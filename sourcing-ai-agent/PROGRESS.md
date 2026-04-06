@@ -59,6 +59,17 @@
     - handoff bundle download
     - sqlite snapshot upload
     - sqlite restore helper
+- 已完成真实 Cloudflare R2 配置接入与 live 验证：
+  - 当前使用 Cloudflare R2 的 S3-compatible endpoint，而不是 dashboard 链接
+  - `sqlite_snapshot` 已成功真实上传到 R2
+  - 同一 `sqlite_snapshot` 已成功从 R2 下载回来
+  - 说明当前：
+    - endpoint
+    - region=`auto`
+    - access key / secret key
+    - SigV4 签名逻辑
+    都可用
+  - Thinking Machines Lab `company_handoff` 大 bundle 的真实上传已启动验证，但当前串行上传 `571` 个对象较慢，后续应优化为并发上传
 - 已补恢复教程：
   - 新增 `docs/RECOVERY_TUTORIAL.md`
   - 明确同机换账号、新机器恢复、bundle 上传下载、SQLite 恢复的具体命令
@@ -73,6 +84,9 @@
   - provider secrets 由 secret manager 注入
   - 高价值 runtime 资产进入 object storage durable storage
   - 相似用户意图优先复用既有资产，再做 plan / filtering / rerank / presentation
+- 已明确当前 GitHub repo 已足够作为代码仓库：
+  - 不再建议创建第二个“包含 secrets 和 runtime 的完整 GitHub repo”
+  - secrets 与高价值数据资产继续采用 secret manager + object storage 分层存储
 
 ### 已记录待办
 

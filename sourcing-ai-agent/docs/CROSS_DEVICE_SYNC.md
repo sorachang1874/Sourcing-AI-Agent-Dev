@@ -291,6 +291,26 @@ PYTHONPATH=src python3 -m sourcing_agent.cli restore-sqlite-snapshot --manifest 
   - Thinking Machines Lab handoff bundle 已成功 upload + download
   - SQLite snapshot 已成功 upload
 
+## Real Cloud R2 Validation
+
+当前已完成真实 Cloudflare R2 live 验证：
+
+- `sqlite_snapshot` 已成功上传到 R2
+- 同一 bundle 已成功从 R2 下载回来
+
+这说明当前 `s3_compatible` provider 对以下要素已经有效：
+
+- endpoint
+- SigV4 signing
+- `region=auto`
+- Access Key ID / Secret Access Key
+
+当前仍待优化的一点：
+
+- 大 handoff bundle 仍按对象串行上传
+- 对于 `500+` 文件的 bundle，真实上传会偏慢
+- 后续应补并发上传 / retry batching
+
 ## Recommended Phase Plan
 
 ### Phase 1: Manual but safe

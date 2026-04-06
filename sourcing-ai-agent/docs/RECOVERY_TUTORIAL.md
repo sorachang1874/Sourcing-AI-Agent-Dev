@@ -178,6 +178,16 @@ PYTHONPATH=src python3 -m sourcing_agent.cli upload-asset-bundle \
 }
 ```
 
+Cloudflare R2 这轮已经真实验证过可用的关键点：
+
+- endpoint 要使用 S3-compatible endpoint  
+  例如：`https://<ACCOUNT_ID>.r2.cloudflarestorage.com`
+- 不要把 dashboard URL 当成 endpoint
+- `region` 使用 `auto`
+- 当前 uploader/downloader 已成功对真实 R2 完成：
+  - `sqlite_snapshot` upload
+  - `sqlite_snapshot` download
+
 也可以用环境变量：
 
 - `OBJECT_STORAGE_PROVIDER`
