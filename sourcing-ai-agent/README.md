@@ -193,6 +193,7 @@ sourcing-ai-agent/
 4. [docs/DEVELOPMENT_GUIDE.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/DEVELOPMENT_GUIDE.md)
 5. [docs/THINKING_MACHINES_LAB_RETROSPECTIVE.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/THINKING_MACHINES_LAB_RETROSPECTIVE.md)
 6. [docs/CROSS_DEVICE_SYNC.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/CROSS_DEVICE_SYNC.md)
+7. [docs/HANDOFF_2026-04-06.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/HANDOFF_2026-04-06.md)
 
 ## GitHub Sync Boundary
 
@@ -233,6 +234,10 @@ PYTHONPATH=src python3 -m sourcing_agent.cli show-workers --job-id <job_id>
 PYTHONPATH=src python3 -m sourcing_agent.cli show-scheduler --job-id <job_id>
 PYTHONPATH=src python3 -m sourcing_agent.cli show-recoverable-workers
 PYTHONPATH=src python3 -m sourcing_agent.cli show-daemon-status
+PYTHONPATH=src python3 -m sourcing_agent.cli export-company-snapshot-bundle --company thinkingmachineslab
+PYTHONPATH=src python3 -m sourcing_agent.cli export-company-handoff-bundle --company thinkingmachineslab
+PYTHONPATH=src python3 -m sourcing_agent.cli export-sqlite-snapshot
+PYTHONPATH=src python3 -m sourcing_agent.cli restore-asset-bundle --manifest runtime/asset_exports/<bundle>/bundle_manifest.json --target-runtime-dir /tmp/sourcing-agent-runtime
 PYTHONPATH=src python3 -m sourcing_agent.cli interrupt-worker --worker-id <worker_id>
 PYTHONPATH=src python3 -m sourcing_agent.cli run-worker-daemon-once
 PYTHONPATH=src python3 -m sourcing_agent.cli run-worker-daemon --poll-seconds 5

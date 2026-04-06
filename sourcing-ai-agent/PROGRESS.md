@@ -24,6 +24,35 @@
     - `export-asset-bundle / restore-asset-bundle`
     - exported SQLite snapshot
     - cloud asset registry
+- 已将跨设备恢复方案落成可执行命令：
+  - 新增 `asset_sync.py`
+  - CLI 新增：
+    - `export-company-snapshot-bundle`
+    - `export-company-handoff-bundle`
+    - `export-sqlite-snapshot`
+    - `restore-asset-bundle`
+  - 当前 bundle 形态为：
+    - `bundle_manifest.json`
+    - `export_summary.json`
+    - `payload/<runtime_relative_path>`
+  - 可直接作为后续 object storage durable sync 的上传单位
+- 已完成 Thinking Machines Lab handoff bundle 的真实导出与恢复验证：
+  - handoff bundle:
+    - `runtime/asset_exports/company_handoff_thinkingmachineslab_20260406t172703_20260406T125539Z/`
+    - `569` files
+    - `29346219` bytes
+  - sqlite snapshot:
+    - `runtime/asset_exports/sqlite_snapshot_sourcing_agent_db_20260406T125538Z/`
+  - restore smoke test:
+    - `/tmp/sourcing-agent-restore-smoke`
+- 已补结构化交接文档：
+  - 新增 `docs/HANDOFF_2026-04-06.md`
+  - 用结构化 handoff 取代保留冗长聊天记录，降低新 AI session / 新设备接手成本
+- 已明确后续服务器化/云端资产化方向：
+  - 服务运行位置迁移到长期运行的服务器
+  - provider secrets 由 secret manager 注入
+  - 高价值 runtime 资产进入 object storage durable storage
+  - 相似用户意图优先复用既有资产，再做 plan / filtering / rerank / presentation
 
 ### 已记录待办
 

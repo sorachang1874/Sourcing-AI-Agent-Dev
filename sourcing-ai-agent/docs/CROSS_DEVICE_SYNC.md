@@ -238,20 +238,47 @@ sourcing-ai-agent-dev/
 
 ## Proposed Restore Commands
 
-当前还没有正式实现这些命令，但建议后续按下面的接口补：
+当前已经正式实现：
+
+- `export-company-snapshot-bundle`
+- `export-company-handoff-bundle`
+- `export-sqlite-snapshot`
+- `restore-asset-bundle`
+
+当前建议后续继续补：
 
 - `bootstrap-device`
   - 检查 repo、Python、provider config、runtime layout
-- `export-asset-bundle`
-  - 按 company / snapshot / manual-review / job 导出 bundle
 - `upload-asset-bundle`
   - 把 bundle 和 manifest 推送到 cloud object storage
 - `pull-asset-index`
   - 拉取云端 index，不拉全量 raw asset
-- `restore-asset-bundle`
-  - 根据 bundle manifest 恢复本地 runtime 子树
 - `export-sqlite-snapshot`
   - 导出当前 SQLite 的只读恢复版本
+
+## Implemented CLI Examples
+
+```bash
+cd '/home/sorachang/projects/Sourcing AI Agent Dev/sourcing-ai-agent'
+
+PYTHONPATH=src python3 -m sourcing_agent.cli export-company-snapshot-bundle --company thinkingmachineslab
+PYTHONPATH=src python3 -m sourcing_agent.cli export-company-handoff-bundle --company thinkingmachineslab
+PYTHONPATH=src python3 -m sourcing_agent.cli export-sqlite-snapshot
+PYTHONPATH=src python3 -m sourcing_agent.cli restore-asset-bundle --manifest runtime/asset_exports/<bundle>/bundle_manifest.json --target-runtime-dir /tmp/sourcing-agent-runtime
+```
+
+## Current Thinking Machines Lab Example
+
+这轮已经实际导出并验证：
+
+- handoff bundle:
+  - `runtime/asset_exports/company_handoff_thinkingmachineslab_20260406t172703_20260406T125539Z/`
+  - `569` files
+  - `29346219` bytes
+- sqlite snapshot:
+  - `runtime/asset_exports/sqlite_snapshot_sourcing_agent_db_20260406T125538Z/`
+- restore smoke test:
+  - `/tmp/sourcing-agent-restore-smoke`
 
 ## Recommended Phase Plan
 

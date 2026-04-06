@@ -274,3 +274,20 @@ Thinking Machines Lab 这轮人工 review 的实际结果：
 
 4. 在下一家公司复用这套策略  
    Thinking Machines Lab 已经证明 current / former / publication / manual review 四条链能形成可审计闭环。
+
+## Cross-Device Continuation
+
+这轮之后，Thinking Machines Lab 的 runtime 资产已经可以通过 bundle export / restore 继续复用，而不必在下一台机器上从零开始。
+
+当前已实现并验证：
+
+- `export-company-handoff-bundle --company thinkingmachineslab`
+- `export-sqlite-snapshot`
+- `restore-asset-bundle --manifest <bundle_manifest.json> --target-runtime-dir <runtime_dir>`
+
+这意味着后续切换到新账号、新机器或服务器环境时，可以：
+
+1. 从 GitHub clone 代码和文档
+2. 恢复 provider secrets
+3. 恢复 Thinking Machines Lab handoff bundle
+4. 继续补 `former / publication / manual review` 资产，而不是重做 current roster baseline

@@ -8,6 +8,7 @@ from .acquisition import AcquisitionEngine
 from .agent_runtime import AgentRuntimeCoordinator
 from .api import create_server
 from .asset_catalog import AssetCatalog
+from .asset_sync import AssetBundleManager
 from .model_provider import build_model_client
 from .orchestrator import SourcingOrchestrator
 from .service_daemon import SingleInstanceError
@@ -33,6 +34,12 @@ def build_orchestrator() -> SourcingOrchestrator:
         acquisition_engine=acquisition_engine,
         agent_runtime=agent_runtime,
     )
+
+
+def build_asset_bundle_manager() -> AssetBundleManager:
+    catalog = AssetCatalog.discover()
+    settings = load_settings(catalog.project_root)
+    return AssetBundleManager(catalog.project_root, settings.runtime_dir)
 
 
 def main() -> None:
@@ -134,6 +141,27 @@ def main() -> None:
     manual_review_parser.add_argument("--target-company", default="", help="Optional target company filter")
     manual_review_parser.add_argument("--job-id", default="", help="Optional job identifier filter")
 
+    company_snapshot_bundle_parser = subparsers.add_parser("export-company-snapshot-bundle", help="Export one company snapshot as a portable asset bundle")
+    company_snapshot_bundle_parser.add_argument("--company", required=True, help="Company key or name")
+    company_snapshot_bundle_parser.add_argument("--snapshot-id", default="", help="Optional snapshot id; defaults to latest")
+    company_snapshot_bundle_parser.add_argument("--output-dir", default="", help="Optional bundle export directory")
+
+    company_handoff_bundle_parser = subparsers.add_parser("export-company-handoff-bundle", help="Export a company handoff bundle including snapshots and related runtime assets")
+    company_handoff_bundle_parser.add_argument("--company", required=True, help="Company key or name")
+    company_handoff_bundle_parser.add_argument("--output-dir", default="", help="Optional bundle export directory")
+    company_handoff_bundle_parser.add_argument("--without-sqlite", action="store_true", help="Do not include SQLite snapshot")
+    company_handoff_bundle_parser.add_argument("--without-live-tests", action="store_true", help="Do not include matching live test assets")
+    company_handoff_bundle_parser.add_argument("--without-manual-review", action="store_true", help="Do not include manual review assets")
+    company_handoff_bundle_parser.add_argument("--without-jobs", action="store_true", help="Do not include matching job JSON files")
+
+    sqlite_snapshot_parser = subparsers.add_parser("export-sqlite-snapshot", help="Export the current SQLite database as a portable asset bundle")
+    sqlite_snapshot_parser.add_argument("--output-dir", default="", help="Optional bundle export directory")
+
+    restore_bundle_parser = subparsers.add_parser("restore-asset-bundle", help="Restore a previously exported asset bundle into runtime")
+    restore_bundle_parser.add_argument("--manifest", required=True, help="Path to bundle_manifest.json")
+    restore_bundle_parser.add_argument("--target-runtime-dir", default="", help="Optional runtime dir override")
+    restore_bundle_parser.add_argument("--conflict", choices=["skip", "overwrite", "error"], default="skip", help="How to handle existing files")
+
     subparsers.add_parser("test-model", help="Run provider healthcheck")
 
     serve_parser = subparsers.add_parser("serve", help="Start the HTTP API")
@@ -141,6 +169,59 @@ def main() -> None:
     serve_parser.add_argument("--port", type=int, default=8765)
 
     args = parser.parse_args()
+    if args.command in {
+        "export-company-snapshot-bundle",
+        "export-company-handoff-bundle",
+        "export-sqlite-snapshot",
+        "restore-asset-bundle",
+    }:
+        bundle_manager = build_asset_bundle_manager()
+        if args.command == "export-company-snapshot-bundle":
+            print(
+                json.dumps(
+                    bundle_manager.export_company_snapshot_bundle(
+                        args.company,
+                        snapshot_id=args.snapshot_id,
+                        output_dir=args.output_dir or None,
+                    ),
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+            return
+        if args.command == "export-company-handoff-bundle":
+            print(
+                json.dumps(
+                    bundle_manager.export_company_handoff_bundle(
+                        args.company,
+                        output_dir=args.output_dir or None,
+                        include_sqlite=not args.without_sqlite,
+                        include_live_tests=not args.without_live_tests,
+                        include_manual_review=not args.without_manual_review,
+                        include_jobs=not args.without_jobs,
+                    ),
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+            return
+        if args.command == "export-sqlite-snapshot":
+            print(json.dumps(bundle_manager.export_sqlite_snapshot(output_dir=args.output_dir or None), ensure_ascii=False, indent=2))
+            return
+        if args.command == "restore-asset-bundle":
+            print(
+                json.dumps(
+                    bundle_manager.restore_bundle(
+                        args.manifest,
+                        target_runtime_dir=args.target_runtime_dir or None,
+                        conflict=args.conflict,
+                    ),
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+            return
+
     orchestrator = build_orchestrator()
 
     if args.command == "bootstrap":

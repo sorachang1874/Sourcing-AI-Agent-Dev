@@ -15,6 +15,7 @@ User Request
   -> worker_scheduler.py
   -> worker_daemon.py
   -> service_daemon.py
+  -> asset_sync.py
   -> acquisition.py
   -> connectors.py / seed_discovery.py / harvest_connectors.py
   -> enrichment.py / exploratory_enrichment.py / manual_review_resolution.py / web_fetch.py
@@ -99,6 +100,20 @@ User Request
   - 优雅停止
   - systemd unit 渲染与写出
 - 不直接替代 `worker_daemon.py` 的恢复逻辑，而是在其外层提供长期常驻和运维控制
+
+### `asset_sync.py`
+
+- 提供跨设备可恢复的 runtime asset bundle 能力
+- 当前已实现：
+  - `export-company-snapshot-bundle`
+  - `export-company-handoff-bundle`
+  - `export-sqlite-snapshot`
+  - `restore-asset-bundle`
+- bundle 当前以文件系统目录形式保存：
+  - `bundle_manifest.json`
+  - `export_summary.json`
+  - `payload/<runtime_relative_path>`
+- 设计目标是先把高价值 runtime 资产标准化为 portable bundle，后续再叠加 object storage uploader/downloader
 
 ### `acquisition_strategy.py`
 

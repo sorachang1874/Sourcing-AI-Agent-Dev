@@ -109,6 +109,19 @@
   - systemd unit 渲染
 - 这样 worker recovery 不再只是“一个长循环命令”，而是能被系统托管的稳定后台服务
 
+### `asset_sync.py`
+
+- 为跨设备恢复和后续云端 durable storage 提供中间层
+- 当前职责：
+  - 将高价值 runtime 资产打包成 portable bundle
+  - 用 `bundle_manifest.json` 显式记录 bundle 内容、统计、restore 目标
+  - 支持把 bundle 恢复到新的 `runtime/`
+- 当前已实现：
+  - `company_snapshot bundle`
+  - `company_handoff bundle`
+  - `sqlite_snapshot bundle`
+- 这一层暂不直接绑定 OSS/S3/R2 SDK；先用文件系统 bundle 保持 provider-agnostic，后续再在其上叠加 object storage sync
+
 ### `acquisition.py`
 
 - 执行 acquisition tasks
