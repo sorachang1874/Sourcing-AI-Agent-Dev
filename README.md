@@ -88,3 +88,4 @@ Sourcing AI Agent Dev/
 2. 只提交代码、文档、示例配置和不含密钥的历史方法论资产。
 3. 继续把 live data、runtime snapshot、provider cache 保留在本地或后续云端存储。
 4. 将高价值 asset bundle 逐步迁移到 object storage，而不是再创建一个“包含 secrets 和 runtime 的 GitHub repo”。
+5. 当前 Thinking Machines Lab handoff bundle 已完成真实 R2 `upload -> download -> restore`，后续优先继续补资产，而不是重复搭基础同步层。

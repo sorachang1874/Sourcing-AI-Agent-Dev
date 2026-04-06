@@ -248,6 +248,23 @@ sourcing-ai-agent-dev/
 - `restore-asset-bundle`
 - `restore-sqlite-snapshot`
 
+当前 object sync 附加元数据也已实现：
+
+- local bundle index:
+  - `runtime/object_sync/bundle_index.json`
+- local sync runs:
+  - `runtime/object_sync/runs/*.json`
+- remote bundle index:
+  - `indexes/bundle_index.json`
+- remote sync runs:
+  - `indexes/sync_runs/*.json`
+
+`upload-asset-bundle / download-asset-bundle` 现已支持：
+
+- `max_workers` 并发传输
+- per-object retry/backoff
+- upload/download 后同步写出 local/remote sync manifest
+
 当前建议后续继续补：
 
 - `bootstrap-device`

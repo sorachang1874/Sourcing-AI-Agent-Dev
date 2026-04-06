@@ -136,10 +136,12 @@ PYTHONPATH=src python3 -m sourcing_agent.cli export-sqlite-snapshot
 
 ```bash
 PYTHONPATH=src python3 -m sourcing_agent.cli upload-asset-bundle \
-  --manifest runtime/asset_exports/company_handoff_thinkingmachineslab_20260406t172703_20260406T125539Z/bundle_manifest.json
+  --manifest runtime/asset_exports/company_handoff_thinkingmachineslab_20260406t172703_20260406T125539Z/bundle_manifest.json \
+  --max-workers 8
 
 PYTHONPATH=src python3 -m sourcing_agent.cli upload-asset-bundle \
-  --manifest runtime/asset_exports/sqlite_snapshot_sourcing_agent_db_20260406T125538Z/bundle_manifest.json
+  --manifest runtime/asset_exports/sqlite_snapshot_sourcing_agent_db_20260406T125538Z/bundle_manifest.json \
+  --max-workers 8
 ```
 
 ## Object Storage Config
@@ -153,7 +155,8 @@ PYTHONPATH=src python3 -m sourcing_agent.cli upload-asset-bundle \
   "object_storage": {
     "provider": "filesystem",
     "local_dir": "/tmp/sourcing-ai-agent-object-store",
-    "prefix": "sourcing-ai-agent-dev"
+    "prefix": "sourcing-ai-agent-dev",
+    "max_workers": 8
   }
 }
 ```
@@ -173,7 +176,8 @@ PYTHONPATH=src python3 -m sourcing_agent.cli upload-asset-bundle \
     "access_key_id": "AKIA...",
     "secret_access_key": "secret...",
     "timeout_seconds": 60,
-    "force_path_style": true
+    "force_path_style": true,
+    "max_workers": 8
   }
 }
 ```
@@ -187,6 +191,9 @@ Cloudflare R2 这轮已经真实验证过可用的关键点：
 - 当前 uploader/downloader 已成功对真实 R2 完成：
   - `sqlite_snapshot` upload
   - `sqlite_snapshot` download
+  - `company_handoff` upload
+  - `company_handoff` download
+  - 基于下载结果的本地 restore
 
 也可以用环境变量：
 
@@ -199,6 +206,7 @@ Cloudflare R2 这轮已经真实验证过可用的关键点：
 - `OBJECT_STORAGE_SECRET_ACCESS_KEY`
 - `OBJECT_STORAGE_TIMEOUT_SECONDS`
 - `OBJECT_STORAGE_FORCE_PATH_STYLE`
+- `OBJECT_STORAGE_MAX_WORKERS`
 
 ## Thinking Machines Lab Checklist
 

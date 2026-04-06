@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import hashlib
 import hmac
 from pathlib import Path
+import threading
 from typing import Protocol
 from urllib.parse import quote, urlsplit
 
@@ -12,6 +13,10 @@ import requests
 
 
 class ObjectStorageError(RuntimeError):
+    pass
+
+
+class ObjectStorageNotFoundError(ObjectStorageError):
     pass
 
 
@@ -28,12 +33,17 @@ class ObjectStorageConfig:
     timeout_seconds: int = 60
     force_path_style: bool = True
     local_dir: str = ""
+    max_workers: int = 8
 
 
 class ObjectStorageClient(Protocol):
     def upload_file(self, local_path: str | Path, object_key: str, *, content_type: str = "application/octet-stream") -> dict: ...
 
     def download_file(self, object_key: str, local_path: str | Path) -> dict: ...
+
+    def upload_bytes(self, payload: bytes, object_key: str, *, content_type: str = "application/octet-stream") -> dict: ...
+
+    def download_bytes(self, object_key: str) -> bytes: ...
 
     def object_url(self, object_key: str) -> str: ...
 
@@ -59,9 +69,12 @@ class FilesystemObjectStorageClient:
         source = Path(local_path)
         if not source.exists():
             raise ObjectStorageError(f"Upload source not found: {source}")
+        return self.upload_bytes(source.read_bytes(), object_key, content_type=content_type)
+
+    def upload_bytes(self, payload: bytes, object_key: str, *, content_type: str = "application/octet-stream") -> dict:
         destination = self.root / _join_key(self.config.prefix, object_key)
         destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_bytes(source.read_bytes())
+        destination.write_bytes(payload)
         return {
             "status": "uploaded",
             "provider": "filesystem",
@@ -72,12 +85,10 @@ class FilesystemObjectStorageClient:
         }
 
     def download_file(self, object_key: str, local_path: str | Path) -> dict:
-        source = self.root / _join_key(self.config.prefix, object_key)
-        if not source.exists():
-            raise ObjectStorageError(f"Object not found: {object_key}")
+        payload = self.download_bytes(object_key)
         destination = Path(local_path)
         destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_bytes(source.read_bytes())
+        destination.write_bytes(payload)
         return {
             "status": "downloaded",
             "provider": "filesystem",
@@ -85,6 +96,12 @@ class FilesystemObjectStorageClient:
             "object_url": self.object_url(object_key),
             "size_bytes": destination.stat().st_size,
         }
+
+    def download_bytes(self, object_key: str) -> bytes:
+        source = self.root / _join_key(self.config.prefix, object_key)
+        if not source.exists():
+            raise ObjectStorageNotFoundError(f"Object not found: {object_key}")
+        return source.read_bytes()
 
     def object_url(self, object_key: str) -> str:
         return f"file://{(self.root / _join_key(self.config.prefix, object_key)).as_posix()}"
@@ -105,20 +122,22 @@ class S3CompatibleObjectStorageClient:
         if missing:
             raise ObjectStorageError(f"S3-compatible object storage missing config: {', '.join(missing)}")
         self.config = config
-        self.session = requests.Session()
+        self._thread_local = threading.local()
 
     def upload_file(self, local_path: str | Path, object_key: str, *, content_type: str = "application/octet-stream") -> dict:
         source = Path(local_path)
         if not source.exists():
             raise ObjectStorageError(f"Upload source not found: {source}")
-        payload = source.read_bytes()
+        return self.upload_bytes(source.read_bytes(), object_key, content_type=content_type)
+
+    def upload_bytes(self, payload: bytes, object_key: str, *, content_type: str = "application/octet-stream") -> dict:
         url, signed_headers = self._signed_request(
             method="PUT",
             object_key=object_key,
             payload=payload,
             extra_headers={"content-type": content_type},
         )
-        response = self.session.put(url, data=payload, headers=signed_headers, timeout=self.config.timeout_seconds)
+        response = self._session().put(url, data=payload, headers=signed_headers, timeout=self.config.timeout_seconds)
         if response.status_code not in {200, 201, 204}:
             raise ObjectStorageError(f"Upload failed for {object_key}: {response.status_code} {response.text[:300]}")
         return {
@@ -131,13 +150,10 @@ class S3CompatibleObjectStorageClient:
         }
 
     def download_file(self, object_key: str, local_path: str | Path) -> dict:
-        url, signed_headers = self._signed_request(method="GET", object_key=object_key, payload=b"")
-        response = self.session.get(url, headers=signed_headers, timeout=self.config.timeout_seconds)
-        if response.status_code != 200:
-            raise ObjectStorageError(f"Download failed for {object_key}: {response.status_code} {response.text[:300]}")
+        payload = self.download_bytes(object_key)
         destination = Path(local_path)
         destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_bytes(response.content)
+        destination.write_bytes(payload)
         return {
             "status": "downloaded",
             "provider": "s3_compatible",
@@ -146,8 +162,24 @@ class S3CompatibleObjectStorageClient:
             "size_bytes": destination.stat().st_size,
         }
 
+    def download_bytes(self, object_key: str) -> bytes:
+        url, signed_headers = self._signed_request(method="GET", object_key=object_key, payload=b"")
+        response = self._session().get(url, headers=signed_headers, timeout=self.config.timeout_seconds)
+        if response.status_code == 404:
+            raise ObjectStorageNotFoundError(f"Object not found: {object_key}")
+        if response.status_code != 200:
+            raise ObjectStorageError(f"Download failed for {object_key}: {response.status_code} {response.text[:300]}")
+        return response.content
+
     def object_url(self, object_key: str) -> str:
         return self._build_url(object_key)
+
+    def _session(self) -> requests.Session:
+        session = getattr(self._thread_local, "session", None)
+        if session is None:
+            session = requests.Session()
+            self._thread_local.session = session
+        return session
 
     def _build_url(self, object_key: str) -> str:
         endpoint = self.config.endpoint_url.rstrip("/")

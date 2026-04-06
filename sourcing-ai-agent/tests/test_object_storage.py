@@ -43,9 +43,22 @@ class ObjectStorageSyncTest(unittest.TestCase):
             )
         )
         export = self.bundle_manager.export_company_snapshot_bundle("Acme")
-        upload = self.bundle_manager.upload_bundle(export["manifest_path"], self.client)
+        upload = self.bundle_manager.upload_bundle(export["manifest_path"], self.client, max_workers=4)
         self.assertEqual(upload["status"], "uploaded")
         self.assertEqual(upload["uploaded_file_count"], 5)
+        self.assertEqual(upload["max_workers"], 4)
+        local_index_path = self.runtime_dir / "object_sync" / "bundle_index.json"
+        self.assertTrue(local_index_path.exists())
+        local_index = json.loads(local_index_path.read_text())
+        self.assertEqual(local_index["bundles"][0]["bundle_id"], upload["bundle_id"])
+        local_runs = sorted((self.runtime_dir / "object_sync" / "runs").glob("*.json"))
+        self.assertEqual(len(local_runs), 1)
+        remote_index_path = self.object_store_dir / "sourcing-ai-agent-dev-test" / "indexes" / "bundle_index.json"
+        self.assertTrue(remote_index_path.exists())
+        remote_index = json.loads(remote_index_path.read_text())
+        self.assertEqual(remote_index["bundles"][0]["bundle_id"], upload["bundle_id"])
+        remote_runs = sorted((self.object_store_dir / "sourcing-ai-agent-dev-test" / "indexes" / "sync_runs").glob("*.json"))
+        self.assertEqual(len(remote_runs), 1)
 
         download_dir = self.project_root / "downloaded"
         download = self.bundle_manager.download_bundle(
@@ -53,13 +66,17 @@ class ObjectStorageSyncTest(unittest.TestCase):
             bundle_id=upload["bundle_id"],
             client=self.client,
             output_dir=download_dir,
+            max_workers=3,
         )
         self.assertEqual(download["status"], "downloaded")
+        self.assertEqual(download["max_workers"], 3)
         manifest_path = Path(download["manifest_path"])
         self.assertTrue(manifest_path.exists())
         manifest = json.loads(manifest_path.read_text())
         relpaths = {entry["runtime_relative_path"] for entry in manifest["files"]}
         self.assertIn("company_assets/acme/20260406T120000/manifest.json", relpaths)
+        remote_runs = sorted((self.object_store_dir / "sourcing-ai-agent-dev-test" / "indexes" / "sync_runs").glob("*.json"))
+        self.assertEqual(len(remote_runs), 2)
 
     def test_restore_sqlite_snapshot_creates_backup(self) -> None:
         sqlite_path = self.runtime_dir / "sourcing_agent.db"

@@ -69,7 +69,28 @@
     - access key / secret key
     - SigV4 签名逻辑
     都可用
-  - Thinking Machines Lab `company_handoff` 大 bundle 的真实上传已启动验证，但当前串行上传 `571` 个对象较慢，后续应优化为并发上传
+  - Thinking Machines Lab `company_handoff` 大 bundle 已完成真实 durable sync 闭环：
+    - real upload:
+      - `bundle_id=company_handoff_thinkingmachineslab_20260406t172703_20260406T125539Z`
+      - `571` uploaded objects
+      - `29570059` bytes
+      - `max_workers=8`
+    - real download:
+      - `571` downloaded objects
+      - `29570059` bytes
+      - `max_workers=8`
+    - local restore from downloaded bundle:
+      - restored to `/tmp/r2-tml-handoff-restore`
+      - `569` runtime files restored
+- 已完成 object storage sync 第二版优化：
+  - `upload-asset-bundle / download-asset-bundle` 已支持并发 `max_workers`
+  - 已补 per-object retry/backoff
+  - `S3CompatibleObjectStorageClient` 已改成 thread-local session
+  - 已补 local/remote sync metadata：
+    - local: `runtime/object_sync/bundle_index.json`
+    - local: `runtime/object_sync/runs/*.json`
+    - remote: `indexes/bundle_index.json`
+    - remote: `indexes/sync_runs/*.json`
 - 已补恢复教程：
   - 新增 `docs/RECOVERY_TUTORIAL.md`
   - 明确同机换账号、新机器恢复、bundle 上传下载、SQLite 恢复的具体命令
@@ -90,10 +111,10 @@
 - 已新增显式待办清单：
   - `docs/NEXT_TODO.md`
   - 用于切换账号/设备后继续执行：
-    - object storage 并发上传/下载优化
-    - bundle index / sync run manifest
-    - Thinking Machines Lab handoff bundle 完整 R2 持久化
     - Thinking Machines Lab 后续资产补全
+    - normalized asset / reusable candidate artifact 提炼
+    - object storage 的 resume/progress 继续优化
+    - 服务器化/云端资产化方向继续推进
 
 ### 已记录待办
 

@@ -171,11 +171,13 @@ def main() -> None:
 
     upload_bundle_parser = subparsers.add_parser("upload-asset-bundle", help="Upload an exported asset bundle to configured object storage")
     upload_bundle_parser.add_argument("--manifest", required=True, help="Path to bundle_manifest.json")
+    upload_bundle_parser.add_argument("--max-workers", type=int, default=0, help="Optional concurrent upload worker count; 0 uses config default")
 
     download_bundle_parser = subparsers.add_parser("download-asset-bundle", help="Download an asset bundle from configured object storage")
     download_bundle_parser.add_argument("--bundle-kind", required=True, help="Bundle kind, e.g. company_handoff")
     download_bundle_parser.add_argument("--bundle-id", required=True, help="Bundle id")
     download_bundle_parser.add_argument("--output-dir", default="", help="Optional local export directory")
+    download_bundle_parser.add_argument("--max-workers", type=int, default=0, help="Optional concurrent download worker count; 0 uses config default")
 
     restore_sqlite_parser = subparsers.add_parser("restore-sqlite-snapshot", help="Restore SQLite database from an exported bundle")
     restore_sqlite_parser.add_argument("--manifest", required=True, help="Path to bundle_manifest.json")
@@ -261,7 +263,17 @@ def main() -> None:
             return
         storage_client = build_object_storage()
         if args.command == "upload-asset-bundle":
-            print(json.dumps(bundle_manager.upload_bundle(args.manifest, storage_client), ensure_ascii=False, indent=2))
+            print(
+                json.dumps(
+                    bundle_manager.upload_bundle(
+                        args.manifest,
+                        storage_client,
+                        max_workers=args.max_workers or None,
+                    ),
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
             return
         if args.command == "download-asset-bundle":
             print(
@@ -271,6 +283,7 @@ def main() -> None:
                         bundle_id=args.bundle_id,
                         client=storage_client,
                         output_dir=args.output_dir or None,
+                        max_workers=args.max_workers or None,
                     ),
                     ensure_ascii=False,
                     indent=2,

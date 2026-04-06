@@ -2,13 +2,15 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
 import json
 from pathlib import Path
 import shutil
-from typing import Iterable
+import time
+from typing import Any, Iterable
 
-from .object_storage import ObjectStorageClient
+from .object_storage import ObjectStorageClient, ObjectStorageNotFoundError
 
 
 class AssetBundleError(RuntimeError):
@@ -54,6 +56,9 @@ class AssetBundleManager:
         self.project_root = Path(project_root)
         self.runtime_dir = Path(runtime_dir)
         self.exports_dir = self.runtime_dir / "asset_exports"
+        self.sync_dir = self.runtime_dir / "object_sync"
+        self.sync_runs_dir = self.sync_dir / "runs"
+        self.sync_bundle_index_path = self.sync_dir / "bundle_index.json"
 
     def export_company_snapshot_bundle(
         self,
@@ -252,6 +257,8 @@ class AssetBundleManager:
         self,
         manifest_path: str | Path,
         client: ObjectStorageClient,
+        *,
+        max_workers: int | None = None,
     ) -> dict:
         manifest_file = Path(manifest_path)
         if not manifest_file.exists():
@@ -263,20 +270,21 @@ class AssetBundleManager:
             raise AssetBundleError("Bundle manifest missing bundle_kind or bundle_id")
         bundle_root = manifest_file.parent
         remote_prefix = self._bundle_remote_prefix(bundle_kind, bundle_id)
-        uploads: list[dict] = []
         upload_paths = [bundle_root / "bundle_manifest.json", bundle_root / "export_summary.json"]
         for record in payload.get("files", []):
             upload_paths.append(bundle_root / record["payload_relative_path"])
-        total_bytes = 0
-        for path in upload_paths:
-            if not path.exists() or not path.is_file():
-                continue
-            rel = path.relative_to(bundle_root).as_posix()
-            object_key = f"{remote_prefix}/{rel}"
-            content_type = _content_type_for_path(path)
-            result = client.upload_file(path, object_key, content_type=content_type)
-            uploads.append(result)
-            total_bytes += int(result.get("size_bytes", path.stat().st_size))
+        resolved_max_workers = self._resolve_max_workers(client, max_workers)
+        transfers = [
+            {"path": path, "relative_path": path.relative_to(bundle_root).as_posix()}
+            for path in upload_paths
+            if path.exists() and path.is_file()
+        ]
+        uploads = self._parallel_transfer(
+            transfers,
+            max_workers=resolved_max_workers,
+            op=lambda item: self._upload_transfer_item(client, remote_prefix, item),
+        )
+        total_bytes = sum(int(item.get("size_bytes", 0)) for item in uploads)
         summary = {
             "status": "uploaded",
             "bundle_kind": bundle_kind,
@@ -286,8 +294,39 @@ class AssetBundleManager:
             "uploaded_file_count": len(uploads),
             "uploaded_total_bytes": total_bytes,
             "provider": uploads[0]["provider"] if uploads else "",
+            "max_workers": resolved_max_workers,
             "object_urls_sample": [item.get("object_url", "") for item in uploads[:5]],
         }
+        sync_run = self._record_sync_run(
+            action="upload",
+            bundle_kind=bundle_kind,
+            bundle_id=bundle_id,
+            summary=summary,
+            extra={
+                "manifest_path": str(manifest_file),
+                "remote_prefix": remote_prefix,
+            },
+        )
+        summary["sync_run_id"] = sync_run["run_id"]
+        manifest_stats = payload.get("stats", {})
+        bundle_index_entry = {
+            "bundle_kind": bundle_kind,
+            "bundle_id": bundle_id,
+            "metadata": payload.get("metadata", {}),
+            "stats": {
+                "file_count": int(manifest_stats.get("file_count", len(payload.get("files", [])))),
+                "total_bytes": int(manifest_stats.get("total_bytes", total_bytes)),
+            },
+            "remote_prefix": remote_prefix,
+            "remote_manifest_key": f"{remote_prefix}/bundle_manifest.json",
+            "provider": summary["provider"],
+            "latest_run_id": sync_run["run_id"],
+            "last_uploaded_at": sync_run["created_at"],
+            "last_uploaded_total_bytes": total_bytes,
+            "manifest_sha256": _sha256(manifest_file),
+        }
+        self._update_bundle_index(bundle_index_entry)
+        self._upload_sync_records(client, sync_run, bundle_index_entry)
         (bundle_root / "upload_summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2))
         return summary
 
@@ -298,6 +337,7 @@ class AssetBundleManager:
         bundle_id: str,
         client: ObjectStorageClient,
         output_dir: str | Path | None = None,
+        max_workers: int | None = None,
     ) -> dict:
         remote_prefix = self._bundle_remote_prefix(bundle_kind, bundle_id)
         export_root = Path(output_dir) if output_dir else self.exports_dir
@@ -314,13 +354,20 @@ class AssetBundleManager:
             client.download_file(f"{remote_prefix}/export_summary.json", export_summary)
             downloaded += 1
             total_bytes += export_summary.stat().st_size
-        except Exception:
+        except ObjectStorageNotFoundError:
             pass
-        for record in payload.get("files", []):
-            destination = bundle_dir / record["payload_relative_path"]
-            client.download_file(f"{remote_prefix}/{record['payload_relative_path']}", destination)
-            downloaded += 1
-            total_bytes += destination.stat().st_size
+        resolved_max_workers = self._resolve_max_workers(client, max_workers)
+        transfers = [
+            {"relative_path": record["payload_relative_path"], "path": bundle_dir / record["payload_relative_path"]}
+            for record in payload.get("files", [])
+        ]
+        results = self._parallel_transfer(
+            transfers,
+            max_workers=resolved_max_workers,
+            op=lambda item: self._download_transfer_item(client, remote_prefix, item),
+        )
+        downloaded += len(results)
+        total_bytes += sum(int(item.get("size_bytes", 0)) for item in results)
         summary = {
             "status": "downloaded",
             "bundle_kind": bundle_kind,
@@ -330,9 +377,192 @@ class AssetBundleManager:
             "downloaded_file_count": downloaded,
             "downloaded_total_bytes": total_bytes,
             "remote_prefix": remote_prefix,
+            "max_workers": resolved_max_workers,
         }
+        sync_run = self._record_sync_run(
+            action="download",
+            bundle_kind=bundle_kind,
+            bundle_id=bundle_id,
+            summary=summary,
+            extra={
+                "bundle_dir": str(bundle_dir),
+                "manifest_path": str(manifest_path),
+                "remote_prefix": remote_prefix,
+            },
+        )
+        summary["sync_run_id"] = sync_run["run_id"]
+        manifest_stats = payload.get("stats", {})
+        bundle_index_entry = {
+            "bundle_kind": bundle_kind,
+            "bundle_id": bundle_id,
+            "metadata": payload.get("metadata", {}),
+            "stats": {
+                "file_count": int(manifest_stats.get("file_count", len(payload.get("files", [])))),
+                "total_bytes": int(manifest_stats.get("total_bytes", 0)),
+            },
+            "remote_prefix": remote_prefix,
+            "remote_manifest_key": f"{remote_prefix}/bundle_manifest.json",
+            "manifest_sha256": _sha256(manifest_path),
+            "latest_run_id": sync_run["run_id"],
+            "last_downloaded_at": sync_run["created_at"],
+            "last_downloaded_total_bytes": total_bytes,
+        }
+        self._update_bundle_index(bundle_index_entry)
+        self._upload_sync_records(client, sync_run, bundle_index_entry)
         (bundle_dir / "download_summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2))
         return summary
+
+    def _resolve_max_workers(self, client: ObjectStorageClient, requested: int | None) -> int:
+        if requested is not None:
+            try:
+                return max(1, min(int(requested), 64))
+            except (TypeError, ValueError):
+                return 8
+        client_config = getattr(client, "config", None)
+        candidate = getattr(client_config, "max_workers", 8)
+        try:
+            return max(1, min(int(candidate), 64))
+        except (TypeError, ValueError):
+            return 8
+
+    def _parallel_transfer(
+        self,
+        items: list[dict[str, Any]],
+        *,
+        max_workers: int,
+        op,
+    ) -> list[dict]:
+        if not items:
+            return []
+        if max_workers <= 1 or len(items) == 1:
+            return sorted((op(item) for item in items), key=lambda entry: entry["relative_path"])
+        results: list[dict] = []
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(op, item): item for item in items}
+            for future in as_completed(futures):
+                results.append(future.result())
+        return sorted(results, key=lambda entry: entry["relative_path"])
+
+    def _upload_transfer_item(self, client: ObjectStorageClient, remote_prefix: str, item: dict[str, Any]) -> dict:
+        path = Path(item["path"])
+        relative_path = str(item["relative_path"])
+        object_key = f"{remote_prefix}/{relative_path}"
+        result = self._with_retries(
+            lambda: client.upload_file(path, object_key, content_type=_content_type_for_path(path)),
+            action=f"upload {relative_path}",
+        )
+        return {
+            "relative_path": relative_path,
+            "size_bytes": int(result.get("size_bytes", path.stat().st_size)),
+            **result,
+        }
+
+    def _download_transfer_item(self, client: ObjectStorageClient, remote_prefix: str, item: dict[str, Any]) -> dict:
+        destination = Path(item["path"])
+        relative_path = str(item["relative_path"])
+        result = self._with_retries(
+            lambda: client.download_file(f"{remote_prefix}/{relative_path}", destination),
+            action=f"download {relative_path}",
+        )
+        return {
+            "relative_path": relative_path,
+            "size_bytes": int(result.get("size_bytes", destination.stat().st_size)),
+            **result,
+        }
+
+    def _with_retries(self, fn, *, action: str, attempts: int = 3) -> dict:
+        last_error: Exception | None = None
+        for attempt in range(1, attempts + 1):
+            try:
+                return fn()
+            except Exception as exc:  # noqa: BLE001
+                last_error = exc
+                if attempt >= attempts:
+                    break
+                time.sleep(min(2.0, 0.35 * attempt))
+        raise AssetBundleError(f"{action} failed after {attempts} attempts: {last_error}") from last_error
+
+    def _record_sync_run(
+        self,
+        *,
+        action: str,
+        bundle_kind: str,
+        bundle_id: str,
+        summary: dict[str, Any],
+        extra: dict[str, Any] | None = None,
+    ) -> dict:
+        self.sync_runs_dir.mkdir(parents=True, exist_ok=True)
+        created_at = _utc_now_iso()
+        run_id = f"{_safe_token(action)}_{_safe_token(bundle_kind)}_{_safe_token(bundle_id)}_{_utc_now_token()}"
+        payload = {
+            "run_id": run_id,
+            "action": action,
+            "bundle_kind": bundle_kind,
+            "bundle_id": bundle_id,
+            "created_at": created_at,
+            "summary": summary,
+            "extra": extra or {},
+        }
+        (self.sync_runs_dir / f"{run_id}.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2))
+        return payload
+
+    def _update_bundle_index(self, entry: dict[str, Any]) -> None:
+        self.sync_dir.mkdir(parents=True, exist_ok=True)
+        payload = self._load_json_if_exists(self.sync_bundle_index_path, {"updated_at": "", "bundles": []})
+        bundles = {
+            (str(item.get("bundle_kind", "")).strip(), str(item.get("bundle_id", "")).strip()): dict(item)
+            for item in payload.get("bundles", [])
+            if str(item.get("bundle_kind", "")).strip() and str(item.get("bundle_id", "")).strip()
+        }
+        key = (entry["bundle_kind"], entry["bundle_id"])
+        merged = dict(bundles.get(key, {}))
+        merged.update(entry)
+        bundles[key] = merged
+        updated_payload = {
+            "updated_at": _utc_now_iso(),
+            "bundles": sorted(bundles.values(), key=lambda item: (item["bundle_kind"], item["bundle_id"])),
+        }
+        self.sync_bundle_index_path.write_text(json.dumps(updated_payload, ensure_ascii=False, indent=2))
+
+    def _upload_sync_records(
+        self,
+        client: ObjectStorageClient,
+        sync_run: dict[str, Any],
+        bundle_index_entry: dict[str, Any],
+    ) -> None:
+        run_key = f"indexes/sync_runs/{sync_run['run_id']}.json"
+        client.upload_bytes(json.dumps(sync_run, ensure_ascii=False, indent=2).encode("utf-8"), run_key, content_type="application/json")
+        try:
+            remote_index_payload = json.loads(client.download_bytes("indexes/bundle_index.json").decode("utf-8"))
+        except ObjectStorageNotFoundError:
+            remote_index_payload = {"updated_at": "", "bundles": []}
+        bundles = {
+            (str(item.get("bundle_kind", "")).strip(), str(item.get("bundle_id", "")).strip()): dict(item)
+            for item in remote_index_payload.get("bundles", [])
+            if str(item.get("bundle_kind", "")).strip() and str(item.get("bundle_id", "")).strip()
+        }
+        key = (bundle_index_entry["bundle_kind"], bundle_index_entry["bundle_id"])
+        merged = dict(bundles.get(key, {}))
+        merged.update(bundle_index_entry)
+        merged["latest_remote_run_id"] = sync_run["run_id"]
+        bundles[key] = merged
+        updated_payload = {
+            "updated_at": _utc_now_iso(),
+            "bundles": sorted(bundles.values(), key=lambda item: (item["bundle_kind"], item["bundle_id"])),
+        }
+        client.upload_bytes(
+            json.dumps(updated_payload, ensure_ascii=False, indent=2).encode("utf-8"),
+            "indexes/bundle_index.json",
+            content_type="application/json",
+        )
+
+    def _load_json_if_exists(self, path: Path, default: dict[str, Any]) -> dict[str, Any]:
+        if not path.exists():
+            return default
+        try:
+            return json.loads(path.read_text())
+        except json.JSONDecodeError:
+            return default
 
     def _export_bundle(
         self,

@@ -148,6 +148,12 @@
   - CLI: `show-workers / show-scheduler / interrupt-worker`
   - `GET /api/jobs/{job_id}/trace` 现会同时返回 `agent_workers`
 - 预留 Qwen / Claude model provider 接口
+- 支持 object storage durable sync：
+  - `upload-asset-bundle / download-asset-bundle` 已支持并发 `max_workers`
+  - 单对象上传/下载已补 retry/backoff
+  - 本地会生成 `runtime/object_sync/bundle_index.json` 与 `runtime/object_sync/runs/*.json`
+  - 云端会同步写入 `indexes/bundle_index.json` 与 `indexes/sync_runs/*.json`
+  - Thinking Machines Lab handoff bundle 已完成真实 `R2 upload -> R2 download -> local restore`
 - 已记录高质量 HarvestAPI 接入策略，供后续 Thinking Machines Lab 等小公司端到端验证使用：
   - intent-driven LinkedIn search，用于按用户意图定向检索在职 / 已离职 / 特定岗位人群
   - company employees actor，用于获取小中型公司的高质量 roster

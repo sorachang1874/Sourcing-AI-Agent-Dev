@@ -65,6 +65,7 @@ class ObjectStorageSettings:
     timeout_seconds: int = 60
     force_path_style: bool = True
     local_dir: str = ""
+    max_workers: int = 8
 
 
 @dataclass(frozen=True, slots=True)
@@ -235,6 +236,11 @@ def load_settings(project_root: str | Path) -> AppSettings:
         object_storage_timeout_seconds = int(object_storage_timeout)
     except (TypeError, ValueError):
         object_storage_timeout_seconds = 60
+    object_storage_max_workers = os.getenv("OBJECT_STORAGE_MAX_WORKERS") or object_storage_payload.get("max_workers", 8)
+    try:
+        object_storage_max_workers_value = int(object_storage_max_workers)
+    except (TypeError, ValueError):
+        object_storage_max_workers_value = 8
     force_path_style_raw = os.getenv("OBJECT_STORAGE_FORCE_PATH_STYLE")
     if force_path_style_raw is None:
         object_storage_force_path_style = bool(object_storage_payload.get("force_path_style", True))
@@ -338,6 +344,7 @@ def load_settings(project_root: str | Path) -> AppSettings:
             timeout_seconds=object_storage_timeout_seconds,
             force_path_style=object_storage_force_path_style,
             local_dir=object_storage_local_dir,
+            max_workers=max(1, min(object_storage_max_workers_value, 64)),
         ),
         harvest=HarvestSettings(
             profile_scraper=_harvest_actor_settings(

@@ -6,61 +6,16 @@
 
 ## Highest Priority
 
-### 1. Optimize object storage sync performance
-
-当前 `upload-asset-bundle` / `download-asset-bundle` 已可用，但大 bundle 仍按对象串行传输。
-
-下一步要做：
-
-- 为 object storage upload 增加并发 worker
-- 为 download 增加并发 worker
-- 为 upload/download 增加 per-object retry
-- 为大 bundle 增加 progress summary
-
-目标：
-
-- Thinking Machines Lab `company_handoff` 这类 `500+` 文件 bundle 能稳定上传到 R2
-
-### 2. Add bundle index and sync run manifest
-
-当前已有：
-
-- `bundle_manifest.json`
-- `export_summary.json`
-- `upload_summary.json`
-- `download_summary.json`
-
-下一步要补：
-
-- `asset_sync_runs` 风格的 summary artifact
-- object storage 中的 bundle index
-- “最近可恢复 bundle” 的 manifest
-- 失败 upload 的 resume strategy
-
-### 3. Complete Thinking Machines Lab durable sync
+### 1. Continue Thinking Machines Lab asset accumulation
 
 当前已完成：
-
-- `sqlite_snapshot` 真正上传到 R2
-- `sqlite_snapshot` 真正从 R2 下载
-
-下一步要做：
-
-- 把 Thinking Machines Lab `company_handoff` bundle 完整上传到 R2
-- 下载一次该 handoff bundle 做真实恢复验证
-- 将最终 object key / bundle id 写回 retrospective 与 handoff 文档
-
-## Medium Priority
-
-### 4. Continue Thinking Machines Lab asset accumulation
-
-当前 TML 已有：
 
 - current roster
 - prioritized current detail
 - former fallback
 - publication supplementation
 - manual review resolution
+- handoff bundle durable sync to R2
 
 下一步继续补：
 
@@ -69,7 +24,24 @@
 - corner-case web exploration assets
 - 可复用的 normalized candidate artifacts
 
-### 5. Prepare server-oriented runtime model
+### 2. Strengthen object storage sync operability
+
+当前已完成：
+
+- 并发 upload/download
+- per-object retry
+- local/remote bundle index
+- local/remote sync run manifest
+- Thinking Machines Lab handoff bundle R2 `upload -> download -> restore`
+
+下一步要补：
+
+- failed upload/download 的 resume strategy
+- 更细粒度 progress summary
+- “最近可恢复 bundle” / “最近成功 sync run” 的快捷入口
+- 针对大 bundle 的 selective restore / partial pull
+
+### 3. Prepare server-oriented runtime model
 
 后续目标已经明确：
 
@@ -83,10 +55,11 @@
 - 定义 server deployment checklist
 - 定义 object storage prefix / environment layout
 - 定义 server-side runtime bootstrap
+- 定义 asset reuse / asset refresh policy
 
 ## Lower Priority
 
-### 6. Improve object storage provider compatibility
+### 4. Improve object storage provider compatibility
 
 当前 provider：
 
@@ -99,7 +72,7 @@
 - richer object metadata
 - lifecycle / retention policy
 
-### 7. Add restore convenience tooling
+### 5. Add restore convenience tooling
 
 后续可补：
 
@@ -116,4 +89,4 @@
 2. 阅读 `docs/RECOVERY_TUTORIAL.md`
 3. 阅读这份 `docs/NEXT_TODO.md`
 4. 检查 object storage 配置
-5. 继续做 `object storage sync performance` 和 `Thinking Machines Lab durable sync`
+5. 继续做 `Thinking Machines Lab asset accumulation` 和 `server-oriented runtime model`

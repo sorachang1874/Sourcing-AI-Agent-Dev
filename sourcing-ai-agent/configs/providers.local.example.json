@@ -39,7 +39,8 @@
   "object_storage": {
     "provider": "filesystem",
     "local_dir": "/tmp/sourcing-ai-agent-object-store",
-    "prefix": "sourcing-ai-agent-dev"
+    "prefix": "sourcing-ai-agent-dev",
+    "max_workers": 8
   },
   "harvest": {
     "profile_search": {

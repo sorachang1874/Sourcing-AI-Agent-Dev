@@ -19,8 +19,10 @@
 - monorepo 根目录保留历史调研资产与当前通用后端工程
 - 当前主开发目录是 `sourcing-ai-agent/`
 - Thinking Machines Lab 已经完成一轮可复盘的端到端 live baseline
+- Thinking Machines Lab handoff bundle 已完成真实 R2 `upload -> download -> restore`
 - 低成本 search 现已统一到稳定的 provider abstraction
 - 自动化 worker runtime、scheduler、daemon、manual review、criteria evolution 已具备可继续扩展的底座
+- object storage durable sync 已有本地/云端 bundle index 与 sync run manifest
 
 ## 本仓库不会包含什么
 
