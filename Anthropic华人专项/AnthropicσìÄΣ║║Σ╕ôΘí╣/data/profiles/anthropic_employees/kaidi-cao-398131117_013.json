@@ -1,0 +1,162 @@
+{
+  "success": true,
+  "message": "response retrieved successfully",
+  "data": {
+    "basic_info": {
+      "fullname": "Kaidi Cao",
+      "first_name": "Kaidi",
+      "last_name": "Cao",
+      "headline": "Research @ Anthropic",
+      "public_identifier": "kaidi-cao-398131117",
+      "profile_url": "https://linkedin.com/in/kaidi-cao-398131117",
+      "profile_picture_url": "https://media.licdn.com/dms/image/v2/D5603AQEgHHZKxjpZpA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1708239182542?e=1776902400&v=beta&t=jv8m4F7jkuYl6KEXBp8T5xfWKaRx0wEG2MDfDQahl1U",
+      "about": "Post-training Agents.",
+      "location": {
+        "country": "United States",
+        "city": "Stanford, California",
+        "full": "Stanford, California, United States",
+        "country_code": "US"
+      },
+      "creator_hashtags": [],
+      "is_creator": false,
+      "is_influencer": false,
+      "is_premium": true,
+      "open_to_work": false,
+      "created_timestamp": 1458138089132,
+      "show_follower_count": false,
+      "background_picture_url": "https://static.licdn.com/scds/common/u/images/apps/profile/topcard_backgrounds/texture_bokeh_1400x425.jpg",
+      "urn": "ACoAAB0Hd-QBCkS5gKB86gvDmAQqkp36HFwF2Ao",
+      "follower_count": 973,
+      "connection_count": 827,
+      "current_company": "Anthropic",
+      "current_company_urn": "74126343",
+      "current_company_url": "https://www.linkedin.com/company/anthropicresearch",
+      "top_skills": [],
+      "email": null
+    },
+    "experience": [
+      {
+        "title": "Member of Technical Staff",
+        "company": "Anthropic",
+        "location": "San Francisco, California, United States",
+        "description": "Advancing Claude’s agentic and tool-use capabilities.",
+        "duration": "2025 - Present · 1 yr 4 mos",
+        "start_date": {
+          "year": 2025
+        },
+        "is_current": true,
+        "company_linkedin_url": "https://www.linkedin.com/company/74126343/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_400_400/company-logo_400_400/0/1719256729905/anthropicresearch_logo?e=1776902400&v=beta&t=6sv-GagnF1G5d4B4rN1Yu3sq6fln2BP_9tb0s6bARoY",
+        "employment_type": "Full-time",
+        "location_type": "On-site",
+        "company_id": "74126343"
+      },
+      {
+        "title": "Co-Founder and Research Scientist",
+        "company": "Voyage AI",
+        "location": "Palo Alto, California, United States",
+        "description": "I co-founded Voyage AI, built best-in-class embedding and reranking models for AI search, and led it to acquisition.\n\nhttps://www.bloomberg.com/news/articles/2025-02-24/mongodb-buys-voyage-ai-for-220-million-to-bolster-ai-search",
+        "duration": "2023 - 2025 · 2 yrs",
+        "start_date": {
+          "year": 2023
+        },
+        "end_date": {
+          "year": 2025
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/101027951/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQHw21Cgdf4ckA/company-logo_400_400/B4EZbKSl29HYAY-/0/1747150594503/voyageai_logo?e=1776902400&v=beta&t=iQCmLZkTOmuiSJXLa31l33OxiAp02xk16sYX4K5V8KA",
+        "employment_type": "Full-time",
+        "location_type": "On-site",
+        "company_id": "101027951"
+      },
+      {
+        "title": "Student Researcher",
+        "company": "Google",
+        "location": "New York, United States",
+        "duration": "2022 - 2022 · Less than a year",
+        "start_date": {
+          "year": 2022
+        },
+        "end_date": {
+          "year": 2022
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/1441/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+        "employment_type": "Internship",
+        "company_id": "1441"
+      },
+      {
+        "title": "Research Intern",
+        "company": "Microsoft",
+        "location": "Beijing, China",
+        "duration": "2017 - 2018 · 1 yr",
+        "start_date": {
+          "year": 2017
+        },
+        "end_date": {
+          "year": 2018
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/1035/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_400_400/B56ZYQ0mrGGoAc-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=47BifJmZk2QcSo7UM_a7lFIk5vBFq49cOHVWx8Pu2dE",
+        "company_id": "1035"
+      }
+    ],
+    "education": [
+      {
+        "school": "Stanford University",
+        "degree": "Doctor of Philosophy - PhD, Computer Science",
+        "degree_name": "Doctor of Philosophy - PhD",
+        "field_of_study": "Computer Science",
+        "duration": "2018 - 2023",
+        "school_linkedin_url": "https://www.linkedin.com/company/1792/",
+        "school_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_400_400/company-logo_400_400/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=zzE-1MKqCLrmkqb1p2hJqhVuV2hbdZzC0j_ok6Kyhk8",
+        "start_date": {
+          "year": 2018
+        },
+        "end_date": {
+          "year": 2023
+        },
+        "school_id": "1792"
+      },
+      {
+        "school": "Tsinghua University",
+        "degree": "Bachelor of Engineering - BE, Electronic Engineering",
+        "degree_name": "Bachelor of Engineering - BE",
+        "field_of_study": "Electronic Engineering",
+        "duration": "2014 - 2018",
+        "school_linkedin_url": "https://www.linkedin.com/company/14022/",
+        "school_logo_url": "https://media.licdn.com/dms/image/v2/C4D0BAQFJU3_2fIeNWw/company-logo_400_400/company-logo_400_400/0/1631309794782?e=1776902400&v=beta&t=5vKo8h73BW4zBciSn7a601C16TydvCU0Qs3a9KvhyhQ",
+        "start_date": {
+          "year": 2014
+        },
+        "end_date": {
+          "year": 2018
+        },
+        "school_id": "14022"
+      }
+    ],
+    "certifications": [
+      {
+        "name": "Practical Machine Learning",
+        "issuer": "Coursera Course Certificates",
+        "issued_date": "Issued Sep 2016"
+      },
+      {
+        "name": "Machine Learning",
+        "issuer": "Coursera Course Certificates",
+        "issued_date": "Issued Sep 2016"
+      }
+    ],
+    "languages": [
+      {
+        "language": "English"
+      },
+      {
+        "language": "Mandarin"
+      }
+    ]
+  }
+}

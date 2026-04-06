@@ -1,0 +1,12 @@
+{
+  "raw_user_request": "帮我找 xAI 当前偏基础设施、训练系统和推理平台方向的核心技术成员，先获取全量成员数据资产，再做检索和排序。",
+  "target_company": "xAI",
+  "categories": ["employee"],
+  "employment_statuses": ["current"],
+  "keywords": ["基础设施", "训练系统", "推理", "GPU"],
+  "top_k": 8,
+  "slug_resolution_limit": 5,
+  "profile_detail_limit": 3,
+  "publication_scan_limit": 4,
+  "publication_lead_limit": 6
+}

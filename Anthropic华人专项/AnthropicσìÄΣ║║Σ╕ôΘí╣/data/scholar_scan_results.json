@@ -1,0 +1,111 @@
+{
+  "scan_date": "2026-04-03",
+  "method": "Google Scholar @anthropic.com 邮箱验证扫描",
+  "new_chinese_candidates": [
+    {
+      "name_en": "Kaidi Cao",
+      "name_zh": "曹凯迪",
+      "position": "Member of Technical Staff",
+      "team": "Claude Agentic & Tool-use",
+      "scholar_url": "https://scholar.google.com/citations?user=4Zw1PJ8AAAAJ",
+      "homepage": "https://ai.stanford.edu/~kaidicao/",
+      "verified_email": "anthropic.com",
+      "education": {
+        "bachelor": "清华大学 工学学士（B.E.）",
+        "phd": "斯坦福大学 计算机科学 博士（Ph.D.）"
+      },
+      "background_note": "Voyage AI 联合创始人（被收购），Stanford AI Lab PhD，做 embedding/reranking，现在 Anthropic 负责 Claude agentic 能力",
+      "research_areas": "Machine Learning, Computer Vision, Graph Neural Networks",
+      "citations_approx": "~1000+",
+      "chinese_background_confidence": "高 - 清华本科",
+      "status": "已写入Excel（row85）",
+      "in_excel": true,
+      "linkedin": "https://www.linkedin.com/in/kaidi-cao-398131117",
+      "linkedin_slug": "kaidi-cao-398131117",
+      "confirm_date": "2026-04-03",
+      "confirm_source": "个人主页 ai.stanford.edu/~kaidicao/ + LinkedIn + Google Scholar"
+    },
+    {
+      "name_en": "Zhao Meng",
+      "name_zh": "赵孟",
+      "position": "Researcher",
+      "team": "Unknown",
+      "scholar_url": "https://scholar.google.com/citations?user=hKESpIUAAAAJ",
+      "verified_email": "anthropic.com",
+      "education": {
+        "bachelor": "待查",
+        "phd": "待查"
+      },
+      "background_note": "Apple Foundation Models高级研究员 → 2025年底加入Anthropic",
+      "research_areas": "Large Language Models, Machine Learning, NLP",
+      "citations_approx": "~830+",
+      "chinese_background_confidence": "高 - 姓名为中文",
+      "status": "已写入Excel（row86）",
+      "in_excel": true,
+      "confirm_date": "2026-04-03",
+      "confirm_source": "36Kr英文报道2025-09 + 知乎专栏2025-12 + Google Scholar @anthropic.com"
+    },
+    {
+      "name_en": "Yanda Chen",
+      "name_zh": "陈彦达",
+      "position": "Member of Technical Staff (Research Scientist)",
+      "team": "Alignment Science",
+      "scholar_url": "https://scholar.google.com/citations?user=iY2LhwEAAAAJ",
+      "homepage": "https://yandachen.github.io/",
+      "linkedin": "https://www.linkedin.com/in/yanda-chen-03455a16a",
+      "twitter": "@yanda_chen_",
+      "verified_email": "anthropic.com",
+      "education": {
+        "bachelor": "Columbia University, Computer Science (B.S. 2021)",
+        "phd": "Columbia University, Computer Science (NLP, AI Safety, ML)"
+      },
+      "background_note": "哥伦比亚大学 CS 本硕博，做 NLP/AI Safety/Explainability，在 Alignment Science 团队",
+      "research_areas": "NLP, AI Safety, Machine Learning, Explainability",
+      "citations_approx": "~200+",
+      "chinese_background_confidence": "高 - 中文名",
+      "status": "已写入Excel（row69，早于本次扫描）",
+      "in_excel": true
+    },
+    {
+      "name_en": "Saffron Huang",
+      "name_zh": null,
+      "position": "Research Scientist",
+      "team": "Societal Impacts",
+      "scholar_url": "https://scholar.google.com/citations?user=1aL6moAAAAAJ",
+      "verified_email": "anthropic.com",
+      "homepage": "https://saffronhuang.com/",
+      "linkedin": "https://www.linkedin.com/in/saffronhuang/",
+      "background_note": "来自新西兰；LinkedIn语言含中文(简体)；北大Yu Xie课题组实习；2024 TIME 100 AI",
+      "chinese_background_confidence": "中 - 非中文名但有明确中文语言背景和北大经历",
+      "status": "已写入Excel（row88）",
+      "in_excel": true,
+      "confirm_date": "2026-04-03",
+      "confirm_source": "LinkedIn语言字段+北大实习经历+用户确认"
+    }
+  ],
+  "excluded": [],
+  "already_known_confirmed": [
+    "Dario Amodei - CEO，非华裔",
+    "Collin Burns - 非华裔",
+    "Ross Girshick - 非华裔",
+    "Vihan Jain - 印裔，非华裔"
+  ],
+  "pending_review": [
+    {
+      "name_en": "Alwin Peng",
+      "affiliation": "Anthropic Safeguards Research Team",
+      "source": "alignment.anthropic.com/2025/introducing-safeguards-research-team/",
+      "scholar_url": "https://scholar.google.com/citations?user=c5PO2pgAAAAJ",
+      "chinese_background": "待确认（Peng是华人常见姓，无其他信息）",
+      "status": "待核实"
+    },
+    {
+      "name_en": "Giulio Zhou",
+      "affiliation": "Anthropic MTS 2024/05-2025/11 → Google DeepMind",
+      "linkedin": "https://www.linkedin.com/in/giuliozhou",
+      "homepage": "http://giuliozhou.com/",
+      "chinese_background": "待确认（意大利名+Zhou姓，ABC可能性；无中文背景证据）",
+      "status": "已离职Anthropic，华裔身份待确认"
+    }
+  ]
+}

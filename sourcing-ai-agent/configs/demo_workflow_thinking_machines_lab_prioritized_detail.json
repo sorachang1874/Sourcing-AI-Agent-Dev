@@ -1,0 +1,19 @@
+{
+  "raw_user_request": "在已获取 Thinking Machines Lab 当前全量 roster 的基础上，优先为技术和核心领导成员拉取 full LinkedIn profile detail，允许使用 company-employees、profile-scraper 和 profile-search fallback。",
+  "target_company": "Thinking Machines Lab",
+  "categories": [
+    "employee"
+  ],
+  "employment_statuses": [
+    "current"
+  ],
+  "organization_keywords": [
+    "Thinking Machines Lab"
+  ],
+  "top_k": 25,
+  "slug_resolution_limit": 12,
+  "profile_detail_limit": 12,
+  "publication_scan_limit": 0,
+  "publication_lead_limit": 0,
+  "exploration_limit": 0
+}

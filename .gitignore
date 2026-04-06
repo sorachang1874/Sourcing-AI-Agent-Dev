@@ -1,0 +1,17 @@
+*.zip
+*.tar.gz
+**/__pycache__/
+**/*.pyc
+**/.DS_Store
+**/._*
+**/__MACOSX/
+**/.pytest_cache/
+**/*.db
+**/providers.local.json
+**/api_accounts.json
+
+# Live/runtime assets should stay local or move to cloud storage later.
+**/runtime/
+
+# Keep the project-level example config, but never commit real provider secrets.
+!sourcing-ai-agent/configs/providers.local.example.json

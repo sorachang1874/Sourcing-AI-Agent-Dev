@@ -1,0 +1,165 @@
+{
+  "success": true,
+  "message": "response retrieved successfully",
+  "data": {
+    "basic_info": {
+      "fullname": "Qiaojing (David) Yan",
+      "first_name": "Qiaojing (David)",
+      "last_name": "Yan",
+      "headline": "MTS at Anthropic",
+      "public_identifier": "qiaojingyan",
+      "profile_url": "https://linkedin.com/in/qiaojingyan",
+      "profile_picture_url": "",
+      "about": "Experienced machine learning engineer with expertise in mining large scale dataset, designing,\nimplementing and training state-of-the-art ML models, and deploying models to production.",
+      "location": {
+        "country": "United States",
+        "city": "Mountain View, California",
+        "full": "Mountain View, California, United States",
+        "country_code": "US"
+      },
+      "creator_hashtags": [],
+      "is_creator": false,
+      "is_influencer": false,
+      "is_premium": false,
+      "open_to_work": false,
+      "created_timestamp": 1452931246764,
+      "show_follower_count": false,
+      "background_picture_url": "",
+      "urn": "ACoAABwxyj8Bnf8wZJ1j5AfGWatIpINP4rJd1nk",
+      "follower_count": 821,
+      "connection_count": 714,
+      "current_company": "Anthropic",
+      "current_company_urn": "74126343",
+      "current_company_url": "https://www.linkedin.com/company/anthropicresearch",
+      "top_skills": [],
+      "email": null
+    },
+    "experience": [
+      {
+        "title": "Member of Technical Staff",
+        "company": "Anthropic",
+        "description": "Reinforcement Learning",
+        "duration": "Oct 2025 - Present · 7 mos",
+        "start_date": {
+          "year": 2025,
+          "month": "Oct"
+        },
+        "is_current": true,
+        "company_linkedin_url": "https://www.linkedin.com/company/74126343/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_400_400/company-logo_400_400/0/1719256729905/anthropicresearch_logo?e=1776902400&v=beta&t=6sv-GagnF1G5d4B4rN1Yu3sq6fln2BP_9tb0s6bARoY",
+        "employment_type": "Full-time",
+        "company_id": "74126343"
+      },
+      {
+        "title": "Senior Applied Scientist",
+        "company": "Amazon Web Services (AWS)",
+        "location": "Santa Clara, California, United States",
+        "description": "Agentic AI Research",
+        "duration": "May 2024 - Oct 2025 · 1 yr 6 mos",
+        "start_date": {
+          "year": 2024,
+          "month": "May"
+        },
+        "end_date": {
+          "year": 2025,
+          "month": "Oct"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/2382910/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQFqdm1TZ-RZKQ/company-logo_400_400/B4EZgOay6gHEAg-/0/1752588562343/amazon_web_services_logo?e=1776902400&v=beta&t=LDRq2nbifI5rRrDAI6jngUEQaV-WTVhmAm3YngokD2Q",
+        "employment_type": "Full-time",
+        "company_id": "2382910"
+      },
+      {
+        "title": "Senior Machine Learning Engineer",
+        "company": "Waymo",
+        "location": "Mountain View",
+        "description": "Behavior prediction and planning.",
+        "duration": "Sep 2019 - May 2024 · 4 yrs 9 mos",
+        "start_date": {
+          "year": 2019,
+          "month": "Sep"
+        },
+        "end_date": {
+          "year": 2024,
+          "month": "May"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/17900793/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQH7oNKotSNJzg/company-logo_400_400/B56ZsEdpviIcAg-/0/1765306440935/waymo_logo?e=1776902400&v=beta&t=0qZFY8bJ2UC-DUgao_dshH2dRxU4g4C1L8c47gKqXY0",
+        "company_id": "17900793"
+      },
+      {
+        "title": "Software Engineer",
+        "company": "Google",
+        "location": "Mountain View",
+        "description": "Natural Language Processing, Knowledge Graph",
+        "duration": "May 2017 - Sep 2019 · 2 yrs 5 mos",
+        "start_date": {
+          "year": 2017,
+          "month": "May"
+        },
+        "end_date": {
+          "year": 2019,
+          "month": "Sep"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/1441/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+        "company_id": "1441"
+      },
+      {
+        "title": "Graduate Teaching Assistant",
+        "company": "Stanford University",
+        "description": "TA for CS224N (Natural Language Processing with Deep Learning)",
+        "duration": "Jan 2017 - Apr 2017 · 4 mos",
+        "start_date": {
+          "year": 2017,
+          "month": "Jan"
+        },
+        "end_date": {
+          "year": 2017,
+          "month": "Apr"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/1792/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_400_400/company-logo_400_400/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=zzE-1MKqCLrmkqb1p2hJqhVuV2hbdZzC0j_ok6Kyhk8",
+        "company_id": "1792"
+      }
+    ],
+    "education": [
+      {
+        "school": "Stanford University",
+        "degree": "Master’s Degree, Electrical Engineering",
+        "degree_name": "Master’s Degree",
+        "field_of_study": "Electrical Engineering",
+        "duration": "2015 - 2017",
+        "school_linkedin_url": "https://www.linkedin.com/company/1792/",
+        "school_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_400_400/company-logo_400_400/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=zzE-1MKqCLrmkqb1p2hJqhVuV2hbdZzC0j_ok6Kyhk8",
+        "start_date": {
+          "year": 2015
+        },
+        "end_date": {
+          "year": 2017
+        },
+        "school_id": "1792"
+      },
+      {
+        "school": "Peking University",
+        "degree": "Bachelor’s Degree, Physics",
+        "degree_name": "Bachelor’s Degree",
+        "field_of_study": "Physics",
+        "duration": "2011 - 2015",
+        "school_linkedin_url": "https://www.linkedin.com/company/20289/",
+        "school_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQFNJ0xtCpaTmA/company-logo_400_400/company-logo_400_400/0/1630659985593/peking_university_logo?e=1776902400&v=beta&t=tzWsCJkzrFTjS8-XTrasS49bBUqZTxxm9qz4Y-W-UEI",
+        "start_date": {
+          "year": 2011
+        },
+        "end_date": {
+          "year": 2015
+        },
+        "school_id": "20289"
+      }
+    ]
+  }
+}

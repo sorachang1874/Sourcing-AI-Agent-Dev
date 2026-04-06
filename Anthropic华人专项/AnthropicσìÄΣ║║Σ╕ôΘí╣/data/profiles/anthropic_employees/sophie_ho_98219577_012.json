@@ -1,0 +1,255 @@
+{
+  "success": true,
+  "message": "response retrieved successfully",
+  "data": {
+    "basic_info": {
+      "fullname": "Sophie Ho",
+      "first_name": "Sophie",
+      "last_name": "Ho",
+      "headline": "Brand @ Anthropic | Ex WhatsApp, Meta, PepsiCo",
+      "public_identifier": "sophie-ho-98219577",
+      "profile_url": "https://linkedin.com/in/sophie-ho-98219577",
+      "profile_picture_url": "https://media.licdn.com/dms/image/v2/D4E03AQE2m4cCFqda0w/profile-displayphoto-crop_800_800/B4EZnNexq1KwAM-/0/1760089025197?e=1776902400&v=beta&t=5yEae79aNwvBbsvPzB4pBOcHrp81P8vnviwt-lEDkUg",
+      "about": "I help breakthrough technologies become culturally essential.\n20 years crafting brand storytelling with culture & human insight for both iconic trademarks and new-to-world businesses. At Meta, I led WhatsApp's global brand through privacy innovation and AI integration for 3B+ users, turning end-to-end encryption into a Cannes Grand Prix-winning human rights story, unlocking +$10B revenue by launching ads, and making WhatsApp Meta AI's primary entry point. At PepsiCo, I created the #PepsiChallenge campaign that became the #1 trending topic on social media worldwide and conceived the first partnership with Alibaba to build a youth incubator for China.\nExpert in translating complex innovation into cultural movements that drive adoption and trust. Cross-cultural strategist with deep China and US market experience.",
+      "location": {
+        "country": "United States",
+        "city": "New York, New York",
+        "full": "New York, New York, United States",
+        "country_code": "US"
+      },
+      "creator_hashtags": [],
+      "is_creator": false,
+      "is_influencer": false,
+      "is_premium": true,
+      "open_to_work": false,
+      "created_timestamp": 1373910645000,
+      "show_follower_count": false,
+      "background_picture_url": "",
+      "urn": "ACoAABA4_DIBKoI9jdphw8sivGEolWFC-LbkgPc",
+      "follower_count": 8342,
+      "connection_count": 5323,
+      "current_company": "Anthropic",
+      "current_company_urn": "74126343",
+      "current_company_url": "https://www.linkedin.com/company/anthropicresearch",
+      "top_skills": [
+        "Brand Strategy",
+        "Technology Marketing",
+        "Artificial Intelligence (AI)",
+        "U.S. China",
+        "Integrated Brand Marketing"
+      ],
+      "email": null
+    },
+    "experience": [
+      {
+        "title": "Head of Brand - Claude ",
+        "company": "Anthropic",
+        "location": "New York City Metropolitan Area",
+        "duration": "Aug 2025 - Present · 9 mos",
+        "start_date": {
+          "year": 2025,
+          "month": "Aug"
+        },
+        "is_current": true,
+        "company_linkedin_url": "https://www.linkedin.com/company/74126343/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_400_400/company-logo_400_400/0/1719256729905/anthropicresearch_logo?e=1776902400&v=beta&t=6sv-GagnF1G5d4B4rN1Yu3sq6fln2BP_9tb0s6bARoY",
+        "employment_type": "Full-time",
+        "location_type": "On-site",
+        "company_id": "74126343"
+      },
+      {
+        "title": "Global Head of Brand_WhatsApp",
+        "company": "Meta",
+        "location": "New York City Metropolitan Area",
+        "description": "Lead global brand marketing for WhatsApp - World's biggest messaging platform. Responsible for brand strategy, global brand campaigns & activations, major product GTMs, talent partnerships, agency roster building, annual marketing planning, etc.",
+        "duration": "Jul 2022 - Aug 2025 · 3 yrs 2 mos",
+        "start_date": {
+          "year": 2022,
+          "month": "Jul"
+        },
+        "end_date": {
+          "year": 2025,
+          "month": "Aug"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/10667/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+        "employment_type": "Full-time",
+        "company_id": "10667"
+      },
+      {
+        "title": "Head of Global Marketing for Quaker",
+        "company": "PepsiCo",
+        "location": "New York, United States",
+        "description": "Responsible for global marketing management including strategic planning, market research, market analytics, marketing communication, brand purpose, product management, product development, digital marketing, content marketing, social media marketing, channel activations, etc.",
+        "duration": "Jul 2019 - Jul 2022 · 3 yrs 1 mo",
+        "start_date": {
+          "year": 2019,
+          "month": "Jul"
+        },
+        "end_date": {
+          "year": 2022,
+          "month": "Jul"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/1431/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQH6OpZgQIX1lQ/company-logo_400_400/B4EZoqk4DAKYAY-/0/1761650901484/pepsico_logo?e=1776902400&v=beta&t=RTy-iXdmwzJnAQTWtnrWzC67As8TU9v2F6faSngxogs",
+        "company_id": "1431"
+      },
+      {
+        "title": "Global Marketing Director for Flavors Brands",
+        "company": "PepsiCo",
+        "location": "New York City Metropolitan Area",
+        "description": "•\tLed PEP flavors portfolio incl brands like 7UP, Mirinda for 100+ international markets across key regions like SSA, Europe, MENA, APAC, LATAM. Built and executed portfolio growth plan, delivered top-line and brand equity growth despite shrinking investment. Reconnected the brands with Gen-Z and millennial consumers with new positionings. Launched new thematic campaigns in global markets incl. TV, digital collaboration, experiential, OOH, PR, influencer partnerships. \n•\tSuccessfully launched a new sparkling lemonade brand: Lemon Lemon in 11 markets. Named “#1 CSD innovation of the year” with outstanding product performance vs. competition. Created a winning brand proposition from scratch which won 30+ international awards across innovation, design, creative, and communication.",
+        "duration": "Mar 2018 - Jun 2019 · 1 yr 4 mos",
+        "start_date": {
+          "year": 2018,
+          "month": "Mar"
+        },
+        "end_date": {
+          "year": 2019,
+          "month": "Jun"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/1431/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQH6OpZgQIX1lQ/company-logo_400_400/B4EZoqk4DAKYAY-/0/1761650901484/pepsico_logo?e=1776902400&v=beta&t=RTy-iXdmwzJnAQTWtnrWzC67As8TU9v2F6faSngxogs",
+        "company_id": "1431"
+      },
+      {
+        "title": "Brand communication lead for Pepsi TM",
+        "company": "PepsiCo",
+        "location": "Greater New York City Area",
+        "duration": "Jul 2013 - Feb 2018 · 4 yrs 8 mos",
+        "start_date": {
+          "year": 2013,
+          "month": "Jul"
+        },
+        "end_date": {
+          "year": 2018,
+          "month": "Feb"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/1431/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQH6OpZgQIX1lQ/company-logo_400_400/B4EZoqk4DAKYAY-/0/1761650901484/pepsico_logo?e=1776902400&v=beta&t=RTy-iXdmwzJnAQTWtnrWzC67As8TU9v2F6faSngxogs",
+        "company_id": "1431"
+      },
+      {
+        "title": "Brand Manager of TANG, Maxwell House, Maxim",
+        "company": "Mondelēz International",
+        "location": "Shanghai, China",
+        "description": "•\tGrew Maxwell House and TANG core business, introduced Maxim into Greater China as new premium instant coffee brand. \n•\tExtensive experiences across sales, marketing, trade marketing, commercialization, customer & channel activations, pricing, P&L management, supply chain management.\n•\tCompleted 18 months of management trainee program as one of the seven top talents in entire organization.",
+        "duration": "Jul 2004 - Jul 2009 · 5 yrs 1 mo",
+        "start_date": {
+          "year": 2004,
+          "month": "Jul"
+        },
+        "end_date": {
+          "year": 2009,
+          "month": "Jul"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/1511/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/C4D0BAQEXpvlmPQN68Q/company-logo_400_400/company-logo_400_400/0/1630453251495/mondelezinternational_logo?e=1776902400&v=beta&t=KcFNZAMHg0u31iIxlim6pYjm9LKczP8nBuJhghDFXDE",
+        "company_id": "1511"
+      }
+    ],
+    "education": [
+      {
+        "school": "NYU School of Professional Studies",
+        "duration": "2021 - 2022",
+        "school_linkedin_url": "https://www.linkedin.com/company/15097453/",
+        "school_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQFnzfTTCbjqqA/company-logo_400_400/company-logo_400_400/0/1689362448520/nyu_school_of_professional_studies_logo?e=1776902400&v=beta&t=Wpo0af099GWfYjsaUwEmpGHTonYyqq61yIuxB0zRR4M",
+        "start_date": {
+          "year": 2021
+        },
+        "end_date": {
+          "year": 2022
+        },
+        "school_id": "15097453"
+      },
+      {
+        "school": "Beijing Foreign Studies University",
+        "degree": "Bachelor's degree, International Business School",
+        "degree_name": "Bachelor's degree",
+        "field_of_study": "International Business School",
+        "duration": "2000 - 2004",
+        "school_linkedin_url": "https://www.linkedin.com/company/15090807/",
+        "school_logo_url": "https://media.licdn.com/dms/image/v2/C4D0BAQGsDx07zmgQZg/company-logo_400_400/company-logo_400_400/0/1631351184178?e=1776902400&v=beta&t=7N4wmSeNgOBNQkET7ePQcmfLFuuX7QfK4icLQTcq1Pw",
+        "start_date": {
+          "year": 2000
+        },
+        "end_date": {
+          "year": 2004
+        },
+        "school_id": "15090807"
+      }
+    ],
+    "featured": [
+      {
+        "type": "link",
+        "title": "Williams is thinking with Claude",
+        "description": "YouTube",
+        "url": "https://www.youtube.com/watch?v=xpmag2Gvi0g",
+        "image_url": "https://media.licdn.com/dms/image/sync/v2/D4E27AQHImf7Xh2c9qg/articleshare-shrink_1280_800/B4EZwe2yKkHoAQ-/0/1770044204058?e=1775739600&v=beta&t=5vrwTRIvmhAGtecOhtEajjGHEhbrQEQHvxPj-ZGe8Xo"
+      },
+      {
+        "type": "post",
+        "title": "Can I get a six pack quickly?",
+        "description": "Claude made its Super Bowl debut.\n\nFor millions of Americans, this might have been their first intro to Claude and first encounter with a choice about AI - that is quickly becoming consequential to our lives.\nThe brief was ambitious: 1) introduce Claude 2) help people understand what's at stake in your choices. If we've accomplished even one of those goals, that's meaningful progress.\nThis isn't the full story of Claude or where we go from here. This is one chapter in a much longer conversation, one page in a story we're still writing.\n\nProud to have helped shape this moment.\nGratitude to the Anthropic team - the most thoughtful group of people who are already sprinting straight into the next, Andrew Stirk and Sasha de Marigny for the vision, Mother for the A+ genius, and our partners at Initiative, Edelman, and Loop for the beautiful orchestration in bringing this to life.\n\nRead more about our commitment here: https://lnkd.in/eKgZFbrf\n\nhttps://lnkd.in/epyCJcZt\n",
+        "url": "https://www.linkedin.com/feed/update/urn:li:activity:7426646839455768576?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A7426646839455768576%29",
+        "image_url": "https://media.licdn.com/dms/image/sync/v2/D4E27AQGF1q8T2m0IZw/articleshare-shrink_1280_800/B4EZwo8jSJI0AQ-/0/1770213488171?e=1775739600&v=beta&t=BgB58ZhW6WydHZNmcfx-qKpLk2DOPDNHHcKfO554qLM",
+        "social_counts": {
+          "likes": 487,
+          "comments": 57,
+          "reaction_counts": [
+            {
+              "type": "like",
+              "count": 309
+            },
+            {
+              "type": "praise",
+              "count": 103
+            },
+            {
+              "type": "empathy",
+              "count": 71
+            },
+            {
+              "type": "appreciation",
+              "count": 2
+            },
+            {
+              "type": "entertainment",
+              "count": 1
+            },
+            {
+              "type": "interest",
+              "count": 1
+            }
+          ]
+        }
+      },
+      {
+        "type": "link",
+        "title": "WhatsApp talks up privacy in biggest global campaign to date",
+        "description": "The Drum",
+        "url": "https://www.thedrum.com/news/2025/05/19/whatsapp-talks-up-privacy-biggest-global-campaign-date",
+        "image_url": "https://media.licdn.com/dms/image/sync/v2/D4E27AQECSIvUyS938Q/articleshare-shrink_1280_800/B4EZbovCCwHYAU-/0/1774670549154?e=1775739600&v=beta&t=KNEbgqbGiGGfD9AKCmKNOAWlBx8BItf5N3YJuva-1oM"
+      },
+      {
+        "type": "link",
+        "title": "We Are Ayenda | A True Story on WhatsApp",
+        "description": "YouTube",
+        "url": "https://www.youtube.com/watch?v=w4Je_kVHDzg",
+        "image_url": "https://media.licdn.com/dms/image/sync/v2/D5627AQEjFcjykASlhg/articleshare-shrink_1280_800/articleshare-shrink_1280_800/0/1712007597689?e=1775739600&v=beta&t=_l-paFJntolnxm3gze75WaxAxNOhYs7R1OfbB83ZLk0"
+      },
+      {
+        "type": "link",
+        "title": "WhatsApp Teams Up With Netflix To Lure Squid Game Fandom",
+        "description": "adweek.com",
+        "url": "https://www.adweek.com/convergent-tv/squid-game-season-2-netflix-whatsapp-campaign/",
+        "image_url": "https://media.licdn.com/dms/image/sync/v2/D4D27AQGC1JNkkkYACQ/articleshare-shrink_800/B4DZes8LqQHAAM-/0/1750953147438?e=1775739600&v=beta&t=4sEo9CfaS-fetKltiSc_ySR0WKDuhproB8mupM69WmU"
+      }
+    ]
+  }
+}

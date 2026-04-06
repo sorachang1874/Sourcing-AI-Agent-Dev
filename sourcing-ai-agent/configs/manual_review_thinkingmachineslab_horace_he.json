@@ -1,0 +1,39 @@
+{
+  "apply_resolution": true,
+  "action": "escalated",
+  "reviewer": "user_manual_review",
+  "notes": "Manual review found homepage and CV, but the homepage does not directly confirm Thinking Machines Lab affiliation. Keep Horace He as an unresolved lead until stronger evidence appears.",
+  "target_company": "Thinking Machines Lab",
+  "candidate": {
+    "candidate_id": "cc74ce71f900de73",
+    "name_en": "Horace He",
+    "display_name": "Horace He",
+    "category": "lead",
+    "target_company": "Thinking Machines Lab",
+    "organization": "Thinking Machines Lab",
+    "role": "Publication author lead",
+    "source_dataset": "thinkingmachinesai_official_feed",
+    "source_path": "/home/sorachang/projects/Sourcing AI Agent Dev/sourcing-ai-agent/runtime/company_assets/thinkingmachineslab/20260406T172439/publications/official_surfaces/blogdefeatingnondeterminisminllminference.html",
+    "metadata": {
+      "publication_url": "https://thinkingmachines.ai/blog/defeating-nondeterminism-in-llm-inference/"
+    }
+  },
+  "candidate_patch": {
+    "category": "lead",
+    "employment_status": ""
+  },
+  "source_links": [
+    {
+      "label": "Homepage",
+      "url": "https://horace.io/",
+      "source_type": "manual_review_link",
+      "notes": "Homepage surfaced via Google search."
+    },
+    {
+      "label": "CV PDF",
+      "url": "https://horace.io/files/horace.pdf",
+      "source_type": "manual_review_link",
+      "notes": "Public CV linked from homepage."
+    }
+  ]
+}

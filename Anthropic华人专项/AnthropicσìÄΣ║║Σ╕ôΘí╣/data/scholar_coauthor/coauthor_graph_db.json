@@ -1,0 +1,1620 @@
+{
+  "_meta": {
+    "schema_version": "1.0",
+    "created_at": "2026-04-05",
+    "last_updated": "2026-04-05",
+    "description": "Scholar Coauthor 图谱扩展数据库 — 追踪每位种子作者的 coauthor 扫描进度与华人候选状态",
+    "stats": {
+      "seed_authors": 11,
+      "seeds_scanned": 11,
+      "seeds_pending": 0,
+      "seeds_no_sidebar": 6,
+      "total_coauthors_discovered": 52,
+      "coauthors_chinese_layer2plus": 28,
+      "coauthors_confirmed_anthropic_or_in_excel": 7,
+      "coauthors_confirmed_not_anthropic": 28,
+      "all_seeds_complete": true
+    }
+  },
+  "seed_authors": {
+    "Y4sk3aMAAAAJ": {
+      "scholar_id": "Y4sk3aMAAAAJ",
+      "name": "Jerry Wei",
+      "scholar_url": "https://scholar.google.com/citations?user=Y4sk3aMAAAAJ",
+      "excel_row": null,
+      "scan_status": "done",
+      "scan_date": "2026-04-05",
+      "coauthor_count": 9,
+      "error_msg": null
+    },
+    "ZvMMbt8AAAAJ": {
+      "scholar_id": "ZvMMbt8AAAAJ",
+      "name": "Christina Lu",
+      "scholar_url": "https://scholar.google.com/citations?user=ZvMMbt8AAAAJ",
+      "excel_row": 75,
+      "scan_status": "done",
+      "scan_date": "2026-04-05",
+      "coauthor_count": 0,
+      "error_msg": null
+    },
+    "x4JAvwMAAAAJ": {
+      "scholar_id": "x4JAvwMAAAAJ",
+      "name": "Jeffrey Wu",
+      "scholar_url": "https://scholar.google.com/citations?user=x4JAvwMAAAAJ",
+      "excel_row": 80,
+      "scan_status": "done",
+      "scan_date": "2026-04-05",
+      "coauthor_count": 0,
+      "error_msg": null
+    },
+    "4Zw1PJ8AAAAJ": {
+      "scholar_id": "4Zw1PJ8AAAAJ",
+      "name": "Kaidi Cao",
+      "scholar_url": "https://scholar.google.com/citations?user=4Zw1PJ8AAAAJ",
+      "excel_row": 85,
+      "scan_status": "done",
+      "scan_date": "2026-04-05",
+      "coauthor_count": 12,
+      "error_msg": null
+    },
+    "hKESpIUAAAAJ": {
+      "scholar_id": "hKESpIUAAAAJ",
+      "name": "Zhao Meng",
+      "scholar_url": "https://scholar.google.com/citations?user=hKESpIUAAAAJ",
+      "excel_row": 86,
+      "scan_status": "done",
+      "scan_date": "2026-04-05",
+      "coauthor_count": 8,
+      "error_msg": null
+    },
+    "jVRL96IAAAAJ": {
+      "scholar_id": "jVRL96IAAAAJ",
+      "name": "Jiaxin Wen",
+      "scholar_url": "https://scholar.google.com/citations?user=jVRL96IAAAAJ",
+      "excel_row": 87,
+      "scan_status": "done",
+      "scan_date": "2026-04-05",
+      "coauthor_count": 9,
+      "error_msg": null
+    },
+    "iY2LhwEAAAAJ": {
+      "scholar_id": "iY2LhwEAAAAJ",
+      "name": "Yanda Chen",
+      "scholar_url": "https://scholar.google.com/citations?user=iY2LhwEAAAAJ",
+      "excel_row": 69,
+      "scan_status": "done",
+      "scan_date": "2026-04-05",
+      "coauthor_count": 16,
+      "error_msg": null
+    },
+    "1aL6moAAAAAJ": {
+      "scholar_id": "1aL6moAAAAAJ",
+      "name": "Saffron Huang",
+      "scholar_url": "https://scholar.google.com/citations?user=1aL6moAAAAAJ",
+      "excel_row": 88,
+      "scan_status": "done",
+      "scan_date": "2026-04-05",
+      "coauthor_count": 0,
+      "error_msg": null
+    },
+    "Y4bU0bwAAAAJ": {
+      "scholar_id": "Y4bU0bwAAAAJ",
+      "name": "Rowan Wang",
+      "scholar_url": "https://scholar.google.com/citations?user=Y4bU0bwAAAAJ",
+      "excel_row": 91,
+      "scan_status": "done",
+      "scan_date": "2026-04-05",
+      "coauthor_count": 0,
+      "error_msg": null
+    },
+    "S63gb38AAAAJ": {
+      "scholar_id": "S63gb38AAAAJ",
+      "name": "Andi Peng",
+      "scholar_url": "https://scholar.google.com/citations?user=S63gb38AAAAJ",
+      "excel_row": null,
+      "scan_status": "done",
+      "scan_date": "2026-04-05",
+      "coauthor_count": 0,
+      "error_msg": null
+    },
+    "c5PO2pgAAAAJ": {
+      "scholar_id": "c5PO2pgAAAAJ",
+      "name": "Alwin Peng",
+      "scholar_url": "https://scholar.google.com/citations?user=c5PO2pgAAAAJ",
+      "excel_row": 89,
+      "scan_status": "done",
+      "scan_date": "2026-04-05",
+      "coauthor_count": 0,
+      "error_msg": null
+    }
+  },
+  "coauthors": {
+    "wA5TK_0AAAAJ": {
+      "scholar_id": "wA5TK_0AAAAJ",
+      "name": "Jason Wei",
+      "scholar_url": "https://scholar.google.com/citations?user=wA5TK_0AAAAJ",
+      "co_with": [
+        "Y4sk3aMAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": null,
+      "chinese_evidence": {},
+      "chinese_confidence": null,
+      "anthropic_status": "confirmed_not",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "excluded",
+      "review_date": "2026-04-05",
+      "review_note": "亚裔（可能韩裔），前 Google Brain 现 Meta，非 Anthropic",
+      "scholar_profile": {
+        "affiliation": "Meta Superintelligence Labs",
+        "verified_email": "google.com",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "UwLsYw8AAAAJ": {
+      "scholar_id": "UwLsYw8AAAAJ",
+      "name": "Denny Zhou",
+      "scholar_url": "https://scholar.google.com/citations?user=UwLsYw8AAAAJ",
+      "co_with": [
+        "Y4sk3aMAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 2,
+      "chinese_evidence": {},
+      "chinese_confidence": null,
+      "anthropic_status": "confirmed_not",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "confirmed_not",
+      "review_date": "2026-04-05",
+      "review_note": "华人（邓），Google DeepMind，非 Anthropic",
+      "scholar_profile": {
+        "affiliation": "Google DeepMind",
+        "verified_email": "google.com",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "CM4o-cgAAAAJ": {
+      "scholar_id": "CM4o-cgAAAAJ",
+      "name": "Yifeng Lu",
+      "scholar_url": "https://scholar.google.com/citations?user=CM4o-cgAAAAJ",
+      "co_with": [
+        "Y4sk3aMAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 2,
+      "chinese_evidence": {
+        "name_pattern": "Yifeng Lu - 中文名",
+        "affil": "Google DeepMind"
+      },
+      "chinese_confidence": "高",
+      "anthropic_status": "confirmed_not",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "confirmed_not",
+      "review_date": "2026-04-05",
+      "review_note": "Google DeepMind Researcher，已从Scholar侧边栏确认（verified @google.com）",
+      "scholar_profile": {
+        "affiliation": "Google DeepMind",
+        "verified_email": "google.com",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "vfT6-XIAAAAJ": {
+      "scholar_id": "vfT6-XIAAAAJ",
+      "name": "Quoc V. Le",
+      "scholar_url": "https://scholar.google.com/citations?user=vfT6-XIAAAAJ",
+      "co_with": [
+        "Y4sk3aMAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": null,
+      "chinese_evidence": {},
+      "chinese_confidence": null,
+      "anthropic_status": "confirmed_not",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "excluded",
+      "review_date": "2026-04-05",
+      "review_note": "越裔，Google，非 Anthropic",
+      "scholar_profile": {
+        "affiliation": "Google",
+        "verified_email": "stanford.edu",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "vkFXULkAAAAJ": {
+      "scholar_id": "vkFXULkAAAAJ",
+      "name": "Saeed Hassanpour",
+      "scholar_url": "https://scholar.google.com/citations?user=vkFXULkAAAAJ",
+      "co_with": [
+        "Y4sk3aMAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 0,
+      "chinese_evidence": {},
+      "chinese_confidence": null,
+      "anthropic_status": "unknown",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "excluded",
+      "review_date": "2026-04-05",
+      "review_note": "非华裔，排除",
+      "scholar_profile": {
+        "affiliation": "Dartmouth",
+        "verified_email": "dartmouth.edu",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "i38QlUwAAAAJ": {
+      "scholar_id": "i38QlUwAAAAJ",
+      "name": "Tengyu MA",
+      "scholar_url": "https://scholar.google.com/citations?user=i38QlUwAAAAJ",
+      "co_with": [
+        "Y4sk3aMAAAAJ",
+        "4Zw1PJ8AAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 2,
+      "chinese_evidence": {
+        "name_pattern": "Tengyu MA - 典型中文名拼音",
+        "affil": "Stanford"
+      },
+      "chinese_confidence": "高",
+      "anthropic_status": "confirmed_not",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "confirmed_not",
+      "review_date": "2026-04-05",
+      "review_note": "Stanford 教授，非 Anthropic 员工",
+      "scholar_profile": {
+        "affiliation": "Stanford University",
+        "verified_email": "stanford.edu",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "VBclY_cAAAAJ": {
+      "scholar_id": "VBclY_cAAAAJ",
+      "name": "Yi Tay",
+      "scholar_url": "https://scholar.google.com/citations?user=VBclY_cAAAAJ",
+      "co_with": [
+        "Y4sk3aMAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 2,
+      "chinese_evidence": {},
+      "chinese_confidence": null,
+      "anthropic_status": "confirmed_not",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "confirmed_not",
+      "review_date": "2026-04-05",
+      "review_note": "华裔（可能马来华裔），Google DeepMind，非 Anthropic",
+      "scholar_profile": {
+        "affiliation": "Google DeepMind",
+        "verified_email": "google.com",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "ss8KR5gAAAAJ": {
+      "scholar_id": "ss8KR5gAAAAJ",
+      "name": "Lorenzo Torresani",
+      "scholar_url": "https://scholar.google.com/citations?user=ss8KR5gAAAAJ",
+      "co_with": [
+        "Y4sk3aMAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 0,
+      "chinese_evidence": {},
+      "chinese_confidence": null,
+      "anthropic_status": "unknown",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "excluded",
+      "review_date": "2026-04-05",
+      "review_note": "非华裔，排除",
+      "scholar_profile": {
+        "affiliation": "Northeastern University",
+        "verified_email": "northeastern.edu",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "_N44XxAAAAAJ": {
+      "scholar_id": "_N44XxAAAAAJ",
+      "name": "Andrew Kyle Lampinen",
+      "scholar_url": "https://scholar.google.com/citations?user=_N44XxAAAAAJ",
+      "co_with": [
+        "Y4sk3aMAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": null,
+      "chinese_evidence": {},
+      "chinese_confidence": null,
+      "anthropic_status": "confirmed_anthropic",
+      "anthropic_evidence": "Scholar verified_email: anthropic.com",
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "confirmed_anthropic",
+      "review_date": null,
+      "review_note": null,
+      "scholar_profile": {
+        "affiliation": "Anthropic",
+        "verified_email": "anthropic.com",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "ujDhg2sAAAAJ": {
+      "scholar_id": "ujDhg2sAAAAJ",
+      "name": "Kathleen McKeown",
+      "scholar_url": "https://scholar.google.com/citations?user=ujDhg2sAAAAJ",
+      "co_with": [
+        "iY2LhwEAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 0,
+      "chinese_evidence": {},
+      "chinese_confidence": null,
+      "anthropic_status": "unknown",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "excluded",
+      "review_date": "2026-04-05",
+      "review_note": "非华裔，排除",
+      "scholar_profile": {
+        "affiliation": "Columbia University",
+        "verified_email": "cs.columbia.edu",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "K-isjagAAAAJ": {
+      "scholar_id": "K-isjagAAAAJ",
+      "name": "He He",
+      "scholar_url": "https://scholar.google.com/citations?user=K-isjagAAAAJ",
+      "co_with": [
+        "iY2LhwEAAAAJ",
+        "jVRL96IAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 2,
+      "chinese_evidence": {
+        "name_pattern": "He He 华裔姓名"
+      },
+      "chinese_confidence": null,
+      "anthropic_status": "confirmed_not",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "confirmed_not",
+      "review_date": "2026-04-05",
+      "review_note": "NYU 副教授，AI NLP方向，非 Anthropic",
+      "scholar_profile": {
+        "affiliation": "New York University",
+        "verified_email": "cs.nyu.edu",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "jee2Dy0AAAAJ": {
+      "scholar_id": "jee2Dy0AAAAJ",
+      "name": "Zhou Yu",
+      "scholar_url": "https://scholar.google.com/citations?user=jee2Dy0AAAAJ",
+      "co_with": [
+        "iY2LhwEAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 2,
+      "chinese_evidence": {
+        "name_pattern": "Zhou Yu 华裔姓名"
+      },
+      "chinese_confidence": null,
+      "anthropic_status": "confirmed_not",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "confirmed_not",
+      "review_date": "2026-04-05",
+      "review_note": "Columbia 教授，对话系统，非 Anthropic",
+      "scholar_profile": {
+        "affiliation": "Columbia University",
+        "verified_email": "columbia.edu",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "GskOShAAAAAJ": {
+      "scholar_id": "GskOShAAAAAJ",
+      "name": "Ruiqi Zhong",
+      "scholar_url": "https://scholar.google.com/citations?user=GskOShAAAAAJ",
+      "co_with": [
+        "iY2LhwEAAAAJ",
+        "jVRL96IAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 3,
+      "chinese_evidence": {
+        "name_pattern": "Ruiqi Zhong 钟瑞琦 - 中文名确认",
+        "education_cn": "哥伦比亚大学本科 → UC Berkeley PhD",
+        "self_stated": "X bio: PhD UC Berkeley'25; Columbia'19"
+      },
+      "chinese_confidence": "高",
+      "anthropic_status": "in_excel",
+      "anthropic_evidence": null,
+      "excel_row": 8,
+      "linkedin_url": "https://www.linkedin.com/in/ruiqi-zhong-09a533b4/",
+      "linkedin_slug": null,
+      "review_status": "confirmed_anthropic",
+      "review_date": "2026-04-05",
+      "review_note": "已离职，写入已离职华人员工表 Row 8；X bio: 'Prev @AnthropicAI PhD UC Berkeley'25; Columbia'19'",
+      "scholar_profile": {
+        "affiliation": "Thinking Machines Lab",
+        "verified_email": "thinkingmachines.ai",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "zehsvT8AAAAJ": {
+      "scholar_id": "zehsvT8AAAAJ",
+      "name": "Chen Zhao",
+      "scholar_url": "https://scholar.google.com/citations?user=zehsvT8AAAAJ",
+      "co_with": [
+        "iY2LhwEAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 2,
+      "chinese_evidence": {
+        "name_pattern": "Chen Zhao - 中文名",
+        "affil": "NYU"
+      },
+      "chinese_confidence": "高",
+      "anthropic_status": "confirmed_not",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "confirmed_not",
+      "review_date": "2026-04-05",
+      "review_note": "NYU Shanghai / NYU，学术研究者，非 Anthropic 员工",
+      "scholar_profile": {
+        "affiliation": "NYU Shanghai / New York University",
+        "verified_email": "nyu.edu",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "ElqwScwAAAAJ": {
+      "scholar_id": "ElqwScwAAAAJ",
+      "name": "George Karypis",
+      "scholar_url": "https://scholar.google.com/citations?user=ElqwScwAAAAJ",
+      "co_with": [
+        "iY2LhwEAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 0,
+      "chinese_evidence": {},
+      "chinese_confidence": null,
+      "anthropic_status": "unknown",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "excluded",
+      "review_date": "2026-04-05",
+      "review_note": "非华裔，排除",
+      "scholar_profile": {
+        "affiliation": "NTT Data / University of Minnesota",
+        "verified_email": "umn.edu",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "LKv32bgAAAAJ": {
+      "scholar_id": "LKv32bgAAAAJ",
+      "name": "Jacob Steinhardt",
+      "scholar_url": "https://scholar.google.com/citations?user=LKv32bgAAAAJ",
+      "co_with": [
+        "iY2LhwEAAAAJ",
+        "jVRL96IAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 0,
+      "chinese_evidence": {},
+      "chinese_confidence": null,
+      "anthropic_status": "unknown",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "excluded",
+      "review_date": "2026-04-05",
+      "review_note": "非华裔，排除",
+      "scholar_profile": {
+        "affiliation": "Stanford University",
+        "verified_email": "cs.stanford.edu",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "NIewcxMAAAAJ": {
+      "scholar_id": "NIewcxMAAAAJ",
+      "name": "Xiaodong Liu",
+      "scholar_url": "https://scholar.google.com/citations?user=NIewcxMAAAAJ",
+      "co_with": [
+        "iY2LhwEAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 2,
+      "chinese_evidence": {
+        "name_pattern": "Xiaodong Liu - 中文名",
+        "affil": "Microsoft Research"
+      },
+      "chinese_confidence": "高",
+      "anthropic_status": "confirmed_not",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "confirmed_not",
+      "review_date": "2026-04-05",
+      "review_note": "Microsoft Research Redmond，verified @microsoft.com，非 Anthropic",
+      "scholar_profile": {
+        "affiliation": "Microsoft Research",
+        "verified_email": "microsoft.com",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "CQ1cqKkAAAAJ": {
+      "scholar_id": "CQ1cqKkAAAAJ",
+      "name": "Jianfeng Gao",
+      "scholar_url": "https://scholar.google.com/citations?user=CQ1cqKkAAAAJ",
+      "co_with": [
+        "iY2LhwEAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 2,
+      "chinese_evidence": {
+        "name_pattern": "Jianfeng Gao - 中文名",
+        "affil": "Microsoft Research"
+      },
+      "chinese_confidence": "高",
+      "anthropic_status": "confirmed_not",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "confirmed_not",
+      "review_date": "2026-04-05",
+      "review_note": "Microsoft Research Redmond，verified @microsoft.com，非 Anthropic",
+      "scholar_profile": {
+        "affiliation": "Microsoft Research",
+        "verified_email": "microsoft.com",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "vPYz4QwAAAAJ": {
+      "scholar_id": "vPYz4QwAAAAJ",
+      "name": "Chandan Singh",
+      "scholar_url": "https://scholar.google.com/citations?user=vPYz4QwAAAAJ",
+      "co_with": [
+        "iY2LhwEAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 0,
+      "chinese_evidence": {},
+      "chinese_confidence": null,
+      "anthropic_status": "unknown",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "excluded",
+      "review_date": "2026-04-05",
+      "review_note": "非华裔，排除",
+      "scholar_profile": {
+        "affiliation": "Microsoft Research",
+        "verified_email": "microsoft.com",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "-xcIYgsAAAAJ": {
+      "scholar_id": "-xcIYgsAAAAJ",
+      "name": "Chris Kedzie",
+      "scholar_url": "https://scholar.google.com/citations?user=-xcIYgsAAAAJ",
+      "co_with": [
+        "iY2LhwEAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 0,
+      "chinese_evidence": {},
+      "chinese_confidence": null,
+      "anthropic_status": "unknown",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "excluded",
+      "review_date": "2026-04-05",
+      "review_note": "非华裔，排除",
+      "scholar_profile": {
+        "affiliation": "Microsoft",
+        "verified_email": "cs.columbia.edu",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "3ctKkysAAAAJ": {
+      "scholar_id": "3ctKkysAAAAJ",
+      "name": "Douglas W. Oard",
+      "scholar_url": "https://scholar.google.com/citations?user=3ctKkysAAAAJ",
+      "co_with": [
+        "iY2LhwEAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 0,
+      "chinese_evidence": {},
+      "chinese_confidence": null,
+      "anthropic_status": "unknown",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "excluded",
+      "review_date": "2026-04-05",
+      "review_note": "非华裔，排除",
+      "scholar_profile": {
+        "affiliation": "University of Maryland",
+        "verified_email": "umd.edu",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "uyUMxHYAAAAJ": {
+      "scholar_id": "uyUMxHYAAAAJ",
+      "name": "Petra Galuscakova",
+      "scholar_url": "https://scholar.google.com/citations?user=uyUMxHYAAAAJ",
+      "co_with": [
+        "iY2LhwEAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 0,
+      "chinese_evidence": {},
+      "chinese_confidence": null,
+      "anthropic_status": "unknown",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "excluded",
+      "review_date": "2026-04-05",
+      "review_note": "非华裔，排除",
+      "scholar_profile": {
+        "affiliation": "University of Stavanger",
+        "verified_email": "uis.no",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "bCosyooAAAAJ": {
+      "scholar_id": "bCosyooAAAAJ",
+      "name": "Suraj Nair",
+      "scholar_url": "https://scholar.google.com/citations?user=bCosyooAAAAJ",
+      "co_with": [
+        "iY2LhwEAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 0,
+      "chinese_evidence": {},
+      "chinese_confidence": null,
+      "anthropic_status": "unknown",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "excluded",
+      "review_date": "2026-04-05",
+      "review_note": "非华裔，排除",
+      "scholar_profile": {
+        "affiliation": "Amazon",
+        "verified_email": "amazon.com",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "_dRPJYkAAAAJ": {
+      "scholar_id": "_dRPJYkAAAAJ",
+      "name": "Amith Ananthram",
+      "scholar_url": "https://scholar.google.com/citations?user=_dRPJYkAAAAJ",
+      "co_with": [
+        "iY2LhwEAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 0,
+      "chinese_evidence": {},
+      "chinese_confidence": null,
+      "anthropic_status": "unknown",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "excluded",
+      "review_date": "2026-04-05",
+      "review_note": "非华裔，排除",
+      "scholar_profile": {
+        "affiliation": "Columbia University",
+        "verified_email": "columbia.edu",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "d-lg1lEAAAAJ": {
+      "scholar_id": "d-lg1lEAAAAJ",
+      "name": "Vittorio Castelli",
+      "scholar_url": "https://scholar.google.com/citations?user=d-lg1lEAAAAJ",
+      "co_with": [
+        "iY2LhwEAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 0,
+      "chinese_evidence": {},
+      "chinese_confidence": null,
+      "anthropic_status": "unknown",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "excluded",
+      "review_date": "2026-04-05",
+      "review_note": "非华裔，排除",
+      "scholar_profile": {
+        "affiliation": "Oracle",
+        "verified_email": "alumni.stanford.edu",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "Q_kKkIUAAAAJ": {
+      "scholar_id": "Q_kKkIUAAAAJ",
+      "name": "Jure Leskovec",
+      "scholar_url": "https://scholar.google.com/citations?user=Q_kKkIUAAAAJ",
+      "co_with": [
+        "4Zw1PJ8AAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 0,
+      "chinese_evidence": {},
+      "chinese_confidence": null,
+      "anthropic_status": "unknown",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "excluded",
+      "review_date": "2026-04-05",
+      "review_note": "非华裔，排除",
+      "scholar_profile": {
+        "affiliation": "Stanford University",
+        "verified_email": "cs.stanford.edu",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "F5rVlz0AAAAJ": {
+      "scholar_id": "F5rVlz0AAAAJ",
+      "name": "Cheng Li",
+      "scholar_url": "https://scholar.google.com/citations?user=F5rVlz0AAAAJ",
+      "co_with": [
+        "4Zw1PJ8AAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 2,
+      "chinese_evidence": {
+        "name_pattern": "Cheng Li - 中文名",
+        "affil": "SenseTime-中国公司"
+      },
+      "chinese_confidence": "高",
+      "anthropic_status": "confirmed_not",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "excluded",
+      "review_date": "2026-04-05",
+      "review_note": "SenseTime 中国公司，与 Anthropic 无关",
+      "scholar_profile": {
+        "affiliation": "SenseTime",
+        "verified_email": "sensetime.com",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "559LF80AAAAJ": {
+      "scholar_id": "559LF80AAAAJ",
+      "name": "Chen Change Loy",
+      "scholar_url": "https://scholar.google.com/citations?user=559LF80AAAAJ",
+      "co_with": [
+        "4Zw1PJ8AAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 2,
+      "chinese_evidence": {
+        "name_pattern": "Chen Change Loy - 华人姓名",
+        "affil": "NTU新加坡南大"
+      },
+      "chinese_confidence": "高",
+      "anthropic_status": "confirmed_not",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "confirmed_not",
+      "review_date": "2026-04-05",
+      "review_note": "南洋理工大学教授（NTU），verified @ntu.edu.sg，非 Anthropic",
+      "scholar_profile": {
+        "affiliation": "Nanyang Technological University",
+        "verified_email": "ntu.edu.sg",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "ltxmeroAAAAJ": {
+      "scholar_id": "ltxmeroAAAAJ",
+      "name": "Maria Brbić",
+      "scholar_url": "https://scholar.google.com/citations?user=ltxmeroAAAAJ",
+      "co_with": [
+        "4Zw1PJ8AAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 0,
+      "chinese_evidence": {},
+      "chinese_confidence": null,
+      "anthropic_status": "unknown",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "excluded",
+      "review_date": "2026-04-05",
+      "review_note": "非华裔，排除",
+      "scholar_profile": {
+        "affiliation": "EPFL",
+        "verified_email": "cs.stanford.edu",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "6ai0lDAAAAAJ": {
+      "scholar_id": "6ai0lDAAAAAJ",
+      "name": "Karthik Subbian",
+      "scholar_url": "https://scholar.google.com/citations?user=6ai0lDAAAAAJ",
+      "co_with": [
+        "4Zw1PJ8AAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 0,
+      "chinese_evidence": {},
+      "chinese_confidence": null,
+      "anthropic_status": "unknown",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "excluded",
+      "review_date": "2026-04-05",
+      "review_note": "非华裔，排除",
+      "scholar_profile": {
+        "affiliation": "Pinterest",
+        "verified_email": "pinterest.com",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "ql1bcCwAAAAJ": {
+      "scholar_id": "ql1bcCwAAAAJ",
+      "name": "Yu Rong",
+      "scholar_url": "https://scholar.google.com/citations?user=ql1bcCwAAAAJ",
+      "co_with": [
+        "4Zw1PJ8AAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 2,
+      "chinese_evidence": {
+        "name_pattern": "Yu Rong - 中文名",
+        "affil": "Meta"
+      },
+      "chinese_confidence": "中",
+      "anthropic_status": "confirmed_not",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "confirmed_not",
+      "review_date": "2026-04-05",
+      "review_note": "Meta Reality Labs Research，verified @fb.com，非 Anthropic",
+      "scholar_profile": {
+        "affiliation": "Meta Reality Labs Research",
+        "verified_email": "fb.com",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "wAFMjfkAAAAJ": {
+      "scholar_id": "wAFMjfkAAAAJ",
+      "name": "Weihua Hu",
+      "scholar_url": "https://scholar.google.com/citations?user=wAFMjfkAAAAJ",
+      "co_with": [
+        "4Zw1PJ8AAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 2,
+      "chinese_evidence": {
+        "name_pattern": "Weihua Hu - 中文名",
+        "affil": "Stanford"
+      },
+      "chinese_confidence": "高",
+      "anthropic_status": "confirmed_not",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "confirmed_not",
+      "review_date": "2026-04-05",
+      "review_note": "Stanford 研究员/博后，verified @stanford.edu，非 Anthropic",
+      "scholar_profile": {
+        "affiliation": "Stanford",
+        "verified_email": "stanford.edu",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "qe8AH6UAAAAJ": {
+      "scholar_id": "qe8AH6UAAAAJ",
+      "name": "Chien-Yi Chang",
+      "scholar_url": "https://scholar.google.com/citations?user=qe8AH6UAAAAJ",
+      "co_with": [
+        "4Zw1PJ8AAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 2,
+      "chinese_evidence": {
+        "name_pattern": "Chien-Yi Chang - 台湾华人名",
+        "affil": "Durham/Stanford"
+      },
+      "chinese_confidence": "高",
+      "anthropic_status": "confirmed_not",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "confirmed_not",
+      "review_date": "2026-04-05",
+      "review_note": "Durham University Assistant Professor (台湾华人背景)，verified @stanford.edu，非 Anthropic",
+      "scholar_profile": {
+        "affiliation": "Durham University",
+        "verified_email": "stanford.edu",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "pA-TqMEAAAAJ": {
+      "scholar_id": "pA-TqMEAAAAJ",
+      "name": "Zhangjie Cao",
+      "scholar_url": "https://scholar.google.com/citations?user=pA-TqMEAAAAJ",
+      "co_with": [
+        "4Zw1PJ8AAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 2,
+      "chinese_evidence": {
+        "name_pattern": "Zhangjie Cao - 中文名",
+        "affil": "Stanford PhD"
+      },
+      "chinese_confidence": "高",
+      "anthropic_status": "confirmed_not",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "confirmed_not",
+      "review_date": "2026-04-05",
+      "review_note": "Stanford PhD（Kaidi Cao 同门），非 Anthropic",
+      "scholar_profile": {
+        "affiliation": "Stanford University",
+        "verified_email": "stanford.edu",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "4a6iPeUAAAAJ": {
+      "scholar_id": "4a6iPeUAAAAJ",
+      "name": "Yining Chen",
+      "scholar_url": "https://scholar.google.com/citations?user=4a6iPeUAAAAJ",
+      "co_with": [
+        "4Zw1PJ8AAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 2,
+      "chinese_evidence": {
+        "name_pattern": "Yining Chen - 中文名",
+        "affil": "OpenAI"
+      },
+      "chinese_confidence": "高",
+      "anthropic_status": "confirmed_not",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "confirmed_not",
+      "review_date": "2026-04-05",
+      "review_note": "现为 OpenAI Research Scientist，非 Anthropic",
+      "scholar_profile": {
+        "affiliation": "OpenAI",
+        "verified_email": "openai.com",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "k9TsUVsAAAAJ": {
+      "scholar_id": "k9TsUVsAAAAJ",
+      "name": "Lu Yuan",
+      "scholar_url": "https://scholar.google.com/citations?user=k9TsUVsAAAAJ",
+      "co_with": [
+        "4Zw1PJ8AAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 2,
+      "chinese_evidence": {
+        "name_pattern": "Lu Yuan - 中文名",
+        "affil": "Meta GenAI"
+      },
+      "chinese_confidence": "高",
+      "anthropic_status": "confirmed_not",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "confirmed_not",
+      "review_date": "2026-04-05",
+      "review_note": "Meta GenAI Research Scientist Manager，非 Anthropic",
+      "scholar_profile": {
+        "affiliation": "Meta GenAI",
+        "verified_email": null,
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "d0npq2oAAAAJ": {
+      "scholar_id": "d0npq2oAAAAJ",
+      "name": "Shi Feng",
+      "scholar_url": "https://scholar.google.com/citations?user=d0npq2oAAAAJ",
+      "co_with": [
+        "jVRL96IAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 2,
+      "chinese_evidence": {
+        "name_pattern": "Shi Feng 华裔姓名"
+      },
+      "chinese_confidence": null,
+      "anthropic_status": "confirmed_not",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "confirmed_not",
+      "review_date": "2026-04-05",
+      "review_note": "GWU 教授，NLP方向，非 Anthropic",
+      "scholar_profile": {
+        "affiliation": "George Washington University",
+        "verified_email": "gwu.edu",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "za0-taQAAAAJ": {
+      "scholar_id": "za0-taQAAAAJ",
+      "name": "Ethan Perez",
+      "scholar_url": "https://scholar.google.com/citations?user=za0-taQAAAAJ",
+      "co_with": [
+        "jVRL96IAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": null,
+      "chinese_evidence": {},
+      "chinese_confidence": null,
+      "anthropic_status": "confirmed_anthropic",
+      "anthropic_evidence": "Scholar verified_email: anthropic.com",
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "confirmed_anthropic",
+      "review_date": null,
+      "review_note": null,
+      "scholar_profile": {
+        "affiliation": "Anthropic",
+        "verified_email": "anthropic.com",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "kV9XRxYAAAAJ": {
+      "scholar_id": "kV9XRxYAAAAJ",
+      "name": "Samuel R. Bowman",
+      "scholar_url": "https://scholar.google.com/citations?user=kV9XRxYAAAAJ",
+      "co_with": [
+        "jVRL96IAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": null,
+      "chinese_evidence": {},
+      "chinese_confidence": null,
+      "anthropic_status": "confirmed_anthropic",
+      "anthropic_evidence": "Scholar verified_email: anthropic.com",
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "confirmed_anthropic",
+      "review_date": null,
+      "review_note": null,
+      "scholar_profile": {
+        "affiliation": "Anthropic and NYU",
+        "verified_email": "anthropic.com",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "P1jPSzMAAAAJ": {
+      "scholar_id": "P1jPSzMAAAAJ",
+      "name": "Minlie Huang",
+      "scholar_url": "https://scholar.google.com/citations?user=P1jPSzMAAAAJ",
+      "co_with": [
+        "jVRL96IAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 3,
+      "chinese_evidence": {
+        "name_pattern": "Minlie Huang - 中文名",
+        "affil": "Tsinghua University - 清华大学"
+      },
+      "chinese_confidence": "高",
+      "anthropic_status": "confirmed_not",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "confirmed_not",
+      "review_date": "2026-04-05",
+      "review_note": "清华大学教授（AI Lab），Jiaxin Wen 博士导师。非 Anthropic 员工，学术合作关系",
+      "scholar_profile": {
+        "affiliation": "Tsinghua University",
+        "verified_email": "tsinghua.edu.cn",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "beiWcokAAAAJ": {
+      "scholar_id": "beiWcokAAAAJ",
+      "name": "Jan Leike",
+      "scholar_url": "https://scholar.google.com/citations?user=beiWcokAAAAJ",
+      "co_with": [
+        "jVRL96IAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": null,
+      "chinese_evidence": {},
+      "chinese_confidence": null,
+      "anthropic_status": "confirmed_anthropic",
+      "anthropic_evidence": "Scholar verified_email: anthropic.com",
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "confirmed_anthropic",
+      "review_date": null,
+      "review_note": "已离职",
+      "scholar_profile": {
+        "affiliation": "Anthropic",
+        "verified_email": "anthropic.com",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "JGS2xjkAAAAJ": {
+      "scholar_id": "JGS2xjkAAAAJ",
+      "name": "Collin Burns",
+      "scholar_url": "https://scholar.google.com/citations?user=JGS2xjkAAAAJ",
+      "co_with": [
+        "jVRL96IAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": null,
+      "chinese_evidence": {},
+      "chinese_confidence": null,
+      "anthropic_status": "confirmed_anthropic",
+      "anthropic_evidence": "Scholar verified_email: anthropic.com",
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "confirmed_anthropic",
+      "review_date": null,
+      "review_note": null,
+      "scholar_profile": {
+        "affiliation": "Anthropic",
+        "verified_email": "anthropic.com",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "KLFjg9EAAAAJ": {
+      "scholar_id": "KLFjg9EAAAAJ",
+      "name": "Thomas I. Liao",
+      "scholar_url": "https://scholar.google.com/citations?user=KLFjg9EAAAAJ",
+      "co_with": [
+        "1aL6moAAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 2,
+      "chinese_evidence": {
+        "self_stated": "从X账号内容判断至少ABC",
+        "education_cn": "UCBerkeley EECS"
+      },
+      "chinese_confidence": "中",
+      "anthropic_status": "in_excel",
+      "anthropic_evidence": "已写入Excel Row 96，论文 co-author: Collective Constitutional AI",
+      "excel_row": 96,
+      "linkedin_url": "https://www.linkedin.com/in/thomasliao/",
+      "linkedin_slug": "thomasliao",
+      "review_status": "confirmed_anthropic",
+      "review_date": "2026-04-05",
+      "review_note": "已在Excel (Row 96). Scholar KLFjg9EAAAAJ. 论文 Collective Constitutional AI与Saffron Huang共著",
+      "scholar_profile": {
+        "affiliation": "Anthropic",
+        "verified_email": "anthropic.com",
+        "interests": [
+          "AI Safety",
+          "Alignment"
+        ],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "l4ffN_QAAAAJ": {
+      "scholar_id": "l4ffN_QAAAAJ",
+      "name": "Peilin Zhong",
+      "scholar_url": "https://scholar.google.com/citations?user=l4ffN_QAAAAJ",
+      "co_with": [
+        "GskOShAAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 2,
+      "chinese_evidence": {
+        "name_pattern": "Peilin Zhong - 典型中文名拼音",
+        "affil": "Meta Superintelligence Lab"
+      },
+      "chinese_confidence": "高",
+      "anthropic_status": "confirmed_not",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "confirmed_not",
+      "review_date": "2026-04-05",
+      "review_note": "Meta Superintelligence Lab，非 Anthropic",
+      "scholar_profile": {
+        "affiliation": "Meta Superintelligence Lab",
+        "verified_email": "meta.com",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "EG3VPm4AAAAJ": {
+      "scholar_id": "EG3VPm4AAAAJ",
+      "name": "Roger Wattenhofer",
+      "scholar_url": "https://scholar.google.com/citations?user=EG3VPm4AAAAJ",
+      "co_with": [
+        "hKESpIUAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": null,
+      "chinese_evidence": {},
+      "chinese_confidence": null,
+      "anthropic_status": "unknown",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "excluded",
+      "review_date": "2026-04-05",
+      "review_note": "非华裔，排除",
+      "scholar_profile": {
+        "affiliation": "ETH Zurich",
+        "verified_email": "ethz.ch",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "ZC7SObAAAAAJ": {
+      "scholar_id": "ZC7SObAAAAAJ",
+      "name": "Zhi Jin",
+      "scholar_url": "https://scholar.google.com/citations?user=ZC7SObAAAAAJ",
+      "co_with": [
+        "hKESpIUAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 3,
+      "chinese_evidence": {
+        "name_pattern": "Zhi Jin",
+        "affil": "Peking University / Wuhan University"
+      },
+      "chinese_confidence": "高",
+      "anthropic_status": "confirmed_not",
+      "anthropic_evidence": "在 Peking University / Wuhan University，非 Anthropic",
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "confirmed_not",
+      "review_date": "2026-04-05",
+      "review_note": "华人，在 Peking University / Wuhan University，非 Anthropic",
+      "scholar_profile": {
+        "affiliation": "Peking University / Wuhan University",
+        "verified_email": "whu.edu.cn",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "32UrMrQAAAAJ": {
+      "scholar_id": "32UrMrQAAAAJ",
+      "name": "Lili Mou",
+      "scholar_url": "https://scholar.google.com/citations?user=32UrMrQAAAAJ",
+      "co_with": [
+        "hKESpIUAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 2,
+      "chinese_evidence": {
+        "name_pattern": "Lili Mou",
+        "affil": "University of Alberta"
+      },
+      "chinese_confidence": "高",
+      "anthropic_status": "confirmed_not",
+      "anthropic_evidence": "在 University of Alberta，非 Anthropic",
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "confirmed_not",
+      "review_date": "2026-04-05",
+      "review_note": "华人，在 University of Alberta，非 Anthropic",
+      "scholar_profile": {
+        "affiliation": "University of Alberta",
+        "verified_email": "ualberta.ca",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "JUnz2VcAAAAJ": {
+      "scholar_id": "JUnz2VcAAAAJ",
+      "name": "Lu Zhang",
+      "scholar_url": "https://scholar.google.com/citations?user=JUnz2VcAAAAJ",
+      "co_with": [
+        "hKESpIUAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 3,
+      "chinese_evidence": {
+        "name_pattern": "Lu Zhang",
+        "affil": "Peking University"
+      },
+      "chinese_confidence": "高",
+      "anthropic_status": "confirmed_not",
+      "anthropic_evidence": "在 Peking University，非 Anthropic",
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "confirmed_not",
+      "review_date": "2026-04-05",
+      "review_note": "华人，在 Peking University，非 Anthropic",
+      "scholar_profile": {
+        "affiliation": "Peking University",
+        "verified_email": "sei.pku.edu.cn",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "R_w2b2YAAAAJ": {
+      "scholar_id": "R_w2b2YAAAAJ",
+      "name": "Yan Xu",
+      "scholar_url": "https://scholar.google.com/citations?user=R_w2b2YAAAAJ",
+      "co_with": [
+        "hKESpIUAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 2,
+      "chinese_evidence": {
+        "name_pattern": "Yan Xu",
+        "affil": "ZitoWise"
+      },
+      "chinese_confidence": "高",
+      "anthropic_status": "confirmed_not",
+      "anthropic_evidence": "在 ZitoWise，非 Anthropic",
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "confirmed_not",
+      "review_date": "2026-04-05",
+      "review_note": "华人，在 ZitoWise，非 Anthropic",
+      "scholar_profile": {
+        "affiliation": "ZitoWise",
+        "verified_email": "zitowise.com",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "eLw6g-UAAAAJ": {
+      "scholar_id": "eLw6g-UAAAAJ",
+      "name": "Rui Yan",
+      "scholar_url": "https://scholar.google.com/citations?user=eLw6g-UAAAAJ",
+      "co_with": [
+        "hKESpIUAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 3,
+      "chinese_evidence": {
+        "name_pattern": "Rui Yan",
+        "affil": "Wuhan University / Renmin U."
+      },
+      "chinese_confidence": "高",
+      "anthropic_status": "confirmed_not",
+      "anthropic_evidence": "在 Wuhan University / Renmin U.，非 Anthropic",
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "confirmed_not",
+      "review_date": "2026-04-05",
+      "review_note": "华人，在 Wuhan University / Renmin U.，非 Anthropic",
+      "scholar_profile": {
+        "affiliation": "Wuhan University / Renmin U.",
+        "verified_email": "seas.upenn.edu",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "wkC9xHMAAAAJ": {
+      "scholar_id": "wkC9xHMAAAAJ",
+      "name": "Justine Cassell",
+      "scholar_url": "https://scholar.google.com/citations?user=wkC9xHMAAAAJ",
+      "co_with": [
+        "hKESpIUAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": null,
+      "chinese_evidence": {},
+      "chinese_confidence": null,
+      "anthropic_status": "unknown",
+      "anthropic_evidence": null,
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "excluded",
+      "review_date": "2026-04-05",
+      "review_note": "非华裔，排除",
+      "scholar_profile": {
+        "affiliation": "Inria Paris / CMU",
+        "verified_email": "cs.cmu.edu",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    },
+    "4MJN6qoAAAAJ": {
+      "scholar_id": "4MJN6qoAAAAJ",
+      "name": "Ran Zhao",
+      "scholar_url": "https://scholar.google.com/citations?user=4MJN6qoAAAAJ",
+      "co_with": [
+        "hKESpIUAAAAJ"
+      ],
+      "discovered_date": "2026-04-05",
+      "chinese_layer": 2,
+      "chinese_evidence": {
+        "name_pattern": "Ran Zhao",
+        "affil": "5Y Capital"
+      },
+      "chinese_confidence": "高",
+      "anthropic_status": "confirmed_not",
+      "anthropic_evidence": "在 5Y Capital，非 Anthropic",
+      "excel_row": null,
+      "linkedin_url": null,
+      "linkedin_slug": null,
+      "review_status": "confirmed_not",
+      "review_date": "2026-04-05",
+      "review_note": "华人，在 5Y Capital，非 Anthropic",
+      "scholar_profile": {
+        "affiliation": "5Y Capital",
+        "verified_email": "5ycap.com",
+        "interests": [],
+        "citations": null,
+        "h_index": null
+      }
+    }
+  }
+}

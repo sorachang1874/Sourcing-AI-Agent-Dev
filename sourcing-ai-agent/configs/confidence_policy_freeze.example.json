@@ -1,0 +1,22 @@
+{
+  "action": "freeze_current",
+  "target_company": "Thinking Machines Lab",
+  "scope_kind": "request_family",
+  "reviewer": "pm",
+  "notes": "Freeze current confidence bands for this request family before live validation.",
+  "request_payload": {
+    "target_company": "Thinking Machines Lab",
+    "categories": [
+      "employee"
+    ],
+    "employment_statuses": [
+      "current"
+    ],
+    "keywords": [
+      "researcher",
+      "engineer",
+      "multimodal"
+    ],
+    "top_k": 20
+  }
+}

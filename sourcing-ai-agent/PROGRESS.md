@@ -1,0 +1,498 @@
+# Sourcing AI Agent Dev Progress
+
+## 2026-04-06
+
+### 已记录待办
+
+- `worker daemon` 的真实 systemd 安装与启用延后到正式服务器环境：
+  - 当前开发环境是 WSL，本地可生成 unit 并验证 service 壳层逻辑
+  - 但不把 `/etc/systemd/system` 安装视为当前开发阶段目标
+  - 等正式上线到长期运行的 Linux 服务器后，再执行安装、`enable --now` 和运维接入
+- 新增 source family 的产品化流程需要保持“先交互、后规划、再开发/测试”的阶段门：
+  - 先确认用户的目标、偏好、覆盖范围、执行深度、成本容忍度
+  - 再进入 source onboarding review 和具体链路实现
+  - 新链路必须继续满足数据资产意识、可审计性、可扩展性要求
+
+### 已记录的产品决策
+
+- 明确将当前项目继续泛化为通用 sourcing workflow，而不是 Anthropic / xAI 特例扫描器
+- 已实现 `AcquisitionStrategyCompiler`
+  - plan 阶段可输出 `full_company_roster / scoped_search_roster / former_employee_search / investor_firm_roster`
+  - 明确低成本优先的 slug resolution 顺序：relation check / web search -> LinkedIn people search API -> profile detail API
+  - 对大公司查询会给出 scope confirmation points，例如 `Google Gemini` 默认建议缩到 `Google DeepMind / Gemini`
+  - 已编码 HarvestAPI 成本规则：
+    - 已知 URL 时默认 route 到 `linkedin-profile-scraper`
+    - `linkedin-company-employees` 只适用于批量场景
+    - `linkedin-profile-search` 仅作为低成本 web search 不足时的 fallback
+- 已实现 `PublicationCoveragePlanner`
+  - plan 阶段可输出 publication source families、seed queries、LLM extraction role、fallback steps
+  - 当前将 official research / engineering / blog / docs / publication platforms 作为标准 coverage family
+- 记录后续 Thinking Machines Lab 端到端验证的高质量 connector 策略：
+  - HarvestAPI LinkedIn profile search，用于按意图定向检索
+  - HarvestAPI LinkedIn company employees，用于获取高质量公司 roster
+  - HarvestAPI LinkedIn profile scraper，用于按 LinkedIn URL 获取 full profile detail
+- 明确 HarvestAPI 使用策略：
+  - 默认不需要 email
+  - profile scraper 默认 `Full` 模式，避免因 detail 不完整而重复调用
+  - 可利用 `moreProfiles` 扩展相同公司经历或相近背景的人选
+  - 因成本较高，仅在最终验证或人工确认后调用
+- 明确后续产品化重点：
+  - 早期阶段要根据用户意图制定 acquisition strategy，而不只是固定 company roster
+  - 后期 retrieval 要升级为多层过滤与多置信度结果输出
+  - 高价值 LinkedIn Profile 与最终 result artifact 未来进入云端存储，本地保留 workflow 执行态与调试缓存
+- 明确 publication enrichment 的升级方向：
+  - 当前 `arXiv affiliation -> author / acknowledgement -> co-author` 只能作为 baseline
+  - 后续需要让 LLM 先做 source coverage planning，确保 coverage 不只包含 arXiv，也包括 official research / engineering / blog / docs 等 source families
+  - 对弱结构化的 author / acknowledgement / contributor 文本，允许 LLM 参与抽取与归一化
+  - 仍保留 deterministic fallback，避免模型不可用时中断工作流
+- 明确 retrieval 产品策略：
+  - 默认输出 `hybrid` 结果
+  - 同时支持 `structured_only` 与 `semantic_heavy`
+  - 结果按 `high confidence / medium confidence / lead only` 分层呈现，供用户按 precision / recall 需求选择
+- 已完成执行层改造第一步：
+  - acquisition runtime 不再只会执行 company roster，而是会按 strategy 分叉
+  - `scoped_search_roster / former_employee_search` 已接入 low-cost search-seed acquisition
+  - enrichment 的 slug/profile 解析已改为 `web-first, paid-fallback`
+- 已补 Harvest profile-scraper adapter 基础层：
+  - 仅在已知 LinkedIn URL 且配置了 Apify token 时启用
+  - 默认 `Full`
+  - 默认不抓 email
+  - 作为 high-cost provider 中成本最低的一档 detail connector
+- 已补 publication lead 的 second-pass enrichment：
+  - publication / acknowledgement 发现的 lead 不再只停留在 `lead` 文档层
+  - 在剩余 enrichment budget 内，会继续尝试解析 LinkedIn profile
+  - 若 profile 验证通过，可将 `lead` 升级为 `employee` 或 `former_employee`
+- 已补 `docs/DATA_ARCHITECTURE.md`
+  - 明确当前 canonical schema、snapshot 资产类型、审计链路
+  - 明确仍缺 `confidence persistence / criteria self-evolution / cloud asset registry`
+- 已补 `further exploration` 模块：
+  - 对 unresolved lead 做低成本网页探索，而不是默认直接花费 LinkedIn search 成本
+  - 可从网页、X、GitHub、个人主页、CV 中回收 profile 线索
+  - 若探索后发现 LinkedIn URL，可重新进入 detail enrichment
+- 已补 criteria evolution persistence 第一版：
+  - 新增 `criteria_feedback` 和 `criteria_patterns`
+  - 新增 API/CLI 入口写入人工 review feedback
+  - `accepted_alias` 这类 feedback 已可影响后续 scoring
+- 已补 criteria audit persistence：
+  - 新增 `criteria_versions`
+  - 新增 `criteria_compiler_runs`
+  - plan / workflow / retrieval 都会留下 criteria 编译版本与 provider 记录
+- 已补 confidence persistence：
+  - `job_results` 新增 `confidence_label / confidence_score / confidence_reason`
+  - retrieval artifact 和持久化结果都会带上 `high / medium / lead_only`
+- 已补 model-agnostic page analysis：
+  - `further exploration` 不再把页面摘要能力写死为 Qwen
+  - 当前通过通用 `analyze_page_asset` 接口接入模型，保留 deterministic fallback
+- 已显式固化 raw-first / compact-context 规则：
+  - 外部 API 返回、网页原文、analysis input/output 默认先落盘
+  - 模型默认只读取 compact excerpt，而不是直接吃整页 HTML 或大体积 raw payload
+  - `.pdf` 等 binary-like URL 默认不直接送入页面分析上下文
+- 已补 centralized asset logger：
+  - 新增 `asset_logger.py`
+  - snapshot 下统一维护 `asset_registry.json`
+  - company roster、search seed、LinkedIn profile、Harvest profile、publication raw page、exploration page、analysis input/output 统一登记
+- 已补跨进程 worker recovery daemon：
+  - `agent_worker_runs` 新增 `lease_owner / lease_expires_at / attempt_count / last_error`
+  - 新增 recoverable worker 扫描、claim、renew、release
+  - 新增 `PersistentWorkerRecoveryDaemon`
+  - `stale running` worker 现在会被当作可恢复 worker 重新进入 scheduler
+  - 已补 CLI/API 控制面：
+    - CLI: `show-recoverable-workers / run-worker-daemon-once / run-worker-daemon`
+    - API: `GET /api/workers/recoverable / POST /api/workers/daemon/run-once`
+  - 已补跨连接测试，验证 DB lease 可协调独立进程式恢复器
+- 已补系统级 daemon service 壳层：
+  - 新增 `service_daemon.py`
+  - 支持单实例 lock、心跳状态、优雅退出
+  - 支持 `run-worker-daemon-service`
+  - 支持 `show-daemon-status`
+  - 支持 `write-worker-daemon-systemd-unit`
+  - 新增 API：`GET /api/workers/daemon/status`、`POST /api/workers/daemon/systemd-unit`
+  - 新增测试 `tests/test_service_daemon.py`
+- 已补 criteria auto-evolution loop 第一版：
+  - feedback 写入后自动触发一次 criteria recompile
+  - 新 criteria version 会保留 `parent_version_id / trigger_feedback_id / evolution_stage`
+  - 新增 `/api/criteria/recompile` 与 `recompile-criteria`
+- 已补 feedback -> rerun -> result diff：
+  - `rerun_retrieval=true` 时会在 recompile 后自动执行 retrieval rerun
+  - 新增 `criteria_result_diffs`
+  - baseline job 与 rerun job 的 `added / removed / moved` 会被持久化并落成 diff artifact
+- 已将 result diff 升级为双层 diff：
+  - `rule_changes` 会比较 baseline / rerun 的 criteria version、pattern snapshot、request、plan
+  - `result_changes` 会比较 rerun 前后的候选人进入、退出、排序与置信度变化
+  - 新增 `impact_explanations`，将规则变化与结果变化合并成可读的审计解释
+  - criteria version 现会保存包含 disabled pattern 在内的全量 pattern snapshot，避免事后解释被当前 active state 污染
+- 已补候选人级影响归因：
+  - diff 现包含 `candidate_impacts`
+  - 会针对 `added / removed / moved` 候选人，归因到具体 pattern change、request change，及其对应的 matched field
+  - 对 alias 这类规则变更，现可直接解释“哪条规则让哪个候选人进入结果”
+- 已补 rerun gating + cost policy：
+  - `rerun_retrieval` 现支持 `auto / cheap / full`
+  - `auto` 会按 feedback 类型、baseline 规模和预估影响决定是否 rerun
+  - `cheap` rerun 会收紧 `top_k / semantic_rerank_limit`，并强制使用 deterministic summary
+  - 低信号 feedback 会被 gate 掉，避免无意义 rerun 和重复模型摘要成本
+- 已补 baseline job / request-family 精确匹配：
+  - rerun 不再默认选择“同公司最近完成 job”
+  - 会先按 request-family signature 和 family score 匹配最接近的 baseline job
+  - 仅在没有足够接近的 family match 时，才退回到 latest-company fallback
+  - rerun 返回和 diff artifact 现会显式包含 `baseline_selection`
+- 已补 confidence evolution：
+  - `must_have_signal / false_negative_pattern` 会派生出 `must_signal + confidence_boost`
+  - `exclude_signal / false_positive_pattern` 会派生出 `exclude_signal + confidence_penalty`
+  - scoring 现会让这些 pattern 直接影响 `confidence_score / confidence_label / confidence_reason`
+  - rerun diff 已能表现“结果未换人，但 confidence label 变化”的场景
+- 已补 company-level confidence band evolution：
+  - 会按同公司历史 feedback 统计 precision / recall pressure
+  - 自动微调 `high / medium` band 边界，而不是只做 pattern 级加减分
+  - 每次 retrieval / rerun 会把当时生效的阈值保存到 `confidence_policy_runs`
+  - result artifact 现会附带 `confidence_policy`
+- 已补 request-family confidence policy + time decay：
+  - feedback 现会自动带上 `request_signature / request_family_signature`
+  - confidence policy 默认优先按 request-family 过滤历史 feedback，而不是混用同公司所有 query
+  - 老 feedback 会按时间半衰，避免旧项目经验无限累积污染当前 band
+- 已补 feedback-derived auto pattern suggestion：
+  - 当 feedback 带 `job_id + candidate_id` 时，会结合 `matched_fields` 与 candidate context 自动生成 pattern suggestions
+  - suggestion 单独持久化为 `criteria_pattern_suggestions`，默认 `suggested`，不会直接写入 active patterns
+  - `show-criteria` / `/api/criteria/patterns` / `record-feedback` 返回里现在都能看到 suggestions
+- 已补 suggestion review loop：
+  - 支持 `review-suggestion` CLI 和 `/api/criteria/suggestions/review`
+  - suggestion 可被标记为 `applied / rejected`
+  - `applied` suggestion 会写入 active patterns，并可继续触发 criteria recompile 与 retrieval rerun
+- 已补 manual policy freeze / override：
+  - 新增 `confidence_policy_controls`
+  - 支持 `request_exact / request_family / company` 三种 scope
+  - 支持 `freeze_current / override / clear`
+  - retrieval 会按 `request_exact -> request_family -> company` 优先级选择 active control
+  - active control 会写入 retrieval artifact，方便后续审计“这次 band 是自动 policy 还是人工锁定”
+- 已补 canonical request matching for manual controls：
+  - confidence policy control 创建时会先 canonicalize request payload
+  - 避免 raw request 与 runtime request signature 不一致，导致 freeze/override 无法命中
+- 已补 Plan Review Gate：
+  - plan 阶段会生成 `plan_review_gate`
+  - 对 scoped roster、investor firm roster、高成本 source 等计划，workflow 会先返回 `needs_plan_review`
+  - 已新增 `plan_review_sessions`
+  - review 后可把 `extra_source_families / confirmed_company_scope / allow_high_cost_sources` 写回 approved plan
+- 已补 Manual Review Queue：
+  - retrieval 现在会自动产出 `manual_review_items`
+  - 当前会优先收集 `lead_only`、缺少 LinkedIn profile、需要人工确认 membership 的候选人
+  - 已新增 manual review 的 API / CLI review 入口
+- 已补 Investor Firm Roster Workflow：
+  - `investor_firm_roster` 不再只是 planning strategy
+  - acquisition runtime 现可基于既有 investor 资产生成 tiered firm plan
+  - 会先产出 firm tiering，再归一化 full investor roster，后续再做 role/involvement filter
+- 已补模块级文档与操作示例：
+  - 新增 `docs/MODULES.md`
+  - 新增 `configs/confidence_policy_freeze.example.json`
+  - 新增 `configs/confidence_policy_override.example.json`
+  - 新增 `configs/suggestion_review_apply.example.json`
+  - 新增 `configs/plan_review_approve.example.json`
+  - 新增 `configs/manual_review_resolve.example.json`
+- 已补 `LLM-driven Search Planner`：
+  - plan 现会显式生成 `search_strategy`
+  - query 会被编译成具名 bundle：`relationship_web / publication_surface / public_interviews / targeted_people_search`
+  - “公开访谈 / Podcast / YouTube” 这类新 sourcing 方法，已经可以先沉淀为 source family，并进入 plan review 与执行链
+- 已将 search planner 接入 search-seed acquisition：
+  - `seed_discovery` 不再只消费裸 `search_seed_queries`
+  - 会执行 query bundles，并对 `public_interviews / publication_and_blog` 生成 `public_media_lead`
+  - 这些 lead 会进入后续 exploration / manual review，而不是直接丢失
+- 已落地 semantic/vector retrieval 第一版：
+  - 新增 `semantic_retrieval.py`
+  - retrieval 现已真正执行 `structured hard filters + lexical/alias + sparse-vector semantic rerank + confidence banding`
+  - 对 `post-train` 这类 lexical 不稳定的 query 变体，已能通过 semantic hit 召回候选人
+- 当前 fully agentic sourcing copilot 的现状边界：
+  - 已具备 model-assisted plan / search / page analysis / weakly structured exploration
+  - 但 runtime 仍不是“会自动 handoff 给多个自主子 Agent”的执行架构
+  - 后续若要进一步 agent 化，应增加 specialist lanes / handoff runtime / long-running agent state
+- 已补 `agent runtime` 第一版：
+  - 新增 `agent_runtime.py`
+  - workflow / retrieval 已会生成 `agent_runtime_session`
+  - acquisition / retrieval 过程已记录 `agent_trace_spans`
+  - 当前 lane 为 specialist-lane runtime，而非自治 swarm；但 handoff、trace、runtime state 已具备
+- 已补 `semantic provider` 第一版：
+  - 新增 `semantic_provider.py`
+  - 默认 `LocalSemanticProvider` fallback
+  - 已可切换 DashScope/Qwen embedding + rerank
+  - 当前配置面向 `text-embedding-v4 + gte-rerank-v2`，并预留 `qwen3-vl-rerank`
+- 已将公开视频结果纳入低成本数据资产：
+  - `public_interviews / publication_and_blog` query bundle 会保存 `public_media_results / public_media_analysis`
+  - 当前先基于标题/摘要做初步关系判断，不主动抓 transcript
+  - 若后续需要深挖访谈内容，可直接复用这些资产
+- 已补 autonomous worker runtime 第一版：
+  - `search_planner / public_media_specialist / exploration_specialist` 已支持并行 worker
+  - worker 现会持久化 `budget / checkpoint / output / interrupt_requested`
+  - 同一个 `job_id + lane_id + worker_key` 已支持 checkpointed resume
+  - acquisition state 已把 `job_id / plan_payload / runtime_mode` 下传到 search/exploration worker
+- 已补 worker 控制面：
+  - CLI 新增 `show-workers / interrupt-worker`
+  - API 新增 `GET /api/jobs/{job_id}/workers` 与 `POST /api/workers/interrupt`
+  - `GET /api/jobs/{job_id}/results` 与 `GET /api/jobs/{job_id}/trace` 现会附带 `agent_workers`
+- 已补 worker 生命周期测试：
+  - 新增 `tests/test_agent_runtime.py`
+  - 已验证 `checkpoint -> interrupt -> resume -> complete`
+  - 全量测试现为 `57` 个通过
+- 已补 lane-aware scheduler 第一版：
+  - 新增 `worker_scheduler.py`
+  - scheduler 会按 lane priority、resume mode 和并行上限选择下一批 runnable worker
+  - 当前优先恢复 `reuse_checkpoint / resume_from_checkpoint`，再执行 fresh worker
+  - 已新增 `GET /api/jobs/{job_id}/scheduler` 与 CLI `show-scheduler`
+- 已补 checkpoint 恢复语义：
+  - public media analysis 现在会把 `completed_urls + analysis_map` 写入 checkpoint
+  - exploration worker 现在会把 `completed_queries + gathered_signals + result_summaries` 写入 checkpoint
+  - 这样 interrupted/completed worker 再次执行时，不会丢失已经沉淀的中间状态
+- 已补 autonomous worker daemon loop：
+  - 新增 `worker_daemon.py`
+  - search/public media/exploration worker 现在统一通过 daemon loop 执行
+  - daemon 会执行 `resume/retry loop + lane budget arbitration`
+  - failed worker 现在会按 retry limit 自动重试
+  - completed worker 现在会优先复用已持久化 output，而不是重复请求外部 source
+- 已补 lane budget caps：
+  - cost policy 现新增 `search/public_media/exploration` 的 worker unit budget
+  - scheduler summary 现会输出 `lane_budget_caps`
+  - daemon 会记录 `lane_budget_used`
+- 已补 daemon 测试：
+  - 新增 `tests/test_worker_daemon.py`
+  - 已验证 `failed -> retry` 与 `budget exhausted -> backlog`
+- 全量测试现为 `62` 个通过
+
+## 2026-04-05
+
+### 已完成
+
+- 解压 `Sourcing AI Agent Dev` 下 4 个压缩包，并确认核心材料分布
+- 阅读 `Anthropic华人专项` 的 `README.md`、`PROGRESS.md`、`api_accounts.json`、`company_ids.json`
+- 阅读 `anthropic-employee-scan`、`investor-chinese-scan`、`biz-visit-onepager` 的 `SKILL.md`
+- 确认当前沉淀出的可产品化资产：
+  - Anthropic 主工作簿：在职华人员工 / 已离职华人员工 / 投融资历史 / 主要投资方华人成员
+  - Scholar 扫描结果
+  - 投资机构成员原始 JSON
+  - 项目方法论、阶段门、审计要求
+- 新建 `sourcing-ai-agent/`，开始实现后端 MVP
+- 完成后端 MVP 第一版实现：
+  - `AssetCatalog` 自动发现解压资产
+  - 标准库 `.xlsx` 解析器
+  - SQLite candidate/evidence/job store
+  - criteria-driven scoring
+  - CLI 与 HTTP API
+- 将项目从 Anthropic 特例扩展为通用 sourcing workflow engine：
+  - 新增 planning 层，显式输出 `SourcingPlan`
+  - 新增 acquisition task 抽象
+  - 新增 workflow job，显式阶段：`planning` / `acquiring` / `retrieving` / `completed`
+  - 新增 retrieval strategy 抽象：`structured` / `hybrid` / `semantic`
+  - API 新增 `/api/plan`、`/api/workflows`、`/api/providers/health`
+- 接入 Qwen provider：
+  - 本地 secret 读取：`runtime/secrets/providers.local.json`
+  - Provider 支持 DashScope Responses API
+  - 加入 timeout fallback，模型超时时自动退回 deterministic 实现
+- 完成真实链路验证：
+  - bootstrap 导入 `258` 位候选人
+  - demo job 1：基础设施方向当前 Anthropic 员工，Top 1 为 `Da Yan`
+  - demo job 2：直接参与 Anthropic 投资决策的华人投资方成员，返回结构化结果
+  - demo workflow 1：`xAI` 进入 `blocked@acquiring`，明确暴露缺失 connector
+  - demo workflow 2：`Anthropic` 完整跑通 `planning -> acquiring -> retrieving -> completed`
+- 完成 Qwen 联通验证：
+  - `test-model` 返回 `QWEN_OK`
+  - `plan` / `workflow` 可使用 Qwen 生成 intent summary，失败时自动回退
+- 完成自动化验证：`PYTHONPATH=src python3 -m unittest discover -s tests -v` 全部通过
+- 落地 connector 第一版：
+  - 新增 live company identity resolver
+  - 新增 RapidAPI 账号自动发现与排序
+  - 新增 LinkedIn `company/people` roster connector，支持多账号 fallback、429 熔断、分页落盘、重复页检测
+  - 新增 `runtime/company_assets/{company}/{snapshot_id}` snapshot 目录约定
+- 完成真实 xAI acquisition + retrieval 验证：
+  - `account_014` 可稳定拉取 xAI roster
+  - 首次 xAI workflow 获取 `98` 条 roster 行，其中 `97` 条可见、`1` 条 headless
+  - 归一化后向 SQLite 写入 `97` 个 xAI baseline candidates
+  - 中文 infra criteria 已可通过 alias expansion 命中英文 headline
+  - demo workflow 返回 `Jake Palmer / Jesik Min / Neal Bayya` 等结构化结果
+- 完成 enrichment connector 第二版：
+  - 新增 provider-first slug resolution：`search/people -> /api/profile -> profile detail`
+  - 新增 publication author / acknowledgement / co-author baseline connector
+  - 新增跨 snapshot search/basic profile 缓存复用，避免重复消耗 LinkedIn search quota
+  - 新增 cached roster snapshot fallback：live roster 超限或空返回时，workflow 可继续复用最近一次成功的本地资产
+  - 新增 enrichment 单测，`unittest` 总数增至 `8`
+- 完成 enrichment 实测验证：
+  - 在已有 xAI snapshot 上，top 5 infra 候选中成功解析 `Jake Palmer / Jesik Min / Neal Bayya` 的 LinkedIn profile detail
+  - 最新 live xAI workflow 已能在 end-to-end 链路中落下 enriched artifact，`20260405T220122` snapshot 至少成功合并 `Jake Palmer` 的完整 LinkedIn profile
+  - 发现真实约束：`search/people` 所在 z-real-time 账号配额已接近耗尽，后续 live 验证需要继续复用缓存或补充新账号
+
+### 当前结论
+
+- 现有项目已经具备产品雏形，核心不是“再写一次扫描脚本”，而是把已有流程产品化为：
+  - 可重复运行的 job
+  - 可持续扩展的 source adapter
+  - 可审计的结果存储
+- 技术栈先采用 Python 标准库，避免因为外部依赖阻塞 MVP
+- 模型调用层做接口预留，不把 Codex / Claude 写死在业务逻辑里
+- acquisition 已经不再只有本地 Anthropic asset：xAI 的 LinkedIn roster baseline 已能真实执行
+- 当前“全量资产”仍是 baseline：受 LinkedIn headless 用户、页数上限、search quota、publication 覆盖率影响，覆盖率还不是最终上限
+- 高价值资产的最终形态不应长期只放本地：LinkedIn Profile 和最终结果需要进入云端存储设计
+
+### 正在推进
+
+- 继续补 The Org / Hunter / Scholar / web adapters，并把现有 publication/co-author 真正用于 retrieval
+- 设计外部 API 接入策略、云端资产存储方案和人工 review 阶段门
+
+### 下一步
+
+- 在小公司样本上做完整端到端验证，例如 Thinking Machines Lab
+- 把 candidate document 向量化或语义索引纳入 retrieval 层
+- 设计云端资产存储：本地保留执行日志，云端持久化 LinkedIn Profile 与最终结果 artifact
+- 引入真正的 LLM criteria compiler
+- 补前端 Demo
+
+### 2026-04-06 Claude Relay 与 Thinking Machines Lab 准备
+
+- 新增通用 `model_provider` 配置层：
+  - `settings.py` 新增 `ModelProviderSettings`
+  - `build_model_client(...)` 现优先选择通用 `model_provider`，未配置时再回退到 `qwen`
+- 新增 `OpenAICompatibleChatModelClient`：
+  - 面向 OpenAI-compatible `chat/completions` + `models`
+  - 已完成 `summarize / interpret_intent / analyze_page_asset / plan_search_strategy / healthcheck`
+  - 当前实现使用 `requests`，避免 relay 对默认 `urllib` 请求头的拦截
+- 完成 Claude relay 联通验证：
+  - `GET /v1/models` 成功返回 `claude-sonnet-4-6`
+  - `POST /v1/chat/completions` 已通过 relay 成功返回结果
+  - 项目内 `healthcheck_model()` 已显示 provider `ready`
+  - 项目内 `interpret_intent(...)` 已成功通过 `claude-sonnet-4-6` 返回文本
+- 新增 `tests/test_model_provider.py`
+  - 覆盖通用 provider 选择与 OpenAI-compatible 响应解析
+- 新增 `configs/demo_workflow_thinking_machines_lab.json`
+  - 用于 Thinking Machines Lab 的 scoped roster 端到端测试起点
+- 新增 `configs/demo_workflow_thinking_machines_lab_full_roster.json`
+  - 用于 Thinking Machines Lab 全量 current roster acquisition
+  - 当前建议纯 roster 采集时设置 `slug_resolution_limit=0`、`profile_detail_limit=0`
+- 更新 README：
+  - 将“Qwen 配置”改为“模型配置”
+  - 明确 `model_provider` 的优先级和 Claude relay 的 base URL 形态
+  - 补充 Thinking Machines Lab 的 `plan -> review -> start-workflow` 建议入口
+- 新增 HarvestAPI live connector 基础层：
+  - `HarvestProfileSearchConnector`
+  - `HarvestCompanyEmployeesConnector`
+  - `HarvestProfileConnector`
+  - `former_employee_search / scoped_search_roster` 现可走 Harvest search fallback
+  - `full_company_roster` 现可在允许高成本 source 时优先走 Harvest company-employees
+- 完成 Harvest live 参数核对与最小调用验证：
+  - `linkedin-profile-search` + `pastCompanies` + `excludeCurrentCompanies` 已成功调用，Thinking Machines Lab 最小预算测试返回 `0` 条结果
+  - `linkedin-company-employees` 已成功调用，Thinking Machines Lab 最小预算测试返回 `10` 条当前成员
+  - 已确认关键参数坑位：
+    - `maxTotalChargeUsd` 不能低于 actor 最小允许值
+    - company-employees actor 的 `profileScraperMode` 必须使用完整枚举字符串，如 `Short ($4 per 1k)`
+  - company-employees actor 返回字段更接近 `firstName / lastName / currentPositions / location.linkedinText`，而不是旧假设中的 `fullName / headline`
+- 完成 Thinking Machines Lab 全量 current roster live acquisition：
+  - workflow `1d19590b1e4c` 已完整跑通 `planning -> acquiring -> retrieving -> completed`
+  - 使用 Harvest `linkedin-company-employees` 获取 current roster
+  - snapshot `20260406T160415` 共捕获 `25` 条 roster rows，其中 `25` 可见、`0` headless
+  - 已将 `25` 位成员归一化进 SQLite，并生成 `candidate_documents.json / retrieval_index_summary.json`
+  - 当前 live roster 质量良好：实测样本中名字、headline、location、LinkedIn URL 均完整
+- 完成 Thinking Machines Lab former / detail 链路校正：
+  - 已通过 Harvest live 对照确认 former employee search 更适合先用 `pastCompanies` 做 recall，不默认加 `excludeCurrentCompanies`
+  - 两页 `pastCompanies=Thinking Machines Lab` live search 可返回 `19` 条 former leads，并命中 `Alexis Dunn`
+  - 已修正 `linkedin-profile-scraper` 的 `profileScraperMode` 枚举，必须使用 `Profile details no email ($4 per 1k)`
+  - 已修正 roster -> candidate 映射，`build_candidates_from_roster(...)` 现会保留 `linkedin_url / metadata.profile_url`
+  - 已为 known-profile enrichment 增加 Harvest batch profile fetch，避免逐人串行 profile scrape
+- 完成 Thinking Machines Lab prioritized current detail live acquisition：
+  - 最新有效 workflow `3f5e25153ab0` 已完整跑通 `planning -> acquiring -> retrieving -> completed`
+  - snapshot `20260406T165131` 成功落下 `12` 个 `harvest_profiles/*.json`
+  - acquisition event 明确记录：`Resolved 12 profile details and matched 0 publications`
+  - 合并后的 candidate assets 已成功吸收 profile detail 信息，包括：
+    - vanity LinkedIn URL
+    - education
+    - work_history
+    - moreProfiles metadata
+  - 实测已成功 enrich 的代表成员包括：
+    - `Mira Murati`
+    - `Lilian Weng`
+    - `Soumith Chintala`
+    - `Andy Hwang`
+    - `Saurabh Garg`
+- 完成 Thinking Machines Lab publication supplementation：
+  - enrichment 现已执行 official surface publication collection，而不再只依赖 Anthropic 本地 publication 或通用 arXiv affiliation
+  - Thinking Machines Lab 官方 surface 已成功抽出 `4` 个 publication/blog leads：
+    - `Kevin Lu`
+    - `John Schulman`
+    - `Jeremy Bernstein`
+    - `Horace He`
+  - publication raw/index/page assets 已落到 snapshot `20260406T172439/publications/official_surfaces`
+  - publication lead 现会自动进入 targeted Harvest resolution，再进入 exploration fallback
+  - 当前 TML publication lead 的 live 现状是：
+    - targeted Harvest current/past exact-name search 可执行且可审计
+    - 但在这 `4` 个 lead 上返回 `0`
+    - exploration fallback 当前受 DuckDuckGo SSL 问题影响，仍保留为 unresolved lead / manual review 输入
+- 完成 Harvest runtime 级 cache/live-test bridge：
+  - `harvest_profile_search` 与 `harvest_company_employees` 现会按 payload hash 复用：
+    - 当前 snapshot 本地 raw asset
+    - `runtime/provider_cache/*`
+    - `runtime/live_tests/*` 下历史手工 live 资产
+  - 这样即便当前进程没有 Harvest token，也能把已有 live asset 重新接入 workflow，而不是重复调用或退化成 0 结果
+  - 同时修复了 `HarvestProfileConnector.fetch_profiles_by_urls(...)` 中未定义 `take_pages` 的 batch profile bug
+- 完成 Thinking Machines Lab former fallback 修复与复跑：
+  - 新增 refreshed plan review `9`，former strategy 的 `provider_people_search_min_expected_results` 已从 `10` 提升到 `50`
+  - former workflow 现已通过 Harvest cached live bridge 重新接回历史 `pastCompanies` live asset
+  - 最新有效 former snapshot 为 `20260406T175245`
+  - `search_seed_discovery/summary.json` 当前记录：
+    - `entry_count=25`
+    - `query="__past_company_only__"`
+    - `mode="harvest_profile_search"`
+    - `seed_entry_count=25`
+  - 这批 former candidates 已成功归一化进 `candidate_documents.json`，其中包含：
+    - `Alexis Dunn`
+    - `Andrew Tulloch`
+    - `Barret Zoph`
+    - `Joshua Gross`
+    - `Songlin Yang`
+    - 以及其他 former leads
+  - 这说明 current roster、current detail、publication supplement、former fallback 四条 Thinking Machines Lab 主链都已具备可复盘的端到端资产
+- 完成 manual review resolution 正式写回链路：
+  - `manual_review_resolution.py` 已接到 orchestrator/store，而不是只停留在 helper
+  - 人工 review 现在可以：
+    - 直接写回 `candidate`
+    - upsert `evidence`
+    - 在 `runtime/manual_review_assets/...` 下落盘 source manifest、fetched html、analysis input/output
+  - 已对 Thinking Machines Lab 的 publication leads 做真实写回：
+    - `Kevin Lu`：confirmed current employee，LinkedIn 已写回
+    - `John Schulman`：confirmed current employee，homepage evidence 已写回
+    - `Jeremy Bernstein`：confirmed current employee，homepage + CV evidence 已写回
+    - `Horace He`：homepage 未直接确认 TML affiliation，保留为 unresolved lead
+- 完成 publication lead low-cost-first 调整：
+  - `targeted Harvest name search` 不再默认执行
+  - 当前默认顺序改为：
+    - slug/web exploration
+    - manual review / unresolved lead 保留
+    - 只有显式批准时才进入 targeted Harvest name search
+- 完成 manual review / exploration 信号质量修正：
+  - 页面信号提取已过滤 `static.licdn.com / gstatic / fonts` 等静态资源 URL
+  - 避免像 Kevin Lu 这类 LinkedIn 页面把静态资源误写成 `media_url`
+- 复核 DuckDuckGo SSL 问题：
+  - 旧 snapshot 中的报错不是单纯的 `urllib` 代码问题
+  - 已用新的 `requests + endpoint fallback` live 复测，当前环境对 DuckDuckGo HTML endpoint 依然会返回 `SSL: UNEXPECTED_EOF_WHILE_READING`
+  - 结论是：
+    - 当前网络路径对 DuckDuckGo HTML 搜索不稳定
+    - low-cost web search 必须继续走 provider abstraction / best-effort 策略
+    - unresolved lead 必须保留，不能因为搜索失败就静默丢弃
+- 新增 Thinking Machines Lab 复盘文档：
+  - `docs/THINKING_MACHINES_LAB_RETROSPECTIVE.md`
+  - 记录了：
+    - Harvest 参数修正
+    - current roster / current detail / former fallback / publication supplement 结果
+    - manual review 写回结果
+    - DuckDuckGo SSL 问题与后续建议
+- 完成稳定 search provider abstraction 第一版：
+  - 新增 `src/sourcing_agent/search_provider.py`
+  - 当前 provider chain 支持 `serper_google -> duckduckgo_html`
+  - `search_seed_discovery / slug_resolution / exploratory_enrichment` 已统一接到 provider abstraction
+  - search raw payload 现按 provider 的 `html/json` 形态落盘，便于缓存复用、审计和后续替换 provider
+  - 这意味着 low-cost search 不再写死到 DuckDuckGo HTML endpoint
+- 补齐 search provider 回归测试：
+  - 新增 `tests/test_search_provider.py`
+  - 覆盖 DuckDuckGo HTML parsing、Serper parsing、provider chain fallback、response roundtrip
+- 完成 monorepo 级 GitHub 同步准备：
+  - 新增根目录 `README.md`
+  - 新增根目录 `ONBOARDING.md`
+  - 新增根目录 `.gitignore`
+  - 新增 `docs/DEVELOPMENT_GUIDE.md`
+  - 明确忽略：
+    - 原始 zip 包
+    - `runtime/` 数据资产
+    - `providers.local.json`
+    - 历史 `api_accounts.json`
+    - SQLite / cache / Python 临时文件
+  - 当前结论是可以先整理成 publish-ready monorepo，但不能把现有目录原样直接推到 GitHub

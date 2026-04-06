@@ -1,0 +1,19 @@
+[
+  {
+    "name_en": "Alwin Peng",
+    "name_zh": null,
+    "layer": 1,
+    "layer_label": "疑似华人",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": "Peng是华人常见姓",
+      "linkedin_languages": null
+    },
+    "confidence": "低",
+    "in_excel": true,
+    "excel_row": 89,
+    "excel_sheet": "在职华人员工",
+    "notes": "Anthropic Safeguards Team正式成员；邮箱alwin@anthropic.com；华裔身份待确认",
+    "last_updated": "2026-04-03"
+  }
+]

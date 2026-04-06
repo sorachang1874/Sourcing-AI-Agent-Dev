@@ -1,0 +1,1042 @@
+[
+  {
+    "name_en": "Jesse Mu",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 4,
+    "excel_sheet": "在职华人员工",
+    "notes": "美籍华裔（ABC）；中文中级；Sleeper Agents/Constitutional Classifiers论文作者",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Andy Shih",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 9,
+    "excel_sheet": "在职华人员工",
+    "notes": "台湾裔美国人（ABC）；UCLA本科/硕士→斯坦福博士；Auditing LMs论文作者",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Jack Chen",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 12,
+    "excel_sheet": "在职华人员工",
+    "notes": "华裔；斯坦福BS+MS；Alignment Faking论文作者",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Jerry Wei",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 13,
+    "excel_sheet": "在职华人员工",
+    "notes": "华裔（美籍，ABC）；斯坦福CS；Constitutional Classifiers论文作者",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Catherine Wu",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 16,
+    "excel_sheet": "在职华人员工",
+    "notes": "华裔（美籍）；普林斯顿CS；前Index Ventures合伙人；产品负责人（非研究岗）",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Brian Chen",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 22,
+    "excel_sheet": "在职华人员工",
+    "notes": "台湾裔美国人（用户核实）；MIT数学&CS；Scaling Monosemanticity / Circuit Tracing / Auditing LMs三篇核心论文作者",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Newton Cheng",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 23,
+    "excel_sheet": "在职华人员工",
+    "notes": "疑似华裔（姓Cheng，待核实）；Stanford物理本科→Berkeley物理博士；以Resident身份转Research Scientist；Sleeper Agents论文作者",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Dustin Li",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 25,
+    "excel_sheet": "在职华人员工",
+    "notes": "疑似华裔（Li姓，待核实）；UC Berkeley EECS；独特跨界背景（UN/Cisco/HHS → Anthropic）；LinkedIn职称含\"Director of Bubble Tea C",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Xiuruo Zhang",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 29,
+    "excel_sheet": "在职华人员工",
+    "notes": "大陆华人；宾大CS本硕；Two Sigma 6年→Anthropic；AI Values论文、Economic Index报告署名",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Carol Chen",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": "Chen是华人常见姓",
+      "media_source": "Constitutional AI论文署名"
+    },
+    "confidence": "低",
+    "in_excel": true,
+    "excel_row": 30,
+    "excel_sheet": "在职华人员工",
+    "notes": "华裔身份待核实（用户确认过X账号）",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Angela Jiang",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 32,
+    "excel_sheet": "在职华人员工",
+    "notes": "华裔；UIUC毕业；前OpenAI / Stripe产品负责人；2025年12月加入Anthropic",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Harry Liu",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 33,
+    "excel_sheet": "在职华人员工",
+    "notes": "华裔；UC Davis电气工程本科；2026年1月加入Anthropic",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "David Choo",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 34,
+    "excel_sheet": "在职华人员工",
+    "notes": "华裔；加拿大女王大学商科本科；前微软/Glean GTM；2026年3月加入Anthropic",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Hendson Lin",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 36,
+    "excel_sheet": "在职华人员工",
+    "notes": "华裔；UC Davis政治学/经济学本科；UCSF法学院JD（知识产权）；非技术岗（法务/政策）",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Albert Au Yeung",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 37,
+    "excel_sheet": "在职华人员工",
+    "notes": "香港人；在爱尔兰都柏林；南安普顿大学电子/CS博士；LinkedIn Staff AI Engineer；播客主持人",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Bebe Zhao",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 38,
+    "excel_sheet": "在职华人员工",
+    "notes": "华裔；沃顿MBA；Wellesley本科；Google财务6年→Anthropic；非技术岗（财务/战略）",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Chinsin Sim",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 41,
+    "excel_sheet": "在职华人员工",
+    "notes": "华裔；UC Davis传播学本科；Uber/Robinhood招聘经验丰富；2023年11月加入Anthropic；非技术岗",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Calvin Liu-Navarro",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 44,
+    "excel_sheet": "在职华人员工",
+    "notes": "华裔；加州大学圣克鲁兹分校商业管理经济学本科；中文名刘长远；非技术岗（技术招聘）",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Jo Zhu Kennedy",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 45,
+    "excel_sheet": "在职华人员工",
+    "notes": "华裔；斯坦福商学院MBA + 教育学院MEd；a16z合伙人（2022-2024）；DoorDash/Uber产品背景；非研究岗（创业合作）",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Du (Derry) Chen",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 47,
+    "excel_sheet": "在职华人员工",
+    "notes": "华裔；康奈尔大学信息科学本科；Scale AI→Anthropic；非技术岗（产品战略/运营）",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Jeffrey Chiu",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 48,
+    "excel_sheet": "在职华人员工",
+    "notes": "华裔；哈佛大学统计+CS联合学位（AB/SM）；Vatic Labs/Two Sigma/Citadel量化背景；YC冬季营",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Henry Shi",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 50,
+    "excel_sheet": "在职华人员工",
+    "notes": "华裔（加拿大）；滑铁卢大学CS荣誉本科；佐治亚理工CS硕士（ML）；Super.com联合创始人（年收入$2亿+）；Technical Chief of Staff直接向Ben Buchanan汇报",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Wenley Tong",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 54,
+    "excel_sheet": "在职华人员工",
+    "notes": "华裔；普林斯顿大学CS本科（2014）；Square/Flexport/Gusto/Patch软件工程经历",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Bobby Chen",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 56,
+    "excel_sheet": "在职华人员工",
+    "notes": "大陆华人；UIUC CS本硕；Dropbox→Uber工程经理8年→Anthropic；Constitutional Classifiers论文作者",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Jin Pan",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 62,
+    "excel_sheet": "在职华人员工",
+    "notes": "华裔；MIT CS本科（2016）；Constitutional Classifiers论文作者；OpenReview @anthropic.com确认在职",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Daniel Liu",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 63,
+    "excel_sheet": "在职华人员工",
+    "notes": "华裔；UCLA CS本科（2024届）；GitHub: daniel-liu-c0deb0t；生物信息学研究背景",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Cynthia Wu",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 65,
+    "excel_sheet": "在职华人员工",
+    "notes": "华裔（吴姓）；UC Berkeley CS本科（2021届）；Snorkel AI/Anyscale→Anthropic",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Jenny Wen",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 66,
+    "excel_sheet": "在职华人员工",
+    "notes": "华裔（加拿大）；滑铁卢大学系统设计工程本科；前Figma设计总监→Anthropic；非传统研究岗（设计方向MTS）",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Christopher Liu",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 67,
+    "excel_sheet": "在职华人员工",
+    "notes": "华裔；CMU数学+CS本科（2017）；Facebook/Twitch/Airbnb→Anthropic；OpenReview ~Christopher_Liu1 @anthropic.com确认",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Michael Ran Chen",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 72,
+    "excel_sheet": "在职华人员工",
+    "notes": "华裔；宾大CS本科+硕士（2015）；Quora平台负责人3年→2025-06加入Anthropic MTS Manager",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Judy Hanwen Shen",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 74,
+    "excel_sheet": "在职华人员工",
+    "notes": "华裔；U of Toronto本科→MIT媒体艺术硕士（2019）→Stanford CS博士（Omer Reingold组）；Anthropic Fellows Program后转正MTS；How ",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Christina Lu",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 75,
+    "excel_sheet": "在职华人员工",
+    "notes": "华裔；Dartmouth CS+艺术本科（2020）→Oxford CS博士在读（2023-2026）；2025-08 Anthropic Research Fellow → 2026-01转正MTS",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Jerry Hong",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 76,
+    "excel_sheet": "在职华人员工",
+    "notes": "华人（Mandarin母语）；Stanford CS+Math+AI MS；设计背景转AI产品",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Danny Lin",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 77,
+    "excel_sheet": "在职华人员工",
+    "notes": "华人；NYU CS本科；工程背景",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Ashley Wang",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 78,
+    "excel_sheet": "在职华人员工",
+    "notes": "华人；CMU；Google TLM→Anthropic",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Christine Ye",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 79,
+    "excel_sheet": "在职华人员工",
+    "notes": "华裔美国人（ABC）；from outside Seattle；Stanford CS；Anthropic Fellows Program（可扩展监督方向）",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Jeffrey Wu",
+    "name_zh": "(Jeff Wu)",
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": "有确认中文名：(Jeff Wu)",
+      "media_source": null
+    },
+    "confidence": "高",
+    "in_excel": true,
+    "excel_row": 80,
+    "excel_sheet": "在职华人员工",
+    "notes": "ABC（美国出生华裔）；普通话流利（RocketReach确认）；GPT-2/GPT-3/InstructGPT核心作者；前OpenAI Research Engineer（2018-2024）；US",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Theodora Chu",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 81,
+    "excel_sheet": "在职华人员工",
+    "notes": "华裔；斯坦福CS本科(AI)，硕士CS(NLP)暂停；2024-08加入Anthropic PM；参与MCP产品与Writing Tools for Agents工程博文；LinkedIn: theo",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Daniel Jiang",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 82,
+    "excel_sheet": "在职华人员工",
+    "notes": "华裔；UC Berkeley CS本科，UW CS PhD（on leave）；2026年加入Anthropic MTS；来源：advanced-tool-use（基础研究致谢）+ writing-t",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Sam Jiang",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 83,
+    "excel_sheet": "在职华人员工",
+    "notes": "华裔；GitHub: samj-anthropic（2024-03创建）；出现于 advanced-tool-use 工程博文致谢；用户确认在职；无其他公开信息",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Saffron Huang",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": "Huang是华人常见姓",
+      "linkedin_languages": "Chinese (Simplified)",
+      "education_cn": "北京大学（Yu Xie课题组实习）"
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 88,
+    "excel_sheet": "在职华人员工",
+    "notes": "来自新西兰；LinkedIn语言含中文（简体）；2024 TIME 100 AI",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Shi Feng",
+    "name_zh": "冯石（待确认）",
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": "Feng/Shi均符合华人拼音习惯",
+      "media_source": "ACL2016论文UMD背景"
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 90,
+    "excel_sheet": "在职华人员工",
+    "notes": "GWU助理教授；外部合作，非Anthropic正式员工",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Yuntao Bai",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "已离职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 2,
+    "excel_sheet": "已离职华人员工",
+    "notes": "大陆华人；Anthropic RLHF和Constitutional AI论文首席作者；引用6500+；2025年约10月离职加入OpenAI",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Andi Peng",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "已离职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 5,
+    "excel_sheet": "已离职华人员工",
+    "notes": "华裔（中国出生，美国长大，用户确认）；耶鲁本科→MIT CS PhD在读；Anthropic MTS 2024/05-2025/10；离职后创立humans&（AI初创）",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Giulio Zhou",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "已离职",
+    "evidence": {
+      "name_pattern": "意大利名+Zhou姓（华人常见）",
+      "linkedin_languages": "Chinese (Limited working proficiency)"
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 6,
+    "excel_sheet": "已离职华人员工",
+    "notes": "2024/05-2025/11 Anthropic MTS→Google DeepMind",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Anna Chen",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "已离职",
+    "evidence": {
+      "name_pattern": "Chen是华人常见姓"
+    },
+    "confidence": "低",
+    "in_excel": true,
+    "excel_row": 7,
+    "excel_sheet": "已离职华人员工",
+    "notes": "已离职，去向未知，华裔身份待核实",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Ruiqi Zhong",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "已离职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 8,
+    "excel_sheet": "已离职华人员工",
+    "notes": "有Anthropic工作经历（用户确认）；论文多篇与Anthropic合著；现在Thinking Machines Lab",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Shannon Yang",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "已离职",
+    "evidence": {
+      "name_pattern": null,
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": null,
+      "media_source": null
+    },
+    "confidence": "中",
+    "in_excel": true,
+    "excel_row": 9,
+    "excel_sheet": "已离职华人员工",
+    "notes": "华裔（Yang姓，英文名 Shannon）；牛津大学PPE本科（X简介确认）；前Anthropic运营成员；个人网站 shannonyang.com；X: @shannonyangsky；「杨珊珊」中",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Whitney Chen",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": "Chen是华人常见姓",
+      "linkedin_languages": null,
+      "education_cn": null,
+      "work_cn": null,
+      "self_stated": "Chinese-Australian (个人主页自述)",
+      "media_source": null,
+      "linkedin": "linkedin.com/in/whitneychen",
+      "homepage": "whitneychn.com",
+      "linkedin_verified": "在职 @ Anthropic (2024-04至今)",
+      "headline": "brand + other stuff @ anthropic"
+    },
+    "confidence": "高",
+    "in_excel": false,
+    "excel_row": null,
+    "excel_sheet": null,
+    "notes": "Chinese-Australian producer/writer based in NYC；出现在Alignment Faking (2412.14093) ACK中；需要确认是否为Anthropic正式员工",
+    "last_updated": "2026-04-05"
+  },
+  {
+    "name_en": "Alvin Tsuei",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "self_stated": "台湾背景，中文母语（LinkedIn 搜索结果显示）",
+      "name_pattern": "Tsuei 是台湾闽南语/国语拼音姓"
+    },
+    "confidence": "高",
+    "in_excel": false,
+    "note": "GTM Strategy @ Anthropic (2025-11至今)；LinkedIn: alvin-tsuei；台湾背景"
+  },
+  {
+    "name_en": "Qian Liang",
+    "name_zh": null,
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "anthropic_status": "在职",
+    "evidence": {
+      "name_pattern": "Qian(前/钱) + Liang(梁/亮)，典型华人名字组合"
+    },
+    "confidence": "高",
+    "in_excel": false,
+    "note": "MTS @ Anthropic (2025-04至今)；LinkedIn: qian-liang-66a52b17；前 Meta/Amazon/Microsoft"
+  }
+]

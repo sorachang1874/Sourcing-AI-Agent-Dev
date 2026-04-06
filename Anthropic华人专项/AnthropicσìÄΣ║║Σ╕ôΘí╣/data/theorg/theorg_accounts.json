@@ -1,0 +1,51 @@
+{
+  "_comment": "The Org API 账号与使用进度记录",
+  "api_base": "https://api.theorg.com",
+  "endpoint_org_chart": "GET /v1.2/companies/org-chart",
+  "endpoint_find_manager": "GET /v1.1/companies/org-chart/managers",
+  "accounts": [
+    {
+      "id": "theorg_001",
+      "api_key": "REDACTED",
+      "registered_at": "2026-04-05",
+      "monthly_limit_credits": 10,
+      "cost_per_org_chart": 10,
+      "max_org_chart_calls_per_month": 1,
+      "warn_at_credits": 9,
+      "stop_at_credits": 10,
+      "total_credits_used": 10,
+      "total_org_chart_calls": 1,
+      "status": "exhausted_this_month",
+      "notes": "Free tier: 每月 10 credits，org-chart 每次消耗 10 credits = 每月仅 1 次。2026-04-05 已用尽，下次可用：2026-05-01 重置。",
+      "usage_log": [
+        {
+          "date": "2026-04-05",
+          "credits": 10,
+          "endpoint": "GET /v1.2/companies/org-chart?domain=anthropic.com",
+          "result_positions": 0,
+          "result_nodes": 0,
+          "note": "首次调用，获取 Anthropic 完整 org chart"
+        }
+      ],
+      "reset_date": "2026-05-01"
+    }
+  ],
+  "usage_policy": {
+    "hard_limit": "每月最多 1 次 org-chart 调用（Free tier: 10 credits / 10 credits per call）",
+    "pre_call_check": "调用前必须读取 total_credits_used，若 >= 90 先向用户报告剩余额度",
+    "post_call_update": "每次调用后立即更新 total_credits_used + usage_log",
+    "data_persistence": "每次调用结果立即存档到 data/theorg/orgchart_{company_slug}_{date}.json，不重复调用已存档的公司",
+    "idempotent_check": "调用前先检查 data/theorg/ 目录是否有该公司的存档，已有存档直接读取，不再调用 API",
+    "current_month_status": "2026-04 已耗尽，下次可用 2026-05-01"
+  },
+  "data_directory": "data/theorg/",
+  "archived_companies": [
+    {
+      "company": "Anthropic",
+      "domain": "anthropic.com",
+      "fetched_at": "2026-04-05",
+      "file": "data/theorg/orgchart_anthropic_2026-04-05.json",
+      "total_positions": 0
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "raw_user_request": "获取 Thinking Machines Lab 当前全量成员 roster，允许使用 company-employees、profile-scraper 和 profile-search fallback，先完成 current roster acquisition，再做基础检索与排序。",
+  "target_company": "Thinking Machines Lab",
+  "categories": [
+    "employee"
+  ],
+  "employment_statuses": [
+    "current"
+  ],
+  "organization_keywords": [
+    "Thinking Machines Lab"
+  ],
+  "top_k": 20,
+  "slug_resolution_limit": 0,
+  "profile_detail_limit": 0,
+  "publication_scan_limit": 0,
+  "publication_lead_limit": 0,
+  "exploration_limit": 0
+}

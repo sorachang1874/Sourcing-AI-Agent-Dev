@@ -1,0 +1,33 @@
+{
+  "apply_resolution": true,
+  "action": "resolved",
+  "reviewer": "user_manual_review",
+  "notes": "Manual review confirmed John Schulman via personal homepage surfaced from web search.",
+  "target_company": "Thinking Machines Lab",
+  "candidate": {
+    "candidate_id": "9f2137bcbbb5db85",
+    "name_en": "John Schulman",
+    "display_name": "John Schulman",
+    "category": "lead",
+    "target_company": "Thinking Machines Lab",
+    "organization": "Thinking Machines Lab",
+    "role": "Publication author lead",
+    "source_dataset": "thinkingmachinesai_official_feed",
+    "source_path": "/home/sorachang/projects/Sourcing AI Agent Dev/sourcing-ai-agent/runtime/company_assets/thinkingmachineslab/20260406T172439/publications/official_surfaces/bloglora.html",
+    "metadata": {
+      "publication_url": "https://thinkingmachines.ai/blog/lora/"
+    }
+  },
+  "candidate_patch": {
+    "category": "employee",
+    "employment_status": "current"
+  },
+  "source_links": [
+    {
+      "label": "Homepage",
+      "url": "http://joschu.net/",
+      "source_type": "manual_review_link",
+      "notes": "Found via Google query John Schulman Thinking Machines Lab LinkedIn; homepage surfaced in top results."
+    }
+  ]
+}

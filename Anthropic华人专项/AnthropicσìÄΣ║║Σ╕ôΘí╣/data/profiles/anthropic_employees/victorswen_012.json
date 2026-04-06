@@ -1,0 +1,194 @@
+{
+  "success": true,
+  "message": "response retrieved successfully",
+  "data": {
+    "basic_info": {
+      "fullname": "Victor Wen",
+      "first_name": "Victor",
+      "last_name": "Wen",
+      "headline": "Manager Revenue Accounting",
+      "public_identifier": "victorswen",
+      "profile_url": "https://linkedin.com/in/victorswen",
+      "profile_picture_url": "https://media.licdn.com/dms/image/v2/C5603AQEWsfx5_2uxuA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1532674368294?e=1776902400&v=beta&t=R9uCq-bsgsi3dxWo2nbBit2h4iJCCaBHNvfnpEvxaV4",
+      "about": "Detailed oriented and ambitious audit associate with a strong work ethic. I'm a very self driven professional who delivers results on time and within tight deadlines.",
+      "location": {
+        "country": "United States",
+        "city": "San Francisco, California",
+        "full": "San Francisco, California, United States",
+        "country_code": "US"
+      },
+      "creator_hashtags": [],
+      "is_creator": false,
+      "is_influencer": false,
+      "is_premium": true,
+      "open_to_work": false,
+      "created_timestamp": 1334889515069,
+      "show_follower_count": false,
+      "background_picture_url": "https://media.licdn.com/dms/image/v2/D5616AQEwgWY1Fvqxuw/profile-displaybackgroundimage-shrink_350_1400/B56ZeFZBzWHoAc-/0/1750289620919?e=1776902400&v=beta&t=8_MYiUVuSgEPzc2MeLlJ7KY5D9QYpjSwRLn1p5zFvUw",
+      "urn": "ACoAAAq9eyYB6_oZAYnCpU424KKbWfWmTGkXKdg",
+      "follower_count": 942,
+      "connection_count": 866,
+      "current_company": "Anthropic",
+      "current_company_urn": "74126343",
+      "current_company_url": "https://www.linkedin.com/company/anthropicresearch",
+      "top_skills": [],
+      "email": null
+    },
+    "experience": [
+      {
+        "title": "Revenue Accounting",
+        "company": "Anthropic",
+        "location": "San Francisco, California, United States",
+        "duration": "Sep 2024 - Present · 1 yr 8 mos",
+        "start_date": {
+          "year": 2024,
+          "month": "Sep"
+        },
+        "is_current": true,
+        "company_linkedin_url": "https://www.linkedin.com/company/74126343/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_400_400/company-logo_400_400/0/1719256729905/anthropicresearch_logo?e=1776902400&v=beta&t=6sv-GagnF1G5d4B4rN1Yu3sq6fln2BP_9tb0s6bARoY",
+        "company_id": "74126343"
+      },
+      {
+        "title": "Senior Manager, Revenue Accounting",
+        "company": "Iterable",
+        "location": "San Francisco, California, United States",
+        "duration": "Jun 2023 - Aug 2024 · 1 yr 3 mos",
+        "start_date": {
+          "year": 2023,
+          "month": "Jun"
+        },
+        "end_date": {
+          "year": 2024,
+          "month": "Aug"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/3119164/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQFPN-ayY9td0w/company-logo_400_400/company-logo_400_400/0/1720728713114/iterable_logo?e=1776902400&v=beta&t=t6KV_ymwAqo8i_5oh__cdM1LwXL9zobvo6VwrQ3GTOI",
+        "company_id": "3119164"
+      },
+      {
+        "title": "Technical Revenue Senior Manager",
+        "company": "Snowflake",
+        "location": "San Mateo, California, United States",
+        "duration": "Feb 2023 - Jun 2023 · 5 mos",
+        "start_date": {
+          "year": 2023,
+          "month": "Feb"
+        },
+        "end_date": {
+          "year": 2023,
+          "month": "Jun"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/3653845/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQF3mYS3WqCB3g/company-logo_400_400/company-logo_400_400/0/1688575708630/snowflake_computing_logo?e=1776902400&v=beta&t=SFeWWXV3Dkd8U41E0IovvXHImODQrOcxggIr3TThNR8",
+        "company_id": "3653845"
+      },
+      {
+        "title": "Manager, Revenue Recognition",
+        "company": "Snowflake",
+        "location": "San Mateo, California, United States",
+        "duration": "Jun 2020 - Jan 2023 · 2 yrs 8 mos",
+        "start_date": {
+          "year": 2020,
+          "month": "Jun"
+        },
+        "end_date": {
+          "year": 2023,
+          "month": "Jan"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/3653845/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQF3mYS3WqCB3g/company-logo_400_400/company-logo_400_400/0/1688575708630/snowflake_computing_logo?e=1776902400&v=beta&t=SFeWWXV3Dkd8U41E0IovvXHImODQrOcxggIr3TThNR8",
+        "company_id": "3653845"
+      },
+      {
+        "title": "Technical Revenue Manager",
+        "company": "Anaplan",
+        "location": "San Francisco, California",
+        "duration": "Sep 2019 - Jun 2020 · 10 mos",
+        "start_date": {
+          "year": 2019,
+          "month": "Sep"
+        },
+        "end_date": {
+          "year": 2020,
+          "month": "Jun"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/658814/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGYt40mQR_WYw/company-logo_400_400/B56ZUXZoi4GsAk-/0/1739854350849/anaplan_logo?e=1776902400&v=beta&t=9MVdEusJ768eEyLsHK-bZlm4vvJamD_6An1VXcukmC4",
+        "company_id": "658814"
+      },
+      {
+        "title": "Senior Revenue Accountant",
+        "company": "Anaplan",
+        "location": "San Francisco, California",
+        "duration": "Oct 2017 - Sep 2019 · 2 yrs",
+        "start_date": {
+          "year": 2017,
+          "month": "Oct"
+        },
+        "end_date": {
+          "year": 2019,
+          "month": "Sep"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/658814/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGYt40mQR_WYw/company-logo_400_400/B56ZUXZoi4GsAk-/0/1739854350849/anaplan_logo?e=1776902400&v=beta&t=9MVdEusJ768eEyLsHK-bZlm4vvJamD_6An1VXcukmC4",
+        "company_id": "658814"
+      },
+      {
+        "title": "Assurance Senior Associate",
+        "company": "PwC",
+        "location": "San Francisco Bay Area",
+        "duration": "Nov 2014 - Oct 2017 · 3 yrs",
+        "start_date": {
+          "year": 2014,
+          "month": "Nov"
+        },
+        "end_date": {
+          "year": 2017,
+          "month": "Oct"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/1044/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQFVfAbYbmcpvA/company-logo_400_400/B4EZaB6j58H0AY-/0/1745936334912/pwc_logo?e=1776902400&v=beta&t=MNxRIBmy-RpQBWBHEnqiO3FN2CK5lgfrmf-L4vBcJ5g",
+        "company_id": "1044"
+      }
+    ],
+    "education": [
+      {
+        "school": "Naveen Jindal School of Management, UT Dallas",
+        "degree": "Master of Science (M.S.), Accounting",
+        "degree_name": "Master of Science (M.S.)",
+        "field_of_study": "Accounting",
+        "duration": "2010 - 2012",
+        "school_linkedin_url": "https://www.linkedin.com/company/15100629/",
+        "school_logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQHkXEd556X81g/company-logo_400_400/company-logo_400_400/0/1630584806620/university_of_texas_at_dallas___naveen_jindal_school_of_management_logo?e=1776902400&v=beta&t=ayrFx-HFJfKYu_MXoVEzA8SPrewm2NWEhwRarl4wXZw",
+        "start_date": {
+          "year": 2010
+        },
+        "end_date": {
+          "year": 2012
+        },
+        "school_id": "15100629"
+      }
+    ],
+    "certifications": [
+      {
+        "name": "CPA",
+        "issuer": "California Board of Accountancy"
+      }
+    ],
+    "languages": [
+      {
+        "language": "Chinese"
+      },
+      {
+        "language": "English"
+      }
+    ]
+  }
+}

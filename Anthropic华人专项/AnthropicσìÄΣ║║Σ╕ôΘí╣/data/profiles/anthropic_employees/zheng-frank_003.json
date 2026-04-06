@@ -1,0 +1,183 @@
+{
+  "meta": {
+    "slug": "zheng-frank",
+    "api": "account_003",
+    "fetched_at": "2026-04-02T16:19:55+08:00"
+  },
+  "raw": {
+    "success": true,
+    "message": "response retrieved successfully",
+    "data": {
+      "basic_info": {
+        "fullname": "Frank Zheng",
+        "first_name": "Frank",
+        "last_name": "Zheng",
+        "headline": "Member of Technical Staff at Anthropic",
+        "public_identifier": "zheng-frank",
+        "profile_url": "https://linkedin.com/in/zheng-frank",
+        "profile_picture_url": "",
+        "about": "Lover of history and technology who wishes to make a tangible, meaningful, and positive impact.",
+        "location": {
+          "country": "United States",
+          "city": "San Francisco Bay Area",
+          "full": "San Francisco Bay Area",
+          "country_code": "US"
+        },
+        "creator_hashtags": [],
+        "is_creator": false,
+        "is_influencer": false,
+        "is_premium": true,
+        "open_to_work": false,
+        "created_timestamp": 1398146568288,
+        "show_follower_count": false,
+        "background_picture_url": "https://media.licdn.com/dms/image/v2/C4E16AQGbv4eMU67Nnw/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1516800139762?e=1776902400&v=beta&t=dCfiloyuy4AKNZpmlOIGun8ATbMKcYzoLcMQE0p_4vQ",
+        "urn": "ACoAABQ834QBFUMw8TFg0hN3nllwZhDCsRPQxV0",
+        "follower_count": 1495,
+        "connection_count": 1462,
+        "current_company": "Anthropic",
+        "current_company_urn": "74126343",
+        "current_company_url": "https://www.linkedin.com/company/anthropicresearch",
+        "top_skills": [],
+        "email": null
+      },
+      "experience": [
+        {
+          "title": "Member of Technical Staff",
+          "company": "Anthropic",
+          "location": "San Francisco, California, United States",
+          "duration": "Jul 2025 - Present · 10 mos",
+          "start_date": {
+            "year": 2025,
+            "month": "Jul"
+          },
+          "is_current": true,
+          "company_linkedin_url": "https://www.linkedin.com/company/74126343/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_400_400/company-logo_400_400/0/1719256729905/anthropicresearch_logo?e=1776902400&v=beta&t=6sv-GagnF1G5d4B4rN1Yu3sq6fln2BP_9tb0s6bARoY",
+          "employment_type": "Full-time",
+          "company_id": "74126343"
+        },
+        {
+          "title": "Senior Software Engineer",
+          "company": "Google",
+          "location": "San Francisco, California, United States",
+          "description": "Travel and Events -- Product Area: Payments / Wallet (Feb 2020 - Jun 2025)\n\nGoogle Station -- Product Area: Next Billion Users (Sept 2019 - Jan 2020)",
+          "duration": "Sep 2019 - Jun 2025 · 5 yrs 10 mos",
+          "start_date": {
+            "year": 2019,
+            "month": "Sep"
+          },
+          "end_date": {
+            "year": 2025,
+            "month": "Jun"
+          },
+          "is_current": false,
+          "company_linkedin_url": "https://www.linkedin.com/company/1441/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+          "company_id": "1441"
+        },
+        {
+          "title": "Software Engineer Intern",
+          "company": "Salesforce",
+          "location": "San Francisco, California, United States",
+          "description": "Test and Release Pipeline -- Infrastructure Org",
+          "duration": "Jun 2018 - Sep 2018 · 4 mos",
+          "start_date": {
+            "year": 2018,
+            "month": "Jun"
+          },
+          "end_date": {
+            "year": 2018,
+            "month": "Sep"
+          },
+          "is_current": false,
+          "company_linkedin_url": "https://www.linkedin.com/company/3185/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQHZ9xYomLW7zg/company-logo_400_400/company-logo_400_400/0/1630658255326/salesforce_logo?e=1776902400&v=beta&t=kDhYIGt6-dWNq403gtqMzbHS1eWrCwk_2PW31JWlg0Q",
+          "company_id": "3185"
+        },
+        {
+          "title": "Software Development Engineer Intern",
+          "company": "Amazon",
+          "location": "Seattle, Washington",
+          "description": "Kindle Rendering",
+          "duration": "Jun 2017 - Sep 2017 · 4 mos",
+          "start_date": {
+            "year": 2017,
+            "month": "Jun"
+          },
+          "end_date": {
+            "year": 2017,
+            "month": "Sep"
+          },
+          "is_current": false,
+          "company_linkedin_url": "https://www.linkedin.com/company/1586/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGDLy4STCnHbg/company-logo_400_400/B56ZnZxDipI0AY-/0/1760295142304/amazon_logo?e=1776902400&v=beta&t=lYPAbzBmg2YQhgQFeMnV-wHyKGvMPrvdCpcjHf_aGWc",
+          "company_id": "1586"
+        },
+        {
+          "title": "Software Engineer Intern",
+          "company": "Keewi Inc",
+          "location": "San Francisco Bay Area",
+          "duration": "Jun 2016 - Aug 2016 · 3 mos",
+          "start_date": {
+            "year": 2016,
+            "month": "Jun"
+          },
+          "end_date": {
+            "year": 2016,
+            "month": "Aug"
+          },
+          "is_current": false,
+          "company_linkedin_url": "https://www.linkedin.com/company/7798087/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQEsz6xvikXGIw/company-logo_400_400/company-logo_400_400/0/1631317119731?e=1776902400&v=beta&t=A_-pgqBvBMqrrOujHTvQlNBuUjck1MYm7rzWMiTxWeI",
+          "company_id": "7798087"
+        }
+      ],
+      "education": [
+        {
+          "school": "Stanford University",
+          "degree": "Master of Science - MS, Computer Science",
+          "degree_name": "Master of Science - MS",
+          "field_of_study": "Computer Science",
+          "duration": "2019",
+          "school_linkedin_url": "https://www.linkedin.com/company/1792/",
+          "description": "Track: Systems",
+          "school_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_400_400/company-logo_400_400/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=zzE-1MKqCLrmkqb1p2hJqhVuV2hbdZzC0j_ok6Kyhk8",
+          "school_id": "1792"
+        },
+        {
+          "school": "Stanford University",
+          "degree": "Bachelor of Arts and Science - BAS, Computer Science + History",
+          "degree_name": "Bachelor of Arts and Science - BAS",
+          "field_of_study": "Computer Science + History",
+          "duration": "2018",
+          "school_linkedin_url": "https://www.linkedin.com/company/1792/",
+          "description": "• Computer Science Track: Artificial Intelligence\n• History Track: General History with a concentration in Middle Eastern History",
+          "school_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_400_400/company-logo_400_400/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=zzE-1MKqCLrmkqb1p2hJqhVuV2hbdZzC0j_ok6Kyhk8",
+          "school_id": "1792"
+        }
+      ],
+      "certifications": [
+        {
+          "name": "Open Water Scuba Diver",
+          "issuer": "PADI",
+          "issued_date": "Issued May 2025"
+        },
+        {
+          "name": "Snowboard Instructor Level 1",
+          "issuer": "Canadian Association of Snowboard Instructors",
+          "issued_date": "Issued Mar 2013"
+        }
+      ],
+      "languages": [
+        {
+          "language": "Arabic",
+          "proficiency": "Elementary proficiency"
+        },
+        {
+          "language": "Chinese",
+          "proficiency": "Native or bilingual proficiency"
+        }
+      ]
+    }
+  }
+}

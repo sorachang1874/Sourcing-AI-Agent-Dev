@@ -1,0 +1,283 @@
+{
+  "meta": {
+    "slug": "albert-au-yeung",
+    "api": "account_003",
+    "fetched_at": "2026-04-02T16:20:03+08:00"
+  },
+  "raw": {
+    "success": true,
+    "message": "response retrieved successfully",
+    "data": {
+      "basic_info": {
+        "fullname": "Albert Au Yeung",
+        "first_name": "Albert",
+        "last_name": "Au Yeung",
+        "headline": "AI/ML Engineer | Hongkonger in Ireland | Podcast Host",
+        "public_identifier": "albert-au-yeung",
+        "profile_url": "https://linkedin.com/in/albert-au-yeung",
+        "profile_picture_url": "https://media.licdn.com/dms/image/v2/C5603AQGsFgR2iYk1lg/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1594048168593?e=1776902400&v=beta&t=uvU_yliMH1tYoi2fKAEfiFI5LjSJ3b4XDSMLE9pqOOE",
+        "about": "Experienced software/AI/ML engineer",
+        "location": {
+          "country": "Ireland",
+          "city": "Dublin, County Dublin",
+          "full": "Dublin, County Dublin, Ireland",
+          "country_code": "IE"
+        },
+        "creator_hashtags": [
+          "ai",
+          "career",
+          "datascience",
+          "machinelearning",
+          "softwareengineering"
+        ],
+        "is_creator": true,
+        "is_influencer": false,
+        "is_premium": true,
+        "open_to_work": false,
+        "created_timestamp": 1170420303000,
+        "show_follower_count": true,
+        "background_picture_url": "https://media.licdn.com/dms/image/v2/D5616AQGX903igkNDIQ/profile-displaybackgroundimage-shrink_350_1400/B56Zomd.q.JkAY-/0/1761581985366?e=1776902400&v=beta&t=XiYv5YEr8z7N_3jOBHO-UYq5Md8r-6MVP09AtDUH7KA",
+        "urn": "ACoAAACXO0EB2wQd9UtXtcietQzM2oY17fUZhOQ",
+        "follower_count": 2326,
+        "connection_count": 1745,
+        "current_company": "Anthropic",
+        "current_company_urn": "74126343",
+        "current_company_url": "https://www.linkedin.com/company/anthropicresearch",
+        "top_skills": [],
+        "email": null
+      },
+      "experience": [
+        {
+          "title": "Member of Technical Staff",
+          "company": "Anthropic",
+          "location": "County Dublin, Ireland",
+          "duration": "Oct 2025 - Present · 7 mos",
+          "start_date": {
+            "year": 2025,
+            "month": "Oct"
+          },
+          "is_current": true,
+          "company_linkedin_url": "https://www.linkedin.com/company/74126343/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_400_400/company-logo_400_400/0/1719256729905/anthropicresearch_logo?e=1776902400&v=beta&t=6sv-GagnF1G5d4B4rN1Yu3sq6fln2BP_9tb0s6bARoY",
+          "employment_type": "Full-time",
+          "company_id": "74126343"
+        },
+        {
+          "title": "Senior Principal Engineer, AI/ML Software",
+          "company": "亞德諾半導體",
+          "location": "Dublin, County Dublin, Ireland",
+          "duration": "Oct 2024 - Oct 2025 · 1 yr 1 mo",
+          "start_date": {
+            "year": 2024,
+            "month": "Oct"
+          },
+          "end_date": {
+            "year": 2025,
+            "month": "Oct"
+          },
+          "is_current": false,
+          "company_linkedin_url": "https://www.linkedin.com/company/3450/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQFIPofjzp1AXA/company-logo_400_400/company-logo_400_400/0/1639584615887/analog_devices_logo?e=1776902400&v=beta&t=Y6BY1F87UNudETbkD5t97MBbmEm5-ZLvW94iF3J1Tnk",
+          "employment_type": "Full-time",
+          "location_type": "Hybrid",
+          "company_id": "3450"
+        },
+        {
+          "title": "Staff AI Engineer",
+          "company": "LinkedIn",
+          "location": "County Dublin, Ireland",
+          "duration": "Jul 2020 - Sep 2024 · 4 yrs 3 mos",
+          "start_date": {
+            "year": 2020,
+            "month": "Jul"
+          },
+          "end_date": {
+            "year": 2024,
+            "month": "Sep"
+          },
+          "is_current": false,
+          "company_linkedin_url": "https://www.linkedin.com/company/1337/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQHaVYd13rRz3A/company-logo_400_400/company-logo_400_400/0/1638831590218/linkedin_logo?e=1776902400&v=beta&t=b7YR38u9HV_S3GAfCQNvCQREdlcOHn9w0mu-6Dsmv4I",
+          "employment_type": "Full-time",
+          "location_type": "Hybrid",
+          "skills": [
+            "Natural Language Processing",
+            "Python"
+          ],
+          "company_id": "1337",
+          "skills_url": "https://www.linkedin.com/in/albert-au-yeung/overlay/urn:li:fsd_profilePosition:(ACoAAACXO0EB2wQd9UtXtcietQzM2oY17fUZhOQ,1640480194)/skill-associations-details?profileUrn=urn%3Ali%3Afsd_profile%3AACoAAACXO0EB2wQd9UtXtcietQzM2oY17fUZhOQ"
+        },
+        {
+          "title": "Podcast Host",
+          "company": "Fireside Chats with CUHK IE Alumni",
+          "description": "Hosted a podcast series titled \"Fireside chat with CUHK IE Alumni\", in which I interviewed CUHK Information Engineering alumni and invited them to share their experience with students and graduates.",
+          "duration": "Jan 2022 - Dec 2023 · 2 yrs",
+          "start_date": {
+            "year": 2022,
+            "month": "Jan"
+          },
+          "end_date": {
+            "year": 2023,
+            "month": "Dec"
+          },
+          "is_current": false,
+          "company_linkedin_url": "https://www.linkedin.com/company/89971665/"
+        },
+        {
+          "title": "AI Technical Manager",
+          "company": "Wisers Information Limited",
+          "location": "Hong Kong",
+          "duration": "Jan 2019 - Jun 2020 · 1 yr 6 mos",
+          "start_date": {
+            "year": 2019,
+            "month": "Jan"
+          },
+          "end_date": {
+            "year": 2020,
+            "month": "Jun"
+          },
+          "is_current": false,
+          "company_linkedin_url": "https://www.linkedin.com/company/156114/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C510BAQFFGTN91lZibQ/company-logo_400_400/company-logo_400_400/0/1631410148889/wisers_information_ltd_logo?e=1776902400&v=beta&t=B7XT_BrxDdWcT2Cuj8U_w7bnsGSn0rf7ry3bsp6fInQ",
+          "skills": [
+            "資料科學"
+          ],
+          "company_id": "156114",
+          "skills_url": "https://www.linkedin.com/in/albert-au-yeung/overlay/urn:li:fsd_profilePosition:(ACoAAACXO0EB2wQd9UtXtcietQzM2oY17fUZhOQ,1418608494)/skill-associations-details?profileUrn=urn%3Ali%3Afsd_profile%3AACoAAACXO0EB2wQd9UtXtcietQzM2oY17fUZhOQ"
+        }
+      ],
+      "education": [
+        {
+          "school": "University of Southampton",
+          "degree": "Doctor of Philosophy (PhD), Electronics and Computer Science",
+          "degree_name": "Doctor of Philosophy (PhD)",
+          "field_of_study": "Electronics and Computer Science",
+          "duration": "2006 - 2009",
+          "school_linkedin_url": "https://www.linkedin.com/company/6865/",
+          "description": "Conducted research in social computing, collaborative tagging, social network analysis using machine learning, and natural language processing;\nPublished over 15 academic publications during the course of the Ph.D. programme",
+          "school_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQFahJOcvnrKgQ/company-logo_400_400/B4EZ0FZMkaJAAY-/0/1773911984799/university_of_southampton_logo?e=1776902400&v=beta&t=5IpD0xZALB6rKZ28a7Q8qB2jB9gdgI8-0V5BaakOpUA",
+          "start_date": {
+            "year": 2006
+          },
+          "end_date": {
+            "year": 2009
+          },
+          "school_id": "6865"
+        },
+        {
+          "school": "University of Oxford",
+          "degree": "Summer Doctoral Programme",
+          "degree_name": "Summer Doctoral Programme",
+          "duration": "2008 - 2008",
+          "school_linkedin_url": "https://www.linkedin.com/company/4477/",
+          "school_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQGnc4qXLbE8Sg/company-logo_400_400/company-logo_400_400/0/1709206435851/oxforduni_logo?e=1776902400&v=beta&t=AXsTLCnoM-MtK_qfegfcWqTKXeiQHFVk1TGzbT-7c9I",
+          "start_date": {
+            "year": 2008
+          },
+          "end_date": {
+            "year": 2008
+          },
+          "school_id": "4477"
+        }
+      ],
+      "certifications": [
+        {
+          "name": "Natural Language Processing Specialization",
+          "issuer": "Coursera",
+          "issued_date": "Issued Dec 2020"
+        },
+        {
+          "name": "Natural Language Processing with Attention Models",
+          "issuer": "Coursera",
+          "issued_date": "Issued Dec 2020"
+        }
+      ],
+      "languages": [
+        {
+          "language": "Cantonese",
+          "proficiency": "Native or bilingual proficiency"
+        },
+        {
+          "language": "Chinese",
+          "proficiency": "Native or bilingual proficiency"
+        }
+      ],
+      "featured": [
+        {
+          "type": "post",
+          "description": "At the beginning of this year, I created this \"Fireside chat with CUHK IE Alumni\" (https://spoti.fi/34XeJaz) 🎙️ #podcast series (mostly in Cantonese), in which I chat with graduates of Department of Information Engineering, CUHK and get to know their career development and experience after graduation.\n\nNow half a year has passed and I have recorded 14 episodes 🚀. I must say that this is one of the best things that I have ever started. Through this project, I have connected to alumni working in different locations, companies and professions, I have learnt about the responsibilities, challenges and fun of various roles in the technology industry. I am also deeply impressed by my fellow alumni's passion in technology and their eagerness to acquire new skills and knowledge to overcome challenges in their career.\n\nI have received messages from different people showing support and appreciation to this podcast series, and the number of people listening to the series has been increasing steadily, which are very encouraging! I look forward to chatting with more fellow alumni and bringing insights and advice to students and fresh graduates.\n\nI would also like to thank all of the guests who contributed greatly to this podcast series so far! Wing Chung, Yu Peng, Cho Yiu (Michael) Ng, Marco Leung, Kin Leung, Kevin Cheung, Terry Chan, Ellie Liu, Ka Lung Ng, Francis Chong, Calvin Chan, Ka tim Chu, Gloria Chan, Yandy Tse.",
+          "url": "https://www.linkedin.com/feed/update/urn:li:activity:6954549672363352064?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A6954549672363352064%29",
+          "social_counts": {
+            "likes": 98,
+            "comments": 9,
+            "reaction_counts": [
+              {
+                "type": "like",
+                "count": 91
+              },
+              {
+                "type": "praise",
+                "count": 4
+              },
+              {
+                "type": "appreciation",
+                "count": 3
+              }
+            ]
+          }
+        },
+        {
+          "type": "post",
+          "description": "Thanks to CUHK Alumni Affairs Office (CUHKAAO) for interviewing me about my career in #AI, #datascience  and #machinelearning. It is a privilege to be included in the latest issue of the CUHK Alumni Magazine alongside other brilliant alumni working in the field of data science and AI/ML. Hope this will inspire more students to join this exciting and challenging field!\n\nThe online version of the latest issue of the magazine can be access here: https://lnkd.in/evZgRwac",
+          "url": "https://www.linkedin.com/feed/update/urn:li:activity:6980147130929668096?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A6980147130929668096%29",
+          "image_url": "https://media.licdn.com/dms/image/v2/C4E22AQHoQLbiTJiLTw/feedshare-shrink_2048_1536/feedshare-shrink_2048_1536/0/1664196757611?e=1776902400&v=beta&t=KqpOfxYRGqNwch_jtCcqfQWlEdxzs3JBQalIPr5qll0",
+          "social_counts": {
+            "likes": 253,
+            "comments": 5,
+            "reaction_counts": [
+              {
+                "type": "like",
+                "count": 243
+              },
+              {
+                "type": "empathy",
+                "count": 5
+              },
+              {
+                "type": "praise",
+                "count": 3
+              },
+              {
+                "type": "appreciation",
+                "count": 2
+              }
+            ]
+          }
+        },
+        {
+          "type": "post",
+          "description": "I am working on a new podcast series \"Fireside chat with CUHK IE Alumni\", in which I will interview Department of Information Engineering, CUHK alumni and invite them to share their experience with students and graduates. The first episode has just been released, in which Wing Chung shared his work as a data scientist and his transition from a software developer to a data scientist. You can listen to the episode on Spotify, Apple iTunes or Amazon Music by following the links below. Please help spread the news!\n\n我正在製作一個名為「中大信息工程校友訪談」的 podcast 節目，邀請中大信息工程學系畢業生接受訪問，跟學生及畢業生分享他們的各種經驗。第一集我邀請了 2011 年本科畢業的鍾家穎接受訪問，他分享了自己作為一個數據科學家的日常工作，以及由軟件工程師轉型為數據科學家的過程。大家可按以下連結於 Spotify、Apple iTunes 或 Amazon Music 收聽！\n\nSpotify: https://spoti.fi/34XeJaz \niTunes: https://apple.co/3JHzoxV \nAmazon Music: https://amzn.to/3h2S92F \n\n#cuhkie #interview #podcast #informationengineering #experiencesharing #datascientist",
+          "url": "https://www.linkedin.com/feed/update/urn:li:activity:6902027332069257216?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A6902027332069257216%29",
+          "social_counts": {
+            "likes": 93,
+            "comments": 3,
+            "reaction_counts": [
+              {
+                "type": "like",
+                "count": 88
+              },
+              {
+                "type": "praise",
+                "count": 3
+              },
+              {
+                "type": "appreciation",
+                "count": 2
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

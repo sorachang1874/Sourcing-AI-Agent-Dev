@@ -1,0 +1,11 @@
+{
+  "meta": {
+    "name": "Jenny Wen",
+    "slug": "jennywen",
+    "api": "account_003",
+    "fetched_at": "2026-04-02T18:59:57+08:00"
+  },
+  "raw": {
+    "message": "You have exceeded the MONTHLY quota for Requests on your current plan, BASIC. Upgrade your plan at https://rapidapi.com/karimgreek/api/linkedin-scraper-api-real-time-fast-affordable"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "query": "找直接参与 Anthropic 投资决策的华人投资方成员",
+  "target_company": "Anthropic",
+  "categories": ["investor"],
+  "keywords": ["是", "Anthropic投资", "领投", "决策"],
+  "top_k": 8
+}

@@ -1,0 +1,1429 @@
+[
+  {
+    "name_en": "Da Yan",
+    "name_zh": "闫达",
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active",
+      "arxiv_paper"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 2,
+    "position": "Member of Technical Staff",
+    "edu": "博士：香港科技大学，计算机科学，2016-2022\n本科：华中科技大学，电气与通信工程，2012-2016",
+    "note": "大陆华人；华科大2012级；Anthropic早期华人基础设施工程师"
+  },
+  {
+    "name_en": "Hongbin Chen",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 3,
+    "position": "Member of Technical Staff",
+    "edu": "博士：约翰斯·霍普金斯大学，理论物理，2014-2019\n本科：中国科学技术大学，物理（国家奖学金），2010-2014",
+    "note": "大陆华人；中科大2010级；以Resident身份转正"
+  },
+  {
+    "name_en": "Jesse Mu",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active",
+      "arxiv_paper"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 4,
+    "position": "Member of Technical Staff",
+    "edu": "博士：斯坦福大学，计算机科学，2018-2023\n硕士：剑桥大学，高级计算机科学（MASt），2017-2018\n本科：波士顿学院，计算机科学",
+    "note": "美籍华裔（ABC）；中文中级；Sleeper Agents/Constitutional Classifiers论文作者"
+  },
+  {
+    "name_en": "Mu (Kevin) Lin",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 5,
+    "position": "Head of Trust & Safety ML",
+    "edu": "博士：达特茅斯学院，2008入学，肄业\n硕士：浙江大学，计算机科学，2006-2008",
+    "note": "大陆华人；浙大CS硕士；达特茅斯PhD肄业；Constitutional Classifiers论文作者"
+  },
+  {
+    "name_en": "Daliang Li",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 6,
+    "position": "Member of Technical Staff",
+    "edu": "Simons Fellow：哈佛大学，自然基本定律中心，2018-2020\n博士后：约翰斯·霍普金斯大学，高能理论\n博士：耶鲁大学，理论物理，2009-2015\n本科：北京大学，物理，2005-200",
+    "note": "大陆华人；北大2005级物理；耶鲁高能物理博士；FedMD联邦学习NeurIPS 2019杰出论文"
+  },
+  {
+    "name_en": "Yijie Zhu",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 7,
+    "position": "Member of Technical Staff",
+    "edu": "硕士：伊利诺伊理工大学，计算机科学，2016-2018\n本科：复旦大学，计算机软件工程，2009-2013",
+    "note": "大陆华人；复旦2009级；百度/Google/Facebook/ByteDance多家大厂经历"
+  },
+  {
+    "name_en": "Haochen Zhang",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 8,
+    "position": "Member of Technical Staff",
+    "edu": "博士：斯坦福大学，计算机科学，2019-2024\n访问研究员：MIT LIDS（Suvrit Sra组）；多伦多大学Vector研究所（Roger Grosse组）\n本科：清华大学，计算机科学（姚班）",
+    "note": "大陆华人；清华姚班2015级；天津一中数学奥赛金牌"
+  },
+  {
+    "name_en": "Andy Shih",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active",
+      "arxiv_paper"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 9,
+    "position": "Member of Technical Staff",
+    "edu": "博士：斯坦福大学，计算机科学，2019-2024\n本科：加州大学洛杉矶分校（UCLA），计算机科学，2014-2017",
+    "note": "台湾裔美国人（ABC）；UCLA本科/硕士→斯坦福博士；Auditing LMs论文作者"
+  },
+  {
+    "name_en": "Celine Xie",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 10,
+    "position": "Head of Revenue Accounting and Operations",
+    "edu": "硕士：圣母大学Mendoza商学院，会计\n本科：中国人民大学，会计",
+    "note": "大陆华人；人大会计；非技术岗"
+  },
+  {
+    "name_en": "Jo Zhu",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 11,
+    "position": "Startup Partnerships + Growth",
+    "edu": "MBA：斯坦福大学商学院\n硕士：斯坦福大学教育学院，教育学（MEd）\n本科：英属哥伦比亚大学（UBC），计算机科学",
+    "note": "华人（华裔背景）；UBC CS→斯坦福MBA；前a16z合伙人；非技术岗"
+  },
+  {
+    "name_en": "Jack Chen",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active",
+      "arxiv_paper"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 12,
+    "position": "Member of Technical Staff",
+    "edu": "硕士：斯坦福大学，计算机科学，2014毕业\n本科：斯坦福大学，计算机科学，2010-2014",
+    "note": "华裔；斯坦福BS+MS；Alignment Faking论文作者"
+  },
+  {
+    "name_en": "Jerry Wei",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active",
+      "arxiv_paper"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 13,
+    "position": "Member of Technical Staff",
+    "edu": "本科：斯坦福大学，计算机科学/AI",
+    "note": "华裔（美籍，ABC）；斯坦福CS；Constitutional Classifiers论文作者"
+  },
+  {
+    "name_en": "Zhenze Fu",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 14,
+    "position": "Member of Technical Staff",
+    "edu": "硕士：芝加哥大学，金融数学，2018-2019\n本科：北京大学，金融，2014-2018",
+    "note": "大陆华人；北大2014级金融；摩根士丹利4年量化研究员"
+  },
+  {
+    "name_en": "Shijie Wu",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 15,
+    "position": "Member of Technical Staff",
+    "edu": "博士：约翰斯·霍普金斯大学，计算机科学，2018-2021\n硕士：约翰斯·霍普金斯大学，计算机科学，2016-2018\n本科：中山大学，信息与计算科学，2012级",
+    "note": "大陆华人；中山大学2012级；JHU CS博士；BloombergGPT核心作者"
+  },
+  {
+    "name_en": "Catherine Wu",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 16,
+    "position": "Head of Product, Claude Code & Cowork",
+    "edu": "本科：普林斯顿大学，计算机科学\n交换：ETH Zürich（苏黎世联邦理工学院）",
+    "note": "华裔（美籍）；普林斯顿CS；前Index Ventures合伙人；产品负责人（非研究岗）"
+  },
+  {
+    "name_en": "Qichen Fu",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 17,
+    "position": "Member of Technical Staff",
+    "edu": "硕士：卡内基梅隆大学，机器人学，2020-2022\n本科：密歇根大学，计算机科学（UM-SJTU联合学位），2018-2020",
+    "note": "大陆华人；UM-SJTU联合学位；CMU机器人学硕士；Apple ML工程师"
+  },
+  {
+    "name_en": "Xiaoyi Zhang",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 18,
+    "position": "Member of Technical Staff (Manager)",
+    "edu": "博士：华盛顿大学，计算机科学（HCI），2014-2018\n本科：加州大学洛杉矶分校（UCLA），计算机科学，2011-2014",
+    "note": "大陆华人（北大附中毕业）；UCLA CS本科→UW CS博士；Apple ML 6年"
+  },
+  {
+    "name_en": "Yue Ning",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 19,
+    "position": "Member of Technical Staff",
+    "edu": "硕士：宾夕法尼亚大学，计算机与信息科学，2010-2012\n本科：北京大学，物理，2006-2010",
+    "note": "大陆华人；北大2006级物理；宾大CS硕士；多家AI创业公司联合创始人"
+  },
+  {
+    "name_en": "Xiaoran Wang",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 20,
+    "position": "安全工程师",
+    "edu": "硕士：卡内基梅隆大学，IT与管理\n本科：香港城市大学，信息工程（荣誉学士）",
+    "note": "华人（港/大陆背景）；CMU IT管理硕士；LinkedIn链接未知"
+  },
+  {
+    "name_en": "Runjin Chen",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active",
+      "arxiv_paper"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 21,
+    "position": "Member of Technical Staff",
+    "edu": "博士：德克萨斯大学奥斯汀分校，计算机科学，2023入学，在读\n硕士：上海交通大学，计算机科学，2020-2023",
+    "note": "大陆华人；SJTU CS硕士→UT Austin物理博士在读；以Research Fellow身份加入后转MTS"
+  },
+  {
+    "name_en": "Brian Chen",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active",
+      "arxiv_paper"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 22,
+    "position": "Member of Technical Staff",
+    "edu": "硕士：麻省理工学院（MIT），计算机科学\n本科：麻省理工学院（MIT），数学与计算机科学",
+    "note": "台湾裔美国人（用户核实）；MIT数学&CS；Scaling Monosemanticity / Circuit Tracing / Auditing LMs三篇核心论文作者"
+  },
+  {
+    "name_en": "Newton Cheng",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active",
+      "arxiv_paper"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 23,
+    "position": "Research Scientist",
+    "edu": "博士：加州大学伯克利分校，物理，2018-2022\n本科：斯坦福大学，物理，2014-2018",
+    "note": "疑似华裔（姓Cheng，待核实）；Stanford物理本科→Berkeley物理博士；以Resident身份转Research Scientist；Sleeper Agents论文作者"
+  },
+  {
+    "name_en": "Yizhi Zhao",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 24,
+    "position": "Member of Technical Staff",
+    "edu": "硕士：耶鲁大学，计算机科学，2021-2022\n本科：浙江大学，计算机科学与技术，2016-2020",
+    "note": "大陆华人；浙大CS→耶鲁CS硕士；Meta 3年→Anthropic"
+  },
+  {
+    "name_en": "Dustin Li",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active",
+      "arxiv_paper"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 25,
+    "position": "Member of Technical Staff",
+    "edu": "本科：加州大学伯克利分校，电子工程与计算机科学（EECS）",
+    "note": "疑似华裔（Li姓，待核实）；UC Berkeley EECS；独特跨界背景（UN/Cisco/HHS → Anthropic）；LinkedIn职称含\"Director of Bubble Tea Center of Excellence\"为调侃"
+  },
+  {
+    "name_en": "Tony Zeng",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 26,
+    "position": "Data Scientist",
+    "edu": "本科：麻省理工学院（MIT），数学（主修）/ 计算机科学+数据科学（辅修）",
+    "note": "华裔；MIT数学本科；Economic Index报告署名；非研究/工程MTS岗"
+  },
+  {
+    "name_en": "Mengyi Xu",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 27,
+    "position": "Product Counsel",
+    "edu": "博士：斯坦福法学院，法学，2014-2017\n交换：巴黎政治学院（Sciences Po），经济法硕士，2016",
+    "note": "华裔；斯坦福法学院JD；非技术岗（法务）；Economic Index报告署名"
+  },
+  {
+    "name_en": "Shuyi Zheng",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 28,
+    "position": "Member of Technical Staff",
+    "edu": "硕士：卡内基梅隆大学，信息系统管理（商业智能与数据分析），2017-2018\n本科：清华大学，工业工程（运筹学），2013-2017",
+    "note": "大陆华人；清华工业工程→CMU MISM；Uber→Twitch→Anthropic；2025年6月加入"
+  },
+  {
+    "name_en": "Xiuruo Zhang",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 29,
+    "position": "Member of Technical Staff",
+    "edu": "硕士：宾夕法尼亚大学，计算机科学（MSE），2015-2016\n本科：宾夕法尼亚大学，计算机科学，2012-2016",
+    "note": "大陆华人；宾大CS本硕；Two Sigma 6年→Anthropic；AI Values论文、Economic Index报告署名"
+  },
+  {
+    "name_en": "Carol Chen",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active",
+      "arxiv_paper"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 30,
+    "position": "研究员",
+    "edu": "（待核实）",
+    "note": "【无法确认华裔】Constitutional AI(2212.08073)论文作者；X账号kipperrii经用户核实；华裔身份待确认"
+  },
+  {
+    "name_en": "Shu Wu",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 31,
+    "position": "Member of Technical Staff",
+    "edu": "硕士：华盛顿大学，计算语言学，2008入学，肄业\n本科：滑铁卢大学，电气工程，2001-2006",
+    "note": "华裔（加拿大滑铁卢大学电气工程背景）；Facebook 9年→Apple→AI2→Anthropic；2024年7月LinkedIn帖子宣布加入"
+  },
+  {
+    "name_en": "Angela Jiang",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 32,
+    "position": "Head of Product, Platform",
+    "edu": "本科：伊利诺伊大学香槟分校（UIUC）",
+    "note": "华裔；UIUC毕业；前OpenAI / Stripe产品负责人；2025年12月加入Anthropic"
+  },
+  {
+    "name_en": "Harry Liu",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 33,
+    "position": "Member of Technical Staff",
+    "edu": "本科：加州大学戴维斯分校，电气与电子工程",
+    "note": "华裔；UC Davis电气工程本科；2026年1月加入Anthropic"
+  },
+  {
+    "name_en": "David Choo",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 34,
+    "position": "GTM",
+    "edu": "本科：女王大学史密斯商学院，商业管理（商科）",
+    "note": "华裔；加拿大女王大学商科本科；前微软/Glean GTM；2026年3月加入Anthropic"
+  },
+  {
+    "name_en": "Frank Zheng",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 35,
+    "position": "Member of Technical Staff",
+    "edu": "硕士：斯坦福大学，计算机科学\n本科：斯坦福大学，计算机科学+历史（BAS）",
+    "note": "华裔；斯坦福大学CS本科+硕士（BAS+MS）；Google高级SWE 6年→Anthropic；2025年7月加入"
+  },
+  {
+    "name_en": "Hendson Lin",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 36,
+    "position": "Head of Safety Research & Policy Agreements",
+    "edu": "博士：加州大学旧金山法学院（前UC Hastings），法学，2010-2013\n本科：加州大学戴维斯分校，政治学/经济学，2006-2009",
+    "note": "华裔；UC Davis政治学/经济学本科；UCSF法学院JD（知识产权）；非技术岗（法务/政策）"
+  },
+  {
+    "name_en": "Albert Au Yeung",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 37,
+    "position": "Member of Technical Staff",
+    "edu": "博士：南安普顿大学，电子与计算机科学，2006-2009\n暑期访问：牛津大学，2008",
+    "note": "香港人；在爱尔兰都柏林；南安普顿大学电子/CS博士；LinkedIn Staff AI Engineer；播客主持人"
+  },
+  {
+    "name_en": "Bebe Zhao",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 38,
+    "position": "GTM Finance & Strategy",
+    "edu": "MBA：宾夕法尼亚大学沃顿商学院，2014-2016\n本科：卫斯理学院，经济学与心理学，2006-2010",
+    "note": "华裔；沃顿MBA；Wellesley本科；Google财务6年→Anthropic；非技术岗（财务/战略）"
+  },
+  {
+    "name_en": "Ruiyang Wang",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 39,
+    "position": "Member of Technical Staff",
+    "edu": "硕士：卡内基梅隆大学硅谷校区，计算机软件工程，2018-2019\n本科：上海交通大学，计算机科学，2013-2017",
+    "note": "大陆华人；上海交通大学CS本科；CMU硅谷校区硕士；Google→Anyscale→Anthropic"
+  },
+  {
+    "name_en": "Mengting Li",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 40,
+    "position": "Member of Technical Staff",
+    "edu": "硕士：哈佛大学，公共卫生（生物统计），2017-2019\n本科：浙江大学，应用生物科学，2013-2017",
+    "note": "大陆华人；浙大应用生物科学本科→哈佛生物统计硕士；Airbnb 6年→Anthropic"
+  },
+  {
+    "name_en": "Chinsin Sim",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 41,
+    "position": "Recruiting",
+    "edu": "本科：加州大学戴维斯分校，传播学（辅修专业写作）",
+    "note": "华裔；UC Davis传播学本科；Uber/Robinhood招聘经验丰富；2023年11月加入Anthropic；非技术岗"
+  },
+  {
+    "name_en": "Zhipeng Jia",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 42,
+    "position": "Member of Technical Staff",
+    "edu": "博士：德克萨斯大学奥斯汀分校，计算机科学，2017-2022\n本科：清华大学，计算机科学，2013-2017",
+    "note": "大陆华人；清华大学CS本科→UT Austin CS博士（2022）；Google系统研究工程师3年→Anthropic 2025-06加入"
+  },
+  {
+    "name_en": "Sophie Ho",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 43,
+    "position": "Head of Brand - Claude",
+    "edu": "专业进修：纽约大学（NYU）专业学院，2021-2022\n本科：北京外国语大学，国际商学院，2000-2004",
+    "note": "大陆华人；北外国际商学院本科；Meta/百事/亿滋品牌经验；非技术岗（品牌营销）"
+  },
+  {
+    "name_en": "Calvin Liu-Navarro",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 44,
+    "position": "Technical Recruiting",
+    "edu": "本科：加州大学圣克鲁兹分校，商业管理经济学",
+    "note": "华裔；加州大学圣克鲁兹分校商业管理经济学本科；中文名刘长远；非技术岗（技术招聘）"
+  },
+  {
+    "name_en": "Jo Zhu Kennedy",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 45,
+    "position": "Startup Partnerships + Growth",
+    "edu": "MBA：斯坦福大学商学院\n硕士：斯坦福大学教育学院，教育学（MEd）",
+    "note": "华裔；斯坦福商学院MBA + 教育学院MEd；a16z合伙人（2022-2024）；DoorDash/Uber产品背景；非研究岗（创业合作）"
+  },
+  {
+    "name_en": "Sihan Li",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 46,
+    "position": "Member of Technical Staff",
+    "edu": "博士：伊利诺伊大学香槟分校（UIUC），计算机科学，2013-2019\n硕士：北卡罗来纳州立大学，计算机科学，2011-2013",
+    "note": "华裔；NCSU CS硕士→UIUC CS博士；Uber→Whova→Anthropic"
+  },
+  {
+    "name_en": "Du (Derry) Chen",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 47,
+    "position": "Product Strategy & Operations",
+    "edu": "本科：康奈尔大学，信息科学，2016-2020\n交换：伦敦国王学院，历史与哲学，2019",
+    "note": "华裔；康奈尔大学信息科学本科；Scale AI→Anthropic；非技术岗（产品战略/运营）"
+  },
+  {
+    "name_en": "Jeffrey Chiu",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 48,
+    "position": "Member of Technical Staff",
+    "edu": "硕士：哈佛大学，统计学与计算机科学（AB/SM联合项目），2019-2023\n本科：哈佛大学，统计学与计算机科学，2019-2023",
+    "note": "华裔；哈佛大学统计+CS联合学位（AB/SM）；Vatic Labs/Two Sigma/Citadel量化背景；YC冬季营"
+  },
+  {
+    "name_en": "Ming Li",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 49,
+    "position": "Member of Technical Staff",
+    "edu": "硕士：卡内基梅隆大学，信息系统与管理\n本科：武汉大学，计算机科学",
+    "note": "华裔；武汉大学CS本科；CMU信息系统硕士；多家公司CTO/工程负责人经历"
+  },
+  {
+    "name_en": "Henry Shi",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 50,
+    "position": "Member of Technical Staff",
+    "edu": "硕士：佐治亚理工学院，计算机科学（机器学习方向）\n本科：滑铁卢大学，计算机科学与经济学（荣誉双学位）",
+    "note": "华裔（加拿大）；滑铁卢大学CS荣誉本科；佐治亚理工CS硕士（ML）；Super.com联合创始人（年收入$2亿+）；Technical Chief of Staff直接向Ben Buchanan汇报"
+  },
+  {
+    "name_en": "Qiaojing (David) Yan",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 51,
+    "position": "Member of Technical Staff",
+    "edu": "硕士：斯坦福大学，电气工程，2015-2017\n本科：北京大学，物理，2011-2015",
+    "note": "大陆华人；北京大学物理本科→斯坦福电气工程硕士；Waymo ML 5年→AWS→Anthropic"
+  },
+  {
+    "name_en": "Guangfeng He",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 52,
+    "position": "Member of Technical Staff",
+    "edu": "硕士：南加州大学（USC），计算机科学\n本科：南开大学，电气与电子工程\n（天津大学，待核实）",
+    "note": "大陆华人；天津大学→南开大学电气工程本科→南加州大学CS硕士；Google→Amazon→Anthropic；2026年3月加入"
+  },
+  {
+    "name_en": "Victor Wen",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 53,
+    "position": "Revenue Accounting",
+    "edu": "硕士：德克萨斯大学达拉斯分校（Jindal商学院），会计，2010-2012",
+    "note": "华裔；UT Dallas会计硕士；Snowflake/Anaplan收入会计背景；非技术岗（财务）"
+  },
+  {
+    "name_en": "Wenley Tong",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 54,
+    "position": "Member of Technical Staff",
+    "edu": "本科：普林斯顿大学，计算机科学，2011-2014",
+    "note": "华裔；普林斯顿大学CS本科（2014）；Square/Flexport/Gusto/Patch软件工程经历"
+  },
+  {
+    "name_en": "Yudong Gao",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 55,
+    "position": "Member of Technical Staff",
+    "edu": "硕士：密歇根大学，计算机科学，2008-2011\n本科：上海交通大学，计算机科学，2004-2008",
+    "note": "大陆华人；上海交通大学CS本科→密歇根大学CS硕士；Google软件工程师12年→Anthropic"
+  },
+  {
+    "name_en": "Bobby Chen",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active",
+      "arxiv_paper"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 56,
+    "position": "Member of Technical Staff",
+    "edu": "硕士：伊利诺伊大学香槟分校（UIUC），计算机科学，2013-2014\n本科：伊利诺伊大学香槟分校（UIUC），计算机科学，2009-2013",
+    "note": "大陆华人；UIUC CS本硕；Dropbox→Uber工程经理8年→Anthropic；Constitutional Classifiers论文作者"
+  },
+  {
+    "name_en": "Zihan Wang",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active",
+      "arxiv_paper"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 57,
+    "position": "Member of Technical Staff",
+    "edu": "博士：加州大学圣地亚哥分校（UCSD），计算机科学，2020入学，在读\n本科：伊利诺伊大学香槟分校（UIUC），数学与计算机科学，2016-2020",
+    "note": "华裔；UIUC数学+CS本科→UCSD CS博士；Constitutional Classifiers论文作者；OpenReview @anthropic.com确认在职"
+  },
+  {
+    "name_en": "Xinpei Yu",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 58,
+    "position": "Member of Technical Staff",
+    "edu": "硕士：南加州大学（USC），计算机科学，2014-2016\n本科：北京师范大学，计算机科学，2009-2013",
+    "note": "大陆华人；北京师范大学CS本科→南加州大学CS硕士；Google 9年（Staff SWE/EM）→Anthropic"
+  },
+  {
+    "name_en": "Yu Hua Cheng",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 59,
+    "position": "Member of Technical Staff",
+    "edu": "硕士：哥伦比亚大学，统计学，2013-2014\n本科：台湾国立大学，运营研究，2007-2012",
+    "note": "台湾华人；台湾国立大学运营研究本科→哥伦比亚统计硕士；arXiv署名Yijin Hua；Constitutional Classifiers论文作者"
+  },
+  {
+    "name_en": "Chengyin Liu",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 60,
+    "position": "Member of Technical Staff",
+    "edu": "本科：伊利诺伊大学香槟分校（UIUC），计算机科学，2009-2011\n本科：武汉大学，软件工程，2007-2009",
+    "note": "大陆华人；武汉大学软件工程→UIUC CS本科；Slab联合创始人兼CTO（2017-2023）→Anthropic 2025-01加入"
+  },
+  {
+    "name_en": "Yue Song",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active",
+      "arxiv_paper"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 61,
+    "position": "Member of Technical Staff",
+    "edu": "硕士：达特茅斯学院，计算机科学\n本科：西安交通大学，微电子",
+    "note": "大陆华人；西安交通大学微电子本科→达特茅斯CS硕士；Google软件工程师9年→Anthropic；Constitutional Classifiers论文作者"
+  },
+  {
+    "name_en": "Jin Pan",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active",
+      "arxiv_paper"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 62,
+    "position": "Member of Technical Staff",
+    "edu": "本科：麻省理工学院（MIT），计算机科学，2012-2016",
+    "note": "华裔；MIT CS本科（2016）；Constitutional Classifiers论文作者；OpenReview @anthropic.com确认在职"
+  },
+  {
+    "name_en": "Daniel Liu",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 63,
+    "position": "Member of Technical Staff",
+    "edu": "本科：加州大学洛杉矶分校（UCLA），计算机科学，2020-2024",
+    "note": "华裔；UCLA CS本科（2024届）；GitHub: daniel-liu-c0deb0t；生物信息学研究背景"
+  },
+  {
+    "name_en": "Barry Zhang",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 64,
+    "position": "Member of Technical Staff",
+    "edu": "硕士：西北大学，工业工程与运营研究（IEOR）\n本科：西北大学，工业工程与运营研究（IEOR）/ 计算机科学",
+    "note": "华裔；西北大学IEOR+CS联合学位；Meta研究工程师3年；X: @barry_zyj；LinkedIn: barry-z"
+  },
+  {
+    "name_en": "Cynthia Wu",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 65,
+    "position": "Member of Technical Staff",
+    "edu": "本科：加州大学伯克利分校，计算机科学，2018-2021",
+    "note": "华裔（吴姓）；UC Berkeley CS本科（2021届）；Snorkel AI/Anyscale→Anthropic"
+  },
+  {
+    "name_en": "Jenny Wen",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 66,
+    "position": "Member of Technical Staff",
+    "edu": "本科：滑铁卢大学，系统设计工程（院长荣誉榜）",
+    "note": "华裔（加拿大）；滑铁卢大学系统设计工程本科；前Figma设计总监→Anthropic；非传统研究岗（设计方向MTS）"
+  },
+  {
+    "name_en": "Christopher Liu",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active",
+      "arxiv_paper"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 67,
+    "position": "Member of Technical Staff",
+    "edu": "本科：卡内基梅隆大学，数学与计算机科学，2013-2017",
+    "note": "华裔；CMU数学+CS本科（2017）；Facebook/Twitch/Airbnb→Anthropic；OpenReview ~Christopher_Liu1 @anthropic.com确认"
+  },
+  {
+    "name_en": "Bing Ju",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 68,
+    "position": "Technical Revenue Manager",
+    "edu": "本科：波特兰州立大学，会计，2004-2008",
+    "note": "华裔；波特兰州立大学会计本科；Palo Alto Networks→Zoom→Google→Anthropic；非技术岗（财务/收入管理）"
+  },
+  {
+    "name_en": "Yanda Chen",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active",
+      "arxiv_paper"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 69,
+    "position": "Member of Technical Staff",
+    "edu": "博士：哥伦比亚大学，计算机科学（NLP方向），2021-2024\n本科：哥伦比亚大学，计算机科学，2017-2021",
+    "note": "大陆华人；哥伦比亚大学CS本科（2021）→ CS博士（2021-2024，McKeown/He He/Zhou Yu组）；Microsoft/AWS/IBM研究实习；CRA学生研究奖获得者；2024-09加入Anthropic Alignment Science team；首篇Anthropic论"
+  },
+  {
+    "name_en": "Miranda Zhang",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active",
+      "arxiv_paper"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 70,
+    "position": "Operations Generalist",
+    "edu": "本科：芝加哥大学，公共政策，2018-2022\nIB：Sevenoaks School，国际文凭，2015-2017",
+    "note": "华裔；芝加哥大学公共政策本科（2022）；2022-07加入Anthropic运营岗；兼任CLR暑期研究员（2024）；EA背景"
+  },
+  {
+    "name_en": "Chao Chen",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 71,
+    "position": "Member of Technical Staff",
+    "edu": "硕士：加州大学圣地亚哥分校（UCSD），计算机科学，2011-2013\n本科：华中科技大学，计算机软件工程，2007-2011",
+    "note": "大陆华人；华中科技大学CS本科（2011）→UCSD CS硕士（2013）；Databricks EM 4年→2026-03加入Anthropic"
+  },
+  {
+    "name_en": "Michael Ran Chen",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 72,
+    "position": "Member of Technical Staff (Manager)",
+    "edu": "硕士：宾夕法尼亚大学，计算机科学，2014-2015\n本科：宾夕法尼亚大学，计算机工程，2010-2014",
+    "note": "华裔；宾大CS本科+硕士（2015）；Quora平台负责人3年→2025-06加入Anthropic MTS Manager"
+  },
+  {
+    "name_en": "Qile (Paul) Chen",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 73,
+    "position": "Member of Technical Staff",
+    "edu": "博士：明尼苏达大学，化学工程，2013-2018\n本科：清华大学，化学与生物分子工程，2009-2013",
+    "note": "大陆华人；清华大学化工本科（2013）→明尼苏达大学化工博士（2018）；Meta Staff MLE→2025-09加入Anthropic"
+  },
+  {
+    "name_en": "Judy Hanwen Shen",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active",
+      "arxiv_paper"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 74,
+    "position": "Member of Technical Staff",
+    "edu": "博士：斯坦福大学，计算机科学（公平性/差分隐私），2020入学，在读\n硕士：麻省理工学院（MIT），媒体艺术与科学，2017-2019",
+    "note": "华裔；U of Toronto本科→MIT媒体艺术硕士（2019）→Stanford CS博士（Omer Reingold组）；Anthropic Fellows Program后转正MTS；How AI Impacts Skill Formation论文主导者"
+  },
+  {
+    "name_en": "Christina Lu",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active",
+      "arxiv_paper"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 75,
+    "position": "Member of Technical Staff (Resident)",
+    "edu": "博士：牛津大学，计算机科学，2023入学，在读\n本科：达特茅斯学院，计算机科学+艺术，2016-2020",
+    "note": "华裔；Dartmouth CS+艺术本科（2020）→Oxford CS博士在读（2023-2026）；2025-08 Anthropic Research Fellow → 2026-01转正MTS Resident；Assistant Axis论文提交者；个人网站 christina.lu"
+  },
+  {
+    "name_en": "Jerry Hong",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active",
+      "arxiv_paper"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 76,
+    "position": "Member of Design Staff",
+    "edu": "硕士：斯坦福大学，CS/人工智能，2020-2022\n本科：斯坦福大学，CS设计+数学，2017-2022",
+    "note": "华人（Mandarin母语）；Stanford CS+Math+AI MS；设计背景转AI产品"
+  },
+  {
+    "name_en": "Danny Lin",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 77,
+    "position": "Member of Technical Staff",
+    "edu": "本科：纽约大学，计算机科学",
+    "note": "华人；NYU CS本科；工程背景"
+  },
+  {
+    "name_en": "Ashley Wang",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 78,
+    "position": "Member of Technical Staff",
+    "edu": "本科：卡内基梅隆大学",
+    "note": "华人；CMU；Google TLM→Anthropic"
+  },
+  {
+    "name_en": "Christine Ye",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active",
+      "arxiv_paper"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 79,
+    "position": "Anthropic Fellow / Research",
+    "edu": "本科：斯坦福大学，计算机科学",
+    "note": "华裔美国人（ABC）；from outside Seattle；Stanford CS；Anthropic Fellows Program（可扩展监督方向）"
+  },
+  {
+    "name_en": "Jeffrey Wu",
+    "name_zh": "(Jeff Wu)",
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 80,
+    "position": "Member of Technical Staff",
+    "edu": "硕士：麻省理工学院（MIT），计算机科学（MEng），2013毕业\n本科：麻省理工学院（MIT），计算机科学，2009-2013",
+    "note": "ABC（美国出生华裔）；普通话流利（RocketReach确认）；GPT-2/GPT-3/InstructGPT核心作者；前OpenAI Research Engineer（2018-2024）；USAMO 2006-2008、Putnam top 200；MIT BS数学+CS+MEng；个人网站"
+  },
+  {
+    "name_en": "Theodora Chu",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 81,
+    "position": "Product Manager",
+    "edu": "硕士：斯坦福大学，计算机科学（NLP），暂停\n本科：斯坦福大学，计算机科学（AI）",
+    "note": "华裔；斯坦福CS本科(AI)，硕士CS(NLP)暂停；2024-08加入Anthropic PM；参与MCP产品与Writing Tools for Agents工程博文；LinkedIn: theodorachu；来源：engineering博文致谢（writing-tools-for-agent"
+  },
+  {
+    "name_en": "Daniel Jiang",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 82,
+    "position": "Member of Technical Staff",
+    "edu": "博士：华盛顿大学，计算机科学，休学中\n本科：加州大学伯克利分校，计算机科学",
+    "note": "华裔；UC Berkeley CS本科，UW CS PhD（on leave）；2026年加入Anthropic MTS；来源：advanced-tool-use（基础研究致谢）+ writing-tools-for-agents（Research团队致谢）；LinkedIn: daniel-jia"
+  },
+  {
+    "name_en": "Sam Jiang",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 83,
+    "position": "Member of Technical Staff",
+    "edu": "",
+    "note": "华裔；GitHub: samj-anthropic（2024-03创建）；出现于 advanced-tool-use 工程博文致谢；用户确认在职；无其他公开信息"
+  },
+  {
+    "name_en": "Bin Wu",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 84,
+    "position": "Member of Technical Staff",
+    "edu": "硕士：南方理工学院，信息技术，2010-2011\n本科：厦门大学，软件工程，2006-2010",
+    "note": "大陆华人；厦门大学软件工程本科→筑波大学(日本)交流→美国硕士；Airbnb Staff SWE 7年→Anthropic MTS 2025；工程博文 advanced-tool-use 作者（Written by Bin Wu）；RocketReach确认；Bellevue WA；LinkedIn"
+  },
+  {
+    "name_en": "Kaidi Cao",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 85,
+    "position": "Member of Technical Staff",
+    "edu": "博士：斯坦福大学，计算机科学，2018-2023\n本科：清华大学，电子工程，2014-2018",
+    "note": "大陆华人；清华大学电子工程本科→斯坦福CS博士；Voyage AI联合创始人（embedding/reranking模型，被收购）；Google Scholar验证anthropic.com邮箱"
+  },
+  {
+    "name_en": "Zhao Meng",
+    "name_zh": "赵孟",
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 86,
+    "position": "Researcher",
+    "edu": "博士：ETH Zürich，计算机科学（Dr. sc.），2019-2024\n硕士：ETH Zürich，数据科学（MSc），2018-2019\n本科：北京大学，计算机科学",
+    "note": "大陆华人；北大本科→ETH Zürich硕博（2024毕业）；Apple Foundation Models高级研究员（负责Apple Intelligence大模型训练优化）→2025年底加入Anthropic；Google Scholar引用830+，验证anthropic.com邮箱；来源：量"
+  },
+  {
+    "name_en": "Jiaxin Wen",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active",
+      "arxiv_paper"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 87,
+    "position": "Part-time Researcher",
+    "edu": "博士：UC Berkeley，计算机科学，在读\n硕士：清华大学，计算机科学，2022-2025\n本科：清华大学，计算机科学，2018-2022",
+    "note": "大陆华人；清华大学CS本科+硕士（优秀毕业论文Top-1，北京市优秀毕业生）；UC Berkeley CS PhD在读；自述\"part-time researcher at Anthropic\"；ICLR 2025《Language Models Learn to Mislead Humans vi"
+  },
+  {
+    "name_en": "Saffron Huang",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active",
+      "arxiv_paper"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 88,
+    "position": "Research Scientist",
+    "edu": "本科：哈佛大学，应用数学与计算机科学",
+    "note": "来自新Zealand；LinkedIn语言栏含中文（简体），曾在北大Yu Xie社会学课题组实习；2024 TIME 100 Most Influential People in AI；Scholar @anthropic.com 验证"
+  },
+  {
+    "name_en": "Alwin Peng",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active",
+      "arxiv_paper"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 89,
+    "position": "Member of Technical Staff",
+    "edu": "（待核实）",
+    "note": "【疑似华人，待确认】Peng为华人常见姓；Anthropic Safeguards Research Team正式成员（alignment.anthropic.com官方介绍页）；邮箱：alwin@anthropic.com；MATS导师；Scholar @未验证"
+  },
+  {
+    "name_en": "Shi Feng",
+    "name_zh": "冯石（待确认）",
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active",
+      "arxiv_paper"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 90,
+    "position": "Assistant Professor",
+    "edu": "博士：马里兰大学，计算机科学\n本科：（待核实）",
+    "note": "【外部研究合作者】非Anthropic在职员工；GWU助理教授，与Anthropic多篇论文共同署名（safety/alignment方向）；邮箱：shifeng@cs.umd.edu / shi.feng@gwu.edu；早期论文(ACL2016)显示华人背景，教育：UMD；个人主页：shi-fe"
+  },
+  {
+    "name_en": "Yuntao Bai",
+    "name_zh": null,
+    "anthropic_status": "已离职",
+    "source": [
+      "excel_alumni",
+      "arxiv_paper"
+    ],
+    "excel_sheet": "已离职华人员工",
+    "excel_row": 2,
+    "position": "研究科学家",
+    "next": "OpenAI，MTS",
+    "edu": "博士后：加州理工学院，Sherman Fairchild博士后，2018-2021\n博士：普林斯顿大学，理论粒子物理，2013-2018\n本科：多伦多大学，物理与数学（荣誉），2009-2013",
+    "note": "大陆华人；Anthropic RLHF和Constitutional AI论文首席作者；引用6500+；2025年约10月离职加入OpenAI"
+  },
+  {
+    "name_en": "Xin Zhou",
+    "name_zh": null,
+    "anthropic_status": "已离职",
+    "source": [
+      "excel_alumni"
+    ],
+    "excel_sheet": "已离职华人员工",
+    "excel_row": 3,
+    "position": "Member of Technical Staff",
+    "next": "Meta，Software Engineer",
+    "edu": "硕士：北京大学，计算机科学，2010-2013\n本科：北京化工大学，材料科学，2006-2010",
+    "note": "大陆华人；北化工本科→北大CS硕士；Google NLP+TPU编译器6年；2025年5月离职加入Meta"
+  },
+  {
+    "name_en": "Shunyu Yao",
+    "name_zh": "姚顺宇",
+    "anthropic_status": "已离职",
+    "source": [
+      "excel_alumni"
+    ],
+    "excel_sheet": "已离职华人员工",
+    "excel_row": 4,
+    "position": "Member of Technical Staff",
+    "next": "Google DeepMind，Senior Staff Research Scientist",
+    "edu": "博士后：加州大学伯克利分校，2024/07-2024/09（3个月）\n博士：斯坦福大学，理论与数学物理，2019-2024\n本科：清华大学，凝聚态与材料物理（特等奖学金），2015-2019",
+    "note": "大陆华人；清华2015级物理特等奖学金；2025年9月19日因不认同Anthropic将中国列为'adversarial nation'而离职；SCMP/量子位有报道"
+  },
+  {
+    "name_en": "Andi Peng",
+    "name_zh": null,
+    "anthropic_status": "已离职",
+    "source": [
+      "excel_alumni"
+    ],
+    "excel_sheet": "已离职华人员工",
+    "excel_row": 5,
+    "position": "Member of Technical Staff",
+    "next": "humans&，联合创始人",
+    "edu": "博士在读：麻省理工学院（MIT），计算机科学，2020-2026\n本科：耶鲁大学，认知科学（BS）+ 全球事务（BA），cum laude，2013-2018",
+    "note": "华裔（中国出生，美国长大，用户确认）；耶鲁本科→MIT CS PhD在读；Anthropic MTS 2024/05-2025/10；离职后创立humans&（AI初创）"
+  },
+  {
+    "name_en": "Giulio Zhou",
+    "name_zh": null,
+    "anthropic_status": "已离职",
+    "source": [
+      "excel_alumni"
+    ],
+    "excel_sheet": "已离职华人员工",
+    "excel_row": 6,
+    "position": "Member of Technical Staff",
+    "next": "Google DeepMind，Senior Research Engineer",
+    "edu": "博士：卡内基梅隆大学，计算机科学，2017-2024\n本科：加州大学伯克利分校，计算机科学，2012-2016",
+    "note": "华裔（UC Berkeley CS → CMU CS PhD）；Anthropic Safeguards Research Team成员（官方博客确认）；Constitutional Classifiers论文作者；2025年11月离职→Google DeepMind"
+  },
+  {
+    "name_en": "Anna Chen",
+    "name_zh": null,
+    "anthropic_status": "已离职",
+    "source": [
+      "excel_alumni",
+      "arxiv_paper"
+    ],
+    "excel_sheet": "已离职华人员工",
+    "excel_row": 7,
+    "position": "Member of Technical Staff",
+    "next": "（未知）",
+    "edu": "硕士：密歇根大学，计算机科学与工程，2009-2011\n本科：国立台湾大学，电机工程，2005-2009",
+    "note": "台湾裔（国立台湾大学电机→密歇根CS硕士）；Constitutional AI / RLHF等早期核心论文作者；2024年2月离职"
+  },
+  {
+    "name_en": "Ruiqi Zhong",
+    "name_zh": null,
+    "anthropic_status": "已离职",
+    "source": [
+      "excel_alumni"
+    ],
+    "excel_sheet": "已离职华人员工",
+    "excel_row": 8,
+    "position": "Research Scientist",
+    "next": "Thinking Machines Lab，研究员",
+    "edu": "待补充",
+    "note": "有Anthropic工作经历（用户确认）；论文多篇与Anthropic合著；现在Thinking Machines Lab"
+  },
+  {
+    "name_en": "Shannon Yang",
+    "name_zh": null,
+    "anthropic_status": "已离职",
+    "source": [
+      "excel_alumni",
+      "arxiv_paper"
+    ],
+    "excel_sheet": "已离职华人员工",
+    "excel_row": 9,
+    "position": "Member of Operations Staff",
+    "next": "UK AI Security Institute（AISI），AI安全人才与社区建设",
+    "edu": "本科：牛津大学，哲学、政治与经济学（PPE）",
+    "note": "华裔（Yang姓，英文名 Shannon）；牛津大学PPE本科（X简介确认）；前Anthropic运营成员；个人网站 shannonyang.com；X: @shannonyangsky；「杨珊珊」中文名无来源，已清除"
+  },
+  {
+    "name_en": "Meg Tong",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "arxiv_paper",
+      "personal_website"
+    ],
+    "excel_sheet": null,
+    "excel_row": null,
+    "position": "Research Infrastructure",
+    "edu": "牛津大学 & 剑桥大学，计算机科学/自然科学",
+    "note": "确认非华裔（Layer 0）；Oxford/Cambridge教育背景；Anthropic Safeguards Research Team核心成员；Constitutional Classifiers论文共同作者",
+    "layer": 0,
+    "last_updated": "2026-04-05"
+  },
+  {
+    "name_en": "Whitney Chen",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "arxiv_ack",
+      "personal_website",
+      "linkedin"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 91,
+    "position": "Member of Technical Staff (Brand)",
+    "edu": null,
+    "note": "Chinese-Australian producer/writer；LinkedIn确认在职MTS @ Anthropic (2024-04至今)；个人主页whitneychn.com；需写入Excel",
+    "layer": 2,
+    "linkedin_slug": "whitneychen",
+    "linkedin_url": "https://www.linkedin.com/in/whitneychen/",
+    "personal_website": "https://whitneychn.com/",
+    "last_updated": "2026-04-05",
+    "linkedin": "https://www.linkedin.com/in/whitneychen",
+    "homepage": "https://whitneychn.com/",
+    "layer_label": "确认泛华人/CJK华裔",
+    "evidence": {
+      "self_stated": "Chinese-Australian (个人主页 whitneychn.com 自述)",
+      "linkedin_verified": "在职 @ Anthropic (2024-04至今)",
+      "headline": "brand + other stuff @ anthropic",
+      "title": "Member of Technical Staff"
+    },
+    "in_excel": true,
+    "profile_fetched": "2026-04-05"
+  },
+  {
+    "name_en": "Rowan Wang",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "excel_active",
+      "arxiv_ack",
+      "personal_website",
+      "google_scholar"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 91,
+    "position": "Research (Interpretability / AI Safety)",
+    "edu": "博士：哈佛大学，统计学，在读（休学中）",
+    "note": "Harvard PhD on leave at Anthropic；Scholar @anthropic.com verified (ID: Y4bU0bwAAAAJ)；rowankwang.com；出现在Model Organisms (2503.10965) ACK中",
+    "layer": 1,
+    "linkedin_slug": "rowankwang",
+    "linkedin_url": "https://www.linkedin.com/in/rowankwang",
+    "scholar_id": "Y4bU0bwAAAAJ",
+    "personal_website": "https://rowankwang.com/",
+    "last_updated": "2026-04-05"
+  },
+  {
+    "name_en": "Alvin Tsuei",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "linkedin_api"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 92,
+    "in_excel": true,
+    "position": "GTM Strategy",
+    "linkedin": "https://www.linkedin.com/in/alvin-tsuei",
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "evidence": {
+      "self_stated": "台湾背景，中文母语（LinkedIn 搜索结果显示）",
+      "name_pattern": "Tsuei 是台湾闽南语/国语拼音姓"
+    },
+    "note": "GTM Strategy @ Anthropic (2025-11至今)；LinkedIn: alvin-tsuei；台湾背景",
+    "profile_fetched": "2026-04-05"
+  },
+  {
+    "name_en": "Qian Liang",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "linkedin_api"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": 93,
+    "in_excel": true,
+    "position": "Member of Technical Staff",
+    "linkedin": "https://www.linkedin.com/in/qian-liang-66a52b17",
+    "layer": 2,
+    "layer_label": "确认泛华人/CJK华裔",
+    "evidence": {
+      "name_pattern": "Qian(前/钱) + Liang(梁/亮)，典型华人名字组合"
+    },
+    "note": "MTS @ Anthropic (2025-04至今)；LinkedIn: qian-liang-66a52b17；前 Meta/Amazon/Microsoft",
+    "profile_fetched": "2026-04-05"
+  },
+  {
+    "name_en": "Tony CW Liu",
+    "name_zh": null,
+    "anthropic_status": "在职",
+    "source": [
+      "linkedin_api"
+    ],
+    "excel_sheet": "在职华人员工",
+    "excel_row": null,
+    "in_excel": false,
+    "position": "Member of Technical Staff (Manager), GPU",
+    "linkedin": "https://www.linkedin.com/in/tonycwliu",
+    "layer": 1,
+    "layer_label": "疑似华人（待进一步核实）",
+    "evidence": {
+      "name_pattern": "Liu 是华人常见姓，CW 可能是中文名缩写"
+    },
+    "note": "GPU MTS Manager @ Anthropic (2025-08至今)；LinkedIn: tonycwliu；需确认族裔",
+    "profile_fetched": "2026-04-05"
+  }
+]

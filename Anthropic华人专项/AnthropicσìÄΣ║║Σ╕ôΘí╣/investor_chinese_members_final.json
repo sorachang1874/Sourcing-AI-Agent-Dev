@@ -1,0 +1,209 @@
+{
+  "scan_date": "2026-04-01",
+  "method": "官网爬取 + Crunchbase + 官方新闻 + 搜索",
+  "institutions": {
+    "Lightspeed Venture Partners": {
+      "role": "Series E 领投方",
+      "source": "官网全量爬取（121人名单）",
+      "members": [
+        {
+          "name": "Amber Yang",
+          "title": "Venture Partner",
+          "focus": "Enterprise AI",
+          "note": "2025年加入，Series E同年"
+        },
+        {
+          "name": "Lisa Han",
+          "title": "Partner",
+          "focus": "Enterprise Software",
+          "note": "2022年加入"
+        },
+        {
+          "name": "Kat Zhang",
+          "title": "Partner",
+          "focus": "Fintech"
+        },
+        {
+          "name": "Justin Shen",
+          "title": "Partner",
+          "focus": "Growth Stage",
+          "note": "2024年加入"
+        },
+        {
+          "name": "Lina Zhuo",
+          "title": "Partner",
+          "focus": "Growth Private Equity"
+        },
+        {
+          "name": "Shelley Chu",
+          "title": "Partner",
+          "focus": "Health"
+        },
+        {
+          "name": "Catherine Chen",
+          "title": "Partner / CFO",
+          "focus": "Finance/Ops"
+        }
+      ]
+    },
+    "ICONIQ Capital": {
+      "role": "历史投资方（多轮）",
+      "source": "Crunchbase",
+      "members": [
+        {
+          "name": "Yidrienne Lai",
+          "title": "General Partner",
+          "note": "斯坦福工业工程，前TCV、eBay Corp Dev",
+          "confidence": "高"
+        }
+      ],
+      "note": "官网无公开 team 页，Crunchbase 仅显示 37 个员工 profile 中名字可见的为非华裔（Jacobson/Griffith等），Yidrienne Lai 是唯一明确华裔 GP"
+    },
+    "Google Ventures (GV)": {
+      "role": "历史投资方",
+      "source": "官网爬取",
+      "members": [
+        {
+          "name": "Crystal Huang",
+          "title": "General Partner",
+          "note": "⭐ 投资合伙人"
+        },
+        {
+          "name": "Rob Wu",
+          "title": "Executive Business Partner",
+          "note": "运营职能"
+        },
+        {
+          "name": "Yeji Han",
+          "title": "Legal Counsel",
+          "note": "法务"
+        }
+      ]
+    },
+    "Sequoia Capital": {
+      "role": "历史投资方",
+      "source": "官网爬取",
+      "members": [
+        {
+          "name": "Alfred Lin",
+          "title": "Partner",
+          "note": "⭐ 知名合伙人，已知参与 Anthropic"
+        },
+        {
+          "name": "Jess Lee",
+          "title": "Partner"
+        },
+        {
+          "name": "Stephanie Zhan",
+          "title": "Partner",
+          "focus": "Consumer"
+        },
+        {
+          "name": "Josephine Chen",
+          "title": "待确认职位"
+        }
+      ]
+    },
+    "Bessemer Venture Partners": {
+      "role": "Series E 参投方",
+      "source": "官网爬取",
+      "members": [
+        {
+          "name": "Anna Ng",
+          "title": "Legal & Compliance",
+          "note": "职能部门"
+        },
+        {
+          "name": "Michelle Cheng",
+          "title": "Talent",
+          "note": "职能部门"
+        },
+        {
+          "name": "Lindsey Li",
+          "title": "待确认"
+        },
+        {
+          "name": "Bryan Wu",
+          "title": "待确认"
+        },
+        {
+          "name": "Isabel Yuan",
+          "title": "Finance & Accounting",
+          "note": "职能部门"
+        },
+        {
+          "name": "Jason Chan",
+          "title": "Talent",
+          "note": "职能部门"
+        },
+        {
+          "name": "Kathy Wang",
+          "title": "Legal & Compliance",
+          "note": "职能部门"
+        },
+        {
+          "name": "Grace Ma",
+          "title": "待确认"
+        },
+        {
+          "name": "Christopher Wan",
+          "title": "Legal & Compliance",
+          "note": "职能部门"
+        },
+        {
+          "name": "Blythe Yee",
+          "title": "待确认"
+        }
+      ]
+    },
+    "Spark Capital": {
+      "role": "历史参投方",
+      "source": "Crunchbase（19 名员工 profile）",
+      "members": [],
+      "note": "公开 GP 名单：Alexander Finkelstein、Santo Politi、Jeremy Philips、Bijan Sabet、Nabeel Hyatt、Natalie Sandman、Yasmin Razavi——无明显华裔"
+    },
+    "General Catalyst": {
+      "role": "历史投资方",
+      "source": "Crunchbase（94 名员工 profile）",
+      "members": [],
+      "note": "公开 MD/GP 名单无明显华裔。Cloudflare 拦截了浏览器爬取"
+    },
+    "GIC": {
+      "role": "历史投资方（主权基金）",
+      "source": "官方新闻 + Google 摘要",
+      "members": [
+        {
+          "name": "Lim Chow Kiat (林朝棋)",
+          "title": "CEO",
+          "note": "⭐ 新加坡华裔，顶级领导层"
+        },
+        {
+          "name": "Bryan Yeo",
+          "title": "Group CIO（2025.4起）",
+          "note": "华裔，前 Deputy Group CIO"
+        },
+        {
+          "name": "Sam Kim",
+          "title": "COO & Director of Technology",
+          "note": "韩裔（Kim），非华裔，仅供参考"
+        },
+        {
+          "name": "Boon Chin Hau",
+          "title": "CIO Infrastructure（2025.4起）",
+          "note": "华裔，新加坡"
+        },
+        {
+          "name": "Ang Eng Seng",
+          "title": "前 CIO Infrastructure（退休，转任 Advisor）",
+          "note": "华裔"
+        }
+      ]
+    }
+  },
+  "api_usage": {
+    "account_003": {
+      "total_used": 1,
+      "remaining": 49
+    }
+  }
+}

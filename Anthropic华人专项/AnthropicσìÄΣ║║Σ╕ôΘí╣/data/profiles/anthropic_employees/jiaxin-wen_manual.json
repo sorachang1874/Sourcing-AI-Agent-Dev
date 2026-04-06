@@ -1,0 +1,23 @@
+{
+  "source": "personal homepage + user confirmation",
+  "fetched_at": "2026-04-03",
+  "name": "Jiaxin Wen",
+  "name_zh": "文佳欣",
+  "homepage": "https://jiaxin-wen.github.io/",
+  "scholar": "https://scholar.google.com/citations?user=jVRL96IAAAAJ",
+  "twitter": "https://x.com/jiaxinwen22",
+  "anthropic_status": "Part-time Researcher (self-described)",
+  "education": [
+    {"school": "清华大学", "degree": "本科", "field": "计算机科学", "end_year": 2022},
+    {"school": "清华大学", "degree": "硕士", "field": "计算机科学", "end_year": 2025, "advisor": "Minlie Huang"},
+    {"school": "UC Berkeley", "degree": "CS PhD", "status": "在读", "advisor": ["Lijie Chen", "Dawn Song"]}
+  ],
+  "honors": [
+    "Outstanding Graduate Thesis (Top-1), Tsinghua 2025",
+    "Beijing Outstanding Graduate (Top-1), Tsinghua 2025"
+  ],
+  "key_papers": [
+    "Language Models Learn to Mislead Humans via RLHF (ICLR 2025)",
+    "Unsupervised Elicitation of Language Models (preprint 2025, with Anthropic co-authors)"
+  ]
+}

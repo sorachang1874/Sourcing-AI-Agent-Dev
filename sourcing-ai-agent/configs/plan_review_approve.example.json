@@ -1,0 +1,17 @@
+{
+  "review_id": 1,
+  "action": "approved",
+  "reviewer": "pm",
+  "notes": "Approved after confirming scope and source coverage.",
+  "decision": {
+    "confirmed_company_scope": [
+      "Thinking Machines Lab"
+    ],
+    "extra_source_families": [
+      "Engineering Blog",
+      "OpenReview"
+    ],
+    "allow_high_cost_sources": false,
+    "precision_recall_bias": "balanced"
+  }
+}

@@ -1,0 +1,156 @@
+{
+  "meta": {
+    "slug": "yudonggao",
+    "api": "account_003",
+    "fetched_at": "2026-04-02T16:46:12+08:00"
+  },
+  "raw": {
+    "success": true,
+    "message": "response retrieved successfully",
+    "data": {
+      "basic_info": {
+        "fullname": "Yudong Gao",
+        "first_name": "Yudong",
+        "last_name": "Gao",
+        "headline": "Member of Technical Staff at Anthropic / Ex-Googler",
+        "public_identifier": "yudonggao",
+        "profile_url": "https://linkedin.com/in/yudonggao",
+        "profile_picture_url": "https://media.licdn.com/dms/image/v2/D5603AQFrM0YoiaQgCQ/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1710007732496?e=1776902400&v=beta&t=uku246T-EcCeJWqGy9tjiruXJjLEyIbKLk4LkP5uVjU",
+        "about": "",
+        "location": {
+          "country": "United States",
+          "city": "Sunnyvale, California",
+          "full": "Sunnyvale, California, United States",
+          "country_code": "US"
+        },
+        "creator_hashtags": [],
+        "is_creator": false,
+        "is_influencer": false,
+        "is_premium": false,
+        "open_to_work": false,
+        "created_timestamp": 1280616592000,
+        "show_follower_count": false,
+        "background_picture_url": "",
+        "urn": "ACoAAAToIokB0WZaqiz0wCNLoehglI5VB3Icx4Y",
+        "follower_count": 440,
+        "connection_count": 348,
+        "current_company": "Anthropic",
+        "current_company_urn": "74126343",
+        "current_company_url": "https://www.linkedin.com/company/anthropicresearch",
+        "top_skills": [],
+        "email": null
+      },
+      "experience": [
+        {
+          "title": "Member of Technical Staff",
+          "company": "Anthropic",
+          "location": "San Francisco Bay Area",
+          "duration": "Mar 2024 - Present · 2 yrs 2 mos",
+          "start_date": {
+            "year": 2024,
+            "month": "Mar"
+          },
+          "is_current": true,
+          "company_linkedin_url": "https://www.linkedin.com/company/74126343/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_400_400/company-logo_400_400/0/1719256729905/anthropicresearch_logo?e=1776902400&v=beta&t=6sv-GagnF1G5d4B4rN1Yu3sq6fln2BP_9tb0s6bARoY",
+          "employment_type": "Full-time",
+          "location_type": "Hybrid",
+          "company_id": "74126343"
+        },
+        {
+          "title": "Senior Staff Software Engineer",
+          "company": "Google",
+          "duration": "Apr 2022 - Mar 2024 · 2 yrs",
+          "start_date": {
+            "year": 2022,
+            "month": "Apr"
+          },
+          "end_date": {
+            "year": 2024,
+            "month": "Mar"
+          },
+          "is_current": false,
+          "company_linkedin_url": "https://www.linkedin.com/company/1441/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+          "company_id": "1441"
+        },
+        {
+          "title": "Staff Software Engineer",
+          "company": "Google",
+          "duration": "Apr 2018 - Mar 2022 · 4 yrs",
+          "start_date": {
+            "year": 2018,
+            "month": "Apr"
+          },
+          "end_date": {
+            "year": 2022,
+            "month": "Mar"
+          },
+          "is_current": false,
+          "company_linkedin_url": "https://www.linkedin.com/company/1441/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+          "company_id": "1441"
+        },
+        {
+          "title": "Software Engineer",
+          "company": "Google",
+          "duration": "Feb 2012 - Mar 2018 · 6 yrs 2 mos",
+          "start_date": {
+            "year": 2012,
+            "month": "Feb"
+          },
+          "end_date": {
+            "year": 2018,
+            "month": "Mar"
+          },
+          "is_current": false,
+          "company_linkedin_url": "https://www.linkedin.com/company/1441/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+          "company_id": "1441"
+        }
+      ],
+      "education": [
+        {
+          "school": "University of Michigan",
+          "degree": "Master of Science (MS), Computer Science",
+          "degree_name": "Master of Science (MS)",
+          "field_of_study": "Computer Science",
+          "duration": "2008 - 2011",
+          "school_linkedin_url": "https://www.linkedin.com/company/2516/",
+          "school_logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQFGfERBPGurCg/company-logo_400_400/company-logo_400_400/0/1631307390795?e=1776902400&v=beta&t=aLUa5HF2x-cpuTPtWwXVkMarELD8wA-kkuqOTCHIUT4",
+          "start_date": {
+            "year": 2008
+          },
+          "end_date": {
+            "year": 2011
+          },
+          "school_id": "2516"
+        },
+        {
+          "school": "Shanghai Jiao Tong University",
+          "degree": "BS, Computer Science",
+          "degree_name": "BS",
+          "field_of_study": "Computer Science",
+          "duration": "2004 - 2008",
+          "school_linkedin_url": "https://www.linkedin.com/company/27413/",
+          "school_logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQFkNUM4pr0xcg/company-logo_400_400/company-logo_400_400/0/1631314417560?e=1776902400&v=beta&t=_9V7x73QmUeI3ljuiRcsifjAUZDbQNuOqoZkwuoQJko",
+          "start_date": {
+            "year": 2004
+          },
+          "end_date": {
+            "year": 2008
+          },
+          "school_id": "27413"
+        }
+      ],
+      "languages": [
+        {
+          "language": "Cantonese"
+        },
+        {
+          "language": "Chinese"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,8 @@
+[project]
+name = "sourcing-ai-agent"
+version = "0.1.0"
+description = "Backend MVP for a criteria-driven sourcing AI agent."
+requires-python = ">=3.12"
+
+[tool.unittest]
+testpaths = ["tests"]

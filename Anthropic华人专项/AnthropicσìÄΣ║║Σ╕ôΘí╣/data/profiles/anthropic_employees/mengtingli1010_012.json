@@ -1,0 +1,164 @@
+{
+  "success": true,
+  "message": "response retrieved successfully",
+  "data": {
+    "basic_info": {
+      "fullname": "Mengting Li",
+      "first_name": "Mengting",
+      "last_name": "Li",
+      "headline": "@Anthropic | ex-Airbnb",
+      "public_identifier": "mengtingli1010",
+      "profile_url": "https://linkedin.com/in/mengtingli1010",
+      "profile_picture_url": "https://media.licdn.com/dms/image/v2/C4E03AQFGCnrwQ5suWw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1516946534473?e=1776902400&v=beta&t=yeJ__usuN731nP35jNpejhUQJrfuWYBDsHhQs4LKWt8",
+      "about": "",
+      "location": {
+        "country": "United States",
+        "city": "San Mateo, California",
+        "full": "San Mateo, California, United States",
+        "country_code": "US"
+      },
+      "creator_hashtags": [],
+      "is_creator": false,
+      "is_influencer": false,
+      "is_premium": true,
+      "open_to_work": false,
+      "created_timestamp": 1500255194723,
+      "show_follower_count": false,
+      "background_picture_url": "https://media.licdn.com/dms/image/v2/C4E16AQGyAxHZ0CJAxw/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1516946535185?e=1776902400&v=beta&t=lDqfUWQB7zcin4Wx5r68f-D5JSFAD51XAb5It9XeZiQ",
+      "urn": "ACoAACKnpqYBRk13tuZZufsZIWmEKW8Z8eBEs1U",
+      "follower_count": 586,
+      "connection_count": 561,
+      "current_company": "Anthropic",
+      "current_company_urn": "74126343",
+      "current_company_url": "https://www.linkedin.com/company/anthropicresearch",
+      "top_skills": [],
+      "email": null
+    },
+    "experience": [
+      {
+        "title": "Member of Technical Staff",
+        "company": "Anthropic",
+        "location": "San Francisco Bay Area",
+        "duration": "May 2025 - Present · 1 yr",
+        "start_date": {
+          "year": 2025,
+          "month": "May"
+        },
+        "is_current": true,
+        "company_linkedin_url": "https://www.linkedin.com/company/74126343/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_400_400/company-logo_400_400/0/1719256729905/anthropicresearch_logo?e=1776902400&v=beta&t=6sv-GagnF1G5d4B4rN1Yu3sq6fln2BP_9tb0s6bARoY",
+        "employment_type": "Full-time",
+        "company_id": "74126343"
+      },
+      {
+        "title": "Senior Software Engineer",
+        "company": "Airbnb",
+        "location": "San Francisco Bay Area",
+        "description": "Working on Growth & Traffic Notification Team",
+        "duration": "Mar 2019 - May 2025 · 6 yrs 3 mos",
+        "start_date": {
+          "year": 2019,
+          "month": "Mar"
+        },
+        "end_date": {
+          "year": 2025,
+          "month": "May"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/309694/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQFhfl32crIGIw/company-logo_400_400/company-logo_400_400/0/1630637496980/airbnb_logo?e=1776902400&v=beta&t=-9EBSuoM2qiLzzUeI-QP65UtwxiAn9NJuUx0fILPcYk",
+        "company_id": "309694"
+      },
+      {
+        "title": "Software Development Engineer Intern",
+        "company": "PingAn Technology LTD",
+        "location": "Palo Alto, CA",
+        "description": "• Design and implement “PingAn Insight” Platform Prototype.\n   - Assembled financial-oriented data. Crawled them from multiple database including Wikipedia historical events, NYTimes, BBC, Wall street journal, Reuters and company official websites.\n   - Built crawler API, which allows server automatically collect and clean ad-hoc data.\n   - Evaluated and organized these financial data and created database to support workable financial analytics.\n   - Extracted required information from text data such as annual financial report, by refining the architecture of bidirectional LSTM-CRF model and customizing rule-based algorithm.\n   - Applied quantitative analytics to precisely response to the upcoming investment questions.\n• FDDC 2018 Financial Algorithm Challenge: Quarterly Revenue Forecast for Public Companies.\n   - Developed and adjusted machine learning models, including different tree models, statistical regression, lightGBM, Arima and embedding models, to predict the accurate forecast of companies in A-Share Main-Board Market, based on historical financial statements, market data, macro data, industry data and domain knowledge.\n   - The prediction error of revenue was 0.511 and final rank of this competition was 9th/2724.",
+        "duration": "Jun 2018 - Sep 2018 · 4 mos",
+        "start_date": {
+          "year": 2018,
+          "month": "Jun"
+        },
+        "end_date": {
+          "year": 2018,
+          "month": "Sep"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/search/results/all/?keywords=PingAn+Technology+LTD"
+      },
+      {
+        "title": "Research Assistant",
+        "company": "Zhejiang University",
+        "location": "Hangzhou, Zhejiang, China",
+        "description": "1) SUMOylation Mechanism over Gene Mutation Repair in Botrytis Cinerea; \n2) Functional Analysis of ABC Transportome of the Pathogenic Fungus Fusarium Graminearum;                   \n•\tConducted research on the functional principles of SUMO modification; independently designed experiments based on its characters to rebuild the entire sumo process\n•\tCommanded the fundamental techniques to accomplish the entire gene knockout flow and obtain certain mutants as well as the fungus cancerization phenotype verification to eventually verify experimental results\n•\tIndependently constructed two Fusarium graminearum mutants; co-acquired 64 ABC transportome, among which the arb1 gene has proven to have the most significant impact over the growing phenotype\n•\tCo-wrote and published a paper with respect to findings.",
+        "duration": "Mar 2016 - Jun 2017 · 1 yr 4 mos",
+        "start_date": {
+          "year": 2016,
+          "month": "Mar"
+        },
+        "end_date": {
+          "year": 2017,
+          "month": "Jun"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/24531/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/C510BAQFqHuGrMlNcfg/company-logo_400_400/company-logo_400_400/0/1631311270979?e=1776902400&v=beta&t=uboOfy8ys01nOFIoCCVt5ndC6vHT5eHVFBy9cX9gjQg",
+        "company_id": "24531"
+      },
+      {
+        "title": "Research Assistant",
+        "company": "University of Illinois at Urbana-Champaign",
+        "location": "Urbana-Champaign, Illinois Area",
+        "description": "•\tDeveloped a clear understanding of fundamental theories of protein evolution, with particular focus on protein domains’ dynamic interactions and their functional annotations\n•\tSelf-studied specific packages of R for utilization and integration with valid materials and practices\n•\tProgrammed R and Pajek environments to perform protein structural analyses and conclude significant inferences about power law evolution and modular behavior of protein domain networks\n•\tCompleted an individual poster presentation in the front of faculty and students",
+        "duration": "Jul 2016 - Aug 2016 · 2 mos",
+        "start_date": {
+          "year": 2016,
+          "month": "Jul"
+        },
+        "end_date": {
+          "year": 2016,
+          "month": "Aug"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/2650/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQGFFDl_Z9pIAA/company-logo_400_400/company-logo_400_400/0/1630611684443/university_of_illinois_at_urbana_champaign_logo?e=1776902400&v=beta&t=1--Z9zB14SnN_KSEEz3x-H2Uy7aJs5OXT38VWWEsQEo",
+        "company_id": "2650"
+      }
+    ],
+    "education": [
+      {
+        "school": "Harvard University",
+        "degree": "Master of Public Health - MPH, Biostatistics",
+        "degree_name": "Master of Public Health - MPH",
+        "field_of_study": "Biostatistics",
+        "duration": "2017 - 2019",
+        "school_linkedin_url": "https://www.linkedin.com/company/1646/",
+        "school_logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQF5t62bcL0e9g/company-logo_400_400/company-logo_400_400/0/1631318058235?e=1776902400&v=beta&t=RkTNKHKBHCNAI5CNo-HAGQ7uOxrr8GBSdP6Mhal50gg",
+        "start_date": {
+          "year": 2017
+        },
+        "end_date": {
+          "year": 2019
+        },
+        "school_id": "1646"
+      },
+      {
+        "school": "Zhejiang University",
+        "degree": "Bachelor's degree, applied bioscience",
+        "degree_name": "Bachelor's degree",
+        "field_of_study": "applied bioscience",
+        "duration": "2013 - 2017",
+        "school_linkedin_url": "https://www.linkedin.com/company/24531/",
+        "description": "National Scholarship",
+        "school_logo_url": "https://media.licdn.com/dms/image/v2/C510BAQFqHuGrMlNcfg/company-logo_400_400/company-logo_400_400/0/1631311270979?e=1776902400&v=beta&t=uboOfy8ys01nOFIoCCVt5ndC6vHT5eHVFBy9cX9gjQg",
+        "start_date": {
+          "year": 2013
+        },
+        "end_date": {
+          "year": 2017
+        },
+        "school_id": "24531"
+      }
+    ]
+  }
+}

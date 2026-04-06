@@ -1,0 +1,141 @@
+{
+  "success": true,
+  "message": "response retrieved successfully",
+  "data": {
+    "basic_info": {
+      "fullname": "Angela Jiang",
+      "first_name": "Angela",
+      "last_name": "Jiang",
+      "headline": "Head of Product, Anthropic Platform",
+      "public_identifier": "angelajiang",
+      "profile_url": "https://linkedin.com/in/angelajiang",
+      "profile_picture_url": "https://media.licdn.com/dms/image/v2/D5603AQGxY6jMWcnqBA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1715056330743?e=1776902400&v=beta&t=eFGBRDc9o1KZm2aI3Xg-MAqTHZk4bR1Efx5hk0FNtHM",
+      "about": "Versatile experience across consumer, enterprise, artificial intelligence, marketplaces, developer products, and finance. Proven track record of leading difficult projects to success with a strong entrepreneurial bent. Passionate about building high performing systems, teams, and products. Interested in hard problems.",
+      "location": {
+        "country": "United States",
+        "city": "San Francisco Bay Area",
+        "full": "San Francisco Bay Area",
+        "country_code": "US"
+      },
+      "creator_hashtags": [
+        "ai",
+        "marketplaces",
+        "payments",
+        "product"
+      ],
+      "is_creator": true,
+      "is_influencer": false,
+      "is_premium": true,
+      "open_to_work": false,
+      "created_timestamp": 1191827160000,
+      "show_follower_count": true,
+      "background_picture_url": "https://media.licdn.com/dms/image/v2/D5616AQHaaPk-z7Ea0A/profile-displaybackgroundimage-shrink_350_1400/B56ZmrVhP8I4AY-/0/1759516169929?e=1776902400&v=beta&t=SVRJ8phiH4LT6ryYkQ0Q_H9zdRTiBluEqBPmGVWXDCg",
+      "urn": "ACoAAAD-40YBibH7j3PtahMgj2lbbSGLJEyXnk0",
+      "follower_count": 5756,
+      "connection_count": 2150,
+      "current_company": "Anthropic",
+      "current_company_urn": "74126343",
+      "current_company_url": "https://www.linkedin.com/company/anthropicresearch",
+      "top_skills": [],
+      "email": null
+    },
+    "experience": [
+      {
+        "title": "Head of Product, Platform",
+        "company": "Anthropic",
+        "description": "Bringing businesses to the exponential. Model primitives, APIs, hyperscaler integrations, agentic infrastructure and solutions.",
+        "duration": "Dec 2025 - Present · 5 mos",
+        "start_date": {
+          "year": 2025,
+          "month": "Dec"
+        },
+        "is_current": true,
+        "company_linkedin_url": "https://www.linkedin.com/company/74126343/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_400_400/company-logo_400_400/0/1719256729905/anthropicresearch_logo?e=1776902400&v=beta&t=6sv-GagnF1G5d4B4rN1Yu3sq6fln2BP_9tb0s6bARoY",
+        "employment_type": "Full-time",
+        "company_id": "74126343"
+      },
+      {
+        "title": "Head of Product, API",
+        "company": "OpenAI",
+        "description": "Enabling businesses and developers to build AI products with the best intelligence per dollar per second available.",
+        "duration": "Aug 2025 - Dec 2025 · 5 mos",
+        "start_date": {
+          "year": 2025,
+          "month": "Aug"
+        },
+        "end_date": {
+          "year": 2025,
+          "month": "Dec"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/11130470/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+        "employment_type": "Full-time",
+        "company_id": "11130470"
+      },
+      {
+        "title": "Head of Product, Connect Activation",
+        "company": "Stripe",
+        "description": "Connect enables any business to become a financial platform. Led embedded payments offerings, developer experience, accounts, charge flows, and new activations.",
+        "duration": "Aug 2022 - Aug 2025 · 3 yrs 1 mo",
+        "start_date": {
+          "year": 2022,
+          "month": "Aug"
+        },
+        "end_date": {
+          "year": 2025,
+          "month": "Aug"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/2135371/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQE2ZfJyfn-VCg/company-logo_400_400/B56ZlyKwpUKIAY-/0/1758557047806/stripe_logo?e=1776902400&v=beta&t=flaM5KtAekc-eCrsPt6jUJseCn4TVJ_2mGnh7a4mhfs",
+        "company_id": "2135371"
+      },
+      {
+        "title": "Director of Product, Search & Discovery",
+        "company": "Upwork",
+        "description": "Led product, design, and engineering teams to build new search and discovery experiences to help businesses and freelancers find and work with each other. Incubated new business lines.",
+        "duration": "Aug 2021 - Aug 2022 · 1 yr 1 mo",
+        "start_date": {
+          "year": 2021,
+          "month": "Aug"
+        },
+        "end_date": {
+          "year": 2022,
+          "month": "Aug"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/4827017/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQFHVb6ZSCipCw/company-logo_400_400/company-logo_400_400/0/1727104517379/upwork_logo?e=1776902400&v=beta&t=LSvDtE0S5Si4OZDl0nJltzZFW_f897MB1Eu2FFIA98I",
+        "company_id": "4827017"
+      },
+      {
+        "title": "Entrepreneur",
+        "company": "Startups",
+        "description": "Built a platform for creators and SMBs to write and sell online.",
+        "duration": "Jan 2019 - Jun 2021 · 2 yrs 6 mos",
+        "start_date": {
+          "year": 2019,
+          "month": "Jan"
+        },
+        "end_date": {
+          "year": 2021,
+          "month": "Jun"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/11533715/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/C4D0BAQHTflifKJyM4A/company-logo_400_400/company-logo_400_400/0/1631368548108?e=1776902400&v=beta&t=YqLaOjV_O7tpgwMxLClOaF5BeVn1caTAVE2sZ7P94k8",
+        "company_id": "11533715"
+      }
+    ],
+    "education": [
+      {
+        "school": "University of Illinois Urbana-Champaign",
+        "school_linkedin_url": "https://www.linkedin.com/company/2650/",
+        "school_logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQGFFDl_Z9pIAA/company-logo_400_400/company-logo_400_400/0/1630611684443/university_of_illinois_at_urbana_champaign_logo?e=1776902400&v=beta&t=1--Z9zB14SnN_KSEEz3x-H2Uy7aJs5OXT38VWWEsQEo",
+        "school_id": "2650"
+      }
+    ]
+  }
+}

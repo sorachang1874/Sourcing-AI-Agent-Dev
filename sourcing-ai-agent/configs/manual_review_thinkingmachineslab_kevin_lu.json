@@ -1,0 +1,35 @@
+{
+  "apply_resolution": true,
+  "action": "resolved",
+  "reviewer": "user_manual_review",
+  "notes": "Manual review confirmed Kevin Lu via Google search and direct LinkedIn profile.",
+  "target_company": "Thinking Machines Lab",
+  "candidate": {
+    "candidate_id": "04bb60dc2157f232",
+    "name_en": "Kevin Lu",
+    "display_name": "Kevin Lu",
+    "category": "lead",
+    "target_company": "Thinking Machines Lab",
+    "organization": "Thinking Machines Lab",
+    "role": "Publication author lead",
+    "source_dataset": "thinkingmachinesai_official_feed",
+    "source_path": "/home/sorachang/projects/Sourcing AI Agent Dev/sourcing-ai-agent/runtime/company_assets/thinkingmachineslab/20260406T172439/publications/official_surfaces/blogonpolicydistillation.html",
+    "metadata": {
+      "publication_url": "https://thinkingmachines.ai/blog/on-policy-distillation/"
+    }
+  },
+  "candidate_patch": {
+    "category": "employee",
+    "employment_status": "current",
+    "linkedin_url": "https://www.linkedin.com/in/kzl/",
+    "media_url": ""
+  },
+  "source_links": [
+    {
+      "label": "LinkedIn",
+      "url": "https://www.linkedin.com/in/kzl/",
+      "source_type": "manual_review_link",
+      "notes": "Found via Google query Kevin Lu Thinking Machines Lab LinkedIn."
+    }
+  ]
+}

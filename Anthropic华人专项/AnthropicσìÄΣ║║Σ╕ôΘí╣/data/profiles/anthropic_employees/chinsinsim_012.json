@@ -1,0 +1,318 @@
+{
+  "success": true,
+  "message": "response retrieved successfully",
+  "data": {
+    "basic_info": {
+      "fullname": "Chinsin Sim",
+      "first_name": "Chinsin",
+      "last_name": "Sim",
+      "headline": "Recruiting at Anthropic",
+      "public_identifier": "chinsinsim",
+      "profile_url": "https://linkedin.com/in/chinsinsim",
+      "profile_picture_url": "https://media.licdn.com/dms/image/v2/D5603AQHkIQnKr6Np5Q/profile-displayphoto-crop_800_800/B56ZgADjcYHQAI-/0/1752347588701?e=1776902400&v=beta&t=QNjjU--xPaEmi_Lks4SFKjxJjGU7uZp0ZWUBjWR9VBs",
+      "about": "Recruiting leader with a track record of building teams the right way the first time. I'm passionate about mission-driven ventures invested in making the world a better place. We get one shot, so let's make it count.",
+      "location": {
+        "country": "United States",
+        "city": "San Francisco, California",
+        "full": "San Francisco, California, United States",
+        "country_code": "US"
+      },
+      "creator_hashtags": [
+        "communications",
+        "culture",
+        "negotiations",
+        "recruiting",
+        "teambuilding"
+      ],
+      "is_creator": true,
+      "is_influencer": false,
+      "is_premium": true,
+      "open_to_work": false,
+      "created_timestamp": 1323966195814,
+      "show_follower_count": true,
+      "background_picture_url": "https://media.licdn.com/dms/image/v2/D5616AQHsUcumDtRFqg/profile-displaybackgroundimage-shrink_350_1400/B56ZnkLc3SHkAg-/0/1760469832683?e=1776902400&v=beta&t=G1XCJRHBsbKSxLXv0XsZiSh8iPesW1taZ8fzEgHleXQ",
+      "urn": "ACoAAAlmdjEBGjDRKMeZ3Z1p2OYc_-1SNzQ6Jd4",
+      "follower_count": 49711,
+      "connection_count": 29973,
+      "current_company": "Anthropic",
+      "current_company_urn": "74126343",
+      "current_company_url": "https://www.linkedin.com/company/anthropicresearch",
+      "top_skills": [],
+      "email": null
+    },
+    "experience": [
+      {
+        "title": "Recruiting",
+        "company": "Anthropic",
+        "location": "San Francisco Bay Area",
+        "description": "Anthropic aims to ensure the world safely makes the transition through transformative AI. We're an AI safety and research company working to build reliable, interpretable, and steerable AI systems.",
+        "duration": "Nov 2023 - Present · 2 yrs 6 mos",
+        "start_date": {
+          "year": 2023,
+          "month": "Nov"
+        },
+        "is_current": true,
+        "company_linkedin_url": "https://www.linkedin.com/company/74126343/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_400_400/company-logo_400_400/0/1719256729905/anthropicresearch_logo?e=1776902400&v=beta&t=6sv-GagnF1G5d4B4rN1Yu3sq6fln2BP_9tb0s6bARoY",
+        "employment_type": "Full-time",
+        "company_id": "74126343"
+      },
+      {
+        "title": "Mentor",
+        "company": "First Round Fast Track",
+        "location": "San Francisco Bay Area",
+        "description": "Fast Track is a mentorship experience that pairs hundreds of tech leaders with high-potential operators - those at First Round-backed companies, and Black, Indigenous, and Latinx folks at non-First Round backed startups.",
+        "duration": "Mar 2022 - Mar 2025 · 3 yrs 1 mo",
+        "start_date": {
+          "year": 2022,
+          "month": "Mar"
+        },
+        "end_date": {
+          "year": 2025,
+          "month": "Mar"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/30672588/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQFeTCed4SmX2w/company-logo_400_400/company-logo_400_400/0/1678406308804/first_round_fast_track_logo?e=1776902400&v=beta&t=lP5G79Dba6ehyk7OyAPUSAd833ThjMjjrrtHNGg79xc",
+        "company_id": "30672588"
+      },
+      {
+        "title": "Recruiting Lead - Expansion, BizOps and Financial Services",
+        "company": "Robinhood",
+        "location": "San Francisco Bay Area",
+        "description": "Advisor to the VP & Chief Compliance Officer and the VP of Financial Crimes.\n\nPrevious advisor to the Chief Operating Officer and the senior leadership team, including the VP of Operations Shared Services, VP of Customer Experience, Head of Business Operations, and Head of Vendor Relationship Management.\n\nLed a talented team of recruiters, sourcers and coordinators to support Product Operations, Business Operations, Data Analytics, Learning & Development, Customer Experience, Fraud Operations, Anti-Money Laundering and Financial Crimes.\n\nLeadership hires included:\n• Head of Workforce Management & Analytics\n• Site Director, Charlotte \n• Site Director, Denver\n• Site Director, Lake Mary\n\nManaged the recruiting efforts for new office expansions in Westlake, Texas and Charlotte, North Carolina, scaling each of the offices from 0 to 100+ employees each. These business critical initiatives required extensive cross-functional partnership between Business Operations, Ops & CX Leadership, Legal, Tax and HR and Real Estate. Served as the main POC to each Site Director.\n\nCoached offer roundtables, weekly meetings where I mentored junior to senior level recruiters through workshopping, talent mapping and strategizing on closing strategies to compete in today's competitive talent landscape. This biweekly session was open to early career talent acquisition members too, giving them the opportunity to shadow and learn from the team.",
+        "duration": "Sep 2020 - Nov 2023 · 3 yrs 3 mos",
+        "start_date": {
+          "year": 2020,
+          "month": "Sep"
+        },
+        "end_date": {
+          "year": 2023,
+          "month": "Nov"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/3254263/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQESwNiGp2qYlA/company-logo_400_400/company-logo_400_400/0/1728574763254/robinhood_logo?e=1776902400&v=beta&t=XxgklfwQpWazRIU5Ix54C2HwVNFZqjEs4JfC3FraPvM",
+        "employment_type": "Full-time",
+        "company_id": "3254263"
+      },
+      {
+        "title": "Recruiting Manager - People & R4R",
+        "company": "Robinhood",
+        "location": "San Francisco Bay Area",
+        "description": "Advisor to the VP of People and the Head of Recruiting, scaling the People (HR) & Recruiting team from 30 to 100+ employees.\n\nLed a talented team of recruiters, sourcers and coordinators while running a full desk for leadership positions in the People organization.\n\nLeadership hires included:\n• Head of Employee Relations\n• Head of Benefits\n• Head of Recruiting Operations & Analytics \n• Head of University Recruiting\n• Head of Employer Brand\n• Head of HR Systems & Operations\n\nOwned RPO & contract negotiations with contingent staffing agencies, working very closely with Business Development, Procurement, People Partners and Compensation to support staffing needs in a fast-paced and ambiguous environment.",
+        "duration": "Jun 2019 - Sep 2020 · 1 yr 4 mos",
+        "start_date": {
+          "year": 2019,
+          "month": "Jun"
+        },
+        "end_date": {
+          "year": 2020,
+          "month": "Sep"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/3254263/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQESwNiGp2qYlA/company-logo_400_400/company-logo_400_400/0/1728574763254/robinhood_logo?e=1776902400&v=beta&t=XxgklfwQpWazRIU5Ix54C2HwVNFZqjEs4JfC3FraPvM",
+        "employment_type": "Full-time",
+        "company_id": "3254263"
+      },
+      {
+        "title": "Senior Sourcer",
+        "company": "Robinhood",
+        "location": "San Francisco Bay Area",
+        "description": "Joined as the first sourcer on Robinhood's talent acquisition team, scaling the firm from 80 to 4,000+ employees while designing and executing innovative sourcing strategies to ensure a high-touch candidate experience. Launched the firm's first rules of engagement policies while managing multiple hiring platforms and initiatives to scale Robinhood's engineering team. \n\nSourced across multiple verticals, including: Engineering, People, Security, Legal, Finance, Accounting, Product Management, Brokerage Operations, Business and International Expansion.\n\nImplemented Gem to scale sourcing operations and increase recruiting productivity by 12x.",
+        "duration": "Jul 2017 - Jun 2019 · 2 yrs",
+        "start_date": {
+          "year": 2017,
+          "month": "Jul"
+        },
+        "end_date": {
+          "year": 2019,
+          "month": "Jun"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/3254263/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQESwNiGp2qYlA/company-logo_400_400/company-logo_400_400/0/1728574763254/robinhood_logo?e=1776902400&v=beta&t=XxgklfwQpWazRIU5Ix54C2HwVNFZqjEs4JfC3FraPvM",
+        "employment_type": "Full-time",
+        "company_id": "3254263"
+      },
+      {
+        "title": "Technical Recruiter",
+        "company": "Uber",
+        "location": "San Francisco Bay Area",
+        "description": "Joined as an early employee on Uber's technical recruiting team, scaling multiple engineering functions and teams, including specialities in: Machine Learning, Data Engineering, Mobile (iOS/Android), Backend, Frontend and Data Science.\n\nAdvisor to the Chief Information Officer, collaborating with multiple engineering managers to scale corporate and security  engineering across Uber's global employee network.",
+        "duration": "Aug 2015 - Jul 2017 · 2 yrs",
+        "start_date": {
+          "year": 2015,
+          "month": "Aug"
+        },
+        "end_date": {
+          "year": 2017,
+          "month": "Jul"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/1815218/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/C4D0BAQFiYnR1Mbtxdg/company-logo_400_400/company-logo_400_400/0/1630552741617/uber_com_logo?e=1776902400&v=beta&t=M3Xr2nGIJbwiL7SweaMx1kmbobUFKb94NlsRcNonpyw",
+        "employment_type": "Full-time",
+        "company_id": "1815218"
+      },
+      {
+        "title": "Human Resources & Employee Communications Associate",
+        "company": "Logitech",
+        "location": "San Francisco Bay Area",
+        "description": "Partner to the Head of Talent Management, Head of Global Recruiting and Head of Employee Communications, working on employee engagement, talent acquisition, human resources and internal communications programs.\n\nTeam lead for biweekly new hire orientations, onboarding 15+ new hires on a monthly basis and training 10+ coordinators globally in multiple regions to create a world-class onboarding experience.\n\nManaged the company-wide All-Hands, working directly with the CEO, in addition to multiple cross-functional partners, on a weekly basis to design a robust, informative and engaging agenda. \n\nProgram manager for our university internship program, managing 20+ interns via weekly development workshops, career fairs, offsite team building events, leadership lunch and learns, conversions, weekly check-ins and final presentation logistics.\n\nConverted from an intern to a full-time employee within a few months, initially reporting into the Head of Employee Communications.",
+        "duration": "May 2014 - Aug 2015 · 1 yr 4 mos",
+        "start_date": {
+          "year": 2014,
+          "month": "May"
+        },
+        "end_date": {
+          "year": 2015,
+          "month": "Aug"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/4328/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGZy4MFSpNapg/company-logo_400_400/company-logo_400_400/0/1727322903222/logitech_logo?e=1776902400&v=beta&t=ZZrEMBYHkH24qTkNoduwbWNkB2yHJOnimOUdveFe8Jw",
+        "employment_type": "Full-time",
+        "company_id": "4328"
+      }
+    ],
+    "education": [
+      {
+        "school": "University of California, Davis",
+        "degree": "Bachelor of Arts (B.A.), Communication, Minor in Professional Writing",
+        "degree_name": "Bachelor of Arts (B.A.)",
+        "field_of_study": "Communication, Minor in Professional Writing",
+        "school_linkedin_url": "https://www.linkedin.com/company/2842/",
+        "activities": "Asian & Pacific Islander American Scholar, Dragon Boat - Collegiate Sports Club",
+        "school_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQEoGOIHB7x65w/company-logo_400_400/B56ZnoqcQMKMAg-/0/1760545064338/uc_davis_logo?e=1776902400&v=beta&t=2u9O9kgIkxBs30NVwOr2pqQP3CZvonu-hX1jAUdLaLw",
+        "school_id": "2842"
+      },
+      {
+        "school": "University of California Washington Program (UCDC)",
+        "school_linkedin_url": "https://www.linkedin.com/company/81932347/",
+        "description": "Studied and interned in Washington, D.C. for three months.",
+        "school_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQGuMR0FtE8uzA/company-logo_400_400/company-logo_400_400/0/1688246433140?e=1776902400&v=beta&t=3J0IKPas0q0eyg-s06hiBRHUUGvpIuh5hVI6q9lWMXo",
+        "school_id": "81932347"
+      }
+    ],
+    "languages": [
+      {
+        "language": "English",
+        "proficiency": "Full professional proficiency"
+      },
+      {
+        "language": "Khmer",
+        "proficiency": "Native or bilingual proficiency"
+      }
+    ],
+    "featured": [
+      {
+        "type": "link",
+        "title": "Anthropic, Microsoft, and NVIDIA Announce Partnerships",
+        "description": "YouTube",
+        "url": "https://www.linkedin.com/in/chinsinsim/overlay/1763522433982/single-media-viewer?type=LINK&profileId=ACoAAAlmdjEBGjDRKMeZ3Z1p2OYc_-1SNzQ6Jd4",
+        "image_url": "https://media.licdn.com/dms/image/sync/v2/D4D27AQEwEwJHp_wXew/articleshare-shrink_1280_800/B4DZqXkKLgG8AQ-/0/1764080408489?e=1775739600&v=beta&t=vbKB0S3dzs5hQLqMAt6FkiR9eS86ISQlslCzfvYRXtM"
+      },
+      {
+        "type": "link",
+        "title": "How Anthropic has doubled down on AI safety: The safety-conscious AI startup is one of the most innovative AI companies of 2024.",
+        "description": "Fast Company",
+        "url": "https://www.linkedin.com/in/chinsinsim/overlay/1710879445231/single-media-viewer?type=LINK&profileId=ACoAAAlmdjEBGjDRKMeZ3Z1p2OYc_-1SNzQ6Jd4",
+        "image_url": "https://media.licdn.com/dms/image/sync/v2/D4E27AQFla0VflXPSQQ/articleshare-shrink_1280_800/articleshare-shrink_1280_800/0/1712874134011?e=1775739600&v=beta&t=QtAIeyMUedIGMRFdtcv1b1v1yn7DH5qWcKP6gWpS5zQ"
+      },
+      {
+        "type": "post",
+        "description": "Today, I joined the talent team at Anthropic, an AI safety and research company building reliable, interpretable and steerable AI systems. The implications of AI done right are enormous - not just for technology, but for humanity. \n\nWhen I heard Anthropic's vision to ensure AI systems are helpful, harmless, and honest, I knew I had to get involved. Their mission could not be more crucial for our generation. Together, we can write the next inspirational chapter in the AI story.",
+        "url": "https://www.linkedin.com/feed/update/urn:li:activity:7130343418924290050?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A7130343418924290050%29",
+        "image_url": "https://media.licdn.com/dms/image/v2/D4E22AQHuRPM0oiiGkA/feedshare-shrink_2048_1536/feedshare-shrink_2048_1536/0/1700006345491?e=1776902400&v=beta&t=uK6MV45RQN9W4vqo7xrMXAGc-EVhYavLVU0rUeG4enE",
+        "social_counts": {
+          "likes": 1635,
+          "comments": 128,
+          "reaction_counts": [
+            {
+              "type": "like",
+              "count": 1183
+            },
+            {
+              "type": "praise",
+              "count": 338
+            },
+            {
+              "type": "empathy",
+              "count": 105
+            },
+            {
+              "type": "appreciation",
+              "count": 8
+            },
+            {
+              "type": "interest",
+              "count": 1
+            }
+          ]
+        }
+      },
+      {
+        "type": "post",
+        "description": "I never imagined I’d be penning this farewell. A few weeks ago, I tendered my resignation to my manager. Today is my last day at Robinhood.\n\nOver six years ago, I took a leap of faith and joined a small startup with a bold mission to democratize finance for all. Back then, Robinhood was still small with just a little less than hundred employees in our two office buildings in Palo Alto, California. I'll never forget the close bonds we forged, working tirelessly together to turn our shared dream into a reality. Though Robinhood has grown so much, I'll always look back fondly on those early days, when we were just a handful of passionate builders laying the foundations for something revolutionary. \n\nFast forward to today, I've had the rare fortune to recruit hundreds of Hoodies, collaborate with an all-star roster of hiring managers and leaders, work alongside some brilliant and wicked smart colleagues, launch multiple offices and teams from the ground up, and enjoy an astronomical amount of professional and personal growth.\n\nThank you, Robinhood, and all the phenomenal people I was lucky to encounter along the way. Saying goodbye to this magical place is hard, but I know Robinhood will continue thriving and staying true to its mission. \n\nWhat’s next for me? I’ll be taking a quick hiatus before embarking on my next adventure. Hint: I’m returning to my roots by joining another startup with a bold and momentous mission for our generation. Stay tuned!",
+        "url": "https://www.linkedin.com/feed/update/urn:li:activity:7126203109407645696?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A7126203109407645696%29",
+        "image_url": "https://media.licdn.com/dms/image/v2/D4E22AQH7nob6BBlhJA/feedshare-shrink_2048_1536/feedshare-shrink_2048_1536/0/1699019218193?e=1776902400&v=beta&t=YiMdVYWJrdXhdvGdQ2aOh089whFPM90MwswAL9V3gHU",
+        "social_counts": {
+          "likes": 1175,
+          "comments": 119,
+          "reaction_counts": [
+            {
+              "type": "like",
+              "count": 741
+            },
+            {
+              "type": "praise",
+              "count": 211
+            },
+            {
+              "type": "empathy",
+              "count": 198
+            },
+            {
+              "type": "appreciation",
+              "count": 25
+            }
+          ]
+        }
+      },
+      {
+        "type": "post",
+        "description": "We are officially public! Could not be more proud of the Robinhood team and our customers. We are all investors 🎉 💚",
+        "url": "https://www.linkedin.com/feed/update/urn:li:activity:6826577271810355200?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A6826577271810355200%29",
+        "image_url": "https://media.licdn.com/dms/image/v2/C5622AQGSuc82XIKsmg/feedshare-shrink_2048_1536/feedshare-shrink_2048_1536/0/1627582849058?e=1776902400&v=beta&t=1i5BzsJIthduvor9Sva5eHsqKrADhNZb1tCvQg94GQk",
+        "social_counts": {
+          "likes": 1487,
+          "comments": 38,
+          "reaction_counts": [
+            {
+              "type": "like",
+              "count": 1218
+            },
+            {
+              "type": "praise",
+              "count": 171
+            },
+            {
+              "type": "empathy",
+              "count": 92
+            },
+            {
+              "type": "appreciation",
+              "count": 5
+            },
+            {
+              "type": "maybe",
+              "count": 1
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

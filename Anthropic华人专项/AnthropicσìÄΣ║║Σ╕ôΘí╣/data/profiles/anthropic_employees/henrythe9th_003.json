@@ -1,0 +1,317 @@
+{
+  "meta": {
+    "slug": "henrythe9th",
+    "api": "account_003",
+    "fetched_at": "2026-04-02T16:30:17+08:00"
+  },
+  "raw": {
+    "success": true,
+    "message": "response retrieved successfully",
+    "data": {
+      "basic_info": {
+        "fullname": "Henry Shi",
+        "first_name": "Henry",
+        "last_name": "Shi",
+        "headline": "Co-Founder of Super.com ($200M+ revenue/year) | AI@Anthropic | LeanAILeaderboard.com | Angel Investor | Forbes U30",
+        "public_identifier": "henrythe9th",
+        "profile_url": "https://linkedin.com/in/henrythe9th",
+        "profile_picture_url": "https://media.licdn.com/dms/image/v2/D5603AQG-H77uU3C5XQ/profile-displayphoto-crop_800_800/B56Zr2DxWaIcAI-/0/1765064776562?e=1776902400&v=beta&t=R48YCFQbJ2rp289ZAnsQwCsvJUOhrrmS8CBASIJjIf4",
+        "about": "Interested in meeting bright, ambitious and highly motivated individuals who have a proven track record of getting things done.\n\nCurrently writing about AI and helping founders build and scale businesses through angel investing and select high-impact advisory.\n\nPaying it forward and giving back, one interaction at a time.\n\nFeaturing AI Native founders on LeanAILeaderboard.com\n\nWriting at: https://henrythe9th.substack.com/\n\nBook a 1:1 with me: https://intro.co/henrythe9th\n\nBased in SF: https://henryinsanfrancisco.statuspage.io/",
+        "location": {
+          "country": "United States",
+          "city": "San Francisco, California",
+          "full": "San Francisco, California, United States",
+          "country_code": "US"
+        },
+        "creator_hashtags": [],
+        "is_creator": false,
+        "is_influencer": true,
+        "is_premium": true,
+        "open_to_work": false,
+        "created_timestamp": 1293043318760,
+        "show_follower_count": true,
+        "background_picture_url": "https://media.licdn.com/dms/image/v2/D5616AQEbJEeaxWvrJw/profile-displaybackgroundimage-shrink_350_1400/B56Zr2Gh9kK4Ac-/0/1765065499348?e=1776902400&v=beta&t=KuCDAW9qbYWCE2SXbgo_dkygGJ3EBF82v_UO3e_FPvs",
+        "urn": "ACoAAAXYWv4Bns_3dxxz42nN8y0CSUx9LXy6BgA",
+        "follower_count": 77215,
+        "connection_count": 19969,
+        "current_company": "Anthropic",
+        "current_company_urn": "74126343",
+        "current_company_url": "https://www.linkedin.com/company/anthropicresearch",
+        "top_skills": [],
+        "email": null
+      },
+      "experience": [
+        {
+          "title": "Member of Technical Staff",
+          "company": "Anthropic",
+          "location": "San Francisco, California, United States",
+          "description": "Building AGI with Ben Mann (Co-Founder).\n\nWorking across product, engineering, research and exploring emerging model capabilities.",
+          "duration": "Jul 2025 - Present · 10 mos",
+          "start_date": {
+            "year": 2025,
+            "month": "Jul"
+          },
+          "is_current": true,
+          "company_linkedin_url": "https://www.linkedin.com/company/74126343/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_400_400/company-logo_400_400/0/1719256729905/anthropicresearch_logo?e=1776902400&v=beta&t=6sv-GagnF1G5d4B4rN1Yu3sq6fln2BP_9tb0s6bARoY",
+          "company_id": "74126343"
+        },
+        {
+          "title": "Co-Founder, Board Member & Hype Man",
+          "company": "Super.com",
+          "location": "San Francisco, California, United States",
+          "description": "Super.com is the all-in-one app to save, earn and put more money in your pocket. Our mission is to help people experience more of what life has to offer, regardless of their income or circumstance.\n\nCome join one of the fastest growing startups in North America. Some key metrics:\n\n- $1B in sales/year\n- $200MM+ in revenue/year\n- profitable\n- 50MM+ users\n- $150MM+ USD in funding, including 2× NBA MVP Steph Curry\n\nWe are working on complex problems within Ecommerce, Fintech, Data Analytics and Scalable Infrastructure and have been featured on the New York Times, Forbes, Bloomberg, TechCrunch, Fast Company, etc.",
+          "duration": "Apr 2016 - Present · 10 yrs 1 mo",
+          "start_date": {
+            "year": 2016,
+            "month": "Apr"
+          },
+          "is_current": true,
+          "company_linkedin_url": "https://www.linkedin.com/company/10865494/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQEFo5yFYEhjTQ/company-logo_400_400/company-logo_400_400/0/1666097379925/superdotcom_logo?e=1776902400&v=beta&t=rmg26u5XrwkIh12SopZOfhqNr7DSdGxmbyIuaJprAjc",
+          "company_id": "10865494"
+        },
+        {
+          "title": "Angel Investor",
+          "company": "Various Startups",
+          "description": "Angel and seed investor in various AI and technology startups. Select Angel\ninvestments:\n- Ollama\n- Fal.ai\n- Higgsfield AI\n- LlamaIndex\n- Superblocks",
+          "duration": "Sep 2021 - Present · 4 yrs 8 mos",
+          "start_date": {
+            "year": 2021,
+            "month": "Sep"
+          },
+          "is_current": true,
+          "company_linkedin_url": "https://www.linkedin.com/company/68353711/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv27DG2mRhdQ/company-logo_400_400/B4EZizqGLGHgAY-/0/1755360814169/various_startups1_logo?e=1776902400&v=beta&t=_qzDsGxTTv7eITeBUqVlMZVFmjQPyghYiAl_F8CCmp8",
+          "company_id": "68353711"
+        },
+        {
+          "title": "Software Engineer",
+          "company": "Google",
+          "location": "San Francisco, California, United States",
+          "description": "• Defined and built the next generation of brand new music streaming products\nand experiences for YouTube Music\n- Built and launched Music Insights for Artists (www.youtube.com/artists)",
+          "duration": "Aug 2014 - Oct 2015 · 1 yr 3 mos",
+          "start_date": {
+            "year": 2014,
+            "month": "Aug"
+          },
+          "end_date": {
+            "year": 2015,
+            "month": "Oct"
+          },
+          "is_current": false,
+          "company_linkedin_url": "https://www.linkedin.com/company/1441/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+          "company_id": "1441"
+        },
+        {
+          "title": "Co-Founder, CTO",
+          "company": "uMentioned",
+          "description": "• Co-founder of mobile, local, social discovery network serving 2+ Million\npageviews/day\n• Architected, developed and scaled backend data store, serverside code and\nAPI serving up to 4500+ request/minute",
+          "duration": "Mar 2013 - May 2014 · 1 yr 3 mos",
+          "start_date": {
+            "year": 2013,
+            "month": "Mar"
+          },
+          "end_date": {
+            "year": 2014,
+            "month": "May"
+          },
+          "is_current": false,
+          "company_linkedin_url": "https://www.linkedin.com/search/results/all/?keywords=uMentioned"
+        }
+      ],
+      "education": [
+        {
+          "school": "University of Waterloo",
+          "degree": "BCS, Honors Bachelor of Computer Science and Honors Economics",
+          "degree_name": "BCS",
+          "field_of_study": "Honors Bachelor of Computer Science and Honors Economics",
+          "school_linkedin_url": "https://www.linkedin.com/company/166688/",
+          "description": "Top of Class",
+          "school_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQHV472cn2nhMw/company-logo_400_400/B56Zb.Jn2gHwAY-/0/1748020657900/uwaterloo_logo?e=1776902400&v=beta&t=ZSEv7h2rdp04BpN8cDJeyHrNYqE-CvOHEx6l5oYkX4k",
+          "school_id": "166688"
+        },
+        {
+          "school": "Georgia Institute of Technology",
+          "degree": "Master's of Science, Computer Science, Machine Learning Specialization (AI)",
+          "degree_name": "Master's of Science",
+          "field_of_study": "Computer Science, Machine Learning Specialization (AI)",
+          "school_linkedin_url": "https://www.linkedin.com/company/3558/",
+          "description": "Sponsored the first Fellowship Scholarship for the OMSCS program:\nhttps://omscs.gatech.edu/news/omscs-alumnus-and-co-founder-snaptravel-gives-back-new-fellowship-program",
+          "school_logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQFuhLQoh5_7yA/company-logo_400_400/company-logo_400_400/0/1640110532212/georgia_institute_of_technology_logo?e=1776902400&v=beta&t=A3nLu-fD9kr-oBIibW14IwUalRdZEqZCFA-wMJthzYM",
+          "school_id": "3558"
+        }
+      ],
+      "featured": [
+        {
+          "type": "post",
+          "description": "There’s a founder who generates $1B in ARR with just 30 employees. VCs are begging to invest, but he won’t take their money. \n\nNo, that is NOT a typo. \n\nHe is turning down funding. In 2025. \n\nThe Silicon Valley I have known for 10+ years is unrecognizable now.\n\nI spent the last 8 years building a $150M ARR company the traditional way: 200+ employees, raising $200M+ in VC funding, and a constant grind of growth at all costs.\n\nBut today, AI has completely changed the traditional startup playbook.\n\nThere used to be a time when startups needed hundreds of employees to hit their first $10M ARR. Those days are long gone. \n\nOne person can now handle what used to require an entire department, whether it's customer service, marketing, coding, or research.\n\nThe economics are so mind-boggling that they sound made up:\n\n• Old world: Burn $1M to generate $1M in revenue\n\n• Today: Generate $1M in revenue on just $200K spend\n\n• Tomorrow: Do it with $100K or less\n\nThese new-age lean AI-Native startups are thriving without VC money. They simply don't need it. \n\nI've been following this trend closely for some time now and created the official leaderboard for lean AI-Native companies called the LeanAILeaderboard.com\n\nIt's the first comprehensive database tracking every ultra-lean AI-Native company.\n\nUntil now, all this information had been scattered across random social media posts, buried in news articles, or shared as industry gossip. No single source of truth existed.\n\nSo today, I'm officially launching this open-source website to track our progress toward this new trend of companies that have hyper-scaled without massive headcount or funding rounds.\n\nI've spent weeks collecting verifiable data on companies that meet these criteria:\n\n• Revenue exceeding $5M ARR \n• Teams smaller than 50 people \n• Founded within the last 5 years\n\nThe data will leave you speechless:\n\n• Average revenue per employee: $3.7M (10x the SaaS industry standard) \n• Average valuation/employee: $144M (14x the value for tech giants) \n• Average team size: 23 (compared to 100+ for normal startups)\n\nThere were 5 new companies that stood out on the list and were not extensively covered before:\n\n• Telegram Messenger: $1B ARR => 30 employees\n• fal: $40M ARR => 25 employees (full disclosure, i'm an angel investor)\n• Cal AI: $12MM ARR => 4 employees\n• OpenArt AI: $12MM ARR => 8 employees\n• Solvely.ai: $6MM ARR => 4 employees\n\nLooks like Sam Altman wasn't exaggerating when he predicted: \"There will soon be a 1-person billion-dollar company.\"\n\n— — — — — — — —\n\nCheck out the link in the comments to access the leaderboard. \n\nIf you know a company that belongs on the leaderboard, please tag it or DM me, so we can all help grow this list. \n\nI'm also actively investing in and supporting founders who are building next-gen Lean AI-Native companies. If you're a deep domain/industry expert building in AI (even if non-technical) and want to partner, share this post and let's connect!",
+          "url": "https://www.linkedin.com/feed/update/urn:li:activity:7301243523054329857?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A7301243523054329857%29",
+          "image_url": "https://media.licdn.com/dms/image/v2/D4E22AQHKSiabfoOGjQ/feedshare-shrink_2048_1536/B4EZVLyz3NH0Ao-/0/1740733367667?e=1776902400&v=beta&t=YZmxlUO6bL8kFuZmZci-7yKL3Yz2hhzBz6JOAdQE3bE",
+          "social_counts": {
+            "likes": 4090,
+            "comments": 344,
+            "reaction_counts": [
+              {
+                "type": "like",
+                "count": 3427
+              },
+              {
+                "type": "interest",
+                "count": 398
+              },
+              {
+                "type": "empathy",
+                "count": 144
+              },
+              {
+                "type": "praise",
+                "count": 95
+              },
+              {
+                "type": "appreciation",
+                "count": 21
+              },
+              {
+                "type": "entertainment",
+                "count": 5
+              }
+            ]
+          }
+        },
+        {
+          "type": "post",
+          "description": "Scaling from 50 to 100 employees almost killed our company. Until we discovered a simple org structure that unlocked $100M+ in annual revenue. \n\nIn my 10+ years of experience as a founder, one of the biggest challenges I faced in scaling was bridging the organizational gap between startup and enterprise. \n\nWe hit that wall at around 100~ employees. \n\nWhat worked beautifully with a small team suddenly became our biggest obstacle to growth.\n\nThe problem was our functional org structure:\n\nEngineers reporting to engineering, product to product, business to business. This created a complex dependency web:\n\n• Planning took weeks\n• No clear ownership \n• Business threw Jira tickets over the fence and prayed for them to get completed\n• Engineers didn’t understand priorities and worked on problems that didn’t align with customer needs\n\nThat was when I studied Amazon's Single-Threaded Owner (STO) model, in which dedicated GMs run independent business units with their own cross-functional teams and manage P&L\n\nIt looked great for Amazon's scale but felt impossible for growing companies like ours.\n\nThese 2 critical barriers made it impractical for our scale:\n\n1. Engineering Squad Requirements: \n\nTrue STO demands complete engineering teams (including managers) reporting to a single owner. \n\nAt our size, we couldn't justify full engineering squads for each business unit. To make it work, we would have to quadruple our engineering headcount.\n\n2. P&L Owner Complexity: \n\nSTO leaders need unicorn-level skills: deep business acumen and P&L management experience. \n\nNot only are these leaders rare and expensive, but requiring all these skills in one person would have limited our talent pool and slowed our ability to launch new initiatives.\n\nWhat we needed was a model that captured STO's focus and accountability but worked for our size and growth needs. \n\nThat's when we created Mission-Aligned Teams (MATs), a hybrid model that changed our execution (for good)\n\nKey principles:\n\n• Each team owns a specific mission (e.g., improving customer service, optimizing payment flow)\n• Teams are cross-functional and self-sufficient, \n• Leaders can be anyone (engineer, PM, marketer) who's good at execution\n• People still report functionally for career development\n• Leaders focus on execution, not people management\n\nThe results exceeded our highest expectations:\n\nNew MAT leads launched new products, each generating $5-10M in revenue within a year with under 10 person teams.\n\nPlanning became streamlined. Ownership became clear. \n\nBut it's NOT for everyone (like STO wasn’t for us)\n\nIf you're under 50 people, the overhead probably isn't worth it. If you're Amazon-scale, pure STO might be better. \n\nMAT works best in the messy middle: when you're too big for everyone to be in one room but too small for a full enterprise structure.\n\nimage courtesy of Manu Cornet\n\n------\n\nIf you liked this, follow me Henry Shi as I share insights from my journey of building and scaling a  $1B/year business.",
+          "url": "https://www.linkedin.com/feed/update/urn:li:activity:7298378410265849856?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A7298378410265849856%29",
+          "image_url": "https://media.licdn.com/dms/image/v2/D5622AQH7qMQOfF9b1g/feedshare-shrink_2048_1536/B56ZUdjsweGoAo-/0/1739957652901?e=1776902400&v=beta&t=1FhFVhRKzp0UVt9hy7LIA4lIYpPqccWUbP_GMNrOeM4",
+          "social_counts": {
+            "likes": 9772,
+            "comments": 439,
+            "reaction_counts": [
+              {
+                "type": "like",
+                "count": 7929
+              },
+              {
+                "type": "interest",
+                "count": 1306
+              },
+              {
+                "type": "empathy",
+                "count": 258
+              },
+              {
+                "type": "praise",
+                "count": 170
+              },
+              {
+                "type": "entertainment",
+                "count": 74
+              },
+              {
+                "type": "appreciation",
+                "count": 35
+              }
+            ]
+          }
+        },
+        {
+          "type": "post",
+          "description": "🚨  Big Announcement 🚨\n\nAfter an incredible 8-year journey filled with growth, challenges, laughter and sweat, today marks my last month as CTO & COO at Super.com and I’ll be transitioning to a board role as co-founder. We’ve collectively achieved more than what I could've ever imagined when I started the company as a new grad at 22 🦄 \n\n✅ $1B+/year in sales\n✅ $150MM/year in revenue\n✅ Profitable\n✅ 50MM+ users\n✅ $150MM VC raised\n\nAs America’s #1 all-in-one app for saving and earning, we’ve continually innovated from 0 -> 1 -> 10 -> 100, breaking new ground in multiple industries including fintech, travel, cashback, chatbots, e-commerce, gaming, and more. \n\nBut building Super.com wasn’t just about big lofty ideas, in fact, the path to building an all-in-one app was far from clear or obvious when we first started. It was 8 years of consistent, disciplined, world-class execution and data-driven experimentation at all levels of the organization. We listened closely to our customers, iterated rapidly, and delivered products that solved real-world problems. \n\nWe invented and shared the MAT organizational structure, which brought 10x efficiency and extreme ownership. Now for the first time ever, we’re sharing our exact operating blueprint  to the world to help more founders and operators scale from $0 to $100M to $1B and beyond.\n\nThis journey wouldn’t have been possible without some incredible people:\n- Hussein Fazal for believing in me and your eternal fighting spirit\n- Garrett Goldberg for being the first investor to say yes after 100+ no’s\n- Chris Arsenault for your conviction and giving us the freedom to pursue our craziest ideas and biggest dreams\n- Stephen Curry Yash Patel Bryant Barr for inspiring us with your celebrity status and humility\n- Geoff Graber for helping me better understand myself\n- And to the 500+ current and former Super.com employees—your inspiration and dedication have been nothing short of amazing\n\nBut this post isn’t just about me and here's the most exciting part: I’m open sourcing our one secret operating blueprint and template behind all of our explosive growth and success. With real-life examples and a window into the exact goals and metrics we used to scale, this guide will help founders and operators apply the same rigor and discipline to drive world-class execution and hit their targets, quarter after quarter, year after year, at scale\n\n👉 Share this post and comment or DM \"Operating Blueprint\" and I'll share our full guide in the comments below\n\nAs I step into the next chapter, I’m excited to see where life takes me. I don’t have any plans and am open to new opportunities - learning, investing, advising, speaking, operating, building, hosting events, dinners and meeting really smart people— so feel free to reach out. My DMs are open, and I’m 100% based in San Francisco. Long SF! 🌉\n\nI hope our operating blueprint will help your company grow faster and achieve more success. Let’s keep building and innovating—together. 💥",
+          "url": "https://www.linkedin.com/feed/update/urn:li:activity:7234201751434715136?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A7234201751434715136%29",
+          "image_url": "https://media.licdn.com/dms/image/v2/D5622AQGKAPTm3RGvLA/feedshare-shrink_2048_1536/feedshare-shrink_2048_1536/0/1724735526952?e=1776902400&v=beta&t=y5RblVY3rnG_TNImDecfYbd27LV_vp-a4A8o0cHGM88",
+          "social_counts": {
+            "likes": 1801,
+            "comments": 683,
+            "reaction_counts": [
+              {
+                "type": "like",
+                "count": 1288
+              },
+              {
+                "type": "praise",
+                "count": 310
+              },
+              {
+                "type": "empathy",
+                "count": 180
+              },
+              {
+                "type": "appreciation",
+                "count": 18
+              },
+              {
+                "type": "interest",
+                "count": 5
+              }
+            ]
+          }
+        },
+        {
+          "type": "post",
+          "description": "🚀 We launched a new product that scaled from $0 to over $30MM+ ARR in under 12 months. Plus, we launched two new products in unrelated verticals that reached millions in sales. How did we ship so fast and with such impact? Here's the secret: 🧵👇\n\nThe magic wasn't in the ideas, but in an organizational structure change. We adapted Amazon's Single-Threaded Owner (STO) model for modern startups and scale-ups.\n\nAs we grew, functional organization slowed us down. Cross-team dependencies and disconnected team members were issues. I saw a lot of “create a Jira ticket, throw it over the fence, and pray an engineer gets to it” from the business teams and vice versa.\n\nWe tried Spotify's guilds and tribes, but non-tech teams were left out. We pivoted to Amazon’s STO model for clear ownership and accountability, but it needed tweaks for startups. We didn’t have Amazon's resources, deep pockets or hundreds of engineers to throw at problems.\n\nIntroducing Mission-Aligned Teams (MATs) - a hybrid of STO and functional reporting. MATs blend hardcore ownership with coaching and development at a fraction of the cost and resources required to run STOs. Here's why MATs worked:\n\n1) Every MAT has a single mission and a single owner (MAT Lead) who is responsible and accountable. Clarity of focus and ownership is the most important part of this structure.\n\n2) Most projects are MATs. If a project doesn’t have a clear MAT or single lead, it’s a no-go. We do not allow \"side-hustle\" projects. The best way to fail at something is to make it into many people’s part-time jobs.\n\n3) MATs control their destinies with members from all functions including both tech and non-tech. No tossing Jira tickets over the fence, no RACI frameworks and no complex web of cross-functional dependencies.\n\n4) MAT Leads have decentralized decision-making authority, allowing for clear prioritization and informed choices.\n\n5) MAT Leads aren't people managers. They focus on mission and execution, while functional managers handle development and coaching. Neither MAT Leads nor MAT members have to be senior or unicorn talent.\n\n6) Anyone can be a MAT lead, regardless of title, job level or tenure. MATs can be led by product, engineering, marketing, data, or business.\n\n7) We offer standardized training and a MAT “bootcamp” to ensure a consistent execution framework. We can hire talent at any level and execute just as effectively.\n\n8) MATs are flexible and can be spun up or down based on market needs. Leads and members can easily move between MATs. This lets us rapidly adapt to capture new market opportunities or double down on successful experiments.\n\nThis structure made us fast and focused. We now ship winning products and grow talent from within. One of our million-dollar projects was led by a new-grad MAT Lead!\n\nWant to stay ahead? Comment or DM \"I want to learn about MATs\" and share this thread and I'll send a link to our MAT implementation template and guide.",
+          "url": "https://www.linkedin.com/feed/update/urn:li:activity:7206451181378785281?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A7206451181378785281%29",
+          "image_url": "https://media.licdn.com/dms/image/v2/D5622AQGtJnHJhSd1Eg/feedshare-shrink_2048_1536/feedshare-shrink_2048_1536/0/1718151850432?e=1776902400&v=beta&t=CMEcEd_uvOt8v05K7nHyf1UPdcWavKNcxqzT5uSq-Fs",
+          "social_counts": {
+            "likes": 1390,
+            "comments": 946,
+            "reaction_counts": [
+              {
+                "type": "like",
+                "count": 1145
+              },
+              {
+                "type": "interest",
+                "count": 111
+              },
+              {
+                "type": "praise",
+                "count": 77
+              },
+              {
+                "type": "empathy",
+                "count": 45
+              },
+              {
+                "type": "appreciation",
+                "count": 12
+              }
+            ]
+          }
+        },
+        {
+          "type": "post",
+          "description": "We at Super successfully transitioned to a fully remote company, hired 100+ people, and raised $100MM+ in a little over 1 year\n\nHere’s how we did it:\n\nScaling up creates information asymmetry and goes against an open and transparent culture.\n\nThis can be reversed if we operationalize the flow of information - which is best achieved by implementing a culture of writing and reading.\n\n\nWhy written culture?\n\n✅ Writing down your thoughts = Better understanding of your line of thinking\n✅ It gives everyone in the room a voice\n✅ People have more time to process their thoughts\n\n\n⭐Written briefs for medium to large projects and initiatives. \n\nIt might seem obvious but it's shocking how many projects start as quick requests but end up as medium sized projects that lack clear direction, documentation, or thought.\n\n⭐Align on ownership and key stakeholders early.\n\nWith a larger organization, you actually need to do the work of defining each major task and deciding who specifically is Responsible, Accountable, Consulted, and Informed (RACI).\n\n⭐Every meeting must have an agenda + designated note taker. \n\nAgenda includes goal, discussion items, and decision/alignment needs. Note taker records action items.\n\nNotes may not be often referred to, but critical at times.\n\n⭐Use a Decision Making Framework for high-risk, long-term decisions for optimal outcomes, reduced rework, and documentation.\n\nThis ensures that stakeholders feel heard and decision makers are empowered.\n\n⭐Documentation is key.\n\nEveryone must get into the habit of documenting everything. Documentation is never fun — so we make it as easy as possible by not forcing a particular tool. Just write. \n\n\n\n🤔 Now how did we get people to write?\n\nWe set an internal OKR for the quarter that each FTE has to write a doc about anything - as long as it was searchable and useful.\n\n95%+ of our employees submitted and we created a culture and habit of putting things down in writing!\n\n\n👀 But what about the reading? Don’t assume people will read what you write.\n\nWe have a 10-minute quiet pre-reading and commenting period for meetings. Less time spent in clarifying the context = More time to discuss.\n\n\n🔍 Finding documents when you need it.\n\nWe partnered with Glean to index & make all docs searchable. \n\nWhen asked a question on Slack, we usually say ‘have you gleaned it’. If the answer isn't available, someone should write/create a glean ‘answer’ for it.\n\nWriting and documenting everything saves us TONS of time. Having the answers at our employees’ fingertips promotes an open and transparent culture and honestly — just a more efficient organization.\n\nThings will break again when we go from 200+ employees to 2000+ employees. However, we believe creating this written culture at the company ‘early’ is going to help us scale the organization.\n\nOne last thing to remember — when in doubt, write it down!\n\nMore info on RACI and DMF in the comment box 👇\n\nHave more TIPS to add? Write it down in the comments!\n",
+          "url": "https://www.linkedin.com/feed/update/urn:li:activity:7025603373022253056?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A7025603373022253056%29",
+          "social_counts": {
+            "likes": 1206,
+            "comments": 75,
+            "reaction_counts": [
+              {
+                "type": "like",
+                "count": 1011
+              },
+              {
+                "type": "praise",
+                "count": 95
+              },
+              {
+                "type": "empathy",
+                "count": 58
+              },
+              {
+                "type": "interest",
+                "count": 37
+              },
+              {
+                "type": "appreciation",
+                "count": 5
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

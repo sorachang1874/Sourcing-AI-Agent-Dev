@@ -1,0 +1,1350 @@
+{
+  "_meta": {
+    "description": "Anthropic arXiv论文扫描数据库 - 华人员工识别",
+    "created": "2026-04-02",
+    "last_updated": "2026-04-03",
+    "total_papers": 124,
+    "scanned_count": 129,
+    "pending_count": 0,
+    "result_types": {
+      "known": "论文作者中的华人已在Excel表中",
+      "new_added": "通过本论文新发现并已添加到Excel",
+      "excluded": "排除：非Anthropic成员/非华人/论文非Anthropic自有",
+      "no_chinese": "已扫描，无华人候选作者",
+      "pending": "发现候选人但尚未完成核查"
+    }
+  },
+  "scanned": {
+    "2212.08073": {
+      "slug": "constitutional-ai",
+      "title": "Constitutional AI: Harmlessness from AI Feedback",
+      "authors_raw": "Yuntao Bai, Saurav Kadavath, Sandipan Kundu, Amanda Askell, ...",
+      "chinese_candidates": [
+        "Yuntao Bai"
+      ],
+      "result": "known",
+      "note": "Yuntao Bai 已在离职表",
+      "scan_date": "2026-04-02"
+    },
+    "2204.05862": {
+      "slug": "rlhf-assistant",
+      "title": "Training a Helpful and Harmless Assistant with Reinforcement Learning from Human Feedback",
+      "authors_raw": "Yuntao Bai, ...",
+      "chinese_candidates": [
+        "Yuntao Bai"
+      ],
+      "result": "known",
+      "note": "Yuntao Bai 已在离职表",
+      "scan_date": "2026-04-02"
+    },
+    "2209.07858": {
+      "slug": "red-teaming",
+      "title": "Red Teaming Language Models to Reduce Harms",
+      "authors_raw": "Deep Ganguli, Liane Lovitt, Jackson Kernion, Amanda Askell, ..., Anna Chen, ...",
+      "chinese_candidates": [
+        "Anna Chen"
+      ],
+      "result": "known",
+      "note": "Anna Chen 已在表中（离职）",
+      "scan_date": "2026-04-02"
+    },
+    "2401.05566": {
+      "slug": "sleeper-agents",
+      "title": "Sleeper Agents: Training Deceptive LLMs that Persist Through Safety Training",
+      "authors_raw": "Evan Hubinger, Carson Denison, Jesse Mu, ...",
+      "chinese_candidates": [
+        "Jesse Mu"
+      ],
+      "result": "known",
+      "note": "Jesse Mu 已在表中（在职）",
+      "scan_date": "2026-04-02"
+    },
+    "2412.14093": {
+      "slug": "alignment-faking",
+      "title": "Alignment Faking in Large Language Models",
+      "authors_raw": "Ryan Greenblatt, ..., Jack Chen, ...",
+      "chinese_candidates": [
+        "Jack Chen"
+      ],
+      "result": "known",
+      "note": "Jack Chen 已在表中（在职）",
+      "scan_date": "2026-04-02"
+    },
+    "2501.18837": {
+      "slug": "constitutional-classifiers",
+      "title": "Constitutional Classifiers: Defending Against Universal Jailbreaks",
+      "authors_raw": "Mrinank Sharma, ..., Meg Tong, Jesse Mu, Alwin Peng, Kevin Lin, Leonard Tang, ...",
+      "chinese_candidates": [
+        "Meg Tong",
+        "Jesse Mu",
+        "Alwin Peng",
+        "Kevin Lin",
+        "Leonard Tang"
+      ],
+      "result": "known",
+      "note": "Meg Tong=非华人排除；Jesse Mu/Kevin Lin/Alwin Peng 已在表中（在职）；Leonard Tang=Haize Labs排除",
+      "scan_date": "2026-04-02"
+    },
+    "2601.04603": {
+      "slug": "next-generation-constitutional-classifiers",
+      "title": "Next-Generation Constitutional Classifiers",
+      "authors_raw": "Hoagy Cunningham, Jerry Wei, Zihan Wang, ..., Bobby Chen, ..., Yijin Hua, Mu Lin, Christopher Liu, Jin Pan, Yue Song, Xunjie Yu, ...",
+      "chinese_candidates": [
+        "Jerry Wei",
+        "Zihan Wang",
+        "Bobby Chen",
+        "Yijin Hua",
+        "Mu Lin",
+        "Christopher Liu",
+        "Jin Pan",
+        "Yue Song",
+        "Xunjie Yu"
+      ],
+      "result": "known",
+      "note": "全部已在在职表；Xunjie Yu=Xinpei Yu（SS截断）",
+      "scan_date": "2026-04-02"
+    },
+    "2505.05410": {
+      "slug": "agentic-misalignment",
+      "title": "Reasoning Models Don't Always Say What They Think",
+      "authors_raw": "Yanda Chen, Joe Benton, Ansh Radhakrishnan, ...",
+      "chinese_candidates": [
+        "Yanda Chen"
+      ],
+      "result": "known",
+      "note": "Yanda Chen 已在表中（在职，row69）",
+      "scan_date": "2026-04-02"
+    },
+    "2305.17333": {
+      "slug": "model-card-claude",
+      "title": "Model Card and Evaluations for Claude Models",
+      "authors_raw": "Tianyu Gao, Danqi Chen, ...",
+      "chinese_candidates": [
+        "Tianyu Gao",
+        "Danqi Chen"
+      ],
+      "result": "excluded",
+      "note": "Tianyu Gao=Princeton学术合作者；Danqi Chen=Princeton教授/ThinkingMachines排除",
+      "scan_date": "2026-04-02"
+    },
+    "2411.17693": {
+      "slug": "constitutional-classifiers",
+      "title": "Adaptive Deployment of Untrusted LLMs Reduces Distributed Threats",
+      "authors_raw": "Jiaxin Wen, Vivek Hebbar, ..., Shi Feng, He He, ...",
+      "chinese_candidates": [
+        "Jiaxin Wen",
+        "Shi Feng",
+        "He He"
+      ],
+      "result": "excluded",
+      "note": "Jiaxin Wen=非Anthropic/非华裔确认；Shi Feng=GWU学术；He He=Cornell教授",
+      "scan_date": "2026-04-02"
+    },
+    "2305.16367": {
+      "slug": "role-play-llms",
+      "title": "Role-Play with Large Language Models",
+      "authors_raw": "Murray Shanahan",
+      "chinese_candidates": [],
+      "result": "no_chinese",
+      "note": "非Anthropic自有，Murray Shanahan单作者",
+      "scan_date": "2026-04-02"
+    },
+    "2411.14257": {
+      "slug": "tracing-thoughts-language-model",
+      "title": "Do I Know This Entity? Knowledge Awareness and Hallucinations in Language Models",
+      "authors_raw": "Javier Ferrando, ...",
+      "chinese_candidates": [],
+      "result": "no_chinese",
+      "note": "Javier Ferrando提交，无华人作者",
+      "scan_date": "2026-04-02"
+    },
+    "2305.04388": {
+      "slug": "reasoning-models",
+      "title": "Language Models Don't Always Say What They Think: Unfaithful CoT",
+      "authors_raw": "Miles Turpin, ...",
+      "chinese_candidates": [],
+      "result": "no_chinese",
+      "note": "Miles Turpin等，无华人作者",
+      "scan_date": "2026-04-02"
+    },
+    "2306.11932": {
+      "slug": "polis-deliberation",
+      "title": "Opportunities and Risks of LLMs for Scalable Deliberation with Polis",
+      "authors_raw": "Christopher T. Small, Ivan Vendrov, Esin Durmus, ..., Deep Ganguli, ...",
+      "chinese_candidates": [],
+      "result": "no_chinese",
+      "note": "无华人作者",
+      "scan_date": "2026-04-02"
+    },
+    "2503.10965": {
+      "slug": "auditing-hidden-objectives",
+      "title": "Auditing language models for hidden objectives",
+      "authors_raw": "Samuel Marks, ..., Brian Chen, ..., Andy Shih, ...",
+      "chinese_candidates": [
+        "Brian Chen",
+        "Andy Shih"
+      ],
+      "result": "known",
+      "note": "Brian Chen 已在表中（在职）；Andy Shih 已在表中（在职）",
+      "scan_date": "2026-04-02"
+    },
+    "2502.15840": {
+      "slug": "project-vend-1",
+      "title": "Vending-Bench: A Benchmark for Long-Term Coherence of Autonomous Agents",
+      "authors_raw": "Lukas Petersson, ...",
+      "chinese_candidates": [],
+      "result": "no_chinese",
+      "note": "非Anthropic自有论文，外部评测",
+      "scan_date": "2026-04-02"
+    },
+    "2310.06824": {
+      "slug": "introspection",
+      "title": "Emergent Linear Structure in LLM Representations of True/False Datasets",
+      "authors_raw": "Samuel Marks, ...",
+      "chinese_candidates": [],
+      "result": "no_chinese",
+      "note": "Samuel Marks提交，无华人作者",
+      "scan_date": "2026-04-02"
+    },
+    "2112.00861": {
+      "slug": "general-language-assistant",
+      "title": "A General Language Assistant as a Laboratory for Alignment",
+      "authors_raw": "Amanda Askell, Yuntao Bai, Anna Chen, ...",
+      "chinese_candidates": [
+        "Yuntao Bai",
+        "Anna Chen"
+      ],
+      "result": "known",
+      "note": "Yuntao Bai已在离职表；Anna Chen已在离职表",
+      "scan_date": "2026-04-02"
+    },
+    "2405.01470": {
+      "slug": "clio",
+      "title": "WildChat: 1M ChatGPT Interaction Logs",
+      "authors_raw": "Yuntian Deng, ...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "非Anthropic自有（AI2论文），误纳入sitemap",
+      "scan_date": "2026-04-02"
+    },
+    "2502.17424": {
+      "slug": "persona-vectors",
+      "title": "Emergent Misalignment: Narrow finetuning can produce broadly misaligned LLMs",
+      "authors_raw": "Jan Betley, ..., Xuchan Bao, ...",
+      "chinese_candidates": [
+        "Xuchan Bao"
+      ],
+      "result": "excluded",
+      "note": "非Anthropic自有；Xuchan Bao=学术界",
+      "scan_date": "2026-04-02"
+    },
+    "2212.09251": {
+      "slug": "model-written-evaluations",
+      "title": "Discovering Language Model Behaviors with Model-Written Evaluations",
+      "authors_raw": "Ethan Perez, ..., Edwin Chen, Anna Chen, Da Yan, Dustin Li, ...",
+      "chinese_candidates": [
+        "Edwin Chen",
+        "Anna Chen",
+        "Da Yan",
+        "Dustin Li"
+      ],
+      "result": "known",
+      "note": "Edwin Chen=已离职排除；Anna Chen/Da Yan/Dustin Li 已在表中",
+      "scan_date": "2026-04-02"
+    },
+    "2302.07459": {
+      "slug": "moral-self-correction",
+      "title": "The Capacity for Moral Self-Correction in Large Language Models",
+      "authors_raw": "Deep Ganguli, ..., Anna Chen, ..., Dustin Li, ...",
+      "chinese_candidates": [
+        "Anna Chen",
+        "Dustin Li"
+      ],
+      "result": "known",
+      "note": "Anna Chen/Dustin Li 已在表中",
+      "scan_date": "2026-04-02"
+    },
+    "2404.16014": {
+      "slug": "mapping-mind-language-model",
+      "title": "Improving Dictionary Learning with Gated Sparse Autoencoders",
+      "authors_raw": "Arthur Conmy, ...",
+      "chinese_candidates": [],
+      "result": "no_chinese",
+      "note": "Arthur Conmy提交，无华人作者",
+      "scan_date": "2026-04-02"
+    },
+    "2310.13548": {
+      "slug": "sycophancy-llms",
+      "title": "Towards Understanding Sycophancy in Language Models",
+      "authors_raw": "Mrinank Sharma, Meg Tong, ..., Newton Cheng, ..., Da Yan, Miranda Zhang, ...",
+      "chinese_candidates": [
+        "Meg Tong",
+        "Newton Cheng",
+        "Da Yan",
+        "Miranda Zhang"
+      ],
+      "result": "known",
+      "note": "Meg Tong=非华人排除；Newton Cheng/Da Yan/Miranda Zhang 已在表中（在职）",
+      "scan_date": "2026-04-02"
+    },
+    "2411.00986": {
+      "slug": "exploring-model-welfare",
+      "title": "Taking AI Welfare Seriously",
+      "authors_raw": "Robert Long, ...",
+      "chinese_candidates": [],
+      "result": "no_chinese",
+      "note": "Robert Long提交，无华人作者",
+      "scan_date": "2026-04-02"
+    },
+    "2601.20245": {
+      "slug": "AI-assistance-coding-skills",
+      "title": "How AI Impacts Skill Formation",
+      "authors_raw": "Judy Hanwen Shen, Alex Tamkin",
+      "chinese_candidates": [
+        "Judy Hanwen Shen"
+      ],
+      "result": "new_added",
+      "note": "Judy Hanwen Shen=Anthropic MTS（Fellows Program），已添加row75，v6zm",
+      "scan_date": "2026-04-02"
+    },
+    "2601.19062": {
+      "slug": "disempowerment-patterns",
+      "title": "Who's in Charge? Disempowerment Patterns in Real-World LLM Usage",
+      "authors_raw": "Mrinank Sharma, ...",
+      "chinese_candidates": [],
+      "result": "no_chinese",
+      "note": "Mrinank Sharma提交，无华人作者",
+      "scan_date": "2026-04-02"
+    },
+    "2603.20179": {
+      "slug": "long-running-Claude",
+      "title": "AI Agents Can Already Autonomously Perform Experimental High Energy Physics",
+      "authors_raw": "Samuel Bright-Thonney, ...",
+      "chinese_candidates": [],
+      "result": "no_chinese",
+      "note": "物理论文，非Anthropic自有",
+      "scan_date": "2026-04-02"
+    },
+    "2507.21509": {
+      "slug": "persona-vectors",
+      "title": "Persona Vectors: Monitoring and Controlling Character Traits in Language Models",
+      "authors_raw": "Runjin Chen, Andy Arditi, Henry Sleight, Owain Evans, Jack Lindsey",
+      "chinese_candidates": [
+        "Runjin Chen"
+      ],
+      "result": "known",
+      "note": "Runjin Chen 已在表中（在职，早期版本row21）",
+      "scan_date": "2026-04-02"
+    },
+    "2506.15740": {
+      "slug": "shade-arena-sabotage-monitoring",
+      "title": "SHADE-Arena: Evaluating Sabotage and Monitoring in LLM Agents",
+      "authors_raw": "Jonathan Kutasov, Yuqi Sun, ..., Xiang Deng, ...",
+      "chinese_candidates": [
+        "Yuqi Sun",
+        "Xiang Deng"
+      ],
+      "result": "excluded",
+      "note": "Yuqi Sun待进一步核查；Xiang Deng=Ohio State学术，非Anthropic",
+      "scan_date": "2026-04-02"
+    },
+    "2512.07828": {
+      "slug": "measuring-agent-autonomy",
+      "title": "The Adoption and Usage of AI Agents: Early Evidence from Perplexity",
+      "authors_raw": "...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "非Anthropic自有（Perplexity论文）",
+      "scan_date": "2026-04-02"
+    },
+    "2510.07192": {
+      "slug": "small-samples-poison",
+      "title": "Poisoning Attacks on LLMs Require a Near-constant Number of Poison Samples",
+      "authors_raw": "Alexandra Souly, ...",
+      "chinese_candidates": [],
+      "result": "no_chinese",
+      "note": "无华人Anthropic成员",
+      "scan_date": "2026-04-02"
+    },
+    "2506.02548": {
+      "slug": "building-ai-cyber-defenders",
+      "title": "Evaluating AI Agents' Real-World Cybersecurity Capabilities at Scale",
+      "authors_raw": "Zhun Wang, ...",
+      "chinese_candidates": [
+        "Zhun Wang"
+      ],
+      "result": "excluded",
+      "note": "Zhun Wang提交但无Anthropic匹配，多机构合作论文，非Anthropic自有",
+      "scan_date": "2026-04-02"
+    },
+    "2510.05024": {
+      "slug": "emergent-misalignment-reward-hacking",
+      "title": "Inoculation Prompting: Instructing LLMs to misbehave at train-time improves test-time alignment",
+      "authors_raw": "Nevan Wichers, ..., Christine Ye, ...",
+      "chinese_candidates": [
+        "Christine Ye"
+      ],
+      "result": "excluded",
+      "note": "Christine Ye=ABC（美国出生华裔），LinkedIn: christine-y，个人主页称from outside Seattle；非项目目标人群，排除",
+      "scan_date": "2026-04-02"
+    },
+    "2601.10387": {
+      "slug": "assistant-axis",
+      "title": "Situating and Stabilizing the Default Persona of Language Models",
+      "authors_raw": "Christina Lu, ...",
+      "chinese_candidates": [
+        "Christina Lu"
+      ],
+      "result": "new_added",
+      "note": "Christina Lu=Anthropic MTS Resident（可解释性），已添加在职表row75，v6zm；profile: christina_lu_013.json",
+      "scan_date": "2026-04-02"
+    },
+    "2502.16797": {
+      "slug": "forecasting-rare-behaviors",
+      "title": "Forecasting Rare Language Model Behaviors",
+      "authors_raw": "Erik Jones, ...",
+      "chinese_candidates": [],
+      "result": "no_chinese",
+      "note": "Erik Jones提交，无华人作者",
+      "scan_date": "2026-04-02"
+    },
+    "2412.16339": {
+      "slug": "persona-selection-model",
+      "title": "Deliberative Alignment: Reasoning Enables Safer Language Models",
+      "authors_raw": "Melody Y. Guan, ..., Hongyu Ren, Jason Wei, Hyung Won Chung, ...",
+      "chinese_candidates": [
+        "Melody Y. Guan",
+        "Hongyu Ren",
+        "Jason Wei",
+        "Hyung Won Chung"
+      ],
+      "result": "excluded",
+      "note": "OpenAI论文（非Anthropic自有）；误纳入sitemap",
+      "scan_date": "2026-04-02"
+    },
+    "2410.13787": {
+      "slug": "introspection",
+      "title": "Looking Inward: Language Models Can Learn About Themselves by Introspection",
+      "authors_raw": "...",
+      "chinese_candidates": [],
+      "result": "no_chinese",
+      "note": "无华人Anthropic作者",
+      "scan_date": "2026-04-02"
+    },
+    "2411.07494": {
+      "slug": "constitutional-classifiers",
+      "title": "Rapid Response: Mitigating LLM Jailbreaks with a Few Examples",
+      "authors_raw": "Alwin Peng, ...",
+      "chinese_candidates": [
+        "Alwin Peng"
+      ],
+      "result": "known",
+      "note": "Alwin Peng 已在表中（在职）",
+      "scan_date": "2026-04-02"
+    },
+    "2406.12775": {
+      "slug": "tracing-thoughts-language-model",
+      "title": "Exploring the Limitations of LLMs on Multi-Hop Queries",
+      "authors_raw": "Eden Biran, ...",
+      "chinese_candidates": [],
+      "result": "no_chinese",
+      "note": "非Anthropic自有，外部学术论文",
+      "scan_date": "2026-04-02"
+    },
+    "2403.19647": {
+      "slug": "mapping-mind-language-model",
+      "title": "Sparse Feature Circuits: Discovering and Editing Interpretable Causal Graphs in LMs",
+      "authors_raw": "Samuel Marks, ...",
+      "chinese_candidates": [],
+      "result": "no_chinese",
+      "note": "Samuel Marks提交，无华人作者",
+      "scan_date": "2026-04-02"
+    },
+    "2504.21848": {
+      "slug": "measuring-agent-autonomy",
+      "title": "Characterizing AI Agents for Alignment and Governance",
+      "authors_raw": "Atoosa Kasirzadeh, ...",
+      "chinese_candidates": [],
+      "result": "no_chinese",
+      "note": "无华人作者",
+      "scan_date": "2026-04-02"
+    },
+    "2411.00640": {
+      "slug": "statistical-approach-to-model-evals",
+      "title": "Adding Error Bars to Evals: A Statistical Approach to Language Model Evaluations",
+      "authors_raw": "...",
+      "chinese_candidates": [],
+      "result": "no_chinese",
+      "note": "无华人作者",
+      "scan_date": "2026-04-02"
+    },
+    "2502.06807": {
+      "slug": "visible-extended-thinking",
+      "title": "Competitive Programming with Large Reasoning Models",
+      "authors_raw": "OpenAI: Ahmed El-Kishky, ...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "OpenAI论文（非Anthropic自有），误纳入sitemap",
+      "scan_date": "2026-04-02"
+    },
+    "2406.00877": {
+      "slug": "tracing-thoughts-language-model",
+      "title": "Evidence of Learned Look-Ahead in a Chess-Playing Neural Network",
+      "authors_raw": "Erik Jenner, ...",
+      "chinese_candidates": [],
+      "result": "no_chinese",
+      "note": "无华人作者",
+      "scan_date": "2026-04-02"
+    },
+    "2404.13076": {
+      "slug": "introspection",
+      "title": "LLM Evaluators Recognize and Favor Their Own Generations",
+      "authors_raw": "Shi Feng, ...",
+      "chinese_candidates": [
+        "Shi Feng"
+      ],
+      "result": "excluded",
+      "note": "Shi Feng=George Washington University学术人员（gwu.edu），非Anthropic",
+      "scan_date": "2026-04-02"
+    },
+    "2408.04720": {
+      "slug": "vibe-physics",
+      "title": "Learning the Simplicity of Scattering Amplitudes",
+      "authors_raw": "Aurélien Dersy, ...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "物理论文（hep-th），误纳入sitemap",
+      "scan_date": "2026-04-02"
+    },
+    "2406.04614": {
+      "slug": "unknown",
+      "title": "A Chinese Legal Knowledge-Enhanced Large Language Model (LawGPT)",
+      "authors_raw": "Zhi Zhou, ...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "非Anthropic自有（中文法律LLM论文），误纳入sitemap",
+      "scan_date": "2026-04-02"
+    },
+    "2501.12948": {
+      "slug": "unknown",
+      "title": "Incentivizing Reasoning Capability in LLMs via RL (DeepSeek-R1)",
+      "authors_raw": "DeepSeek-AI, ...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "DeepSeek-R1论文（非Anthropic自有），误纳入sitemap",
+      "scan_date": "2026-04-02"
+    },
+    "2507.19218": {
+      "slug": "assistant-axis",
+      "title": "Technological folie à deux: Feedback Loops Between AI Chatbots and Mental Illness",
+      "authors_raw": "Matthew Nour, ...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "非Anthropic自有（Nature Mental Health医学论文），误纳入sitemap",
+      "scan_date": "2026-04-02"
+    },
+    "2503.04761": {
+      "slug": "anthropic-interviewer",
+      "title": "Which Economic Tasks are Performed with AI? Evidence from Millions of Claude Conversations",
+      "authors_raw": "Kunal Handa, Alex Tamkin, ..., Saffron Huang, ..., Jerry Hong, ..., Dario Amodei, ...",
+      "chinese_candidates": [
+        "Saffron Huang",
+        "Jerry Hong"
+      ],
+      "result": "new_added",
+      "note": "Jerry Hong=确认华人(Mandarin母语)，Anthropic Member of Design Staff(2024-08)，已添加在职表row76，v6zn；Saffron Huang=非华裔排除",
+      "scan_date": "2026-04-02"
+    },
+    "2312.06942": {
+      "slug": "probes-catch-sleeper-agents",
+      "title": "AI Control: Improving Safety Despite Intentional Subversion",
+      "authors_raw": "Samuel Bowman, ...",
+      "chinese_candidates": [],
+      "result": "no_chinese",
+      "note": "无华人Anthropic作者",
+      "scan_date": "2026-04-02"
+    },
+    "2403.14380": {
+      "slug": "measuring-model-persuasiveness",
+      "title": "On the Conversational Persuasiveness of Large Language Models: A Randomized Controlled Trial",
+      "authors_raw": "Francesco Salvi, ...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "非Anthropic自有（ETH Zurich等多机构，Nature Human Behaviour），误纳入sitemap",
+      "scan_date": "2026-04-02"
+    },
+    "2412.03556": {
+      "slug": "constitutional-classifiers",
+      "title": "Best-of-N Jailbreaking",
+      "authors_raw": "Sara Price, ...",
+      "chinese_candidates": [],
+      "result": "no_chinese",
+      "note": "Sara Price提交，无华人作者",
+      "scan_date": "2026-04-02"
+    },
+    "2501.17148": {
+      "slug": "persona-vectors",
+      "title": "Steering LLMs? Even Simple Baselines Outperform Sparse Autoencoders (AxBench)",
+      "authors_raw": "Aryaman Arora, ...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "非Anthropic自有（Stanford/Cornell等学术机构），误纳入sitemap",
+      "scan_date": "2026-04-02"
+    },
+    "2403.05530": {
+      "slug": "visible-extended-thinking",
+      "title": "Gemini 1.5: Unlocking multimodal understanding across millions of tokens of context",
+      "authors_raw": "Gemini Team Google: ...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "Google Gemini论文（非Anthropic自有），误纳入sitemap",
+      "scan_date": "2026-04-02"
+    },
+    "2601.14027": {
+      "slug": "vibe-physics",
+      "title": "Numina-Lean-Agent: An Open and General Agentic Reasoning System for Formal Mathematics",
+      "authors_raw": "Junqi Liu, Zihao Zhou, ..., Jia Li, Wenda Li",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "非Anthropic自有（数学推理论文），误纳入sitemap",
+      "scan_date": "2026-04-02"
+    },
+    "2512.04123": {
+      "slug": "measuring-agent-autonomy",
+      "title": "Measuring Agents in Production",
+      "authors_raw": "Melissa Z. Pan, ..., Yuxuan Zhu, ..., Emma Shen, ..., Shu Liu, ..., Dongyao Zhao, ..., Dawn Song",
+      "chinese_candidates": [
+        "Melissa Z. Pan",
+        "Yuxuan Zhu",
+        "Emma Shen",
+        "Shu Liu",
+        "Dongyao Zhao"
+      ],
+      "result": "excluded",
+      "note": "非Anthropic自有（UC Berkeley/Stanford等学术多机构论文）；Dawn Song是学术教授，非Anthropic",
+      "scan_date": "2026-04-02"
+    },
+    "2506.12469": {
+      "slug": "measuring-agent-autonomy",
+      "title": "Model-Organized Openness and the Economics of AI",
+      "authors_raw": "K. J. Kevin Feng, ..., Amy X. Zhang",
+      "chinese_candidates": [
+        "Amy X. Zhang"
+      ],
+      "result": "excluded",
+      "note": "非Anthropic自有；Amy X. Zhang=UW教授，知名HCI研究员",
+      "scan_date": "2026-04-02"
+    },
+    "2503.14499": {
+      "slug": "project-vend-1",
+      "title": "Measuring AI Ability to Complete Long Software Tasks (Vending-Bench)",
+      "authors_raw": "Thomas Kwa, ..., Amy Deng, ..., Tao Lin, ...",
+      "chinese_candidates": [
+        "Amy Deng",
+        "Tao Lin"
+      ],
+      "result": "excluded",
+      "note": "Amy Deng=METR/Martian（X: @amydeng_，非Anthropic）；Tao Lin=Meta工程师（LinkedIn: tao-lin，无Anthropic经历）",
+      "scan_date": "2026-04-03"
+    },
+    "2602.15104": {
+      "slug": "long-running-Claude",
+      "title": "A Python+JAX Package for the Cosmic Microwave Background Power Spectrum",
+      "authors_raw": "...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "宇宙学/物理论文，非Anthropic自有",
+      "scan_date": "2026-04-02"
+    },
+    "2501.11120": {
+      "slug": "introspection",
+      "title": "Tell me about yourself: LLMs are aware of their learned behaviors",
+      "authors_raw": "Jan Betley, Xuchan Bao, ...",
+      "chinese_candidates": [
+        "Xuchan Bao"
+      ],
+      "result": "excluded",
+      "note": "非Anthropic自有（Truthful AI/UC Berkeley/UToronto）；Xuchan Bao=学术界",
+      "scan_date": "2026-04-02"
+    },
+    "2410.06496": {
+      "slug": "tracing-thoughts-language-model",
+      "title": "On the Similarity of Circuits across Languages",
+      "authors_raw": "...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "非Anthropic自有（Gemma语言学研究）",
+      "scan_date": "2026-04-02"
+    },
+    "2410.03334": {
+      "slug": "tracing-thoughts-language-model",
+      "title": "An X-Ray Is Worth 15 Features: Sparse Autoencoders for Radiology",
+      "authors_raw": "...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "医学影像放射学报告，非Anthropic自有",
+      "scan_date": "2026-04-02"
+    },
+    "2406.10162": {
+      "slug": "reward-tampering",
+      "title": "Sycophancy to Subterfuge: Investigating Reward-Tampering in LLMs",
+      "authors_raw": "Carson Denison, Monte MacDiarmid, ...",
+      "chinese_candidates": [],
+      "result": "no_chinese",
+      "note": "Anthropic自有论文，无华人作者",
+      "scan_date": "2026-04-02"
+    },
+    "2311.12022": {
+      "slug": "visible-extended-thinking",
+      "title": "GPQA: A Graduate-Level Google-Proof Q&A Benchmark",
+      "authors_raw": "David Rein, Betty Li Hou, ..., Richard Yuanzhe Pang, ...",
+      "chinese_candidates": [
+        "Betty Li Hou",
+        "Richard Yuanzhe Pang"
+      ],
+      "result": "excluded",
+      "note": "NYU论文；Richard Yuanzhe Pang=Meta FAIR（非Anthropic）；Betty Li Hou待核查",
+      "scan_date": "2026-04-02"
+    },
+    "2311.03291": {
+      "slug": "long-running-Claude",
+      "title": "Einstein-Boltzmann solver for cosmology",
+      "authors_raw": "...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "宇宙学物理论文，误纳入sitemap",
+      "scan_date": "2026-04-02"
+    },
+    "2310.13798": {
+      "slug": "specific-versus-general-principles-for-constitutional-ai",
+      "title": "Specific versus General Principles for Constitutional AI",
+      "authors_raw": "Sandipan Kundu, Yuntao Bai, ..., Anna Chen, ...",
+      "chinese_candidates": [
+        "Yuntao Bai",
+        "Anna Chen"
+      ],
+      "result": "known",
+      "note": "Anthropic自有论文；Yuntao Bai已离职，Anna Chen已离职",
+      "scan_date": "2026-04-02"
+    },
+    "2312.03689": {
+      "slug": "evaluating-and-mitigating-discrimination-in-language-model-decisions",
+      "title": "Evaluating and Mitigating Discrimination in Language Model Decisions",
+      "authors_raw": "...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "Anthropic论文但作者团队无华人",
+      "scan_date": "2026-04-02"
+    },
+    "2311.02462": {
+      "slug": "measuring-agent-autonomy",
+      "title": "Levels of AGI for Operationalizing Progress",
+      "authors_raw": "...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "Google DeepMind论文，非Anthropic自有",
+      "scan_date": "2026-04-02"
+    },
+    "2211.03540": {
+      "slug": "scalable-oversight",
+      "title": "Measuring Progress on Scalable Oversight for LLMs",
+      "authors_raw": "Samuel Bowman, ..., Edwin Chen, ..., Anna Chen, ...",
+      "chinese_candidates": [
+        "Edwin Chen",
+        "Anna Chen"
+      ],
+      "result": "known",
+      "note": "Anthropic自有论文；Edwin Chen和Anna Chen已在离职表",
+      "scan_date": "2026-04-02"
+    },
+    "2210.11610": {
+      "slug": "self-improvement",
+      "title": "Large Language Models Can Self-Improve",
+      "authors_raw": "Jiaxin Huang, Shixiang Shane Gu, ...",
+      "chinese_candidates": [
+        "Jiaxin Huang",
+        "Shixiang Shane Gu",
+        "Yuexin Wu",
+        "Xuezhi Wang",
+        "Hongkun Yu",
+        "Jiawei Han"
+      ],
+      "result": "excluded",
+      "note": "Google论文，非Anthropic自有",
+      "scan_date": "2026-04-02"
+    },
+    "2205.01069": {
+      "slug": "deep-learning-python-book",
+      "title": "From Basics to Building Deep Neural Networks with Python (波斯语书籍)",
+      "authors_raw": "Milad Vazan",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "波斯语教学书籍，误纳入sitemap",
+      "scan_date": "2026-04-02"
+    },
+    "2202.07785": {
+      "slug": "predictability-and-surprise",
+      "title": "Predictability and Surprise in Large Generative Models",
+      "authors_raw": "Deep Ganguli, ..., Yuntao Bai, Anna Chen, ...",
+      "chinese_candidates": [
+        "Yuntao Bai",
+        "Anna Chen"
+      ],
+      "result": "known",
+      "note": "Anthropic自有论文；Yuntao Bai和Anna Chen已离职",
+      "scan_date": "2026-04-02"
+    },
+    "2510.04340": {
+      "slug": "emergent-misalignment-reward-hacking",
+      "title": "Inoculation Prompting: Eliciting traits from LLMs during training can suppress them at test-time",
+      "authors_raw": "Daniel Tan, Anders Woodruff, ...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "UK AI Security Institute 论文，非 Anthropic 自有",
+      "scan_date": "2026-04-03"
+    },
+    "2507.07935": {
+      "slug": "anthropic-economic-index-january-2026-report",
+      "title": "Measuring the Applicability of Generative AI to Occupations",
+      "authors_raw": "Kiran Tomlinson, ...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "Microsoft Bing Copilot 数据论文，非 Anthropic 自有",
+      "scan_date": "2026-04-03"
+    },
+    "2412.13678": {
+      "slug": "economic-index-march-2026-report",
+      "title": "Privacy-Preserving Insights into Real-World AI Use (Anthropic Economic Index)",
+      "authors_raw": "Alex Tamkin, ..., Saffron Huang, ..., Jerry Hong, ...",
+      "chinese_candidates": [
+        "Saffron Huang",
+        "Jerry Hong"
+      ],
+      "result": "known",
+      "note": "Anthropic自有论文；Jerry Hong已在在职表row76；Saffron Huang=非华裔排除",
+      "scan_date": "2026-04-03"
+    },
+    "2502.02649": {
+      "slug": "measuring-agent-autonomy",
+      "title": "Fully Autonomous AI Agents Should Not be Developed",
+      "authors_raw": "Margaret Mitchell, ...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "非 Anthropic 自有（AI 伦理学术论文）",
+      "scan_date": "2026-04-03"
+    },
+    "2407.01502": {
+      "slug": "measuring-agent-autonomy",
+      "title": "AI Agents That Matter",
+      "authors_raw": "...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "非 Anthropic 自有（Princeton 学术论文）",
+      "scan_date": "2026-04-03"
+    },
+    "2310.06387": {
+      "slug": "many-shot-jailbreaking",
+      "title": "Jailbreak and Guard Aligned LLMs with In-Context Demonstrations (ICA/ICD)",
+      "authors_raw": "Zeming Wei, ...",
+      "chinese_candidates": [
+        "Zeming Wei"
+      ],
+      "result": "excluded",
+      "note": "非 Anthropic 自有（清华/学术）；Zeming Wei 提交但非 Anthropic 成员",
+      "scan_date": "2026-04-03"
+    },
+    "2310.03693": {
+      "slug": "mapping-mind-language-model",
+      "title": "Fine-tuning Aligned LLMs Compromises Safety",
+      "authors_raw": "...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "非 Anthropic 自有（Princeton/Stanford）",
+      "scan_date": "2026-04-03"
+    },
+    "2310.02207": {
+      "slug": "introspection",
+      "title": "Language Models Represent Space and Time",
+      "authors_raw": "Wes Gurnee, ...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "非 Anthropic 自有（MIT）",
+      "scan_date": "2026-04-03"
+    },
+    "2309.11998": {
+      "slug": "clio",
+      "title": "LMSYS-Chat-1M: A Large-Scale Real-World LLM Conversation Dataset",
+      "authors_raw": "Lianmin Zheng, Wei-Lin Chiang, ...",
+      "chinese_candidates": [
+        "Lianmin Zheng",
+        "Wei-Lin Chiang",
+        "Ying Sheng",
+        "Tianle Li",
+        "Siyuan Zhuang",
+        "Zhanghao Wu"
+      ],
+      "result": "excluded",
+      "note": "非 Anthropic 自有（UC Berkeley/LMSYS）；全部为 Berkeley 学术成员",
+      "scan_date": "2026-04-03"
+    },
+    "2308.15605": {
+      "slug": "probes-catch-sleeper-agents",
+      "title": "Benchmarks for Detecting Measurement Tampering",
+      "authors_raw": "...",
+      "chinese_candidates": [],
+      "result": "no_chinese",
+      "note": "Anthropic 自有论文，无华人作者",
+      "scan_date": "2026-04-03"
+    },
+    "2308.10248": {
+      "slug": "persona-vectors",
+      "title": "Steering Language Models With Activation Engineering (ActAdd)",
+      "authors_raw": "Gavin Leech, ...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "非 Anthropic 自有（学术研究/SERI MATS）",
+      "scan_date": "2026-04-03"
+    },
+    "2308.03296": {
+      "slug": "studying-large-language-model-generalization-with-influence-functions",
+      "title": "Studying Large Language Model Generalization with Influence Functions",
+      "authors_raw": "Roger Grosse, ..., Dustin Li, ...",
+      "chinese_candidates": [
+        "Dustin Li"
+      ],
+      "result": "known",
+      "note": "Anthropic 自有论文；Dustin Li 已在离职表",
+      "scan_date": "2026-04-03"
+    },
+    "2307.13702": {
+      "slug": "tracing-thoughts-language-model",
+      "title": "Measuring Faithfulness in Chain-of-Thought Reasoning",
+      "authors_raw": "Tamera Lanham, Anna Chen, ..., Dustin Li, ..., Newton Cheng, ..., Shannon Yang, ...",
+      "chinese_candidates": [
+        "Anna Chen",
+        "Dustin Li",
+        "Newton Cheng",
+        "Shannon Yang"
+      ],
+      "result": "known",
+      "note": "Anthropic 自有论文；Anna Chen/Dustin Li 已在离职表；Newton Cheng/Shannon Yang 已在在职表（Shannon Yang 待核实状态）",
+      "scan_date": "2026-04-03"
+    },
+    "2306.16388": {
+      "slug": "towards-measuring-the-representation-of-subjective-global-opinions-in-language-models",
+      "title": "Towards Measuring the Representation of Subjective Global Opinions in LLMs",
+      "authors_raw": "Esin Durmus, ..., Carol Chen, ...",
+      "chinese_candidates": [
+        "Carol Chen"
+      ],
+      "result": "known",
+      "note": "Anthropic 自有论文；Carol Chen 已在在职表row30",
+      "scan_date": "2026-04-03"
+    },
+    "2306.03809": {
+      "slug": "evaluating-ai-systems",
+      "title": "Can LLMs democratize access to dual-use biotechnology?",
+      "authors_raw": "...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "非 Anthropic 自有（MIT 课程论文）",
+      "scan_date": "2026-04-03"
+    },
+    "2305.15324": {
+      "slug": "evaluating-ai-systems",
+      "title": "Model evaluation for extreme risks",
+      "authors_raw": "Toby Shevlane, ...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "非 Anthropic 自有（DeepMind 主导）",
+      "scan_date": "2026-04-03"
+    },
+    "2310.01405": {
+      "slug": "probes-catch-sleeper-agents",
+      "title": "Representation Engineering: A Top-Down Approach to AI Transparency",
+      "authors_raw": "Andy Zou, ..., Zifan Wang, ..., Dawn Song, ...",
+      "chinese_candidates": [
+        "Andy Zou",
+        "Zifan Wang"
+      ],
+      "result": "excluded",
+      "note": "非 Anthropic 自有（CMU/UC Berkeley 学术）；Andy Zou/Zifan Wang 均为学术界",
+      "scan_date": "2026-04-03"
+    },
+    "2309.15840": {
+      "slug": "probes-catch-sleeper-agents",
+      "title": "How to Catch an AI Liar: Lie Detection in Black-Box LLMs",
+      "authors_raw": "Jan Markus Brauner, ...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "非 Anthropic 自有（Oxford 等学术机构）",
+      "scan_date": "2026-04-03"
+    },
+    "2410.13722": {
+      "slug": "small-samples-poison",
+      "title": "Persistent Pre-Training Poisoning of LLMs",
+      "authors_raw": "Yiming Zhang, Javier Rando, ..., Jianfeng Chi, ...",
+      "chinese_candidates": [
+        "Yiming Zhang",
+        "Jianfeng Chi"
+      ],
+      "result": "excluded",
+      "note": "非 Anthropic 自有（ETH/Meta/Google 多机构）；Yiming Zhang/Jianfeng Chi 均为学术/Meta，非 Anthropic",
+      "scan_date": "2026-04-03"
+    },
+    "2507.09089": {
+      "slug": "AI-assistance-coding-skills",
+      "title": "Measuring the Impact of Early-2025 AI on Experienced Open-Source Developer Productivity",
+      "authors_raw": "Joel Becker, Nate Rush, Elizabeth Barnes, David Rein",
+      "chinese_candidates": [],
+      "result": "no_chinese",
+      "note": "Anthropic 自有论文（Joel Becker/Nate Rush），无华人作者",
+      "scan_date": "2026-04-03"
+    },
+    "2501.06346": {
+      "slug": "tracing-thoughts-language-model",
+      "title": "LLMs Share Representations of Latent Grammatical Concepts Across Languages",
+      "authors_raw": "Jannik Brinkmann, ...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "非 Anthropic 自有（学术机构，Anthropic Fellows Program 合作）",
+      "scan_date": "2026-04-03"
+    },
+    "2312.06681": {
+      "slug": "persona-vectors",
+      "title": "Steering Llama 2 via Contrastive Activation Addition (CAA)",
+      "authors_raw": "Nina Panickssery, ...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "非 Anthropic 自有（学术研究）",
+      "scan_date": "2026-04-03"
+    },
+    "2312.01037": {
+      "slug": "probes-catch-sleeper-agents",
+      "title": "Eliciting Latent Knowledge from Quirky Language Models",
+      "authors_raw": "Alex Mallen, Madeline Brumley, ...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "非 Anthropic 自有（EleutherAI/学术）",
+      "scan_date": "2026-04-03"
+    },
+    "2311.14455": {
+      "slug": "small-samples-poison",
+      "title": "Universal Jailbreak Backdoors from Poisoned Human Feedback",
+      "authors_raw": "Javier Rando, ...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "非 Anthropic 自有（ETH Zurich/学术）",
+      "scan_date": "2026-04-03"
+    },
+    "2303.17548": {
+      "slug": "collective-constitutional-ai-aligning-a-language-model-with-public-input",
+      "title": "Whose Opinions Do Language Models Reflect? (OpinionsQA)",
+      "authors_raw": "...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "非 Anthropic 自有（Stanford 学术）",
+      "scan_date": "2026-04-03"
+    },
+    "2207.05221": {
+      "slug": "language-models-mostly-know-what-they-know",
+      "title": "Language Models (Mostly) Know What They Know",
+      "authors_raw": "Saurav Kadavath, ..., Anna Chen, Yuntao Bai, ...",
+      "chinese_candidates": [
+        "Anna Chen",
+        "Yuntao Bai"
+      ],
+      "result": "known",
+      "note": "Anthropic 自有论文；Anna Chen/Yuntao Bai 已在离职表",
+      "scan_date": "2026-04-03"
+    },
+    "2206.14858": {
+      "slug": "visible-extended-thinking",
+      "title": "Solving Quantitative Reasoning Problems with LLMs (Minerva)",
+      "authors_raw": "Aitor Lewkowycz, ..., Yuhuai Wu, ...",
+      "chinese_candidates": [
+        "Yuhuai Wu"
+      ],
+      "result": "excluded",
+      "note": "非 Anthropic 自有（Google Research）；Yuhuai Wu=Google研究员",
+      "scan_date": "2026-04-03"
+    },
+    "2302.10329": {
+      "slug": "measuring-agent-autonomy",
+      "title": "Harms from Increasingly Agentic Algorithmic Systems",
+      "authors_raw": "Alan Chan, ..., Zhonghao He, Yawen Duan, ..., Michelle Lin, ..., Wanru Zhao, ...",
+      "chinese_candidates": [
+        "Alan Chan",
+        "Zhonghao He",
+        "Yawen Duan",
+        "Michelle Lin",
+        "Wanru Zhao"
+      ],
+      "result": "excluded",
+      "note": "非 Anthropic 自有（Mila/学术多机构）；Alan Chan=Mila PhD→GovAI，已确认排除；其余均为学术界",
+      "scan_date": "2026-04-03"
+    },
+    "2302.06590": {
+      "slug": "estimating-productivity-gains",
+      "title": "The Impact of AI on Developer Productivity: Evidence from GitHub Copilot",
+      "authors_raw": "Mert Demirer, ...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "非 Anthropic 自有（GitHub Copilot 经济学研究）",
+      "scan_date": "2026-04-03"
+    },
+    "2110.14168": {
+      "slug": "collective-constitutional-ai-aligning-a-language-model-with-public-input",
+      "title": "Training Verifiers to Solve Math Word Problems (GSM8K)",
+      "authors_raw": "Karl Cobbe, ..., Mark Chen, ...",
+      "chinese_candidates": [
+        "Mark Chen"
+      ],
+      "result": "excluded",
+      "note": "非 Anthropic 自有（OpenAI 论文）；Mark Chen=OpenAI 研究员",
+      "scan_date": "2026-04-03"
+    },
+    "2203.15556": {
+      "slug": "small-samples-poison",
+      "title": "Training Compute-Optimal Large Language Models (Chinchilla)",
+      "authors_raw": "Jordan Hoffmann, ...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "非 Anthropic 自有（DeepMind Chinchilla 论文）",
+      "scan_date": "2026-04-03"
+    },
+    "2601.02484": {
+      "slug": "vibe-physics",
+      "title": "Resummation of C-Parameter Sudakov Shoulder (Claude辅助生成的物理论文)",
+      "authors_raw": "Claude AI assistant (physicist supervision)",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "hep-ph论文，非Anthropic员工主导，仅使用Claude工具",
+      "scan_date": "2026-04-03"
+    },
+    "2511.15935": {
+      "slug": "vibe-physics",
+      "title": "Relativistic Covariance and Nonlinear Quantum Mechanics (Tomonaga-Schwinger)",
+      "authors_raw": "Stephen D. H. Hsu",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "量子物理论文，MSU教授，非Anthropic自有",
+      "scan_date": "2026-04-03"
+    },
+    "2511.04648": {
+      "slug": "vibe-physics",
+      "title": "Automated Discovery of Non-local Photonic Gates",
+      "authors_raw": "...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "量子光学论文，非Anthropic自有",
+      "scan_date": "2026-04-03"
+    },
+    "2507.06261": {
+      "slug": "persona-selection-model",
+      "title": "Gemini 2.5: Pushing the Frontier with Advanced Reasoning, Multimodality, Long Context",
+      "authors_raw": "Google Gemini Team",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "Google Gemini 2.5技术报告，非Anthropic自有；fetch超时原因：内容较大，与Anthropic无关",
+      "scan_date": "2026-04-03"
+    },
+    "2502.18864": {
+      "slug": "vibe-physics",
+      "title": "Towards an AI co-scientist",
+      "authors_raw": "Juraj Gottweis, Wei-Hung Weng, Tao Tu, ...",
+      "chinese_candidates": [
+        "Wei-Hung Weng",
+        "Tao Tu"
+      ],
+      "result": "excluded",
+      "note": "Google论文，非Anthropic自有；Wei-Hung Weng/Tao Tu=Google研究员",
+      "scan_date": "2026-04-03"
+    },
+    "2401.13138": {
+      "slug": "measuring-agent-autonomy",
+      "title": "Visibility into AI Agents",
+      "authors_raw": "Alan Chan, ..., Kevin Wei, ...",
+      "chinese_candidates": [
+        "Alan Chan",
+        "Kevin Wei"
+      ],
+      "result": "excluded",
+      "note": "非Anthropic自有（Mila/Cambridge/GovAI多机构）；Alan Chan=Mila→GovAI已排除；Kevin Wei=学术界",
+      "scan_date": "2026-04-03"
+    },
+    "2305.14965": {
+      "slug": "many-shot-jailbreaking",
+      "title": "Tricking LLMs into Disobedience: Formalizing, Analyzing, and Detecting Jailbreaks",
+      "authors_raw": "...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "非Anthropic自有（学术多机构）",
+      "scan_date": "2026-04-03"
+    },
+    "2304.05332": {
+      "slug": "evaluating-ai-systems",
+      "title": "Emergent autonomous scientific research capabilities of LLMs",
+      "authors_raw": "Daniil A. Boiko, Robert MacKnight, Gabe Gomes",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "化学论文，非Anthropic自有",
+      "scan_date": "2026-04-03"
+    },
+    "2206.07682": {
+      "slug": "building-ai-cyber-defenders",
+      "title": "Emergent Abilities of Large Language Models",
+      "authors_raw": "Jason Wei, Yi Tay, ..., Denny Zhou, ...",
+      "chinese_candidates": [
+        "Jason Wei",
+        "Yi Tay",
+        "Denny Zhou"
+      ],
+      "result": "excluded",
+      "note": "非Anthropic自有（Google Brain论文）；Jason Wei/Denny Zhou=Google，非Anthropic",
+      "scan_date": "2026-04-03"
+    },
+    "2205.10487": {
+      "slug": "scaling-laws-and-interpretability-of-learning-from-repeated-data",
+      "title": "Scaling Laws and Interpretability of Learning from Repeated Data",
+      "authors_raw": "Danny Hernandez, Tom Brown, ..., Dario Amodei, ...",
+      "chinese_candidates": [],
+      "result": "no_chinese",
+      "note": "Anthropic自有早期论文，无华人作者",
+      "scan_date": "2026-04-03"
+    },
+    "2202.03286": {
+      "slug": "forecasting-rare-behaviors",
+      "title": "Red Teaming Language Models with Language Models",
+      "authors_raw": "Ethan Perez, ..., Saffron Huang, ..., Yuntao Bai, Anna Chen, ...",
+      "chinese_candidates": [
+        "Saffron Huang",
+        "Yuntao Bai",
+        "Anna Chen"
+      ],
+      "result": "known",
+      "note": "Anthropic自有论文；Saffron Huang=非华裔已排除；Yuntao Bai/Anna Chen已在离职表",
+      "scan_date": "2026-04-03"
+    },
+    "2110.08193": {
+      "slug": "evaluating-feature-steering",
+      "title": "BBQ: A Hand-Built Bias Benchmark for QA",
+      "authors_raw": "Alicia Parrish, ...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "非Anthropic自有（NYU/Princeton学术）",
+      "scan_date": "2026-04-03"
+    },
+    "2108.12427": {
+      "slug": "evaluating-ai-systems",
+      "title": "Why and How Governments Should Monitor AI Development",
+      "authors_raw": "Jess Whittlestone, Jack Clark",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "AI治理政策论文；Jack Clark是Anthropic联创但该论文为政策研究，无Anthropic员工研究成员",
+      "scan_date": "2026-04-03"
+    },
+    "2102.12452": {
+      "slug": "probes-catch-sleeper-agents",
+      "title": "Probing Classifiers: Promises, Shortcomings, and Advances",
+      "authors_raw": "Yonatan Belinkov",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "非Anthropic自有（MIT/学术），NLP解释性论文",
+      "scan_date": "2026-04-03"
+    },
+    "2009.03300": {
+      "slug": "statistical-approach-to-model-evals",
+      "title": "(2020年论文，待补充)",
+      "authors_raw": "...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "2020年论文，Anthropic 2021年才成立，肯定非Anthropic自有",
+      "scan_date": "2026-04-03"
+    },
+    "2001.08361": {
+      "slug": "mapping-mind-language-model",
+      "title": "(2020年论文)",
+      "authors_raw": "...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "2020年论文，早于Anthropic成立",
+      "scan_date": "2026-04-03"
+    },
+    "1909.06146": {
+      "slug": "evaluating-feature-steering",
+      "title": "(2019年论文)",
+      "authors_raw": "...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "2019年论文，早于Anthropic成立",
+      "scan_date": "2026-04-03"
+    },
+    "1906.01820": {
+      "slug": "probes-catch-sleeper-agents",
+      "title": "(2019年论文)",
+      "authors_raw": "...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "2019年论文，早于Anthropic成立",
+      "scan_date": "2026-04-03"
+    },
+    "1808.07036": {
+      "slug": "statistical-approach-to-model-evals",
+      "title": "(2018年论文)",
+      "authors_raw": "...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "2018年论文，早于Anthropic成立",
+      "scan_date": "2026-04-03"
+    },
+    "1806.03822": {
+      "slug": "statistical-approach-to-model-evals",
+      "title": "(2018年论文)",
+      "authors_raw": "...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "2018年论文，早于Anthropic成立",
+      "scan_date": "2026-04-03"
+    },
+    "1703.04730": {
+      "slug": "influence-functions",
+      "title": "Understanding Black-box Predictions via Influence Functions",
+      "authors_raw": "Pang Wei Koh, Percy Liang",
+      "chinese_candidates": [
+        "Pang Wei Koh"
+      ],
+      "result": "excluded",
+      "note": "2017年论文；Pang Wei Koh=Stanford→Google Research，非Anthropic",
+      "scan_date": "2026-04-03"
+    },
+    "1612.01551": {
+      "slug": "vibe-physics",
+      "title": "(2016年论文)",
+      "authors_raw": "...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "2016年论文，早于Anthropic成立",
+      "scan_date": "2026-04-03"
+    },
+    "1610.01644": {
+      "slug": "probes-catch-sleeper-agents",
+      "title": "(2016年论文)",
+      "authors_raw": "...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "2016年论文，早于Anthropic成立",
+      "scan_date": "2026-04-03"
+    },
+    "1312.6199": {
+      "slug": "constitutional-classifiers",
+      "title": "(2013年论文)",
+      "authors_raw": "...",
+      "chinese_candidates": [],
+      "result": "excluded",
+      "note": "2013年论文，早于Anthropic成立",
+      "scan_date": "2026-04-03"
+    }
+  },
+  "pending": {}
+}

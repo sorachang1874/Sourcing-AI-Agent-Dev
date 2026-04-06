@@ -1,0 +1,19 @@
+[Unit]
+Description=Sourcing AI Agent Worker Recovery Daemon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=sorachang
+WorkingDirectory=/home/sorachang/projects/Sourcing AI Agent Dev/sourcing-ai-agent
+Environment=PYTHONPATH=src
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/env python3 -m sourcing_agent.cli run-worker-daemon-service --service-name worker-recovery-daemon --poll-seconds 5 --lease-seconds 300 --stale-after-seconds 180 --total-limit 4
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

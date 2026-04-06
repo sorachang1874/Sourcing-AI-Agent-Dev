@@ -1,0 +1,39 @@
+{
+  "apply_resolution": true,
+  "action": "resolved",
+  "reviewer": "user_manual_review",
+  "notes": "Manual review confirmed Jeremy Bernstein via homepage and public CV link from personal site.",
+  "target_company": "Thinking Machines Lab",
+  "candidate": {
+    "candidate_id": "d338bd59cef9af3c",
+    "name_en": "Jeremy Bernstein",
+    "display_name": "Jeremy Bernstein",
+    "category": "lead",
+    "target_company": "Thinking Machines Lab",
+    "organization": "Thinking Machines Lab",
+    "role": "Publication author lead",
+    "source_dataset": "thinkingmachinesai_official_feed",
+    "source_path": "/home/sorachang/projects/Sourcing AI Agent Dev/sourcing-ai-agent/runtime/company_assets/thinkingmachineslab/20260406T172439/publications/official_surfaces/blogmodularmanifolds.html",
+    "metadata": {
+      "publication_url": "https://thinkingmachines.ai/blog/modular-manifolds/"
+    }
+  },
+  "candidate_patch": {
+    "category": "employee",
+    "employment_status": "current"
+  },
+  "source_links": [
+    {
+      "label": "Homepage",
+      "url": "https://jeremybernste.in/",
+      "source_type": "manual_review_link",
+      "notes": "Homepage surfaced via Google search."
+    },
+    {
+      "label": "CV",
+      "url": "https://docs.google.com/document/d/1yGn5ZDFaAj7tI2-0ZyMEASX1uvOjwld2aHeE1V8Mzg0/edit?tab=t.0",
+      "source_type": "manual_review_link",
+      "notes": "Public CV linked from homepage."
+    }
+  ]
+}

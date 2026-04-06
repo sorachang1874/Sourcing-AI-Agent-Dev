@@ -1,0 +1,55 @@
+{
+  "_meta": {
+    "source": "hunter.io Discover page",
+    "source_doc": "redoc:911627c71c11aaf5a648f9f8925b1223",
+    "domain": "anthropic.com",
+    "fetched_at": "2026-04-05",
+    "total_email_addresses": 565,
+    "total_people": 509,
+    "decision_makers": 41,
+    "generic": 34
+  },
+  "department_counts": {
+    "Executive": 7,
+    "IT": 228,
+    "Management": 72,
+    "Sales": 17,
+    "Legal": 8,
+    "Support": 8,
+    "HR": 16,
+    "Marketing": 13,
+    "Communication": 10,
+    "Education": 15,
+    "Design": 9,
+    "Operations": 22,
+    "Department unknown": 84
+  },
+  "signals_new_emails_7days": [
+    "Vineel Adusumilli",
+    "Allison Scott",
+    "Taylor Richardson",
+    "Ada Mui",
+    "Stephen McAleer",
+    "Anneke Jong",
+    "Adam Ward",
+    "Rafi Ayub",
+    "Ming Zhong",
+    "Alek Dimitriev",
+    "Bert Maher",
+    "Krish Visht"
+  ],
+  "chinese_candidates_from_signals": [
+    {
+      "name": "Ming Zhong",
+      "signal": "New email address found",
+      "date": "7 days ago",
+      "note": "明显华人姓名，Zhong=钟"
+    },
+    {
+      "name": "Ada Mui",
+      "signal": "New email address found",
+      "date": "7 days ago",
+      "note": "Mui为华裔常见姓（梅/毛），需核实"
+    }
+  ]
+}

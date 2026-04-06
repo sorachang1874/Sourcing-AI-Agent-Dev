@@ -1,0 +1,10 @@
+{
+  "_meta": {
+    "created_at": "2026-04-05",
+    "last_updated": "2026-04-05",
+    "description": "Scholar Coauthor 图谱扩展 — 候选人处理队列（断点续传用）"
+  },
+  "seeds_to_scan": [],
+  "coauthors_to_review": [],
+  "linkedin_to_scrape": []
+}

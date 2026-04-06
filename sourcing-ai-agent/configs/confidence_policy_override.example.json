@@ -1,0 +1,23 @@
+{
+  "action": "override",
+  "target_company": "Thinking Machines Lab",
+  "scope_kind": "request_family",
+  "reviewer": "pm",
+  "notes": "Use stricter confidence bands for high-precision recruiter review.",
+  "high_threshold": 0.82,
+  "medium_threshold": 0.55,
+  "request_payload": {
+    "target_company": "Thinking Machines Lab",
+    "categories": [
+      "employee"
+    ],
+    "employment_statuses": [
+      "current"
+    ],
+    "keywords": [
+      "researcher",
+      "engineer"
+    ],
+    "top_k": 20
+  }
+}

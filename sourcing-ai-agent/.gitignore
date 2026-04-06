@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+runtime/*.db
+runtime/jobs/*.json
+runtime/bootstrap_summary.json
+runtime/secrets/
+runtime/company_assets/
+tests/__pycache__/

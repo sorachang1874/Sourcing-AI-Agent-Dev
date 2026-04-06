@@ -1,0 +1,53 @@
+{
+  "accounts": [
+    {
+      "id": "hunter_001",
+      "email": "hunter_account@example.com",
+      "api_key": "REDACTED",
+      "plan_name": "Free",
+      "plan_level": 0,
+      "monthly_search_limit": 60,
+      "monthly_verification_limit": 120,
+      "max_results_per_call": 100,
+      "registered_at": "2026-04-05",
+      "reset_date": "2026-05-04",
+      "notes": "Free tier: 60 searches/月 + 120 verifications/月。Domain Search 每次最多返回 100 条，翻页消耗多次 search 额度。anthropic.com 共 565 条记录，需 6 次调用。",
+      "total_searches_used": 4,
+      "total_verifications_used": 2,
+      "usage_log": [
+        {
+          "date": "2026-04-05",
+          "action": "account_check",
+          "searches_used": 1,
+          "note": "首次查询账号信息 + domain-search meta（limit=1）"
+        },
+        {
+          "date": "2026-04-05",
+          "action": "domain_search_full",
+          "domain": "anthropic.com",
+          "searches_used": 1,
+          "records_fetched": 0,
+          "out_file": "data/hunter/domain_search_anthropic_2026-04-05.json",
+          "note": "全量拉取 anthropic.com，6 页原子落盘"
+        },
+        {
+          "date": "2026-04-05",
+          "action": "domain_search_full",
+          "domain": "anthropic.com",
+          "searches_used": 2,
+          "records_fetched": 10,
+          "out_file": "data/hunter/domain_search_anthropic_2026-04-05.json",
+          "note": "Free tier 10条/页，全量拉取 anthropic.com"
+        }
+      ],
+      "archived_domains": [
+        {
+          "domain": "anthropic.com",
+          "date": "2026-04-05",
+          "records": 0,
+          "file": "data/hunter/domain_search_anthropic_2026-04-05.json"
+        }
+      ]
+    }
+  ]
+}

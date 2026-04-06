@@ -1,0 +1,11 @@
+{
+  "meta": {
+    "slug": "angelajiang",
+    "fetched_at": "2026-04-02T16:19:15+08:00",
+    "api": "account_008"
+  },
+  "raw": {
+    "messages": "The API is unreachable, please contact the API provider",
+    "info": "Your Client (working) ---> Gateway (working) ---> API (not working)"
+  }
+}

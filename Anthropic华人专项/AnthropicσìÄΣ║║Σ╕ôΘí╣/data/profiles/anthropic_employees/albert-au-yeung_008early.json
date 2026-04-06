@@ -1,0 +1,114 @@
+{
+  "meta": {
+    "slug": "albert-au-yeung",
+    "url": "https://www.linkedin.com/in/albert-au-yeung/",
+    "fetched_at": "2026-04-02T16:18:14+08:00",
+    "api": "account_007"
+  },
+  "raw": {
+    "success": true,
+    "name": "Albert Au Yeung",
+    "image": "https://media.licdn.com/dms/image/v2/C5603AQGsFgR2iYk1lg/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1594048168593?e=2147483647&v=beta&t=Jr93nZuR2zKdOvWo9iX7WuRmkimZF6QJb5V1AwpBdWo",
+    "location": "Dublin, County Dublin, Ireland",
+    "followers": 2326,
+    "about": null,
+    "connections": "500+",
+    "job_titles": [
+      "****** ** ********* *****"
+    ],
+    "experience": [
+      {
+        "company": "Anthropic",
+        "url": "https://www.linkedin.com/company/anthropicresearch",
+        "start_date": null,
+        "end_date": null
+      }
+    ],
+    "education": [
+      {
+        "school": "University of Southampton",
+        "url": "https://uk.linkedin.com/school/university-of-southampton/",
+        "start_date": 2006,
+        "end_date": 2009
+      },
+      {
+        "school": "********** ** ******",
+        "url": null,
+        "start_date": 2008,
+        "end_date": 2008
+      },
+      {
+        "school": "*** ******* ********** ** **** ****",
+        "url": null,
+        "start_date": 2004,
+        "end_date": 2006
+      },
+      {
+        "school": "********** ** *********** ************ ****",
+        "url": null,
+        "start_date": 2001,
+        "end_date": 2004
+      }
+    ],
+    "articles": [],
+    "activity": [],
+    "similar_profiles": [
+      {
+        "name": "Cathal Coffey",
+        "url": "https://ie.linkedin.com/in/cathalcoffey",
+        "location": "Ireland"
+      },
+      {
+        "name": "Nazareno Lorenzo",
+        "url": "https://ie.linkedin.com/in/nazarenolorenzo",
+        "location": "Dublin"
+      },
+      {
+        "name": "⚙️Eoin Brazil",
+        "url": "https://ie.linkedin.com/in/eoinbrazil",
+        "location": "Ireland"
+      },
+      {
+        "name": "Piotr Berlowski",
+        "url": "https://ie.linkedin.com/in/piotrberlowski",
+        "location": "County Dublin, Ireland"
+      },
+      {
+        "name": "Mohammad Efazati",
+        "url": "https://ie.linkedin.com/in/efazati",
+        "location": "Tullamore"
+      },
+      {
+        "name": "Sagar Jape",
+        "url": "https://ie.linkedin.com/in/sagarjape",
+        "location": "County Dublin, Ireland"
+      },
+      {
+        "name": "Eric Risser",
+        "url": "https://ie.linkedin.com/in/eric-risser",
+        "location": "Ireland"
+      },
+      {
+        "name": "Sivaprakash Rajaram",
+        "url": "https://ie.linkedin.com/in/siva-prakash-26a08520",
+        "location": "Ireland"
+      },
+      {
+        "name": "Benoit D.",
+        "url": "https://www.linkedin.com/in/benoit-d-8037b247",
+        "location": "Oakland, CA"
+      },
+      {
+        "name": "Karl O'Dwyer",
+        "url": "https://ie.linkedin.com/in/karlodwyer",
+        "location": "Ireland"
+      }
+    ],
+    "recommendations": [],
+    "skills": [],
+    "publications": [],
+    "projects": [],
+    "cached": false,
+    "cached_at": null
+  }
+}

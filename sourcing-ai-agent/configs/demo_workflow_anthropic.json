@@ -1,0 +1,8 @@
+{
+  "raw_user_request": "帮我找 Anthropic 当前偏基础设施方向的华人技术成员，先获取全量数据资产，再做检索和排序。",
+  "target_company": "Anthropic",
+  "categories": ["employee"],
+  "employment_statuses": ["current"],
+  "keywords": ["基础设施", "GPU", "预训练", "推理"],
+  "top_k": 5
+}

@@ -1,0 +1,235 @@
+{
+  "success": true,
+  "message": "response retrieved successfully",
+  "data": {
+    "basic_info": {
+      "fullname": "Calvin Liu-Navarro (刘长远）",
+      "first_name": "Calvin",
+      "last_name": "Liu-Navarro (刘长远）",
+      "headline": "Technical Recruiting @ Anthropic",
+      "public_identifier": "calvinliunavarro",
+      "profile_url": "https://linkedin.com/in/calvinliunavarro",
+      "profile_picture_url": "https://media.licdn.com/dms/image/v2/D5603AQEEZcl5ZlHYEA/profile-displayphoto-shrink_800_800/B56ZR25264HoAc-/0/1737161666855?e=1776902400&v=beta&t=U8cu-sIVjtl_bTpPle3TK8mW_3AgyQ417qqzLChiSGc",
+      "about": "To me, recruiting is the point where candidate experience, business needs, client management, project management and cross-functional collaboration meet.\n\nI care about offers, but i care about people more!",
+      "location": {
+        "country": "United States",
+        "city": "San Francisco, California",
+        "full": "San Francisco, California, United States",
+        "country_code": "US"
+      },
+      "creator_hashtags": [],
+      "is_creator": false,
+      "is_influencer": false,
+      "is_premium": true,
+      "open_to_work": false,
+      "created_timestamp": 1447803246337,
+      "show_follower_count": false,
+      "background_picture_url": "https://media.licdn.com/dms/image/v2/D5616AQFWxtRM4AlsAA/profile-displaybackgroundimage-shrink_350_1400/B56ZYWxhdRHQAY-/0/1744138803746?e=1776902400&v=beta&t=NRzOFtRzOnS3xFgQpm4i4A6w7YKvAs1kHIpm1nukzoQ",
+      "urn": "ACoAABt9Vb8B16zQN-7XHcgWUQD6UnFV4cI_p8o",
+      "follower_count": 8549,
+      "connection_count": 5870,
+      "current_company": "Anthropic",
+      "current_company_urn": "74126343",
+      "current_company_url": "https://www.linkedin.com/company/anthropicresearch",
+      "top_skills": [],
+      "email": null
+    },
+    "experience": [
+      {
+        "title": "Technical Recruiting ",
+        "company": "Anthropic",
+        "description": "Supporting all things infrastructure ~",
+        "duration": "May 2024 - Present · 2 yrs",
+        "start_date": {
+          "year": 2024,
+          "month": "May"
+        },
+        "is_current": true,
+        "company_linkedin_url": "https://www.linkedin.com/company/74126343/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_400_400/company-logo_400_400/0/1719256729905/anthropicresearch_logo?e=1776902400&v=beta&t=6sv-GagnF1G5d4B4rN1Yu3sq6fln2BP_9tb0s6bARoY",
+        "employment_type": "Full-time",
+        "company_id": "74126343"
+      },
+      {
+        "title": "Recruiting + Recruiting Ops",
+        "company": "ClassDojo",
+        "location": "Remote",
+        "description": "ClassDojo's mission is to give every child on Earth an education they love.\n\nDoing full cycle recruiting plus owning recruiting operations. \n\nRecruiting: full cycle recruiting across tech, people, business, creative and corporate functions. \n\nRecruiting Ops: partner with Total Rewards, Learning & Development, People Tech and People Ops to build out recruiting infrastructure & processes to ensure the best candidate and recruiting experience out there. \n\nCheck out our open roles - https://www.classdojo.com/jobs/",
+        "duration": "Mar 2023 - May 2024 · 1 yr 3 mos",
+        "start_date": {
+          "year": 2023,
+          "month": "Mar"
+        },
+        "end_date": {
+          "year": 2024,
+          "month": "May"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/2293241/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQFzo-N0iDDQMg/company-logo_400_400/company-logo_400_400/0/1690292237355/classdojo_logo?e=1776902400&v=beta&t=p1hXk8LUuLg1hlHfMZPx22gMGGIqGbPpnuV3N0TUTBo",
+        "employment_type": "Full-time",
+        "company_id": "2293241"
+      },
+      {
+        "title": "Head of Technical Recruiting (Engineering, Product, Design and Data)",
+        "company": "Dandy",
+        "location": "San Diego, California, United States",
+        "description": "I lead a team of talented technical sourcers and recruiters to help Dandy scale the EPDD org (engineering, product, design and data) by building recruiting infrastructure / process and bringing in one human at a time :) \n\nScaled and mentored a remote tech recruiting team (3 recruiting coordinators, 2 technical sourcers and 5 technical recruiters).\nLed the team to build out a scalable engineering recruiting process that resulted in hiring up to 12 senior level engineers in one month. \nWorked with product management leadership to streamline recruiting process to double product management / product design functions while focusing on a diverse pipeline. \nPartnered with tech leadership and the co-founder to improve tech brand to attract top tech talent. \nManaged external tech recruiting vendors. \n \n\nMy group is hiring specifically across all levels: \n•Engineering (full stack, backend infra/platform) : Director of Engineering, Engineering Managers, Software Engineers across levels (Mid, Senior and Staff), Technical Program Managers\n•Data : Data Science , Analytics Engineer , Data Infrastructure\n•Machine Learning & Computer Vision & 3D \n•Product : Product Managers\n•Design : Product Design & UX Researcher \n•Business Applications: Salesforce Developer\n\nWe are on a mission to build the operating system of every dental practice in the country.\nWe are just getting started and jump on the ride with us!",
+        "duration": "Mar 2022 - Feb 2023 · 1 yr",
+        "start_date": {
+          "year": 2022,
+          "month": "Mar"
+        },
+        "end_date": {
+          "year": 2023,
+          "month": "Feb"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/10894709/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQGbpEfk4uSBzQ/company-logo_400_400/company-logo_400_400/0/1669005247358/dandyofficial_logo?e=1776902400&v=beta&t=muAADrVNzLc6Qr23eOa2uQIOoXIbwAU82nzd0cxDN-w",
+        "employment_type": "Full-time",
+        "location_type": "Remote",
+        "skills": [
+          "Team Leadership",
+          "Career Development"
+        ],
+        "company_id": "10894709",
+        "skills_url": "https://www.linkedin.com/in/calvinliunavarro/overlay/urn:li:fsd_profilePosition:(ACoAABt9Vb8B16zQN-7XHcgWUQD6UnFV4cI_p8o,1933218080)/skill-associations-details?profileUrn=urn%3Ali%3Afsd_profile%3AACoAABt9Vb8B16zQN-7XHcgWUQD6UnFV4cI_p8o"
+      },
+      {
+        "title": "Senior Technical Recruiter",
+        "company": "Robinhood",
+        "location": "San Francisco Bay Area",
+        "description": "Building a future where finance is relevant to all of us, not just to the top 1%! \nin 2021, hired in total of 51 engineers (across different areas, mostly on platform/infrastructure) that accounted 10% of all engineering hire for Robinhood for the year. \n\nStill working with the best hiring teams and candidates to democratize finance for ALL :)\n\n-POC for all recruiting related to Software Platform & Developer Infrastructure.\n-Helped build out Developer Infrastructure org from the ground up and grew the org from 10 to 35 engineers in 6 months. Being the only Recruiter for the org, helped sourcers calibrate profiles, set expectations with Eng managers and Org Director. Built out recruiting process from scratch across 5 different teams within the org. \n-Recruiting Onboarding POC for Software Platform.\n-Initiated and built out new centralized infrastructure recruiting process as we continue to scale the infrastructure function with VP of Infrastructure and infrastructure engineering pillar leads. \n-Actively interviewing and building out the infrastructure recruiting team at Robinhood. \n-Mentoring and developing current infrastructure recruiting team, both sourcers and recruiters on career development, expectation setting and goal setting in 1:1.\n\nOn top of that, also working on some exciting projects to improve the efficiency and career development opportunities within Robinhood recruiting org.\n- Worked with other Recruiting Managers to build out a Recognition/Spotlight Award from the ground up for overall recruiting function at Robinhood. Rolled out in Q3 2021 to Recruiting(Dreamteam) All Hands. \n- Working on building internal mobility career development vertically and horizontally for the recruiting function. \n- Initiated and led the group building internal candidate sharing guidance and process for all tech recruiting at Robinhood.\n- Hosting weekly closing workshop for tech recruiting. \n\nServing as Communication Manager for Rainbowhood (Robinhood’s 🌈 ERG)",
+        "duration": "Jul 2021 - Mar 2022 · 9 mos",
+        "start_date": {
+          "year": 2021,
+          "month": "Jul"
+        },
+        "end_date": {
+          "year": 2022,
+          "month": "Mar"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/3254263/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQESwNiGp2qYlA/company-logo_400_400/company-logo_400_400/0/1728574763254/robinhood_logo?e=1776902400&v=beta&t=XxgklfwQpWazRIU5Ix54C2HwVNFZqjEs4JfC3FraPvM",
+        "employment_type": "Full-time",
+        "company_id": "3254263"
+      },
+      {
+        "title": "Technical Recruiter",
+        "company": "Robinhood",
+        "location": "San Francisco Bay Area",
+        "description": "Full Life Cycle Recruiter with a focus on closing, projects, mentorship and client management. \n\nCurrently supporting our infrastructure function with a focus on Software Platform and Developer Infrastructure, both Software Engineers and Site Reliability Engineers, in Menlo Park, Seattle and NYC. \n\nSoftware Platform's mission is to accelerate developer velocity and increase system stability by building the foundational software platforms and tools that power the rest of Robinhood engineering. \n\nDeveloper Infrastructure's mission is to increase the efficiency, velocity, reliability, and scalability of Robinhood Engineering.\n\nSound interesting? Feel free to check out our engineering website or reach out to me to chat!",
+        "duration": "Dec 2020 - Jul 2021 · 8 mos",
+        "start_date": {
+          "year": 2020,
+          "month": "Dec"
+        },
+        "end_date": {
+          "year": 2021,
+          "month": "Jul"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/3254263/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQESwNiGp2qYlA/company-logo_400_400/company-logo_400_400/0/1728574763254/robinhood_logo?e=1776902400&v=beta&t=XxgklfwQpWazRIU5Ix54C2HwVNFZqjEs4JfC3FraPvM",
+        "employment_type": "Full-time",
+        "company_id": "3254263"
+      },
+      {
+        "title": "Technical Recruiter 2",
+        "company": "LinkedIn",
+        "location": "Sunnyvale, California, United States",
+        "description": "Currently working as a Recruiter (full life cycle) with a focus on closing, supporting Applications, UI, Mobile (iOS and Android), Tools, Performance, Systems & Infrastructure, AI, Data Science and Big Data Engineering. \nVolume - on average, I handle 70-90 candidates at the onsite stage and 5-9 offers at the same time.  \n\nLast quarter of 2019, I was able to close in total of 30 candidates (15 was the expectation) while leading an organizational level project and meeting expected accepting rate of 60%. \n\nPartner up closely with Engineering Leaders, Compensation Partners, Immigration Partners, Sourcers and Recruiting Coordinators to bring the best talent to the world-changing Engineering team here at LinkedIn.\n\nProject: \n-leading a group of Recruiters to revamp prep material across LinkedIn engineering tracks ; involved in two -Workstream projects (candidate debrief and allocation) and hosted training to the whole Eng Recruiting org (around 100 people). \n-Media Attraction Project: work with Eng Recruiting Event team and Engineering leaders to come up with media strategy to attract passive talent. \n\nClient Management - Partner closely with engineering leaders and leverage data to influence recruiting strategies and host training for engineering on the recruiting process. \n\nMentorship: \n--providing best practices to Sourcers with sourcing strategy/tips on hard to fill roles and training Sourcers to transition into Recruiters. \n--acting as the lead for Recruiter Excellence project for Apps/UI/Mobile/Foundation recruiting pods. I partner with other leads for Eng recruiting as well as learning teams to provide trainings to Eng recruiting team on best practices, closing strategy, diversity training, etc. once a month. \n\nMember of Core Planning Group for Out[IN] HQ Chapter - meet weekly and create opportunities for the LGBTQ community to network and support each other at the LinkedIn Headquarter office.",
+        "duration": "Sep 2019 - Nov 2020 · 1 yr 3 mos",
+        "start_date": {
+          "year": 2019,
+          "month": "Sep"
+        },
+        "end_date": {
+          "year": 2020,
+          "month": "Nov"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/1337/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQHaVYd13rRz3A/company-logo_400_400/company-logo_400_400/0/1638831590218/linkedin_logo?e=1776902400&v=beta&t=b7YR38u9HV_S3GAfCQNvCQREdlcOHn9w0mu-6Dsmv4I",
+        "employment_type": "Full-time",
+        "company_id": "1337"
+      },
+      {
+        "title": "Technical Recruiter ",
+        "company": "LinkedIn",
+        "location": "San Francisco Bay Area",
+        "description": "June 2019 - September 2019\nMoved into Backend Recruiting (Closing) role. Partnering up with Engineering Leaders, Sourcers and Recruiting Coordinators working with candidates from onsite stage to team matching then offer negotiation.  \n\nAt the same time, working on several projects from team level to org level. \n\nMay 2018 - May 2019\nGot promoted to become Technical Recruiter and started doing full life cycle recruiting. \n\nJoined Foundation Pod supporting Applications, Systems & Infrastructure, Tools, Performance, Mobile and UI tracks. Also supporting AI and Data Science tracks along the way. Being the Data Infrastructure track expert within the Foundation Recruiting pod. \n\nSourced and closed in total of 44 candidates from July 2018 - May 2019 across different tracks and levels (both ICs and Managers ; Expectation was 12 accepts per year). \n\nBesides hiring top talent, you can also find me mentoring/on-boarding new team members; attending Hiring Committee; meeting with hiring managers; organizing/volunteering at events/meetups; shooting Linkedin videos, etc.",
+        "duration": "May 2018 - Sep 2019 · 1 yr 5 mos",
+        "start_date": {
+          "year": 2018,
+          "month": "May"
+        },
+        "end_date": {
+          "year": 2019,
+          "month": "Sep"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/1337/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQHaVYd13rRz3A/company-logo_400_400/company-logo_400_400/0/1638831590218/linkedin_logo?e=1776902400&v=beta&t=b7YR38u9HV_S3GAfCQNvCQREdlcOHn9w0mu-6Dsmv4I",
+        "employment_type": "Full-time",
+        "company_id": "1337"
+      },
+      {
+        "title": "Technical Recruiting Associate (Sourcing)",
+        "company": "LinkedIn",
+        "location": "San Francisco Bay Area",
+        "description": "Joined LinkedIn Technical Recruiting Associate Program with no prior experience in tech recruiting.\nAfter three months, graduated from the program with 3 offer accepts (expectation was 1 accept) and a very healthy pipeline.\n\nAfter that, joined Data Infrastructure team supporting Systems & Infrastructure hiring. On top of it, I also supported Applications, UI, Mobile (iOS & Android), AI, Tools, Performance and Data Science tracks. \n\nOn average, did 200-250 reach out / 20- 30 phone calls with candidates weekly.\nFar exceeded expectation every quarter. On average, had over 8 accepts per quarter (expectation was 2-3 accepts per quarter).",
+        "duration": "Aug 2017 - May 2018 · 10 mos",
+        "start_date": {
+          "year": 2017,
+          "month": "Aug"
+        },
+        "end_date": {
+          "year": 2018,
+          "month": "May"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/1337/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQHaVYd13rRz3A/company-logo_400_400/company-logo_400_400/0/1638831590218/linkedin_logo?e=1776902400&v=beta&t=b7YR38u9HV_S3GAfCQNvCQREdlcOHn9w0mu-6Dsmv4I",
+        "employment_type": "Full-time",
+        "company_id": "1337"
+      }
+    ],
+    "education": [
+      {
+        "school": "University of California, Santa Cruz",
+        "degree": "Undergraduate, Business Management Economics",
+        "degree_name": "Undergraduate",
+        "field_of_study": "Business Management Economics",
+        "school_linkedin_url": "https://www.linkedin.com/company/2841/",
+        "activities": "Delta Sigma Pi",
+        "school_logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQEEdPQHFbiGrg/company-logo_400_400/company-logo_400_400/0/1656436364797?e=1776902400&v=beta&t=NlYnSA0XN8gVsBquVchkaXJe8GPuOKzHrhVB-b8nVoo",
+        "school_id": "2841"
+      }
+    ],
+    "certifications": [
+      {
+        "name": "Leadership Foundations",
+        "issuer": "LinkedIn",
+        "issued_date": "Issued May 2021"
+      },
+      {
+        "name": "Unconscious Bias",
+        "issuer": "LinkedIn",
+        "issued_date": "Issued Jan 2021"
+      }
+    ],
+    "languages": [
+      {
+        "language": "Chinese",
+        "proficiency": "Native or bilingual proficiency"
+      },
+      {
+        "language": "English",
+        "proficiency": "Native or bilingual proficiency"
+      }
+    ]
+  }
+}

@@ -1,0 +1,130 @@
+﻿arxiv_id,slug,title,chinese_candidates,result,note,scan_date
+1312.6199,constitutional-classifiers,(2013年论文),,excluded,2013年论文，早于Anthropic成立,2026-04-03
+1610.01644,probes-catch-sleeper-agents,(2016年论文),,excluded,2016年论文，早于Anthropic成立,2026-04-03
+1612.01551,vibe-physics,(2016年论文),,excluded,2016年论文，早于Anthropic成立,2026-04-03
+1703.04730,influence-functions,Understanding Black-box Predictions via Influence Functions,Pang Wei Koh,excluded,2017年论文；Pang Wei Koh=Stanford→Google Research，非Anthropic,2026-04-03
+1806.03822,statistical-approach-to-model-evals,(2018年论文),,excluded,2018年论文，早于Anthropic成立,2026-04-03
+1808.07036,statistical-approach-to-model-evals,(2018年论文),,excluded,2018年论文，早于Anthropic成立,2026-04-03
+1906.01820,probes-catch-sleeper-agents,(2019年论文),,excluded,2019年论文，早于Anthropic成立,2026-04-03
+1909.06146,evaluating-feature-steering,(2019年论文),,excluded,2019年论文，早于Anthropic成立,2026-04-03
+2001.08361,mapping-mind-language-model,(2020年论文),,excluded,2020年论文，早于Anthropic成立,2026-04-03
+2009.03300,statistical-approach-to-model-evals,(2020年论文，待补充),,excluded,2020年论文，Anthropic 2021年才成立，肯定非Anthropic自有,2026-04-03
+2102.12452,probes-catch-sleeper-agents,"Probing Classifiers: Promises, Shortcomings, and Advances",,excluded,非Anthropic自有（MIT/学术），NLP解释性论文,2026-04-03
+2108.12427,evaluating-ai-systems,(待确认),,pending,未成功fetch，需手动核查,2026-04-03
+2110.08193,evaluating-feature-steering,BBQ: A Hand-Built Bias Benchmark for QA,,excluded,非Anthropic自有（NYU/Princeton学术）,2026-04-03
+2110.14168,collective-constitutional-ai-aligning-a-language-model-with-public-input,Training Verifiers to Solve Math Word Problems (GSM8K),Mark Chen,excluded,非 Anthropic 自有（OpenAI 论文）；Mark Chen=OpenAI 研究员,2026-04-03
+2112.00861,general-language-assistant,A General Language Assistant as a Laboratory for Alignment,Yuntao Bai；Anna Chen,known,Yuntao Bai已在离职表；Anna Chen已在离职表,2026-04-02
+2202.03286,forecasting-rare-behaviors,Red Teaming Language Models with Language Models,Saffron Huang；Yuntao Bai；Anna Chen,known,Anthropic自有论文；Saffron Huang=非华裔已排除；Yuntao Bai/Anna Chen已在离职表,2026-04-03
+2202.07785,predictability-and-surprise,Predictability and Surprise in Large Generative Models,Yuntao Bai；Anna Chen,known,Anthropic自有论文；Yuntao Bai和Anna Chen已离职,2026-04-02
+2203.15556,small-samples-poison,Training Compute-Optimal Large Language Models (Chinchilla),,excluded,非 Anthropic 自有（DeepMind Chinchilla 论文）,2026-04-03
+2204.05862,rlhf-assistant,Training a Helpful and Harmless Assistant with Reinforcement Learning from Human Feedback,Yuntao Bai,known,Yuntao Bai 已在离职表,2026-04-02
+2205.01069,deep-learning-python-book,From Basics to Building Deep Neural Networks with Python (波斯语书籍),,excluded,波斯语教学书籍，误纳入sitemap,2026-04-02
+2205.10487,scaling-laws-and-interpretability-of-learning-from-repeated-data,Scaling Laws and Interpretability of Learning from Repeated Data,,no_chinese,Anthropic自有早期论文，无华人作者,2026-04-03
+2206.07682,building-ai-cyber-defenders,Emergent Abilities of Large Language Models,Jason Wei；Yi Tay；Denny Zhou,excluded,非Anthropic自有（Google Brain论文）；Jason Wei/Denny Zhou=Google，非Anthropic,2026-04-03
+2206.14858,visible-extended-thinking,Solving Quantitative Reasoning Problems with LLMs (Minerva),Yuhuai Wu,excluded,非 Anthropic 自有（Google Research）；Yuhuai Wu=Google研究员,2026-04-03
+2207.05221,language-models-mostly-know-what-they-know,Language Models (Mostly) Know What They Know,Anna Chen；Yuntao Bai,known,Anthropic 自有论文；Anna Chen/Yuntao Bai 已在离职表,2026-04-03
+2209.07858,red-teaming,Red Teaming Language Models to Reduce Harms,Anna Chen,known,Anna Chen 已在表中（离职）,2026-04-02
+2210.11610,self-improvement,Large Language Models Can Self-Improve,Jiaxin Huang；Shixiang Shane Gu；Yuexin Wu；Xuezhi Wang；Hongkun Yu；Jiawei Han,excluded,Google论文，非Anthropic自有,2026-04-02
+2211.03540,scalable-oversight,Measuring Progress on Scalable Oversight for LLMs,Edwin Chen；Anna Chen,known,Anthropic自有论文；Edwin Chen和Anna Chen已在离职表,2026-04-02
+2212.08073,constitutional-ai,Constitutional AI: Harmlessness from AI Feedback,Yuntao Bai,known,Yuntao Bai 已在离职表,2026-04-02
+2212.09251,model-written-evaluations,Discovering Language Model Behaviors with Model-Written Evaluations,Edwin Chen；Anna Chen；Da Yan；Dustin Li,known,Edwin Chen=已离职排除；Anna Chen/Da Yan/Dustin Li 已在表中,2026-04-02
+2302.06590,estimating-productivity-gains,The Impact of AI on Developer Productivity: Evidence from GitHub Copilot,,excluded,非 Anthropic 自有（GitHub Copilot 经济学研究）,2026-04-03
+2302.07459,moral-self-correction,The Capacity for Moral Self-Correction in Large Language Models,Anna Chen；Dustin Li,known,Anna Chen/Dustin Li 已在表中,2026-04-02
+2302.10329,measuring-agent-autonomy,Harms from Increasingly Agentic Algorithmic Systems,Alan Chan；Zhonghao He；Yawen Duan；Michelle Lin；Wanru Zhao,excluded,非 Anthropic 自有（Mila/学术多机构）；Alan Chan=Mila PhD→GovAI，已确认排除；其余均为学术界,2026-04-03
+2303.17548,collective-constitutional-ai-aligning-a-language-model-with-public-input,Whose Opinions Do Language Models Reflect? (OpinionsQA),,excluded,非 Anthropic 自有（Stanford 学术）,2026-04-03
+2304.05332,evaluating-ai-systems,Emergent autonomous scientific research capabilities of LLMs,,excluded,化学论文，非Anthropic自有,2026-04-03
+2305.04388,reasoning-models,Language Models Don't Always Say What They Think: Unfaithful CoT,,no_chinese,Miles Turpin等，无华人作者,2026-04-02
+2305.14965,many-shot-jailbreaking,"Tricking LLMs into Disobedience: Formalizing, Analyzing, and Detecting Jailbreaks",,excluded,非Anthropic自有（学术多机构）,2026-04-03
+2305.15324,evaluating-ai-systems,Model evaluation for extreme risks,,excluded,非 Anthropic 自有（DeepMind 主导）,2026-04-03
+2305.16367,role-play-llms,Role-Play with Large Language Models,,no_chinese,非Anthropic自有，Murray Shanahan单作者,2026-04-02
+2305.17333,model-card-claude,Model Card and Evaluations for Claude Models,Tianyu Gao；Danqi Chen,excluded,Tianyu Gao=Princeton学术合作者；Danqi Chen=Princeton教授/ThinkingMachines排除,2026-04-02
+2306.03809,evaluating-ai-systems,Can LLMs democratize access to dual-use biotechnology?,,excluded,非 Anthropic 自有（MIT 课程论文）,2026-04-03
+2306.11932,polis-deliberation,Opportunities and Risks of LLMs for Scalable Deliberation with Polis,,no_chinese,无华人作者,2026-04-02
+2306.16388,towards-measuring-the-representation-of-subjective-global-opinions-in-language-models,Towards Measuring the Representation of Subjective Global Opinions in LLMs,Carol Chen,known,Anthropic 自有论文；Carol Chen 已在在职表row30,2026-04-03
+2307.13702,tracing-thoughts-language-model,Measuring Faithfulness in Chain-of-Thought Reasoning,Anna Chen；Dustin Li；Newton Cheng；Shannon Yang,known,Anthropic 自有论文；Anna Chen/Dustin Li 已在离职表；Newton Cheng/Shannon Yang 已在在职表（Shannon Yang 待核实状态）,2026-04-03
+2308.03296,studying-large-language-model-generalization-with-influence-functions,Studying Large Language Model Generalization with Influence Functions,Dustin Li,known,Anthropic 自有论文；Dustin Li 已在离职表,2026-04-03
+2308.10248,persona-vectors,Steering Language Models With Activation Engineering (ActAdd),,excluded,非 Anthropic 自有（学术研究/SERI MATS）,2026-04-03
+2308.15605,probes-catch-sleeper-agents,Benchmarks for Detecting Measurement Tampering,,no_chinese,Anthropic 自有论文，无华人作者,2026-04-03
+2309.11998,clio,LMSYS-Chat-1M: A Large-Scale Real-World LLM Conversation Dataset,Lianmin Zheng；Wei-Lin Chiang；Ying Sheng；Tianle Li；Siyuan Zhuang；Zhanghao Wu,excluded,非 Anthropic 自有（UC Berkeley/LMSYS）；全部为 Berkeley 学术成员,2026-04-03
+2309.15840,probes-catch-sleeper-agents,How to Catch an AI Liar: Lie Detection in Black-Box LLMs,,excluded,非 Anthropic 自有（Oxford 等学术机构）,2026-04-03
+2310.01405,probes-catch-sleeper-agents,Representation Engineering: A Top-Down Approach to AI Transparency,Andy Zou；Zifan Wang,excluded,非 Anthropic 自有（CMU/UC Berkeley 学术）；Andy Zou/Zifan Wang 均为学术界,2026-04-03
+2310.02207,introspection,Language Models Represent Space and Time,,excluded,非 Anthropic 自有（MIT）,2026-04-03
+2310.03693,mapping-mind-language-model,Fine-tuning Aligned LLMs Compromises Safety,,excluded,非 Anthropic 自有（Princeton/Stanford）,2026-04-03
+2310.06387,many-shot-jailbreaking,Jailbreak and Guard Aligned LLMs with In-Context Demonstrations (ICA/ICD),Zeming Wei,excluded,非 Anthropic 自有（清华/学术）；Zeming Wei 提交但非 Anthropic 成员,2026-04-03
+2310.06824,introspection,Emergent Linear Structure in LLM Representations of True/False Datasets,,no_chinese,Samuel Marks提交，无华人作者,2026-04-02
+2310.13548,sycophancy-llms,Towards Understanding Sycophancy in Language Models,Meg Tong；Newton Cheng；Da Yan；Miranda Zhang,known,Meg Tong=非华人排除；Newton Cheng/Da Yan/Miranda Zhang 已在表中（在职）,2026-04-02
+2310.13798,specific-versus-general-principles-for-constitutional-ai,Specific versus General Principles for Constitutional AI,Yuntao Bai；Anna Chen,known,Anthropic自有论文；Yuntao Bai已离职，Anna Chen已离职,2026-04-02
+2311.02462,measuring-agent-autonomy,Levels of AGI for Operationalizing Progress,,excluded,Google DeepMind论文，非Anthropic自有,2026-04-02
+2311.03291,long-running-Claude,Einstein-Boltzmann solver for cosmology,,excluded,宇宙学物理论文，误纳入sitemap,2026-04-02
+2311.12022,visible-extended-thinking,GPQA: A Graduate-Level Google-Proof Q&A Benchmark,Betty Li Hou；Richard Yuanzhe Pang,excluded,NYU论文；Richard Yuanzhe Pang=Meta FAIR（非Anthropic）；Betty Li Hou待核查,2026-04-02
+2311.14455,small-samples-poison,Universal Jailbreak Backdoors from Poisoned Human Feedback,,excluded,非 Anthropic 自有（ETH Zurich/学术）,2026-04-03
+2312.01037,probes-catch-sleeper-agents,Eliciting Latent Knowledge from Quirky Language Models,,excluded,非 Anthropic 自有（EleutherAI/学术）,2026-04-03
+2312.03689,evaluating-and-mitigating-discrimination-in-language-model-decisions,Evaluating and Mitigating Discrimination in Language Model Decisions,,excluded,Anthropic论文但作者团队无华人,2026-04-02
+2312.06681,persona-vectors,Steering Llama 2 via Contrastive Activation Addition (CAA),,excluded,非 Anthropic 自有（学术研究）,2026-04-03
+2312.06942,probes-catch-sleeper-agents,AI Control: Improving Safety Despite Intentional Subversion,,no_chinese,无华人Anthropic作者,2026-04-02
+2401.05566,sleeper-agents,Sleeper Agents: Training Deceptive LLMs that Persist Through Safety Training,Jesse Mu,known,Jesse Mu 已在表中（在职）,2026-04-02
+2401.13138,measuring-agent-autonomy,Visibility into AI Agents,Alan Chan；Kevin Wei,excluded,非Anthropic自有（Mila/Cambridge/GovAI多机构）；Alan Chan=Mila→GovAI已排除；Kevin Wei=学术界,2026-04-03
+2403.05530,visible-extended-thinking,Gemini 1.5: Unlocking multimodal understanding across millions of tokens of context,,excluded,Google Gemini论文（非Anthropic自有），误纳入sitemap,2026-04-02
+2403.14380,measuring-model-persuasiveness,On the Conversational Persuasiveness of Large Language Models: A Randomized Controlled Trial,,excluded,非Anthropic自有（ETH Zurich等多机构，Nature Human Behaviour），误纳入sitemap,2026-04-02
+2403.19647,mapping-mind-language-model,Sparse Feature Circuits: Discovering and Editing Interpretable Causal Graphs in LMs,,no_chinese,Samuel Marks提交，无华人作者,2026-04-02
+2404.13076,introspection,LLM Evaluators Recognize and Favor Their Own Generations,Shi Feng,excluded,Shi Feng=George Washington University学术人员（gwu.edu），非Anthropic,2026-04-02
+2404.16014,mapping-mind-language-model,Improving Dictionary Learning with Gated Sparse Autoencoders,,no_chinese,Arthur Conmy提交，无华人作者,2026-04-02
+2405.01470,clio,WildChat: 1M ChatGPT Interaction Logs,,excluded,非Anthropic自有（AI2论文），误纳入sitemap,2026-04-02
+2406.00877,tracing-thoughts-language-model,Evidence of Learned Look-Ahead in a Chess-Playing Neural Network,,no_chinese,无华人作者,2026-04-02
+2406.04614,unknown,A Chinese Legal Knowledge-Enhanced Large Language Model (LawGPT),,excluded,非Anthropic自有（中文法律LLM论文），误纳入sitemap,2026-04-02
+2406.10162,reward-tampering,Sycophancy to Subterfuge: Investigating Reward-Tampering in LLMs,,no_chinese,Anthropic自有论文，无华人作者,2026-04-02
+2406.12775,tracing-thoughts-language-model,Exploring the Limitations of LLMs on Multi-Hop Queries,,no_chinese,非Anthropic自有，外部学术论文,2026-04-02
+2407.01502,measuring-agent-autonomy,AI Agents That Matter,,excluded,非 Anthropic 自有（Princeton 学术论文）,2026-04-03
+2408.04720,vibe-physics,Learning the Simplicity of Scattering Amplitudes,,excluded,物理论文（hep-th），误纳入sitemap,2026-04-02
+2410.03334,tracing-thoughts-language-model,An X-Ray Is Worth 15 Features: Sparse Autoencoders for Radiology,,excluded,医学影像放射学报告，非Anthropic自有,2026-04-02
+2410.06496,tracing-thoughts-language-model,On the Similarity of Circuits across Languages,,excluded,非Anthropic自有（Gemma语言学研究）,2026-04-02
+2410.13722,small-samples-poison,Persistent Pre-Training Poisoning of LLMs,Yiming Zhang；Jianfeng Chi,excluded,非 Anthropic 自有（ETH/Meta/Google 多机构）；Yiming Zhang/Jianfeng Chi 均为学术/Meta，非 Anthropic,2026-04-03
+2410.13787,introspection,Looking Inward: Language Models Can Learn About Themselves by Introspection,,no_chinese,无华人Anthropic作者,2026-04-02
+2411.00640,statistical-approach-to-model-evals,Adding Error Bars to Evals: A Statistical Approach to Language Model Evaluations,,no_chinese,无华人作者,2026-04-02
+2411.00986,exploring-model-welfare,Taking AI Welfare Seriously,,no_chinese,Robert Long提交，无华人作者,2026-04-02
+2411.07494,constitutional-classifiers,Rapid Response: Mitigating LLM Jailbreaks with a Few Examples,Alwin Peng,known,Alwin Peng 已在表中（在职）,2026-04-02
+2411.14257,tracing-thoughts-language-model,Do I Know This Entity? Knowledge Awareness and Hallucinations in Language Models,,no_chinese,Javier Ferrando提交，无华人作者,2026-04-02
+2411.17693,constitutional-classifiers,Adaptive Deployment of Untrusted LLMs Reduces Distributed Threats,Jiaxin Wen；Shi Feng；He He,excluded,Jiaxin Wen=非Anthropic/非华裔确认；Shi Feng=GWU学术；He He=Cornell教授,2026-04-02
+2412.03556,constitutional-classifiers,Best-of-N Jailbreaking,,no_chinese,Sara Price提交，无华人作者,2026-04-02
+2412.13678,economic-index-march-2026-report,Privacy-Preserving Insights into Real-World AI Use (Anthropic Economic Index),Saffron Huang；Jerry Hong,known,Anthropic自有论文；Jerry Hong已在在职表row76；Saffron Huang=非华裔排除,2026-04-03
+2412.14093,alignment-faking,Alignment Faking in Large Language Models,Jack Chen,known,Jack Chen 已在表中（在职）,2026-04-02
+2412.16339,persona-selection-model,Deliberative Alignment: Reasoning Enables Safer Language Models,Melody Y. Guan；Hongyu Ren；Jason Wei；Hyung Won Chung,excluded,OpenAI论文（非Anthropic自有）；误纳入sitemap,2026-04-02
+2501.06346,tracing-thoughts-language-model,LLMs Share Representations of Latent Grammatical Concepts Across Languages,,excluded,非 Anthropic 自有（学术机构，Anthropic Fellows Program 合作）,2026-04-03
+2501.11120,introspection,Tell me about yourself: LLMs are aware of their learned behaviors,Xuchan Bao,excluded,非Anthropic自有（Truthful AI/UC Berkeley/UToronto）；Xuchan Bao=学术界,2026-04-02
+2501.12948,unknown,Incentivizing Reasoning Capability in LLMs via RL (DeepSeek-R1),,excluded,DeepSeek-R1论文（非Anthropic自有），误纳入sitemap,2026-04-02
+2501.17148,persona-vectors,Steering LLMs? Even Simple Baselines Outperform Sparse Autoencoders (AxBench),,excluded,非Anthropic自有（Stanford/Cornell等学术机构），误纳入sitemap,2026-04-02
+2501.18837,constitutional-classifiers,Constitutional Classifiers: Defending Against Universal Jailbreaks,Meg Tong；Jesse Mu；Alwin Peng；Kevin Lin；Leonard Tang,known,Meg Tong=非华人排除；Jesse Mu/Kevin Lin/Alwin Peng 已在表中（在职）；Leonard Tang=Haize Labs排除,2026-04-02
+2502.02649,measuring-agent-autonomy,Fully Autonomous AI Agents Should Not be Developed,,excluded,非 Anthropic 自有（AI 伦理学术论文）,2026-04-03
+2502.06807,visible-extended-thinking,Competitive Programming with Large Reasoning Models,,excluded,OpenAI论文（非Anthropic自有），误纳入sitemap,2026-04-02
+2502.15840,project-vend-1,Vending-Bench: A Benchmark for Long-Term Coherence of Autonomous Agents,,no_chinese,非Anthropic自有论文，外部评测,2026-04-02
+2502.16797,forecasting-rare-behaviors,Forecasting Rare Language Model Behaviors,,no_chinese,Erik Jones提交，无华人作者,2026-04-02
+2502.17424,persona-vectors,Emergent Misalignment: Narrow finetuning can produce broadly misaligned LLMs,Xuchan Bao,excluded,非Anthropic自有；Xuchan Bao=学术界,2026-04-02
+2502.18864,vibe-physics,Towards an AI co-scientist,Wei-Hung Weng；Tao Tu,excluded,Google论文，非Anthropic自有；Wei-Hung Weng/Tao Tu=Google研究员,2026-04-03
+2503.04761,anthropic-interviewer,Which Economic Tasks are Performed with AI? Evidence from Millions of Claude Conversations,Saffron Huang；Jerry Hong,new_added,Jerry Hong=确认华人(Mandarin母语)，Anthropic Member of Design Staff(2024-08)，已添加在职表row76，v6zn；Saffron Huang=非华裔排除,2026-04-02
+2503.10965,auditing-hidden-objectives,Auditing language models for hidden objectives,Brian Chen；Andy Shih,known,Brian Chen 已在表中（在职）；Andy Shih 已在表中（在职）,2026-04-02
+2503.14499,project-vend-1,Measuring AI Ability to Complete Long Software Tasks (Vending-Bench),Amy Deng；Tao Lin,excluded,Amy Deng=METR/Martian（X: @amydeng_，非Anthropic）；Tao Lin=Meta工程师（LinkedIn: tao-lin，无Anthropic经历）,2026-04-03
+2504.21848,measuring-agent-autonomy,Characterizing AI Agents for Alignment and Governance,,no_chinese,无华人作者,2026-04-02
+2505.05410,agentic-misalignment,Reasoning Models Don't Always Say What They Think,Yanda Chen,known,Yanda Chen 已在表中（在职，row69）,2026-04-02
+2506.02548,building-ai-cyber-defenders,Evaluating AI Agents' Real-World Cybersecurity Capabilities at Scale,Zhun Wang,excluded,Zhun Wang提交但无Anthropic匹配，多机构合作论文，非Anthropic自有,2026-04-02
+2506.12469,measuring-agent-autonomy,Model-Organized Openness and the Economics of AI,Amy X. Zhang,excluded,非Anthropic自有；Amy X. Zhang=UW教授，知名HCI研究员,2026-04-02
+2506.15740,shade-arena-sabotage-monitoring,SHADE-Arena: Evaluating Sabotage and Monitoring in LLM Agents,Yuqi Sun；Xiang Deng,excluded,Yuqi Sun待进一步核查；Xiang Deng=Ohio State学术，非Anthropic,2026-04-02
+2507.06261,persona-selection-model,待补充（多次fetch超时）,,pending,多次fetch超时，内容未知，需手动核查,2026-04-03
+2507.07935,anthropic-economic-index-january-2026-report,Measuring the Applicability of Generative AI to Occupations,,excluded,Microsoft Bing Copilot 数据论文，非 Anthropic 自有,2026-04-03
+2507.09089,AI-assistance-coding-skills,Measuring the Impact of Early-2025 AI on Experienced Open-Source Developer Productivity,,no_chinese,Anthropic 自有论文（Joel Becker/Nate Rush），无华人作者,2026-04-03
+2507.19218,assistant-axis,Technological folie à deux: Feedback Loops Between AI Chatbots and Mental Illness,,excluded,非Anthropic自有（Nature Mental Health医学论文），误纳入sitemap,2026-04-02
+2507.21509,persona-vectors,Persona Vectors: Monitoring and Controlling Character Traits in Language Models,Runjin Chen,known,Runjin Chen 已在表中（在职，早期版本row21）,2026-04-02
+2510.04340,emergent-misalignment-reward-hacking,Inoculation Prompting: Eliciting traits from LLMs during training can suppress them at test-time,,excluded,UK AI Security Institute 论文，非 Anthropic 自有,2026-04-03
+2510.05024,emergent-misalignment-reward-hacking,Inoculation Prompting: Instructing LLMs to misbehave at train-time improves test-time alignment,Christine Ye,pending,Christine Ye 待核查是否为华人Anthropic成员,2026-04-02
+2510.07192,small-samples-poison,Poisoning Attacks on LLMs Require a Near-constant Number of Poison Samples,,no_chinese,无华人Anthropic成员,2026-04-02
+2511.04648,vibe-physics,Automated Discovery of Non-local Photonic Gates,,excluded,量子光学论文，非Anthropic自有,2026-04-03
+2511.15935,vibe-physics,Relativistic Covariance and Nonlinear Quantum Mechanics (Tomonaga-Schwinger),,excluded,量子物理论文，MSU教授，非Anthropic自有,2026-04-03
+2512.04123,measuring-agent-autonomy,Measuring Agents in Production,Melissa Z. Pan；Yuxuan Zhu；Emma Shen；Shu Liu；Dongyao Zhao,excluded,非Anthropic自有（UC Berkeley/Stanford等学术多机构论文）；Dawn Song是学术教授，非Anthropic,2026-04-02
+2512.07828,measuring-agent-autonomy,The Adoption and Usage of AI Agents: Early Evidence from Perplexity,,excluded,非Anthropic自有（Perplexity论文）,2026-04-02
+2601.02484,vibe-physics,Resummation of C-Parameter Sudakov Shoulder (Claude辅助生成的物理论文),,excluded,hep-ph论文，非Anthropic员工主导，仅使用Claude工具,2026-04-03
+2601.04603,next-generation-constitutional-classifiers,Next-Generation Constitutional Classifiers,Jerry Wei；Zihan Wang；Bobby Chen；Yijin Hua；Mu Lin；Christopher Liu；Jin Pan；Yue Song；Xunjie Yu,known,全部已在在职表；Xunjie Yu=Xinpei Yu（SS截断）,2026-04-02
+2601.10387,assistant-axis,Situating and Stabilizing the Default Persona of Language Models,Christina Lu,new_added,Christina Lu=Anthropic MTS Resident（可解释性），已添加在职表row75，v6zm；profile: christina_lu_013.json,2026-04-02
+2601.14027,vibe-physics,Numina-Lean-Agent: An Open and General Agentic Reasoning System for Formal Mathematics,,excluded,非Anthropic自有（数学推理论文），误纳入sitemap,2026-04-02
+2601.19062,disempowerment-patterns,Who's in Charge? Disempowerment Patterns in Real-World LLM Usage,,no_chinese,Mrinank Sharma提交，无华人作者,2026-04-02
+2601.20245,AI-assistance-coding-skills,How AI Impacts Skill Formation,Judy Hanwen Shen,new_added,Judy Hanwen Shen=Anthropic MTS（Fellows Program），已添加row75，v6zm,2026-04-02
+2602.15104,long-running-Claude,A Python+JAX Package for the Cosmic Microwave Background Power Spectrum,,excluded,宇宙学/物理论文，非Anthropic自有,2026-04-02
+2603.20179,long-running-Claude,AI Agents Can Already Autonomously Perform Experimental High Energy Physics,,no_chinese,物理论文，非Anthropic自有,2026-04-02

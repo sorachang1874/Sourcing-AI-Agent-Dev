@@ -1,0 +1,7 @@
+{
+  "notes": "Optional path overrides. Leave unset to use auto-discovery under Sourcing AI Agent Dev.",
+  "anthropic_asset_root": "/absolute/path/to/Anthropic华人专项/<decoded-inner-folder>",
+  "anthropic_workbook": "/absolute/path/to/latest.xlsx",
+  "scholar_scan_results": "/absolute/path/to/scholar_scan_results.json",
+  "investor_members_json": "/absolute/path/to/investor_chinese_members_final.json"
+}

@@ -1,0 +1,197 @@
+{
+  "success": true,
+  "message": "response retrieved successfully",
+  "data": {
+    "basic_info": {
+      "fullname": "Hendson Lin",
+      "first_name": "Hendson",
+      "last_name": "Lin",
+      "headline": "Commercial Legal at Anthropic",
+      "public_identifier": "hendsonlin",
+      "profile_url": "https://linkedin.com/in/hendsonlin",
+      "profile_picture_url": "",
+      "about": "In-house counsel leading contracts for Anthropic's safety research and policy teams, as well as enterprise partnerships with major technology companies. My background spans product privacy, ad tech, marketplaces, enterprise SaaS, and content licensing.",
+      "location": {
+        "country": "United States",
+        "city": "San Francisco, California",
+        "full": "San Francisco, California, United States",
+        "country_code": "US"
+      },
+      "creator_hashtags": [],
+      "is_creator": false,
+      "is_influencer": false,
+      "is_premium": true,
+      "open_to_work": false,
+      "created_timestamp": 1326348028535,
+      "show_follower_count": false,
+      "background_picture_url": "https://media.licdn.com/dms/image/v2/D5616AQFELXoW-SMUnQ/profile-displaybackgroundimage-shrink_350_1400/B56ZY_ZlyyGoAc-/0/1744820395953?e=1776902400&v=beta&t=g_RDBgWmEFqMIjBriM4pE5EVH7mgLGE3zb4sh7MTly4",
+      "urn": "ACoAAAmhWD4BySMyJ8GTFyMs0ATY2_QmFwCuKlk",
+      "follower_count": 1713,
+      "connection_count": 1724,
+      "current_company": "Anthropic",
+      "current_company_urn": "74126343",
+      "current_company_url": "https://www.linkedin.com/company/anthropicresearch",
+      "top_skills": [],
+      "email": null
+    },
+    "experience": [
+      {
+        "title": "Head of Safety Research & Policy Agreements",
+        "company": "Anthropic",
+        "location": "San Francisco, California, United States",
+        "description": "Head of contracting for Anthropic's safety research and policy teams, structuring agreements for AI research and safety collaborations, industry partnerships, and policy research programs.\nHead of commercial contracts for Anthropic's enterprise technology customers. \nBuilding and managing the commercial legal team supporting these verticals.",
+        "duration": "Dec 2024 - Present · 1 yr 5 mos",
+        "start_date": {
+          "year": 2024,
+          "month": "Dec"
+        },
+        "is_current": true,
+        "company_linkedin_url": "https://www.linkedin.com/company/74126343/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_400_400/company-logo_400_400/0/1719256729905/anthropicresearch_logo?e=1776902400&v=beta&t=6sv-GagnF1G5d4B4rN1Yu3sq6fln2BP_9tb0s6bARoY",
+        "employment_type": "Full-time",
+        "company_id": "74126343"
+      },
+      {
+        "title": "Associate General Counsel, Commercial & Product",
+        "company": "Automattic",
+        "location": "San Francisco Bay Area",
+        "description": "Counseled C-level executives on the full spectrum of commercial, corporate, and product matters, worldwide, at a 2000+ employee company with businesses in online marketplaces, content management, e-commerce, social media, and advertising. Build and lead international legal team supporting these areas.\n\nOversee or directly support the negotiation, drafting, and implementation of outbound (sales) and inbound (vendor) contracts, including strategic partnerships, SaaS agreements, generative AI, marketing agreements, payment processing agreements, co-development agreements, IP licenses, data sharing agreements, and professional services agreements.\n\nLead private investments, including SAFE rounds and Series financings, and related transactions with private investors.",
+        "duration": "Oct 2022 - Oct 2024 · 2 yrs 1 mo",
+        "start_date": {
+          "year": 2022,
+          "month": "Oct"
+        },
+        "end_date": {
+          "year": 2024,
+          "month": "Oct"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/58194/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQEI9XQhCcVfCg/company-logo_400_400/B4EZwA7OVvG0Ag-/0/1769542051737/automattic_logo?e=1776902400&v=beta&t=JekJDCmN0dFIv02e4ePLHMSdvQ5UX_XqPzecqY5kfn0",
+        "company_id": "58194"
+      },
+      {
+        "title": "Senior Counsel, Commercial & Product",
+        "company": "Automattic",
+        "location": "San Francisco Bay Area",
+        "duration": "Jan 2021 - Oct 2022 · 1 yr 10 mos",
+        "start_date": {
+          "year": 2021,
+          "month": "Jan"
+        },
+        "end_date": {
+          "year": 2022,
+          "month": "Oct"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/58194/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQEI9XQhCcVfCg/company-logo_400_400/B4EZwA7OVvG0Ag-/0/1769542051737/automattic_logo?e=1776902400&v=beta&t=JekJDCmN0dFIv02e4ePLHMSdvQ5UX_XqPzecqY5kfn0",
+        "company_id": "58194"
+      },
+      {
+        "title": "Founding Partner",
+        "company": "Aggregate LLC",
+        "description": "Aggregate is a men's accessories brand which has been featured in GQ, Mashable, Design Insider, and the California by Design TV Series.  Our signature timepiece was a 2019 finalist for the International Design Excellence Awards (IDEA).\n\nIn 2024, I successfully led the sale of Aggregate, transitioning the business to new ownership to ensure its continued growth and success.",
+        "duration": "Nov 2016 - Sep 2024 · 7 yrs 11 mos",
+        "start_date": {
+          "year": 2016,
+          "month": "Nov"
+        },
+        "end_date": {
+          "year": 2024,
+          "month": "Sep"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/18186835/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQEnU1mUDVT3rg/company-logo_400_400/company-logo_400_400/0/1631325038773?e=1776902400&v=beta&t=0AgSkRBAKGuNLn3DLsvrwTrA1OIx2VwSiZ_4etpYQQA",
+        "company_id": "18186835"
+      },
+      {
+        "title": "Commercial Counsel",
+        "company": "Quantcast",
+        "location": "San Francisco Bay Area",
+        "description": "Commercial attorney on a small legal team at a mid-sized ad tech company, owning negotiations for revenue-generating partnerships, strategic deals, and vendor agreements. Helped build out the company's global privacy framework, including GDPR and CCPA compliant data processing agreements and advertising policies. Led cross-functional projects beyond core legal work, partnering closely with business teams across the company.",
+        "duration": "Sep 2019 - Jan 2021 · 1 yr 5 mos",
+        "start_date": {
+          "year": 2019,
+          "month": "Sep"
+        },
+        "end_date": {
+          "year": 2021,
+          "month": "Jan"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/60540/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQHgcT9K-gw5dA/company-logo_400_400/company-logo_400_400/0/1719258055427/quantcast_logo?e=1776902400&v=beta&t=WEQN5jArNxjPRlMAprbk-b969MNtY4nIFGsNLutq9V0",
+        "company_id": "60540"
+      },
+      {
+        "title": "Corporate Counsel",
+        "company": "Rakuten",
+        "location": "San Francisco Bay Area",
+        "description": "Primary legal counsel for ShopStyle Inc., with ownership of the subsidiary's commercial agreements, privacy policies, and partner disputes. Also supported Ebates, Rakuten Advertising, and other Rakuten USA entities on contracts and data privacy compliance.",
+        "duration": "May 2018 - Sep 2019 · 1 yr 5 mos",
+        "start_date": {
+          "year": 2018,
+          "month": "May"
+        },
+        "end_date": {
+          "year": 2019,
+          "month": "Sep"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/47584/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQFLt8xmWpX75Q/company-logo_400_400/company-logo_400_400/0/1719928507791/rakuten_logo?e=1776902400&v=beta&t=bmOA7Hl6NPFCULYEJetc97SyP7JWodip5bRSk38LWeM",
+        "company_id": "47584"
+      }
+    ],
+    "education": [
+      {
+        "school": "University of California, College of the Law, San Francisco (formerly UC Hastings)",
+        "degree": "Juris Doctor, Intellectual Property Law",
+        "degree_name": "Juris Doctor",
+        "field_of_study": "Intellectual Property Law",
+        "duration": "2010 - 2013",
+        "school_linkedin_url": "https://www.linkedin.com/company/91077305/",
+        "description": "Hastings Business Law Journal - Senior Editor\nBest Oral Advocate - Moot Court Award\nUC Hastings Intercollegiate Trial Team\nAPALSA Treasurer\nVALS Treasurer",
+        "school_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQFAiVWY8jAvng/company-logo_400_400/company-logo_400_400/0/1680201456719?e=1776902400&v=beta&t=jFNrhyqxEU7RfLQWQpASKxQQH2bkV5wTREEZAM9ebIk",
+        "start_date": {
+          "year": 2010
+        },
+        "end_date": {
+          "year": 2013
+        },
+        "school_id": "91077305"
+      },
+      {
+        "school": "University of California, Davis",
+        "degree": "Bachelor of Arts (B.A.), Political Science and Government, Bachelor of Arts (B.A.), Economics",
+        "degree_name": "Bachelor of Arts (B.A.)",
+        "field_of_study": "Political Science and Government, Bachelor of Arts (B.A.), Economics",
+        "duration": "2006 - 2009",
+        "school_linkedin_url": "https://www.linkedin.com/company/2842/",
+        "description": "Dean's Honor List - College of Letters & Science\nPi Sigma Alpha - Political Science Honor Society\nPhi Alpha Delta - Professional Pre-Law Organization (Class President)\nVent (Asian American Pop Culture and Politics Magazine) - Staff Writer\nCompleted double major in less than 3 years",
+        "school_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQEoGOIHB7x65w/company-logo_400_400/B56ZnoqcQMKMAg-/0/1760545064338/uc_davis_logo?e=1776902400&v=beta&t=2u9O9kgIkxBs30NVwOr2pqQP3CZvonu-hX1jAUdLaLw",
+        "start_date": {
+          "year": 2006
+        },
+        "end_date": {
+          "year": 2009
+        },
+        "school_id": "2842"
+      }
+    ],
+    "certifications": [
+      {
+        "name": "Negotiation Mastery",
+        "issuer": "Harvard Business School",
+        "issued_date": "Issued Feb 2026"
+      },
+      {
+        "name": "General Counsel University",
+        "issuer": "UC Berkeley Law Executive Education",
+        "issued_date": "Issued Jun 2025"
+      }
+    ]
+  }
+}

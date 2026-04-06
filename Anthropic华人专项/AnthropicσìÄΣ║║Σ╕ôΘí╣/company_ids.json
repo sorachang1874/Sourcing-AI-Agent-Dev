@@ -1,0 +1,94 @@
+{
+  "Bessemer Venture Partners": {
+    "company_id": "16754",
+    "company_slug": "bessemer-venture-partners"
+  },
+  "Lightspeed Venture Partners": {
+    "company_id": "30258",
+    "company_slug": "lightspeed-venture-partners"
+  },
+  "Sequoia Capital": {
+    "company_id": "11190",
+    "company_slug": "sequoia"
+  },
+  "Andreessen Horowitz": {
+    "company_id": "439909",
+    "company_slug": "a16z"
+  },
+  "General Catalyst": {
+    "company_id": "28902",
+    "company_slug": "general-catalyst"
+  },
+  "Coatue Management": {
+    "company_id": "67322",
+    "company_slug": "coatue"
+  },
+  "Menlo Ventures": {
+    "company_id": "39208",
+    "company_slug": "menlo-ventures"
+  },
+  "ICONIQ Capital": {
+    "company_id": "6376200",
+    "company_slug": "iconiq-capital-llc"
+  },
+  "General Atlantic": {
+    "company_id": "15910",
+    "company_slug": "general-atlantic"
+  },
+  "SV Angel": {
+    "company_id": "1522847",
+    "company_slug": "sv-angel"
+  },
+  "Thrive Capital": {
+    "company_id": "1474021",
+    "company_slug": "thrive-capital"
+  },
+  "Index Ventures": {
+    "company_id": "14585",
+    "company_slug": "index-ventures"
+  },
+  "Tiger Global Management": {
+    "company_id": "123789",
+    "company_slug": "tiger-global-management"
+  },
+  "Greenoaks Capital": {
+    "company_id": "6905600",
+    "company_slug": "greenoaks-capital-partners"
+  },
+  "Fidelity Investments": {
+    "company_id": "1307",
+    "company_slug": "fidelity-investments"
+  },
+  "DFJ Growth": {
+    "company_id": "20109961",
+    "company_slug": "dfj-growth"
+  },
+  "WndrCo": {
+    "company_id": "17931593",
+    "company_slug": "wndrco"
+  },
+  "Altimeter Capital": {
+    "company_id": "3529681",
+    "company_slug": "altimeter-capital"
+  },
+  "Accel": {
+    "company_id": "17412",
+    "company_slug": "accel-vc"
+  },
+  "T. Rowe Price": {
+    "company_id": "157329",
+    "company_slug": "t--rowe-price"
+  },
+  "Scale Venture Partners": {
+    "company_id": "51048",
+    "company_slug": "scale-venture-partners"
+  },
+  "Dragoneer Investment Group": {
+    "company_id": "15591517",
+    "company_slug": "dragoneer-investment-group-llc"
+  },
+  "Salesforce Ventures": {
+    "company_id": "18609517",
+    "company_slug": "salesforce-ventures"
+  }
+}

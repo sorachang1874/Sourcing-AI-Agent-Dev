@@ -1,0 +1,994 @@
+{
+  "meta": {
+    "source": "claude.com/blog",
+    "sitemap_url": "https://claude.com/sitemap.xml",
+    "total": 98,
+    "scanned": 98,
+    "pending": 0,
+    "new_members_found": [],
+    "notes": "claude.com/blog 面向企业/开发者用户的产品博客，偏产品实践。文章署名以团队/产品为主，较少个人署名，Acknowledgements 少见。97篇全量扫描，未发现华人候选人。",
+    "last_updated": "2026-04-03"
+  },
+  "articles": [
+    {
+      "url": "https://claude.com/blog/harnessing-claudes-intelligence",
+      "slug": "harnessing-claudes-intelligence",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/1m-context",
+      "slug": "1m-context",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/agent-capabilities-api",
+      "slug": "agent-capabilities-api",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/amazon-bedrock-general-availability",
+      "slug": "amazon-bedrock-general-availability",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/analysis-tool",
+      "slug": "analysis-tool",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/android-app",
+      "slug": "android-app",
+      "scan_status": "done",
+      "scan_date": "2026-04-03",
+      "authors": [],
+      "chinese_candidates": [],
+      "new_members_found": []
+    },
+    {
+      "url": "https://claude.com/blog/auto-mode",
+      "slug": "auto-mode",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/automate-security-reviews-with-claude-code",
+      "slug": "automate-security-reviews-with-claude-code",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/behind-model-launch-what-customers-discovered-testing-claude-opus-4-6-early",
+      "slug": "behind-model-launch-what-customers-discovered-testing-claude-opus-4-6-early",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/best-practices-for-prompt-engineering",
+      "slug": "best-practices-for-prompt-engineering",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/beyond-permission-prompts-making-claude-code-more-secure-and-autonomous",
+      "slug": "beyond-permission-prompts-making-claude-code-more-secure-and-autonomous",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/build-responsive-web-layouts",
+      "slug": "build-responsive-web-layouts",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/building-agents-with-skills-equipping-agents-for-specialized-work",
+      "slug": "building-agents-with-skills-equipping-agents-for-specialized-work",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/building-agents-with-the-claude-agent-sdk",
+      "slug": "building-agents-with-the-claude-agent-sdk",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/building-ai-agents-for-startups",
+      "slug": "building-ai-agents-for-startups",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/building-ai-agents-in-financial-services",
+      "slug": "building-ai-agents-in-financial-services",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/building-ai-agents-in-healthcare-and-life-sciences",
+      "slug": "building-ai-agents-in-healthcare-and-life-sciences",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/building-companies-with-claude-code",
+      "slug": "building-companies-with-claude-code",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/building-multi-agent-systems-when-and-how-to-use-them",
+      "slug": "building-multi-agent-systems-when-and-how-to-use-them",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/claude-2-1-prompting",
+      "slug": "claude-2-1-prompting",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/claude-2-amazon-bedrock",
+      "slug": "claude-2-amazon-bedrock",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/claude-and-slack",
+      "slug": "claude-and-slack",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/claude-builds-visuals",
+      "slug": "claude-builds-visuals",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/claude-code-and-new-admin-controls-for-business-plans",
+      "slug": "claude-code-and-new-admin-controls-for-business-plans",
+      "scan_status": "done",
+      "scan_date": "2026-04-03",
+      "authors": [],
+      "chinese_candidates": [],
+      "new_members_found": []
+    },
+    {
+      "url": "https://claude.com/blog/claude-code-and-slack",
+      "slug": "claude-code-and-slack",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/claude-code-on-the-web",
+      "slug": "claude-code-on-the-web",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/claude-code-plugins",
+      "slug": "claude-code-plugins",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/claude-code-remote-mcp",
+      "slug": "claude-code-remote-mcp",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/claude-excel-powerpoint-updates",
+      "slug": "claude-excel-powerpoint-updates",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/claude-for-chrome",
+      "slug": "claude-for-chrome",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/claude-for-enterprise",
+      "slug": "claude-for-enterprise",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/claude-now-available-in-microsoft-365-copilot",
+      "slug": "claude-now-available-in-microsoft-365-copilot",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/claude-on-google-cloud-fedramp-high",
+      "slug": "claude-on-google-cloud-fedramp-high",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/claude-platform-compliance-api",
+      "slug": "claude-platform-compliance-api",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/claude-powered-artifacts",
+      "slug": "claude-powered-artifacts",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/claude-team-updates",
+      "slug": "claude-team-updates",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/code-with-claude-san-francisco-london-tokyo",
+      "slug": "code-with-claude-san-francisco-london-tokyo",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/common-workflow-patterns-for-ai-agents-and-when-to-use-them",
+      "slug": "common-workflow-patterns-for-ai-agents-and-when-to-use-them",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/complete-guide-to-building-skills-for-claude",
+      "slug": "complete-guide-to-building-skills-for-claude",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/connectors-directory",
+      "slug": "connectors-directory",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/context-management",
+      "slug": "context-management",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/contribution-metrics",
+      "slug": "contribution-metrics",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/cowork-plugins",
+      "slug": "cowork-plugins",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/cowork-plugins-across-enterprise",
+      "slug": "cowork-plugins-across-enterprise",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/cowork-plugins-finance",
+      "slug": "cowork-plugins-finance",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/create-files",
+      "slug": "create-files",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/dispatch-and-computer-use",
+      "slug": "dispatch-and-computer-use",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/driving-ai-transformation-with-claude",
+      "slug": "driving-ai-transformation-with-claude",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/eight-trends-defining-how-software-gets-built-in-2026",
+      "slug": "eight-trends-defining-how-software-gets-built-in-2026",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/equipping-agents-for-the-real-world-with-agent-skills",
+      "slug": "equipping-agents-for-the-real-world-with-agent-skills",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/evaluate-prompts",
+      "slug": "evaluate-prompts",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/extending-claude-capabilities-with-skills-mcp-servers",
+      "slug": "extending-claude-capabilities-with-skills-mcp-servers",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/fine-tune-claude-3-haiku",
+      "slug": "fine-tune-claude-3-haiku",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/fix-software-bugs-faster-with-claude",
+      "slug": "fix-software-bugs-faster-with-claude",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/how-ai-helps-break-cost-barrier-cobol-modernization",
+      "slug": "how-ai-helps-break-cost-barrier-cobol-modernization",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/how-anthropic-teams-use-claude-code",
+      "slug": "how-anthropic-teams-use-claude-code",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/how-anthropic-uses-claude-legal",
+      "slug": "how-anthropic-uses-claude-legal",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/how-anthropic-uses-claude-marketing",
+      "slug": "how-anthropic-uses-claude-marketing",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/how-brex-improves-code-quality-and-productivity-with-claude-code",
+      "slug": "how-brex-improves-code-quality-and-productivity-with-claude-code",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/how-enterprises-are-building-ai-agents-in-2026",
+      "slug": "how-enterprises-are-building-ai-agents-in-2026",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/how-leading-retailers-are-turning-ai-pilots-into-enterprise-wide-transformation",
+      "slug": "how-leading-retailers-are-turning-ai-pilots-into-enterprise-wide-transformation",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/how-to-configure-hooks",
+      "slug": "how-to-configure-hooks",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/how-to-create-skills-key-steps-limitations-and-examples",
+      "slug": "how-to-create-skills-key-steps-limitations-and-examples",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/improved-web-search-with-dynamic-filtering",
+      "slug": "improved-web-search-with-dynamic-filtering",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/improving-frontend-design-through-skills",
+      "slug": "improving-frontend-design-through-skills",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/improving-skill-creator-test-measure-and-refine-agent-skills",
+      "slug": "improving-skill-creator-test-measure-and-refine-agent-skills",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/integrate-apis-seamlessly",
+      "slug": "integrate-apis-seamlessly",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/integrations",
+      "slug": "integrations",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/interactive-tools-in-claude",
+      "slug": "interactive-tools-in-claude",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/introducing-citations-api",
+      "slug": "introducing-citations-api",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/introduction-to-agentic-coding",
+      "slug": "introduction-to-agentic-coding",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/key-benefits-transitioning-agentic-coding",
+      "slug": "key-benefits-transitioning-agentic-coding",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/making-claude-a-better-electrical-engineer",
+      "slug": "making-claude-a-better-electrical-engineer",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/max-plan",
+      "slug": "max-plan",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/message-batches-api",
+      "slug": "message-batches-api",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/optimize-code-performance-quickly",
+      "slug": "optimize-code-performance-quickly",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/organization-skills-and-directory",
+      "slug": "organization-skills-and-directory",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/preview-review-and-merge-with-claude-code",
+      "slug": "preview-review-and-merge-with-claude-code",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/product-management-on-the-ai-exponential",
+      "slug": "product-management-on-the-ai-exponential",
+      "scan_status": "done",
+      "authors": [
+        "Cat Wu, the Head of Product for Claude Code at Anthropic"
+      ],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/prompt-caching",
+      "slug": "prompt-caching",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/prompt-generator",
+      "slug": "prompt-generator",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/prompt-improver",
+      "slug": "prompt-improver",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/research",
+      "slug": "research",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/scaling-agentic-coding",
+      "slug": "scaling-agentic-coding",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/self-serve-enterprise",
+      "slug": "self-serve-enterprise",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/skills",
+      "slug": "skills",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/structured-outputs-on-the-claude-developer-platform",
+      "slug": "structured-outputs-on-the-claude-developer-platform",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/team-plan-and-ios",
+      "slug": "team-plan-and-ios",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/token-saving-updates",
+      "slug": "token-saving-updates",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/tool-use-ga",
+      "slug": "tool-use-ga",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/trainium2-and-distillation",
+      "slug": "trainium2-and-distillation",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/upgraded-anthropic-console",
+      "slug": "upgraded-anthropic-console",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/using-claude-md-files",
+      "slug": "using-claude-md-files",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/web-search",
+      "slug": "web-search",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/web-search-api",
+      "slug": "web-search-api",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/what-is-model-context-protocol",
+      "slug": "what-is-model-context-protocol",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/workspaces",
+      "slug": "workspaces",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://claude.com/blog/your-thinking-partner",
+      "slug": "your-thinking-partner",
+      "scan_status": "done",
+      "authors": [],
+      "ack_snippet": "",
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    }
+  ]
+}

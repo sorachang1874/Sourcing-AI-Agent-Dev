@@ -1,0 +1,20 @@
+{
+  "raw_user_request": "帮我补齐 Thinking Machines Lab 的已离职成员，优先使用 LinkedIn Search 的 pastCompanies 做 former recall，再用 profile detail 或后续证据判断是否真的是 former。",
+  "target_company": "Thinking Machines Lab",
+  "categories": [
+    "former_employee"
+  ],
+  "employment_statuses": [
+    "former"
+  ],
+  "organization_keywords": [
+    "Thinking Machines Lab"
+  ],
+  "top_k": 25,
+  "slug_resolution_limit": 0,
+  "profile_detail_limit": 8,
+  "publication_scan_limit": 0,
+  "publication_lead_limit": 0,
+  "exploration_limit": 4,
+  "plan_review_id": 9
+}

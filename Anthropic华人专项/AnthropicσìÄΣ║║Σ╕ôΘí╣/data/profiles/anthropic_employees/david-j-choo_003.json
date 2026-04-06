@@ -1,0 +1,209 @@
+{
+  "meta": {
+    "slug": "david-j-choo",
+    "api": "account_003",
+    "fetched_at": "2026-04-02T16:19:51+08:00"
+  },
+  "raw": {
+    "success": true,
+    "message": "response retrieved successfully",
+    "data": {
+      "basic_info": {
+        "fullname": "David Choo",
+        "first_name": "David",
+        "last_name": "Choo",
+        "headline": "GTM @ Anthropic",
+        "public_identifier": "david-j-choo",
+        "profile_url": "https://linkedin.com/in/david-j-choo",
+        "profile_picture_url": "https://media.licdn.com/dms/image/v2/D4E03AQGjTIL1yTBXYg/profile-displayphoto-crop_800_800/B4EZyXtgS_JsAI-/0/1772071821705?e=1776902400&v=beta&t=SGcrTflR2XL51_Ci0IkufYqE8eErl0eZb41dx1ZMRqM",
+        "about": "🚀 AI Agents Account Executive | US Work Authorized 🎯\n\nHi, I’m David Choo, an Account Executive at Anthropic. I have a track record of turning complex tech solutions into clear business value for my customers. I specialize in building and selling Agents across Glean, Copilot, Azure and enterprise B2B SaaS, I have consistently helped companies raise the bar through increasing productivity, lowering costs and unlocking revenue growth. I thrive in high-stakes environments, consistently delivering results through strategic sales leadership and a deep understanding of client needs.\n\n🌟 Professional Highlights:\n• FY26 - 173% attainments, President’s Club\n• Enterprise Copilot AI Sales @ Microsoft: Leading AI-driven sales strategies, contributing to significant revenue growth in enterprise accounts.\n• Azure Sales & Product Marketing: Generated net new Azure revenue and launched initiatives like the Azure Programs Bot, driving a 230% increase in GitHub Enterprise MAUs.\n• Investment Analyst @ Round13 Capital: Played a key role in deploying $40M across Series A & B deals\n\n🎓 Education:\n• Bachelor of Commerce, Queen’s University\n\n💼 Core Skills:\n• Scaled outbound sales\n• Sales Strategy & Execution\n• Market Analysis & Competitive Intelligence\n• Product Management & GTM Strategy\n• Stakeholder Management & Collaboration\n\n🌍 Passionate About:\n• Global exploration with 35+ countries visited\n• Soccer enthusiast, including attending the 2022 World Cup, 2024 Copa America, and 2026 World Cup.\n\nOpen to conversations about what's next in AI.\n\n🔗🚀 #AccountExecutive #EnterpriseSales #B2BSales #TechSales #SalesLeadership #Glean #Microsoft #SalesStrategy #RevenueGrowth",
+        "location": {
+          "country": "United States",
+          "city": "New York, New York",
+          "full": "New York, New York, United States",
+          "country_code": "US"
+        },
+        "creator_hashtags": [],
+        "is_creator": false,
+        "is_influencer": false,
+        "is_premium": true,
+        "open_to_work": false,
+        "created_timestamp": 1551141274086,
+        "show_follower_count": false,
+        "background_picture_url": "https://media.licdn.com/dms/image/v2/D4D16AQEocokiVo9pPg/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1679456903012?e=1776902400&v=beta&t=89__KNDdO-28YyRKhvSWYgidDl66UKhssc9baAujcqM",
+        "urn": "ACoAACrXVTsBGHmd9F_nr7xdDeRts3HSjBvCZDo",
+        "follower_count": 3238,
+        "connection_count": 3211,
+        "current_company": "Anthropic",
+        "current_company_urn": "74126343",
+        "current_company_url": "https://www.linkedin.com/company/anthropicresearch",
+        "top_skills": [
+          "Go-to-Market Strategy",
+          "Sales",
+          "Customer Relationship Management (CRM)",
+          "Artificial Intelligence (AI)",
+          "AI Agents"
+        ],
+        "email": null
+      },
+      "experience": [
+        {
+          "title": "GTM",
+          "company": "Anthropic",
+          "location": "New York, NY",
+          "duration": "Mar 2026 - Present · 2 mos",
+          "start_date": {
+            "year": 2026,
+            "month": "Mar"
+          },
+          "is_current": true,
+          "company_linkedin_url": "https://www.linkedin.com/company/74126343/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_400_400/company-logo_400_400/0/1719256729905/anthropicresearch_logo?e=1776902400&v=beta&t=6sv-GagnF1G5d4B4rN1Yu3sq6fln2BP_9tb0s6bARoY",
+          "employment_type": "Full-time",
+          "company_id": "74126343"
+        },
+        {
+          "title": "GTM",
+          "company": "Glean",
+          "location": "New York, NY",
+          "description": "President's Club",
+          "duration": "Dec 2024 - Mar 2026 · 1 yr 4 mos",
+          "start_date": {
+            "year": 2024,
+            "month": "Dec"
+          },
+          "end_date": {
+            "year": 2026,
+            "month": "Mar"
+          },
+          "is_current": false,
+          "company_linkedin_url": "https://www.linkedin.com/company/74882602/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQH8sZuW2WzLDQ/company-logo_400_400/company-logo_400_400/0/1647448995044/gleanwork_logo?e=1776902400&v=beta&t=wJRgyIGCXAdCEg3aT1UJbtKlZc1wCeIKHBerjMKAJaM",
+          "employment_type": "Full-time",
+          "location_type": "Hybrid",
+          "skills": [
+            "Agentic AI Development",
+            "Sales Prospecting and +1 skill"
+          ],
+          "company_id": "74882602",
+          "skills_url": "https://www.linkedin.com/in/david-j-choo/overlay/urn:li:fsd_profilePosition:(ACoAACrXVTsBGHmd9F_nr7xdDeRts3HSjBvCZDo,2532759778)/skill-associations-details?profileUrn=urn%3Ali%3Afsd_profile%3AACoAACrXVTsBGHmd9F_nr7xdDeRts3HSjBvCZDo"
+        },
+        {
+          "title": "Copilot Sales Specialist",
+          "company": "Microsoft",
+          "location": "Vancouver, British Columbia, Canada",
+          "description": "Drove strategic partnerships with enterprise customers by driving tailored sales plans, leading commercial strategies, and managing high-value negotiations to achieve business growth.",
+          "duration": "Jul 2024 - Dec 2024 · 6 mos",
+          "start_date": {
+            "year": 2024,
+            "month": "Jul"
+          },
+          "end_date": {
+            "year": 2024,
+            "month": "Dec"
+          },
+          "is_current": false,
+          "company_linkedin_url": "https://www.linkedin.com/company/1035/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_400_400/B56ZYQ0mrGGoAc-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=47BifJmZk2QcSo7UM_a7lFIk5vBFq49cOHVWx8Pu2dE",
+          "employment_type": "Full-time",
+          "location_type": "Hybrid",
+          "skills": [
+            "Commercial Strategy",
+            "Negotiation and +1 skill"
+          ],
+          "company_id": "1035",
+          "skills_url": "https://www.linkedin.com/in/david-j-choo/overlay/urn:li:fsd_profilePosition:(ACoAACrXVTsBGHmd9F_nr7xdDeRts3HSjBvCZDo,2486476717)/skill-associations-details?profileUrn=urn%3Ali%3Afsd_profile%3AACoAACrXVTsBGHmd9F_nr7xdDeRts3HSjBvCZDo"
+        },
+        {
+          "title": "Sales & Distribution",
+          "company": "Flair Airlines",
+          "location": "Vancouver, BC",
+          "duration": "2023 - 2024 · 1 yr",
+          "start_date": {
+            "year": 2023
+          },
+          "end_date": {
+            "year": 2024
+          },
+          "is_current": false,
+          "company_linkedin_url": "https://www.linkedin.com/company/3181128/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQF2q_vm_dcstA/company-logo_400_400/company-logo_400_400/0/1722987917978/flair_airlines_logo?e=1776902400&v=beta&t=MCzsFB2Yov-PZju5JU3qTcjnlCfpW_FjAw3vr0Jj0XM",
+          "employment_type": "Full-time",
+          "company_id": "3181128"
+        },
+        {
+          "title": "Azure Sales Specialist, Enterprise",
+          "company": "Microsoft",
+          "location": "On-site",
+          "description": "• Spearheaded sales efforts for Digital & App Innovation Services in Financial Services and Energy sectors, generating $Xm in Azure Revenue\n• Delivered impactful customer presentations and cold emails on Azure Application Modernization, generating over $XXXk in pipeline and contributing to the winning team of the Canadian Azure Pipeline Blitz Competition\n• Conducted a comprehensive 45-minute Quota Retirement Planning session, providing insights on the current state of accounts, stakeholder maps, and an end-to-end strategy to enhance the App Innovation pipeline",
+          "duration": "2022 - 2023 · 1 yr",
+          "start_date": {
+            "year": 2022
+          },
+          "end_date": {
+            "year": 2023
+          },
+          "is_current": false,
+          "company_linkedin_url": "https://www.linkedin.com/company/1035/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_400_400/B56ZYQ0mrGGoAc-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=47BifJmZk2QcSo7UM_a7lFIk5vBFq49cOHVWx8Pu2dE",
+          "company_id": "1035"
+        },
+        {
+          "title": "Product Marketing Manager",
+          "company": "Microsoft",
+          "description": "Worked in the Azure Business Group on Digital & App Innovation.\n\n- Created and launched Azure Programs Bot to answer seller questions to all Azure solution plays, programs and funding calculations resulting in 1,100+ uses in Microsoft Canada\n- Led App of the Future Program by securing $250k in funding for FY23 and working with 5+ partner organizations to complete 3 engagements and secure 2 nominations to build net new applications for customers\n- Spearheaded GitHub Activation Scorecard Metric in Canada to 100% attainment in FY22 H2 by developing strategy and rhythm of business for team of Microsoft Sellers, Customer Success and GitHub Sellers\n- Developed branding, content and partner strategy for first of its kind developer accessibility content series with Fable, resulting in it being highlighted in Tech Crunch, Beta Kit and the Globe and Mail\n- Revamped the Intern community in Canada as the Intern Program Lead by securing 3 full-time employee sponsors, $4,000 in annual budget and hosting 15+ virtual and in-person events",
+          "duration": "2022 - 2022 · Less than a year",
+          "start_date": {
+            "year": 2022
+          },
+          "end_date": {
+            "year": 2022
+          },
+          "is_current": false,
+          "company_linkedin_url": "https://www.linkedin.com/company/1035/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_400_400/B56ZYQ0mrGGoAc-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=47BifJmZk2QcSo7UM_a7lFIk5vBFq49cOHVWx8Pu2dE",
+          "company_id": "1035"
+        }
+      ],
+      "education": [
+        {
+          "school": "Smith School of Business at Queen's University",
+          "degree": "Bachelor of Commerce - BCom",
+          "degree_name": "Bachelor of Commerce - BCom",
+          "school_linkedin_url": "https://www.linkedin.com/company/6927/",
+          "activities": "• CREO Solutions\n• Queen's Private Capital Group\n• Queen's Sales Association\n• Queen's Commerce Mental Health Association\n• Peer Mentorship Program\n• Queen's Technology & Media Association\n• Intramurals - Soccer",
+          "school_logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQEsG87VcXgbow/company-logo_400_400/company-logo_400_400/0/1631307575751?e=1776902400&v=beta&t=kCEuHlHIqxFMa0Bz-PwnHU1VR6sdjSDGDq9ydlanM08",
+          "school_id": "6927"
+        },
+        {
+          "school": "Queen's University",
+          "degree": "Bachelor of Commerce - BCom, Business/Commerce, General",
+          "degree_name": "Bachelor of Commerce - BCom",
+          "field_of_study": "Business/Commerce, General",
+          "school_linkedin_url": "https://www.linkedin.com/company/6926/",
+          "school_logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQE7P2b1VHr6ig/company-logo_400_400/company-logo_400_400/0/1651082685160/queens_university_logo?e=1776902400&v=beta&t=0fXqbs0PXdGUV6xgKlnyeRYodFuiS5n1lkmXngHX57c",
+          "school_id": "6926"
+        }
+      ],
+      "certifications": [
+        {
+          "name": "Consultative Sales Fundamentals",
+          "issuer": "Sales Readiness Group",
+          "issued_date": "Issued Nov 2024"
+        },
+        {
+          "name": "Academy Accreditation - Generative AI Fundamentals",
+          "issuer": "Databricks",
+          "issued_date": "Issued Sep 2023 · Expired Sep 2025"
+        }
+      ],
+      "skills": [
+        "Scaled outbound sales",
+        "Sales Strategy & Execution",
+        "Market Analysis & Competitive Intelligence",
+        "Product Management & GTM Strategy",
+        "Stakeholder Management & Collaboration"
+      ]
+    }
+  }
+}

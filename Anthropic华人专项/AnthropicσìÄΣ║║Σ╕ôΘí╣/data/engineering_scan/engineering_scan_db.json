@@ -1,0 +1,423 @@
+{
+  "meta": {
+    "source": "anthropic.com/engineering",
+    "total": 21,
+    "scanned": 21,
+    "pending": 0,
+    "new_members_found": [
+      "Theodora Chu",
+      "Daniel Jiang",
+      "Sam Jiang",
+      "Bin Wu"
+    ],
+    "last_updated": "2026-04-03"
+  },
+  "articles": [
+    {
+      "url": "https://www.anthropic.com/engineering/infrastructure-noise",
+      "title": "Quantifying infrastructure noise in agentic coding evals",
+      "published": "featured",
+      "scan_status": "done",
+      "authors": [
+        "Gian Segato"
+      ],
+      "acknowledgements": [],
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://www.anthropic.com/engineering/claude-code-auto-mode",
+      "title": "Claude Code auto mode: a safer way to skip permissions",
+      "published": "2026-03-25",
+      "scan_status": "done",
+      "authors": [
+        "John Hughes"
+      ],
+      "acknowledgements": [
+        "Alex Isken",
+        "Alexander Glynn",
+        "Conner Phillippi",
+        "David Dworken",
+        "Emily To",
+        "Fabie (partial)"
+      ],
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03",
+      "notes": "完整致谢列表因HTML截断不完整"
+    },
+    {
+      "url": "https://www.anthropic.com/engineering/harness-design-long-running-apps",
+      "title": "Harness design for long-running application development",
+      "published": "2026-03-24",
+      "scan_status": "done",
+      "authors": [
+        "Prithvi Rajasekaran"
+      ],
+      "acknowledgements": [],
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://www.anthropic.com/engineering/eval-awareness-browsecomp",
+      "title": "Eval awareness in Claude Opus 4.6's BrowseComp performance",
+      "published": "2026-03-06",
+      "scan_status": "done",
+      "authors": [
+        "Russell Coleman"
+      ],
+      "acknowledgements": [],
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://www.anthropic.com/engineering/building-c-compiler",
+      "title": "Building a C compiler with a team of parallel Claudes",
+      "published": "2026-02-05",
+      "scan_status": "done",
+      "authors": [],
+      "acknowledgements": [
+        "Josef Bacik",
+        "Edwin Chen",
+        "Bernardo Meurer Costa",
+        "Jake Eaton",
+        "Dan Kelley",
+        "Felix Klock",
+        "Jannet Park",
+        "Steve Weis"
+      ],
+      "chinese_candidates": [
+        {
+          "name": "Edwin Chen",
+          "role": "acknowledgements",
+          "status": "known",
+          "notes": "已在离职表（Anthropic早期员工，已离职）"
+        }
+      ],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://www.anthropic.com/engineering/AI-resistant-technical-evaluations",
+      "title": "Designing AI-resistant technical evaluations",
+      "published": "2026-01-21",
+      "scan_status": "done",
+      "authors": [],
+      "acknowledgements": [],
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03",
+      "notes": "页面致谢区未能提取"
+    },
+    {
+      "url": "https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents",
+      "title": "Demystifying evals for AI agents",
+      "published": "2026-01-09",
+      "scan_status": "done",
+      "authors": [],
+      "acknowledgements": [],
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03",
+      "notes": "页面致谢区未能提取"
+    },
+    {
+      "url": "https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents",
+      "title": "Effective harnesses for long-running agents",
+      "published": "2025-11-26",
+      "scan_status": "done",
+      "authors": [
+        "Justin Young"
+      ],
+      "acknowledgements": [
+        "David Hershey",
+        "Prithvi Rajasakeran",
+        "Jeremy Hadfield",
+        "Naia Bouscal",
+        "Michael Tingley",
+        "Jesse Mu",
+        "Jake Eaton",
+        "Marius Buleandara",
+        "Maggie Vo",
+        "Pedram Navid",
+        "Nadine Yasser",
+        "Alex Notov"
+      ],
+      "chinese_candidates": [
+        {
+          "name": "Jesse Mu",
+          "role": "acknowledgements",
+          "status": "known",
+          "notes": "已在在职表 row4"
+        }
+      ],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://www.anthropic.com/engineering/advanced-tool-use",
+      "title": "Introducing advanced tool use on the Claude Developer Platform",
+      "published": "2025-11-24",
+      "scan_status": "done",
+      "authors": [
+        "Bin Wu"
+      ],
+      "acknowledgements": [
+        "Adam Jones",
+        "Artur Renault",
+        "Henry Tay",
+        "Jake Noble",
+        "Noah Picard",
+        "Sam Jiang",
+        "Daniel Jiang",
+        "Chris Gorgolewski",
+        "Jeremy Fox",
+        "Mike Lambert"
+      ],
+      "chinese_candidates": [
+        {
+          "name": "Bin Wu",
+          "role": "authors",
+          "status": "new→confirmed",
+          "notes": "大陆华人；厦门大学→Airbnb Staff SWE 7年→Anthropic MTS 2025；工程博文作者；RocketReach确认；用户确认；已写入row84"
+        },
+        {
+          "name": "Sam Jiang",
+          "role": "acknowledgements",
+          "status": "new→confirmed",
+          "notes": "GitHub: samj-anthropic；用户确认在职；已写入row83"
+        },
+        {
+          "name": "Daniel Jiang",
+          "role": "acknowledgements",
+          "status": "new→confirmed",
+          "notes": "已确认Anthropic MTS；UC Berkeley CS→UW PhD；2026加入；已写入row82"
+        }
+      ],
+      "new_members_found": [
+        "Daniel Jiang",
+        "Sam Jiang",
+        "Bin Wu"
+      ],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://www.anthropic.com/engineering/code-execution-with-mcp",
+      "title": "Code execution with MCP: Building more efficient agents",
+      "published": "2025-11-04",
+      "scan_status": "done",
+      "authors": [],
+      "acknowledgements": [],
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03",
+      "notes": "页面致谢区未能提取"
+    },
+    {
+      "url": "https://www.anthropic.com/engineering/claude-code-sandboxing",
+      "title": "Beyond permission prompts: making Claude Code more secure and autonomous",
+      "published": "2025-10-20",
+      "scan_status": "done",
+      "authors": [
+        "David Dworken",
+        "Oliver Weller-Davies"
+      ],
+      "acknowledgements": [
+        "Meaghan Choi",
+        "Catherine Wu",
+        "Molly Vorwerck",
+        "Alex Isken",
+        "Kier Bradwell",
+        "Kevin Garcia"
+      ],
+      "chinese_candidates": [
+        {
+          "name": "Catherine Wu",
+          "role": "acknowledgements",
+          "status": "known",
+          "notes": "已在在职表 row16"
+        }
+      ],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents",
+      "title": "Effective context engineering for AI agents",
+      "published": "2025-09-29",
+      "scan_status": "done",
+      "authors": [
+        "Prithvi Rajasekaran",
+        "Ethan Dixon",
+        "Carly Ryan",
+        "Jeremy Hadfield"
+      ],
+      "acknowledgements": [],
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://www.anthropic.com/engineering/a-postmortem-of-three-recent-issues",
+      "title": "A postmortem of three recent issues",
+      "published": "2025-09-17",
+      "scan_status": "done",
+      "authors": [],
+      "acknowledgements": [],
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03",
+      "notes": "页面致谢区未能提取"
+    },
+    {
+      "url": "https://www.anthropic.com/engineering/writing-tools-for-agents",
+      "title": "Writing effective tools for agents — with agents",
+      "published": "2025-09-11",
+      "scan_status": "done",
+      "authors": [
+        "Ken Aizawa"
+      ],
+      "acknowledgements": [
+        "Barry Zhang",
+        "Zachary Witten",
+        "Daniel Jiang",
+        "Sami Al-Sheikh",
+        "Matt Bell",
+        "Maggie Vo",
+        "Theodora Chu",
+        "John Welsh",
+        "David Soria Parra",
+        "Adam Jones",
+        "Santiago Seira",
+        "Molly Vorwerck",
+        "Drew Roper"
+      ],
+      "chinese_candidates": [
+        {
+          "name": "Barry Zhang",
+          "role": "acknowledgements",
+          "status": "known",
+          "notes": "已在在职表 row64"
+        },
+        {
+          "name": "Daniel Jiang",
+          "role": "acknowledgements",
+          "status": "new→confirmed",
+          "notes": "已确认；已写入row82"
+        },
+        {
+          "name": "Theodora Chu",
+          "role": "acknowledgements",
+          "status": "new→confirmed",
+          "notes": "已确认Anthropic PM；已写入row81"
+        }
+      ],
+      "new_members_found": [
+        "Theodora Chu",
+        "Daniel Jiang"
+      ],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://www.anthropic.com/engineering/desktop-extensions",
+      "title": "Desktop Extensions: One-click MCP server installation for Claude Desktop",
+      "published": "2025-06-26",
+      "scan_status": "done",
+      "authors": [],
+      "acknowledgements": [],
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03",
+      "notes": "页面致谢区未能提取"
+    },
+    {
+      "url": "https://www.anthropic.com/engineering/multi-agent-research-system",
+      "title": "How we built our multi-agent research system",
+      "published": "2025-06-13",
+      "scan_status": "done",
+      "authors": [],
+      "acknowledgements": [],
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03",
+      "notes": "页面致谢区未能提取"
+    },
+    {
+      "url": "https://www.anthropic.com/engineering/claude-code-best-practices",
+      "title": "Claude Code: Best practices for agentic coding",
+      "published": "2025-04-18",
+      "scan_status": "done",
+      "authors": [],
+      "acknowledgements": [],
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03",
+      "notes": "页面致谢区未能提取"
+    },
+    {
+      "url": "https://www.anthropic.com/engineering/claude-think-tool",
+      "title": "The \"think\" tool: Enabling Claude to stop and think in complex tool use situations",
+      "published": "2025-03-20",
+      "scan_status": "done",
+      "authors": [],
+      "acknowledgements": [],
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03",
+      "notes": "页面致谢区未能提取"
+    },
+    {
+      "url": "https://www.anthropic.com/engineering/swe-bench-sonnet",
+      "title": "Raising the bar on SWE-bench Verified with Claude 3.5 Sonnet",
+      "published": "2025-01-06",
+      "scan_status": "done",
+      "authors": [
+        "Erik Schluntz"
+      ],
+      "acknowledgements": [
+        "Simon Biggs",
+        "Dawn Drain",
+        "Eric Christiansen"
+      ],
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://www.anthropic.com/engineering/building-effective-agents",
+      "title": "Building effective agents",
+      "published": "2024-12-19",
+      "scan_status": "done",
+      "authors": [
+        "Erik Schluntz",
+        "Barry Zhang"
+      ],
+      "acknowledgements": [],
+      "chinese_candidates": [
+        {
+          "name": "Barry Zhang",
+          "role": "authors",
+          "status": "known",
+          "notes": "已在在职表 row64；本文共同作者"
+        }
+      ],
+      "new_members_found": [],
+      "scan_date": "2026-04-03"
+    },
+    {
+      "url": "https://www.anthropic.com/engineering/contextual-retrieval",
+      "title": "Introducing Contextual Retrieval",
+      "published": "2024-09-19",
+      "scan_status": "done",
+      "authors": [],
+      "acknowledgements": [],
+      "chinese_candidates": [],
+      "new_members_found": [],
+      "scan_date": "2026-04-03",
+      "notes": "页面致谢区未能提取"
+    }
+  ]
+}

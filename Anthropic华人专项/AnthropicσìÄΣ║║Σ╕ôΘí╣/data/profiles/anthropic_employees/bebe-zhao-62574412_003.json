@@ -1,0 +1,202 @@
+{
+  "meta": {
+    "slug": "bebe-zhao-62574412",
+    "api": "account_003",
+    "fetched_at": "2026-04-02T16:20:07+08:00"
+  },
+  "raw": {
+    "success": true,
+    "message": "response retrieved successfully",
+    "data": {
+      "basic_info": {
+        "fullname": "Bebe Zhao",
+        "first_name": "Bebe",
+        "last_name": "Zhao",
+        "headline": "Finance & Strategy @ Anthropic",
+        "public_identifier": "bebe-zhao-62574412",
+        "profile_url": "https://linkedin.com/in/bebe-zhao-62574412",
+        "profile_picture_url": "",
+        "about": "With ~15 years of professional experience, my core competencies lie in corporate strategy, equity research and corporate finance / financial planning and analysis, contributing to my dynamic role at Google today. On a day-to-day basis, I am excited to unearth actionable insights that helps inform our Ads Sales and product sales strategies.\n\nAs Finance Manager in Global Business (GBO) Finance, I partnered closely with cross-functional leaders and teams on our portfolio strategies across the US Tech, Education, and Services industries. My analytical skills and equity research background have been instrumental in tailoring financial insights and informing strategies that support these teams. My operational mindset has also contributed to the edification of robust central processes and solutions that free up our time to offer the highest and best use of our team’s passion and talent.",
+        "location": {
+          "country": "United States",
+          "city": "San Francisco Bay Area",
+          "full": "San Francisco Bay Area",
+          "country_code": "US"
+        },
+        "creator_hashtags": [],
+        "is_creator": false,
+        "is_influencer": false,
+        "is_premium": true,
+        "open_to_work": false,
+        "created_timestamp": 1238426816208,
+        "show_follower_count": false,
+        "background_picture_url": "",
+        "urn": "ACoAAAKZ1n0BZYZnn5QD3Q7S8F_odT9DV1iyyCo",
+        "follower_count": 3174,
+        "connection_count": 3187,
+        "current_company": "Anthropic",
+        "current_company_urn": "74126343",
+        "current_company_url": "https://www.linkedin.com/company/anthropicresearch",
+        "top_skills": [],
+        "email": null
+      },
+      "experience": [
+        {
+          "title": "GTM Finance & Strategy",
+          "company": "Anthropic",
+          "duration": "Mar 2026 - Present · 2 mos",
+          "start_date": {
+            "year": 2026,
+            "month": "Mar"
+          },
+          "is_current": true,
+          "company_linkedin_url": "https://www.linkedin.com/company/74126343/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_400_400/company-logo_400_400/0/1719256729905/anthropicresearch_logo?e=1776902400&v=beta&t=6sv-GagnF1G5d4B4rN1Yu3sq6fln2BP_9tb0s6bARoY",
+          "employment_type": "Full-time",
+          "company_id": "74126343"
+        },
+        {
+          "title": "Finance Manager",
+          "company": "Google",
+          "location": "Mountain View, California, United States",
+          "description": "Finance Manager with an agile team whose scope spans across Ads Sales sector finance partnership, US sector Youtube & DVA product specialist partnership as well as central processes, solutions and insights\n\nFinance & Strategy Partner for the US Tech, Education, Retail, and Services (B2B and B2C) advertisers",
+          "duration": "May 2022 - Mar 2026 · 3 yrs 11 mos",
+          "start_date": {
+            "year": 2022,
+            "month": "May"
+          },
+          "end_date": {
+            "year": 2026,
+            "month": "Mar"
+          },
+          "is_current": false,
+          "company_linkedin_url": "https://www.linkedin.com/company/1441/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+          "employment_type": "Full-time",
+          "company_id": "1441"
+        },
+        {
+          "title": "Finance Lead, Services & Distribution Solutions",
+          "company": "Google",
+          "location": "Mountain View, California",
+          "description": "Finance & Strategy Partner for the US Tech, Education, Retail, and Services (B2B and B2C) advertisers",
+          "duration": "May 2019 - Apr 2022 · 3 yrs",
+          "start_date": {
+            "year": 2019,
+            "month": "May"
+          },
+          "end_date": {
+            "year": 2022,
+            "month": "Apr"
+          },
+          "is_current": false,
+          "company_linkedin_url": "https://www.linkedin.com/company/1441/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+          "employment_type": "Full-time",
+          "company_id": "1441"
+        },
+        {
+          "title": "Senior Equity Research Associate",
+          "company": "AB Bernstein",
+          "location": "New York City Metropolitan Area",
+          "description": "Worked on initiating coverage of the US Lodging & Leisure team (2016-2017) and the US Softlines & Specialty Retail team (2017-2019)",
+          "duration": "Jun 2016 - May 2019 · 3 yrs",
+          "start_date": {
+            "year": 2016,
+            "month": "Jun"
+          },
+          "end_date": {
+            "year": 2019,
+            "month": "May"
+          },
+          "is_current": false,
+          "company_linkedin_url": "https://www.linkedin.com/company/3795/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQEDPxLfyDSP-Q/company-logo_400_400/company-logo_400_400/0/1631310426649?e=1776902400&v=beta&t=ak_pk5SdgGNFRusZ_pXj-4Q-XnEyvjVNDt3ccupPF0U",
+          "company_id": "3795"
+        },
+        {
+          "title": "MBA",
+          "company": "The Wharton School",
+          "location": "Greater Philadelphia",
+          "duration": "Aug 2014 - May 2016 · 1 yr 10 mos",
+          "start_date": {
+            "year": 2014,
+            "month": "Aug"
+          },
+          "end_date": {
+            "year": 2016,
+            "month": "May"
+          },
+          "is_current": false,
+          "company_linkedin_url": "https://www.linkedin.com/company/5290/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQFQu7wZniptpA/company-logo_400_400/company-logo_400_400/0/1677690194092/the_wharton_school_logo?e=1776902400&v=beta&t=sW5cCSPXksuCk-FjvPkBXsGeBlrbSgaqWfpUx_DcxFw",
+          "company_id": "5290"
+        },
+        {
+          "title": "Senior Research Associate Intern",
+          "company": "AB Bernstein",
+          "location": "Greater New York City Area",
+          "description": "US Media",
+          "duration": "Jun 2015 - Aug 2015 · 3 mos",
+          "start_date": {
+            "year": 2015,
+            "month": "Jun"
+          },
+          "end_date": {
+            "year": 2015,
+            "month": "Aug"
+          },
+          "is_current": false,
+          "company_linkedin_url": "https://www.linkedin.com/company/3795/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQEDPxLfyDSP-Q/company-logo_400_400/company-logo_400_400/0/1631310426649?e=1776902400&v=beta&t=ak_pk5SdgGNFRusZ_pXj-4Q-XnEyvjVNDt3ccupPF0U",
+          "company_id": "3795"
+        }
+      ],
+      "education": [
+        {
+          "school": "The Wharton School",
+          "degree": "Master of Business Administration (MBA)",
+          "degree_name": "Master of Business Administration (MBA)",
+          "duration": "2014 - 2016",
+          "school_linkedin_url": "https://www.linkedin.com/company/5290/",
+          "activities": "Investment Management Club, Boxing",
+          "school_logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQFQu7wZniptpA/company-logo_400_400/company-logo_400_400/0/1677690194092/the_wharton_school_logo?e=1776902400&v=beta&t=sW5cCSPXksuCk-FjvPkBXsGeBlrbSgaqWfpUx_DcxFw",
+          "start_date": {
+            "year": 2014
+          },
+          "end_date": {
+            "year": 2016
+          },
+          "school_id": "5290"
+        },
+        {
+          "school": "Wellesley College",
+          "degree": "Bachelor of Arts (B.A.), Economics and Psychology",
+          "degree_name": "Bachelor of Arts (B.A.)",
+          "field_of_study": "Economics and Psychology",
+          "duration": "2006 - 2010",
+          "school_linkedin_url": "https://www.linkedin.com/company/13055/",
+          "activities": "President, Economic Student Association; Student Representative, Board of Trustees Finance Committee; Treasurer, Class of 2010 Class Council, Canadian Club; Associate, Harvard China Review; Ambassador, Harvard Undergraduate Women in Business and Admissions; Writer, Wellesley News, East Coast Asian-American Student Union National Newsletter",
+          "school_logo_url": "https://media.licdn.com/dms/image/v2/D4D0BAQF7EpT5AJzINA/company-logo_400_400/company-logo_400_400/0/1694183788167?e=1776902400&v=beta&t=Y5sRAYOHFFBF9qbAOYiDgIM0Zt7Ntq1PDKKTGvndSnw",
+          "start_date": {
+            "year": 2006
+          },
+          "end_date": {
+            "year": 2010
+          },
+          "school_id": "13055"
+        }
+      ],
+      "languages": [
+        {
+          "language": "Cantonese",
+          "proficiency": "Professional working proficiency"
+        },
+        {
+          "language": "English",
+          "proficiency": "Native or bilingual proficiency"
+        }
+      ]
+    }
+  }
+}

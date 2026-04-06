@@ -1,0 +1,13 @@
+{
+  "raw_user_request": "帮我找 Thinking Machines Lab 当前偏 post-train 和 multimodal 方向的 researcher，先确认 scoped roster plan，再做全量资产获取、检索和排序。",
+  "target_company": "Thinking Machines Lab",
+  "categories": ["researcher"],
+  "employment_statuses": ["current"],
+  "keywords": ["post-train", "multimodal", "alignment", "fine-tuning"],
+  "organization_keywords": ["Thinking Machines Lab"],
+  "top_k": 8,
+  "slug_resolution_limit": 8,
+  "profile_detail_limit": 5,
+  "publication_scan_limit": 6,
+  "publication_lead_limit": 8
+}

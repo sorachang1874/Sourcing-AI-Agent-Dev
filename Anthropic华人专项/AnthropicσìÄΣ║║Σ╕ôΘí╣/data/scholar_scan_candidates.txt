@@ -1,0 +1,31 @@
+# Google Scholar @anthropic.com 验证邮箱扫描结果
+# 2026-04-03 执行
+
+## 确认验证 anthropic.com 邮箱的华人候选者：
+
+1. Kaidi Cao (曹凯迪)
+   Scholar: https://scholar.google.com/citations?user=4Zw1PJ8AAAAJ
+   Homepage: https://ai.stanford.edu/~kaidicao/
+   Position: MTS at Anthropic (Claude agentic & tool-use)
+   Background: Stanford AI PhD, Voyage AI co-founder
+   Verified: anthropic.com
+
+2. Zhao Meng (赵孟)
+   Scholar: https://scholar.google.com/citations?user=hKESpIUAAAAJ
+   Position: Anthropic Researcher
+   Research: LLMs, ML, NLP
+   Verified: anthropic.com
+   引用数: ~830+
+
+3. Yanda Chen (陈彦达)
+   Scholar: https://scholar.google.com/citations?user=iY2LhwEAAAAJ
+   Homepage: https://yandachen.github.io/
+   LinkedIn: https://www.linkedin.com/in/yanda-chen-03455a16a
+   Position: MTS at Anthropic
+   Background: Columbia PhD (NLP, AI Safety)
+   Verified: anthropic.com
+   X: @yanda_chen_
+
+4. Saffron Huang (待确认华人背景)
+   Scholar: https://scholar.google.com/citations?user=1aL6moAAAAAJ
+   Verified: anthropic.com

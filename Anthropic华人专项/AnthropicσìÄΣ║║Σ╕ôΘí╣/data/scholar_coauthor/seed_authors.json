@@ -1,0 +1,131 @@
+{
+  "_meta": {
+    "description": "Scholar Coauthor 图谱扩展 — 种子节点（已知 Anthropic 华人的 Scholar ID）",
+    "created_at": "2026-04-05",
+    "source": "data/anthropic_scholar_ids.json + 用户确认"
+  },
+  "seeds": {
+    "Y4sk3aMAAAAJ": {
+      "scholar_id": "Y4sk3aMAAAAJ",
+      "name": "Jerry Wei",
+      "scholar_url": "https://scholar.google.com/citations?user=Y4sk3aMAAAAJ",
+      "excel_row": null,
+      "excel_sheet": "在职华人员工",
+      "scan_status": "pending",
+      "scan_date": null,
+      "coauthor_count": null,
+      "error_msg": null
+    },
+    "ZvMMbt8AAAAJ": {
+      "scholar_id": "ZvMMbt8AAAAJ",
+      "name": "Christina Lu",
+      "scholar_url": "https://scholar.google.com/citations?user=ZvMMbt8AAAAJ",
+      "excel_row": 75,
+      "excel_sheet": "在职华人员工",
+      "scan_status": "pending",
+      "scan_date": null,
+      "coauthor_count": null,
+      "error_msg": null
+    },
+    "x4JAvwMAAAAJ": {
+      "scholar_id": "x4JAvwMAAAAJ",
+      "name": "Jeffrey Wu",
+      "scholar_url": "https://scholar.google.com/citations?user=x4JAvwMAAAAJ",
+      "excel_row": 80,
+      "excel_sheet": "在职华人员工",
+      "scan_status": "pending",
+      "scan_date": null,
+      "coauthor_count": null,
+      "error_msg": null
+    },
+    "4Zw1PJ8AAAAJ": {
+      "scholar_id": "4Zw1PJ8AAAAJ",
+      "name": "Kaidi Cao",
+      "scholar_url": "https://scholar.google.com/citations?user=4Zw1PJ8AAAAJ",
+      "excel_row": 85,
+      "excel_sheet": "在职华人员工",
+      "scan_status": "pending",
+      "scan_date": null,
+      "coauthor_count": null,
+      "error_msg": null
+    },
+    "hKESpIUAAAAJ": {
+      "scholar_id": "hKESpIUAAAAJ",
+      "name": "Zhao Meng",
+      "scholar_url": "https://scholar.google.com/citations?user=hKESpIUAAAAJ",
+      "excel_row": 86,
+      "excel_sheet": "在职华人员工",
+      "scan_status": "pending",
+      "scan_date": null,
+      "coauthor_count": null,
+      "error_msg": null
+    },
+    "jVRL96IAAAAJ": {
+      "scholar_id": "jVRL96IAAAAJ",
+      "name": "Jiaxin Wen",
+      "scholar_url": "https://scholar.google.com/citations?user=jVRL96IAAAAJ",
+      "excel_row": 87,
+      "excel_sheet": "在职华人员工",
+      "scan_status": "pending",
+      "scan_date": null,
+      "coauthor_count": null,
+      "error_msg": null
+    },
+    "iY2LhwEAAAAJ": {
+      "scholar_id": "iY2LhwEAAAAJ",
+      "name": "Yanda Chen",
+      "scholar_url": "https://scholar.google.com/citations?user=iY2LhwEAAAAJ",
+      "excel_row": 69,
+      "excel_sheet": "在职华人员工",
+      "scan_status": "pending",
+      "scan_date": null,
+      "coauthor_count": null,
+      "error_msg": null
+    },
+    "1aL6moAAAAAJ": {
+      "scholar_id": "1aL6moAAAAAJ",
+      "name": "Saffron Huang",
+      "scholar_url": "https://scholar.google.com/citations?user=1aL6moAAAAAJ",
+      "excel_row": 88,
+      "excel_sheet": "在职华人员工",
+      "scan_status": "pending",
+      "scan_date": null,
+      "coauthor_count": null,
+      "error_msg": null
+    },
+    "Y4bU0bwAAAAJ": {
+      "scholar_id": "Y4bU0bwAAAAJ",
+      "name": "Rowan Wang",
+      "scholar_url": "https://scholar.google.com/citations?user=Y4bU0bwAAAAJ",
+      "excel_row": 91,
+      "excel_sheet": "在职华人员工",
+      "scan_status": "pending",
+      "scan_date": null,
+      "coauthor_count": null,
+      "error_msg": null
+    },
+    "S63gb38AAAAJ": {
+      "scholar_id": "S63gb38AAAAJ",
+      "name": "Andi Peng",
+      "scholar_url": "https://scholar.google.com/citations?user=S63gb38AAAAJ",
+      "excel_row": null,
+      "excel_sheet": "已离职华人员工",
+      "scan_status": "pending",
+      "scan_date": null,
+      "coauthor_count": null,
+      "error_msg": null,
+      "note": "已离职，前 Alignment Faking 作者"
+    },
+    "c5PO2pgAAAAJ": {
+      "scholar_id": "c5PO2pgAAAAJ",
+      "name": "Alwin Peng",
+      "scholar_url": "https://scholar.google.com/citations?user=c5PO2pgAAAAJ",
+      "excel_row": 89,
+      "excel_sheet": "在职华人员工",
+      "scan_status": "pending",
+      "scan_date": null,
+      "coauthor_count": null,
+      "error_msg": null
+    }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "meta": {
+    "slug": "angelajiang",
+    "url": "https://www.linkedin.com/in/angelajiang/",
+    "fetched_at": "2026-04-02T16:17:50+08:00",
+    "api": "account_007"
+  },
+  "raw": {
+    "success": true,
+    "name": "Angela Jiang",
+    "image": "https://media.licdn.com/dms/image/v2/D5603AQGxY6jMWcnqBA/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1715056330743?e=2147483647&v=beta&t=RaGj--71dFhcQG75dD-n5yntCw3wPNy3X2IVjRPnw-g",
+    "location": "San Francisco Bay Area",
+    "followers": 5752,
+    "about": null,
+    "connections": "500+",
+    "job_titles": [
+      "**** ** ******** ********"
+    ],
+    "experience": [
+      {
+        "company": "Anthropic",
+        "url": "https://www.linkedin.com/company/anthropicresearch",
+        "start_date": null,
+        "end_date": null
+      }
+    ],
+    "education": [],
+    "articles": [],
+    "activity": [],
+    "similar_profiles": [],
+    "recommendations": [],
+    "skills": [],
+    "publications": [],
+    "projects": [],
+    "cached": false,
+    "cached_at": null
+  }
+}

@@ -1,0 +1,184 @@
+{
+  "success": true,
+  "message": "response retrieved successfully",
+  "data": {
+    "basic_info": {
+      "fullname": "Ruiyang Wang",
+      "first_name": "Ruiyang",
+      "last_name": "Wang",
+      "headline": "Member of Technical Staff at Anthropic",
+      "public_identifier": "ruiyang-wang",
+      "profile_url": "https://linkedin.com/in/ruiyang-wang",
+      "profile_picture_url": "https://media.licdn.com/dms/image/v2/C5603AQEgN-GjYY593w/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1517860372468?e=1776902400&v=beta&t=YhbwarLKX2fhIXONnJ_6MNiGtUIRHOMBZENt7V6pYpo",
+      "about": "",
+      "location": {
+        "country": "United States",
+        "city": "Mountain View, California",
+        "full": "Mountain View, California, United States",
+        "country_code": "US"
+      },
+      "creator_hashtags": [],
+      "is_creator": false,
+      "is_influencer": false,
+      "is_premium": false,
+      "open_to_work": false,
+      "created_timestamp": 1428302505885,
+      "show_follower_count": false,
+      "background_picture_url": "",
+      "urn": "ACoAABiWZFsBP8BLKgEtoffs7h2LV4tKx66KUQc",
+      "follower_count": 1259,
+      "connection_count": 1181,
+      "current_company": "Anthropic",
+      "current_company_urn": "74126343",
+      "current_company_url": "https://www.linkedin.com/company/anthropicresearch",
+      "top_skills": [],
+      "email": null
+    },
+    "experience": [
+      {
+        "title": "Member of Technical Staff",
+        "company": "Anthropic",
+        "description": "Pretraining, large scale data pipelines for AI",
+        "duration": "Feb 2025 - Present · 1 yr 3 mos",
+        "start_date": {
+          "year": 2025,
+          "month": "Feb"
+        },
+        "is_current": true,
+        "company_linkedin_url": "https://www.linkedin.com/company/74126343/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_400_400/company-logo_400_400/0/1719256729905/anthropicresearch_logo?e=1776902400&v=beta&t=6sv-GagnF1G5d4B4rN1Yu3sq6fln2BP_9tb0s6bARoY",
+        "employment_type": "Full-time",
+        "company_id": "74126343"
+      },
+      {
+        "title": "Senior Software Engineer",
+        "company": "Anyscale",
+        "description": "• Ray Backend Development: Contributed to the development of Ray, focusing on the core C++ backend and Python integration to enhance scalability and performance of distributed machine learning applications.\n• Multi-language Frontend Support: Implemented and maintained C++, Python, and Java interoperability with Ray’s core worker library, including support for async primitives, efficient serialization, and memory mapping.\n• Optimizing Distributed Communication: Designed and optimized inter-node communication using gRPC, Unix Socket, and NCCL to improve data-sharing efficiency and reduce latency in large-scale distributed systems.\n• Fault Tolerance and Stability Testing: Developed and improved fault-tolerant mechanisms and stability testing infrastructure for high availability (HA) setups, ensuring reliable performance under heavy workloads.\n• Debugging and Performance Monitoring: Enhanced the Ray dashboard, tracing facilities, and metrics monitoring systems. Led debugging efforts, identified and resolved critical issues, improving overall system reliability.",
+        "duration": "Jun 2023 - Feb 2025 · 1 yr 9 mos",
+        "start_date": {
+          "year": 2023,
+          "month": "Jun"
+        },
+        "end_date": {
+          "year": 2025,
+          "month": "Feb"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/28464994/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGl1Hf-QPsB2g/company-logo_400_400/company-logo_400_400/0/1729876536708/joinanyscale_logo?e=1776902400&v=beta&t=F31s_kuU_m82wYJATc79GqP8qkF4a03-Xyln38OMcr0",
+        "employment_type": "Full-time",
+        "company_id": "28464994"
+      },
+      {
+        "title": "Senior Software Engineer",
+        "company": "Google",
+        "location": "Sunnyvale, California, United States",
+        "description": "Data protection in Google Cloud Storage.\n\nLead the team in developing C++ based large scale data pipeline to restore deleted data and save customers from disaster scenarios.\nExposed the data restore pipeline as an internal service to allow internal customers to create, query and manipulate data restore requests, reducing end to end data recovery time.\nDesigned and built a highly configurable, large scale continuous testing system for all disaster scenarios. The system is used for new feature qualifications, performance benchmarks, and regression alerts. The system was then used by the ~50 people wider team.",
+        "duration": "May 2021 - Jun 2023 · 2 yrs 2 mos",
+        "start_date": {
+          "year": 2021,
+          "month": "May"
+        },
+        "end_date": {
+          "year": 2023,
+          "month": "Jun"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/1441/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+        "employment_type": "Full-time",
+        "company_id": "1441"
+      },
+      {
+        "title": "Software Engineer",
+        "company": "Google",
+        "location": "Sunnyvale, CA",
+        "description": "Linux Kernel Release Management & Development Workflow\n\nDesigned and implemented CI systems to build kernels and make automatic merges from events like upstream commits and release tags.\nDeveloped Command line tool in Golang for developers to work with the system.\nMetrics based anomaly detection: collected metric data from servers, developed and deployed daily run pipeline to perform statistical analyses to find out anomalies across kernel versions. Found multiple performance regressions on key kernel systems and prevented them from entering production.",
+        "duration": "Jul 2019 - May 2021 · 1 yr 11 mos",
+        "start_date": {
+          "year": 2019,
+          "month": "Jul"
+        },
+        "end_date": {
+          "year": 2021,
+          "month": "May"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/1441/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+        "employment_type": "Full-time",
+        "company_id": "1441"
+      },
+      {
+        "title": "Software Development Engineer, Intern",
+        "company": "Clarity Movement Co.",
+        "location": "Shanghai City, China",
+        "description": "Automated Documentation Deployment: Designed automated workflow that generates, uploads and publishes document on certain git events via CI. Ensured synchronization between documents and code.\nAWS X-Ray Integration: Integrated AWS X-Ray that traces requests and performances of microservices in Node.JS and Python on AWS Lambda and ElasticBeanstalk with vendored diagnostic data.\nKubernetes-based Microservice Orchestration: Orchestrates MongoDB, Kafka, Redis and microservices for fast, dockerized testing and deploying. Speedup integration testing 2x.",
+        "duration": "May 2018 - Aug 2018 · 4 mos",
+        "start_date": {
+          "year": 2018,
+          "month": "May"
+        },
+        "end_date": {
+          "year": 2018,
+          "month": "Aug"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/5415517/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/C510BAQFpg8bW5erS2Q/company-logo_400_400/company-logo_400_400/0/1631389074657?e=1776902400&v=beta&t=366pmHAUeCg5x5WcA6hCNK7LsDESHv-_CLtlF2CbI6Y",
+        "company_id": "5415517"
+      },
+      {
+        "title": "Software Development Engineer, Intern",
+        "company": "YITUTech",
+        "location": "Shanghai, China",
+        "description": "Design and Implementation of Distributed Key-Value databases to accelerate Machine Learning workflow\nDesign and Implementation of medicine imaging database server conforming to DICOM standard, with high speed and availability",
+        "duration": "Sep 2017 - Dec 2017 · 4 mos",
+        "start_date": {
+          "year": 2017,
+          "month": "Sep"
+        },
+        "end_date": {
+          "year": 2017,
+          "month": "Dec"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/18049607/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/C510BAQHT9u6s_sxRsA/company-logo_400_400/company-logo_400_400/0/1630614966289/yitutech_logo?e=1776902400&v=beta&t=LW330virKc-PsRasGBumDONo9jKI1KXdECtI-03V9Vc",
+        "company_id": "18049607"
+      }
+    ],
+    "education": [
+      {
+        "school": "Carnegie Mellon University Silicon Valley",
+        "degree": "Master's degree, Computer Software Engineering",
+        "degree_name": "Master's degree",
+        "field_of_study": "Computer Software Engineering",
+        "duration": "2018 - 2019",
+        "school_linkedin_url": "https://www.linkedin.com/company/15142364/",
+        "start_date": {
+          "year": 2018
+        },
+        "end_date": {
+          "year": 2019
+        }
+      },
+      {
+        "school": "Shanghai Jiao Tong University",
+        "degree": "Bachelor's degree, Computer Science",
+        "degree_name": "Bachelor's degree",
+        "field_of_study": "Computer Science",
+        "duration": "2013 - 2017",
+        "school_linkedin_url": "https://www.linkedin.com/company/27413/",
+        "school_logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQFkNUM4pr0xcg/company-logo_400_400/company-logo_400_400/0/1631314417560?e=1776902400&v=beta&t=_9V7x73QmUeI3ljuiRcsifjAUZDbQNuOqoZkwuoQJko",
+        "start_date": {
+          "year": 2013
+        },
+        "end_date": {
+          "year": 2017
+        },
+        "school_id": "27413"
+      }
+    ]
+  }
+}

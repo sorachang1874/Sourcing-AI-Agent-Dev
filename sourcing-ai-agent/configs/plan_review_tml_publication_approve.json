@@ -1,0 +1,17 @@
+{
+  "review_id": 5,
+  "action": "approved",
+  "reviewer": "pm",
+  "notes": "Approved for full current roster plus official publication/blog/news/docs coverage and paid LinkedIn detail where needed.",
+  "decision": {
+    "confirmed_company_scope": [
+      "Thinking Machines Lab"
+    ],
+    "extra_source_families": [
+      "OpenReview",
+      "Official Team Pages"
+    ],
+    "allow_high_cost_sources": true,
+    "precision_recall_bias": "balanced"
+  }
+}

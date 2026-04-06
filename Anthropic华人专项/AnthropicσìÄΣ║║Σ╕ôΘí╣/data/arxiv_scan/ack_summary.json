@@ -1,0 +1,113 @@
+{
+  "2411.07494": {
+    "status": "ack_found",
+    "ack_chars": 329,
+    "ack_preview": "We thank Buck Shlegeris and Ted Sumers for helpful feedback on the project direction. AP was funded by the MATS Program ( https://www.matsprogram.org/ ), Open Philanthropy, and Anthropic. MS thanks Rob Burbea for inspiration and support. We thank Hannah Betts and Taylor Boyle at FAR AI for their compute-related operations help.",
+    "candidate_chinese_names": []
+  },
+  "2505.05410": {
+    "status": "ack_found",
+    "ack_chars": 474,
+    "ack_preview": "We are grateful to many people for helpful conversations and feedback, including Tim Belonax, Steven Bills, Johannes Gasteiger, Erik Jones, Akbir Khan, Samuel Marks, Cam McKinnon, Linda Petrini, Sara Price, Stuart Ritchie, Buck Shlegeris, Zihan Wang, Jerry Wei, Ruiqi Zhong, and Daniel Ziegler. We would also like to thank everyone else at Anthropic for supporting this work, developing the models, i",
+    "candidate_chinese_names": [
+      "Zihan Wang",
+      "Jerry Wei",
+      "Ruiqi Zhong"
+    ]
+  },
+  "2601.04603": {
+    "status": "ack_found",
+    "ack_chars": 465,
+    "ack_preview": "We thank Xander Davies, Robert Kirk, Ben Edelman, and Holden Karnofsky for valuable feedback and discussions. The robustness analysis of our system through human red teaming was made possible by the dedicated efforts of our red-teamers and substantial operational support from HackerOne. We also thank UK AISI, US CAISI, and FAR.AI for red teaming various versions of our system. Mrinank Sharma thank",
+    "candidate_chinese_names": []
+  },
+  "2601.20245": {
+    "status": "no_ack",
+    "debug_headings": [
+      "B.2 Data Availability",
+      "B.3 Participant Feedback Details",
+      "Appendix C Evaluation Details",
+      "C.1 Evaluation Design",
+      "Appendix D Task Details",
+      "Instructions for reporting errors"
+    ]
+  },
+  "2401.05566": {
+    "status": "ack_found",
+    "ack_chars": 423,
+    "ack_preview": "We are grateful to many people for helpful conversations and feedback, including Ajeya Cotra, Allan Dafoe, Becca Ward-Diorio, Carroll Wainwright, Clement Neo, Daniel Filan, Daniel Freeman, Daniel Kokotajlo, David Judd, Dawn Drain, Drake Thomas, Fabien Roger, Karan Singhal, Kate Woolverton, Jan Leike, Jeff Wu, Joseph Carlsmith, Marius Hobbhahn, Max Nadeau, Miranda Zhang, Paul de Font-Reaulx, Rohin ",
+    "candidate_chinese_names": [
+      "Jeff Wu",
+      "Miranda Zhang"
+    ]
+  },
+  "2601.10387": {
+    "status": "ack_found",
+    "ack_chars": 416,
+    "ack_preview": "This research was conducted under the MATS and Anthropic Fellows programs. We would like to thank Cem Anil for early mentorship on the research; Ethan Perez, Avery Griffin, and Henry Sleight for supporting the programs; and John Hughes for technical workflow assistance and compute management. We would additionally like to thank Clément Dumas, Egg Syntax, and Josh Batson for feedback on early draft",
+    "candidate_chinese_names": []
+  },
+  "2412.13678": {
+    "status": "ack_found",
+    "ack_chars": 345,
+    "ack_preview": "We thank Dianne Penn, Janel Thamkul, Jennifer Martinez, Devon Kearns, Kevin Troy, Sam Bowman, Rebecca Lee, Alex Sanderford, Ryn Linthicum, Sarah Heck, Michael Sellitto, Nova DasSarma, Daphne Ippolito, Shelby Grossman, Riana Pfefferkorn, David Thiel, Peter Henderson, Katie Creel, and Shyamal Buch for helpful discussions, comments, and feedback.",
+    "candidate_chinese_names": [],
+    "source_paper": "Clio: A system for privacy-preserving insights into real-world AI use (2412.13678)",
+    "note": "No Chinese names identified. Rebecca Lee appears Western context."
+  },
+  "2412.14093": {
+    "status": "ack_found",
+    "ack_chars": 800,
+    "ack_preview": "We are grateful to many people for helpful conversations and feedback, including Andi Peng, Andrew Edstrom, Alex Turner, Caleb Larson, Chris Olah, Collin Burns, Daniel Ziegler, Daniel Barcay, Dawn Song, Drake Thomas, Elizabeth Barnes, Jacob Andreas, Jan Leike, Jasjeet Sekhon, Jeff Wu, Joseph Carlsmith, Julia Cabral, Holden Karnofsky, Kate Woolverton, Leo Gao, Lewis Smith, Marius Hobbhahn, Max Nadeau, Mrinank Sharma, Neel Nanda, Nicholas Carlini, Nostalgebraist, Peter Hase, Rohin Shah, Sara Price, Stuart Ritchie, Trenton Bricken, Whitney Chen, Yoon Kim, Yoshua Bengio, and Zac Hatfield-Dodds.",
+    "candidate_chinese_names": [
+      "Andi Peng",
+      "Jeff Wu",
+      "Leo Gao",
+      "Whitney Chen"
+    ],
+    "candidate_notes": {
+      "Andi Peng": "已离职Anthropic (2026年初) → 创立humans&；MIT PhD RL研究员；华裔待核实",
+      "Jeff Wu": "已在Excel row80",
+      "Leo Gao": "EleutherAI/Allen AI，外部合作者，非Anthropic员工",
+      "Whitney Chen": "待核实Anthropic员工身份",
+      "Dawn Song": "UC Berkeley教授，外部合作者",
+      "Yoon Kim": "韩裔，Columbia NLP教授，非华裔"
+    },
+    "source_paper": "Alignment Faking in Large Language Models (2412.14093)"
+  },
+  "2503.10965": {
+    "status": "ack_found",
+    "ack_chars": 700,
+    "ack_preview": "We are grateful to the many people who provided helpful discussion and feedback on this work, including Xuchan Bao, Joe Benton, Helena Casademunt, Arthur Conmy, Owain Evans, Zac Hatfield-Dodds, Liv Gorton, Ryan Greenblatt, Alex Mallen, Tom McGrath, Max Nadeau, Neel Nanda, Sara Price, Stuart Ritchie, Naomi Saphra, Alexander Matt Turner, Jonathan Uesato, Martin Wattenberg, Rowan Wang, and Benjamin Wright.",
+    "candidate_chinese_names": [
+      "Xuchan Bao",
+      "Rowan Wang"
+    ],
+    "candidate_notes": {
+      "Xuchan Bao": "University of Toronto PhD student; collaborated with Anthropic Alignment Science; not an Anthropic employee",
+      "Rowan Wang": "待核实华裔身份和Anthropic关联"
+    },
+    "source_paper": "Model Organisms of Misalignment (2503.10965)"
+  },
+  "2501.18837": {
+    "title": "Untitled Document",
+    "ack_found": false,
+    "candidate_chinese_names": [],
+    "ack_text": "",
+    "note": "No acknowledgements section found"
+  },
+  "2503.04761": {
+    "title": "Which Economic Tasks are Performed with AI? Evidence from Millions of Claude Conversations",
+    "ack_found": true,
+    "candidate_chinese_names": [],
+    "ack_text": "A Author Contributions B Methodological Details B.1 Usage Across Tasks and Occupations Creating a task hierarchy Mapping conversations to O*NET tasks Connecting O*NET tasks to occupations B.2 Conversation-level vs. Account-level Analysis B.3 Usage by Wage and Barrier to Entry Wage Barrier to entry B.4 Usage by Occupational Skills B.5 Automating vs. Augmenting Tasks B.6 Usage by Model Type B.7 Validating the Composition of our Dataset C Human Validation Task hierarchy Automating vs. augmenting users D Additional Results D.1 Usage Across the Task Hierarchy D.2 Barrier to Entry Specifics E Analysis Metadata F Prompts F.1 Screening for Occupationally-Relevant Conversations F.2 Mapping Conversations to O*NET Tasks F.3 Automating vs. Augmenting Users F.4 Usage by Occupational Skills G Clio Cluster-Based Reconstruction Analyses G.1 Method and Sample G.2 Occupational Categories G.3 Occupation Reconstruction G.4 Task Reconstruction",
+    "note": ""
+  },
+  "2507.21509": {
+    "title": "| arXiv e-print repository",
+    "ack_found": true,
+    "candidate_chinese_names": [],
+    "ack_text": ".js\">",
+    "note": ""
+  }
+}

@@ -1,0 +1,46 @@
+[
+  {
+    "name_en": "Saffron Huang",
+    "exclude_reason": "误判排除，已移入confirmed_cjk；有中文背景（LinkedIn中文+北大实习）",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Edwin Chen",
+    "exclude_reason": "Surge AI CEO，非Anthropic员工",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Shi Feng (GWU)",
+    "exclude_reason": "非Anthropic正式员工（外部合作），已在confirmed_cjk记录",
+    "last_updated": "2026-04-03"
+  },
+  {
+    "name_en": "Meg Tong",
+    "exclude_reason": "确认非华裔（用户确认）；Oxford/Cambridge教育背景；个人主页megtong.com无华人背景信息",
+    "source": "用户确认 + 个人主页",
+    "last_updated": "2026-04-05"
+  },
+  {
+    "name_en": "Jenny Bao (Xuchan Bao)",
+    "name_zh": null,
+    "exclude_reason": "UToronto PhD + Vector Institute，supervised by Roger Grosse。X账号 @XuchanB。华裔（ABC），但目前为PhD学生，无Anthropic工作经历。出现在2410.13787 ACK中为外部研究者身份。",
+    "homepage": "https://www.cs.toronto.edu/~jennybao/",
+    "x_url": "https://x.com/XuchanB",
+    "user_confirmed": true,
+    "last_updated": "2026-04-05"
+  },
+  {
+    "name_en": "Leo Gao",
+    "name_zh": null,
+    "exclude_reason": "EleutherAI研究员，外部合作者，非Anthropic员工。用户确认排除。",
+    "user_confirmed": true,
+    "last_updated": "2026-04-05"
+  },
+  {
+    "name_en": "Lawrence Chan",
+    "name_zh": null,
+    "exclude_reason": "GovAI / 外部AI安全研究者，非Anthropic员工。用户确认排除。",
+    "user_confirmed": true,
+    "last_updated": "2026-04-05"
+  }
+]

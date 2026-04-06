@@ -1,0 +1,176 @@
+{
+  "success": true,
+  "message": "response retrieved successfully",
+  "data": {
+    "basic_info": {
+      "fullname": "Wenley Tong",
+      "first_name": "Wenley",
+      "last_name": "Tong",
+      "headline": "Making teams better with empathy, thoughtfulness, and cultural design",
+      "public_identifier": "wenleytong",
+      "profile_url": "https://linkedin.com/in/wenleytong",
+      "profile_picture_url": "",
+      "about": "I'm engineer always looking for tough problems to solve, looking to marry elegant systems to human-oriented problems. More recently, I've been practicing both organizational design (incentive structures, communication + coordination networks; how high-performing teams form, fail to form, and disintegrate) and the application of empathy + nonviolent communication to the workplace.\n\nI aim to anchor my teams by asking questions like:\n- What is the most value we could deliver in 1 week vs 2 years? How do we set ourselves up for that success? How do we preemptively account for potential failure?\n- How can this meeting be made most useful to its participants?\n- What data or value difference leads to this disagreement?",
+      "location": {
+        "country": "United States",
+        "city": "San Francisco, California",
+        "full": "San Francisco, California, United States",
+        "country_code": "US"
+      },
+      "creator_hashtags": [],
+      "is_creator": false,
+      "is_influencer": false,
+      "is_premium": false,
+      "open_to_work": false,
+      "created_timestamp": 1309378880066,
+      "show_follower_count": false,
+      "background_picture_url": "",
+      "urn": "ACoAAAeV7hgBBDKVWUa1CbpaHhLv1O-QSbiZFGs",
+      "follower_count": 663,
+      "connection_count": 644,
+      "current_company": "Anthropic",
+      "current_company_urn": "74126343",
+      "current_company_url": "https://www.linkedin.com/company/anthropicresearch",
+      "top_skills": [],
+      "email": null
+    },
+    "experience": [
+      {
+        "title": "Member of Technical Staff",
+        "company": "Anthropic",
+        "location": "San Francisco, California, United States",
+        "duration": "Aug 2025 - Present · 9 mos",
+        "start_date": {
+          "year": 2025,
+          "month": "Aug"
+        },
+        "is_current": true,
+        "company_linkedin_url": "https://www.linkedin.com/company/74126343/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_400_400/company-logo_400_400/0/1719256729905/anthropicresearch_logo?e=1776902400&v=beta&t=6sv-GagnF1G5d4B4rN1Yu3sq6fln2BP_9tb0s6bARoY",
+        "employment_type": "Full-time",
+        "location_type": "Hybrid",
+        "company_id": "74126343"
+      },
+      {
+        "title": "Staff Software Engineer",
+        "company": "Patch",
+        "location": "San Francisco, California, United States",
+        "description": "Built the Credit Management product (since deprecated) and the core customer experience. Responsible for ingesting project data from vendors and suppliers to present a consolidated \"canonical\" view of projects in the VCM.",
+        "duration": "Feb 2023 - Feb 2025 · 2 yrs 1 mo",
+        "start_date": {
+          "year": 2023,
+          "month": "Feb"
+        },
+        "end_date": {
+          "year": 2025,
+          "month": "Feb"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/42343757/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQElfG9pkasMLw/company-logo_400_400/company-logo_400_400/0/1667833317394/usepatch_logo?e=1776902400&v=beta&t=s0Sgu5TgsHdo4SQhJb4NqaP-txuNJ6sxhALa8gArwNs",
+        "employment_type": "Full-time",
+        "location_type": "Hybrid",
+        "company_id": "42343757"
+      },
+      {
+        "title": "Software Engineering",
+        "company": "Gusto",
+        "location": "San Francisco Bay Area",
+        "description": "Tech Lead for a team of 6 engineers for 2 years. Owned and upgraded core systems in the payroll product to keep up to date with latest tax legislation. Increased throughput of daily business critical ACH processes to buy 2 years of runway. Closed compliance gaps impacting a majority of employees and contractors paid through Gusto. Flexed to cover product, design, and management responsibilities.",
+        "duration": "Nov 2018 - Nov 2022 · 4 yrs 1 mo",
+        "start_date": {
+          "year": 2018,
+          "month": "Nov"
+        },
+        "end_date": {
+          "year": 2022,
+          "month": "Nov"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/2499210/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQH658sJdurY4A/company-logo_400_400/company-logo_400_400/0/1731018699255/gustohq_logo?e=1776902400&v=beta&t=ng4Lf1OWnHp9grfK7mxtMTZhqVmOSXtxso1_0VLNJq0",
+        "employment_type": "Full-time",
+        "company_id": "2499210"
+      },
+      {
+        "title": "Software Engineer",
+        "company": "Flexport",
+        "location": "San Francisco Bay Area",
+        "description": "Develop and continuously refactor a Postgres/Rails/React application, extracting isolated functionality and improving test coverage.\nParticipate in the Diversity, Hiring Process, and Enablement recruiting initiatives, revamping the interview process via documentation and training sessions\nDesigned and ran a Pair Programming Workshop for my team\nDrove conversations with each cohort of direct reports to my engineering manager to explicitly establish expectations and needs in both directions",
+        "duration": "Sep 2017 - Oct 2018 · 1 yr 2 mos",
+        "start_date": {
+          "year": 2017,
+          "month": "Sep"
+        },
+        "end_date": {
+          "year": 2018,
+          "month": "Oct"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/3131483/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQEqsGr5MshAsg/company-logo_400_400/company-logo_400_400/0/1715897702397/flexport_logo?e=1776902400&v=beta&t=eiKHAYWN3SYH7T7QEr_D5XyXKnlA4aFZFXtALAA80lQ",
+        "company_id": "3131483"
+      },
+      {
+        "title": "Software Engineer",
+        "company": "Square",
+        "location": "San Francisco Bay Area",
+        "description": "Developed in and continuously refactored a Rails/Ember application, a Java microservice, and the Square Register iOS and Android native applications, improving test quality and coverage\nWrote design documents to discuss and record engineering decisions\nParticipated in a week-long on-call rotation, being first responder to any and all customer issues\nOne of ~30 Hiring Barometers, conducting onsite and phone interviews (137 in 2016, 115 in Jan-June 2017) and making hiring decisions for incoming engineering candidates.",
+        "duration": "Aug 2014 - Aug 2017 · 3 yrs 1 mo",
+        "start_date": {
+          "year": 2014,
+          "month": "Aug"
+        },
+        "end_date": {
+          "year": 2017,
+          "month": "Aug"
+        },
+        "is_current": false,
+        "company_linkedin_url": "https://www.linkedin.com/company/675562/",
+        "company_logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQHikN6EXPd23Q/company-logo_400_400/company-logo_400_400/0/1630646872203/joinsquare_logo?e=1776902400&v=beta&t=Za0jyjcCdUXmCccbQwhhiOYr27NOqzcK01rpQA-xRp4",
+        "company_id": "675562"
+      }
+    ],
+    "education": [
+      {
+        "school": "Princeton University",
+        "degree": "B.S.E., Computer Science",
+        "degree_name": "B.S.E.",
+        "field_of_study": "Computer Science",
+        "duration": "2011 - 2014",
+        "school_linkedin_url": "https://www.linkedin.com/company/157313/",
+        "activities": "Tau Beta Pi\nPrinceton University Orchestra",
+        "school_logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQE4zTC5PJAKSA/company-logo_400_400/company-logo_400_400/0/1630648147093/princeton_university_logo?e=1776902400&v=beta&t=-ejT6CJtb1WJH1ltf1aXlgVpSicKPKcnMorTjVwhDiw",
+        "start_date": {
+          "year": 2011
+        },
+        "end_date": {
+          "year": 2014
+        },
+        "school_id": "157313"
+      }
+    ],
+    "projects": [
+      {
+        "name": "Glotify",
+        "description": "An iOS application to crowd-source document translation.",
+        "associated_with": "Princeton University",
+        "is_current": false
+      },
+      {
+        "name": "PianoScribe",
+        "description": "An iOS application to perform music transcription. Implements two distinct algorithms: one based on Fourier transforms and another based on linear decomposition with matrices.",
+        "associated_with": "Princeton University",
+        "is_current": false
+      }
+    ],
+    "languages": [
+      {
+        "language": "Chinese"
+      },
+      {
+        "language": "Spanish"
+      }
+    ]
+  }
+}
