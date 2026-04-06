@@ -51,7 +51,7 @@ Sourcing AI Agent Dev/
 - 不提交历史 `api_accounts.json`
 - 不提交原始 zip 包
 
-根目录 `.gitignore` 已经按这个原则配置，用于后续创建私有 GitHub repo 时直接复用。
+根目录 `.gitignore` 已经按这个原则配置，可直接用于后续继续推送、换设备 clone 后继续开发。
 
 ## 同步边界
 
@@ -83,7 +83,7 @@ Sourcing AI Agent Dev/
 
 ## 当前建议
 
-1. 先创建一个新的私有 GitHub repo。
-2. 将本目录作为 monorepo 根目录推送。
-3. 只提交代码、文档、示例配置和不含密钥的历史方法论资产。
-4. 继续把 live data、runtime snapshot、provider cache 保留在本地或后续云端存储。
+1. 继续将本目录作为 monorepo 根目录维护。
+2. 只提交代码、文档、示例配置和不含密钥的历史方法论资产。
+3. 继续把 live data、runtime snapshot、provider cache 保留在本地或后续云端存储。
+4. 将高价值 asset bundle 逐步迁移到 object storage，而不是再创建一个“包含 secrets 和 runtime 的 GitHub repo”。
