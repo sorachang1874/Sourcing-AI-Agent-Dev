@@ -108,12 +108,26 @@ User Request
   - `export-company-snapshot-bundle`
   - `export-company-handoff-bundle`
   - `export-sqlite-snapshot`
+  - `upload-asset-bundle`
+  - `download-asset-bundle`
   - `restore-asset-bundle`
+  - `restore-sqlite-snapshot`
 - bundle 当前以文件系统目录形式保存：
   - `bundle_manifest.json`
   - `export_summary.json`
   - `payload/<runtime_relative_path>`
 - 设计目标是先把高价值 runtime 资产标准化为 portable bundle，后续再叠加 object storage uploader/downloader
+
+### `object_storage.py`
+
+- 提供通用 object storage provider abstraction
+- 当前支持：
+  - `filesystem`
+  - `s3_compatible`
+- 设计目标：
+  - 本地开发默认可用 filesystem backend
+  - 生产环境可切 OSS/R2/S3-compatible object storage
+  - bundle upload/download 不绑定具体云厂商
 
 ### `acquisition_strategy.py`
 

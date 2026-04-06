@@ -120,7 +120,21 @@
   - `company_snapshot bundle`
   - `company_handoff bundle`
   - `sqlite_snapshot bundle`
-- 这一层暂不直接绑定 OSS/S3/R2 SDK；先用文件系统 bundle 保持 provider-agnostic，后续再在其上叠加 object storage sync
+- 当前还已接入 object storage sync：
+  - `upload-asset-bundle`
+  - `download-asset-bundle`
+  - `restore-sqlite-snapshot`
+- 这一层不直接把业务逻辑绑死到某个云厂商；先以 bundle 为边界，再通过 object storage provider 上传/下载
+
+### `object_storage.py`
+
+- 提供 object storage provider abstraction
+- 当前 provider：
+  - `filesystem`
+  - `s3_compatible`
+- 设计意图：
+  - 本地开发先用 filesystem backend 跑通
+  - 生产环境再切 OSS / R2 / S3-compatible durable storage
 
 ### `acquisition.py`
 

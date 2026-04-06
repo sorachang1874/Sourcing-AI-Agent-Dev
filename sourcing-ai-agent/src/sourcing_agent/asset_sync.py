@@ -8,6 +8,8 @@ from pathlib import Path
 import shutil
 from typing import Iterable
 
+from .object_storage import ObjectStorageClient
+
 
 class AssetBundleError(RuntimeError):
     pass
@@ -206,6 +208,132 @@ class AssetBundleManager:
         restore_summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2))
         return summary
 
+    def restore_sqlite_snapshot(
+        self,
+        manifest_path: str | Path,
+        *,
+        target_db_path: str | Path | None = None,
+        backup_current: bool = True,
+        backup_dir: str | Path | None = None,
+    ) -> dict:
+        manifest_file = Path(manifest_path)
+        if not manifest_file.exists():
+            raise AssetBundleError(f"Manifest not found: {manifest_file}")
+        payload = json.loads(manifest_file.read_text())
+        db_entry = next((entry for entry in payload.get("files", []) if entry.get("runtime_relative_path") == "sourcing_agent.db"), None)
+        if db_entry is None:
+            raise AssetBundleError("Bundle does not contain sourcing_agent.db")
+        source = manifest_file.parent / db_entry["payload_relative_path"]
+        if not source.exists():
+            raise AssetBundleError(f"SQLite payload missing: {source}")
+        destination = Path(target_db_path) if target_db_path else (self.runtime_dir / "sourcing_agent.db")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        backup_path = None
+        if destination.exists() and backup_current:
+            resolved_backup_dir = Path(backup_dir) if backup_dir else (self.runtime_dir / "sqlite_backups")
+            resolved_backup_dir.mkdir(parents=True, exist_ok=True)
+            backup_path = resolved_backup_dir / f"{destination.stem}_{_utc_now_token()}{destination.suffix}"
+            shutil.copy2(destination, backup_path)
+        shutil.copy2(source, destination)
+        summary = {
+            "status": "sqlite_restored",
+            "bundle_id": payload.get("bundle_id", ""),
+            "source_path": str(source),
+            "target_db_path": str(destination),
+            "backup_current": backup_current,
+            "backup_path": str(backup_path) if backup_path else "",
+            "size_bytes": destination.stat().st_size,
+        }
+        summary_path = manifest_file.parent / "sqlite_restore_summary.json"
+        summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2))
+        return summary
+
+    def upload_bundle(
+        self,
+        manifest_path: str | Path,
+        client: ObjectStorageClient,
+    ) -> dict:
+        manifest_file = Path(manifest_path)
+        if not manifest_file.exists():
+            raise AssetBundleError(f"Manifest not found: {manifest_file}")
+        payload = json.loads(manifest_file.read_text())
+        bundle_kind = str(payload.get("bundle_kind", "")).strip()
+        bundle_id = str(payload.get("bundle_id", "")).strip()
+        if not bundle_kind or not bundle_id:
+            raise AssetBundleError("Bundle manifest missing bundle_kind or bundle_id")
+        bundle_root = manifest_file.parent
+        remote_prefix = self._bundle_remote_prefix(bundle_kind, bundle_id)
+        uploads: list[dict] = []
+        upload_paths = [bundle_root / "bundle_manifest.json", bundle_root / "export_summary.json"]
+        for record in payload.get("files", []):
+            upload_paths.append(bundle_root / record["payload_relative_path"])
+        total_bytes = 0
+        for path in upload_paths:
+            if not path.exists() or not path.is_file():
+                continue
+            rel = path.relative_to(bundle_root).as_posix()
+            object_key = f"{remote_prefix}/{rel}"
+            content_type = _content_type_for_path(path)
+            result = client.upload_file(path, object_key, content_type=content_type)
+            uploads.append(result)
+            total_bytes += int(result.get("size_bytes", path.stat().st_size))
+        summary = {
+            "status": "uploaded",
+            "bundle_kind": bundle_kind,
+            "bundle_id": bundle_id,
+            "remote_prefix": remote_prefix,
+            "remote_manifest_key": f"{remote_prefix}/bundle_manifest.json",
+            "uploaded_file_count": len(uploads),
+            "uploaded_total_bytes": total_bytes,
+            "provider": uploads[0]["provider"] if uploads else "",
+            "object_urls_sample": [item.get("object_url", "") for item in uploads[:5]],
+        }
+        (bundle_root / "upload_summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2))
+        return summary
+
+    def download_bundle(
+        self,
+        *,
+        bundle_kind: str,
+        bundle_id: str,
+        client: ObjectStorageClient,
+        output_dir: str | Path | None = None,
+    ) -> dict:
+        remote_prefix = self._bundle_remote_prefix(bundle_kind, bundle_id)
+        export_root = Path(output_dir) if output_dir else self.exports_dir
+        export_root.mkdir(parents=True, exist_ok=True)
+        bundle_dir = export_root / bundle_id
+        bundle_dir.mkdir(parents=True, exist_ok=True)
+        manifest_path = bundle_dir / "bundle_manifest.json"
+        client.download_file(f"{remote_prefix}/bundle_manifest.json", manifest_path)
+        payload = json.loads(manifest_path.read_text())
+        downloaded = 1
+        total_bytes = manifest_path.stat().st_size
+        export_summary = bundle_dir / "export_summary.json"
+        try:
+            client.download_file(f"{remote_prefix}/export_summary.json", export_summary)
+            downloaded += 1
+            total_bytes += export_summary.stat().st_size
+        except Exception:
+            pass
+        for record in payload.get("files", []):
+            destination = bundle_dir / record["payload_relative_path"]
+            client.download_file(f"{remote_prefix}/{record['payload_relative_path']}", destination)
+            downloaded += 1
+            total_bytes += destination.stat().st_size
+        summary = {
+            "status": "downloaded",
+            "bundle_kind": bundle_kind,
+            "bundle_id": bundle_id,
+            "bundle_dir": str(bundle_dir),
+            "manifest_path": str(manifest_path),
+            "downloaded_file_count": downloaded,
+            "downloaded_total_bytes": total_bytes,
+            "remote_prefix": remote_prefix,
+        }
+        (bundle_dir / "download_summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2))
+        return summary
+
     def _export_bundle(
         self,
         *,
@@ -336,3 +464,23 @@ class AssetBundleManager:
         if not root.exists():
             return []
         return [path.relative_to(self.runtime_dir) for path in root.rglob("*") if path.is_file()]
+
+    def _bundle_remote_prefix(self, bundle_kind: str, bundle_id: str) -> str:
+        return f"bundles/{_safe_token(bundle_kind)}/{bundle_id}"
+
+
+def _content_type_for_path(path: Path) -> str:
+    suffix = path.suffix.lower()
+    if suffix == ".json":
+        return "application/json"
+    if suffix in {".txt", ".md"}:
+        return "text/plain; charset=utf-8"
+    if suffix == ".html":
+        return "text/html; charset=utf-8"
+    if suffix == ".xml":
+        return "application/xml"
+    if suffix == ".pdf":
+        return "application/pdf"
+    if suffix == ".db":
+        return "application/octet-stream"
+    return "application/octet-stream"

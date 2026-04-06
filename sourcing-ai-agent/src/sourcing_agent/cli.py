@@ -10,6 +10,7 @@ from .api import create_server
 from .asset_catalog import AssetCatalog
 from .asset_sync import AssetBundleManager
 from .model_provider import build_model_client
+from .object_storage import build_object_storage_client
 from .orchestrator import SourcingOrchestrator
 from .service_daemon import SingleInstanceError
 from .semantic_provider import build_semantic_provider
@@ -40,6 +41,12 @@ def build_asset_bundle_manager() -> AssetBundleManager:
     catalog = AssetCatalog.discover()
     settings = load_settings(catalog.project_root)
     return AssetBundleManager(catalog.project_root, settings.runtime_dir)
+
+
+def build_object_storage():
+    catalog = AssetCatalog.discover()
+    settings = load_settings(catalog.project_root)
+    return build_object_storage_client(settings.object_storage)
 
 
 def main() -> None:
@@ -162,6 +169,20 @@ def main() -> None:
     restore_bundle_parser.add_argument("--target-runtime-dir", default="", help="Optional runtime dir override")
     restore_bundle_parser.add_argument("--conflict", choices=["skip", "overwrite", "error"], default="skip", help="How to handle existing files")
 
+    upload_bundle_parser = subparsers.add_parser("upload-asset-bundle", help="Upload an exported asset bundle to configured object storage")
+    upload_bundle_parser.add_argument("--manifest", required=True, help="Path to bundle_manifest.json")
+
+    download_bundle_parser = subparsers.add_parser("download-asset-bundle", help="Download an asset bundle from configured object storage")
+    download_bundle_parser.add_argument("--bundle-kind", required=True, help="Bundle kind, e.g. company_handoff")
+    download_bundle_parser.add_argument("--bundle-id", required=True, help="Bundle id")
+    download_bundle_parser.add_argument("--output-dir", default="", help="Optional local export directory")
+
+    restore_sqlite_parser = subparsers.add_parser("restore-sqlite-snapshot", help="Restore SQLite database from an exported bundle")
+    restore_sqlite_parser.add_argument("--manifest", required=True, help="Path to bundle_manifest.json")
+    restore_sqlite_parser.add_argument("--target-db-path", default="", help="Optional DB path override")
+    restore_sqlite_parser.add_argument("--backup-dir", default="", help="Optional backup directory")
+    restore_sqlite_parser.add_argument("--no-backup", action="store_true", help="Overwrite without backing up current DB")
+
     subparsers.add_parser("test-model", help="Run provider healthcheck")
 
     serve_parser = subparsers.add_parser("serve", help="Start the HTTP API")
@@ -174,6 +195,9 @@ def main() -> None:
         "export-company-handoff-bundle",
         "export-sqlite-snapshot",
         "restore-asset-bundle",
+        "upload-asset-bundle",
+        "download-asset-bundle",
+        "restore-sqlite-snapshot",
     }:
         bundle_manager = build_asset_bundle_manager()
         if args.command == "export-company-snapshot-bundle":
@@ -215,6 +239,38 @@ def main() -> None:
                         args.manifest,
                         target_runtime_dir=args.target_runtime_dir or None,
                         conflict=args.conflict,
+                    ),
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+            return
+        if args.command == "restore-sqlite-snapshot":
+            print(
+                json.dumps(
+                    bundle_manager.restore_sqlite_snapshot(
+                        args.manifest,
+                        target_db_path=args.target_db_path or None,
+                        backup_current=not args.no_backup,
+                        backup_dir=args.backup_dir or None,
+                    ),
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+            return
+        storage_client = build_object_storage()
+        if args.command == "upload-asset-bundle":
+            print(json.dumps(bundle_manager.upload_bundle(args.manifest, storage_client), ensure_ascii=False, indent=2))
+            return
+        if args.command == "download-asset-bundle":
+            print(
+                json.dumps(
+                    bundle_manager.download_bundle(
+                        bundle_kind=args.bundle_kind,
+                        bundle_id=args.bundle_id,
+                        client=storage_client,
+                        output_dir=args.output_dir or None,
                     ),
                     ensure_ascii=False,
                     indent=2,

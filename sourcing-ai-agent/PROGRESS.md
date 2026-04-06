@@ -45,6 +45,26 @@
     - `runtime/asset_exports/sqlite_snapshot_sourcing_agent_db_20260406T125538Z/`
   - restore smoke test:
     - `/tmp/sourcing-agent-restore-smoke`
+- 已完成 object storage sync 第一版实现：
+  - 新增 `object_storage.py`
+  - 当前 provider:
+    - `filesystem`
+    - `s3_compatible`
+  - 当前 CLI 新增：
+    - `upload-asset-bundle`
+    - `download-asset-bundle`
+    - `restore-sqlite-snapshot`
+  - 当前本地 smoke test 已跑通：
+    - handoff bundle upload
+    - handoff bundle download
+    - sqlite snapshot upload
+    - sqlite restore helper
+- 已补恢复教程：
+  - 新增 `docs/RECOVERY_TUTORIAL.md`
+  - 明确同机换账号、新机器恢复、bundle 上传下载、SQLite 恢复的具体命令
+- 已明确 Thinking Machines Lab retrospective 当前处于“已完整复盘、待继续补全资产”状态：
+  - 当前没有已完成但未落盘的关键测试结论
+  - 后续仅在新增 TML live execution 或新增资产时继续更新
 - 已补结构化交接文档：
   - 新增 `docs/HANDOFF_2026-04-06.md`
   - 用结构化 handoff 取代保留冗长聊天记录，降低新 AI session / 新设备接手成本

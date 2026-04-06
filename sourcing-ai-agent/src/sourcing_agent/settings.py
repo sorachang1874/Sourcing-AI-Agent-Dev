@@ -53,6 +53,21 @@ class SearchProviderSettings:
 
 
 @dataclass(frozen=True, slots=True)
+class ObjectStorageSettings:
+    enabled: bool = False
+    provider: str = "filesystem"
+    bucket: str = ""
+    prefix: str = "sourcing-ai-agent-dev"
+    endpoint_url: str = ""
+    region: str = "us-east-1"
+    access_key_id: str = ""
+    secret_access_key: str = ""
+    timeout_seconds: int = 60
+    force_path_style: bool = True
+    local_dir: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class HarvestActorSettings:
     enabled: bool = False
     api_token: str = ""
@@ -83,6 +98,7 @@ class AppSettings:
     semantic: SemanticProviderSettings
     harvest: HarvestSettings = field(default_factory=HarvestSettings)
     search: SearchProviderSettings = field(default_factory=SearchProviderSettings)
+    object_storage: ObjectStorageSettings = field(default_factory=ObjectStorageSettings)
     model_provider: ModelProviderSettings = field(default_factory=ModelProviderSettings)
 
 
@@ -97,6 +113,7 @@ def load_settings(project_root: str | Path) -> AppSettings:
     model_provider_payload = secret_payload.get("model_provider", {})
     semantic_payload = secret_payload.get("semantic", {})
     search_payload = secret_payload.get("search_provider", {})
+    object_storage_payload = secret_payload.get("object_storage", {})
     harvest_payload = secret_payload.get("harvest", {})
     profile_scraper_payload = harvest_payload.get("profile_scraper", {})
     profile_search_payload = harvest_payload.get("profile_search", {})
@@ -189,6 +206,41 @@ def load_settings(project_root: str | Path) -> AppSettings:
     ).strip()
     enable_duckduckgo_html = bool(search_payload.get("enable_duckduckgo_html", True))
 
+    object_storage_provider = os.getenv("OBJECT_STORAGE_PROVIDER") or str(
+        object_storage_payload.get("provider", "filesystem")
+    ).strip()
+    object_storage_bucket = os.getenv("OBJECT_STORAGE_BUCKET") or str(object_storage_payload.get("bucket", "")).strip()
+    object_storage_prefix = os.getenv("OBJECT_STORAGE_PREFIX") or str(
+        object_storage_payload.get("prefix", "sourcing-ai-agent-dev")
+    ).strip()
+    object_storage_endpoint = os.getenv("OBJECT_STORAGE_ENDPOINT_URL") or str(
+        object_storage_payload.get("endpoint_url", "")
+    ).strip()
+    object_storage_region = os.getenv("OBJECT_STORAGE_REGION") or str(
+        object_storage_payload.get("region", "us-east-1")
+    ).strip()
+    object_storage_access_key_id = os.getenv("OBJECT_STORAGE_ACCESS_KEY_ID") or str(
+        object_storage_payload.get("access_key_id", "")
+    ).strip()
+    object_storage_secret_access_key = os.getenv("OBJECT_STORAGE_SECRET_ACCESS_KEY") or str(
+        object_storage_payload.get("secret_access_key", "")
+    ).strip()
+    object_storage_local_dir = os.getenv("OBJECT_STORAGE_LOCAL_DIR") or str(
+        object_storage_payload.get("local_dir", "")
+    ).strip()
+    if not object_storage_local_dir and (object_storage_provider or "filesystem").strip().lower() in {"", "filesystem"}:
+        object_storage_local_dir = str(runtime_dir / "object_store")
+    object_storage_timeout = os.getenv("OBJECT_STORAGE_TIMEOUT_SECONDS") or object_storage_payload.get("timeout_seconds", 60)
+    try:
+        object_storage_timeout_seconds = int(object_storage_timeout)
+    except (TypeError, ValueError):
+        object_storage_timeout_seconds = 60
+    force_path_style_raw = os.getenv("OBJECT_STORAGE_FORCE_PATH_STYLE")
+    if force_path_style_raw is None:
+        object_storage_force_path_style = bool(object_storage_payload.get("force_path_style", True))
+    else:
+        object_storage_force_path_style = force_path_style_raw.strip().lower() not in {"0", "false", "no", ""}
+
     shared_harvest_token = os.getenv("APIFY_API_TOKEN") or str(profile_scraper_payload.get("api_token", "")).strip()
     if not shared_harvest_token:
         shared_harvest_token = str(profile_search_payload.get("api_token", "")).strip()
@@ -269,6 +321,23 @@ def load_settings(project_root: str | Path) -> AppSettings:
             enable_duckduckgo_html=enable_duckduckgo_html,
             serper_api_key=serper_api_key,
             serper_base_url=serper_base_url.rstrip("/"),
+        ),
+        object_storage=ObjectStorageSettings(
+            enabled=bool(
+                object_storage_provider.lower() in {"", "filesystem"}
+                or object_storage_local_dir
+                or (object_storage_provider.lower() in {"s3", "s3_compatible", "oss_s3"} and object_storage_bucket and object_storage_endpoint)
+            ),
+            provider=object_storage_provider or "filesystem",
+            bucket=object_storage_bucket,
+            prefix=object_storage_prefix or "sourcing-ai-agent-dev",
+            endpoint_url=object_storage_endpoint.rstrip("/"),
+            region=object_storage_region or "us-east-1",
+            access_key_id=object_storage_access_key_id,
+            secret_access_key=object_storage_secret_access_key,
+            timeout_seconds=object_storage_timeout_seconds,
+            force_path_style=object_storage_force_path_style,
+            local_dir=object_storage_local_dir,
         ),
         harvest=HarvestSettings(
             profile_scraper=_harvest_actor_settings(

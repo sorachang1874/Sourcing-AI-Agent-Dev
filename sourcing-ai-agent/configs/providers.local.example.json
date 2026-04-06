@@ -36,6 +36,11 @@
     "serper_api_key": "serper_api_...",
     "serper_base_url": "https://google.serper.dev/search"
   },
+  "object_storage": {
+    "provider": "filesystem",
+    "local_dir": "/tmp/sourcing-ai-agent-object-store",
+    "prefix": "sourcing-ai-agent-dev"
+  },
   "harvest": {
     "profile_search": {
       "api_token": "apify_api_...",

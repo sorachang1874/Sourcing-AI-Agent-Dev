@@ -291,3 +291,5 @@ Thinking Machines Lab 这轮人工 review 的实际结果：
 2. 恢复 provider secrets
 3. 恢复 Thinking Machines Lab handoff bundle
 4. 继续补 `former / publication / manual review` 资产，而不是重做 current roster baseline
+
+截至 `2026-04-06` 这轮真实测试，retrospective 已经补到“可交接”状态，没有已完成但未写入文档的关键结论。后续只有在继续补全新的 TML 资产或再跑 live test 时，才需要继续更新。
