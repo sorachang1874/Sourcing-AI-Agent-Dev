@@ -87,6 +87,13 @@
 - 已明确当前 GitHub repo 已足够作为代码仓库：
   - 不再建议创建第二个“包含 secrets 和 runtime 的完整 GitHub repo”
   - secrets 与高价值数据资产继续采用 secret manager + object storage 分层存储
+- 已新增显式待办清单：
+  - `docs/NEXT_TODO.md`
+  - 用于切换账号/设备后继续执行：
+    - object storage 并发上传/下载优化
+    - bundle index / sync run manifest
+    - Thinking Machines Lab handoff bundle 完整 R2 持久化
+    - Thinking Machines Lab 后续资产补全
 
 ### 已记录待办
 
