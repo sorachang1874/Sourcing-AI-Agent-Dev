@@ -2,6 +2,20 @@
 
 ## 2026-04-06
 
+### GitHub 同步与跨设备接手
+
+- 已将 `Sourcing AI Agent Dev/` 整理为 monorepo 根目录，准备同步到 private GitHub repo：
+  - 代码、文档、示例配置、去敏后的历史方法论资产进入 Git
+  - `runtime/`、`providers.local.json`、历史 `api_accounts.json`、zip/tar 原包不进入 Git
+- 已补根目录 onboarding/sync 文档，降低后续在公司电脑或其他 AI 环境下继续开发的接手成本：
+  - 根目录 `README.md`
+  - 根目录 `ONBOARDING.md`
+  - 根目录 `GITHUB_SYNC_PREP.md`
+  - `docs/DEVELOPMENT_GUIDE.md`
+- 已明确 GitHub repo 不是 runtime asset storage：
+  - live payload、company snapshots、profile raw assets、manual review raw assets 需要单独安全存储
+  - 换设备后应恢复 secrets 和必要 runtime 子集，而不是依赖 Git 自动同步
+
 ### 已记录待办
 
 - `worker daemon` 的真实 systemd 安装与启用延后到正式服务器环境：

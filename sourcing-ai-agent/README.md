@@ -193,6 +193,23 @@ sourcing-ai-agent/
 4. [docs/DEVELOPMENT_GUIDE.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/DEVELOPMENT_GUIDE.md)
 5. [docs/THINKING_MACHINES_LAB_RETROSPECTIVE.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/THINKING_MACHINES_LAB_RETROSPECTIVE.md)
 
+## GitHub Sync Boundary
+
+这个仓库会同步：
+
+- 源代码
+- 文档
+- 示例配置
+- 去敏后的历史方法论资产
+
+这个仓库不会同步：
+
+- `runtime/` 下的 live payload / company assets / profile raw assets / caches
+- `runtime/secrets/providers.local.json`
+- 历史 `api_accounts.json`
+
+如果后续要在新的电脑上继续做 live test，需要单独恢复 secrets，以及按需恢复高价值 runtime 资产。
+
 ## 快速开始
 
 ```bash

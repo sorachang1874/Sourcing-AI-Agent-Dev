@@ -17,6 +17,9 @@
 5. Model-agnostic interfaces  
    LLM、embedding、rerank、search provider 都应通过抽象层接入，避免业务逻辑绑死某个 vendor。
 
+6. Git is not runtime storage  
+   GitHub 只同步代码、文档、示例配置和去敏后的方法论资产；runtime、secrets、live payload、profile raw assets 必须单独存储。
+
 ## 当前推荐开发顺序
 
 1. 先补 plan / acquisition / enrichment / retrieval 的缺口
@@ -55,3 +58,9 @@
 - 先做最小可验证调用
 - 参数与结果要写入 retrospective / progress
 - 不允许只在对话里记经验，不落到 repo 文档
+
+## 对跨设备继续开发的要求
+
+- 关键上下文必须沉淀到 `README / PROGRESS / retrospective / module docs`
+- 不依赖聊天上下文保存关键决策
+- 新机器接手时，优先恢复 secrets 和必要 runtime 子集，而不是试图让 Git 承担资产仓库角色

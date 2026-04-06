@@ -1,6 +1,6 @@
 # Sourcing AI Agent Dev
 
-这个目录现在已经整理成一个可发布的 monorepo 工作区，包含三类内容：
+这个目录现在已经整理成一个适合放入 private GitHub repo 的 monorepo 工作区，包含三类内容：
 
 - 历史调研/技能资产
 - 新开发的 `sourcing-ai-agent` 后端
@@ -41,7 +41,7 @@ Sourcing AI Agent Dev/
 
 ## GitHub 同步约束
 
-这个 monorepo 不能直接原样推送到 GitHub。必须遵守以下规则：
+这个 monorepo 现在可以推送到 private GitHub repo，但必须遵守以下规则：
 
 - 不提交任何真实密钥或 provider secret
 - 不提交 `runtime/` 下的 live data / search payload / profile payload / company assets
@@ -67,6 +67,16 @@ Sourcing AI Agent Dev/
 - zip / tar 打包副产物
 
 如果后续需要跨设备复用 runtime 或高价值 profile 资产，应单独放到安全的云端存储，而不是 Git。
+
+## 换设备继续开发
+
+如果你后续切换到公司电脑或新的 AI 开发环境，推荐顺序是：
+
+1. 从 GitHub clone 这个 monorepo。
+2. 阅读 [ONBOARDING.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/ONBOARDING.md)。
+3. 阅读 [sourcing-ai-agent/PROGRESS.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/PROGRESS.md) 和 [sourcing-ai-agent/docs/THINKING_MACHINES_LAB_RETROSPECTIVE.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/THINKING_MACHINES_LAB_RETROSPECTIVE.md)。
+4. 单独恢复 `runtime/secrets/providers.local.json` 或重新配置环境变量。
+5. 如需复用历史 live data / company assets / profile assets，从单独的安全存储恢复，不要指望 Git 自动带上这些资产。
 
 ## 当前建议
 

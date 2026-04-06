@@ -29,6 +29,13 @@
 
 这意味着新开发者接手时，代码和文档是完整的，但本地运行仍需要重新配置 provider secrets，必要时重新生成 runtime 资产，或从单独的安全存储恢复。
 
+## 从 GitHub clone 之后先确认什么
+
+1. `runtime/` 默认不存在或只保留空目录结构，这不是仓库损坏，而是刻意不入库。
+2. `runtime/secrets/providers.local.json` 不会随仓库同步，需要手动恢复或改用环境变量。
+3. 历史 live payload、company snapshot、profile payload、manual review raw assets 也不会在 Git 中，需要从单独的安全存储恢复。
+4. 如果只是继续开发后端逻辑，缺少 runtime 不会阻止阅读代码、跑大部分单测和继续实现。
+
 ## 本地启动建议
 
 ```bash
@@ -49,6 +56,16 @@ PYTHONPATH=src python3 -m sourcing_agent.cli plan --file configs/demo_workflow_t
    - 可审计
    - low-cost-first
    - unresolved lead retention
+
+## 推荐的跨设备恢复材料
+
+如果你要在新的机器或新的 AI session 上尽可能完整地恢复工作上下文，优先准备：
+
+1. 这个 GitHub monorepo
+2. `runtime/secrets/providers.local.json`
+3. 必要的 provider tokens 对照表
+4. 需要复用的 `runtime/company_assets/` 子集
+5. 最近一次 live test 的 retrospective 和 progress
 
 ## 当前最重要的工程约束
 
