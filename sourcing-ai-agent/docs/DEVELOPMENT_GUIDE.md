@@ -64,3 +64,4 @@
 - 关键上下文必须沉淀到 `README / PROGRESS / retrospective / module docs`
 - 不依赖聊天上下文保存关键决策
 - 新机器接手时，优先恢复 secrets 和必要 runtime 子集，而不是试图让 Git 承担资产仓库角色
+- 跨设备 durable asset storage 的设计与边界，统一参考 `docs/CROSS_DEVICE_SYNC.md`

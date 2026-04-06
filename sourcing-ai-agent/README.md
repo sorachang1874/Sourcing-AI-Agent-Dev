@@ -192,6 +192,7 @@ sourcing-ai-agent/
 3. [docs/MODULES.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/MODULES.md)
 4. [docs/DEVELOPMENT_GUIDE.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/DEVELOPMENT_GUIDE.md)
 5. [docs/THINKING_MACHINES_LAB_RETROSPECTIVE.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/THINKING_MACHINES_LAB_RETROSPECTIVE.md)
+6. [docs/CROSS_DEVICE_SYNC.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/CROSS_DEVICE_SYNC.md)
 
 ## GitHub Sync Boundary
 
@@ -209,6 +210,10 @@ sourcing-ai-agent/
 - 历史 `api_accounts.json`
 
 如果后续要在新的电脑上继续做 live test，需要单独恢复 secrets，以及按需恢复高价值 runtime 资产。
+
+跨设备恢复的详细设计见：
+
+[docs/CROSS_DEVICE_SYNC.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/CROSS_DEVICE_SYNC.md)
 
 ## 快速开始
 

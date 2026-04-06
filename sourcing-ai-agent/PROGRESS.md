@@ -15,6 +15,15 @@
 - 已明确 GitHub repo 不是 runtime asset storage：
   - live payload、company snapshots、profile raw assets、manual review raw assets 需要单独安全存储
   - 换设备后应恢复 secrets 和必要 runtime 子集，而不是依赖 Git 自动同步
+- 已补跨设备可恢复的安全资产同步设计：
+  - 新增 `docs/CROSS_DEVICE_SYNC.md`
+  - 明确 GitHub / secret manager / cloud object storage / local runtime 四层分工
+  - 明确哪些资产应该 durable sync，哪些只应本地保留
+  - 明确后续实现切入点：
+    - `asset_bundle_manifest`
+    - `export-asset-bundle / restore-asset-bundle`
+    - exported SQLite snapshot
+    - cloud asset registry
 
 ### 已记录待办
 
