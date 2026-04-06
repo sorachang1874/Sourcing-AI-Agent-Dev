@@ -31,15 +31,23 @@
   - `profile_completion_backlog.json`
     - 当前 `25` 人
     - 主要是 former candidates with LinkedIn URL but no full profile detail
-- 当前设备的 Harvest profile providers 未启用，因此 former detail 暂时不会 live 补全
+- 当前设备的 Harvest provider 配置已写回 `runtime/secrets/providers.local.json`
+- 但 `2026-04-07` 直接 smoke test 当前 Harvest token 时返回了 `401`
+- 因此当前更准确的说法是：
+  - provider 配置路径已恢复
+  - 但 Harvest auth 需要重新验证或轮换
+  - 这也是为什么继续补 former detail 前应先做 Harvest smoke test
 
 下一步继续补：
 
-- 重新启用 active device/server 上的 Harvest profile-scraper
+- 重新验证 active device/server 上的 Harvest auth
+- 跑一轮 `profile-scraper` smoke test
 - drain `profile_completion_backlog.json`
 - 继续处理 `manual_review_backlog.json`
 - unresolved publication leads
 - corner-case web exploration assets
+- 浏览器化 Google search provider / browser-search lane
+- PDF OCR or stronger parser fallback
 
 ### 2. Strengthen object storage sync operability
 

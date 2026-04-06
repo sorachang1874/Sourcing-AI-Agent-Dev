@@ -1,5 +1,68 @@
 # Sourcing AI Agent Dev Progress
 
+## 2026-04-07
+
+### HarvestAPI 调用方法沉淀与 Corner Case Exploration 升级
+
+- 已补 Harvest 调用手册：
+  - 新增 `docs/HARVESTAPI_PLAYBOOK.md`
+  - 系统记录了三个 actor 的 console/readme 链接：
+    - `linkedin-profile-scraper`
+    - `linkedin-profile-search`
+    - `linkedin-company-employees`
+  - 系统记录了当前项目里真正可复用的 payload 规范、former/current 推荐调用顺序、Thinking Machines Lab live 结论和已知坑
+- 已修正 `HarvestProfileConnector` 的关键 payload 错误：
+  - `profile-scraper` 不再传 `urls`
+  - 改为传 `profileUrls`
+  - 对应测试已补到 `tests/test_harvest_connectors.py`
+- 已重新确认 Harvest secret 的本地标准位置：
+  - 默认开发环境放在 `runtime/secrets/providers.local.json`
+  - 不再建议依赖旧项目 `api_accounts.json` 隐式发现
+- 已确认一个关键调试结论：
+  - `2026-04-07` 直接对当前本机 Harvest 配置做最小 API smoke test 时，Apify 返回了 `401 user-or-token-not-found`
+  - 这说明之前某些 `fetched_profile_count = 0` 不能简单归因于 payload，本机当前 token 状态也需要重新验证
+  - 相关结论已写进 `docs/HARVESTAPI_PLAYBOOK.md`
+- 已升级 `analyze_page_asset` 输出 schema：
+  - 新增：
+    - `education_signals`
+    - `work_history_signals`
+    - `affiliation_signals`
+    - `document_type`
+  - deterministic fallback 现已能从 `text_blocks` 中做基础规则抽取
+  - Claude / Qwen / 其他 OpenAI-compatible provider 现在也能按同一 schema 返回结构化结果
+- 已补统一文档抽取模块：
+  - 新增 `src/sourcing_agent/document_extraction.py`
+  - 统一处理：
+    - HTML homepage / CV
+    - Google Docs CV
+    - PDF resume
+  - 新增通用能力：
+    - `analyze_remote_document`
+    - `build_candidate_patch_from_analysis`
+    - `build_candidate_patch_from_signal_bundle`
+    - `extract_pdf_text`
+- 已补底层二进制资产能力：
+  - `AssetLogger` 新增 `write_bytes`
+  - `web_fetch.py` 新增 `fetch_binary_url`
+  - 这使 PDF 原始资产、提取文本和 analysis input/output 都能按统一资产纪律落盘
+- 已升级 `manual_review_resolution`：
+  - 人工 review 提供的 homepage / Google Docs / PDF source link 现在不仅会保存为 evidence
+  - 还会自动进入文档分析
+  - 并将 education/work history/affiliation 草稿回写到 candidate
+  - 对应测试已补到 `tests/test_manual_review_resolution.py`
+- 已升级 `exploratory_enrichment`：
+  - 搜索结果页命中的 homepage 现在会继续跟进其 `resume_urls`
+  - 若命中 Google Docs CV 或 PDF resume，会进一步抽取结构化信号
+  - exploration merge 阶段已能把这些信号补进 candidate，而不再只写 notes / media_url
+- 已做真实小样本验证：
+  - Jeremy Bernstein 的 Google Docs CV 现在可自动抽出 education/work history/Thinking Machines Lab affiliation 草稿
+  - Horace He 的 PDF 现在已接入 `resume_url -> raw pdf -> extracted_text -> analysis` 链路
+  - 但当前 `pypdf` 文本提取对 Horace 这份 PDF 仍未抽出有效正文，说明后续如要提升 PDF 覆盖，还需要 OCR 或更强 PDF parser
+- 已更新 onboarding/readme：
+  - `README.md`
+  - monorepo 根 `README.md`
+  - 新增把 `docs/HARVESTAPI_PLAYBOOK.md` 纳入接手必读路径
+
 ## 2026-04-06
 
 ### Thinking Machines Lab 资产补全与可复用候选文档提炼

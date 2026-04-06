@@ -85,6 +85,32 @@ class AssetLogger:
         )
         return target_path
 
+    def write_bytes(
+        self,
+        path: str | Path,
+        content: bytes,
+        *,
+        asset_type: str,
+        source_kind: str,
+        content_type: str = "application/octet-stream",
+        is_raw_asset: bool = True,
+        model_safe: bool = False,
+        metadata: dict[str, Any] | None = None,
+    ) -> Path:
+        target_path = self._resolve_path(path)
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_bytes(content)
+        self._record(
+            target_path,
+            asset_type=asset_type,
+            source_kind=source_kind,
+            content_type=content_type,
+            is_raw_asset=is_raw_asset,
+            model_safe=model_safe,
+            metadata=metadata or {},
+        )
+        return target_path
+
     def record_existing(
         self,
         path: str | Path,

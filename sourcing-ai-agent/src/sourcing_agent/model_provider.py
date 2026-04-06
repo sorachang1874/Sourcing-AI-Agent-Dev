@@ -5,6 +5,7 @@ from typing import Any, Protocol
 from urllib import error, request
 import requests
 
+from .document_extraction import infer_structured_signals_from_payload
 from .domain import JobRequest
 from .settings import ModelProviderSettings, QwenSettings
 
@@ -78,6 +79,7 @@ class DeterministicModelClient:
         title = str(payload.get("title") or "").strip()
         description = str(payload.get("description") or "").strip()
         excerpt = str(payload.get("text_excerpt") or "").strip()
+        document_type = str(payload.get("document_type") or "").strip() or "unknown"
         combined = " ".join([title, description, excerpt]).lower()
         company_match = bool(target_company and target_company.lower() in combined)
         role_signals = []
@@ -85,11 +87,14 @@ class DeterministicModelClient:
             if token in combined:
                 role_signals.append(token)
         urls = payload.get("extracted_links") or {}
+        structured_signals = infer_structured_signals_from_payload(payload)
         confidence_score = 0.25
         if company_match:
             confidence_score += 0.35
         if role_signals:
             confidence_score += 0.2
+        if structured_signals["education_signals"] or structured_signals["work_history_signals"]:
+            confidence_score += 0.1
         if (urls.get("linkedin_urls") or []) or (urls.get("personal_urls") or []) or (urls.get("x_urls") or []):
             confidence_score += 0.15
         confidence_label = "high" if confidence_score >= 0.75 else "medium" if confidence_score >= 0.45 else "low"
@@ -97,8 +102,12 @@ class DeterministicModelClient:
             "summary": " | ".join(item for item in [title, description] if item)[:400],
             "target_company_relation": "explicit" if company_match else "unclear",
             "role_signals": role_signals[:6],
+            "education_signals": structured_signals["education_signals"][:6],
+            "work_history_signals": structured_signals["work_history_signals"][:8],
+            "affiliation_signals": structured_signals["affiliation_signals"][:6],
             "confidence_label": confidence_label,
             "confidence_score": round(min(confidence_score, 0.95), 2),
+            "document_type": document_type,
             "recommended_links": {
                 "linkedin_url": ((urls.get("linkedin_urls") or [""])[0]),
                 "personal_url": ((urls.get("personal_urls") or [""])[0]),
@@ -169,7 +178,11 @@ class QwenResponsesModelClient(DeterministicModelClient):
     def analyze_page_asset(self, payload: dict[str, Any]) -> dict[str, Any]:
         response = self._safe_text_prompt(
             "You are helping with sourcing candidate research. Return strict JSON with keys "
-            "summary,target_company_relation,role_signals,confidence_label,confidence_score,recommended_links,notes. "
+            "summary,target_company_relation,role_signals,education_signals,work_history_signals,"
+            "affiliation_signals,confidence_label,confidence_score,document_type,recommended_links,notes. "
+            "education_signals must be a list of objects with keys school,degree,field,date_range. "
+            "work_history_signals must be a list of objects with keys title,organization,date_range,description. "
+            "affiliation_signals must be a list of objects with keys organization,relation,evidence. "
             "Use concise text. confidence_label must be one of high, medium, low.",
             json.dumps(payload, ensure_ascii=False),
         )
@@ -179,7 +192,27 @@ class QwenResponsesModelClient(DeterministicModelClient):
         if not parsed:
             return super().analyze_page_asset(payload)
         result = super().analyze_page_asset(payload)
-        result.update({key: value for key, value in parsed.items() if key in result or key in {"summary", "target_company_relation", "role_signals", "confidence_label", "confidence_score", "recommended_links", "notes"}})
+        result.update(
+            {
+                key: value
+                for key, value in parsed.items()
+                if key in result
+                or key
+                in {
+                    "summary",
+                    "target_company_relation",
+                    "role_signals",
+                    "education_signals",
+                    "work_history_signals",
+                    "affiliation_signals",
+                    "confidence_label",
+                    "confidence_score",
+                    "document_type",
+                    "recommended_links",
+                    "notes",
+                }
+            }
+        )
         return result
 
     def plan_search_strategy(self, request: JobRequest, draft_payload: dict[str, Any]) -> dict[str, Any]:
@@ -286,7 +319,11 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
     def analyze_page_asset(self, payload: dict[str, Any]) -> dict[str, Any]:
         response = self._safe_text_prompt(
             "You are helping with sourcing candidate research. Return strict JSON with keys "
-            "summary,target_company_relation,role_signals,confidence_label,confidence_score,recommended_links,notes. "
+            "summary,target_company_relation,role_signals,education_signals,work_history_signals,"
+            "affiliation_signals,confidence_label,confidence_score,document_type,recommended_links,notes. "
+            "education_signals must be a list of objects with keys school,degree,field,date_range. "
+            "work_history_signals must be a list of objects with keys title,organization,date_range,description. "
+            "affiliation_signals must be a list of objects with keys organization,relation,evidence. "
             "Use concise text. confidence_label must be one of high, medium, low.",
             json.dumps(payload, ensure_ascii=False),
             max_tokens=700,
@@ -306,8 +343,12 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
                     "summary",
                     "target_company_relation",
                     "role_signals",
+                    "education_signals",
+                    "work_history_signals",
+                    "affiliation_signals",
                     "confidence_label",
                     "confidence_score",
+                    "document_type",
                     "recommended_links",
                     "notes",
                 }

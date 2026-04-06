@@ -2,23 +2,26 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from html import unescape
 from pathlib import Path
-import re
 from typing import Any
-from urllib import parse
 
 from .agent_runtime import AgentRuntimeCoordinator
 from .asset_policy import (
     DEFAULT_MODEL_CONTEXT_CHAR_LIMIT,
-    RAW_ASSET_POLICY_SUMMARY,
     is_binary_like_url,
 )
 from .asset_logger import AssetLogger
+from .document_extraction import (
+    analyze_remote_document,
+    build_candidate_patch_from_signal_bundle,
+    build_page_analysis_input as _build_page_analysis_input_impl,
+    empty_signal_bundle,
+    extract_page_signals as _extract_page_signals_impl,
+    merge_signal_bundle,
+)
 from .domain import Candidate, EvidenceRecord, JobRequest, make_evidence_id, merge_candidate
 from .model_provider import DeterministicModelClient, ModelClient
 from .search_provider import BaseSearchProvider, DuckDuckGoHtmlSearchProvider, search_response_to_record
-from .web_fetch import fetch_text_url
 from .worker_daemon import AutonomousWorkerDaemon
 
 
@@ -175,17 +178,7 @@ class ExploratoryWebEnricher:
         candidate_dir.mkdir(parents=True, exist_ok=True)
         queries = _build_exploration_queries(candidate, target_company)
         result_summaries: list[dict[str, Any]] = []
-        gathered_signals = {
-            "linkedin_urls": [],
-            "x_urls": [],
-            "github_urls": [],
-            "personal_urls": [],
-            "resume_urls": [],
-            "descriptions": [],
-            "validated_summaries": [],
-            "role_signals": [],
-            "analysis_notes": [],
-        }
+        gathered_signals = empty_signal_bundle()
         errors: list[str] = []
         worker_handle = None
         completed_queries = set()
@@ -295,54 +288,57 @@ class ExploratoryWebEnricher:
                 page_summary = {"title": item.get("title", ""), "url": item.get("url", "")}
                 try:
                     if _is_fetchable_detail_page(item.get("url", "")):
-                        page_html = _fetch_html(item.get("url", ""))
-                        page_path = candidate_dir / f"query_{index:02d}_page_{result_index:02d}.html"
-                        logger.write_text(
-                            page_path,
-                            page_html,
-                            asset_type="exploration_detail_html",
-                            source_kind="further_exploration",
-                            content_type="text/html",
-                            is_raw_asset=True,
-                            model_safe=False,
-                            metadata={"candidate_id": candidate.candidate_id, "source_url": item.get("url", "")},
-                        )
-                        signals = extract_page_signals(page_html, item.get("url", ""))
-                        analysis_input = build_page_analysis_input(
+                        analyzed_page = analyze_remote_document(
                             candidate=candidate,
                             target_company=target_company,
                             source_url=item.get("url", ""),
-                            html_text=page_html,
-                            extracted_links=signals,
-                        )
-                        analysis_input_path = candidate_dir / f"query_{index:02d}_page_{result_index:02d}_analysis_input.json"
-                        logger.write_json(
-                            analysis_input_path,
-                            analysis_input,
-                            asset_type="exploration_analysis_input",
+                            asset_dir=candidate_dir,
+                            asset_logger=logger,
+                            model_client=self.model_client,
                             source_kind="further_exploration",
-                            is_raw_asset=False,
-                            model_safe=True,
-                            metadata={"candidate_id": candidate.candidate_id, "source_url": item.get("url", "")},
+                            asset_prefix=f"query_{index:02d}_page_{result_index:02d}",
                         )
-                        analysis = self.model_client.analyze_page_asset(analysis_input)
-                        analysis_path = candidate_dir / f"query_{index:02d}_page_{result_index:02d}_analysis.json"
-                        logger.write_json(
-                            analysis_path,
-                            analysis,
-                            asset_type="exploration_analysis_output",
-                            source_kind="further_exploration",
-                            is_raw_asset=False,
-                            model_safe=True,
-                            metadata={"candidate_id": candidate.candidate_id, "source_url": item.get("url", "")},
-                        )
-                        page_summary["detail_path"] = str(page_path)
-                        page_summary["analysis_input_path"] = str(analysis_input_path)
-                        page_summary["analysis_path"] = str(analysis_path)
-                        page_summary["signals"] = signals
-                        page_summary["analysis"] = analysis
-                        _merge_signal_map(gathered_signals, signals)
-                        _merge_analysis_map(gathered_signals, analysis)
+                        page_summary["detail_path"] = analyzed_page.raw_path
+                        page_summary["analysis_input_path"] = analyzed_page.analysis_input_path
+                        page_summary["analysis_path"] = analyzed_page.analysis_path
+                        if analyzed_page.extracted_text_path:
+                            page_summary["extracted_text_path"] = analyzed_page.extracted_text_path
+                        page_summary["signals"] = analyzed_page.signals
+                        page_summary["analysis"] = analyzed_page.analysis
+                        page_summary["document_type"] = analyzed_page.document_type
+                        merge_signal_bundle(gathered_signals, analyzed_page.signals)
+
+                        supporting_documents: list[dict[str, Any]] = []
+                        for doc_index, resume_url in enumerate(list(analyzed_page.signals.get("resume_urls") or [])[:2], start=1):
+                            normalized_resume_url = str(resume_url or "").strip()
+                            if not normalized_resume_url or normalized_resume_url == str(analyzed_page.final_url or "").strip():
+                                continue
+                            try:
+                                analyzed_resume = analyze_remote_document(
+                                    candidate=candidate,
+                                    target_company=target_company,
+                                    source_url=normalized_resume_url,
+                                    asset_dir=candidate_dir,
+                                    asset_logger=logger,
+                                    model_client=self.model_client,
+                                    source_kind="further_exploration",
+                                    asset_prefix=f"query_{index:02d}_page_{result_index:02d}_support_{doc_index:02d}",
+                                )
+                                supporting_documents.append(
+                                    {
+                                        "url": analyzed_resume.final_url,
+                                        "document_type": analyzed_resume.document_type,
+                                        "detail_path": analyzed_resume.raw_path,
+                                        "analysis_input_path": analyzed_resume.analysis_input_path,
+                                        "analysis_path": analyzed_resume.analysis_path,
+                                        "extracted_text_path": analyzed_resume.extracted_text_path,
+                                    }
+                                )
+                                merge_signal_bundle(gathered_signals, analyzed_resume.signals)
+                            except Exception as exc:
+                                supporting_documents.append({"url": normalized_resume_url, "error": str(exc)})
+                        if supporting_documents:
+                            page_summary["supporting_documents"] = supporting_documents
                 except Exception as exc:
                     page_summary["error"] = str(exc)
                 page_summaries.append(page_summary)
@@ -368,7 +364,7 @@ class ExploratoryWebEnricher:
                     output_payload={"explored_query_count": len(completed_queries)},
                 )
 
-        merged_candidate, candidate_evidence = _merge_exploration(candidate, gathered_signals, candidate_dir)
+        merged_candidate, candidate_evidence = _merge_exploration(candidate, gathered_signals, candidate_dir, target_company=target_company)
         summary = {
             "candidate_id": candidate.candidate_id,
             "display_name": candidate.display_name,
@@ -427,58 +423,8 @@ class ExploratoryWebEnricher:
         }
 
 
-def extract_page_signals(html_text: str, base_url: str) -> dict[str, list[str]]:
-    title_match = re.search(r"<title[^>]*>(.*?)</title>", html_text, flags=re.IGNORECASE | re.DOTALL)
-    title = " ".join(unescape(title_match.group(1)).split()) if title_match else ""
-    meta_match = re.search(
-        r'<meta[^>]+name=["\']description["\'][^>]+content=["\']([^"\']+)["\']',
-        html_text,
-        flags=re.IGNORECASE,
-    )
-    if not meta_match:
-        meta_match = re.search(
-            r'<meta[^>]+property=["\']og:description["\'][^>]+content=["\']([^"\']+)["\']',
-            html_text,
-            flags=re.IGNORECASE,
-        )
-    description = " ".join(unescape(meta_match.group(1)).split()) if meta_match else ""
-    links = re.findall(r'href=["\']([^"\']+)["\']', html_text, flags=re.IGNORECASE)
-    absolute_links = [_normalize_url(parse.urljoin(base_url, link)) for link in links]
-    linkedin_urls = _dedupe([link for link in absolute_links if "linkedin.com/in/" in link])
-    x_urls = _dedupe([link for link in absolute_links if "x.com/" in link or "twitter.com/" in link])
-    github_urls = _dedupe([link for link in absolute_links if "github.com/" in link])
-    resume_urls = _dedupe(
-        [
-            link
-            for link in absolute_links
-            if link.endswith(".pdf") or any(token in link.lower() for token in ["/cv", "/resume", "resume", "curriculum-vitae"])
-        ]
-    )
-    personal_urls = _dedupe(
-        [
-            link
-            for link in absolute_links
-            if link.startswith("http")
-            and "linkedin.com" not in link
-            and "x.com" not in link
-            and "twitter.com" not in link
-            and "github.com" not in link
-            and "duckduckgo.com" not in link
-            and _is_meaningful_personal_url(link)
-        ]
-    )
-    descriptions = _dedupe([item for item in [title, description] if item])
-    return {
-        "linkedin_urls": linkedin_urls,
-        "x_urls": x_urls,
-        "github_urls": github_urls,
-        "personal_urls": personal_urls,
-        "resume_urls": resume_urls,
-        "descriptions": descriptions,
-        "validated_summaries": [],
-        "role_signals": [],
-        "analysis_notes": [],
-    }
+def extract_page_signals(html_text: str, base_url: str) -> dict[str, Any]:
+    return _extract_page_signals_impl(html_text, base_url)
 
 
 def _build_exploration_queries(candidate: Candidate, target_company: str) -> list[str]:
@@ -498,12 +444,6 @@ def _build_exploration_queries(candidate: Candidate, target_company: str) -> lis
         if normalized and normalized not in deduped:
             deduped.append(normalized)
     return deduped
-
-
-def _fetch_html(url: str) -> str:
-    return fetch_text_url(url, timeout=30).text
-
-
 def _is_fetchable_detail_page(url: str) -> bool:
     url = str(url or "").strip().lower()
     if not url.startswith("http"):
@@ -512,82 +452,7 @@ def _is_fetchable_detail_page(url: str) -> bool:
     if is_binary_like_url(url):
         return False
     return not any(item in url for item in blocked)
-
-
-def _normalize_url(url: str) -> str:
-    return str(url or "").strip()
-
-
-def _dedupe(items: list[str]) -> list[str]:
-    seen: set[str] = set()
-    results: list[str] = []
-    for item in items:
-        normalized = item.strip()
-        if not normalized or normalized in seen:
-            continue
-        seen.add(normalized)
-        results.append(normalized)
-    return results
-
-
-def _is_meaningful_personal_url(url: str) -> bool:
-    lower = str(url or "").strip().lower()
-    if not lower.startswith("http"):
-        return False
-    blocked_tokens = [
-        "static.licdn.com",
-        "media.licdn.com",
-        "www.gstatic.com",
-        "ssl.gstatic.com",
-        "fonts.googleapis.com",
-        "fonts.gstatic.com",
-        "chrome.google.com",
-    ]
-    if any(token in lower for token in blocked_tokens):
-        return False
-    blocked_suffixes = [
-        ".css",
-        ".js",
-        ".png",
-        ".jpg",
-        ".jpeg",
-        ".svg",
-        ".ico",
-        ".woff",
-        ".woff2",
-    ]
-    return not any(lower.endswith(suffix) for suffix in blocked_suffixes)
-
-
-def _merge_signal_map(target: dict[str, list[str]], incoming: dict[str, list[str]]) -> None:
-    for key, values in incoming.items():
-        existing = target.setdefault(key, [])
-        for value in values:
-            if value not in existing:
-                existing.append(value)
-
-
-def _merge_analysis_map(target: dict[str, list[str]], analysis: dict[str, Any]) -> None:
-    summary = str(analysis.get("summary") or "").strip()
-    if summary:
-        summaries = target.setdefault("validated_summaries", [])
-        if summary not in summaries:
-            summaries.append(summary)
-    notes = str(analysis.get("notes") or "").strip()
-    if notes:
-        note_items = target.setdefault("analysis_notes", [])
-        if notes not in note_items:
-            note_items.append(notes)
-    for signal in analysis.get("role_signals") or []:
-        normalized = str(signal or "").strip()
-        if not normalized:
-            continue
-        items = target.setdefault("role_signals", [])
-        if normalized not in items:
-            items.append(normalized)
-
-
-def _merge_exploration(candidate: Candidate, signals: dict[str, list[str]], candidate_dir: Path) -> tuple[Candidate, list[EvidenceRecord]]:
+def _merge_exploration(candidate: Candidate, signals: dict[str, Any], candidate_dir: Path, *, target_company: str) -> tuple[Candidate, list[EvidenceRecord]]:
     notes = candidate.notes
     note_segments: list[str] = []
     if signals["descriptions"]:
@@ -608,7 +473,17 @@ def _merge_exploration(candidate: Candidate, signals: dict[str, list[str]], cand
         "exploration_descriptions": signals["descriptions"][:4],
         "exploration_role_signals": signals.get("role_signals", [])[:8],
         "exploration_validated_summaries": signals.get("validated_summaries", [])[:4],
+        "exploration_education_signals": list(signals.get("education_signals") or [])[:6],
+        "exploration_work_history_signals": list(signals.get("work_history_signals") or [])[:8],
+        "exploration_affiliation_signals": list(signals.get("affiliation_signals") or [])[:6],
+        "exploration_document_types": list(signals.get("document_types") or [])[:6],
     }
+    candidate_patch = build_candidate_patch_from_signal_bundle(
+        candidate,
+        signals,
+        target_company=target_company,
+        source_url=str(candidate_dir),
+    )
     incoming = Candidate(
         candidate_id=candidate.candidate_id,
         name_en=candidate.name_en,
@@ -616,19 +491,19 @@ def _merge_exploration(candidate: Candidate, signals: dict[str, list[str]], cand
         display_name=candidate.display_name,
         category=candidate.category,
         target_company=candidate.target_company,
-        organization=candidate.organization,
+        organization=str(candidate_patch.get("organization") or candidate.organization),
         employment_status=candidate.employment_status,
-        role=candidate.role,
+        role=str(candidate_patch.get("role") or candidate.role),
         team=candidate.team,
-        focus_areas=candidate.focus_areas,
-        education=candidate.education,
-        work_history=candidate.work_history,
+        focus_areas=str(candidate_patch.get("focus_areas") or candidate.focus_areas),
+        education=str(candidate_patch.get("education") or candidate.education),
+        work_history=str(candidate_patch.get("work_history") or candidate.work_history),
         notes=notes,
-        linkedin_url=candidate.linkedin_url or (signals["linkedin_urls"][0] if signals["linkedin_urls"] else ""),
-        media_url=candidate.media_url or _pick_media_url(signals),
+        linkedin_url=str(candidate_patch.get("linkedin_url") or candidate.linkedin_url or (signals["linkedin_urls"][0] if signals["linkedin_urls"] else "")),
+        media_url=str(candidate_patch.get("media_url") or candidate.media_url or _pick_media_url(signals)),
         source_dataset=candidate.source_dataset,
         source_path=str(candidate_dir),
-        metadata=metadata,
+        metadata={**metadata, **dict(candidate_patch.get("metadata") or {})},
     )
     merged = merge_candidate(candidate, incoming)
     evidence: list[EvidenceRecord] = []
@@ -678,16 +553,18 @@ def _merge_exploration(candidate: Candidate, signals: dict[str, list[str]], cand
                 summary=" | ".join(signals["validated_summaries"][:2]),
                 source_dataset="exploration_model_summary",
                 source_path=str(candidate_dir),
-                metadata={
-                    "role_signals": signals.get("role_signals", [])[:8],
-                    "analysis_notes": signals.get("analysis_notes", [])[:4],
-                },
+                    metadata={
+                        "role_signals": signals.get("role_signals", [])[:8],
+                        "analysis_notes": signals.get("analysis_notes", [])[:4],
+                        "education_signals": list(signals.get("education_signals") or [])[:4],
+                        "work_history_signals": list(signals.get("work_history_signals") or [])[:4],
+                    },
+                )
             )
-        )
     return merged, evidence
 
 
-def _pick_media_url(signals: dict[str, list[str]]) -> str:
+def _pick_media_url(signals: dict[str, Any]) -> str:
     for key in ["x_urls", "github_urls", "personal_urls", "resume_urls"]:
         if signals[key]:
             return signals[key][0]
@@ -703,39 +580,11 @@ def build_page_analysis_input(
     extracted_links: dict[str, list[str]],
     max_excerpt_chars: int = DEFAULT_MODEL_CONTEXT_CHAR_LIMIT,
 ) -> dict[str, Any]:
-    title_match = re.search(r"<title[^>]*>(.*?)</title>", html_text, flags=re.IGNORECASE | re.DOTALL)
-    title = " ".join(unescape(title_match.group(1)).split()) if title_match else ""
-    meta_match = re.search(
-        r'<meta[^>]+name=["\']description["\'][^>]+content=["\']([^"\']+)["\']',
-        html_text,
-        flags=re.IGNORECASE,
+    return _build_page_analysis_input_impl(
+        candidate=candidate,
+        target_company=target_company,
+        source_url=source_url,
+        html_text=html_text,
+        extracted_links=extracted_links,
+        max_excerpt_chars=max_excerpt_chars,
     )
-    if not meta_match:
-        meta_match = re.search(
-            r'<meta[^>]+property=["\']og:description["\'][^>]+content=["\']([^"\']+)["\']',
-            html_text,
-            flags=re.IGNORECASE,
-        )
-    description = " ".join(unescape(meta_match.group(1)).split()) if meta_match else ""
-    visible_text = re.sub(r"<script.*?</script>|<style.*?</style>", " ", html_text, flags=re.IGNORECASE | re.DOTALL)
-    visible_text = re.sub(r"<[^>]+>", " ", visible_text)
-    visible_text = " ".join(unescape(visible_text).split())
-    excerpt = visible_text[:max_excerpt_chars]
-    return {
-        "candidate_id": candidate.candidate_id,
-        "candidate_name": candidate.display_name,
-        "target_company": target_company,
-        "source_url": source_url,
-        "title": title,
-        "description": description,
-        "text_excerpt": excerpt,
-        "excerpt_char_count": len(excerpt),
-        "raw_asset_policy": RAW_ASSET_POLICY_SUMMARY,
-        "extracted_links": {
-            "linkedin_urls": extracted_links.get("linkedin_urls", [])[:3],
-            "x_urls": extracted_links.get("x_urls", [])[:3],
-            "github_urls": extracted_links.get("github_urls", [])[:3],
-            "personal_urls": extracted_links.get("personal_urls", [])[:3],
-            "resume_urls": extracted_links.get("resume_urls", [])[:3],
-        },
-    }

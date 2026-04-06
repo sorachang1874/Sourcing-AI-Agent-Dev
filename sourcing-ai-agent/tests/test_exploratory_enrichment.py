@@ -29,6 +29,7 @@ class ExploratoryEnrichmentTest(unittest.TestCase):
         self.assertIn("https://janedoe.dev", signals["personal_urls"][0])
         self.assertEqual(signals["resume_urls"][0], "https://janedoe.dev/Jane_Doe_CV.pdf")
         self.assertIn("Research engineer at xAI.", signals["descriptions"][1])
+        self.assertEqual(signals["education_signals"], [])
 
     def test_build_page_analysis_input_truncates_excerpt(self) -> None:
         candidate = Candidate(candidate_id="c1", name_en="Jane Doe", display_name="Jane Doe")
@@ -42,3 +43,5 @@ class ExploratoryEnrichmentTest(unittest.TestCase):
         )
         self.assertLessEqual(payload["excerpt_char_count"], DEFAULT_MODEL_CONTEXT_CHAR_LIMIT)
         self.assertEqual(payload["raw_asset_policy"], RAW_ASSET_POLICY_SUMMARY)
+        self.assertIn("document_type", payload)
+        self.assertIn("text_blocks", payload)

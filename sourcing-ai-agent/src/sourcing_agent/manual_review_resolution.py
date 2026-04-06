@@ -6,12 +6,15 @@ from pathlib import Path
 from typing import Any
 
 from .asset_logger import AssetLogger
-from .asset_policy import is_binary_like_url
+from .document_extraction import (
+    analyze_remote_document,
+    build_candidate_patch_from_signal_bundle,
+    empty_signal_bundle,
+    merge_signal_bundle,
+)
 from .domain import Candidate, EvidenceRecord, format_display_name, make_evidence_id
-from .exploratory_enrichment import build_page_analysis_input, extract_page_signals
 from .model_provider import DeterministicModelClient, ModelClient
 from .storage import SQLiteStore
-from .web_fetch import fetch_text_url
 
 
 def apply_manual_review_resolution(
@@ -46,17 +49,7 @@ def apply_manual_review_resolution(
         model_safe=True,
     )
 
-    signals = {
-        "linkedin_urls": [],
-        "x_urls": [],
-        "github_urls": [],
-        "personal_urls": [],
-        "resume_urls": [],
-        "descriptions": [],
-        "validated_summaries": [],
-        "role_signals": [],
-        "analysis_notes": [],
-    }
+    signals = empty_signal_bundle()
     added_evidence: list[EvidenceRecord] = []
     source_links = _normalize_source_links(payload)
     fetch_assets = bool(payload.get("fetch_assets", True))
@@ -94,78 +87,59 @@ def apply_manual_review_resolution(
         if any(token in url.lower() for token in ["/cv", "/resume", ".pdf"]):
             if url not in signals["resume_urls"]:
                 signals["resume_urls"].append(url)
-        if not fetch_assets or is_binary_like_url(url):
+        if not fetch_assets:
             continue
         try:
-            fetched = fetch_text_url(url, timeout=30, source_label="manual_review")
+            analyzed = analyze_remote_document(
+                candidate=candidate,
+                target_company=target_company,
+                source_url=url,
+                asset_dir=review_dir / "sources",
+                asset_logger=logger,
+                model_client=client,
+                source_kind="manual_review",
+                asset_prefix=f"source_{index:02d}",
+            )
         except Exception as exc:
             signals["analysis_notes"].append(f"fetch_failed:{url}:{str(exc)[:160]}")
             continue
-        raw_path = logger.write_text(
-            review_dir / "sources" / f"source_{index:02d}.html",
-            fetched.text,
-            asset_type="manual_review_source_html",
-            source_kind="manual_review",
-            content_type=fetched.content_type or "text/html",
-            is_raw_asset=True,
-            model_safe=False,
-            metadata={"source_url": url, "final_url": fetched.final_url},
-        )
-        page_signals = extract_page_signals(fetched.text, fetched.final_url)
-        _merge_signal_map(signals, page_signals)
-        analysis_input = build_page_analysis_input(
-            candidate=candidate,
-            target_company=target_company,
-            source_url=fetched.final_url,
-            html_text=fetched.text,
-            extracted_links=page_signals,
-        )
-        analysis_input_path = logger.write_json(
-            review_dir / "analysis" / f"source_{index:02d}_input.json",
-            analysis_input,
-            asset_type="manual_review_analysis_input",
-            source_kind="manual_review",
-            is_raw_asset=False,
-            model_safe=True,
-            metadata={"source_url": fetched.final_url},
-        )
-        analysis = client.analyze_page_asset(analysis_input)
-        analysis_path = logger.write_json(
-            review_dir / "analysis" / f"source_{index:02d}.json",
-            analysis,
-            asset_type="manual_review_analysis_output",
-            source_kind="manual_review",
-            is_raw_asset=False,
-            model_safe=True,
-            metadata={"source_url": fetched.final_url},
-        )
-        summary = str(analysis.get("summary") or "").strip()
+        merge_signal_bundle(signals, analyzed.signals)
+        summary = str(analyzed.analysis.get("summary") or "").strip()
         if summary and summary not in signals["validated_summaries"]:
             signals["validated_summaries"].append(summary)
-        for role_signal in list(analysis.get("role_signals") or []):
+        for role_signal in list(analyzed.analysis.get("role_signals") or []):
             normalized_signal = str(role_signal or "").strip()
             if normalized_signal and normalized_signal not in signals["role_signals"]:
                 signals["role_signals"].append(normalized_signal)
-        signals["analysis_notes"].append(f"analyzed:{fetched.final_url}")
+        signals["analysis_notes"].append(f"analyzed:{analyzed.final_url}")
         added_evidence.append(
             EvidenceRecord(
-                evidence_id=make_evidence_id(candidate.candidate_id, "manual_review_analysis", link_label, fetched.final_url),
+                evidence_id=make_evidence_id(candidate.candidate_id, "manual_review_analysis", link_label, analyzed.final_url),
                 candidate_id=candidate.candidate_id,
                 source_type="manual_review_analysis",
                 title=f"{link_label} analysis",
-                url=fetched.final_url,
+                url=analyzed.final_url,
                 summary=summary or "Manual review page analyzed for additional identity signals.",
                 source_dataset="manual_review_analysis",
-                source_path=str(analysis_path),
+                source_path=str(analyzed.analysis_path),
                 metadata={
-                    "analysis_input_path": str(analysis_input_path),
-                    "raw_path": str(raw_path),
+                    "analysis_input_path": str(analyzed.analysis_input_path),
+                    "raw_path": str(analyzed.raw_path),
                     "role_signals": signals["role_signals"][:8],
+                    "document_type": analyzed.document_type,
+                    "education_signals": list(signals.get("education_signals") or [])[:4],
+                    "work_history_signals": list(signals.get("work_history_signals") or [])[:4],
                 },
             )
         )
 
-    candidate_patch = dict(payload.get("candidate_patch") or {})
+    candidate_patch = build_candidate_patch_from_signal_bundle(
+        candidate,
+        signals,
+        target_company=target_company,
+        source_url=str(review_dir),
+    )
+    candidate_patch.update(dict(payload.get("candidate_patch") or {}))
     if not str(candidate_patch.get("linkedin_url") or "").strip() and signals["linkedin_urls"]:
         candidate_patch["linkedin_url"] = signals["linkedin_urls"][0]
     if not str(candidate_patch.get("media_url") or "").strip():
@@ -188,7 +162,7 @@ def apply_manual_review_resolution(
         "asset_root": str(review_dir),
         "source_links": source_links,
         "fetched_asset_count": len(list((review_dir / "sources").glob("*"))) if (review_dir / "sources").exists() else 0,
-        "analysis_count": len(list((review_dir / "analysis").glob("*.json"))) if (review_dir / "analysis").exists() else 0,
+        "analysis_count": len(list((review_dir / "sources").glob("*_analysis*.json"))) if (review_dir / "sources").exists() else 0,
         "candidate_patch": candidate_patch,
         "resolved_signals": signals,
     }
@@ -295,6 +269,9 @@ def _apply_candidate_patch(
         "personal_urls": signals.get("personal_urls", [])[:3],
         "resume_urls": signals.get("resume_urls", [])[:3],
         "role_signals": signals.get("role_signals", [])[:8],
+        "education_signals": list(signals.get("education_signals") or [])[:6],
+        "work_history_signals": list(signals.get("work_history_signals") or [])[:8],
+        "affiliation_signals": list(signals.get("affiliation_signals") or [])[:6],
     }
     if not str(record.get("linkedin_url") or "").strip() and signals.get("linkedin_urls"):
         record["linkedin_url"] = signals["linkedin_urls"][0]
@@ -310,18 +287,7 @@ def _apply_candidate_patch(
     record["source_path"] = str(review_dir)
     record["metadata"] = metadata
     return Candidate(**record)
-
-
-def _merge_signal_map(target: dict[str, list[str]], incoming: dict[str, list[str]]) -> None:
-    for key, values in incoming.items():
-        current = target.setdefault(key, [])
-        for value in values:
-            normalized = str(value or "").strip()
-            if normalized and normalized not in current:
-                current.append(normalized)
-
-
-def _pick_media_url(signals: dict[str, list[str]]) -> str:
+def _pick_media_url(signals: dict[str, Any]) -> str:
     for key in ["x_urls", "github_urls", "personal_urls", "resume_urls"]:
         values = list(signals.get(key) or [])
         if values:

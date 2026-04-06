@@ -1,10 +1,12 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from sourcing_agent.acquisition import AcquisitionEngine
 from sourcing_agent.agent_runtime import AgentRuntimeCoordinator
 from sourcing_agent.asset_catalog import AssetCatalog
+from sourcing_agent.document_extraction import AnalyzedDocumentAsset, empty_signal_bundle
 from sourcing_agent.model_provider import DeterministicModelClient
 from sourcing_agent.orchestrator import SourcingOrchestrator
 from sourcing_agent.semantic_provider import LocalSemanticProvider
@@ -118,6 +120,78 @@ class ManualReviewResolutionTest(unittest.TestCase):
         artifact_root = Path(result["resolution"]["artifact_root"])
         self.assertTrue((artifact_root / "resolution_input.json").exists())
         self.assertTrue((artifact_root / "sources" / "source_01.json").exists())
+
+    def test_manual_review_resolution_structures_resume_signals_into_candidate(self) -> None:
+        signal_bundle = empty_signal_bundle()
+        signal_bundle["resume_urls"] = ["https://horace.io/files/horace.pdf"]
+        signal_bundle["validated_summaries"] = ["Horace He current profile mentions Thinking Machines Lab."]
+        signal_bundle["role_signals"] = ["compiler", "research"]
+        signal_bundle["education_signals"] = [
+            {"school": "MIT", "degree": "BS", "field": "Computer Science", "date_range": "2016-2020"}
+        ]
+        signal_bundle["work_history_signals"] = [
+            {"title": "Research Engineer", "organization": "Thinking Machines Lab", "date_range": "2025-Present"}
+        ]
+        signal_bundle["affiliation_signals"] = [
+            {"organization": "Thinking Machines Lab", "relation": "explicit_current_affiliation", "evidence": "Research Engineer at Thinking Machines Lab"}
+        ]
+
+        payload = {
+            "action": "resolved",
+            "reviewer": "tester",
+            "target_company": "Thinking Machines Lab",
+            "candidate": {
+                "candidate_id": "lead_horace",
+                "name_en": "Horace He",
+                "display_name": "Horace He",
+                "category": "lead",
+                "target_company": "Thinking Machines Lab",
+                "organization": "",
+                "source_dataset": "thinkingmachinesai_official_feed",
+                "source_path": str(self.root / "publication_leads.json"),
+                "metadata": {},
+            },
+            "source_links": [
+                {
+                    "label": "Resume",
+                    "url": "https://horace.io/files/horace.pdf",
+                    "source_type": "manual_review_resume",
+                }
+            ],
+        }
+
+        fake_asset = AnalyzedDocumentAsset(
+            source_url="https://horace.io/files/horace.pdf",
+            final_url="https://horace.io/files/horace.pdf",
+            content_type="application/pdf",
+            document_type="pdf_resume",
+            raw_path=str(self.root / "raw.pdf"),
+            extracted_text_path=str(self.root / "raw.txt"),
+            analysis_input_path=str(self.root / "input.json"),
+            analysis_path=str(self.root / "analysis.json"),
+            signals=signal_bundle,
+            analysis={
+                "summary": "Horace He resume confirms Thinking Machines Lab affiliation.",
+                "role_signals": ["compiler", "research"],
+                "education_signals": signal_bundle["education_signals"],
+                "work_history_signals": signal_bundle["work_history_signals"],
+                "affiliation_signals": signal_bundle["affiliation_signals"],
+                "recommended_links": {"resume_url": "https://horace.io/files/horace.pdf"},
+                "document_type": "pdf_resume",
+            },
+        )
+
+        with patch("sourcing_agent.manual_review_resolution.analyze_remote_document", return_value=fake_asset):
+            result = self.orchestrator.review_manual_review_item(payload)
+
+        self.assertEqual(result["status"], "applied_without_queue")
+        candidate = self.store.get_candidate("lead_horace")
+        self.assertIsNotNone(candidate)
+        assert candidate is not None
+        self.assertIn("MIT", candidate.education)
+        self.assertIn("Thinking Machines Lab", candidate.work_history)
+        self.assertEqual(candidate.organization, "Thinking Machines Lab")
+        self.assertEqual(candidate.media_url, "https://horace.io/files/horace.pdf")
 
 
 if __name__ == "__main__":

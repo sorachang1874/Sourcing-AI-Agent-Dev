@@ -196,16 +196,22 @@ class HarvestConnectorTest(unittest.TestCase):
         settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
         connector = HarvestProfileConnector(settings)
         with tempfile.TemporaryDirectory() as tempdir:
-            with patch(
-                "sourcing_agent.harvest_connectors._run_harvest_actor",
-                return_value=[
+            capture = {}
+
+            def _fake_run(_settings, payload):
+                capture["payload"] = dict(payload)
+                return [
                     {
                         "firstName": "Jane",
                         "lastName": "Doe",
                         "linkedinUrl": "https://www.linkedin.com/in/jane-doe/",
                         "publicIdentifier": "jane-doe",
                     }
-                ],
+                ]
+
+            with patch(
+                "sourcing_agent.harvest_connectors._run_harvest_actor",
+                side_effect=_fake_run,
             ):
                 result = connector.fetch_profiles_by_urls(
                     ["https://www.linkedin.com/in/jane-doe/"],
@@ -213,6 +219,8 @@ class HarvestConnectorTest(unittest.TestCase):
                 )
         self.assertIn("https://www.linkedin.com/in/jane-doe/", result)
         self.assertEqual(result["https://www.linkedin.com/in/jane-doe/"]["parsed"]["public_identifier"], "jane-doe")
+        self.assertIn("profileUrls", capture["payload"])
+        self.assertNotIn("urls", capture["payload"])
 
     def test_harvest_company_employees_reuses_matching_live_test_asset_without_token(self) -> None:
         settings = HarvestActorSettings(enabled=False, api_token="", actor_id="actor", default_mode="short", max_paid_items=25)

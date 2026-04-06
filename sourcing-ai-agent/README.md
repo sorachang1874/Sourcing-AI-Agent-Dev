@@ -36,6 +36,7 @@
   - `search_seed_discovery / slug_resolution / exploratory_enrichment` 已统一走同一套 provider 接口
   - search raw payload 现在会按 provider 的 `html/json` 形态落盘，便于缓存复用与审计
   - 当前环境下 DuckDuckGo 仍可能出现 TLS EOF，因此 production 推荐显式配置稳定 provider
+  - 对于 OpenClaw 这类“无需 search API 也能做 Google Search”的 Agent，底层思路更接近 `browser automation / Playwright`，而不是普通 search API；当前项目还未接入 browser-search lane，但已记录为后续方向
 - 支持 `agent runtime`
   - workflow / retrieval 已按 specialist lanes 记录 runtime session 和 trace spans
   - 当前 lane 包括 `triage_planner / search_planner / acquisition_specialist / enrichment_specialist / exploration_specialist / retrieval_specialist / review_specialist`
@@ -78,6 +79,17 @@
 - 支持 model-assisted page analysis：
   - 以通用 `analyze_page_asset` 接口调用页面摘要/校验模型，不把实现写死为 Qwen
   - 当前已有 deterministic fallback，后续可并列接 Claude 等其他模型
+  - `analyze_page_asset` 现已扩展输出：
+    - `education_signals`
+    - `work_history_signals`
+    - `affiliation_signals`
+    - `document_type`
+  - exploration / manual review 现在不仅会保存页面摘要，也会把可结构化的 education/work history 草稿回写到 candidate
+  - 已支持：
+    - HTML homepage / CV
+    - Google Docs CV
+    - PDF resume 的文本提取链路
+  - 当前 PDF 仍是 text-extraction first，不含 OCR；对图片型 PDF 仍可能只能保留证据而无法自动补齐字段
 - 支持 criteria evolution persistence：
   - 保存人工 review feedback
   - 持久化 alias / must_signal / exclude_signal 等 pattern
@@ -127,7 +139,8 @@
     - `29` current
     - `25` former
     - `1` unresolved lead
-  - 当前设备上 Harvest profile-scraper 未启用，因此 former detail 补全会保留在 `profile_completion_backlog.json`，而不是静默丢失
+  - 当前设备上 Harvest 配置入口已恢复到 `runtime/secrets/providers.local.json`
+  - 但当前 Harvest token 仍需重新 smoke test 验证；若 auth 失效，former detail 补全仍会保留在 `profile_completion_backlog.json`，而不是静默丢失
 - 支持 `Manual Review Queue`
   - `lead_only`
   - 缺少 LinkedIn profile 的候选人
@@ -198,6 +211,7 @@
     - roster -> candidate 现会保留 `linkedin_url / metadata.profile_url`
     - 已知 LinkedIn URL 的 detail enrichment 现优先走 Harvest batch profile-scraper，而不是逐人串行调用
     - Thinking Machines Lab 最新 live snapshot 已成功解析 `12` 份 prioritized full profile detail
+  - 已新增 [docs/HARVESTAPI_PLAYBOOK.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/HARVESTAPI_PLAYBOOK.md)，沉淀 actor 链接、payload 规范、TML live 结论与当前已知坑
 
 ## 目录
 
@@ -218,6 +232,7 @@ sourcing-ai-agent/
 2. [PROGRESS.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/PROGRESS.md)
 3. [docs/MODULES.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/MODULES.md)
 4. [docs/DEVELOPMENT_GUIDE.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/DEVELOPMENT_GUIDE.md)
+5. [docs/HARVESTAPI_PLAYBOOK.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/HARVESTAPI_PLAYBOOK.md)
 5. [docs/THINKING_MACHINES_LAB_RETROSPECTIVE.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/THINKING_MACHINES_LAB_RETROSPECTIVE.md)
 6. [docs/CROSS_DEVICE_SYNC.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/CROSS_DEVICE_SYNC.md)
 7. [docs/HANDOFF_2026-04-06.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/HANDOFF_2026-04-06.md)

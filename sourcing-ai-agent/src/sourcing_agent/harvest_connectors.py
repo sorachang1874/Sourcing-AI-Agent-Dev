@@ -68,7 +68,7 @@ class HarvestProfileConnector:
             return results
 
         payload = {
-            "urls": pending_urls,
+            "profileUrls": pending_urls,
             "profileScraperMode": _profile_scraper_mode(self.settings),
         }
         body = _run_harvest_actor(self.settings, payload)

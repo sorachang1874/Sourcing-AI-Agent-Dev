@@ -27,6 +27,15 @@ class FetchedTextAsset:
     source_label: str
 
 
+@dataclass(frozen=True, slots=True)
+class FetchedBinaryAsset:
+    url: str
+    final_url: str
+    content_type: str
+    content: bytes
+    source_label: str
+
+
 def fetch_text_url(url: str, *, timeout: int = 30, source_label: str = "web") -> FetchedTextAsset:
     response = requests.get(url, headers=DEFAULT_HEADERS, timeout=timeout, allow_redirects=True)
     response.raise_for_status()
@@ -37,6 +46,19 @@ def fetch_text_url(url: str, *, timeout: int = 30, source_label: str = "web") ->
         final_url=str(response.url or url),
         content_type=content_type,
         text=response.text,
+        source_label=source_label,
+    )
+
+
+def fetch_binary_url(url: str, *, timeout: int = 30, source_label: str = "web") -> FetchedBinaryAsset:
+    response = requests.get(url, headers=DEFAULT_HEADERS, timeout=timeout, allow_redirects=True)
+    response.raise_for_status()
+    content_type = str(response.headers.get("Content-Type") or "application/octet-stream").strip()
+    return FetchedBinaryAsset(
+        url=url,
+        final_url=str(response.url or url),
+        content_type=content_type,
+        content=response.content,
         source_label=source_label,
     )
 
