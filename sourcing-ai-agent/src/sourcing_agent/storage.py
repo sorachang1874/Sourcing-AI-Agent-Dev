@@ -516,6 +516,13 @@ class SQLiteStore:
         rows = self._connection.execute("SELECT * FROM candidates ORDER BY name_en").fetchall()
         return [self._candidate_from_row(row) for row in rows]
 
+    def list_candidates_for_company(self, target_company: str) -> list[Candidate]:
+        rows = self._connection.execute(
+            "SELECT * FROM candidates WHERE lower(target_company) = lower(?) ORDER BY name_en",
+            (target_company,),
+        ).fetchall()
+        return [self._candidate_from_row(row) for row in rows]
+
     def get_candidate(self, candidate_id: str) -> Candidate | None:
         row = self._connection.execute(
             "SELECT * FROM candidates WHERE candidate_id = ? LIMIT 1",
@@ -599,6 +606,34 @@ class SQLiteStore:
             results.append(
                 {
                     "evidence_id": row["evidence_id"],
+                    "source_type": row["source_type"],
+                    "title": row["title"],
+                    "url": row["url"],
+                    "summary": row["summary"],
+                    "source_dataset": row["source_dataset"],
+                    "source_path": row["source_path"],
+                    "metadata": json.loads(row["metadata_json"] or "{}"),
+                }
+            )
+        return results
+
+    def list_evidence_for_company(self, target_company: str) -> list[dict[str, Any]]:
+        rows = self._connection.execute(
+            """
+            SELECT e.*
+            FROM evidence e
+            JOIN candidates c ON c.candidate_id = e.candidate_id
+            WHERE lower(c.target_company) = lower(?)
+            ORDER BY e.candidate_id, e.title
+            """,
+            (target_company,),
+        ).fetchall()
+        results = []
+        for row in rows:
+            results.append(
+                {
+                    "evidence_id": row["evidence_id"],
+                    "candidate_id": row["candidate_id"],
                     "source_type": row["source_type"],
                     "title": row["title"],
                     "url": row["url"],

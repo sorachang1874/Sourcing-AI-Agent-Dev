@@ -364,12 +364,12 @@ class HarvestCompanyEmployeesConnector:
 
 def parse_harvest_profile_payload(payload: dict[str, Any]) -> dict[str, Any]:
     data = payload.get("item") if isinstance(payload.get("item"), dict) else payload
-    full_name = str(data.get("fullName") or data.get("full_name") or data.get("name") or "").strip()
+    full_name = _full_name_from_payload(data)
     headline = str(data.get("headline") or data.get("occupation") or "").strip()
     profile_url = str(data.get("linkedinUrl") or data.get("profileUrl") or data.get("url") or "").strip()
     public_identifier = str(data.get("publicIdentifier") or data.get("public_identifier") or "").strip()
     summary = str(data.get("about") or data.get("summary") or data.get("description") or "").strip()
-    location = str(data.get("location") or data.get("locationName") or "").strip()
+    location = _location_text(data.get("location") or data.get("locationName"))
     experience = _coerce_list(data.get("experience") or data.get("experiences") or data.get("positions"))
     education = _coerce_list(data.get("education") or data.get("educations") or data.get("schools"))
     publications = _coerce_list(data.get("publications") or data.get("posts") or [])
@@ -677,4 +677,12 @@ def _extract_current_company(data: dict[str, Any], experience: list[dict[str, An
     for item in experience:
         if bool(item.get("isCurrent") or item.get("is_current")):
             return str(item.get("company") or item.get("companyName") or item.get("company_name") or "").strip()
+    current_positions = data.get("currentPositions") or data.get("currentPosition") or []
+    if isinstance(current_positions, list):
+        for item in current_positions:
+            if not isinstance(item, dict):
+                continue
+            company_name = str(item.get("companyName") or item.get("company") or "").strip()
+            if company_name:
+                return company_name
     return str(data.get("currentCompany") or data.get("current_company") or "").strip()

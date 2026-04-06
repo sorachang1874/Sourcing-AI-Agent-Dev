@@ -1686,6 +1686,10 @@ def _profile_matches_candidate(profile: dict[str, Any], candidate: Candidate, id
     full_name = profile.get("full_name", "")
     if not _names_match(candidate.name_en, full_name):
         return False
+    candidate_profile_urls = {str(item).strip().rstrip("/") for item in _candidate_profile_urls(candidate) if str(item).strip()}
+    profile_url = str(profile.get("profile_url") or "").strip().rstrip("/")
+    if profile_url and profile_url in candidate_profile_urls:
+        return True
     company_variants = {_normalize(identity.canonical_name)}
     company_variants.update(_normalize(alias) for alias in identity.aliases if alias)
     current_company = str(profile.get("current_company", "")).strip()

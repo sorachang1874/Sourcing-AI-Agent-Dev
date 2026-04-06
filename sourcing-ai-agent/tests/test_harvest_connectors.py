@@ -22,14 +22,15 @@ from sourcing_agent.harvest_connectors import (
 class HarvestConnectorTest(unittest.TestCase):
     def test_parse_harvest_profile_payload(self) -> None:
         payload = {
-            "fullName": "Jane Doe",
+            "firstName": "Jane",
+            "lastName": "Doe",
             "headline": "Research Engineer at xAI",
             "linkedinUrl": "https://www.linkedin.com/in/jane-doe/",
             "publicIdentifier": "jane-doe",
             "about": "Works on reinforcement learning systems.",
-            "location": "San Francisco Bay Area",
-            "currentCompany": "xAI",
-            "experiences": [{"companyName": "xAI", "title": "Research Engineer", "isCurrent": True}],
+            "location": {"linkedinText": "San Francisco Bay Area"},
+            "currentPosition": [{"companyName": "xAI"}],
+            "experiences": [{"companyName": "xAI", "title": "Research Engineer"}],
             "education": [{"schoolName": "MIT"}],
             "moreProfiles": [{"url": "https://www.linkedin.com/in/jane-doe-2/"}],
         }
@@ -37,6 +38,7 @@ class HarvestConnectorTest(unittest.TestCase):
         self.assertEqual(parsed["full_name"], "Jane Doe")
         self.assertEqual(parsed["profile_url"], "https://www.linkedin.com/in/jane-doe/")
         self.assertEqual(parsed["current_company"], "xAI")
+        self.assertEqual(parsed["location"], "San Francisco Bay Area")
         self.assertEqual(len(parsed["more_profiles"]), 1)
 
     def test_lead_profile_merge_upgrades_membership(self) -> None:

@@ -9,6 +9,8 @@ from .agent_runtime import AgentRuntimeCoordinator
 from .api import create_server
 from .asset_catalog import AssetCatalog
 from .asset_sync import AssetBundleManager
+from .candidate_artifacts import build_company_candidate_artifacts
+from .company_asset_completion import CompanyAssetCompletionManager
 from .model_provider import build_model_client
 from .object_storage import build_object_storage_client
 from .orchestrator import SourcingOrchestrator
@@ -47,6 +49,19 @@ def build_object_storage():
     catalog = AssetCatalog.discover()
     settings = load_settings(catalog.project_root)
     return build_object_storage_client(settings.object_storage)
+
+
+def build_asset_completion_manager() -> CompanyAssetCompletionManager:
+    catalog = AssetCatalog.discover()
+    settings = load_settings(catalog.project_root)
+    store = SQLiteStore(settings.db_path)
+    model_client = build_model_client(settings.model_provider, settings.qwen)
+    return CompanyAssetCompletionManager(
+        runtime_dir=settings.runtime_dir,
+        store=store,
+        settings=settings,
+        model_client=model_client,
+    )
 
 
 def main() -> None:
@@ -164,6 +179,18 @@ def main() -> None:
     sqlite_snapshot_parser = subparsers.add_parser("export-sqlite-snapshot", help="Export the current SQLite database as a portable asset bundle")
     sqlite_snapshot_parser.add_argument("--output-dir", default="", help="Optional bundle export directory")
 
+    company_artifact_parser = subparsers.add_parser("build-company-candidate-artifacts", help="Materialize normalized and reusable company candidate artifacts from SQLite + evidence")
+    company_artifact_parser.add_argument("--company", required=True, help="Company key or name")
+    company_artifact_parser.add_argument("--snapshot-id", default="", help="Optional snapshot id; defaults to latest")
+    company_artifact_parser.add_argument("--output-dir", default="", help="Optional artifact output directory")
+
+    complete_company_assets_parser = subparsers.add_parser("complete-company-assets", help="Continue company asset accumulation using known profile URLs and low-cost exploration")
+    complete_company_assets_parser.add_argument("--company", required=True, help="Company key or name")
+    complete_company_assets_parser.add_argument("--snapshot-id", default="", help="Optional snapshot id; defaults to latest")
+    complete_company_assets_parser.add_argument("--profile-detail-limit", type=int, default=12, help="Max candidates to complete via known LinkedIn URLs")
+    complete_company_assets_parser.add_argument("--exploration-limit", type=int, default=3, help="Max unresolved candidates to explore via low-cost web search")
+    complete_company_assets_parser.add_argument("--without-artifacts", action="store_true", help="Skip normalized/reusable artifact build")
+
     restore_bundle_parser = subparsers.add_parser("restore-asset-bundle", help="Restore a previously exported asset bundle into runtime")
     restore_bundle_parser.add_argument("--manifest", required=True, help="Path to bundle_manifest.json")
     restore_bundle_parser.add_argument("--target-runtime-dir", default="", help="Optional runtime dir override")
@@ -196,6 +223,8 @@ def main() -> None:
         "export-company-snapshot-bundle",
         "export-company-handoff-bundle",
         "export-sqlite-snapshot",
+        "build-company-candidate-artifacts",
+        "complete-company-assets",
         "restore-asset-bundle",
         "upload-asset-bundle",
         "download-asset-bundle",
@@ -233,6 +262,40 @@ def main() -> None:
             return
         if args.command == "export-sqlite-snapshot":
             print(json.dumps(bundle_manager.export_sqlite_snapshot(output_dir=args.output_dir or None), ensure_ascii=False, indent=2))
+            return
+        if args.command == "build-company-candidate-artifacts":
+            catalog = AssetCatalog.discover()
+            settings = load_settings(catalog.project_root)
+            store = SQLiteStore(settings.db_path)
+            print(
+                json.dumps(
+                    build_company_candidate_artifacts(
+                        runtime_dir=settings.runtime_dir,
+                        store=store,
+                        target_company=args.company,
+                        snapshot_id=args.snapshot_id,
+                        output_dir=args.output_dir or None,
+                    ),
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+            return
+        if args.command == "complete-company-assets":
+            manager = build_asset_completion_manager()
+            print(
+                json.dumps(
+                    manager.complete_company_assets(
+                        target_company=args.company,
+                        snapshot_id=args.snapshot_id,
+                        profile_detail_limit=args.profile_detail_limit,
+                        exploration_limit=args.exploration_limit,
+                        build_artifacts=not args.without_artifacts,
+                    ),
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
             return
         if args.command == "restore-asset-bundle":
             print(

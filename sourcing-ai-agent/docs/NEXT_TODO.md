@@ -16,13 +16,30 @@
 - publication supplementation
 - manual review resolution
 - handoff bundle durable sync to R2
+- company-history materialization
+- normalized/reusable candidate artifacts
+
+当前已知状态：
+
+- Thinking Machines Lab 聚合资产视图已恢复为：
+  - `55` candidates
+  - `75` evidence
+  - `29 current / 25 former / 1 unresolved lead`
+- backlog 已显式拆分为：
+  - `manual_review_backlog.json`
+    - 当前重点：`Horace He`、`Tianle Li`
+  - `profile_completion_backlog.json`
+    - 当前 `25` 人
+    - 主要是 former candidates with LinkedIn URL but no full profile detail
+- 当前设备的 Harvest profile providers 未启用，因此 former detail 暂时不会 live 补全
 
 下一步继续补：
 
-- former leads
+- 重新启用 active device/server 上的 Harvest profile-scraper
+- drain `profile_completion_backlog.json`
+- 继续处理 `manual_review_backlog.json`
 - unresolved publication leads
 - corner-case web exploration assets
-- 可复用的 normalized candidate artifacts
 
 ### 2. Strengthen object storage sync operability
 
@@ -90,3 +107,14 @@
 3. 阅读这份 `docs/NEXT_TODO.md`
 4. 检查 object storage 配置
 5. 继续做 `Thinking Machines Lab asset accumulation` 和 `server-oriented runtime model`
+
+## Useful Commands
+
+```bash
+cd '/home/sorachang/projects/Sourcing AI Agent Dev/sourcing-ai-agent'
+
+PYTHONPATH=src python3 -m sourcing_agent.cli build-company-candidate-artifacts --company thinkingmachineslab
+PYTHONPATH=src python3 -m sourcing_agent.cli complete-company-assets --company thinkingmachineslab --profile-detail-limit 12 --exploration-limit 2
+PYTHONPATH=src python3 -m sourcing_agent.cli export-company-handoff-bundle --company thinkingmachineslab
+PYTHONPATH=src python3 -m sourcing_agent.cli upload-asset-bundle --manifest runtime/asset_exports/<bundle>/bundle_manifest.json
+```

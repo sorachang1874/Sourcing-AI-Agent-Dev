@@ -107,6 +107,27 @@
 - 支持 centralized asset logger：
   - snapshot 内统一生成 `asset_registry.json`
   - company roster、search seed、profile payload、exploration page、analysis input/output、publication raw page 都会进入统一 registry
+- 支持公司级历史资产物化与可复用候选文档提炼：
+  - `build-company-candidate-artifacts` 现会聚合同一公司的历史 snapshot `candidate_documents.json` 与 SQLite 主库，而不是只读取最后一次覆盖进主库的数据
+  - 会输出：
+    - `materialized_candidate_documents.json`
+    - `normalized_candidates.json`
+    - `reusable_candidate_documents.json`
+    - `manual_review_backlog.json`
+    - `profile_completion_backlog.json`
+  - `profile_completion_backlog` 会显式列出“已有 LinkedIn URL 但尚未拿到 full profile detail”的候选人，便于后续继续补全
+- 支持公司级后处理资产补全：
+  - `complete-company-assets` 会先物化公司历史候选池，再执行：
+    - known-URL profile completion
+    - unresolved lead exploration
+    - follow-up profile completion
+  - 当前 Thinking Machines Lab 的聚合资产视图已恢复为：
+    - `55` candidates
+    - `75` evidence
+    - `29` current
+    - `25` former
+    - `1` unresolved lead
+  - 当前设备上 Harvest profile-scraper 未启用，因此 former detail 补全会保留在 `profile_completion_backlog.json`，而不是静默丢失
 - 支持 `Manual Review Queue`
   - `lead_only`
   - 缺少 LinkedIn profile 的候选人
@@ -243,6 +264,8 @@ PYTHONPATH=src python3 -m sourcing_agent.cli show-recoverable-workers
 PYTHONPATH=src python3 -m sourcing_agent.cli show-daemon-status
 PYTHONPATH=src python3 -m sourcing_agent.cli export-company-snapshot-bundle --company thinkingmachineslab
 PYTHONPATH=src python3 -m sourcing_agent.cli export-company-handoff-bundle --company thinkingmachineslab
+PYTHONPATH=src python3 -m sourcing_agent.cli build-company-candidate-artifacts --company thinkingmachineslab
+PYTHONPATH=src python3 -m sourcing_agent.cli complete-company-assets --company thinkingmachineslab --profile-detail-limit 12 --exploration-limit 2
 PYTHONPATH=src python3 -m sourcing_agent.cli export-sqlite-snapshot
 PYTHONPATH=src python3 -m sourcing_agent.cli upload-asset-bundle --manifest runtime/asset_exports/<bundle>/bundle_manifest.json
 PYTHONPATH=src python3 -m sourcing_agent.cli download-asset-bundle --bundle-kind company_handoff --bundle-id <bundle_id> --output-dir /tmp/asset_imports

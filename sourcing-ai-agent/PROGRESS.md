@@ -2,6 +2,63 @@
 
 ## 2026-04-06
 
+### Thinking Machines Lab 资产补全与可复用候选文档提炼
+
+- 已修正 Harvest profile parser 的两个关键问题：
+  - `parse_harvest_profile_payload` 现在会从 `firstName + lastName` 回填 `full_name`
+  - `currentPosition.companyName` 现在会参与 `current_company` 提取
+  - 这避免了已有 LinkedIn URL 的 profile detail 因姓名或 current company 解析不全而无法进入后续匹配
+- 已修正 known-URL profile 匹配策略：
+  - 若 `candidate.linkedin_url` 与 `profile.profile_url` 一致，且姓名一致，则优先视为同一个人
+  - 不再把“必须先匹配 company 字段”作为已知 URL detail enrichment 的唯一条件
+- 已补公司级历史资产物化层：
+  - 新增 `candidate_artifacts.py` 中的 `materialize_company_candidate_view`
+  - 会聚合同一公司所有历史 snapshot 的 `candidate_documents.json` 与当前 SQLite 主库
+  - 不再因为后续 former workflow 覆盖主库，就丢失 earlier current roster
+- 已补公司级后处理资产补全入口：
+  - 新增 `complete-company-assets`
+  - 补全流程现在是：
+    - materialize company history
+    - sync candidates/evidence back into SQLite
+    - known-URL profile completion
+    - unresolved exploration
+    - follow-up profile completion
+    - rebuild normalized/reusable artifacts
+- 已补 normalized/reusable candidate artifact 提炼：
+  - `build-company-candidate-artifacts` 现在会输出：
+    - `materialized_candidate_documents.json`
+    - `normalized_candidates.json`
+    - `reusable_candidate_documents.json`
+    - `manual_review_backlog.json`
+    - `profile_completion_backlog.json`
+  - 新增 `profile_completion_backlog`，用于显式管理“已有 LinkedIn URL 但尚未拿到 full detail”的候选人
+- Thinking Machines Lab 当前物化结果已更新：
+  - snapshot: `20260406T172703`
+  - `candidate_count=55`
+  - `evidence_count=75`
+  - `status_counts={current: 29, former: 25, lead: 1}`
+  - `manual_review_backlog_count=2`
+  - `profile_completion_backlog_count=25`
+- 当前 backlog 的含义已明确：
+  - `manual_review_backlog`
+    - `Horace He`: unresolved lead with homepage/CV evidence
+    - `Tianle Li`: current candidate but missing individual LinkedIn URL
+  - `profile_completion_backlog`
+    - 主要是 Thinking Machines Lab former candidates
+    - 当前设备上 `Harvest profile-scraper` 未启用，因此被保留为待补全资产，而不是被静默忽略
+- 已确认当前设备的 provider 状态：
+  - `harvest.profile_scraper.enabled = false`
+  - `harvest.profile_search.enabled = false`
+  - `harvest.company_employees.enabled = false`
+  - 因此当前阶段依赖：
+    - 已有 live snapshot / provider cache / manual review asset
+    - 而不是新发起 live Harvest detail requests
+- 已补测试覆盖：
+  - `tests/test_harvest_connectors.py`
+  - `tests/test_candidate_artifacts.py`
+  - `tests/test_company_asset_completion.py`
+  - 针对性测试通过
+
 ### GitHub 同步与跨设备接手
 
 - 已将 `Sourcing AI Agent Dev/` 整理为 monorepo 根目录，准备同步到 private GitHub repo：
