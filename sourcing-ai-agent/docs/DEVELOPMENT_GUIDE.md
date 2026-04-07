@@ -1,5 +1,7 @@
 # Development Guide
 
+这份文档只覆盖工程实现原则。分支、PR、代码评审、AI 使用和协作流程统一以 monorepo 根目录 [CONTRIBUTING.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/CONTRIBUTING.md) 为准。
+
 ## Core Engineering Rules
 
 1. Raw-first  

@@ -11,14 +11,15 @@
 如果你是新的开发者，或是从新的 AI session 重新接手，请先看：
 
 1. [ONBOARDING.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/ONBOARDING.md)
-2. [GITHUB_SYNC_PREP.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/GITHUB_SYNC_PREP.md)
-3. [sourcing-ai-agent/README.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/README.md)
-4. [sourcing-ai-agent/PROGRESS.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/PROGRESS.md)
-5. [sourcing-ai-agent/docs/CROSS_DEVICE_SYNC.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/CROSS_DEVICE_SYNC.md)
-6. [sourcing-ai-agent/docs/HANDOFF_2026-04-06.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/HANDOFF_2026-04-06.md)
-7. [sourcing-ai-agent/docs/RECOVERY_TUTORIAL.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/RECOVERY_TUTORIAL.md)
-8. [sourcing-ai-agent/docs/NEXT_TODO.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/NEXT_TODO.md)
-9. [sourcing-ai-agent/docs/HARVESTAPI_PLAYBOOK.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/HARVESTAPI_PLAYBOOK.md)
+2. [CONTRIBUTING.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/CONTRIBUTING.md)
+3. [GITHUB_SYNC_PREP.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/GITHUB_SYNC_PREP.md)
+4. [sourcing-ai-agent/README.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/README.md)
+5. [sourcing-ai-agent/PROGRESS.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/PROGRESS.md)
+6. [sourcing-ai-agent/docs/CROSS_DEVICE_SYNC.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/CROSS_DEVICE_SYNC.md)
+7. [sourcing-ai-agent/docs/HANDOFF_2026-04-06.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/HANDOFF_2026-04-06.md)
+8. [sourcing-ai-agent/docs/RECOVERY_TUTORIAL.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/RECOVERY_TUTORIAL.md)
+9. [sourcing-ai-agent/docs/NEXT_TODO.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/NEXT_TODO.md)
+10. [sourcing-ai-agent/docs/HARVESTAPI_PLAYBOOK.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/HARVESTAPI_PLAYBOOK.md)
 
 ## 目录
 
@@ -48,6 +49,7 @@ Sourcing AI Agent Dev/
 
 这个 monorepo 现在可以推送到 private GitHub repo，但必须遵守以下规则：
 
+- 日常协作规则统一以 [CONTRIBUTING.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/CONTRIBUTING.md) 为准
 - 不提交任何真实密钥或 provider secret
 - 不提交 `runtime/` 下的 live data / search payload / profile payload / company assets
 - 不提交历史 `api_accounts.json`

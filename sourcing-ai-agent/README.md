@@ -4,6 +4,8 @@
 
 `用户意图 -> criteria 澄清 -> acquisition plan -> 异步 sourcing workflow -> retrieval -> result artifact`
 
+开始在这个子项目里改代码之前，先阅读 monorepo 根目录的协作规则 [../CONTRIBUTING.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/CONTRIBUTING.md)。
+
 ## 当前目标
 
 - 把历史调研资产转成结构化候选池，而不是继续依赖对话上下文
