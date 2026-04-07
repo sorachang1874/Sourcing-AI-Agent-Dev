@@ -2,16 +2,10 @@ name: backend-ci
 
 on:
   pull_request:
-    paths:
-      - "sourcing-ai-agent/**"
-      - ".github/workflows/backend-ci.yml"
   push:
     branches:
       - main
       - dev
-    paths:
-      - "sourcing-ai-agent/**"
-      - ".github/workflows/backend-ci.yml"
 
 jobs:
   unit-tests:
