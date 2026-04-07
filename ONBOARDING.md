@@ -2,18 +2,21 @@
 
 这个仓库的目标是让新的开发者或新的 AI session 能快速接手 `Sourcing AI Agent` 的后续开发，而不依赖之前的对话上下文。
 
+开始写代码前，先看一遍根目录 [CONTRIBUTING.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/CONTRIBUTING.md)。后续分支、PR、AI 使用、API contract 和配置变更都以它为准。
+
 ## 先看哪里
 
 1. 根目录 [README.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/README.md)
-2. [sourcing-ai-agent/README.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/README.md)
-3. [sourcing-ai-agent/PROGRESS.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/PROGRESS.md)
-4. [sourcing-ai-agent/docs/MODULES.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/MODULES.md)
-5. [sourcing-ai-agent/docs/THINKING_MACHINES_LAB_RETROSPECTIVE.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/THINKING_MACHINES_LAB_RETROSPECTIVE.md)
-6. [sourcing-ai-agent/docs/CROSS_DEVICE_SYNC.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/CROSS_DEVICE_SYNC.md)
-7. [sourcing-ai-agent/docs/HANDOFF_2026-04-06.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/HANDOFF_2026-04-06.md)
-8. [sourcing-ai-agent/docs/RECOVERY_TUTORIAL.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/RECOVERY_TUTORIAL.md)
-9. [sourcing-ai-agent/docs/NEXT_TODO.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/NEXT_TODO.md)
-10. [sourcing-ai-agent/docs/HARVESTAPI_PLAYBOOK.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/HARVESTAPI_PLAYBOOK.md)
+2. [CONTRIBUTING.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/CONTRIBUTING.md)
+3. [sourcing-ai-agent/README.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/README.md)
+4. [sourcing-ai-agent/PROGRESS.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/PROGRESS.md)
+5. [sourcing-ai-agent/docs/MODULES.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/MODULES.md)
+6. [sourcing-ai-agent/docs/THINKING_MACHINES_LAB_RETROSPECTIVE.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/THINKING_MACHINES_LAB_RETROSPECTIVE.md)
+7. [sourcing-ai-agent/docs/CROSS_DEVICE_SYNC.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/CROSS_DEVICE_SYNC.md)
+8. [sourcing-ai-agent/docs/HANDOFF_2026-04-06.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/HANDOFF_2026-04-06.md)
+9. [sourcing-ai-agent/docs/RECOVERY_TUTORIAL.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/RECOVERY_TUTORIAL.md)
+10. [sourcing-ai-agent/docs/NEXT_TODO.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/NEXT_TODO.md)
+11. [sourcing-ai-agent/docs/HARVESTAPI_PLAYBOOK.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/HARVESTAPI_PLAYBOOK.md)
 
 ## 当前项目状态
 
