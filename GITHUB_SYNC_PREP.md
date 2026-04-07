@@ -29,22 +29,19 @@
 
 ## 当前 GitHub 限制
 
-当前这个 private repo 在现有账号/套餐下，GitHub API 对以下能力返回 `HTTP 403`：
+仓库改为 public 后，`main` 和 `dev` 的 branch protection 已可正常启用。
 
-- branch protection
-- repository rulesets
+当前已启用：
 
-这意味着：
+- Require pull request before merging
+- Require at least 1 approval
+- Require conversation resolution
+- Require status check `unit-tests`
+- Enforce for admins
+- Disallow force pushes
+- Disallow branch deletion
 
-- 文档中的保护规则已经定义好了
-- 但 GitHub 侧暂时不能强制执行
-
-在升级套餐或调整仓库可见性之前，协作上先按以下方式替代：
-
-- 强制走 `main + dev + feature/*` 分支流程
-- 强制所有代码通过 PR 合入
-- 强制人工 review 和 PR checklist
-- 用 GitHub Actions 提供最小 CI 信号
+后续如果新增前端 CI、lint 或其他 required checks，需要同步更新 GitHub protection 设置。
 
 ## 注意
 

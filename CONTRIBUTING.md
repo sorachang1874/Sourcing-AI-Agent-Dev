@@ -253,16 +253,17 @@ GitHub 仓库必须配置以下保护：
 
 当前仓库的实际限制：
 
-- 这个私有仓库当前账号/套餐下，GitHub API 对 branch protection 和 rulesets 返回 `HTTP 403`
-- 也就是说，这些保护规则目前不能由平台强制执行
+- 这些规则现已在 GitHub 上为 `main` 和 `dev` 启用 branch protection
+- 当前强制项包括：
+  - PR required
+  - at least 1 approval
+  - conversation resolution required
+  - required status check: `unit-tests`
+  - admins enforced
+  - no force push
+  - no branch deletion
 
-在升级 GitHub 套餐或改为 public 之前，临时执行方式如下：
-
-- 默认所有改动都走 PR，不走直推
-- 默认只有 PR 经过另一位开发者确认后才允许 merge
-- 默认只把 `main` 当 release 分支使用，不在 `main` 上日常开发
-- 默认由合并者在 merge 前手动检查 CI 和 checklist，而不是假设 GitHub 会拦截
-- 一旦 GitHub 侧支持 branch protection，应立即按本文件补齐强制规则
+后续如果新增前端 CI 或更细的质量门禁，需要同步更新 GitHub protection 的 required checks。
 
 ## 10. Feature Safety Rules
 
