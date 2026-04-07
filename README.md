@@ -71,6 +71,13 @@ Sourcing AI Agent Dev/
 - 历史 `api_accounts.json`
 - zip / tar 打包副产物
 
+另外要注意：
+
+- `runtime/vendor/` 里的本机增强依赖也不会进入 Git
+  - 例如 `pdfminer.six`
+  - 例如 browser-search 用到的 `playwright` / browser binaries
+- 这类依赖如果要跨设备复用，应跟随 asset bundle/object storage 一起恢复，而不是指望 Git 带上
+
 如果后续需要跨设备复用 runtime 或高价值 profile 资产，应单独放到安全的云端存储，而不是 Git。
 
 ## 换设备继续开发

@@ -6,7 +6,10 @@ from io import BytesIO
 import json
 from pathlib import Path
 import re
+import shutil
+import subprocess
 import sys
+import tempfile
 from typing import TYPE_CHECKING, Any
 from urllib import parse
 
@@ -20,15 +23,22 @@ if TYPE_CHECKING:
 
 
 _VENDOR_DIR = Path(__file__).resolve().parents[1] / "_vendor"
-if _VENDOR_DIR.exists():
-    vendor_path = str(_VENDOR_DIR)
-    if vendor_path not in sys.path:
-        sys.path.insert(0, vendor_path)
+_LOCAL_VENDOR_DIR = Path(__file__).resolve().parents[2] / "runtime" / "vendor" / "python"
+for candidate_dir in (_LOCAL_VENDOR_DIR, _VENDOR_DIR):
+    if candidate_dir.exists():
+        vendor_path = str(candidate_dir)
+        if vendor_path not in sys.path:
+            sys.path.insert(0, vendor_path)
 
 try:  # pragma: no cover - exercised in live/runtime paths
     from pypdf import PdfReader
 except Exception:  # pragma: no cover - graceful fallback when vendored dep is unavailable
     PdfReader = None
+
+try:  # pragma: no cover - exercised in live/runtime paths
+    from pdfminer.high_level import extract_text as pdfminer_extract_text
+except Exception:  # pragma: no cover - graceful fallback when optional dep is unavailable
+    pdfminer_extract_text = None
 
 
 STRUCTURED_SIGNAL_KEYS = ("education_signals", "work_history_signals", "affiliation_signals")
@@ -48,6 +58,13 @@ class AnalyzedDocumentAsset:
     analysis: dict[str, Any]
     title: str = ""
     description: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class PdfExtractionResult:
+    text: str
+    method: str
+    attempts: list[dict[str, Any]]
 
 
 def empty_signal_bundle() -> dict[str, Any]:
@@ -262,7 +279,8 @@ def analyze_remote_document(
             model_safe=False,
             metadata={"source_url": source_url, "final_url": fetched.final_url, "document_type": document_type},
         )
-        extracted_text = extract_pdf_text(fetched.content)
+        extraction_result = extract_pdf_text_details(fetched.content)
+        extracted_text = extraction_result.text
         extracted_text_file = asset_logger.write_text(
             asset_dir / f"{asset_prefix}_extracted.txt",
             extracted_text,
@@ -271,7 +289,13 @@ def analyze_remote_document(
             content_type="text/plain",
             is_raw_asset=False,
             model_safe=True,
-            metadata={"source_url": source_url, "final_url": fetched.final_url, "document_type": document_type},
+            metadata={
+                "source_url": source_url,
+                "final_url": fetched.final_url,
+                "document_type": document_type,
+                "extraction_method": extraction_result.method,
+                "extraction_attempts": extraction_result.attempts,
+            },
         )
         signals = empty_signal_bundle()
         if source_url not in signals["resume_urls"]:
@@ -668,6 +692,41 @@ def infer_structured_signals_from_payload(payload: dict[str, Any]) -> dict[str, 
 
 
 def extract_pdf_text(pdf_bytes: bytes) -> str:
+    return extract_pdf_text_details(pdf_bytes).text
+
+
+def extract_pdf_text_details(pdf_bytes: bytes) -> PdfExtractionResult:
+    candidates: list[tuple[str, str]] = []
+    attempts: list[dict[str, Any]] = []
+
+    pypdf_text = _extract_pdf_text_pypdf(pdf_bytes)
+    attempts.append({"method": "pypdf", "char_count": len(pypdf_text)})
+    if pypdf_text:
+        candidates.append(("pypdf", pypdf_text))
+
+    pdfminer_text = _extract_pdf_text_pdfminer(pdf_bytes)
+    attempts.append({"method": "pdfminer", "char_count": len(pdfminer_text)})
+    if pdfminer_text:
+        candidates.append(("pdfminer", pdfminer_text))
+
+    pdftotext_text = _extract_pdf_text_pdftotext(pdf_bytes)
+    attempts.append({"method": "pdftotext", "char_count": len(pdftotext_text)})
+    if pdftotext_text:
+        candidates.append(("pdftotext", pdftotext_text))
+
+    ocr_text = _extract_pdf_text_ocr(pdf_bytes)
+    attempts.append({"method": "ocr", "char_count": len(ocr_text)})
+    if ocr_text:
+        candidates.append(("ocr", ocr_text))
+
+    if not candidates:
+        return PdfExtractionResult(text="", method="none", attempts=attempts)
+
+    best_method, best_text = max(candidates, key=lambda item: _score_extracted_text(item[1]))
+    return PdfExtractionResult(text=best_text, method=best_method, attempts=attempts)
+
+
+def _extract_pdf_text_pypdf(pdf_bytes: bytes) -> str:
     if PdfReader is None:
         return ""
     try:
@@ -683,6 +742,91 @@ def extract_pdf_text(pdf_bytes: bytes) -> str:
         if text.strip():
             parts.append(text.strip())
     return "\n".join(parts).strip()
+
+
+def _extract_pdf_text_pdfminer(pdf_bytes: bytes) -> str:
+    if pdfminer_extract_text is None:
+        return ""
+    with tempfile.NamedTemporaryFile(suffix=".pdf") as handle:
+        try:
+            handle.write(pdf_bytes)
+            handle.flush()
+            text = pdfminer_extract_text(handle.name) or ""
+        except Exception:
+            return ""
+    return str(text or "").strip()
+
+
+def _extract_pdf_text_pdftotext(pdf_bytes: bytes) -> str:
+    if shutil.which("pdftotext") is None:
+        return ""
+    with tempfile.TemporaryDirectory(prefix="sourcing-agent-pdftotext-") as tempdir:
+        pdf_path = Path(tempdir) / "input.pdf"
+        txt_path = Path(tempdir) / "output.txt"
+        try:
+            pdf_path.write_bytes(pdf_bytes)
+            completed = subprocess.run(
+                ["pdftotext", "-layout", str(pdf_path), str(txt_path)],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            if completed.returncode != 0 or not txt_path.exists():
+                return ""
+            return txt_path.read_text(errors="ignore").strip()
+        except Exception:
+            return ""
+
+
+def _extract_pdf_text_ocr(pdf_bytes: bytes) -> str:
+    if shutil.which("pdftoppm") is None or shutil.which("tesseract") is None:
+        return ""
+    with tempfile.TemporaryDirectory(prefix="sourcing-agent-pdfocr-") as tempdir:
+        pdf_path = Path(tempdir) / "input.pdf"
+        output_prefix = Path(tempdir) / "page"
+        pdf_path.write_bytes(pdf_bytes)
+        try:
+            render = subprocess.run(
+                ["pdftoppm", "-png", str(pdf_path), str(output_prefix)],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=False,
+            )
+            if render.returncode != 0:
+                return ""
+        except Exception:
+            return ""
+
+        texts: list[str] = []
+        for image_path in sorted(Path(tempdir).glob("page-*.png"))[:10]:
+            txt_base = image_path.with_suffix("")
+            try:
+                ocr = subprocess.run(
+                    ["tesseract", str(image_path), str(txt_base), "--psm", "6"],
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                    check=False,
+                )
+                txt_path = txt_base.with_suffix(".txt")
+                if ocr.returncode == 0 and txt_path.exists():
+                    text = txt_path.read_text(errors="ignore").strip()
+                    if text:
+                        texts.append(text)
+            except Exception:
+                continue
+        return "\n".join(texts).strip()
+
+
+def _score_extracted_text(text: str) -> int:
+    normalized = " ".join(str(text or "").split())
+    if not normalized:
+        return 0
+    alpha_count = len(re.findall(r"[A-Za-z]", normalized))
+    line_count = len([line for line in str(text or "").splitlines() if line.strip()])
+    return len(normalized) + (alpha_count * 2) + (line_count * 10)
 
 
 def is_google_doc_document_url(url: str) -> bool:

@@ -2,6 +2,74 @@
 
 ## 2026-04-07
 
+### Harvest Auth 恢复、Browser Search Provider 与 PDF 强解析
+
+- 已恢复本机真实 provider 配置：
+  - `runtime/secrets/providers.local.json` 现已重新写回：
+    - Claude relay
+    - Qwen / DashScope
+    - Harvest / Apify
+    - R2 object storage
+  - 同时补了本机 `search_provider` 配置：
+    - `serper_google -> google_browser -> duckduckgo_html`
+    - `google_browser` 默认使用：
+      - `runtime/vendor/playwright/node_modules`
+      - `runtime/vendor/playwright-browsers`
+      - `runtime/vendor/npm-cache`
+  - 所有真实配置继续只保留在本机 secret/runtime 层，不进 Git
+- 已重新验证 Harvest auth：
+  - 新 Apify token 已真实可用
+  - `linkedin-company-employees` live smoke test 返回 `STATUS 201`
+  - `linkedin-profile-scraper` live smoke test 已成功返回 `Saurabh Garg` 的 profile detail
+  - 因此早先的 `401 user-or-token-not-found` 已确认是旧 token 状态，不再是当前本机配置
+- 已纠正 `linkedin-profile-scraper` 的关键 schema 结论：
+  - 之前错误地把字段写成了 `profileUrls`
+  - 当前经 live 验证确认可用字段是：
+    - `urls`
+    - `publicIdentifiers`
+    - `queries`
+    - `profileIds`
+  - 当前代码已改回 `urls`
+  - 另外已经确认：
+    - vanity URL 可用
+    - opaque LinkedIn URL 可用
+    - `profileIds` 可用
+- 已重新验证 Thinking Machines Lab 的 profile completion 主链：
+  - `complete-company-assets --profile-detail-limit 6`
+  - `fetched_profile_count=6`
+  - 说明 Harvest profile-scraper 已重新进入真实补全链路
+  - 当前 `completed_candidates=0` 的原因已收敛为 candidate/profile matching 仍偏保守，而不是 auth/schema 问题
+- 已新增 browser-based Google search provider：
+  - 新增 `scripts/google_search_browser.cjs`
+  - 新增 `google_browser` provider，已接入 `src/sourcing_agent/search_provider.py`
+  - `SearchProviderSettings` 已补：
+    - `google_browser_node_modules_dir`
+    - `google_browser_browsers_path`
+    - `google_browser_script_path`
+    - `google_browser_headless`
+    - `google_browser_locale`
+  - 当前 provider 采用真实 Chromium/Playwright 路线，而不是 requests 模拟 Google Search
+  - 当前 WSL 环境下仍有一个明确阻塞：
+    - browser launch 缺少系统共享库 `libnspr4.so`
+    - 因此 browser lane 已实现，但本机 live Google query 暂未真正跑通
+- 已补 PDF 多级文本提取链：
+  - `pypdf`
+  - `pdfminer.six`
+  - `pdftotext`
+  - `OCR (pdftoppm + tesseract)` 预留
+  - 当前实现会自动选择文本质量最好的提取结果
+  - `runtime/vendor/python` 已安装本机可复用的 `pdfminer.six`
+  - 代码现会自动从 `runtime/vendor/python` 发现本地增强依赖，不进 Git
+- 已对 Horace He 的 PDF 做真实验证：
+  - 当前最佳方法为 `pdfminer`
+  - 提取文本约 `3538` 个字符
+  - 已成功拿到 Cornell 教育信息、Facebook/Google 工作经历和技能字段
+  - 这说明 PDF 强解析链已从“只保留链接”升级到“可产出结构化草稿”
+- 已补相关测试覆盖：
+  - `tests/test_harvest_connectors.py`
+  - `tests/test_search_provider.py`
+  - `tests/test_document_extraction.py`
+
 ### HarvestAPI 调用方法沉淀与 Corner Case Exploration 升级
 
 - 已补 Harvest 调用手册：
@@ -12,16 +80,17 @@
     - `linkedin-company-employees`
   - 系统记录了当前项目里真正可复用的 payload 规范、former/current 推荐调用顺序、Thinking Machines Lab live 结论和已知坑
 - 已修正 `HarvestProfileConnector` 的关键 payload 错误：
-  - `profile-scraper` 不再传 `urls`
-  - 改为传 `profileUrls`
+  - 先前错误地改成了 `profileUrls`
+  - 当前已根据 live 验证改回 `urls`
+  - 并明确记录 `urls/publicIdentifiers/queries/profileIds` 都是当前 actor 可用入口
   - 对应测试已补到 `tests/test_harvest_connectors.py`
 - 已重新确认 Harvest secret 的本地标准位置：
   - 默认开发环境放在 `runtime/secrets/providers.local.json`
   - 不再建议依赖旧项目 `api_accounts.json` 隐式发现
 - 已确认一个关键调试结论：
-  - `2026-04-07` 直接对当前本机 Harvest 配置做最小 API smoke test 时，Apify 返回了 `401 user-or-token-not-found`
-  - 这说明之前某些 `fetched_profile_count = 0` 不能简单归因于 payload，本机当前 token 状态也需要重新验证
-  - 相关结论已写进 `docs/HARVESTAPI_PLAYBOOK.md`
+  - `2026-04-07` 早先使用旧 token 做最小 API smoke test 时，Apify 返回了 `401 user-or-token-not-found`
+  - 当前已切到新的可用 token，并完成 live 验证
+  - 相关历史结论保留在 `docs/HARVESTAPI_PLAYBOOK.md`，用于说明“0 results”不一定是 payload 问题，也可能是 auth 问题
 - 已升级 `analyze_page_asset` 输出 schema：
   - 新增：
     - `education_signals`
@@ -57,7 +126,8 @@
 - 已做真实小样本验证：
   - Jeremy Bernstein 的 Google Docs CV 现在可自动抽出 education/work history/Thinking Machines Lab affiliation 草稿
   - Horace He 的 PDF 现在已接入 `resume_url -> raw pdf -> extracted_text -> analysis` 链路
-  - 但当前 `pypdf` 文本提取对 Horace 这份 PDF 仍未抽出有效正文，说明后续如要提升 PDF 覆盖，还需要 OCR 或更强 PDF parser
+  - 当前 `pdfminer` 已可对 Horace 这份 PDF 抽出有效正文，`pypdf` 不是这份 PDF 的最佳方法
+  - OCR 仍作为后续增强项保留，用于真正的图片型 PDF
 - 已更新 onboarding/readme：
   - `README.md`
   - monorepo 根 `README.md`

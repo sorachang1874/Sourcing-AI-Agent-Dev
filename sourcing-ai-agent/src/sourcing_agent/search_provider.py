@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from html import unescape
+import json
+import os
+from pathlib import Path
 import re
+import shutil
+import subprocess
 from typing import Any
 from urllib import parse
 
@@ -110,6 +115,105 @@ class SerperGoogleSearchProvider(BaseSearchProvider):
         )
 
 
+class BrowserGoogleSearchProvider(BaseSearchProvider):
+    provider_name = "google_browser"
+
+    def __init__(
+        self,
+        *,
+        script_path: str,
+        npx_package: str = "playwright@1.59.1",
+        node_modules_dir: str = "/tmp/sourcing-playwright-node/node_modules",
+        npm_cache_dir: str = "/tmp/.npm-cache",
+        browsers_path: str = "/tmp/playwright-browsers",
+        headless: bool = True,
+        locale: str = "en-US",
+        timeout_seconds: int = 30,
+    ) -> None:
+        self.script_path = str(script_path or "").strip()
+        self.npx_package = str(npx_package or "playwright@1.59.1").strip()
+        self.node_modules_dir = str(node_modules_dir or "/tmp/sourcing-playwright-node/node_modules").strip()
+        self.npm_cache_dir = str(npm_cache_dir or "/tmp/.npm-cache").strip()
+        self.browsers_path = str(browsers_path or "/tmp/playwright-browsers").strip()
+        self.headless = bool(headless)
+        self.locale = str(locale or "en-US").strip() or "en-US"
+        self.timeout_seconds = timeout_seconds
+
+    def search(self, query_text: str, *, max_results: int = 10, timeout: int | None = None) -> SearchResponse:
+        if not self.script_path:
+            raise SearchProviderError("Browser Google search script is not configured.")
+        if shutil.which("node") is None:
+            raise SearchProviderError("node is not available; browser Google search cannot run.")
+        script_path = Path(self.script_path)
+        if not script_path.exists():
+            raise SearchProviderError(f"Browser Google search script is missing: {script_path}")
+        if self.node_modules_dir and not Path(self.node_modules_dir).exists():
+            raise SearchProviderError(
+                "Browser Google search dependencies are missing. "
+                f"Expected node_modules at {self.node_modules_dir}. "
+                f"Install {self.npx_package} there before using google_browser."
+            )
+        env = os.environ.copy()
+        if self.npm_cache_dir:
+            env.setdefault("NPM_CONFIG_CACHE", self.npm_cache_dir)
+        if self.browsers_path:
+            env.setdefault("PLAYWRIGHT_BROWSERS_PATH", self.browsers_path)
+        if self.node_modules_dir:
+            existing_node_path = str(env.get("NODE_PATH") or "").strip()
+            env["NODE_PATH"] = (
+                f"{self.node_modules_dir}:{existing_node_path}" if existing_node_path else self.node_modules_dir
+            )
+        command = [
+            "node",
+            str(script_path),
+            "--query",
+            query_text,
+            "--max-results",
+            str(max(1, min(int(max_results or 10), 20))),
+            "--locale",
+            self.locale,
+            "--headless",
+            "true" if self.headless else "false",
+            "--timeout-ms",
+            str(max(5, int(timeout or self.timeout_seconds)) * 1000),
+        ]
+        try:
+            completed = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=max(10, int(timeout or self.timeout_seconds)) + 30,
+                env=env,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise SearchProviderError(f"Browser Google search timed out: {exc}") from exc
+        if completed.returncode != 0:
+            stderr = (completed.stderr or "").strip()
+            raise SearchProviderError(f"Browser Google search failed: {stderr or 'unknown error'}")
+        payload = _parse_browser_provider_payload(completed.stdout)
+        results = [
+            SearchResultItem(
+                title=str(item.get("title") or "").strip(),
+                url=str(item.get("url") or "").strip(),
+                snippet=str(item.get("snippet") or "").strip(),
+                metadata=dict(item.get("metadata") or {}),
+            )
+            for item in list(payload.get("results") or [])
+            if str(item.get("title") or "").strip() and str(item.get("url") or "").strip()
+        ]
+        return SearchResponse(
+            provider_name=self.provider_name,
+            query_text=query_text,
+            results=results[:max_results],
+            raw_payload=payload,
+            raw_format="json",
+            final_url=str(payload.get("final_url") or ""),
+            content_type="application/json",
+            metadata=dict(payload.get("metadata") or {}),
+        )
+
+
 class SearchProviderChain(BaseSearchProvider):
     provider_name = "chain"
 
@@ -141,6 +245,20 @@ def build_search_provider(settings: SearchProviderSettings) -> BaseSearchProvide
                 SerperGoogleSearchProvider(
                     api_key=settings.serper_api_key,
                     base_url=settings.serper_base_url,
+                    timeout_seconds=settings.timeout_seconds,
+                )
+            )
+        elif normalized == "google_browser" and settings.enable_google_browser:
+            default_script_path = Path(__file__).resolve().parents[2] / "scripts" / "google_search_browser.cjs"
+            providers.append(
+                BrowserGoogleSearchProvider(
+                    script_path=settings.google_browser_script_path or str(default_script_path),
+                    npx_package=settings.google_browser_npx_package,
+                    node_modules_dir=settings.google_browser_node_modules_dir,
+                    npm_cache_dir=settings.google_browser_npm_cache_dir,
+                    browsers_path=settings.google_browser_browsers_path,
+                    headless=settings.google_browser_headless,
+                    locale=settings.google_browser_locale,
                     timeout_seconds=settings.timeout_seconds,
                 )
             )
@@ -231,3 +349,13 @@ def parse_serper_search_results(payload: dict[str, Any]) -> list[SearchResultIte
 def _strip_html(value: str) -> str:
     text = re.sub(r"<[^>]+>", " ", str(value or ""))
     return " ".join(unescape(text).split())
+
+
+def _parse_browser_provider_payload(stdout_text: str) -> dict[str, Any]:
+    text = str(stdout_text or "").strip()
+    if not text:
+        raise SearchProviderError("Browser Google search returned empty stdout.")
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise SearchProviderError(f"Browser Google search returned invalid JSON: {text[:200]}") from exc

@@ -44,12 +44,20 @@ class SemanticProviderSettings:
 @dataclass(frozen=True, slots=True)
 class SearchProviderSettings:
     enabled: bool = True
-    provider_order: tuple[str, ...] = ("serper_google", "duckduckgo_html")
+    provider_order: tuple[str, ...] = ("serper_google", "google_browser", "duckduckgo_html")
     timeout_seconds: int = 30
     max_results_per_call: int = 10
     enable_duckduckgo_html: bool = True
     serper_api_key: str = ""
     serper_base_url: str = "https://google.serper.dev/search"
+    enable_google_browser: bool = True
+    google_browser_npx_package: str = "playwright@1.59.1"
+    google_browser_node_modules_dir: str = "/tmp/sourcing-playwright-node/node_modules"
+    google_browser_script_path: str = ""
+    google_browser_npm_cache_dir: str = "/tmp/.npm-cache"
+    google_browser_browsers_path: str = "/tmp/playwright-browsers"
+    google_browser_headless: bool = True
+    google_browser_locale: str = "en-US"
 
 
 @dataclass(frozen=True, slots=True)
@@ -183,7 +191,7 @@ def load_settings(project_root: str | Path) -> AppSettings:
 
     search_provider_order = os.getenv("SEARCH_PROVIDER_ORDER") or search_payload.get(
         "provider_order",
-        ["serper_google", "duckduckgo_html"],
+        ["serper_google", "google_browser", "duckduckgo_html"],
     )
     if isinstance(search_provider_order, str):
         provider_order = tuple(item.strip() for item in search_provider_order.split(",") if item.strip())
@@ -206,6 +214,32 @@ def load_settings(project_root: str | Path) -> AppSettings:
         search_payload.get("serper_base_url", "https://google.serper.dev/search")
     ).strip()
     enable_duckduckgo_html = bool(search_payload.get("enable_duckduckgo_html", True))
+    enable_google_browser = _coerce_bool(
+        os.getenv("SEARCH_PROVIDER_ENABLE_GOOGLE_BROWSER"),
+        default=bool(search_payload.get("enable_google_browser", True)),
+    )
+    google_browser_npx_package = os.getenv("SEARCH_PROVIDER_GOOGLE_BROWSER_NPX_PACKAGE") or str(
+        search_payload.get("google_browser_npx_package", "playwright@1.59.1")
+    ).strip()
+    google_browser_node_modules_dir = os.getenv("SEARCH_PROVIDER_GOOGLE_BROWSER_NODE_MODULES_DIR") or str(
+        search_payload.get("google_browser_node_modules_dir", str(runtime_dir / "vendor" / "playwright" / "node_modules"))
+    ).strip()
+    google_browser_script_path = os.getenv("SEARCH_PROVIDER_GOOGLE_BROWSER_SCRIPT_PATH") or str(
+        search_payload.get("google_browser_script_path", "")
+    ).strip()
+    google_browser_npm_cache_dir = os.getenv("SEARCH_PROVIDER_GOOGLE_BROWSER_NPM_CACHE_DIR") or str(
+        search_payload.get("google_browser_npm_cache_dir", str(runtime_dir / "vendor" / "npm-cache"))
+    ).strip()
+    google_browser_browsers_path = os.getenv("SEARCH_PROVIDER_GOOGLE_BROWSER_BROWSERS_PATH") or str(
+        search_payload.get("google_browser_browsers_path", str(runtime_dir / "vendor" / "playwright-browsers"))
+    ).strip()
+    google_browser_headless = _coerce_bool(
+        os.getenv("SEARCH_PROVIDER_GOOGLE_BROWSER_HEADLESS"),
+        default=bool(search_payload.get("google_browser_headless", True)),
+    )
+    google_browser_locale = os.getenv("SEARCH_PROVIDER_GOOGLE_BROWSER_LOCALE") or str(
+        search_payload.get("google_browser_locale", "en-US")
+    ).strip()
 
     object_storage_provider = os.getenv("OBJECT_STORAGE_PROVIDER") or str(
         object_storage_payload.get("provider", "filesystem")
@@ -327,6 +361,14 @@ def load_settings(project_root: str | Path) -> AppSettings:
             enable_duckduckgo_html=enable_duckduckgo_html,
             serper_api_key=serper_api_key,
             serper_base_url=serper_base_url.rstrip("/"),
+            enable_google_browser=enable_google_browser,
+            google_browser_npx_package=google_browser_npx_package,
+            google_browser_node_modules_dir=google_browser_node_modules_dir,
+            google_browser_script_path=google_browser_script_path,
+            google_browser_npm_cache_dir=google_browser_npm_cache_dir,
+            google_browser_browsers_path=google_browser_browsers_path,
+            google_browser_headless=google_browser_headless,
+            google_browser_locale=google_browser_locale,
         ),
         object_storage=ObjectStorageSettings(
             enabled=bool(
@@ -397,3 +439,16 @@ def _load_json_file(path: Path) -> dict:
         return json.loads(path.read_text())
     except json.JSONDecodeError:
         return {}
+
+
+def _coerce_bool(value: object, *, default: bool) -> bool:
+    if value is None or value == "":
+        return default
+    if isinstance(value, bool):
+        return value
+    normalized = str(value).strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return default

@@ -192,7 +192,7 @@ class HarvestConnectorTest(unittest.TestCase):
         self.assertEqual(len(result["rows"]), 1)
         self.assertEqual(result["rows"][0]["full_name"], "Alexis Dunn")
 
-    def test_harvest_profile_connector_batch_call_no_longer_references_take_pages(self) -> None:
+    def test_harvest_profile_connector_batch_call_uses_urls_field(self) -> None:
         settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
         connector = HarvestProfileConnector(settings)
         with tempfile.TemporaryDirectory() as tempdir:
@@ -219,8 +219,8 @@ class HarvestConnectorTest(unittest.TestCase):
                 )
         self.assertIn("https://www.linkedin.com/in/jane-doe/", result)
         self.assertEqual(result["https://www.linkedin.com/in/jane-doe/"]["parsed"]["public_identifier"], "jane-doe")
-        self.assertIn("profileUrls", capture["payload"])
-        self.assertNotIn("urls", capture["payload"])
+        self.assertIn("urls", capture["payload"])
+        self.assertNotIn("profileUrls", capture["payload"])
 
     def test_harvest_company_employees_reuses_matching_live_test_asset_without_token(self) -> None:
         settings = HarvestActorSettings(enabled=False, api_token="", actor_id="actor", default_mode="short", max_paid_items=25)

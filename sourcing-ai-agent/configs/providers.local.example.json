@@ -28,40 +28,58 @@
   "search_provider": {
     "provider_order": [
       "serper_google",
+      "google_browser",
       "duckduckgo_html"
     ],
     "timeout_seconds": 30,
     "max_results_per_call": 10,
     "enable_duckduckgo_html": true,
+    "enable_google_browser": true,
     "serper_api_key": "serper_api_...",
-    "serper_base_url": "https://google.serper.dev/search"
+    "serper_base_url": "https://google.serper.dev/search",
+    "google_browser_npx_package": "playwright@1.59.1",
+    "google_browser_node_modules_dir": "/path/to/runtime/vendor/playwright/node_modules",
+    "google_browser_script_path": "/path/to/sourcing-ai-agent/scripts/google_search_browser.cjs",
+    "google_browser_npm_cache_dir": "/path/to/runtime/vendor/npm-cache",
+    "google_browser_browsers_path": "/path/to/runtime/vendor/playwright-browsers",
+    "google_browser_headless": true,
+    "google_browser_locale": "en-US"
   },
   "object_storage": {
-    "provider": "filesystem",
-    "local_dir": "/tmp/sourcing-ai-agent-object-store",
+    "provider": "s3_compatible",
+    "bucket": "your-bucket",
     "prefix": "sourcing-ai-agent-dev",
+    "endpoint_url": "https://your-s3-compatible-endpoint",
+    "region": "us-east-1",
+    "access_key_id": "AKIA...",
+    "secret_access_key": "secret...",
+    "timeout_seconds": 60,
+    "force_path_style": true,
     "max_workers": 8
   },
   "harvest": {
     "profile_search": {
+      "enabled": true,
       "api_token": "apify_api_...",
       "actor_id": "M2FMdjRVeF1HPGFcc",
       "timeout_seconds": 180,
-      "max_total_charge_usd": 0.1,
-      "max_paid_items": 25,
+      "max_total_charge_usd": 0.2,
+      "max_paid_items": 50,
       "default_mode": "short",
       "collect_email": false
     },
     "company_employees": {
+      "enabled": true,
       "api_token": "apify_api_...",
       "actor_id": "Vb6LZkh4EqRlR0Ka9",
       "timeout_seconds": 180,
-      "max_total_charge_usd": 0.1,
+      "max_total_charge_usd": 0.2,
       "max_paid_items": 200,
       "default_mode": "short",
       "collect_email": false
     },
     "profile_scraper": {
+      "enabled": true,
       "api_token": "apify_api_...",
       "actor_id": "LpVuK3Zozwuipa5bp",
       "timeout_seconds": 180,

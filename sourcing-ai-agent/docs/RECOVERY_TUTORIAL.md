@@ -39,6 +39,7 @@
 1. 确认项目目录仍然存在
 2. 确认 `runtime/` 仍然存在
 3. 确认 `runtime/secrets/providers.local.json` 仍然存在
+4. 如果本机之前启用了增强解析/浏览器能力，确认 `runtime/vendor/` 仍然存在
 4. 重新打开 repo
 5. 运行：
 
@@ -49,6 +50,14 @@ PYTHONPATH=src python3 -m sourcing_agent.cli test-model
 ```
 
 如果这两步通过，就可以直接继续开发。
+
+额外说明：
+
+- `runtime/vendor/python`
+  - 当前可放 `pdfminer.six` 之类的本机增强解析依赖
+- `runtime/vendor/playwright` / `runtime/vendor/playwright-browsers`
+  - 当前可放 browser-search lane 用到的 Playwright 依赖和浏览器
+- 这些目录不进 Git，但可以跟随 bundle/object storage 一起恢复
 
 ## Scenario B: New Machine
 

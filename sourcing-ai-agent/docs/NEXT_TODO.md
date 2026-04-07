@@ -32,22 +32,23 @@
     - 当前 `25` 人
     - 主要是 former candidates with LinkedIn URL but no full profile detail
 - 当前设备的 Harvest provider 配置已写回 `runtime/secrets/providers.local.json`
-- 但 `2026-04-07` 直接 smoke test 当前 Harvest token 时返回了 `401`
-- 因此当前更准确的说法是：
-  - provider 配置路径已恢复
-  - 但 Harvest auth 需要重新验证或轮换
-  - 这也是为什么继续补 former detail 前应先做 Harvest smoke test
+- `2026-04-07` 新 Harvest token 已重新验证通过：
+  - `company-employees` live smoke test 可用
+  - `profile-scraper` live smoke test 可用
+- 当前更准确的卡点是：
+  - former/current backlog 的 profile completion matching 仍偏保守
+  - browser-search lane 已实现，但本机 live launch 仍缺 `libnspr4.so`
+  - PDF OCR 仍是预留路径，当前最强可用解析器是 `pdfminer.six`
 
 下一步继续补：
 
-- 重新验证 active device/server 上的 Harvest auth
-- 跑一轮 `profile-scraper` smoke test
+- 放宽或重构 profile completion matching，使 fetched detail 能稳定写回 candidate
 - drain `profile_completion_backlog.json`
 - 继续处理 `manual_review_backlog.json`
 - unresolved publication leads
 - corner-case web exploration assets
-- 浏览器化 Google search provider / browser-search lane
-- PDF OCR or stronger parser fallback
+- 补 browser-search lane 的系统依赖或迁移到更完整的 Linux/server 环境
+- PDF OCR fallback
 
 ### 2. Strengthen object storage sync operability
 

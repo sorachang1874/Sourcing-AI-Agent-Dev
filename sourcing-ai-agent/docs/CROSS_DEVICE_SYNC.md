@@ -153,6 +153,28 @@ sourcing-ai-agent-dev/
 
 不要求本地 runtime 全量持久化到云端。只同步高价值子集。
 
+### 4.1 Local runtime vendor dependencies
+
+对于不适合提交 Git、但又希望在同一台机器上跨账号复用的增强依赖，当前推荐放在：
+
+- `runtime/vendor/python`
+- `runtime/vendor/playwright`
+- `runtime/vendor/playwright-browsers`
+- `runtime/vendor/npm-cache`
+
+当前已经按这个原则接入两类本地增强依赖：
+
+- `pdfminer.six`
+  - 用于增强 PDF resume 文本提取
+- `playwright`
+  - 用于 browser-based Google search provider
+
+原则：
+
+- 这些依赖不进入 Git
+- 但可以进入 handoff bundle 或对象存储，作为“本机增强环境”的一部分恢复
+- 若新设备不恢复这些 vendor 目录，系统仍会降级运行，只是少掉 browser search / stronger PDF parsing 等增强能力
+
 ### 5. Metadata registry
 
 建议后续补一个中心化 registry，而不是只靠 bucket list。

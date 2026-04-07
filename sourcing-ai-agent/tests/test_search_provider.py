@@ -1,16 +1,20 @@
 import unittest
+from unittest.mock import patch
 
 from sourcing_agent.search_provider import (
     BaseSearchProvider,
+    BrowserGoogleSearchProvider,
     SearchProviderChain,
     SearchProviderError,
     SearchResponse,
     SearchResultItem,
+    build_search_provider,
     parse_duckduckgo_html_results,
     parse_serper_search_results,
     search_response_from_record,
     search_response_to_record,
 )
+from sourcing_agent.settings import SearchProviderSettings
 
 
 class SearchProviderTest(unittest.TestCase):
@@ -105,6 +109,38 @@ class SearchProviderTest(unittest.TestCase):
         with self.assertRaises(SearchProviderError) as exc_info:
             chain.search("Kevin Lu")
         self.assertEqual(exc_info.exception.attempts[0]["provider_name"], "failing")
+
+    def test_browser_google_provider_parses_script_output(self) -> None:
+        provider = BrowserGoogleSearchProvider(
+            script_path="/tmp/google_search_browser.cjs",
+            npx_package="playwright@1.59.1",
+            node_modules_dir="/tmp/sourcing-playwright-node/node_modules",
+            npm_cache_dir="/tmp/.npm-cache",
+            browsers_path="/tmp/playwright-browsers",
+            headless=True,
+            locale="en-US",
+            timeout_seconds=30,
+        )
+        with patch("sourcing_agent.search_provider.shutil.which", return_value="/usr/bin/node"):
+            with patch("sourcing_agent.search_provider.Path.exists", return_value=True):
+                with patch("sourcing_agent.search_provider.subprocess.run") as run_mock:
+                    run_mock.return_value.returncode = 0
+                    run_mock.return_value.stdout = """{"provider_name":"google_browser","final_url":"https://www.google.com/search?q=Kevin+Lu","results":[{"title":"Kevin Lu - LinkedIn","url":"https://www.linkedin.com/in/kzl/","snippet":"Research Engineer at Thinking Machines Lab.","metadata":{"source_domain":"www.linkedin.com"}}],"metadata":{"blocked":false}}"""
+                    response = provider.search("Kevin Lu Thinking Machines Lab LinkedIn")
+        self.assertEqual(response.provider_name, "google_browser")
+        self.assertEqual(response.results[0].url, "https://www.linkedin.com/in/kzl/")
+
+    def test_build_search_provider_includes_google_browser_when_enabled(self) -> None:
+        settings = SearchProviderSettings(
+            provider_order=("google_browser", "duckduckgo_html"),
+            enable_google_browser=True,
+            google_browser_node_modules_dir="/tmp/sourcing-playwright-node/node_modules",
+            google_browser_script_path="/tmp/google_search_browser.cjs",
+            enable_duckduckgo_html=False,
+        )
+        chain = build_search_provider(settings)
+        provider_names = [provider.provider_name for provider in chain.providers]
+        self.assertIn("google_browser", provider_names)
 
 
 if __name__ == "__main__":

@@ -73,7 +73,7 @@
 
 ```json
 {
-  "profileUrls": [
+  "urls": [
     "https://www.linkedin.com/in/kzl/",
     "https://www.linkedin.com/in/ACwAAA4HOMcBjHQNGyUbyfYCY-sOZshkNFC30Jk"
   ],
@@ -83,12 +83,17 @@
 
 关键结论：
 
-- 不要再传 `urls`
-- 应传 `profileUrls`
+- 不要再传错误的 `profileUrls`
+- 当前经 live 验证可用的字段是：
+  - `urls`
+  - `publicIdentifiers`
+  - `queries`
+  - `profileIds`
 - `profileScraperMode` 应使用完整枚举
   - `Profile details no email ($4 per 1k)`
   - 如需邮箱，才切 email 模式
 - 适合已知 LinkedIn URL 的 batch enrichment
+- `vanity URL` 与 `opaque LinkedIn URL` 当前都可用
 
 ### 2. `linkedin-profile-search`
 
@@ -165,8 +170,12 @@
 
 - `company-employees Short`
   - 适合作为 current roster 主入口
+  - `2026-04-07` 新 Apify token 已重新完成 live smoke test，Thinking Machines Lab 返回 `STATUS 201`
 - `profile-scraper`
   - 之前的 live batch 已成功返回 `12` 份 prioritized full profile detail
+  - `2026-04-07` live smoke test 再次验证通过：
+    - `Saurabh Garg`
+    - `STATUS 201`
   - 结果写在：
     - `runtime/live_tests/harvest_profile_batch_tml/batch_summary.json`
 - `profile-search + pastCompanies`
@@ -185,7 +194,7 @@
 
 ### 1. 认证失败会伪装成“没有结果”
 
-`2026-04-07` 本地直接对 Apify API 做最小化 smoke test 时，当前 secret file 中配置的 Harvest token 返回了 `401`：
+`2026-04-07` 早先使用旧 Harvest token 做最小化 smoke test 时，Apify 返回了 `401`：
 
 - `user-or-token-not-found`
 
@@ -194,7 +203,7 @@
 - 之前 `fetched_profile_count = 0` 不一定只是参数问题
 - 也可能是当前本机配置的 token 已失效或被轮换
 
-因此后续看到 `0 results` 时，必须先区分：
+当前已切换到新的可用 token，并重新验证通过。因此后续看到 `0 results` 时，必须先区分：
 
 - payload 问题
 - actor 过滤过严

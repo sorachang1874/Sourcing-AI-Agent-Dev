@@ -32,11 +32,13 @@
     - 确认新增链路是否满足数据资产落盘、可审计、可扩展三项约束
 - 支持稳定的 `search provider abstraction`
   - low-cost search 已不再绑定到单一 DuckDuckGo HTML endpoint
-  - 当前 provider chain 支持 `serper_google -> duckduckgo_html` 的优先级切换
+  - 当前 provider chain 支持 `serper_google -> google_browser -> duckduckgo_html` 的优先级切换
   - `search_seed_discovery / slug_resolution / exploratory_enrichment` 已统一走同一套 provider 接口
   - search raw payload 现在会按 provider 的 `html/json` 形态落盘，便于缓存复用与审计
   - 当前环境下 DuckDuckGo 仍可能出现 TLS EOF，因此 production 推荐显式配置稳定 provider
-  - 对于 OpenClaw 这类“无需 search API 也能做 Google Search”的 Agent，底层思路更接近 `browser automation / Playwright`，而不是普通 search API；当前项目还未接入 browser-search lane，但已记录为后续方向
+  - `google_browser` lane 现已接到 Playwright/Chromium provider
+  - 对于 OpenClaw 这类“无需 search API 也能做 Google Search”的 Agent，底层思路更接近 `browser automation / Playwright`，而不是普通 search API
+  - 当前这台 WSL 机器上，browser lane 仍受系统共享库 `libnspr4.so` 缺失影响，因此代码已就绪，但 live Google query 仍需要更完整的 Linux/server 环境或补系统依赖
 - 支持 `agent runtime`
   - workflow / retrieval 已按 specialist lanes 记录 runtime session 和 trace spans
   - 当前 lane 包括 `triage_planner / search_planner / acquisition_specialist / enrichment_specialist / exploration_specialist / retrieval_specialist / review_specialist`
@@ -89,7 +91,13 @@
     - HTML homepage / CV
     - Google Docs CV
     - PDF resume 的文本提取链路
-  - 当前 PDF 仍是 text-extraction first，不含 OCR；对图片型 PDF 仍可能只能保留证据而无法自动补齐字段
+  - 当前 PDF 现为多级文本提取：
+    - `pypdf`
+    - `pdfminer.six`
+    - `pdftotext`
+    - `OCR (pdftoppm + tesseract)` 预留
+  - `runtime/vendor/python` 可放本机增强解析依赖，不进入 Git
+  - 对图片型 PDF，若本机无 OCR 工具，仍可能只能保留证据而无法自动补齐字段
 - 支持 criteria evolution persistence：
   - 保存人工 review feedback
   - 持久化 alias / must_signal / exclude_signal 等 pattern
@@ -211,6 +219,15 @@
     - roster -> candidate 现会保留 `linkedin_url / metadata.profile_url`
     - 已知 LinkedIn URL 的 detail enrichment 现优先走 Harvest batch profile-scraper，而不是逐人串行调用
     - Thinking Machines Lab 最新 live snapshot 已成功解析 `12` 份 prioritized full profile detail
+  - `2026-04-07` 已重新验证新 Harvest token：
+    - `company-employees` live smoke test 可用
+    - `profile-scraper` live smoke test 可用
+  - 当前已确认 `profile-scraper` 的可用输入字段是：
+    - `urls`
+    - `publicIdentifiers`
+    - `queries`
+    - `profileIds`
+    - 不应继续使用错误的 `profileUrls`
   - 已新增 [docs/HARVESTAPI_PLAYBOOK.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/HARVESTAPI_PLAYBOOK.md)，沉淀 actor 链接、payload 规范、TML live 结论与当前已知坑
 
 ## 目录
