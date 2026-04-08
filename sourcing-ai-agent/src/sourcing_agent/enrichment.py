@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from html import unescape
 from hashlib import sha1
 from itertools import combinations
@@ -17,7 +18,7 @@ from .asset_logger import AssetLogger
 from .connectors import CompanyIdentity, RapidApiAccount, profile_detail_accounts, search_people_accounts
 from .domain import Candidate, EvidenceRecord, JobRequest, make_candidate_id, make_evidence_id, merge_candidate, normalize_name_token
 from .exploratory_enrichment import ExploratoryWebEnricher
-from .harvest_connectors import HarvestProfileConnector, HarvestProfileSearchConnector
+from .harvest_connectors import HarvestProfileConnector, HarvestProfileSearchConnector, write_harvest_execution_artifact
 from .model_provider import ModelClient
 from .search_provider import BaseSearchProvider, DuckDuckGoHtmlSearchProvider, search_response_to_record
 
@@ -37,6 +38,35 @@ TECHNICAL_SIGNAL_TOKENS = {
     "gpu",
     "systems",
     "distributed",
+}
+
+SUSPICIOUS_PROFILE_KEYWORDS = {
+    "spiritual",
+    "healer",
+    "healing",
+    "psychic",
+    "tarot",
+    "astrology",
+    "spell",
+    "sorcery",
+    "witchcraft",
+    "whatsapp",
+    "telegram",
+    "روحاني",
+    "الروحانية",
+    "الروحية",
+    "السحر",
+    "الحسد",
+    "العين",
+    "الأرزاق",
+    "الارزاق",
+    "تنزيل الأموال",
+    "تنزيل الاموال",
+    "الأوراد",
+    "الاوراد",
+    "الطاقي",
+    "النورانية",
+    "الخدام",
 }
 
 ACK_STOPWORDS = {
@@ -65,6 +95,9 @@ class MultiSourceEnrichmentResult:
     coauthor_edges: list[dict[str, Any]] = field(default_factory=list)
     artifact_paths: dict[str, str] = field(default_factory=dict)
     errors: list[str] = field(default_factory=list)
+    queued_harvest_worker_count: int = 0
+    queued_exploration_count: int = 0
+    stop_reason: str = ""
 
     def to_record(self) -> dict[str, Any]:
         return {
@@ -73,6 +106,9 @@ class MultiSourceEnrichmentResult:
             "publication_match_count": len(self.publication_matches),
             "lead_candidate_count": len(self.lead_candidates),
             "coauthor_edge_count": len(self.coauthor_edges),
+            "queued_harvest_worker_count": self.queued_harvest_worker_count,
+            "queued_exploration_count": self.queued_exploration_count,
+            "stop_reason": self.stop_reason,
             "artifact_paths": self.artifact_paths,
             "errors": self.errors,
         }
@@ -89,6 +125,8 @@ class PublicationRecord:
     year: int | None
     authors: list[str]
     acknowledgement_names: list[str]
+    abstract: str = ""
+    topics: list[str] = field(default_factory=list)
 
     def to_record(self) -> dict[str, Any]:
         return {
@@ -101,6 +139,8 @@ class PublicationRecord:
             "year": self.year,
             "authors": self.authors,
             "acknowledgement_names": self.acknowledgement_names,
+            "abstract": self.abstract,
+            "topics": self.topics,
         }
 
 
@@ -116,12 +156,14 @@ class MultiSourceEnricher:
         worker_runtime: AgentRuntimeCoordinator | None = None,
     ) -> None:
         self.catalog = catalog
+        self.model_client = model_client
         resolved_search_provider = search_provider or DuckDuckGoHtmlSearchProvider()
         self.slug_resolver = LinkedInSearchSlugResolver(accounts, search_provider=resolved_search_provider)
         self.profile_connector = LinkedInProfileDetailConnector(accounts)
         self.publication_connector = CompanyPublicationConnector(catalog)
         self.harvest_profile_connector = harvest_profile_connector
         self.harvest_profile_search_connector = harvest_profile_search_connector
+        self.worker_runtime = worker_runtime
         self.exploratory_enricher = ExploratoryWebEnricher(
             model_client,
             worker_runtime=worker_runtime,
@@ -151,6 +193,8 @@ class MultiSourceEnricher:
         unresolved_candidates: list[dict[str, Any]] = []
         artifact_paths: dict[str, str] = {}
         errors: list[str] = []
+        queued_harvest_worker_count = 0
+        queued_exploration_count = 0
 
         prioritized = _prioritize_candidates(candidates)
         slug_resolution_limit = min(job_request.slug_resolution_limit, len(prioritized))
@@ -163,6 +207,35 @@ class MultiSourceEnricher:
                 for profile_url in _candidate_profile_urls(candidate):
                     if profile_url not in known_profile_urls:
                         known_profile_urls.append(profile_url)
+            if (
+                known_profile_urls
+                and self.worker_runtime is not None
+                and job_id
+                and bool(getattr(getattr(self.harvest_profile_connector, "settings", None), "enabled", False))
+            ):
+                harvest_worker = self._execute_harvest_profile_batch_worker(
+                    profile_urls=known_profile_urls,
+                    snapshot_dir=snapshot_dir,
+                    job_id=job_id,
+                    request_payload=request_payload or job_request.to_record(),
+                    plan_payload=plan_payload or {},
+                    runtime_mode=runtime_mode,
+                )
+                if str(harvest_worker.get("worker_status") or "") == "queued":
+                    queued_harvest_worker_count = 1
+                    worker_summary = dict(harvest_worker.get("summary") or {})
+                    if str(worker_summary.get("summary_path") or "").strip():
+                        artifact_paths["harvest_profile_batch_queue"] = str(worker_summary.get("summary_path") or "")
+                    return MultiSourceEnrichmentResult(
+                        candidates=sorted(list(candidate_map.values()), key=lambda item: item.display_name),
+                        evidence=evidence,
+                        resolved_profiles=resolved_profiles,
+                        unresolved_candidates=unresolved_candidates,
+                        artifact_paths=artifact_paths,
+                        errors=errors,
+                        queued_harvest_worker_count=queued_harvest_worker_count,
+                        stop_reason="queued_background_harvest",
+                    )
             prefetched_harvest_profiles = self.harvest_profile_connector.fetch_profiles_by_urls(
                 known_profile_urls,
                 snapshot_dir,
@@ -203,7 +276,7 @@ class MultiSourceEnricher:
                 profile = self.profile_connector.fetch_profile(slug, snapshot_dir, asset_logger=logger)
                 if profile is None:
                     continue
-                if not _profile_matches_candidate(profile["parsed"], candidate, identity):
+                if not _profile_matches_candidate(profile["parsed"], candidate, identity, model_client=self.model_client):
                     continue
 
                 merged_candidate, resolved_profile, profile_evidence = _apply_verified_profile(
@@ -213,6 +286,7 @@ class MultiSourceEnricher:
                     profile["account_id"],
                     slug,
                     identity,
+                    model_client=self.model_client,
                     resolution_source="slug_search",
                 )
                 candidate_map[item["candidate_key"]] = merged_candidate
@@ -240,6 +314,7 @@ class MultiSourceEnricher:
             max_leads=job_request.publication_lead_limit,
             request_payload=request_payload or job_request.to_record(),
             plan_payload=plan_payload or {},
+            existing_evidence=evidence,
         )
         artifact_paths.update(publication_result["artifact_paths"])
         errors.extend(publication_result.get("errors", []))
@@ -250,6 +325,7 @@ class MultiSourceEnricher:
             key = _candidate_key(lead_candidate)
             existing = candidate_map.get(key)
             candidate_map[key] = merge_candidate(existing, lead_candidate) if existing else lead_candidate
+        scholar_coauthor_prospects = list(publication_result.get("scholar_coauthor_prospects") or [])
 
         lead_candidates_to_resolve = _prioritize_candidates(publication_result["lead_candidates"])
         remaining_profile_budget = max(profile_detail_limit - profile_fetch_count, 0)
@@ -272,7 +348,12 @@ class MultiSourceEnricher:
                         break
                     profile_fetch_count += 1
                     profile = self.profile_connector.fetch_profile(slug, snapshot_dir, asset_logger=logger)
-                    if profile is None or not _profile_matches_candidate(profile["parsed"], lead_candidate, identity):
+                    if profile is None or not _profile_matches_candidate(
+                        profile["parsed"],
+                        lead_candidate,
+                        identity,
+                        model_client=self.model_client,
+                    ):
                         continue
                     merged_candidate, resolved_profile, profile_evidence = _apply_verified_profile(
                         lead_candidate,
@@ -281,6 +362,7 @@ class MultiSourceEnricher:
                         profile["account_id"],
                         slug,
                         identity,
+                        model_client=self.model_client,
                         resolution_source="publication_lead_second_pass",
                     )
                     candidate_map[item["candidate_key"]] = merged_candidate
@@ -300,6 +382,7 @@ class MultiSourceEnricher:
                     )
 
         exploration_targets = _exploration_targets(list(candidate_map.values()), unresolved_candidates)
+        exploration_budget_used = 0
         if job_request.exploration_limit > 0 and exploration_targets:
             exploration = self.exploratory_enricher.enrich(
                 snapshot_dir,
@@ -313,6 +396,7 @@ class MultiSourceEnricher:
                 runtime_mode=runtime_mode,
                 parallel_workers=parallel_exploration_workers,
             )
+            exploration_budget_used = len(list(getattr(exploration, "explored_candidates", []) or []))
             artifact_paths.update(exploration.artifact_paths)
             errors.extend(exploration.errors)
             evidence.extend(exploration.evidence)
@@ -321,11 +405,30 @@ class MultiSourceEnricher:
                     candidate_map.get(_candidate_key(explored_candidate), explored_candidate),
                     explored_candidate,
                 )
+            queued_exploration_count += int(getattr(exploration, "queued_candidate_count", 0) or 0)
+            if queued_exploration_count > 0:
+                final_candidates = list(candidate_map.values())
+                return MultiSourceEnrichmentResult(
+                    candidates=sorted(final_candidates, key=lambda item: item.display_name),
+                    evidence=evidence,
+                    resolved_profiles=resolved_profiles,
+                    unresolved_candidates=unresolved_candidates,
+                    publication_matches=publication_result["publication_matches"],
+                    lead_candidates=publication_result["lead_candidates"],
+                    coauthor_edges=publication_result["coauthor_edges"],
+                    artifact_paths=artifact_paths,
+                    errors=errors,
+                    queued_harvest_worker_count=queued_harvest_worker_count,
+                    queued_exploration_count=queued_exploration_count,
+                    stop_reason=str(getattr(exploration, "stop_reason", "") or "queued_background_exploration"),
+                )
 
             post_exploration_candidates = _prioritize_candidates(exploration.candidates)
             for explored_candidate in post_exploration_candidates:
                 if profile_fetch_count >= profile_detail_limit:
                     break
+                if not _should_attempt_known_profile_resolution_after_exploration(explored_candidate, identity):
+                    continue
                 verified, profile_fetch_count = self._resolve_candidate_with_known_refs(
                     explored_candidate,
                     identity,
@@ -350,6 +453,50 @@ class MultiSourceEnricher:
                         }
                     )
 
+        scholar_coauthor_follow_up_limit = max(int(job_request.scholar_coauthor_follow_up_limit or 0), 0)
+        if scholar_coauthor_prospects and scholar_coauthor_follow_up_limit > 0:
+            (
+                profile_fetch_count,
+                scholar_coauthor_follow_up_summary_path,
+                scholar_coauthor_errors,
+                scholar_coauthor_queued_count,
+            ) = self._follow_up_roster_anchored_scholar_coauthor_prospects(
+                prospects=scholar_coauthor_prospects,
+                identity=identity,
+                snapshot_dir=snapshot_dir,
+                candidate_map=candidate_map,
+                resolved_profiles=resolved_profiles,
+                evidence=evidence,
+                profile_fetch_count=profile_fetch_count,
+                profile_detail_limit=profile_detail_limit,
+                exploration_limit=scholar_coauthor_follow_up_limit,
+                asset_logger=logger,
+                job_id=job_id,
+                request_payload=request_payload or job_request.to_record(),
+                plan_payload=plan_payload or {},
+                runtime_mode=runtime_mode,
+            )
+            errors.extend(scholar_coauthor_errors)
+            if scholar_coauthor_follow_up_summary_path is not None:
+                artifact_paths["scholar_coauthor_follow_up"] = str(scholar_coauthor_follow_up_summary_path)
+            queued_exploration_count += scholar_coauthor_queued_count
+            if queued_exploration_count > 0:
+                final_candidates = list(candidate_map.values())
+                return MultiSourceEnrichmentResult(
+                    candidates=sorted(final_candidates, key=lambda item: item.display_name),
+                    evidence=evidence,
+                    resolved_profiles=resolved_profiles,
+                    unresolved_candidates=unresolved_candidates,
+                    publication_matches=publication_result["publication_matches"],
+                    lead_candidates=publication_result["lead_candidates"],
+                    coauthor_edges=publication_result["coauthor_edges"],
+                    artifact_paths=artifact_paths,
+                    errors=errors,
+                    queued_harvest_worker_count=queued_harvest_worker_count,
+                    queued_exploration_count=queued_exploration_count,
+                    stop_reason="queued_background_exploration",
+                )
+
         remaining_profile_budget = max(profile_detail_limit - profile_fetch_count, 0)
         remaining_leads_to_resolve = [
             item
@@ -358,13 +505,26 @@ class MultiSourceEnricher:
             )
             if item.category == "lead"
         ]
+        gated_leads_to_resolve = remaining_leads_to_resolve
+        if remaining_leads_to_resolve:
+            gated_leads_to_resolve, publication_lead_gate_summary_path = self._gate_publication_leads_after_exploration(
+                lead_candidates=remaining_leads_to_resolve,
+                identity=identity,
+                snapshot_dir=snapshot_dir,
+                candidate_map=candidate_map,
+                unresolved_candidates=unresolved_candidates,
+                asset_logger=logger,
+                allow_targeted_name_search=bool(effective_cost_policy.get("allow_targeted_name_search_api", False)),
+            )
+            if publication_lead_gate_summary_path is not None:
+                artifact_paths["publication_lead_public_web_gate"] = str(publication_lead_gate_summary_path)
         if (
             bool(effective_cost_policy.get("allow_targeted_name_search_api", False))
             and remaining_profile_budget > 0
-            and remaining_leads_to_resolve
+            and gated_leads_to_resolve
         ):
             _, targeted_resolution_summary_path = self._resolve_publication_leads_with_harvest_search(
-                lead_candidates=remaining_leads_to_resolve,
+                lead_candidates=gated_leads_to_resolve,
                 identity=identity,
                 snapshot_dir=snapshot_dir,
                 remaining_profile_budget=remaining_profile_budget,
@@ -389,7 +549,396 @@ class MultiSourceEnricher:
             coauthor_edges=publication_result["coauthor_edges"],
             artifact_paths=artifact_paths,
             errors=errors,
+            queued_harvest_worker_count=queued_harvest_worker_count,
+            queued_exploration_count=queued_exploration_count,
         )
+
+    def _execute_harvest_profile_batch_worker(
+        self,
+        *,
+        profile_urls: list[str],
+        snapshot_dir: Path,
+        job_id: str,
+        request_payload: dict[str, Any],
+        plan_payload: dict[str, Any],
+        runtime_mode: str,
+    ) -> dict[str, Any]:
+        if self.harvest_profile_connector is None or self.worker_runtime is None or not job_id:
+            return {"worker_status": "skipped"}
+
+        normalized_urls: list[str] = []
+        for profile_url in profile_urls:
+            value = str(profile_url or "").strip()
+            if value and value not in normalized_urls:
+                normalized_urls.append(value)
+        if not normalized_urls:
+            return {"worker_status": "completed", "summary": {"requested_url_count": 0, "status": "completed"}}
+
+        payload_hash = sha1(
+            json.dumps(sorted(normalized_urls), ensure_ascii=False).encode("utf-8")
+        ).hexdigest()[:16]
+        worker_handle = self.worker_runtime.begin_worker(
+            job_id=job_id,
+            request=JobRequest.from_payload(request_payload),
+            plan_payload=plan_payload,
+            runtime_mode=runtime_mode,
+            lane_id="enrichment_specialist",
+            worker_key=f"harvest_profile_batch::{payload_hash}",
+            stage="enriching",
+            span_name=f"harvest_profile_batch:{payload_hash}",
+            budget_payload={"requested_url_count": len(normalized_urls)},
+            input_payload={"profile_urls": list(normalized_urls)},
+            metadata={
+                "recovery_kind": "harvest_profile_batch",
+                "snapshot_dir": str(snapshot_dir),
+                "profile_urls": list(normalized_urls),
+                "request_payload": request_payload,
+                "plan_payload": plan_payload,
+                "runtime_mode": runtime_mode,
+            },
+            handoff_from_lane="acquisition_specialist",
+        )
+        existing = self.worker_runtime.get_worker(worker_handle.worker_id) or {}
+        checkpoint = dict(existing.get("checkpoint") or {})
+        output_payload = dict(existing.get("output") or {})
+        if str(existing.get("status") or "") == "completed" and output_payload:
+            self.worker_runtime.complete_worker(
+                worker_handle,
+                status="completed",
+                checkpoint_payload=checkpoint,
+                output_payload=output_payload,
+                handoff_to_lane="enrichment_specialist",
+            )
+            return {
+                "worker_status": "completed",
+                "summary": dict(output_payload.get("summary") or {}),
+                "daemon_action": "reused_output",
+            }
+
+        logger = AssetLogger(snapshot_dir)
+        harvest_dir = snapshot_dir / "harvest_profiles"
+        harvest_dir.mkdir(parents=True, exist_ok=True)
+        artifact_default_path = harvest_dir / f"harvest_profile_batch_{payload_hash}.queue.json"
+        execution = self.harvest_profile_connector.execute_batch_with_checkpoint(
+            normalized_urls,
+            snapshot_dir,
+            checkpoint=checkpoint,
+        )
+        artifact_paths = {
+            str(key): str(value)
+            for key, value in dict(checkpoint.get("artifact_paths") or {}).items()
+            if str(key).strip()
+        }
+        for artifact in list(execution.artifacts or []):
+            artifact_path = write_harvest_execution_artifact(
+                logger=logger,
+                artifact=artifact,
+                default_path=artifact_default_path,
+                asset_type="harvest_profile_batch_queue_payload",
+                source_kind="harvest_profile_scraper",
+                metadata={
+                    "logical_name": execution.logical_name,
+                    "requested_url_count": len(normalized_urls),
+                    "payload_hash": payload_hash,
+                },
+            )
+            artifact_paths[str(artifact.label)] = str(artifact_path)
+        summary = {
+            "logical_name": execution.logical_name,
+            "requested_url_count": len(normalized_urls),
+            "requested_urls": list(normalized_urls),
+            "status": "queued" if execution.pending else "completed",
+            "message": str(execution.message or ""),
+            "run_id": str(execution.checkpoint.get("run_id") or ""),
+            "dataset_id": str(execution.checkpoint.get("dataset_id") or ""),
+            "artifact_paths": artifact_paths,
+        }
+        summary_path = harvest_dir / f"harvest_profile_batch_{payload_hash}.queue_summary.json"
+        logger.write_json(
+            summary_path,
+            summary,
+            asset_type="harvest_profile_batch_queue_summary",
+            source_kind="harvest_profile_scraper",
+            is_raw_asset=False,
+            model_safe=True,
+        )
+        updated_checkpoint = {
+            **dict(execution.checkpoint or {}),
+            "artifact_paths": artifact_paths,
+            "summary_path": str(summary_path),
+            "stage": "waiting_remote_harvest" if execution.pending else "completed",
+        }
+        updated_output = {"summary": {**summary, "summary_path": str(summary_path)}}
+        if execution.pending:
+            self.worker_runtime.complete_worker(
+                worker_handle,
+                status="queued",
+                checkpoint_payload=updated_checkpoint,
+                output_payload=updated_output,
+            )
+            return {"worker_status": "queued", "summary": updated_output["summary"]}
+
+        self.worker_runtime.complete_worker(
+            worker_handle,
+            status="completed",
+            checkpoint_payload=updated_checkpoint,
+            output_payload=updated_output,
+            handoff_to_lane="enrichment_specialist",
+        )
+        return {"worker_status": "completed", "summary": updated_output["summary"]}
+
+    def _follow_up_roster_anchored_scholar_coauthor_prospects(
+        self,
+        *,
+        prospects: list[Candidate],
+        identity: CompanyIdentity,
+        snapshot_dir: Path,
+        candidate_map: dict[str, Candidate],
+        resolved_profiles: list[dict[str, Any]],
+        evidence: list[EvidenceRecord],
+        profile_fetch_count: int,
+        profile_detail_limit: int,
+        exploration_limit: int,
+        asset_logger: AssetLogger,
+        job_id: str,
+        request_payload: dict[str, Any],
+        plan_payload: dict[str, Any],
+        runtime_mode: str,
+    ) -> tuple[int, Path | None, list[str], int]:
+        if not prospects or exploration_limit <= 0:
+            return profile_fetch_count, None, [], 0
+
+        follow_up_dir = snapshot_dir / "publications" / "roster_anchored_scholar_coauthors"
+        follow_up_dir.mkdir(parents=True, exist_ok=True)
+        summary_path = follow_up_dir / "follow_up_summary.json"
+        progress_path = follow_up_dir / "follow_up_progress.json"
+        patch_path = follow_up_dir / "follow_up_candidate_patch.json"
+        decisions, errors, processed_candidate_ids = _load_scholar_coauthor_follow_up_progress(progress_path, summary_path)
+        evidence_keys = {_evidence_resume_key(item) for item in evidence}
+        _restore_scholar_coauthor_follow_up_patch(
+            patch_path,
+            candidate_map=candidate_map,
+            resolved_profiles=resolved_profiles,
+            evidence=evidence,
+            evidence_keys=evidence_keys,
+        )
+        decisions_by_candidate_id = {
+            str(item.get("candidate_id") or "").strip(): dict(item)
+            for item in decisions
+            if str(item.get("candidate_id") or "").strip()
+        }
+        queued_prospect_count = 0
+
+        ordered_prospects = [
+            prospect
+            for prospect in _prioritize_scholar_coauthor_prospects(prospects)
+            if prospect.candidate_id not in processed_candidate_ids
+        ][:exploration_limit]
+
+        for prospect in ordered_prospects:
+            updated_candidates: list[Candidate] = []
+            new_evidence_records: list[EvidenceRecord] = []
+            new_resolved_profiles: list[dict[str, Any]] = []
+            try:
+                exploration_result = self.exploratory_enricher._explore_candidate(
+                    snapshot_dir=snapshot_dir,
+                    candidate=prospect,
+                    target_company=identity.canonical_name,
+                    logger=asset_logger,
+                    job_id=job_id,
+                    request_payload=request_payload,
+                    plan_payload=plan_payload,
+                    runtime_mode=runtime_mode,
+                )
+                explored_candidate = exploration_result["candidate"]
+                errors.extend(list(exploration_result.get("errors") or []))
+                if _is_queued_exploration_summary(exploration_result.get("summary") or {}):
+                    queued_prospect_count += 1
+                    decision_record = {
+                        "candidate_id": explored_candidate.candidate_id,
+                        "display_name": explored_candidate.display_name,
+                        "state": "queued_background_exploration",
+                        "confirmed_by_public_web": False,
+                        "linkedin_url": explored_candidate.linkedin_url,
+                        "next_step": "await_background_search_recovery",
+                        "summary": "Background exploration is still queued; resume after worker recovery finishes.",
+                        "seed_names": list(explored_candidate.metadata.get("scholar_coauthor_seed_names") or []),
+                        "papers": list(explored_candidate.metadata.get("scholar_coauthor_papers") or [])[:8],
+                        "profile_verified": False,
+                        "exploration_summary": dict(exploration_result.get("summary") or {}),
+                    }
+                else:
+                    decision = _scholar_coauthor_prospect_public_web_resolution(explored_candidate, identity)
+                    profile_verified = False
+                    prior_evidence_count = len(evidence)
+                    prior_resolved_count = len(resolved_profiles)
+                    if (
+                        decision["confirmed_by_public_web"]
+                        and _candidate_known_linkedin_url(explored_candidate)
+                        and profile_fetch_count < profile_detail_limit
+                    ):
+                        _append_unique_evidence_records(
+                            evidence,
+                            list(exploration_result.get("evidence") or []),
+                            evidence_keys=evidence_keys,
+                        )
+                        profile_verified, profile_fetch_count = self._resolve_candidate_with_known_refs(
+                            _annotate_scholar_coauthor_resolution(explored_candidate, decision),
+                            identity,
+                            snapshot_dir,
+                            profile_fetch_count,
+                            profile_detail_limit,
+                            candidate_map,
+                            resolved_profiles,
+                            evidence,
+                            asset_logger=asset_logger,
+                        )
+                    new_evidence_records = list(evidence[prior_evidence_count:])
+                    for item in new_evidence_records:
+                        evidence_keys.add(_evidence_resume_key(item))
+                    new_resolved_profiles = list(resolved_profiles[prior_resolved_count:])
+                    if profile_verified:
+                        updated_candidate = candidate_map.get(_candidate_key(explored_candidate))
+                        if updated_candidate is not None:
+                            updated_candidates.append(updated_candidate)
+                    decision_record = {
+                        "candidate_id": explored_candidate.candidate_id,
+                        "display_name": explored_candidate.display_name,
+                        "state": decision["state"],
+                        "confirmed_by_public_web": decision["confirmed_by_public_web"],
+                        "linkedin_url": decision["linkedin_url"],
+                        "next_step": decision["next_step"],
+                        "summary": decision["summary"],
+                        "seed_names": list(explored_candidate.metadata.get("scholar_coauthor_seed_names") or []),
+                        "papers": list(explored_candidate.metadata.get("scholar_coauthor_papers") or [])[:8],
+                        "profile_verified": profile_verified,
+                        "exploration_summary": dict(exploration_result.get("summary") or {}),
+                    }
+            except Exception as exc:
+                error_message = f"scholar_coauthor_follow_up:{prospect.display_name}:{str(exc)[:160]}"
+                errors.append(error_message)
+                decision_record = {
+                    "candidate_id": prospect.candidate_id,
+                    "display_name": prospect.display_name,
+                    "state": "follow_up_error",
+                    "confirmed_by_public_web": False,
+                    "linkedin_url": prospect.linkedin_url,
+                    "next_step": "retry_follow_up",
+                    "summary": f"Scholar coauthor follow-up failed: {str(exc)[:160]}",
+                    "seed_names": list(prospect.metadata.get("scholar_coauthor_seed_names") or []),
+                    "papers": list(prospect.metadata.get("scholar_coauthor_papers") or [])[:8],
+                    "profile_verified": False,
+                    "exploration_summary": {},
+                    "error": str(exc)[:300],
+                }
+
+            decisions_by_candidate_id[decision_record["candidate_id"]] = decision_record
+            if not _is_queued_scholar_coauthor_follow_up_decision(decision_record):
+                processed_candidate_ids.add(decision_record["candidate_id"])
+            _persist_scholar_coauthor_follow_up_patch(
+                patch_path,
+                updated_candidates=updated_candidates,
+                resolved_profiles=new_resolved_profiles,
+                new_evidence=new_evidence_records,
+                asset_logger=asset_logger,
+            )
+            _write_scholar_coauthor_follow_up_state(
+                progress_path=progress_path,
+                summary_path=summary_path,
+                identity=identity,
+                prospect_total=len(prospects),
+                processed_candidate_ids=processed_candidate_ids,
+                decisions=list(decisions_by_candidate_id.values()),
+                errors=errors,
+                asset_logger=asset_logger,
+                completed=False,
+            )
+
+        _write_scholar_coauthor_follow_up_state(
+            progress_path=progress_path,
+            summary_path=summary_path,
+            identity=identity,
+            prospect_total=len(prospects),
+            processed_candidate_ids=processed_candidate_ids,
+            decisions=list(decisions_by_candidate_id.values()),
+            errors=errors,
+            asset_logger=asset_logger,
+            completed=len(processed_candidate_ids) >= len({prospect.candidate_id for prospect in prospects}),
+        )
+        return profile_fetch_count, summary_path, errors, queued_prospect_count
+
+    def _gate_publication_leads_after_exploration(
+        self,
+        *,
+        lead_candidates: list[Candidate],
+        identity: CompanyIdentity,
+        snapshot_dir: Path,
+        candidate_map: dict[str, Candidate],
+        unresolved_candidates: list[dict[str, Any]],
+        asset_logger: AssetLogger,
+        allow_targeted_name_search: bool,
+    ) -> tuple[list[Candidate], Path | None]:
+        if not lead_candidates:
+            return [], None
+
+        resolution_dir = snapshot_dir / "publication_lead_resolution"
+        resolution_dir.mkdir(parents=True, exist_ok=True)
+        decisions: list[dict[str, Any]] = []
+        gated_leads: list[Candidate] = []
+
+        for lead_candidate in lead_candidates:
+            current_candidate = candidate_map.get(_candidate_key(lead_candidate), lead_candidate)
+            decision = _publication_lead_public_web_resolution(
+                current_candidate,
+                identity,
+                allow_targeted_name_search=allow_targeted_name_search,
+            )
+            current_candidate = _annotate_publication_lead_resolution(current_candidate, decision)
+            candidate_map[_candidate_key(current_candidate)] = current_candidate
+            _drop_unresolved_candidate(unresolved_candidates, current_candidate.candidate_id)
+            unresolved_candidates.append(
+                {
+                    "candidate_id": current_candidate.candidate_id,
+                    "display_name": current_candidate.display_name,
+                    "attempted_slugs": [],
+                    "query_summaries": [],
+                    "resolution_source": "publication_lead_public_web_verification",
+                    "publication_lead_resolution_state": decision["state"],
+                    "public_web_confirmed": decision["confirmed_by_public_web"],
+                    "linkedin_url": decision["linkedin_url"],
+                    "next_step": decision["next_step"],
+                    "summary": decision["summary"],
+                }
+            )
+            if decision["eligible_for_targeted_name_search"]:
+                gated_leads.append(current_candidate)
+            decisions.append(
+                {
+                    "candidate_id": current_candidate.candidate_id,
+                    "display_name": current_candidate.display_name,
+                    "source_dataset": current_candidate.source_dataset,
+                    "source_path": current_candidate.source_path,
+                    "publication_title": _candidate_publication_title(current_candidate),
+                    "publication_url": str(current_candidate.metadata.get("publication_url") or "").strip(),
+                    **decision,
+                }
+            )
+
+        summary_path = resolution_dir / "public_web_gate.json"
+        asset_logger.write_json(
+            summary_path,
+            {
+                "target_company": identity.canonical_name,
+                "candidate_count": len(decisions),
+                "eligible_for_targeted_name_search_count": len(gated_leads),
+                "decisions": decisions,
+            },
+            asset_type="publication_lead_public_web_gate",
+            source_kind="publication_enrichment",
+            is_raw_asset=False,
+            model_safe=True,
+        )
+        return gated_leads, summary_path
 
     def _resolve_publication_leads_with_harvest_search(
         self,
@@ -484,16 +1033,27 @@ class MultiSourceEnricher:
                     if _names_match(current_candidate.name_en, str(row.get("full_name") or ""))
                 ]
                 variant_summary["matched_names"] = [str(row.get("full_name") or "") for row in rows]
+                profile_urls: list[str] = []
+                for row in rows:
+                    profile_url = str(row.get("profile_url") or "").strip()
+                    if profile_url and profile_url not in profile_urls:
+                        profile_urls.append(profile_url)
+                prefetched_profiles = self.harvest_profile_connector.fetch_profiles_by_urls(
+                    profile_urls,
+                    snapshot_dir,
+                    asset_logger=asset_logger,
+                ) if profile_urls else {}
                 for row in rows:
                     profile_url = str(row.get("profile_url") or "").strip()
                     if not profile_url:
                         continue
-                    profile = self.harvest_profile_connector.fetch_profile_by_url(
-                        profile_url,
-                        snapshot_dir,
-                        asset_logger=asset_logger,
-                    )
-                    if profile is None or not _profile_matches_candidate(profile["parsed"], current_candidate, identity):
+                    profile = prefetched_profiles.get(profile_url)
+                    if profile is None or not _profile_matches_candidate(
+                        profile["parsed"],
+                        current_candidate,
+                        identity,
+                        model_client=self.model_client,
+                    ):
                         continue
                     merged_candidate, resolved_profile, profile_evidence = _apply_verified_profile(
                         current_candidate,
@@ -502,6 +1062,7 @@ class MultiSourceEnricher:
                         profile["account_id"],
                         _extract_seed_slug(current_candidate) or extract_linkedin_slug(profile_url),
                         identity,
+                        model_client=self.model_client,
                         resolution_source=f"publication_lead_targeted_harvest_{variant['employment_status']}",
                     )
                     candidate_map[_candidate_key(current_candidate)] = merged_candidate
@@ -574,7 +1135,12 @@ class MultiSourceEnricher:
                 profile = prefetched_harvest_profiles.get(profile_url)
             if profile is None:
                 profile = self.harvest_profile_connector.fetch_profile_by_url(profile_url, snapshot_dir, asset_logger=asset_logger)
-            if profile is None or not _profile_matches_candidate(profile["parsed"], candidate, identity):
+            if profile is None or not _profile_matches_candidate(
+                profile["parsed"],
+                candidate,
+                identity,
+                model_client=self.model_client,
+            ):
                 continue
             profile_fetch_count += 1
             merged_candidate, resolved_profile, profile_evidence = _apply_verified_profile(
@@ -584,6 +1150,7 @@ class MultiSourceEnricher:
                 profile["account_id"],
                 _extract_seed_slug(candidate) or extract_linkedin_slug(profile_url),
                 identity,
+                model_client=self.model_client,
                 resolution_source="known_profile_url_harvest",
             )
             candidate_map[_candidate_key(candidate)] = merged_candidate
@@ -595,7 +1162,12 @@ class MultiSourceEnricher:
         if seed_slug and profile_fetch_count < profile_detail_limit:
             profile_fetch_count += 1
             profile = self.profile_connector.fetch_profile(seed_slug, snapshot_dir, asset_logger=asset_logger)
-            if profile is not None and _profile_matches_candidate(profile["parsed"], candidate, identity):
+            if profile is not None and _profile_matches_candidate(
+                profile["parsed"],
+                candidate,
+                identity,
+                model_client=self.model_client,
+            ):
                 merged_candidate, resolved_profile, profile_evidence = _apply_verified_profile(
                     candidate,
                     profile["parsed"],
@@ -603,6 +1175,7 @@ class MultiSourceEnricher:
                     profile["account_id"],
                     seed_slug,
                     identity,
+                    model_client=self.model_client,
                     resolution_source="seed_slug",
                 )
                 candidate_map[_candidate_key(candidate)] = merged_candidate
@@ -1025,6 +1598,7 @@ class CompanyPublicationConnector:
         max_leads: int,
         request_payload: dict[str, Any] | None = None,
         plan_payload: dict[str, Any] | None = None,
+        existing_evidence: list[EvidenceRecord] | None = None,
     ) -> dict[str, Any]:
         publications_dir = snapshot_dir / "publications"
         publications_dir.mkdir(parents=True, exist_ok=True)
@@ -1037,6 +1611,7 @@ class CompanyPublicationConnector:
                 "evidence": [],
                 "publication_matches": [],
                 "coauthor_edges": [],
+                "scholar_coauthor_prospects": [],
                 "artifact_paths": {},
             }
 
@@ -1058,13 +1633,22 @@ class CompanyPublicationConnector:
         evidence: list[EvidenceRecord] = []
         publication_matches: list[dict[str, Any]] = []
         coauthor_edges: set[tuple[str, str]] = set()
+        scholar_coauthor_result = self._collect_roster_anchored_scholar_coauthors(
+            identity,
+            publications_dir,
+            candidates,
+            publications=publications,
+            existing_evidence=existing_evidence or [],
+            asset_logger=logger,
+        )
+        evidence.extend(scholar_coauthor_result["evidence"])
 
         for publication in publications:
-            matched_names: list[str] = []
+            matched_candidates: dict[str, Candidate] = {}
             for name in publication.authors:
                 candidate = candidate_map.get(_name_key(name))
                 if candidate is not None:
-                    matched_names.append(candidate.display_name or candidate.name_en)
+                    matched_candidates[candidate.candidate_id] = candidate
                     evidence.append(
                         EvidenceRecord(
                             evidence_id=make_evidence_id(candidate.candidate_id, publication.source_dataset, publication.title, publication.url),
@@ -1107,7 +1691,36 @@ class CompanyPublicationConnector:
                     lead = _build_publication_lead(identity, publication, name, "Acknowledgement lead")
                     lead_map.setdefault(_candidate_key(lead), lead)
 
-            for left, right in combinations(sorted(set(matched_names)), 2):
+            matched_candidate_list = list(matched_candidates.values())
+            matched_names = sorted({candidate.display_name or candidate.name_en for candidate in matched_candidate_list})
+            for candidate in matched_candidate_list:
+                coauthors = [name for name in matched_names if name != (candidate.display_name or candidate.name_en)]
+                if not coauthors:
+                    continue
+                evidence.append(
+                    EvidenceRecord(
+                        evidence_id=make_evidence_id(
+                            candidate.candidate_id,
+                            publication.source_dataset,
+                            f"{publication.title} coauthor",
+                            publication.url,
+                        ),
+                        candidate_id=candidate.candidate_id,
+                        source_type="publication_coauthor",
+                        title=publication.title,
+                        url=publication.url,
+                        summary=f"{candidate.display_name or candidate.name_en} co-authored this company-related publication with {', '.join(coauthors)}.",
+                        source_dataset=publication.source_dataset,
+                        source_path=publication.source_path,
+                        metadata={
+                            "publication_id": publication.publication_id,
+                            "coauthors": coauthors,
+                            "matched_candidates": matched_names,
+                        },
+                    )
+                )
+
+            for left, right in combinations(matched_names, 2):
                 coauthor_edges.add((left, right))
             if matched_names:
                 publication_matches.append(
@@ -1147,6 +1760,12 @@ class CompanyPublicationConnector:
             is_raw_asset=False,
             model_safe=True,
         )
+        artifact_paths = {
+            "publication_matches": str(publication_summary_path),
+            "coauthor_graph": str(coauthor_graph_path),
+            "publication_leads": str(lead_candidates_path),
+        }
+        artifact_paths.update(dict(scholar_coauthor_result.get("artifact_paths") or {}))
 
         return {
             "matched_candidates": candidates,
@@ -1154,12 +1773,9 @@ class CompanyPublicationConnector:
             "evidence": evidence,
             "publication_matches": publication_matches,
             "coauthor_edges": coauthor_graph,
+            "scholar_coauthor_prospects": list(scholar_coauthor_result.get("prospect_candidates") or []),
             "errors": errors,
-            "artifact_paths": {
-                "publication_matches": str(publication_summary_path),
-                "coauthor_graph": str(coauthor_graph_path),
-                "publication_leads": str(lead_candidates_path),
-            },
+            "artifact_paths": artifact_paths,
         }
 
     def _collect_publications(
@@ -1464,6 +2080,514 @@ class CompanyPublicationConnector:
                 break
         return results
 
+    def _collect_roster_anchored_scholar_coauthors(
+        self,
+        identity: CompanyIdentity,
+        publications_dir: Path,
+        candidates: list[Candidate],
+        *,
+        publications: list[PublicationRecord] | None = None,
+        existing_evidence: list[EvidenceRecord] | None = None,
+        asset_logger: AssetLogger,
+    ) -> dict[str, Any]:
+        scholar_dir = publications_dir / "roster_anchored_scholar_coauthors"
+        scholar_dir.mkdir(parents=True, exist_ok=True)
+        selected_seeds = _select_roster_anchored_scholar_seed_candidates(
+            candidates,
+            publications=publications or [],
+            existing_evidence=existing_evidence or [],
+            max_seeds=8,
+        )
+        seed_candidates = [item["candidate"] for item in selected_seeds]
+        if not seed_candidates:
+            return {"evidence": [], "prospect_candidates": [], "artifact_paths": {}}
+
+        candidate_map = _candidate_name_map(candidates)
+        evidence: list[EvidenceRecord] = []
+        prospect_map: dict[str, dict[str, Any]] = {}
+        scholar_edge_map: dict[tuple[str, str], dict[str, Any]] = {}
+        seed_results: list[dict[str, Any]] = []
+        seed_roster_records: list[dict[str, Any]] = []
+        seed_publications: list[dict[str, Any]] = []
+        recent_year_min = max(datetime.now(timezone.utc).year - 2, 2024)
+
+        for seed_spec in selected_seeds:
+            seed_candidate = seed_spec["candidate"]
+            seed_signals = dict(seed_spec["selection_signals"])
+            search_year_min = recent_year_min
+            seed_publication_records = self._search_roster_anchored_scholar_publications(
+                seed_candidate,
+                identity,
+                scholar_dir,
+                max_publications=8,
+                recent_year_min=search_year_min,
+                asset_logger=asset_logger,
+            )
+            expanded_year_min = max(search_year_min - 2, 2022)
+            if not seed_publication_records and seed_signals.get("publication_signal_count", 0) > 0 and expanded_year_min < search_year_min:
+                search_year_min = expanded_year_min
+                seed_publication_records = self._search_roster_anchored_scholar_publications(
+                    seed_candidate,
+                    identity,
+                    scholar_dir,
+                    max_publications=8,
+                    recent_year_min=search_year_min,
+                    asset_logger=asset_logger,
+                )
+            publication_topics = sorted(
+                {
+                    topic
+                    for publication in seed_publication_records
+                    for topic in publication.topics
+                    if str(topic or "").strip()
+                }
+            )
+            seed_results.append(
+                {
+                    "seed_candidate_id": seed_candidate.candidate_id,
+                    "seed_name": seed_candidate.display_name or seed_candidate.name_en,
+                    "paper_count": len(seed_publication_records),
+                    "query_recent_year_min": search_year_min,
+                    "titles": [item.title for item in seed_publication_records[:8]],
+                    "topics": publication_topics[:10],
+                    "selection_score": int(seed_spec["selection_score"]),
+                    "selection_signals": seed_signals,
+                }
+            )
+            seed_display_name = seed_candidate.display_name or seed_candidate.name_en
+            seed_roster_records.append(
+                {
+                    **seed_candidate.to_record(),
+                    "selection_score": int(seed_spec["selection_score"]),
+                    "selection_signals": seed_signals,
+                }
+            )
+            seed_publications.append(
+                {
+                    "seed_candidate_id": seed_candidate.candidate_id,
+                    "seed_name": seed_display_name,
+                    "selection_score": int(seed_spec["selection_score"]),
+                    "selection_signals": seed_signals,
+                    "query_recent_year_min": search_year_min,
+                    "publications": [
+                        _build_seed_publication_record(seed_candidate, publication) for publication in seed_publication_records
+                    ],
+                }
+            )
+            for publication in seed_publication_records:
+                paper_ref = _build_scholar_publication_reference(publication)
+                for author_name in _dedupe_names(publication.authors):
+                    if _name_key(author_name) == _candidate_key(seed_candidate):
+                        continue
+                    if not _looks_like_person_name(author_name):
+                        continue
+                    matched_candidate = candidate_map.get(_name_key(author_name))
+                    if matched_candidate is not None:
+                        matched_name = matched_candidate.display_name or matched_candidate.name_en
+                        _record_scholar_edge(
+                            scholar_edge_map,
+                            source_name=seed_display_name,
+                            target_name=matched_name,
+                            source_candidate_id=seed_candidate.candidate_id,
+                            target_candidate_id=matched_candidate.candidate_id,
+                            target_type="roster_member",
+                            paper_ref=paper_ref,
+                        )
+                        evidence.append(
+                            EvidenceRecord(
+                                evidence_id=make_evidence_id(
+                                    matched_candidate.candidate_id,
+                                    publication.source_dataset,
+                                    f"{publication.title} scholar coauthor with {seed_display_name}",
+                                    publication.url,
+                                ),
+                                candidate_id=matched_candidate.candidate_id,
+                                source_type="scholar_coauthor",
+                                title=publication.title,
+                                url=publication.url,
+                                summary=f"{matched_name} co-authored this scholar publication with confirmed roster member {seed_display_name}.",
+                                source_dataset=publication.source_dataset,
+                                source_path=publication.source_path,
+                                metadata={
+                                    "publication_id": publication.publication_id,
+                                    "seed_candidate_id": seed_candidate.candidate_id,
+                                    "seed_name": seed_display_name,
+                                    "matched_name": author_name,
+                                },
+                            )
+                        )
+                        continue
+
+                    key = _name_key(author_name)
+                    prospect = prospect_map.setdefault(
+                        key,
+                        {
+                            "name": author_name,
+                            "seed_names": [],
+                            "papers": [],
+                        },
+                    )
+                    if seed_display_name not in prospect["seed_names"]:
+                        prospect["seed_names"].append(seed_display_name)
+                    _record_scholar_edge(
+                        scholar_edge_map,
+                        source_name=seed_display_name,
+                        target_name=author_name,
+                        source_candidate_id=seed_candidate.candidate_id,
+                        target_candidate_id="",
+                        target_type="prospect",
+                        paper_ref=paper_ref,
+                    )
+                    paper_record = dict(paper_ref)
+                    paper_record["seed_name"] = seed_display_name
+                    if paper_record not in prospect["papers"]:
+                        prospect["papers"].append(paper_record)
+
+        graph_path = scholar_dir / "scholar_coauthor_graph.json"
+        prospects_path = scholar_dir / "scholar_coauthor_prospects.json"
+        seed_roster_path = scholar_dir / "seed_roster.json"
+        seed_publications_path = scholar_dir / "seed_publications.json"
+        summary_path = scholar_dir / "summary.json"
+        prospect_candidates = [
+            _build_roster_anchored_scholar_coauthor_prospect(
+                identity,
+                prospect,
+                source_path=prospects_path,
+            )
+            for prospect in sorted(
+                prospect_map.values(),
+                key=lambda item: (-len(item["seed_names"]), -len(item["papers"]), item["name"].lower()),
+            )
+        ]
+        graph_edges = [
+            {
+                **edge,
+                "paper_count": len(edge["papers"]),
+            }
+            for _, edge in sorted(
+                scholar_edge_map.items(),
+                key=lambda item: (
+                    -len(item[1]["papers"]),
+                    item[1]["source"].lower(),
+                    item[1]["target"].lower(),
+                ),
+            )
+        ]
+        asset_logger.write_json(
+            graph_path,
+            graph_edges,
+            asset_type="scholar_coauthor_graph",
+            source_kind="publication_enrichment",
+            is_raw_asset=False,
+            model_safe=True,
+        )
+        asset_logger.write_json(
+            seed_roster_path,
+            seed_roster_records,
+            asset_type="scholar_coauthor_seed_roster",
+            source_kind="publication_enrichment",
+            is_raw_asset=False,
+            model_safe=True,
+        )
+        asset_logger.write_json(
+            seed_publications_path,
+            seed_publications,
+            asset_type="scholar_coauthor_seed_publications",
+            source_kind="publication_enrichment",
+            is_raw_asset=False,
+            model_safe=True,
+        )
+        asset_logger.write_json(
+            prospects_path,
+            [candidate.to_record() for candidate in prospect_candidates],
+            asset_type="scholar_coauthor_prospects",
+            source_kind="publication_enrichment",
+            is_raw_asset=False,
+            model_safe=True,
+        )
+        asset_logger.write_json(
+            summary_path,
+            {
+                "target_company": identity.canonical_name,
+                "seed_count": len(seed_candidates),
+                "recent_year_min": recent_year_min,
+                "seed_results": seed_results,
+                "selection_strategy": "publication_signal_first",
+                "graph_edge_count": len(graph_edges),
+                "internal_overlap_count": sum(1 for edge in graph_edges if edge["target_type"] == "roster_member"),
+                "prospect_count": len(prospect_candidates),
+            },
+            asset_type="scholar_coauthor_summary",
+            source_kind="publication_enrichment",
+            is_raw_asset=False,
+            model_safe=True,
+        )
+        return {
+            "evidence": evidence,
+            "prospect_candidates": prospect_candidates,
+            "artifact_paths": {
+                "scholar_coauthor_graph": str(graph_path),
+                "scholar_coauthor_seed_roster": str(seed_roster_path),
+                "scholar_coauthor_seed_publications": str(seed_publications_path),
+                "scholar_coauthor_prospects": str(prospects_path),
+                "scholar_coauthor_summary": str(summary_path),
+            },
+        }
+
+    def _search_roster_anchored_scholar_publications(
+        self,
+        seed_candidate: Candidate,
+        identity: CompanyIdentity,
+        scholar_dir: Path,
+        *,
+        max_publications: int,
+        recent_year_min: int,
+        asset_logger: AssetLogger,
+    ) -> list[PublicationRecord]:
+        seed_name = (seed_candidate.display_name or seed_candidate.name_en).strip()
+        if not seed_name:
+            return []
+        query = f'au:"{seed_name}"'
+        feed_url = "https://export.arxiv.org/api/query?" + parse.urlencode(
+            {
+                "search_query": query,
+                "start": 0,
+                "max_results": max_publications,
+                "sortBy": "submittedDate",
+                "sortOrder": "descending",
+            }
+        )
+        try:
+            raw_feed = _fetch_text(feed_url)
+        except Exception:
+            return []
+        raw_path = scholar_dir / f"{seed_candidate.candidate_id}_arxiv_author_feed.xml"
+        asset_logger.write_text(
+            raw_path,
+            raw_feed,
+            asset_type="scholar_author_feed_xml",
+            source_kind="publication_enrichment",
+            content_type="application/xml",
+            is_raw_asset=True,
+            model_safe=False,
+            metadata={"seed_candidate_id": seed_candidate.candidate_id, "seed_name": seed_name, "url": feed_url},
+        )
+        try:
+            root = ET.fromstring(raw_feed)
+        except ET.ParseError:
+            return []
+        namespace = {"atom": "http://www.w3.org/2005/Atom"}
+        results: list[PublicationRecord] = []
+        seen: set[str] = set()
+        for entry in root.findall("atom:entry", namespace):
+            title = " ".join((entry.findtext("atom:title", default="", namespaces=namespace) or "").split()).strip()
+            url = str(entry.findtext("atom:id", default="", namespaces=namespace) or "").strip()
+            published = str(entry.findtext("atom:published", default="", namespaces=namespace) or "").strip()
+            abstract = " ".join((entry.findtext("atom:summary", default="", namespaces=namespace) or "").split()).strip()
+            year = None
+            if published[:4].isdigit():
+                year = int(published[:4])
+            if year is not None and year < recent_year_min:
+                continue
+            authors = [
+                " ".join((author.findtext("atom:name", default="", namespaces=namespace) or "").split()).strip()
+                for author in entry.findall("atom:author", namespace)
+            ]
+            authors = [item for item in authors if item]
+            topics = []
+            for category in entry.findall("atom:category", namespace):
+                term = str(category.attrib.get("term") or "").strip()
+                if term and term not in topics:
+                    topics.append(term)
+            publication_id = url.rsplit("/", 1)[-1] if url else sha1(title.encode("utf-8")).hexdigest()[:12]
+            if publication_id in seen or not title or len(authors) < 2:
+                continue
+            seen.add(publication_id)
+            results.append(
+                PublicationRecord(
+                    publication_id=publication_id,
+                    source="arxiv_author_seed_search",
+                    source_dataset=f"{identity.company_key}_roster_anchored_scholar",
+                    source_path=str(raw_path),
+                    title=title,
+                    url=url,
+                    year=year,
+                    authors=authors,
+                    acknowledgement_names=[],
+                    abstract=abstract,
+                    topics=topics,
+                )
+            )
+            if len(results) >= max_publications:
+                break
+        return results
+
+
+def _select_roster_anchored_scholar_seed_candidates(
+    candidates: list[Candidate],
+    *,
+    publications: list[PublicationRecord],
+    existing_evidence: list[EvidenceRecord],
+    max_seeds: int,
+) -> list[dict[str, Any]]:
+    eligible = [
+        candidate
+        for candidate in candidates
+        if candidate.category in {"employee", "former_employee"} and _looks_like_person_name(candidate.display_name or candidate.name_en)
+    ]
+    if not eligible:
+        return []
+
+    candidate_map = _candidate_name_map(eligible)
+    publication_author_counts: dict[str, int] = {}
+    publication_ack_counts: dict[str, int] = {}
+    for publication in publications:
+        for name in publication.authors:
+            matched_candidate = candidate_map.get(_name_key(name))
+            if matched_candidate is None:
+                continue
+            publication_author_counts[matched_candidate.candidate_id] = publication_author_counts.get(matched_candidate.candidate_id, 0) + 1
+        for name in publication.acknowledgement_names:
+            matched_candidate = candidate_map.get(_name_key(name))
+            if matched_candidate is None:
+                continue
+            publication_ack_counts[matched_candidate.candidate_id] = publication_ack_counts.get(matched_candidate.candidate_id, 0) + 1
+
+    evidence_counts: dict[str, dict[str, int]] = {}
+    for item in existing_evidence:
+        candidate_counts = evidence_counts.setdefault(item.candidate_id, {})
+        candidate_counts[item.source_type] = candidate_counts.get(item.source_type, 0) + 1
+
+    ranked: list[dict[str, Any]] = []
+    for candidate in eligible:
+        metadata = dict(candidate.metadata or {})
+        candidate_evidence_counts = evidence_counts.get(candidate.candidate_id, {})
+        publication_metadata_count = int(bool(str(metadata.get("publication_id") or "").strip() or str(metadata.get("publication_url") or "").strip()))
+        current_publication_author_matches = int(publication_author_counts.get(candidate.candidate_id, 0))
+        current_publication_ack_matches = int(publication_ack_counts.get(candidate.candidate_id, 0))
+        existing_publication_author_evidence = int(candidate_evidence_counts.get("publication_author", 0))
+        existing_publication_ack_evidence = int(candidate_evidence_counts.get("publication_acknowledgement", 0))
+        existing_profile_publication_evidence = int(candidate_evidence_counts.get("linkedin_profile_publication", 0))
+        manual_confirmed = str(metadata.get("membership_review_decision") or "").strip() == "manual_confirmed_member"
+
+        score = _candidate_priority(candidate)
+        score += publication_metadata_count * 80
+        score += current_publication_author_matches * 36
+        score += current_publication_ack_matches * 20
+        score += existing_publication_author_evidence * 28
+        score += existing_publication_ack_evidence * 16
+        score += existing_profile_publication_evidence * 18
+        if manual_confirmed:
+            score += 6
+        if candidate.linkedin_url:
+            score += 2
+
+        publication_signal_count = (
+            publication_metadata_count
+            + current_publication_author_matches
+            + current_publication_ack_matches
+            + existing_publication_author_evidence
+            + existing_publication_ack_evidence
+            + existing_profile_publication_evidence
+        )
+        reasons: list[str] = []
+        if publication_metadata_count:
+            reasons.append("candidate_metadata_publication")
+        if current_publication_author_matches:
+            reasons.append("current_publication_author_match")
+        if current_publication_ack_matches:
+            reasons.append("current_publication_acknowledgement_match")
+        if existing_publication_author_evidence:
+            reasons.append("historical_publication_author_evidence")
+        if existing_publication_ack_evidence:
+            reasons.append("historical_publication_acknowledgement_evidence")
+        if existing_profile_publication_evidence:
+            reasons.append("linkedin_profile_publication")
+        if manual_confirmed:
+            reasons.append("manual_confirmed_member")
+
+        ranked.append(
+            {
+                "candidate": candidate,
+                "selection_score": score,
+                "selection_signals": {
+                    "publication_signal_count": publication_signal_count,
+                    "candidate_priority": _candidate_priority(candidate),
+                    "publication_metadata_count": publication_metadata_count,
+                    "current_publication_author_matches": current_publication_author_matches,
+                    "current_publication_ack_matches": current_publication_ack_matches,
+                    "existing_publication_author_evidence": existing_publication_author_evidence,
+                    "existing_publication_ack_evidence": existing_publication_ack_evidence,
+                    "existing_profile_publication_evidence": existing_profile_publication_evidence,
+                    "manual_confirmed_member": manual_confirmed,
+                    "selection_reasons": reasons,
+                },
+            }
+        )
+
+    ranked.sort(
+        key=lambda item: (
+            -int(item["selection_score"]),
+            -int(item["selection_signals"]["publication_signal_count"]),
+            -int(item["selection_signals"]["current_publication_author_matches"]),
+            -int(item["selection_signals"]["existing_profile_publication_evidence"]),
+            (item["candidate"].display_name or item["candidate"].name_en).lower(),
+        )
+    )
+    return ranked[:max_seeds]
+
+
+def _build_seed_publication_record(seed_candidate: Candidate, publication: PublicationRecord) -> dict[str, Any]:
+    return {
+        **publication.to_record(),
+        "seed_candidate_id": seed_candidate.candidate_id,
+        "seed_name": seed_candidate.display_name or seed_candidate.name_en,
+        "coauthors": [
+            name
+            for name in _dedupe_names(publication.authors)
+            if _name_key(name) != _candidate_key(seed_candidate)
+        ],
+        "research_direction": list(publication.topics[:8]),
+        "abstract_excerpt": publication.abstract[:500],
+    }
+
+
+def _build_scholar_publication_reference(publication: PublicationRecord) -> dict[str, Any]:
+    return {
+        "publication_id": publication.publication_id,
+        "title": publication.title,
+        "url": publication.url,
+        "year": publication.year,
+        "topics": list(publication.topics[:8]),
+    }
+
+
+def _record_scholar_edge(
+    edge_map: dict[tuple[str, str], dict[str, Any]],
+    *,
+    source_name: str,
+    target_name: str,
+    source_candidate_id: str,
+    target_candidate_id: str,
+    target_type: str,
+    paper_ref: dict[str, Any],
+) -> None:
+    key = (source_name, target_name)
+    edge = edge_map.setdefault(
+        key,
+        {
+            "source": source_name,
+            "target": target_name,
+            "edge_type": "scholar_coauthor",
+            "source_candidate_id": source_candidate_id,
+            "target_candidate_id": target_candidate_id,
+            "target_type": target_type,
+            "papers": [],
+        },
+    )
+    if paper_ref not in edge["papers"]:
+        edge["papers"].append(paper_ref)
+
 
 def extract_linkedin_profile_urls_from_search_html(html_text: str) -> list[str]:
     raw_urls = re.findall(r'result__a" href="([^"]+)"', html_text)
@@ -1594,10 +2718,12 @@ def parse_linkedin_profile_payload(payload: dict[str, Any]) -> dict[str, Any]:
     current_company = ""
     for item in experience:
         if item.get("is_current"):
-            current_company = str(item.get("company") or item.get("company_name") or "").strip()
+            companies = _experience_company_labels(item)
+            current_company = companies[0] if companies else ""
             break
     if not current_company and experience:
-        current_company = str(experience[0].get("company") or experience[0].get("company_name") or "").strip()
+        companies = _experience_company_labels(experience[0])
+        current_company = companies[0] if companies else ""
     if not current_company:
         current_company = str(basic_info.get("current_company") or "").strip()
 
@@ -1682,24 +2808,20 @@ def _search_result_name_matches_candidate(row: dict[str, Any], candidate: Candid
     return _names_match(candidate.name_en, row_name)
 
 
-def _profile_matches_candidate(profile: dict[str, Any], candidate: Candidate, identity: CompanyIdentity) -> bool:
+def _profile_matches_candidate(
+    profile: dict[str, Any],
+    candidate: Candidate,
+    identity: CompanyIdentity,
+    *,
+    model_client: ModelClient | None = None,
+) -> bool:
     full_name = profile.get("full_name", "")
     if not _names_match(candidate.name_en, full_name):
         return False
-    candidate_profile_urls = {str(item).strip().rstrip("/") for item in _candidate_profile_urls(candidate) if str(item).strip()}
-    profile_url = str(profile.get("profile_url") or "").strip().rstrip("/")
-    if profile_url and profile_url in candidate_profile_urls:
+    if _candidate_profile_identifiers(candidate) & _profile_identifiers(profile):
         return True
-    company_variants = {_normalize(identity.canonical_name)}
-    company_variants.update(_normalize(alias) for alias in identity.aliases if alias)
-    current_company = str(profile.get("current_company", "")).strip()
-    if _normalize(current_company) in company_variants:
-        return True
-    for item in profile.get("experience", []) or []:
-        company = str(item.get("company") or item.get("company_name") or "").strip()
-        if _normalize(company) in company_variants:
-            return True
-    return False
+    resolved_category, _ = _classify_profile_membership(profile, identity, model_client=model_client)
+    return resolved_category in {"employee", "former_employee"}
 
 
 def _merge_profile_into_candidate(
@@ -1708,8 +2830,19 @@ def _merge_profile_into_candidate(
     raw_path: Path,
     account_id: str,
     identity: CompanyIdentity,
+    *,
+    model_client: ModelClient | None = None,
+    membership_review: dict[str, Any] | None = None,
 ) -> Candidate:
-    resolved_category, resolved_employment_status = _classify_profile_membership(profile, identity)
+    resolved_category, resolved_employment_status = _classify_profile_membership(
+        profile,
+        identity,
+        model_client=model_client,
+    )
+    membership_review = dict(membership_review or {})
+    review_required = bool(membership_review.get("requires_manual_review"))
+    review_note = str(membership_review.get("note") or "").strip()
+    review_rationale = str(membership_review.get("rationale") or "").strip()
     incoming = Candidate(
         candidate_id=candidate.candidate_id,
         name_en=profile.get("full_name") or candidate.name_en,
@@ -1723,7 +2856,7 @@ def _merge_profile_into_candidate(
         focus_areas=candidate.focus_areas or profile.get("headline", ""),
         education=_format_education(profile.get("education", [])),
         work_history=_format_experience(profile.get("experience", [])),
-        notes=_join_nonempty(candidate.notes, profile.get("summary", ""), profile.get("location", "")),
+        notes=_join_nonempty(candidate.notes, review_note, review_rationale, profile.get("summary", ""), profile.get("location", "")),
         linkedin_url=profile.get("profile_url", ""),
         source_dataset=candidate.source_dataset,
         source_path=str(raw_path),
@@ -1733,6 +2866,15 @@ def _merge_profile_into_candidate(
             "profile_account_id": account_id,
             "profile_location": profile.get("location", ""),
             "more_profiles": list(profile.get("more_profiles", []) or []),
+            "membership_claim_category": resolved_category,
+            "membership_claim_employment_status": resolved_employment_status,
+            "membership_review_required": review_required,
+            "membership_review_reason": "suspicious_membership" if review_required else "",
+            "membership_review_decision": str(membership_review.get("decision") or "").strip(),
+            "membership_review_confidence": str(membership_review.get("confidence_label") or "").strip(),
+            "membership_review_rationale": review_rationale,
+            "membership_review_triggers": list(membership_review.get("trigger_reasons") or []),
+            "membership_review_trigger_keywords": list(membership_review.get("trigger_keywords") or []),
         },
     )
     merged = merge_candidate(candidate, incoming)
@@ -1745,16 +2887,26 @@ def _merge_profile_into_candidate(
         merged_record["education"] = incoming.education
     if incoming.work_history:
         merged_record["work_history"] = incoming.work_history
-    merged_record["notes"] = _join_nonempty(candidate.notes, profile.get("summary", ""), profile.get("location", ""))
+    merged_record["notes"] = incoming.notes
     merged_record["source_path"] = str(raw_path)
     merged_record["metadata"] = incoming.metadata
     return Candidate(**merged_record)
 
 
-def _profile_evidence_record(candidate: Candidate, profile: dict[str, Any], raw_path: Path) -> EvidenceRecord:
+def _profile_evidence_record(
+    candidate: Candidate,
+    profile: dict[str, Any],
+    raw_path: Path,
+    *,
+    membership_review: dict[str, Any] | None = None,
+) -> EvidenceRecord:
     title = profile.get("headline") or "LinkedIn profile detail"
     url = profile.get("profile_url") or candidate.linkedin_url
-    summary = f"LinkedIn profile detail validated {candidate.display_name} at {candidate.target_company}."
+    membership_review = dict(membership_review or {})
+    if membership_review.get("requires_manual_review"):
+        summary = f"LinkedIn profile detail captured for {candidate.display_name}; target-company membership requires manual review."
+    else:
+        summary = f"LinkedIn profile detail validated {candidate.display_name} at {candidate.target_company}."
     return EvidenceRecord(
         evidence_id=make_evidence_id(candidate.candidate_id, "linkedin_profile_detail", title, url or str(raw_path)),
         candidate_id=candidate.candidate_id,
@@ -1763,6 +2915,61 @@ def _profile_evidence_record(candidate: Candidate, profile: dict[str, Any], raw_
         url=url,
         summary=summary,
         source_dataset="linkedin_profile_detail",
+        source_path=str(raw_path),
+        metadata={
+            "public_identifier": profile.get("public_identifier", ""),
+            "membership_review_required": bool(membership_review.get("requires_manual_review")),
+            "membership_review_decision": str(membership_review.get("decision") or "").strip(),
+        },
+    )
+
+
+def _profile_membership_review_evidence_record(
+    candidate: Candidate,
+    profile: dict[str, Any],
+    raw_path: Path,
+    review: dict[str, Any],
+) -> EvidenceRecord:
+    title = profile.get("headline") or "LinkedIn membership review"
+    url = profile.get("profile_url") or candidate.linkedin_url
+    rationale = str(review.get("rationale") or "").strip()
+    summary = (
+        f"LinkedIn membership review flagged {candidate.display_name} for manual review."
+        if review.get("requires_manual_review")
+        else f"LinkedIn membership review completed for {candidate.display_name}."
+    )
+    if rationale:
+        summary = _join_nonempty(summary, rationale)
+    return EvidenceRecord(
+        evidence_id=make_evidence_id(candidate.candidate_id, "linkedin_profile_membership_review", title, url or str(raw_path)),
+        candidate_id=candidate.candidate_id,
+        source_type="linkedin_profile_membership_review",
+        title=title,
+        url=url,
+        summary=summary,
+        source_dataset="linkedin_profile_membership_review",
+        source_path=str(raw_path),
+        metadata={
+            "decision": str(review.get("decision") or "").strip(),
+            "confidence_label": str(review.get("confidence_label") or "").strip(),
+            "trigger_reasons": list(review.get("trigger_reasons") or []),
+            "trigger_keywords": list(review.get("trigger_keywords") or []),
+        },
+    )
+
+
+def _profile_non_member_evidence_record(candidate: Candidate, profile: dict[str, Any], raw_path: Path) -> EvidenceRecord:
+    title = profile.get("headline") or "LinkedIn profile detail"
+    url = profile.get("profile_url") or candidate.linkedin_url
+    summary = f"LinkedIn profile detail did not confirm {candidate.display_name} as a {candidate.target_company} member."
+    return EvidenceRecord(
+        evidence_id=make_evidence_id(candidate.candidate_id, "linkedin_profile_non_member", title, url or str(raw_path)),
+        candidate_id=candidate.candidate_id,
+        source_type="linkedin_profile_non_member",
+        title=title,
+        url=url,
+        summary=summary,
+        source_dataset="linkedin_profile_non_member",
         source_path=str(raw_path),
         metadata={"public_identifier": profile.get("public_identifier", "")},
     )
@@ -1783,9 +2990,32 @@ def _apply_verified_profile(
     slug: str,
     identity: CompanyIdentity,
     *,
+    model_client: ModelClient | None = None,
     resolution_source: str,
 ) -> tuple[Candidate, dict[str, Any], list[EvidenceRecord]]:
-    merged_candidate = _merge_profile_into_candidate(candidate, profile, raw_path, account_id, identity)
+    resolved_category, resolved_employment_status = _classify_profile_membership(
+        profile,
+        identity,
+        model_client=model_client,
+    )
+    membership_review = _review_profile_membership(
+        profile,
+        identity,
+        resolved_category=resolved_category,
+        resolved_employment_status=resolved_employment_status,
+        model_client=model_client,
+    )
+    if str(membership_review.get("decision") or "").strip() == "non_member":
+        return _apply_non_member_profile(candidate, profile, raw_path, account_id)
+    merged_candidate = _merge_profile_into_candidate(
+        candidate,
+        profile,
+        raw_path,
+        account_id,
+        identity,
+        model_client=model_client,
+        membership_review=membership_review,
+    )
     resolved_profile = {
         "candidate_id": candidate.candidate_id,
         "display_name": candidate.display_name,
@@ -1794,8 +3024,15 @@ def _apply_verified_profile(
         "profile_url": profile.get("profile_url", ""),
         "raw_path": str(raw_path),
         "resolution_source": resolution_source,
+        "resolved_category": resolved_category,
+        "resolved_employment_status": resolved_employment_status,
+        "membership_review_required": bool(membership_review.get("requires_manual_review")),
+        "membership_review_decision": str(membership_review.get("decision") or "").strip(),
+        "membership_review_rationale": str(membership_review.get("rationale") or "").strip(),
     }
-    evidence = [_profile_evidence_record(merged_candidate, profile, raw_path)]
+    evidence = [_profile_evidence_record(merged_candidate, profile, raw_path, membership_review=membership_review)]
+    if membership_review.get("triggered"):
+        evidence.append(_profile_membership_review_evidence_record(merged_candidate, profile, raw_path, membership_review))
     for publication_item in profile.get("publications", [])[:5]:
         publication_url = str(publication_item.get("url", "")).strip()
         publication_title = str(publication_item.get("title") or publication_item.get("name") or "LinkedIn publication").strip()
@@ -1822,6 +3059,70 @@ def _apply_verified_profile(
     return merged_candidate, resolved_profile, evidence
 
 
+def _apply_non_member_profile(
+    candidate: Candidate,
+    profile: dict[str, Any],
+    raw_path: Path,
+    account_id: str,
+) -> tuple[Candidate, dict[str, Any], list[EvidenceRecord]]:
+    incoming = Candidate(
+        candidate_id=candidate.candidate_id,
+        name_en=profile.get("full_name") or candidate.name_en,
+        display_name=profile.get("full_name") or candidate.display_name,
+        category="non_member",
+        target_company=candidate.target_company,
+        organization=profile.get("current_company") or candidate.organization,
+        employment_status="",
+        role=profile.get("headline") or candidate.role,
+        team=candidate.team or _infer_team_from_text(profile.get("headline", "")),
+        focus_areas=candidate.focus_areas or profile.get("headline", ""),
+        education=_format_education(profile.get("education", [])),
+        work_history=_format_experience(profile.get("experience", [])),
+        notes=_join_nonempty(
+            candidate.notes,
+            "Profile detail fetched but target-company experience was not confirmed.",
+            profile.get("summary", ""),
+            profile.get("location", ""),
+        ),
+        linkedin_url=profile.get("profile_url", "") or candidate.linkedin_url,
+        source_dataset=candidate.source_dataset,
+        source_path=str(raw_path),
+        metadata={
+            **candidate.metadata,
+            "public_identifier": profile.get("public_identifier", ""),
+            "profile_account_id": account_id,
+            "profile_location": profile.get("location", ""),
+            "more_profiles": list(profile.get("more_profiles", []) or []),
+            "target_company_mismatch": True,
+        },
+    )
+    merged = merge_candidate(candidate, incoming)
+    merged_record = merged.to_record()
+    merged_record["category"] = "non_member"
+    merged_record["employment_status"] = ""
+    merged_record["organization"] = incoming.organization
+    if incoming.linkedin_url:
+        merged_record["linkedin_url"] = incoming.linkedin_url
+    if incoming.education:
+        merged_record["education"] = incoming.education
+    if incoming.work_history:
+        merged_record["work_history"] = incoming.work_history
+    merged_record["notes"] = incoming.notes
+    merged_record["source_path"] = str(raw_path)
+    merged_record["metadata"] = incoming.metadata
+    merged_candidate = Candidate(**merged_record)
+    resolution = {
+        "candidate_id": candidate.candidate_id,
+        "display_name": candidate.display_name,
+        "account_id": account_id,
+        "profile_url": profile.get("profile_url", ""),
+        "raw_path": str(raw_path),
+        "resolution_source": "company_asset_completion_non_member",
+    }
+    evidence = [_profile_non_member_evidence_record(merged_candidate, profile, raw_path)]
+    return merged_candidate, resolution, evidence
+
+
 def _candidate_profile_urls(candidate: Candidate) -> list[str]:
     urls: list[str] = []
     for value in [candidate.linkedin_url, str(candidate.metadata.get("profile_url") or "").strip()]:
@@ -1831,16 +3132,435 @@ def _candidate_profile_urls(candidate: Candidate) -> list[str]:
     return urls
 
 
-def _classify_profile_membership(profile: dict[str, Any], identity: CompanyIdentity) -> tuple[str, str]:
-    company_variants = {_normalize(identity.canonical_name)}
-    company_variants.update(_normalize(alias) for alias in identity.aliases if alias)
-    current_company = str(profile.get("current_company", "")).strip()
-    if _normalize(current_company) in company_variants:
-        return "employee", "current"
-    for item in profile.get("experience", []) or []:
-        company = str(item.get("company") or item.get("company_name") or "").strip()
+def _candidate_profile_identifiers(candidate: Candidate) -> set[str]:
+    metadata = dict(candidate.metadata or {})
+    return _linkedin_identifier_set(
+        [
+            candidate.linkedin_url,
+            metadata.get("profile_url"),
+            metadata.get("seed_slug"),
+            metadata.get("public_identifier"),
+            metadata.get("more_profiles"),
+        ]
+    )
+
+
+def _profile_identifiers(profile: dict[str, Any]) -> set[str]:
+    return _linkedin_identifier_set(
+        [
+            profile.get("profile_url"),
+            profile.get("public_identifier"),
+            profile.get("username"),
+            profile.get("more_profiles"),
+        ]
+    )
+
+
+def _linkedin_identifier_set(values: list[Any]) -> set[str]:
+    identifiers: set[str] = set()
+    for value in values:
+        _append_linkedin_identifier(identifiers, value)
+    return identifiers
+
+
+def _append_linkedin_identifier(identifiers: set[str], value: Any) -> None:
+    if isinstance(value, dict):
+        for key in ["url", "profile_url", "linkedin_url", "public_identifier", "username"]:
+            _append_linkedin_identifier(identifiers, value.get(key))
+        return
+    if isinstance(value, (list, tuple, set)):
+        for item in value:
+            _append_linkedin_identifier(identifiers, item)
+        return
+    normalized = _normalize_linkedin_identifier(str(value or ""))
+    if normalized:
+        identifiers.add(normalized)
+
+
+def _normalize_linkedin_identifier(value: str) -> str:
+    raw = unescape(str(value or "")).strip()
+    if not raw:
+        return ""
+    lowered = raw.lower()
+    if "linkedin.com" in lowered:
+        slug = extract_linkedin_slug(raw)
+        if slug:
+            return slug.strip().lower()
+        parsed = parse.urlparse(raw if "://" in raw else f"https://{raw.lstrip('/')}")
+        host = parsed.netloc.lower()
+        if host.startswith("www."):
+            host = host[4:]
+        if host.startswith("m."):
+            host = host[2:]
+        path = re.sub(r"/+", "/", parsed.path or "").strip().rstrip("/")
+        return f"{host}{path.lower()}"
+    return raw.strip().strip("/").lower()
+
+
+def _company_variants(identity: CompanyIdentity) -> set[str]:
+    variants = {_normalize(identity.canonical_name)}
+    variants.update(_normalize(alias) for alias in identity.aliases if alias)
+    variants.update(_normalize(item) for item in [identity.linkedin_slug, _company_slug_from_url(identity.linkedin_company_url)] if item)
+    variants.update(_verified_equivalent_company_variants(identity))
+    return {item for item in variants if item}
+
+
+def _company_reference_labels(identity: CompanyIdentity) -> list[str]:
+    labels: list[str] = []
+    for value in [identity.canonical_name, *identity.aliases, identity.linkedin_slug, _company_slug_from_url(identity.linkedin_company_url)]:
+        text = str(value or "").strip()
+        if text and text not in labels:
+            labels.append(text)
+    metadata = dict(identity.metadata or {})
+    for item in list(metadata.get("equivalent_company_names") or []):
+        if not isinstance(item, dict):
+            continue
+        text = str(item.get("name") or item.get("company_name") or item.get("canonical_name") or "").strip()
+        if text and text not in labels:
+            labels.append(text)
+    return labels
+
+
+def _verified_equivalent_company_variants(identity: CompanyIdentity) -> set[str]:
+    metadata = dict(identity.metadata or {})
+    equivalent_items = list(metadata.get("equivalent_company_names") or [])
+    identity_company_keys = {
+        _normalize(str(identity.linkedin_slug or "")),
+        _normalize(_company_slug_from_url(identity.linkedin_company_url)),
+    }
+    identity_company_keys.discard("")
+    if not identity_company_keys:
+        return set()
+
+    variants: set[str] = set()
+    for item in equivalent_items:
+        if not isinstance(item, dict):
+            continue
+        normalized = _normalize(
+            str(item.get("name") or item.get("company_name") or item.get("canonical_name") or "")
+        )
+        if not normalized:
+            continue
+        item_company_keys = {
+            _normalize(str(item.get("linkedin_slug") or "")),
+            _normalize(_company_slug_from_url(str(item.get("linkedin_company_url") or item.get("companyLinkedinUrl") or ""))),
+        }
+        item_company_keys.discard("")
+        if item_company_keys & identity_company_keys:
+            variants.add(normalized)
+    return variants
+
+
+def _company_label_matches_identity(
+    label: str,
+    identity: CompanyIdentity,
+    *,
+    company_variants: set[str] | None = None,
+    model_client: ModelClient | None = None,
+) -> bool:
+    normalized = _normalize(label)
+    if not normalized:
+        return False
+    variants = company_variants or _company_variants(identity)
+    if normalized in variants:
+        return True
+    if not _should_attempt_ai_company_equivalence(label, identity, company_variants=variants):
+        return False
+    return _ai_company_equivalence_matches(label, identity, model_client=model_client)
+
+
+def _should_attempt_ai_company_equivalence(
+    label: str,
+    identity: CompanyIdentity,
+    *,
+    company_variants: set[str],
+) -> bool:
+    normalized = _normalize(label)
+    if not normalized or normalized in company_variants:
+        return False
+    label_tokens = _company_name_tokens(label)
+    if not label_tokens and len(normalized) < 10:
+        return False
+    for reference in _company_reference_labels(identity):
+        reference_normalized = _normalize(reference)
+        if not reference_normalized or reference_normalized == normalized:
+            continue
+        reference_tokens = _company_name_tokens(reference)
+        overlap = label_tokens & reference_tokens
+        if len(overlap) >= 2 and len(overlap) >= max(2, min(len(label_tokens), len(reference_tokens)) - 1):
+            return True
+        prefix_length = _common_prefix_length(normalized, reference_normalized)
+        if prefix_length >= 10 and prefix_length / max(1, min(len(normalized), len(reference_normalized))) >= 0.6:
+            return True
+    return False
+
+
+def _company_name_tokens(value: str) -> set[str]:
+    stopwords = {"and", "the", "inc", "llc", "corp", "co", "company", "limited", "ltd", "plc", "gmbh", "sa"}
+    return {
+        token
+        for token in re.split(r"[^a-z0-9]+", str(value or "").lower())
+        if token and token not in stopwords and len(token) >= 2
+    }
+
+
+def _common_prefix_length(left: str, right: str) -> int:
+    count = 0
+    for left_char, right_char in zip(left, right):
+        if left_char != right_char:
+            break
+        count += 1
+    return count
+
+
+def _ai_company_equivalence_matches(
+    label: str,
+    identity: CompanyIdentity,
+    *,
+    model_client: ModelClient | None = None,
+) -> bool:
+    if model_client is None:
+        return False
+    if not isinstance(identity.metadata, dict):
+        identity.metadata = {}
+    cache = identity.metadata.setdefault("_runtime_ai_company_equivalence_cache", {})
+    if not isinstance(cache, dict):
+        cache = {}
+        identity.metadata["_runtime_ai_company_equivalence_cache"] = cache
+    normalized = _normalize(label)
+    cached = cache.get(normalized)
+    if isinstance(cached, dict):
+        return bool(cached.get("is_equivalent"))
+    decision = model_client.judge_company_equivalence(
+        {
+            "target_company": {
+                "canonical_name": identity.canonical_name,
+                "linkedin_slug": identity.linkedin_slug,
+                "linkedin_company_url": identity.linkedin_company_url,
+                "aliases": _company_reference_labels(identity),
+            },
+            "observed_companies": [
+                {
+                    "label": str(label or "").strip(),
+                    "normalized_label": normalized,
+                }
+            ],
+        }
+    )
+    matched_label = str(decision.get("matched_label") or "").strip()
+    is_equivalent = str(decision.get("decision") or "uncertain").strip().lower() == "same_company" and (
+        not matched_label or _normalize(matched_label) == normalized
+    )
+    cache[normalized] = {
+        "is_equivalent": is_equivalent,
+        "matched_label": matched_label,
+        "decision": str(decision.get("decision") or "uncertain").strip(),
+        "confidence_label": str(decision.get("confidence_label") or "").strip(),
+        "rationale": str(decision.get("rationale") or "").strip(),
+    }
+    return is_equivalent
+
+
+def _experience_matches_company(
+    item: dict[str, Any],
+    company_variants: set[str],
+    *,
+    identity: CompanyIdentity | None = None,
+    model_client: ModelClient | None = None,
+) -> bool:
+    for company in _experience_company_labels(item):
         if _normalize(company) in company_variants:
-            return "former_employee", "former"
+            return True
+        if identity is not None and _company_label_matches_identity(
+            company,
+            identity,
+            company_variants=company_variants,
+            model_client=model_client,
+        ):
+            return True
+    return False
+
+
+def _experience_company_labels(item: dict[str, Any]) -> list[str]:
+    values = [
+        item.get("company"),
+        item.get("company_name"),
+        item.get("companyName"),
+        item.get("companyUniversalName"),
+        _company_slug_from_url(str(item.get("companyLinkedinUrl") or "")),
+    ]
+    results: list[str] = []
+    for value in values:
+        text = str(value or "").strip()
+        if text and text not in results:
+            results.append(text)
+    return results
+
+
+def _company_slug_from_url(url: str) -> str:
+    match = re.search(r"linkedin\.com/company/([^/?#]+)", str(url or ""), re.IGNORECASE)
+    if not match:
+        return ""
+    return match.group(1).strip()
+
+
+def _matched_profile_experiences(
+    profile: dict[str, Any],
+    identity: CompanyIdentity,
+    *,
+    company_variants: set[str] | None = None,
+    model_client: ModelClient | None = None,
+) -> list[dict[str, Any]]:
+    variants = company_variants or _company_variants(identity)
+    matched: list[dict[str, Any]] = []
+    for item in profile.get("experience", []) or []:
+        if _experience_matches_company(
+            item,
+            variants,
+            identity=identity,
+            model_client=model_client,
+        ):
+            matched.append(item)
+    return matched
+
+
+def _review_profile_membership(
+    profile: dict[str, Any],
+    identity: CompanyIdentity,
+    *,
+    resolved_category: str,
+    resolved_employment_status: str,
+    model_client: ModelClient | None = None,
+) -> dict[str, Any]:
+    if resolved_category not in {"employee", "former_employee"}:
+        return {
+            "triggered": False,
+            "decision": "",
+            "confidence_label": "",
+            "rationale": "",
+            "requires_manual_review": False,
+            "trigger_reasons": [],
+            "trigger_keywords": [],
+            "note": "",
+        }
+
+    company_variants = _company_variants(identity)
+    matched_experiences = _matched_profile_experiences(
+        profile,
+        identity,
+        company_variants=company_variants,
+        model_client=model_client,
+    )
+    trigger_keywords = _profile_membership_suspicious_keywords(profile, matched_experiences)
+    if len(trigger_keywords) < 2:
+        return {
+            "triggered": False,
+            "decision": "",
+            "confidence_label": "",
+            "rationale": "",
+            "requires_manual_review": False,
+            "trigger_reasons": [],
+            "trigger_keywords": [],
+            "note": "",
+        }
+
+    response = model_client.judge_profile_membership(
+        {
+            "target_company": {
+                "canonical_name": identity.canonical_name,
+                "linkedin_slug": identity.linkedin_slug,
+                "linkedin_company_url": identity.linkedin_company_url,
+                "aliases": _company_reference_labels(identity),
+            },
+            "candidate_membership": {
+                "resolved_category": resolved_category,
+                "resolved_employment_status": resolved_employment_status,
+                "current_company": str(profile.get("current_company") or "").strip(),
+                "matched_experiences": [
+                    {
+                        "title": str(item.get("title") or item.get("position") or "").strip(),
+                        "company_name": str(item.get("companyName") or item.get("company_name") or item.get("company") or "").strip(),
+                        "company_linkedin_url": str(item.get("companyLinkedinUrl") or "").strip(),
+                        "is_current": bool(item.get("is_current") or item.get("isCurrent") or not item.get("endDate")),
+                        "description": str(item.get("description") or "").strip(),
+                        "skills": [str(value).strip() for value in list(item.get("skills") or []) if str(value).strip()][:5],
+                    }
+                    for item in matched_experiences[:3]
+                ],
+            },
+            "profile": {
+                "full_name": str(profile.get("full_name") or "").strip(),
+                "headline": str(profile.get("headline") or "").strip(),
+                "summary": str(profile.get("summary") or "").strip()[:1200],
+                "location": str(profile.get("location") or "").strip(),
+            },
+            "heuristic_triggers": {
+                "reasons": ["suspicious_profile_content"],
+                "keywords": trigger_keywords[:12],
+            },
+        }
+    ) if model_client is not None else {}
+    decision = str(response.get("decision") or "uncertain").strip().lower()
+    if decision not in {"confirmed_member", "suspicious_member", "non_member", "uncertain"}:
+        decision = "uncertain"
+    confidence_label = str(response.get("confidence_label") or "low").strip() or "low"
+    rationale = str(response.get("rationale") or "").strip()
+    requires_manual_review = decision in {"suspicious_member", "uncertain"}
+    note = ""
+    if requires_manual_review:
+        note = "Structured profile signals target-company membership, but the profile content requires manual review."
+    return {
+        "triggered": True,
+        "decision": decision,
+        "confidence_label": confidence_label,
+        "rationale": rationale,
+        "requires_manual_review": requires_manual_review,
+        "trigger_reasons": ["suspicious_profile_content"],
+        "trigger_keywords": trigger_keywords[:12],
+        "note": note,
+    }
+
+
+def _profile_membership_suspicious_keywords(profile: dict[str, Any], matched_experiences: list[dict[str, Any]]) -> list[str]:
+    parts = [
+        str(profile.get("headline") or "").strip(),
+        str(profile.get("summary") or "").strip(),
+    ]
+    for item in matched_experiences[:3]:
+        parts.append(str(item.get("description") or "").strip())
+        parts.extend(str(value).strip() for value in list(item.get("skills") or []) if str(value).strip())
+    combined = " ".join(part for part in parts if part).lower()
+    hits: list[str] = []
+    for keyword in sorted(SUSPICIOUS_PROFILE_KEYWORDS):
+        if keyword in combined and keyword not in hits:
+            hits.append(keyword)
+    return hits
+
+
+def _classify_profile_membership(
+    profile: dict[str, Any],
+    identity: CompanyIdentity,
+    *,
+    model_client: ModelClient | None = None,
+) -> tuple[str, str]:
+    company_variants = _company_variants(identity)
+    current_company = str(profile.get("current_company", "")).strip()
+    if _company_label_matches_identity(
+        current_company,
+        identity,
+        company_variants=company_variants,
+        model_client=model_client,
+    ):
+        return "employee", "current"
+    for item in _matched_profile_experiences(
+        profile,
+        identity,
+        company_variants=company_variants,
+        model_client=model_client,
+    ):
+        if item.get("is_current"):
+            return "employee", "current"
+        return "former_employee", "former"
     return "lead", ""
 
 
@@ -2151,8 +3871,529 @@ def _build_publication_lead(identity: CompanyIdentity, publication: PublicationR
         notes=f"Discovered from {publication.source} publication evidence: {publication.title}",
         source_dataset=publication.source_dataset,
         source_path=publication.source_path,
-        metadata={"publication_id": publication.publication_id, "publication_url": publication.url},
+        metadata={
+            "publication_id": publication.publication_id,
+            "publication_url": publication.url,
+            "publication_title": publication.title,
+            "publication_source": publication.source,
+            "lead_discovery_method": "publication_author_acknowledgement_scan",
+        },
     )
+
+
+def _build_roster_anchored_scholar_coauthor_prospect(
+    identity: CompanyIdentity,
+    prospect: dict[str, Any],
+    *,
+    source_path: Path,
+) -> Candidate:
+    name = str(prospect.get("name") or "").strip()
+    papers = list(prospect.get("papers") or [])
+    top_paper = papers[0] if papers else {}
+    notes = _join_nonempty(
+        f"Discovered from roster-anchored scholar coauthor expansion for {identity.canonical_name}.",
+        f"Seed members: {', '.join(list(prospect.get('seed_names') or [])[:4])}" if list(prospect.get("seed_names") or []) else "",
+        f"Top paper: {str(top_paper.get('title') or '').strip()}" if top_paper else "",
+    )
+    return Candidate(
+        candidate_id=make_candidate_id(name, identity.canonical_name, identity.canonical_name),
+        name_en=name,
+        display_name=name,
+        category="lead",
+        target_company=identity.canonical_name,
+        organization=identity.canonical_name,
+        role="Roster-Anchored Scholar Coauthor Prospect",
+        notes=notes,
+        source_dataset="roster_anchored_scholar_coauthor_prospect",
+        source_path=str(source_path),
+        metadata={
+            "publication_title": str(top_paper.get("title") or "").strip(),
+            "publication_url": str(top_paper.get("url") or "").strip(),
+            "lead_discovery_method": "roster_anchored_scholar_coauthor_expansion",
+            "scholar_coauthor_seed_names": list(prospect.get("seed_names") or [])[:8],
+            "scholar_coauthor_papers": papers[:12],
+        },
+    )
+
+
+def _dedupe_names(values: list[str]) -> list[str]:
+    results: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        normalized = _name_key(value)
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        text = str(value or "").strip()
+        if text:
+            results.append(text)
+    return results
+
+
+def _publication_lead_public_web_resolution(
+    candidate: Candidate,
+    identity: CompanyIdentity,
+    *,
+    allow_targeted_name_search: bool,
+) -> dict[str, Any]:
+    return _public_web_membership_resolution(
+        candidate,
+        identity,
+        allow_targeted_name_search=allow_targeted_name_search,
+        explicit_approval_key="publication_lead_targeted_search_approved",
+        no_evidence_state="publication_source_only_unconfirmed",
+        no_evidence_label="publication provenance is the only current source",
+        confirmed_without_linkedin_next_step="await_user_confirmation_before_paid_search",
+    )
+
+
+def _scholar_coauthor_prospect_public_web_resolution(candidate: Candidate, identity: CompanyIdentity) -> dict[str, Any]:
+    return _public_web_membership_resolution(
+        candidate,
+        identity,
+        allow_targeted_name_search=False,
+        explicit_approval_key="",
+        no_evidence_state="scholar_coauthor_only_unconfirmed",
+        no_evidence_label="scholar coauthor provenance is the only current source",
+        confirmed_without_linkedin_next_step="hold_for_known_linkedin_or_manual_follow_up",
+    )
+
+
+def _public_web_membership_resolution(
+    candidate: Candidate,
+    identity: CompanyIdentity,
+    *,
+    allow_targeted_name_search: bool,
+    explicit_approval_key: str,
+    no_evidence_state: str,
+    no_evidence_label: str,
+    confirmed_without_linkedin_next_step: str,
+) -> dict[str, Any]:
+    linkedin_url = _candidate_known_linkedin_url(candidate)
+    affiliation_matches = _publication_lead_company_signal_matches(
+        candidate,
+        identity,
+        metadata_keys=["exploration_affiliation_signals", "analysis_affiliation_signals"],
+    )
+    work_history_matches = _publication_lead_company_signal_matches(
+        candidate,
+        identity,
+        metadata_keys=["exploration_work_history_signals", "analysis_work_history_signals"],
+    )
+    summary_matches = _publication_lead_summary_matches(candidate, identity)
+    confirmed_by_public_web = bool(affiliation_matches or work_history_matches or summary_matches)
+    explicit_approval = bool(explicit_approval_key and candidate.metadata.get(explicit_approval_key))
+
+    if confirmed_by_public_web and linkedin_url:
+        state = "confirmed_public_web_with_linkedin"
+        next_step = "profile_detail_by_known_linkedin"
+    elif confirmed_by_public_web:
+        state = "confirmed_public_web_missing_linkedin"
+        next_step = confirmed_without_linkedin_next_step
+    elif linkedin_url:
+        state = "linkedin_discovered_membership_unconfirmed"
+        next_step = "hold_for_manual_confirmation_before_profile_scrape"
+    else:
+        state = no_evidence_state
+        next_step = "hold_for_secondary_public_evidence_or_manual_review"
+
+    eligible_for_targeted_name_search = bool(
+        allow_targeted_name_search and explicit_approval and confirmed_by_public_web and not linkedin_url
+    )
+
+    summary_parts = []
+    if affiliation_matches:
+        summary_parts.append("public web captured explicit affiliation signals")
+    if work_history_matches:
+        summary_parts.append("public web captured work-history signals")
+    if summary_matches:
+        summary_parts.append("public web validated target-company summaries")
+    if not summary_parts:
+        summary_parts.append(no_evidence_label)
+    if linkedin_url:
+        summary_parts.append("LinkedIn URL recovered from exploration")
+    summary_parts.append(f"next step: {next_step}")
+
+    return {
+        "state": state,
+        "confirmed_by_public_web": confirmed_by_public_web,
+        "linkedin_url": linkedin_url,
+        "eligible_for_targeted_name_search": eligible_for_targeted_name_search,
+        "next_step": next_step,
+        "summary": "; ".join(summary_parts),
+        "affiliation_matches": affiliation_matches[:4],
+        "work_history_matches": work_history_matches[:4],
+        "summary_matches": summary_matches[:4],
+    }
+
+
+def _annotate_publication_lead_resolution(candidate: Candidate, decision: dict[str, Any]) -> Candidate:
+    record = candidate.to_record()
+    metadata = dict(candidate.metadata or {})
+    metadata.update(
+        {
+            "lead_resolution_strategy": "publication_lead_public_web_verification",
+            "publication_lead_resolution_state": str(decision.get("state") or "").strip(),
+            "publication_lead_public_web_confirmed": bool(decision.get("confirmed_by_public_web")),
+            "publication_lead_targeted_name_search_eligible": bool(decision.get("eligible_for_targeted_name_search")),
+            "publication_lead_next_step": str(decision.get("next_step") or "").strip(),
+            "publication_lead_public_web_summary": str(decision.get("summary") or "").strip(),
+            "publication_lead_public_web_affiliation_matches": list(decision.get("affiliation_matches") or [])[:4],
+            "publication_lead_public_web_work_history_matches": list(decision.get("work_history_matches") or [])[:4],
+            "publication_lead_public_web_summary_matches": list(decision.get("summary_matches") or [])[:4],
+        }
+    )
+    record["metadata"] = metadata
+    return Candidate(**record)
+
+
+def _annotate_scholar_coauthor_resolution(candidate: Candidate, decision: dict[str, Any]) -> Candidate:
+    record = candidate.to_record()
+    metadata = dict(candidate.metadata or {})
+    metadata.update(
+        {
+            "lead_resolution_strategy": "roster_anchored_scholar_coauthor_public_web_verification",
+            "scholar_coauthor_resolution_state": str(decision.get("state") or "").strip(),
+            "scholar_coauthor_public_web_confirmed": bool(decision.get("confirmed_by_public_web")),
+            "scholar_coauthor_next_step": str(decision.get("next_step") or "").strip(),
+            "scholar_coauthor_public_web_summary": str(decision.get("summary") or "").strip(),
+            "scholar_coauthor_public_web_affiliation_matches": list(decision.get("affiliation_matches") or [])[:4],
+            "scholar_coauthor_public_web_work_history_matches": list(decision.get("work_history_matches") or [])[:4],
+            "scholar_coauthor_public_web_summary_matches": list(decision.get("summary_matches") or [])[:4],
+        }
+    )
+    record["metadata"] = metadata
+    return Candidate(**record)
+
+
+def _load_scholar_coauthor_follow_up_progress(progress_path: Path, summary_path: Path) -> tuple[list[dict[str, Any]], list[str], set[str]]:
+    payload = _load_json_payload(progress_path)
+    if not payload:
+        payload = _load_json_payload(summary_path)
+    decisions = [dict(item) for item in list(payload.get("decisions") or []) if isinstance(item, dict)]
+    errors = [str(item) for item in list(payload.get("errors") or []) if str(item).strip()]
+    processed_candidate_ids = {
+        str(item.get("candidate_id") or "").strip()
+        for item in decisions
+        if str(item.get("candidate_id") or "").strip() and not _is_queued_scholar_coauthor_follow_up_decision(item)
+    }
+    decision_lookup = {
+        str(item.get("candidate_id") or "").strip(): dict(item)
+        for item in decisions
+        if str(item.get("candidate_id") or "").strip()
+    }
+    processed_candidate_ids.update(
+        candidate_id
+        for candidate_id in (
+            str(item).strip()
+            for item in list(payload.get("processed_candidate_ids") or [])
+            if str(item).strip()
+        )
+        if not _is_queued_scholar_coauthor_follow_up_decision(decision_lookup.get(candidate_id, {}))
+    )
+    return decisions, errors, processed_candidate_ids
+
+
+def _is_queued_exploration_summary(summary: dict[str, Any]) -> bool:
+    return str(summary.get("status") or "").strip() == "queued"
+
+
+def _is_queued_scholar_coauthor_follow_up_decision(decision: dict[str, Any]) -> bool:
+    if str(decision.get("state") or "").strip() == "queued_background_exploration":
+        return True
+    exploration_summary = dict(decision.get("exploration_summary") or {})
+    return _is_queued_exploration_summary(exploration_summary)
+
+
+def _restore_scholar_coauthor_follow_up_patch(
+    patch_path: Path,
+    *,
+    candidate_map: dict[str, Candidate],
+    resolved_profiles: list[dict[str, Any]],
+    evidence: list[EvidenceRecord],
+    evidence_keys: set[tuple[str, str, str, str]],
+) -> None:
+    payload = _load_json_payload(patch_path)
+    if not payload:
+        return
+    for item in list(payload.get("updated_candidates") or []):
+        if not isinstance(item, dict):
+            continue
+        candidate = Candidate(**item)
+        candidate_map[_candidate_key(candidate)] = candidate
+    _append_unique_resolved_profiles(
+        resolved_profiles,
+        [item for item in list(payload.get("resolved_profiles") or []) if isinstance(item, dict)],
+    )
+    _append_unique_evidence_records(
+        evidence,
+        [
+            EvidenceRecord(**item)
+            for item in list(payload.get("new_evidence") or [])
+            if isinstance(item, dict)
+        ],
+        evidence_keys=evidence_keys,
+    )
+
+
+def _persist_scholar_coauthor_follow_up_patch(
+    patch_path: Path,
+    *,
+    updated_candidates: list[Candidate],
+    resolved_profiles: list[dict[str, Any]],
+    new_evidence: list[EvidenceRecord],
+    asset_logger: AssetLogger,
+) -> None:
+    payload = _load_json_payload(patch_path)
+    candidate_records = [dict(item) for item in list(payload.get("updated_candidates") or []) if isinstance(item, dict)]
+    resolved_profile_records = [dict(item) for item in list(payload.get("resolved_profiles") or []) if isinstance(item, dict)]
+    evidence_records = [dict(item) for item in list(payload.get("new_evidence") or []) if isinstance(item, dict)]
+    _upsert_follow_up_records(
+        candidate_records,
+        [item.to_record() for item in updated_candidates],
+        key_fn=lambda item: str(item.get("candidate_id") or "").strip() or str(item.get("display_name") or "").strip(),
+    )
+    _upsert_follow_up_records(
+        resolved_profile_records,
+        list(resolved_profiles),
+        key_fn=_resolved_profile_patch_key,
+    )
+    _upsert_follow_up_records(
+        evidence_records,
+        [item.to_record() for item in new_evidence],
+        key_fn=_evidence_patch_key,
+    )
+    asset_logger.write_json(
+        patch_path,
+        {
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_candidates": candidate_records,
+            "resolved_profiles": resolved_profile_records,
+            "new_evidence": evidence_records,
+        },
+        asset_type="scholar_coauthor_follow_up_patch",
+        source_kind="publication_enrichment",
+        is_raw_asset=False,
+        model_safe=True,
+    )
+
+
+def _write_scholar_coauthor_follow_up_state(
+    *,
+    progress_path: Path,
+    summary_path: Path,
+    identity: CompanyIdentity,
+    prospect_total: int,
+    processed_candidate_ids: set[str],
+    decisions: list[dict[str, Any]],
+    errors: list[str],
+    asset_logger: AssetLogger,
+    completed: bool,
+) -> None:
+    ordered_decisions = sorted(
+        [dict(item) for item in decisions if str(item.get("candidate_id") or "").strip()],
+        key=lambda item: (str(item.get("display_name") or "").lower(), str(item.get("candidate_id") or "")),
+    )
+    payload = {
+        "target_company": identity.canonical_name,
+        "candidate_count": len(ordered_decisions),
+        "prospect_total": int(prospect_total),
+        "processed_candidate_ids": sorted(str(item) for item in processed_candidate_ids if str(item).strip()),
+        "remaining_candidate_count": max(int(prospect_total) - len(processed_candidate_ids), 0),
+        "status": "completed" if completed else "partial",
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "decisions": ordered_decisions,
+        "errors": [str(item) for item in errors if str(item).strip()],
+    }
+    asset_logger.write_json(
+        progress_path,
+        payload,
+        asset_type="scholar_coauthor_follow_up_progress",
+        source_kind="publication_enrichment",
+        is_raw_asset=False,
+        model_safe=True,
+    )
+    asset_logger.write_json(
+        summary_path,
+        payload,
+        asset_type="scholar_coauthor_follow_up",
+        source_kind="publication_enrichment",
+        is_raw_asset=False,
+        model_safe=True,
+    )
+
+
+def _append_unique_resolved_profiles(target: list[dict[str, Any]], items: list[dict[str, Any]]) -> None:
+    seen = {_resolved_profile_patch_key(item) for item in target}
+    for item in items:
+        key = _resolved_profile_patch_key(item)
+        if key in seen:
+            continue
+        target.append(dict(item))
+        seen.add(key)
+
+
+def _append_unique_evidence_records(
+    target: list[EvidenceRecord],
+    items: list[EvidenceRecord],
+    *,
+    evidence_keys: set[tuple[str, str, str, str]],
+) -> None:
+    for item in items:
+        key = _evidence_resume_key(item)
+        if key in evidence_keys:
+            continue
+        target.append(item)
+        evidence_keys.add(key)
+
+
+def _upsert_follow_up_records(
+    existing: list[dict[str, Any]],
+    incoming: list[dict[str, Any]],
+    *,
+    key_fn: Any,
+) -> None:
+    index_by_key = {
+        key_fn(item): position
+        for position, item in enumerate(existing)
+        if key_fn(item)
+    }
+    for item in incoming:
+        key = key_fn(item)
+        if not key:
+            continue
+        if key in index_by_key:
+            existing[index_by_key[key]] = dict(item)
+            continue
+        existing.append(dict(item))
+        index_by_key[key] = len(existing) - 1
+
+
+def _resolved_profile_patch_key(item: dict[str, Any]) -> str:
+    if not isinstance(item, dict):
+        return ""
+    candidate_id = str(item.get("candidate_id") or "").strip()
+    profile_url = str(item.get("profile_url") or "").strip()
+    raw_path = str(item.get("raw_path") or "").strip()
+    resolution_source = str(item.get("resolution_source") or "").strip()
+    if candidate_id or profile_url or raw_path or resolution_source:
+        return "|".join([candidate_id, profile_url, raw_path, resolution_source])
+    return ""
+
+
+def _evidence_patch_key(item: dict[str, Any]) -> str:
+    if not isinstance(item, dict):
+        return ""
+    evidence_id = str(item.get("evidence_id") or "").strip()
+    if evidence_id:
+        return evidence_id
+    return "|".join(
+        [
+            str(item.get("candidate_id") or "").strip(),
+            str(item.get("source_type") or "").strip(),
+            str(item.get("title") or "").strip(),
+            str(item.get("url") or "").strip(),
+        ]
+    )
+
+
+def _evidence_resume_key(item: EvidenceRecord) -> tuple[str, str, str, str]:
+    evidence_id = str(item.evidence_id or "").strip()
+    if evidence_id:
+        return (evidence_id, "", "", "")
+    return (
+        str(item.candidate_id or "").strip(),
+        str(item.source_type or "").strip(),
+        str(item.title or "").strip(),
+        str(item.url or "").strip(),
+    )
+
+
+def _load_json_payload(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _candidate_known_linkedin_url(candidate: Candidate) -> str:
+    if str(candidate.linkedin_url or "").strip():
+        return str(candidate.linkedin_url or "").strip()
+    links = dict(candidate.metadata.get("exploration_links") or {})
+    linkedin_items = list(links.get("linkedin") or [])
+    for item in linkedin_items:
+        value = str(item or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _candidate_publication_title(candidate: Candidate) -> str:
+    return str(candidate.metadata.get("publication_title") or "").strip()
+
+
+def _should_attempt_known_profile_resolution_after_exploration(candidate: Candidate, identity: CompanyIdentity) -> bool:
+    if not _is_publication_lead_candidate(candidate):
+        return True
+    decision = _publication_lead_public_web_resolution(candidate, identity, allow_targeted_name_search=False)
+    return bool(decision.get("confirmed_by_public_web"))
+
+
+def _is_publication_lead_candidate(candidate: Candidate) -> bool:
+    if candidate.category != "lead":
+        return False
+    source_dataset = str(candidate.source_dataset or "").strip().lower()
+    discovery_method = str(candidate.metadata.get("lead_discovery_method") or "").strip().lower()
+    return "publication" in source_dataset or discovery_method == "publication_author_acknowledgement_scan"
+
+
+def _publication_lead_company_signal_matches(
+    candidate: Candidate,
+    identity: CompanyIdentity,
+    *,
+    metadata_keys: list[str],
+) -> list[dict[str, str]]:
+    company_variants = _company_variants(identity)
+    matches: list[dict[str, str]] = []
+    for metadata_key in metadata_keys:
+        for item in list(candidate.metadata.get(metadata_key) or []):
+            if not isinstance(item, dict):
+                continue
+            label = str(item.get("organization") or item.get("company") or "").strip()
+            if not label:
+                continue
+            if not _company_label_matches_identity(label, identity, company_variants=company_variants):
+                continue
+            normalized = {str(key): str(value).strip() for key, value in item.items() if str(value).strip()}
+            normalized["source_key"] = metadata_key
+            if normalized not in matches:
+                matches.append(normalized)
+    return matches
+
+
+def _publication_lead_summary_matches(candidate: Candidate, identity: CompanyIdentity) -> list[str]:
+    matches: list[str] = []
+    for value in list(candidate.metadata.get("exploration_validated_summaries") or []):
+        text = str(value or "").strip()
+        if not text:
+            continue
+        if _company_text_mentions_identity(text, identity) and text not in matches:
+            matches.append(text)
+    return matches
+
+
+def _company_text_mentions_identity(text: str, identity: CompanyIdentity) -> bool:
+    normalized_text = _normalize(text)
+    if not normalized_text:
+        return False
+    for label in _company_reference_labels(identity):
+        normalized_label = _normalize(label)
+        if normalized_label and normalized_label in normalized_text:
+            return True
+    return False
 
 
 def _candidate_name_map(candidates: list[Candidate]) -> dict[str, Candidate]:
@@ -2169,6 +4410,20 @@ def _name_key(name: str) -> str:
 
 def _prioritize_candidates(candidates: list[Candidate]) -> list[Candidate]:
     return sorted(candidates, key=lambda item: (-_candidate_priority(item), item.display_name))
+
+
+def _prioritize_scholar_coauthor_prospects(candidates: list[Candidate]) -> list[Candidate]:
+    return sorted(
+        candidates,
+        key=lambda item: (
+            -len(list(item.metadata.get("scholar_coauthor_seed_names") or [])),
+            -len(list(item.metadata.get("scholar_coauthor_papers") or [])),
+            -int(bool(_candidate_known_linkedin_url(item))),
+            -int(bool(str(item.metadata.get("publication_title") or "").strip())),
+            -_candidate_priority(item),
+            item.display_name,
+        ),
+    )
 
 
 def _candidate_priority(candidate: Candidate) -> int:
@@ -2209,15 +4464,30 @@ def _candidate_priority(candidate: Candidate) -> int:
 
 
 def _names_match(left: str, right: str) -> bool:
-    left_tokens = {token for token in re.split(r"[^A-Za-z0-9]+", left.lower()) if token}
-    right_tokens = {token for token in re.split(r"[^A-Za-z0-9]+", right.lower()) if token}
+    left_tokens = set(_name_tokens(left))
+    right_tokens = set(_name_tokens(right))
     if not left_tokens or not right_tokens:
         return False
     return left_tokens <= right_tokens or right_tokens <= left_tokens or len(left_tokens & right_tokens) >= max(2, min(len(left_tokens), len(right_tokens)))
 
 
+def _name_tokens(value: str) -> list[str]:
+    tokens: list[str] = []
+    current: list[str] = []
+    for char in str(value or "").strip().lower():
+        if char.isalnum():
+            current.append(char)
+            continue
+        if current:
+            tokens.append("".join(current))
+            current = []
+    if current:
+        tokens.append("".join(current))
+    return tokens
+
+
 def _normalize(value: str) -> str:
-    return value.strip().lower()
+    return "".join(ch.lower() for ch in str(value or "") if ch.isalnum())
 
 
 def _join_nonempty(*parts: str) -> str:
@@ -2246,8 +4516,9 @@ def _format_education(items: list[dict[str, Any]]) -> str:
 def _format_experience(items: list[dict[str, Any]]) -> str:
     formatted = []
     for item in items[:6]:
-        title = str(item.get("title") or "").strip()
-        company = str(item.get("company") or item.get("company_name") or "").strip()
+        title = str(item.get("title") or item.get("position") or "").strip()
+        companies = _experience_company_labels(item)
+        company = companies[0] if companies else ""
         if not title and not company:
             continue
         formatted.append(", ".join(part for part in [company, title] if part))

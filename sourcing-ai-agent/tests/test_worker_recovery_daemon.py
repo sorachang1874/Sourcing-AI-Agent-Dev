@@ -98,7 +98,79 @@ class _FakeExploratoryEnricher:
 class _FakeAcquisitionEngine:
     def __init__(self, store: SQLiteStore) -> None:
         self.search_seed_acquirer = _FakeSearchSeedAcquirer(store)
-        self.multi_source_enricher = SimpleNamespace(exploratory_enricher=_FakeExploratoryEnricher(store))
+        self.multi_source_enricher = SimpleNamespace(
+            exploratory_enricher=_FakeExploratoryEnricher(store),
+            _execute_harvest_profile_batch_worker=self._execute_harvest_profile_batch_worker,
+        )
+        self.store = store
+        self.harvest_company_calls: list[dict[str, str]] = []
+        self.harvest_profile_batch_calls: list[dict[str, str]] = []
+
+    def _execute_harvest_company_roster_worker(
+        self,
+        *,
+        identity: CompanyIdentity,
+        snapshot_dir: Path,
+        max_pages: int,
+        page_limit: int,
+        job_id: str,
+        request_payload: dict,
+        plan_payload: dict,
+        runtime_mode: str,
+    ) -> dict[str, object]:
+        self.harvest_company_calls.append(
+            {
+                "job_id": job_id,
+                "company_key": identity.company_key,
+                "runtime_mode": runtime_mode,
+                "snapshot_dir": str(snapshot_dir),
+            }
+        )
+        worker = self.store.get_agent_worker(
+            job_id=job_id,
+            lane_id="acquisition_specialist",
+            worker_key=f"harvest_company_employees::{identity.company_key}",
+        )
+        if worker is not None:
+            self.store.complete_agent_worker(
+                int(worker["worker_id"]),
+                status="completed",
+                checkpoint_payload={"stage": "completed", "recovery_kind": "harvest_company_employees"},
+                output_payload={"summary": {"status": "completed", "company_key": identity.company_key}},
+            )
+        return {"worker_status": "completed", "summary": {"status": "completed", "company_key": identity.company_key}}
+
+    def _execute_harvest_profile_batch_worker(
+        self,
+        *,
+        profile_urls: list[str],
+        snapshot_dir: Path,
+        job_id: str,
+        request_payload: dict,
+        plan_payload: dict,
+        runtime_mode: str,
+    ) -> dict[str, object]:
+        self.harvest_profile_batch_calls.append(
+            {
+                "job_id": job_id,
+                "runtime_mode": runtime_mode,
+                "snapshot_dir": str(snapshot_dir),
+                "requested_url_count": str(len(profile_urls)),
+            }
+        )
+        worker = self.store.list_agent_workers(job_id=job_id, lane_id="enrichment_specialist")
+        target = worker[0] if worker else None
+        if target is not None:
+            self.store.complete_agent_worker(
+                int(target["worker_id"]),
+                status="completed",
+                checkpoint_payload={"stage": "completed", "recovery_kind": "harvest_profile_batch"},
+                output_payload={"summary": {"status": "completed", "requested_url_count": len(profile_urls)}},
+            )
+        return {
+            "worker_status": "completed",
+            "summary": {"status": "completed", "requested_url_count": len(profile_urls)},
+        }
 
 
 class PersistentWorkerRecoveryDaemonTest(unittest.TestCase):
@@ -319,3 +391,195 @@ class PersistentWorkerRecoveryDaemonTest(unittest.TestCase):
         self.assertEqual(worker["status"], "completed")
         self.assertEqual(worker["checkpoint"]["candidate_id"], candidate.candidate_id)
         self.assertEqual(worker["output"]["candidate_id"], candidate.candidate_id)
+
+    def test_persistent_daemon_can_filter_single_job(self) -> None:
+        target_job_id = "job_target_only"
+        other_job_id = "job_should_skip"
+        snapshot_dir = Path(self.tempdir.name) / "company_assets" / "xai" / "snapshot-03"
+        discovery_dir = snapshot_dir / "search_seed_discovery"
+
+        self._save_job(target_job_id)
+        self._save_job(other_job_id)
+
+        def _create_worker(job_id: str, index: int, query: str):
+            return self.controller_runtime.begin_worker(
+                job_id=job_id,
+                request=self.request,
+                plan_payload=self.plan_payload,
+                runtime_mode="workflow",
+                lane_id="search_planner",
+                worker_key=f"bundle::{index:02d}",
+                stage="acquiring",
+                span_name="search_bundle:bundle",
+                budget_payload={"max_results": 10},
+                input_payload={
+                    "query_spec": {"bundle_id": "bundle", "query": query, "source_family": "web_search"},
+                    "query": query,
+                    "index": index,
+                },
+                metadata={
+                    "index": index,
+                    "identity": CompanyIdentity(
+                        requested_name="xAI",
+                        canonical_name="xAI",
+                        company_key="xai",
+                        linkedin_slug="xai",
+                    ).to_record(),
+                    "snapshot_dir": str(snapshot_dir),
+                    "discovery_dir": str(discovery_dir),
+                    "employment_status": "current",
+                    "request_payload": self.request.to_record(),
+                    "plan_payload": self.plan_payload,
+                    "runtime_mode": "workflow",
+                    "result_limit": 10,
+                },
+                handoff_from_lane="triage_planner",
+            )
+
+        target_handle = _create_worker(target_job_id, 1, "xAI RL target")
+        other_handle = _create_worker(other_job_id, 2, "xAI RL skip")
+        self.controller_runtime.complete_worker(
+            target_handle,
+            status="queued",
+            checkpoint_payload={"stage": "waiting_remote_search"},
+            output_payload={"summary": {"query": "xAI RL target"}},
+        )
+        self.controller_runtime.complete_worker(
+            other_handle,
+            status="queued",
+            checkpoint_payload={"stage": "waiting_remote_search"},
+            output_payload={"summary": {"query": "xAI RL skip"}},
+        )
+
+        daemon = PersistentWorkerRecoveryDaemon(
+            store=self.daemon_store,
+            agent_runtime=self.daemon_runtime,
+            acquisition_engine=self.fake_engine,
+            owner_id="daemon-filtered",
+            stale_after_seconds=180,
+            total_limit=2,
+            job_id=target_job_id,
+        )
+        summary = daemon.run_once()
+        target_worker = self.controller_store.get_agent_worker(worker_id=target_handle.worker_id)
+        other_worker = self.controller_store.get_agent_worker(worker_id=other_handle.worker_id)
+
+        self.assertEqual(summary["job_id"], target_job_id)
+        self.assertEqual(summary["claimed_count"], 1)
+        self.assertEqual(summary["executed_count"], 1)
+        self.assertEqual(len(summary["jobs"]), 1)
+        self.assertEqual(summary["jobs"][0]["job_id"], target_job_id)
+        self.assertEqual(len(self.fake_engine.search_seed_acquirer.calls), 1)
+        self.assertIsNotNone(target_worker)
+        self.assertEqual(target_worker["status"], "completed")
+        self.assertIsNotNone(other_worker)
+        self.assertEqual(other_worker["status"], "queued")
+
+    def test_persistent_daemon_resumes_harvest_company_worker(self) -> None:
+        job_id = "job_harvest_company_recovery"
+        snapshot_dir = Path(self.tempdir.name) / "company_assets" / "xai" / "snapshot-harvest-company"
+        identity = CompanyIdentity(
+            requested_name="xAI",
+            canonical_name="xAI",
+            company_key="xai",
+            linkedin_slug="xai",
+            linkedin_company_url="https://www.linkedin.com/company/xai/",
+        )
+        self._save_job(job_id)
+        handle = self.controller_runtime.begin_worker(
+            job_id=job_id,
+            request=self.request,
+            plan_payload=self.plan_payload,
+            runtime_mode="workflow",
+            lane_id="acquisition_specialist",
+            worker_key="harvest_company_employees::xai",
+            stage="acquiring",
+            span_name="harvest_company_employees:xAI",
+            budget_payload={"max_pages": 5, "page_limit": 25},
+            input_payload={"company_identity": identity.to_record()},
+            metadata={
+                "recovery_kind": "harvest_company_employees",
+                "identity": identity.to_record(),
+                "snapshot_dir": str(snapshot_dir),
+                "max_pages": 5,
+                "page_limit": 25,
+                "request_payload": self.request.to_record(),
+                "plan_payload": self.plan_payload,
+                "runtime_mode": "workflow",
+            },
+            handoff_from_lane="triage_planner",
+        )
+        self.controller_runtime.complete_worker(
+            handle,
+            status="queued",
+            checkpoint_payload={"stage": "waiting_remote_harvest"},
+            output_payload={"summary": {"status": "queued"}},
+        )
+
+        daemon = PersistentWorkerRecoveryDaemon(
+            store=self.daemon_store,
+            agent_runtime=self.daemon_runtime,
+            acquisition_engine=self.fake_engine,
+            owner_id="daemon-harvest-company",
+            stale_after_seconds=180,
+            total_limit=2,
+        )
+        summary = daemon.run_once()
+        worker = self.controller_store.get_agent_worker(worker_id=handle.worker_id)
+
+        self.assertEqual(summary["claimed_count"], 1)
+        self.assertEqual(summary["executed_count"], 1)
+        self.assertEqual(len(self.fake_engine.harvest_company_calls), 1)
+        self.assertIsNotNone(worker)
+        self.assertEqual(worker["status"], "completed")
+        self.assertEqual(worker["checkpoint"]["recovery_kind"], "harvest_company_employees")
+
+    def test_persistent_daemon_resumes_harvest_profile_batch_worker(self) -> None:
+        job_id = "job_harvest_profile_recovery"
+        snapshot_dir = Path(self.tempdir.name) / "company_assets" / "xai" / "snapshot-harvest-profile"
+        self._save_job(job_id)
+        handle = self.controller_runtime.begin_worker(
+            job_id=job_id,
+            request=self.request,
+            plan_payload=self.plan_payload,
+            runtime_mode="workflow",
+            lane_id="enrichment_specialist",
+            worker_key="harvest_profile_batch::abc123",
+            stage="enriching",
+            span_name="harvest_profile_batch:abc123",
+            budget_payload={"requested_url_count": 1},
+            input_payload={"profile_urls": ["https://www.linkedin.com/in/test-user/"]},
+            metadata={
+                "recovery_kind": "harvest_profile_batch",
+                "snapshot_dir": str(snapshot_dir),
+                "profile_urls": ["https://www.linkedin.com/in/test-user/"],
+                "request_payload": self.request.to_record(),
+                "plan_payload": self.plan_payload,
+                "runtime_mode": "workflow",
+            },
+            handoff_from_lane="acquisition_specialist",
+        )
+        self.controller_runtime.complete_worker(
+            handle,
+            status="queued",
+            checkpoint_payload={"stage": "waiting_remote_harvest"},
+            output_payload={"summary": {"status": "queued"}},
+        )
+
+        daemon = PersistentWorkerRecoveryDaemon(
+            store=self.daemon_store,
+            agent_runtime=self.daemon_runtime,
+            acquisition_engine=self.fake_engine,
+            owner_id="daemon-harvest-profile",
+            stale_after_seconds=180,
+            total_limit=2,
+        )
+        summary = daemon.run_once()
+        worker = self.controller_store.get_agent_worker(worker_id=handle.worker_id)
+
+        self.assertEqual(summary["claimed_count"], 1)
+        self.assertEqual(summary["executed_count"], 1)
+        self.assertEqual(len(self.fake_engine.harvest_profile_batch_calls), 1)
+        self.assertIsNotNone(worker)
+        self.assertEqual(worker["status"], "completed")
+        self.assertEqual(worker["checkpoint"]["recovery_kind"], "harvest_profile_batch")

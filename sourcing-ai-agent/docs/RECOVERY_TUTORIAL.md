@@ -1,5 +1,7 @@
 # Recovery Tutorial
 
+> Reference note: this tutorial is still useful for environment recovery, but current default entry docs are `../../ONBOARDING.md` and `docs/INDEX.md`.
+
 ## Goal
 
 这份教程用于在以下场景里快速恢复项目进度：
@@ -28,9 +30,10 @@
 恢复前先看：
 
 1. `ONBOARDING.md`
-2. `docs/HANDOFF_2026-04-06.md`
-3. `docs/CROSS_DEVICE_SYNC.md`
-4. `docs/THINKING_MACHINES_LAB_RETROSPECTIVE.md`
+2. `docs/SERVER_RUNTIME_BOOTSTRAP.md`
+3. `docs/HANDOFF_2026-04-06.md`
+4. `docs/CROSS_DEVICE_SYNC.md`
+5. `docs/THINKING_MACHINES_LAB_RETROSPECTIVE.md`
 
 ## Scenario A: Same Machine, New Account
 
@@ -40,11 +43,11 @@
 2. 确认 `runtime/` 仍然存在
 3. 确认 `runtime/secrets/providers.local.json` 仍然存在
 4. 如果本机之前启用了增强解析/浏览器能力，确认 `runtime/vendor/` 仍然存在
-4. 重新打开 repo
-5. 运行：
+5. 重新打开 repo
+6. 运行：
 
 ```bash
-cd '/home/sorachang/projects/Sourcing AI Agent Dev/sourcing-ai-agent'
+cd "sourcing-ai-agent"
 PYTHONPATH=src python3 -m unittest discover -s tests -v
 PYTHONPATH=src python3 -m sourcing_agent.cli test-model
 ```
@@ -105,6 +108,11 @@ PYTHONPATH=src python3 -m sourcing_agent.cli restore-asset-bundle \
   --target-runtime-dir ./runtime
 ```
 
+重复执行同一个 `download-asset-bundle` 命令时，当前默认会 resume：
+
+- 已存在且匹配 manifest 的 payload 会被跳过
+- 中断后重跑会优先补剩余缺口
+
 ### 4. Restore SQLite if needed
 
 如果你需要恢复 DB：
@@ -129,7 +137,7 @@ PYTHONPATH=src python3 -m sourcing_agent.cli show-manual-review --target-company
 如果你还在旧机器上，准备迁移：
 
 ```bash
-cd '/home/sorachang/projects/Sourcing AI Agent Dev/sourcing-ai-agent'
+cd "sourcing-ai-agent"
 
 PYTHONPATH=src python3 -m sourcing_agent.cli export-company-handoff-bundle --company thinkingmachineslab
 PYTHONPATH=src python3 -m sourcing_agent.cli export-sqlite-snapshot

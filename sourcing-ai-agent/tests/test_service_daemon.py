@@ -36,6 +36,13 @@ class ServiceDaemonTest(unittest.TestCase):
         self.assertEqual(status["tick"], 1)
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0]["total_limit"], 2)
+        self.assertEqual(status["last_summary"]["status"], "completed")
+        self.assertEqual(status["last_nonempty_summary"], {})
+        self.assertEqual(status["last_nonempty_tick"], 0)
+        self.assertEqual(status["cumulative_summary"]["tick_count"], 1)
+        self.assertEqual(status["cumulative_summary"]["active_tick_count"], 0)
+        self.assertEqual(status["cumulative_summary"]["total_claimed_count"], 0)
+        self.assertEqual(status["cumulative_summary"]["total_executed_count"], 0)
 
         unit_path = Path(self.tempdir.name) / "worker-daemon.service"
         written = service.write_systemd_unit(
@@ -96,3 +103,70 @@ class ServiceDaemonTest(unittest.TestCase):
         self.assertIn("--lease-seconds 240", unit)
         self.assertIn("--stale-after-seconds 150", unit)
         self.assertIn("--total-limit 6", unit)
+
+    def test_service_status_retains_last_nonempty_summary_and_cumulative_totals(self) -> None:
+        callbacks = iter(
+            [
+                {
+                    "status": "completed",
+                    "daemon": {
+                        "claimed_count": 1,
+                        "executed_count": 1,
+                        "recoverable_count": 2,
+                        "jobs": [
+                            {
+                                "job_id": "job-123",
+                                "claimed_count": 1,
+                                "executed_count": 1,
+                                "backlog_count": 3,
+                            }
+                        ],
+                    },
+                    "workflow_resume": [{"job_id": "job-123", "status": "resumed"}],
+                },
+                {
+                    "status": "completed",
+                    "daemon": {
+                        "claimed_count": 0,
+                        "executed_count": 0,
+                        "recoverable_count": 0,
+                        "jobs": [],
+                    },
+                    "workflow_resume": [],
+                },
+            ]
+        )
+
+        service = WorkerDaemonService(
+            runtime_dir=self.runtime_dir,
+            recovery_callback=lambda payload: next(callbacks),  # noqa: ARG005
+            service_name="worker-recovery-daemon",
+            poll_seconds=0.1,
+        )
+        summary = service.run_forever(max_ticks=2)
+
+        self.assertEqual(summary["status"], "stopped")
+        self.assertEqual(summary["tick"], 2)
+        self.assertEqual(summary["last_summary"]["daemon"]["claimed_count"], 0)
+        self.assertEqual(summary["last_nonempty_summary"]["daemon"]["claimed_count"], 1)
+        self.assertEqual(summary["last_nonempty_summary"]["daemon"]["executed_count"], 1)
+        self.assertEqual(summary["last_nonempty_tick"], 1)
+        self.assertTrue(summary["last_nonempty_at"])
+
+        cumulative = summary["cumulative_summary"]
+        self.assertEqual(cumulative["tick_count"], 2)
+        self.assertEqual(cumulative["active_tick_count"], 1)
+        self.assertEqual(cumulative["total_claimed_count"], 1)
+        self.assertEqual(cumulative["total_executed_count"], 1)
+        self.assertEqual(cumulative["max_recoverable_count"], 2)
+        self.assertEqual(cumulative["workflow_resume_status_counts"], {"resumed": 1})
+        self.assertEqual(
+            cumulative["job_totals"],
+            {
+                "job-123": {
+                    "claimed_count": 1,
+                    "executed_count": 1,
+                    "max_backlog_count": 3,
+                }
+            },
+        )

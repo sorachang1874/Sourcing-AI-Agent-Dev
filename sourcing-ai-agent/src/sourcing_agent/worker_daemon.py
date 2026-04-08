@@ -138,6 +138,7 @@ class PersistentWorkerRecoveryDaemon:
         lease_seconds: int = 300,
         stale_after_seconds: int = 180,
         total_limit: int = 4,
+        job_id: str = "",
     ) -> None:
         self.store = store
         self.agent_runtime = agent_runtime
@@ -146,11 +147,13 @@ class PersistentWorkerRecoveryDaemon:
         self.lease_seconds = max(30, int(lease_seconds or 300))
         self.stale_after_seconds = max(30, int(stale_after_seconds or 180))
         self.total_limit = max(1, int(total_limit or 4))
+        self.job_id = str(job_id or "")
 
     def run_once(self) -> dict[str, Any]:
         recoverable = self.store.list_recoverable_agent_workers(
             limit=max(10, self.total_limit * 10),
             stale_after_seconds=self.stale_after_seconds,
+            job_id=self.job_id,
         )
         grouped: dict[str, list[dict[str, Any]]] = {}
         for worker in recoverable:
@@ -249,6 +252,7 @@ class PersistentWorkerRecoveryDaemon:
 
         return {
             "owner_id": self.owner_id,
+            "job_id": self.job_id,
             "recoverable_count": len(recoverable),
             "claimed_count": total_claimed,
             "executed_count": total_executed,
@@ -277,6 +281,10 @@ class PersistentWorkerRecoveryDaemon:
                 result = self._resume_search_worker(worker)
             elif lane_id == "exploration_specialist":
                 result = self._resume_exploration_worker(worker)
+            elif lane_id == "acquisition_specialist":
+                result = self._resume_acquisition_worker(worker)
+            elif lane_id == "enrichment_specialist":
+                result = self._resume_enrichment_worker(worker)
             else:
                 self.store.release_agent_worker_lease(worker_id, lease_owner=self.owner_id, error_text="unsupported_lane")
                 return {
@@ -344,6 +352,47 @@ class PersistentWorkerRecoveryDaemon:
             candidate=candidate,
             target_company=str(metadata.get("target_company") or ""),
             logger=AssetLogger(snapshot_dir),
+            job_id=str(worker.get("job_id") or ""),
+            request_payload=dict(metadata.get("request_payload") or {}),
+            plan_payload=dict(metadata.get("plan_payload") or {}),
+            runtime_mode=str(metadata.get("runtime_mode") or "daemon_recovery"),
+        )
+
+    def _resume_acquisition_worker(self, worker: dict[str, Any]) -> dict[str, Any]:
+        metadata = dict(worker.get("metadata") or {})
+        recovery_kind = str(metadata.get("recovery_kind") or "")
+        if recovery_kind != "harvest_company_employees":
+            return {
+                "worker_status": "skipped",
+                "reason": "unsupported_recovery_kind",
+                "recovery_kind": recovery_kind,
+            }
+        identity = CompanyIdentity(**dict(metadata.get("identity") or {}))
+        snapshot_dir = Path(str(metadata.get("snapshot_dir") or "")).expanduser()
+        return self.acquisition_engine._execute_harvest_company_roster_worker(
+            identity=identity,
+            snapshot_dir=snapshot_dir,
+            max_pages=int(metadata.get("max_pages") or 10),
+            page_limit=int(metadata.get("page_limit") or 25),
+            job_id=str(worker.get("job_id") or ""),
+            request_payload=dict(metadata.get("request_payload") or {}),
+            plan_payload=dict(metadata.get("plan_payload") or {}),
+            runtime_mode=str(metadata.get("runtime_mode") or "daemon_recovery"),
+        )
+
+    def _resume_enrichment_worker(self, worker: dict[str, Any]) -> dict[str, Any]:
+        metadata = dict(worker.get("metadata") or {})
+        recovery_kind = str(metadata.get("recovery_kind") or "")
+        if recovery_kind != "harvest_profile_batch":
+            return {
+                "worker_status": "skipped",
+                "reason": "unsupported_recovery_kind",
+                "recovery_kind": recovery_kind,
+            }
+        snapshot_dir = Path(str(metadata.get("snapshot_dir") or "")).expanduser()
+        return self.acquisition_engine.multi_source_enricher._execute_harvest_profile_batch_worker(
+            profile_urls=list(metadata.get("profile_urls") or []),
+            snapshot_dir=snapshot_dir,
             job_id=str(worker.get("job_id") or ""),
             request_payload=dict(metadata.get("request_payload") or {}),
             plan_payload=dict(metadata.get("plan_payload") or {}),

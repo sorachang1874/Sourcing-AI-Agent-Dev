@@ -163,6 +163,10 @@ def _build_retrieval_plan(request: JobRequest, categories: list[str]) -> Retriev
         structured_filters.append(f"categories={categories}")
     if request.employment_statuses:
         structured_filters.append(f"employment_statuses={request.employment_statuses}")
+    if request.must_have_facets:
+        structured_filters.append(f"must_have_facets={request.must_have_facets}")
+    if request.must_have_primary_role_buckets:
+        structured_filters.append(f"must_have_primary_role_buckets={request.must_have_primary_role_buckets}")
     if request.organization_keywords:
         structured_filters.append(f"organization_keywords={request.organization_keywords}")
 
@@ -178,7 +182,7 @@ def _build_retrieval_plan(request: JobRequest, categories: list[str]) -> Retriev
         strategy=strategy,
         reason=reason,
         structured_filters=structured_filters,
-        semantic_fields=["role", "team", "focus_areas", "education", "work_history", "notes"],
+        semantic_fields=_semantic_fields_for_request(request),
         filter_layers=_build_filter_layers(request, strategy, categories),
     )
 
@@ -245,6 +249,7 @@ def _build_acquisition_tasks(
                 "publication_scan_limit": request.publication_scan_limit,
                 "publication_lead_limit": request.publication_lead_limit,
                 "exploration_limit": request.exploration_limit,
+                "scholar_coauthor_follow_up_limit": request.scholar_coauthor_follow_up_limit,
             },
         ),
         AcquisitionTask(
@@ -289,7 +294,12 @@ def _infer_employment_statuses(request: JobRequest) -> list[str]:
 
 def _infer_retrieval_strategy(request: JobRequest) -> str:
     text = f"{request.raw_user_request} {request.query}"
-    if request.must_have_keywords or request.organization_keywords:
+    if (
+        request.must_have_keywords
+        or request.must_have_facets
+        or request.must_have_primary_role_buckets
+        or request.organization_keywords
+    ):
         return "structured"
     if len(request.keywords) >= 5:
         return "hybrid"
@@ -304,6 +314,10 @@ def _criteria_summary(request: JobRequest, categories: list[str], employment_sta
         segments.append(f"employment_statuses={employment_statuses}")
     if request.keywords:
         segments.append(f"keywords={request.keywords}")
+    if request.must_have_facets:
+        segments.append(f"must_have_facets={request.must_have_facets}")
+    if request.must_have_primary_role_buckets:
+        segments.append(f"must_have_primary_role_buckets={request.must_have_primary_role_buckets}")
     if request.must_have_keywords:
         segments.append(f"must_have={request.must_have_keywords}")
     if request.exclude_keywords:
@@ -346,6 +360,8 @@ def _build_filter_layers(request: JobRequest, strategy: str, categories: list[st
                 "target_scope": request.target_scope,
                 "categories": categories,
                 "employment_statuses": request.employment_statuses,
+                "must_have_facets": request.must_have_facets,
+                "must_have_primary_role_buckets": request.must_have_primary_role_buckets,
             },
         },
         {
@@ -353,6 +369,8 @@ def _build_filter_layers(request: JobRequest, strategy: str, categories: list[st
             "kind": "hard_filter",
             "description": "Apply must-have, exclude, and organization filters before recall-heavy ranking.",
             "criteria": {
+                "must_have_facets": request.must_have_facets,
+                "must_have_primary_role_buckets": request.must_have_primary_role_buckets,
                 "must_have_keywords": request.must_have_keywords,
                 "exclude_keywords": request.exclude_keywords,
                 "organization_keywords": request.organization_keywords,
@@ -393,3 +411,10 @@ def _build_filter_layers(request: JobRequest, strategy: str, categories: list[st
         ]
     )
     return layers
+
+
+def _semantic_fields_for_request(request: JobRequest) -> list[str]:
+    fields = ["role", "team", "focus_areas", "derived_facets", "education", "work_history", "notes"]
+    if request.must_have_primary_role_buckets:
+        return [field_name for field_name in fields if field_name != "notes"]
+    return fields

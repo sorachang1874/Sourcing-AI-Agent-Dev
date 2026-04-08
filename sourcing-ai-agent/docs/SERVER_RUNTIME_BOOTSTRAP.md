@@ -1,0 +1,270 @@
+# Server Runtime Bootstrap
+
+## Goal
+
+这份文档定义当前 `Sourcing AI Agent` 在长期在线 Linux/server 环境上的最小可执行启动流程。
+
+目标不是一次性做成全自动平台，而是先把下面三件事固定下来：
+
+- 代码如何落地到服务器
+- secrets 和 object storage 如何注入
+- runtime 资产如何恢复、启动、校验、回滚
+
+## Runtime Model
+
+当前建议的 server 角色分成两类进程：
+
+- API 进程
+  - 提供 `serve`
+  - 暴露 `/health`、`/api/providers/health`
+- worker daemon
+  - 提供 `run-worker-daemon-service`
+  - 持续恢复和推进可恢复 worker
+
+当前不建议把 live runtime 直接塞进 Git 或系统镜像。服务器启动时应恢复：
+
+- Git repo
+- provider secrets
+- object storage config
+- 必要的 bundle / SQLite snapshot
+
+## Host Requirements
+
+最低要求：
+
+- Linux，优先 Debian/Ubuntu 或兼容环境
+- Python `>=3.12`
+- Git
+- 可写的本地 `runtime/`
+
+如果启用 `google_browser` search provider，还需要：
+
+- `node`
+- Playwright 依赖目录
+- Chromium 所需系统库
+
+当前已知最常见缺口：
+
+- `libnspr4.so`
+- `libnss3.so`
+
+在 Debian/Ubuntu 上，最小修复通常是：
+
+```bash
+sudo apt-get install -y libnspr4 libnss3
+```
+
+如果机器过于精简，不要硬扛 browser lane，直接把它迁到更完整的 Linux/server 环境。
+
+## Recommended Layout
+
+示例目录：
+
+```text
+/srv/sourcing-ai-agent/
+  repo/
+    sourcing-ai-agent/
+  runtime/
+    secrets/
+    company_assets/
+    manual_review_assets/
+    asset_exports/
+    object_sync/
+    vendor/
+      playwright/
+      playwright-browsers/
+      npm-cache/
+```
+
+要求：
+
+- repo 与 runtime 分离
+- `runtime/` 必须可持久化
+- `runtime/secrets/providers.local.json` 不进入 Git
+
+## Secrets Contract
+
+至少要恢复或注入：
+
+- model provider / relay 配置
+- semantic provider 配置
+- Harvest token
+- Serper token
+- object storage 配置
+
+推荐顺序：
+
+1. 优先用 secret manager / environment variables
+2. 其次恢复 `runtime/secrets/providers.local.json`
+3. 不要把生产 secrets 写回仓库
+
+## Object Storage Contract
+
+server 侧必须明确：
+
+- `provider`
+- `bucket`
+- `prefix`
+- `endpoint_url`
+- `region`
+- `access_key_id`
+- `secret_access_key`
+
+当前 object sync 已支持：
+
+- 并发 upload/download
+- 默认 resume
+  - 已存在且匹配的对象会跳过
+- progress summary
+- 本地/云端 bundle index
+- 本地/云端 sync run manifest
+
+如果需要强制全量重传或重下，可以显式关闭 resume：
+
+```bash
+PYTHONPATH=src python3 -m sourcing_agent.cli upload-asset-bundle \
+  --manifest runtime/asset_exports/<bundle>/bundle_manifest.json \
+  --no-resume
+
+PYTHONPATH=src python3 -m sourcing_agent.cli download-asset-bundle \
+  --bundle-kind company_handoff \
+  --bundle-id <bundle_id> \
+  --output-dir runtime/asset_imports \
+  --no-resume
+```
+
+## Bootstrap Sequence
+
+### 1. Get code onto the server
+
+```bash
+git clone <repo-url> /srv/sourcing-ai-agent/repo
+cd /srv/sourcing-ai-agent/repo/sourcing-ai-agent
+git switch dev
+```
+
+如果要跑发布版，则切到对应 release commit 或 `main`。
+
+### 2. Prepare runtime directories
+
+```bash
+mkdir -p runtime/secrets runtime/asset_imports runtime/vendor
+```
+
+### 3. Restore secrets
+
+恢复 `providers.local.json`，或导出对应环境变量。
+
+至少先确保：
+
+- `test-model` 可通过
+- object storage client 可初始化
+
+### 4. Restore durable assets
+
+优先恢复最近一次 handoff bundle：
+
+```bash
+PYTHONPATH=src python3 -m sourcing_agent.cli download-asset-bundle \
+  --bundle-kind company_handoff \
+  --bundle-id <bundle_id> \
+  --output-dir runtime/asset_imports
+
+PYTHONPATH=src python3 -m sourcing_agent.cli restore-asset-bundle \
+  --manifest runtime/asset_imports/<bundle_id>/bundle_manifest.json \
+  --target-runtime-dir runtime
+```
+
+如需恢复数据库：
+
+```bash
+PYTHONPATH=src python3 -m sourcing_agent.cli restore-sqlite-snapshot \
+  --manifest /path/to/sqlite_bundle/bundle_manifest.json
+```
+
+### 5. Run smoke checks
+
+```bash
+PYTHONPATH=src python3 -m unittest tests.test_object_storage tests.test_search_provider -q
+PYTHONPATH=src python3 -m sourcing_agent.cli test-model
+PYTHONPATH=src python3 -m sourcing_agent.cli show-daemon-status
+```
+
+如果当前 server 不打算启用 browser lane，不要求 `google_browser` live search 可用。
+
+### 6. Start API server
+
+```bash
+PYTHONPATH=src python3 -m sourcing_agent.cli serve --host 0.0.0.0 --port 8765
+```
+
+### 7. Start worker daemon
+
+```bash
+PYTHONPATH=src python3 -m sourcing_agent.cli run-worker-daemon-service \
+  --service-name worker-recovery-daemon \
+  --poll-seconds 5 \
+  --lease-seconds 300 \
+  --stale-after-seconds 180 \
+  --total-limit 4
+```
+
+如果要交给 systemd，先生成 unit：
+
+```bash
+PYTHONPATH=src python3 -m sourcing_agent.cli write-worker-daemon-systemd-unit \
+  --service-name worker-recovery-daemon
+```
+
+## Health Checks
+
+启动后至少检查：
+
+- `GET /health`
+- `GET /api/providers/health`
+- `PYTHONPATH=src python3 -m sourcing_agent.cli show-daemon-status`
+
+如果 server 主要是为了继续 TML 资产积累，再额外检查：
+
+- `runtime/company_assets/<company>/latest_snapshot.json`
+- `manual_review_backlog.json`
+- `profile_completion_backlog.json`
+
+## Failure Recovery
+
+### Browser search fails with shared library errors
+
+如果错误里出现：
+
+- `libnspr4.so`
+- `libnss3.so`
+
+先补系统库，再重试。当前代码已经会把缺失库名直接写进错误信息。
+
+### Bundle transfer interrupted
+
+直接重跑相同命令即可。默认 resume 会跳过已完成对象，只补剩余缺口。
+
+### SQLite state is suspicious
+
+优先：
+
+1. 备份当前 `runtime/sourcing_agent.db`
+2. 用最近一次只读 snapshot 做 restore
+3. 再重新生成 company candidate artifacts
+
+## Current Gaps
+
+当前还没有的一键能力：
+
+- `bootstrap-device`
+- “拉最近可恢复 bundle” 的快捷命令
+- server 侧自动 secret bootstrap
+
+所以现在的 server bootstrap 仍然是：
+
+- 文档化
+- 可重复
+- 可恢复
+
+但还不是全自动。

@@ -5,7 +5,14 @@ import re
 from typing import Any
 
 from .confidence_policy import DEFAULT_HIGH_THRESHOLD, DEFAULT_MEDIUM_THRESHOLD
-from .domain import Candidate, JobRequest
+from .domain import (
+    Candidate,
+    JobRequest,
+    derive_candidate_facets,
+    derive_candidate_filter_facets,
+    derive_candidate_role_bucket,
+    sanitize_candidate_notes,
+)
 
 
 SEARCH_FIELDS = {
@@ -13,6 +20,7 @@ SEARCH_FIELDS = {
     "role": 5,
     "team": 4,
     "focus_areas": 4,
+    "derived_facets": 4,
     "investment_involvement": 4,
     "education": 2,
     "work_history": 2,
@@ -53,6 +61,13 @@ KEYWORD_ALIAS_MAP = {
     "芯片": ["hardware", "silicon"],
     "gpu": ["cuda", "accelerator", "cluster"],
     "工程": ["engineering", "engineer", "technical staff"],
+    "ops": ["operations", "business operations", "people operations", "chief of staff"],
+    "运营": ["operations", "business operations", "people operations", "chief of staff"],
+    "招聘": ["recruiting", "recruiter", "talent acquisition", "talent"],
+    "recruiting": ["recruiter", "talent acquisition", "talent"],
+    "infra_systems": ["infrastructure", "infra", "systems", "platform", "distributed systems"],
+    "multimodality": ["multimodal", "vision-language", "vision language"],
+    "multimodal": ["multimodality", "vision-language", "vision language"],
 }
 
 CONFIDENCE_PATTERN_BASE = {
@@ -117,14 +132,15 @@ def score_candidate(
 
     score = 0.0
     matched_fields: list[dict[str, Any]] = []
+    search_fields = _search_fields_for_request(request)
     for keyword in keywords:
         variants = _keyword_variants(keyword, criteria_patterns or [])
         normalized_variants = [_normalize(item) for item in variants if _normalize(item)]
         if not normalized_variants:
             continue
         found = False
-        for field_name, weight in SEARCH_FIELDS.items():
-            value = getattr(candidate, field_name)
+        for field_name, weight in search_fields.items():
+            value = _candidate_field_value(candidate, field_name)
             normalized_value = _normalize(value)
             matched_variant = next((item for item in variants if _normalize(item) in normalized_value), "")
             if matched_variant:
@@ -191,10 +207,12 @@ def _candidate_blob(candidate: Candidate) -> str:
             candidate.role,
             candidate.team,
             candidate.focus_areas,
+            " ".join(derive_candidate_facets(candidate)),
+            derive_candidate_role_bucket(candidate),
             candidate.investment_involvement,
             candidate.education,
             candidate.work_history,
-            candidate.notes,
+            sanitize_candidate_notes(candidate.notes),
             candidate.ethnicity_background,
             candidate.current_destination,
         ]
@@ -220,9 +238,21 @@ def build_query_terms(request: JobRequest, criteria_patterns: list[dict[str, Any
     natural_language_query = request.query or request.raw_user_request
     keywords = request.keywords if request.keywords else _extract_keywords_from_query(natural_language_query)
     expanded: list[str] = []
-    for keyword in keywords + request.organization_keywords + request.must_have_keywords:
+    for keyword in (
+        keywords
+        + request.organization_keywords
+        + request.must_have_keywords
+        + request.must_have_facets
+        + request.must_have_primary_role_buckets
+    ):
         expanded.extend(_keyword_variants(keyword, criteria_patterns or []))
     return _dedupe(expanded)
+
+
+def _search_fields_for_request(request: JobRequest) -> dict[str, float]:
+    if request.must_have_primary_role_buckets:
+        return {field_name: weight for field_name, weight in SEARCH_FIELDS.items() if field_name != "notes"}
+    return SEARCH_FIELDS
 
 
 def candidate_matches_structured_filters(candidate: Candidate, request: JobRequest) -> bool:
@@ -234,11 +264,18 @@ def candidate_matches_structured_filters(candidate: Candidate, request: JobReque
         return False
 
     searchable_blob = _normalize(_candidate_blob(candidate))
+    candidate_facets = {_normalize(item) for item in derive_candidate_filter_facets(candidate)}
     if candidate.category == "investor" and _is_direct_investment_search(request):
         involvement_label = _investment_label(candidate.investment_involvement)
         if involvement_label == "no":
             return False
 
+    if request.must_have_facets and not all(_normalize(facet) in candidate_facets for facet in request.must_have_facets):
+        return False
+    if request.must_have_primary_role_buckets:
+        candidate_role_bucket = _normalize(derive_candidate_role_bucket(candidate))
+        if candidate_role_bucket not in {_normalize(item) for item in request.must_have_primary_role_buckets}:
+            return False
     if request.organization_keywords:
         org_blob = _normalize(" ".join([candidate.organization, candidate.role, candidate.team]))
         if not any(_normalize(token) in org_blob for token in request.organization_keywords):
@@ -282,6 +319,15 @@ def _build_explanation(
     if semantic_hit and semantic_hit.get("explanation"):
         explanation += f"；semantic={semantic_hit['explanation']}"
     return explanation
+
+
+def _candidate_field_value(candidate: Candidate, field_name: str) -> str:
+    if field_name == "derived_facets":
+        return " | ".join([derive_candidate_role_bucket(candidate)] + derive_candidate_facets(candidate))
+    value = str(getattr(candidate, field_name) or "").strip()
+    if field_name == "notes":
+        return sanitize_candidate_notes(value)
+    return value
 
 
 def _normalize(value: str) -> str:
@@ -330,6 +376,7 @@ def _confidence_assessment(
 ) -> tuple[str, float, str]:
     score = 0.2
     reasons: list[str] = []
+    confidence_matched_fields = [item for item in matched_fields if str(item.get("field") or "") != "derived_facets"]
     if candidate.category in {"employee", "former_employee"}:
         score += 0.15
         reasons.append(f"category={candidate.category}")
@@ -345,9 +392,12 @@ def _confidence_assessment(
     if candidate.metadata.get("publication_id"):
         score += 0.05
         reasons.append("publication_signal")
-    if matched_fields:
-        score += min(len(matched_fields), 3) * 0.05
-        reasons.append(f"matched_fields={min(len(matched_fields), 3)}")
+    if confidence_matched_fields:
+        score += min(len(confidence_matched_fields), 3) * 0.05
+        reasons.append(f"matched_fields={min(len(confidence_matched_fields), 3)}")
+    elif matched_fields:
+        score += 0.05
+        reasons.append("matched_fields=derived")
     if candidate.category == "lead":
         score -= 0.2
         reasons.append("lead_penalty")

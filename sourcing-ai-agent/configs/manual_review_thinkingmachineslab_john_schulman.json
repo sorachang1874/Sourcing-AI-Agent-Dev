@@ -1,5 +1,6 @@
 {
   "apply_resolution": true,
+  "fetch_assets": false,
   "action": "resolved",
   "reviewer": "user_manual_review",
   "notes": "Manual review confirmed John Schulman via personal homepage surfaced from web search.",
@@ -13,14 +14,15 @@
     "organization": "Thinking Machines Lab",
     "role": "Publication author lead",
     "source_dataset": "thinkingmachinesai_official_feed",
-    "source_path": "/home/sorachang/projects/Sourcing AI Agent Dev/sourcing-ai-agent/runtime/company_assets/thinkingmachineslab/20260406T172439/publications/official_surfaces/bloglora.html",
+    "source_path": "runtime/company_assets/thinkingmachineslab/20260407T181912/publications/official_surfaces/bloglora.html",
     "metadata": {
       "publication_url": "https://thinkingmachines.ai/blog/lora/"
     }
   },
   "candidate_patch": {
     "category": "employee",
-    "employment_status": "current"
+    "employment_status": "current",
+    "media_url": "http://joschu.net/"
   },
   "source_links": [
     {

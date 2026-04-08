@@ -72,9 +72,15 @@ def main() -> None:
 
     run_job_parser = subparsers.add_parser("run-job", help="Run a sourcing job from JSON file")
     run_job_parser.add_argument("--file", required=True, help="Path to job JSON")
+    run_job_parser.add_argument("--asset-view", choices=["canonical_merged", "strict_roster_only"], default="", help="Optional retrieval asset view override")
+    run_job_parser.add_argument("--must-have-facet", action="append", default=[], help="Optional hard facet filter; repeatable")
+    run_job_parser.add_argument("--must-have-primary-role-bucket", action="append", default=[], help="Optional hard primary role bucket filter; repeatable")
 
     plan_parser = subparsers.add_parser("plan", help="Create a sourcing plan from JSON file")
     plan_parser.add_argument("--file", required=True, help="Path to workflow request JSON")
+    plan_parser.add_argument("--asset-view", choices=["canonical_merged", "strict_roster_only"], default="", help="Optional retrieval asset view override")
+    plan_parser.add_argument("--must-have-facet", action="append", default=[], help="Optional hard facet filter; repeatable")
+    plan_parser.add_argument("--must-have-primary-role-bucket", action="append", default=[], help="Optional hard primary role bucket filter; repeatable")
 
     review_plan_parser = subparsers.add_parser("review-plan", help="Review a plan review session from JSON file")
     review_plan_parser.add_argument("--file", required=True, help="Path to plan review JSON")
@@ -84,6 +90,9 @@ def main() -> None:
 
     workflow_parser = subparsers.add_parser("start-workflow", help="Run a workflow in the current CLI process")
     workflow_parser.add_argument("--file", required=True, help="Path to workflow request JSON")
+    workflow_parser.add_argument("--asset-view", choices=["canonical_merged", "strict_roster_only"], default="", help="Optional retrieval asset view override")
+    workflow_parser.add_argument("--must-have-facet", action="append", default=[], help="Optional hard facet filter; repeatable")
+    workflow_parser.add_argument("--must-have-primary-role-bucket", action="append", default=[], help="Optional hard primary role bucket filter; repeatable")
 
     show_job_parser = subparsers.add_parser("show-job", help="Show stored job metadata and results")
     show_job_parser.add_argument("--job-id", required=True, help="Job identifier")
@@ -100,6 +109,7 @@ def main() -> None:
     show_recoverable_parser = subparsers.add_parser("show-recoverable-workers", help="Show recoverable workers across jobs")
     show_recoverable_parser.add_argument("--stale-after-seconds", type=int, default=180, help="Running workers older than this are recoverable")
     show_recoverable_parser.add_argument("--lane-id", default="", help="Optional lane filter")
+    show_recoverable_parser.add_argument("--job-id", default="", help="Optional job filter")
     show_recoverable_parser.add_argument("--limit", type=int, default=100, help="Max workers to return")
 
     interrupt_worker_parser = subparsers.add_parser("interrupt-worker", help="Request interrupt for a worker")
@@ -110,12 +120,14 @@ def main() -> None:
     daemon_once_parser.add_argument("--lease-seconds", type=int, default=300, help="Lease duration in seconds")
     daemon_once_parser.add_argument("--stale-after-seconds", type=int, default=180, help="Running workers older than this are recoverable")
     daemon_once_parser.add_argument("--total-limit", type=int, default=4, help="Max workers to recover per daemon cycle")
+    daemon_once_parser.add_argument("--job-id", default="", help="Optional job filter")
 
     daemon_forever_parser = subparsers.add_parser("run-worker-daemon", help="Run the cross-process worker recovery daemon loop")
     daemon_forever_parser.add_argument("--owner-id", default="", help="Optional daemon owner identifier")
     daemon_forever_parser.add_argument("--lease-seconds", type=int, default=300, help="Lease duration in seconds")
     daemon_forever_parser.add_argument("--stale-after-seconds", type=int, default=180, help="Running workers older than this are recoverable")
     daemon_forever_parser.add_argument("--total-limit", type=int, default=4, help="Max workers to recover per daemon cycle")
+    daemon_forever_parser.add_argument("--job-id", default="", help="Optional job filter")
     daemon_forever_parser.add_argument("--poll-seconds", type=float, default=5.0, help="Sleep between cycles")
     daemon_forever_parser.add_argument("--max-ticks", type=int, default=0, help="Stop after N cycles; 0 means forever")
 
@@ -125,6 +137,7 @@ def main() -> None:
     daemon_service_parser.add_argument("--lease-seconds", type=int, default=300, help="Lease duration in seconds")
     daemon_service_parser.add_argument("--stale-after-seconds", type=int, default=180, help="Running workers older than this are recoverable")
     daemon_service_parser.add_argument("--total-limit", type=int, default=4, help="Max workers to recover per daemon cycle")
+    daemon_service_parser.add_argument("--job-id", default="", help="Optional job filter")
     daemon_service_parser.add_argument("--poll-seconds", type=float, default=5.0, help="Sleep between cycles")
     daemon_service_parser.add_argument("--max-ticks", type=int, default=0, help="Stop after N cycles; 0 means forever")
 
@@ -199,12 +212,14 @@ def main() -> None:
     upload_bundle_parser = subparsers.add_parser("upload-asset-bundle", help="Upload an exported asset bundle to configured object storage")
     upload_bundle_parser.add_argument("--manifest", required=True, help="Path to bundle_manifest.json")
     upload_bundle_parser.add_argument("--max-workers", type=int, default=0, help="Optional concurrent upload worker count; 0 uses config default")
+    upload_bundle_parser.add_argument("--no-resume", action="store_true", help="Force re-upload even when the remote object already exists")
 
     download_bundle_parser = subparsers.add_parser("download-asset-bundle", help="Download an asset bundle from configured object storage")
     download_bundle_parser.add_argument("--bundle-kind", required=True, help="Bundle kind, e.g. company_handoff")
     download_bundle_parser.add_argument("--bundle-id", required=True, help="Bundle id")
     download_bundle_parser.add_argument("--output-dir", default="", help="Optional local export directory")
     download_bundle_parser.add_argument("--max-workers", type=int, default=0, help="Optional concurrent download worker count; 0 uses config default")
+    download_bundle_parser.add_argument("--no-resume", action="store_true", help="Force re-download even when the local payload file already matches the manifest")
 
     restore_sqlite_parser = subparsers.add_parser("restore-sqlite-snapshot", help="Restore SQLite database from an exported bundle")
     restore_sqlite_parser.add_argument("--manifest", required=True, help="Path to bundle_manifest.json")
@@ -332,6 +347,7 @@ def main() -> None:
                         args.manifest,
                         storage_client,
                         max_workers=args.max_workers or None,
+                        resume=not args.no_resume,
                     ),
                     ensure_ascii=False,
                     indent=2,
@@ -347,6 +363,7 @@ def main() -> None:
                         client=storage_client,
                         output_dir=args.output_dir or None,
                         max_workers=args.max_workers or None,
+                        resume=not args.no_resume,
                     ),
                     ensure_ascii=False,
                     indent=2,
@@ -362,11 +379,23 @@ def main() -> None:
 
     if args.command == "run-job":
         payload = json.loads(Path(args.file).read_text())
+        if args.asset_view:
+            payload["asset_view"] = args.asset_view
+        if args.must_have_facet:
+            payload["must_have_facets"] = list(args.must_have_facet)
+        if args.must_have_primary_role_bucket:
+            payload["must_have_primary_role_buckets"] = list(args.must_have_primary_role_bucket)
         print(json.dumps(orchestrator.run_job(payload), ensure_ascii=False, indent=2))
         return
 
     if args.command == "plan":
         payload = json.loads(Path(args.file).read_text())
+        if args.asset_view:
+            payload["asset_view"] = args.asset_view
+        if args.must_have_facet:
+            payload["must_have_facets"] = list(args.must_have_facet)
+        if args.must_have_primary_role_bucket:
+            payload["must_have_primary_role_buckets"] = list(args.must_have_primary_role_bucket)
         print(json.dumps(orchestrator.plan_workflow(payload), ensure_ascii=False, indent=2))
         return
 
@@ -381,6 +410,12 @@ def main() -> None:
 
     if args.command == "start-workflow":
         payload = json.loads(Path(args.file).read_text())
+        if args.asset_view:
+            payload["asset_view"] = args.asset_view
+        if args.must_have_facet:
+            payload["must_have_facets"] = list(args.must_have_facet)
+        if args.must_have_primary_role_bucket:
+            payload["must_have_primary_role_buckets"] = list(args.must_have_primary_role_bucket)
         print(json.dumps(orchestrator.run_workflow_blocking(payload), ensure_ascii=False, indent=2))
         return
 
@@ -419,6 +454,7 @@ def main() -> None:
                     {
                         "stale_after_seconds": args.stale_after_seconds,
                         "lane_id": args.lane_id,
+                        "job_id": args.job_id,
                         "limit": args.limit,
                     }
                 ),
@@ -441,6 +477,7 @@ def main() -> None:
                         "lease_seconds": args.lease_seconds,
                         "stale_after_seconds": args.stale_after_seconds,
                         "total_limit": args.total_limit,
+                        "job_id": args.job_id,
                     }
                 ),
                 ensure_ascii=False,
@@ -458,6 +495,7 @@ def main() -> None:
                         "lease_seconds": args.lease_seconds,
                         "stale_after_seconds": args.stale_after_seconds,
                         "total_limit": args.total_limit,
+                        "job_id": args.job_id,
                         "poll_seconds": args.poll_seconds,
                         "max_ticks": args.max_ticks,
                     }
@@ -475,13 +513,14 @@ def main() -> None:
                     orchestrator.run_worker_daemon_service(
                         {
                             "service_name": args.service_name,
-                            "owner_id": args.owner_id,
-                            "lease_seconds": args.lease_seconds,
-                            "stale_after_seconds": args.stale_after_seconds,
-                            "total_limit": args.total_limit,
-                            "poll_seconds": args.poll_seconds,
-                            "max_ticks": args.max_ticks,
-                        }
+                        "owner_id": args.owner_id,
+                        "lease_seconds": args.lease_seconds,
+                        "stale_after_seconds": args.stale_after_seconds,
+                        "total_limit": args.total_limit,
+                        "job_id": args.job_id,
+                        "poll_seconds": args.poll_seconds,
+                        "max_ticks": args.max_ticks,
+                    }
                     ),
                     ensure_ascii=False,
                     indent=2,

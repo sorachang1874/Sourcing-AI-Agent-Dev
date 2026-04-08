@@ -44,9 +44,25 @@ class SemanticProviderSettings:
 @dataclass(frozen=True, slots=True)
 class SearchProviderSettings:
     enabled: bool = True
-    provider_order: tuple[str, ...] = ("serper_google", "google_browser", "duckduckgo_html")
+    provider_order: tuple[str, ...] = (
+        "dataforseo_google_organic",
+        "serper_google",
+        "google_browser",
+        "bing_html",
+        "duckduckgo_html",
+    )
     timeout_seconds: int = 30
     max_results_per_call: int = 10
+    enable_dataforseo_google_organic: bool = True
+    dataforseo_login: str = ""
+    dataforseo_password: str = ""
+    dataforseo_base_url: str = "https://api.dataforseo.com"
+    dataforseo_default_location_name: str = "United States"
+    dataforseo_default_language_name: str = "English"
+    dataforseo_default_device: str = "desktop"
+    dataforseo_default_os: str = "windows"
+    dataforseo_default_depth: int = 10
+    enable_bing_html: bool = True
     enable_duckduckgo_html: bool = True
     serper_api_key: str = ""
     serper_base_url: str = "https://google.serper.dev/search"
@@ -191,14 +207,14 @@ def load_settings(project_root: str | Path) -> AppSettings:
 
     search_provider_order = os.getenv("SEARCH_PROVIDER_ORDER") or search_payload.get(
         "provider_order",
-        ["serper_google", "google_browser", "duckduckgo_html"],
+        ["dataforseo_google_organic", "serper_google", "google_browser", "bing_html", "duckduckgo_html"],
     )
     if isinstance(search_provider_order, str):
         provider_order = tuple(item.strip() for item in search_provider_order.split(",") if item.strip())
     elif isinstance(search_provider_order, list):
         provider_order = tuple(str(item).strip() for item in search_provider_order if str(item).strip())
     else:
-        provider_order = ("serper_google", "duckduckgo_html")
+        provider_order = ("dataforseo_google_organic", "serper_google", "bing_html", "duckduckgo_html")
     search_timeout = os.getenv("SEARCH_PROVIDER_TIMEOUT_SECONDS") or search_payload.get("timeout_seconds", 30)
     search_max_results = os.getenv("SEARCH_PROVIDER_MAX_RESULTS") or search_payload.get("max_results_per_call", 10)
     try:
@@ -213,6 +229,36 @@ def load_settings(project_root: str | Path) -> AppSettings:
     serper_base_url = os.getenv("SERPER_BASE_URL") or str(
         search_payload.get("serper_base_url", "https://google.serper.dev/search")
     ).strip()
+    enable_dataforseo_google_organic = _coerce_bool(
+        os.getenv("SEARCH_PROVIDER_ENABLE_DATAFORSEO_GOOGLE_ORGANIC"),
+        default=bool(search_payload.get("enable_dataforseo_google_organic", True)),
+    )
+    dataforseo_login = os.getenv("DATAFORSEO_LOGIN") or str(search_payload.get("dataforseo_login", "")).strip()
+    dataforseo_password = os.getenv("DATAFORSEO_PASSWORD") or str(search_payload.get("dataforseo_password", "")).strip()
+    dataforseo_base_url = os.getenv("DATAFORSEO_BASE_URL") or str(
+        search_payload.get("dataforseo_base_url", "https://api.dataforseo.com")
+    ).strip()
+    dataforseo_default_location_name = os.getenv("DATAFORSEO_LOCATION_NAME") or str(
+        search_payload.get("dataforseo_default_location_name", "United States")
+    ).strip()
+    dataforseo_default_language_name = os.getenv("DATAFORSEO_LANGUAGE_NAME") or str(
+        search_payload.get("dataforseo_default_language_name", "English")
+    ).strip()
+    dataforseo_default_device = os.getenv("DATAFORSEO_DEVICE") or str(
+        search_payload.get("dataforseo_default_device", "desktop")
+    ).strip()
+    dataforseo_default_os = os.getenv("DATAFORSEO_OS") or str(
+        search_payload.get("dataforseo_default_os", "windows")
+    ).strip()
+    dataforseo_default_depth_raw = os.getenv("DATAFORSEO_DEPTH") or search_payload.get("dataforseo_default_depth", 10)
+    try:
+        dataforseo_default_depth = int(dataforseo_default_depth_raw)
+    except (TypeError, ValueError):
+        dataforseo_default_depth = 10
+    enable_bing_html = _coerce_bool(
+        os.getenv("SEARCH_PROVIDER_ENABLE_BING_HTML"),
+        default=bool(search_payload.get("enable_bing_html", True)),
+    )
     enable_duckduckgo_html = bool(search_payload.get("enable_duckduckgo_html", True))
     enable_google_browser = _coerce_bool(
         os.getenv("SEARCH_PROVIDER_ENABLE_GOOGLE_BROWSER"),
@@ -297,12 +343,14 @@ def load_settings(project_root: str | Path) -> AppSettings:
         default_charge: float,
         default_items: int,
         default_mode: str,
+        default_collect_email: bool = False,
     ) -> HarvestActorSettings:
         api_token = shared_harvest_token or str(payload.get("api_token", "")).strip()
         actor_id = str(payload.get("actor_id", actor_id_default)).strip()
         timeout = os.getenv(timeout_env) or payload.get("timeout_seconds", 180)
         max_charge = os.getenv(charge_env) or payload.get("max_total_charge_usd", default_charge)
         max_paid_items = os.getenv(items_env) or payload.get("max_paid_items", default_items)
+        collect_email_raw = payload.get("collect_email", default_collect_email)
         try:
             timeout_seconds = int(timeout)
         except (TypeError, ValueError):
@@ -315,6 +363,10 @@ def load_settings(project_root: str | Path) -> AppSettings:
             max_items = int(max_paid_items)
         except (TypeError, ValueError):
             max_items = default_items
+        if isinstance(collect_email_raw, str):
+            collect_email = collect_email_raw.strip().lower() not in {"", "0", "false", "no"}
+        else:
+            collect_email = bool(collect_email_raw)
         return HarvestActorSettings(
             enabled=bool(api_token),
             api_token=api_token,
@@ -323,7 +375,7 @@ def load_settings(project_root: str | Path) -> AppSettings:
             max_total_charge_usd=max_total_charge_usd,
             max_paid_items=max_items,
             default_mode=str(payload.get("default_mode", default_mode)).strip() or default_mode,
-            collect_email=bool(payload.get("collect_email", False)),
+            collect_email=collect_email,
         )
 
     return AppSettings(
@@ -358,6 +410,16 @@ def load_settings(project_root: str | Path) -> AppSettings:
             provider_order=provider_order or ("duckduckgo_html",),
             timeout_seconds=search_timeout_seconds,
             max_results_per_call=max(1, min(search_max_results_value, 25)),
+            enable_dataforseo_google_organic=enable_dataforseo_google_organic,
+            dataforseo_login=dataforseo_login,
+            dataforseo_password=dataforseo_password,
+            dataforseo_base_url=dataforseo_base_url.rstrip("/"),
+            dataforseo_default_location_name=dataforseo_default_location_name or "United States",
+            dataforseo_default_language_name=dataforseo_default_language_name or "English",
+            dataforseo_default_device=dataforseo_default_device or "desktop",
+            dataforseo_default_os=dataforseo_default_os or "windows",
+            dataforseo_default_depth=max(1, min(dataforseo_default_depth, 100)),
+            enable_bing_html=enable_bing_html,
             enable_duckduckgo_html=enable_duckduckgo_html,
             serper_api_key=serper_api_key,
             serper_base_url=serper_base_url.rstrip("/"),
@@ -398,6 +460,7 @@ def load_settings(project_root: str | Path) -> AppSettings:
                 default_charge=1.0,
                 default_items=25,
                 default_mode="full",
+                default_collect_email=True,
             ),
             profile_search=_harvest_actor_settings(
                 profile_search_payload,

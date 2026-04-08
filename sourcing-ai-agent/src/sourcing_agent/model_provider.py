@@ -19,6 +19,10 @@ class ModelClient(Protocol):
 
     def analyze_page_asset(self, payload: dict[str, Any]) -> dict[str, Any]: ...
 
+    def judge_company_equivalence(self, payload: dict[str, Any]) -> dict[str, Any]: ...
+
+    def judge_profile_membership(self, payload: dict[str, Any]) -> dict[str, Any]: ...
+
     def provider_name(self) -> str: ...
 
     def healthcheck(self) -> dict[str, Any]: ...
@@ -116,6 +120,25 @@ class DeterministicModelClient:
                 "resume_url": ((urls.get("resume_urls") or [""])[0]),
             },
             "notes": "Deterministic page analysis fallback.",
+        }
+
+    def judge_company_equivalence(self, payload: dict[str, Any]) -> dict[str, Any]:
+        observed = list(payload.get("observed_companies") or [])
+        matched_label = ""
+        if len(observed) == 1 and isinstance(observed[0], dict):
+            matched_label = str(observed[0].get("label") or "").strip()
+        return {
+            "decision": "uncertain",
+            "matched_label": matched_label,
+            "confidence_label": "low",
+            "rationale": "Deterministic model does not perform company-equivalence judgment.",
+        }
+
+    def judge_profile_membership(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "decision": "uncertain",
+            "confidence_label": "low",
+            "rationale": "Deterministic model does not perform profile-membership review.",
         }
 
 
@@ -234,6 +257,45 @@ class QwenResponsesModelClient(DeterministicModelClient):
         if not parsed:
             return super().plan_search_strategy(request, draft_payload)
         return parsed
+
+    def judge_company_equivalence(self, payload: dict[str, Any]) -> dict[str, Any]:
+        response = self._safe_text_prompt(
+            "You are verifying whether organization labels refer to the same real company. "
+            "Return strict JSON with keys decision,matched_label,confidence_label,rationale. "
+            "decision must be one of same_company,different_company,uncertain. "
+            "matched_label must be one of the observed labels or empty. "
+            "Be conservative: only return same_company when the labels clearly describe the same organization or the same LinkedIn company identity.",
+            json.dumps(payload, ensure_ascii=False),
+        )
+        parsed = _safe_json_object(response)
+        if not parsed:
+            return super().judge_company_equivalence(payload)
+        return {
+            "decision": str(parsed.get("decision") or "uncertain").strip() or "uncertain",
+            "matched_label": str(parsed.get("matched_label") or "").strip(),
+            "confidence_label": str(parsed.get("confidence_label") or "low").strip() or "low",
+            "rationale": str(parsed.get("rationale") or "").strip(),
+        }
+
+    def judge_profile_membership(self, payload: dict[str, Any]) -> dict[str, Any]:
+        response = self._safe_text_prompt(
+            "You are verifying whether a LinkedIn profile really supports target-company membership. "
+            "Return strict JSON with keys decision,confidence_label,rationale. "
+            "decision must be one of confirmed_member,suspicious_member,non_member,uncertain. "
+            "suspicious_member means the structured company match exists but the profile content looks implausible, "
+            "spam-like, corrupted, or otherwise needs manual review. "
+            "Be conservative: only return confirmed_member when the profile is plausibly consistent with a real member, "
+            "and only return non_member when the profile clearly does not support target-company membership.",
+            json.dumps(payload, ensure_ascii=False),
+        )
+        parsed = _safe_json_object(response)
+        if not parsed:
+            return super().judge_profile_membership(payload)
+        return {
+            "decision": str(parsed.get("decision") or "uncertain").strip() or "uncertain",
+            "confidence_label": str(parsed.get("confidence_label") or "low").strip() or "low",
+            "rationale": str(parsed.get("rationale") or "").strip(),
+        }
 
     def _run_text_prompt(self, system_prompt: str, user_prompt: str) -> str:
         input_text = f"System instruction:\n{system_prompt}\n\nUser input:\n{user_prompt}"
@@ -376,6 +438,47 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
         if not parsed:
             return super().plan_search_strategy(request, draft_payload)
         return parsed
+
+    def judge_company_equivalence(self, payload: dict[str, Any]) -> dict[str, Any]:
+        response = self._safe_text_prompt(
+            "You are verifying whether organization labels refer to the same real company. "
+            "Return strict JSON with keys decision,matched_label,confidence_label,rationale. "
+            "decision must be one of same_company,different_company,uncertain. "
+            "matched_label must be one of the observed labels or empty. "
+            "Be conservative: only return same_company when the labels clearly describe the same organization or the same LinkedIn company identity.",
+            json.dumps(payload, ensure_ascii=False),
+            max_tokens=220,
+        )
+        parsed = _safe_json_object(response)
+        if not parsed:
+            return super().judge_company_equivalence(payload)
+        return {
+            "decision": str(parsed.get("decision") or "uncertain").strip() or "uncertain",
+            "matched_label": str(parsed.get("matched_label") or "").strip(),
+            "confidence_label": str(parsed.get("confidence_label") or "low").strip() or "low",
+            "rationale": str(parsed.get("rationale") or "").strip(),
+        }
+
+    def judge_profile_membership(self, payload: dict[str, Any]) -> dict[str, Any]:
+        response = self._safe_text_prompt(
+            "You are verifying whether a LinkedIn profile really supports target-company membership. "
+            "Return strict JSON with keys decision,confidence_label,rationale. "
+            "decision must be one of confirmed_member,suspicious_member,non_member,uncertain. "
+            "suspicious_member means the structured company match exists but the profile content looks implausible, "
+            "spam-like, corrupted, or otherwise needs manual review. "
+            "Be conservative: only return confirmed_member when the profile is plausibly consistent with a real member, "
+            "and only return non_member when the profile clearly does not support target-company membership.",
+            json.dumps(payload, ensure_ascii=False),
+            max_tokens=260,
+        )
+        parsed = _safe_json_object(response)
+        if not parsed:
+            return super().judge_profile_membership(payload)
+        return {
+            "decision": str(parsed.get("decision") or "uncertain").strip() or "uncertain",
+            "confidence_label": str(parsed.get("confidence_label") or "low").strip() or "low",
+            "rationale": str(parsed.get("rationale") or "").strip(),
+        }
 
     def healthcheck(self) -> dict[str, Any]:
         try:

@@ -1,5 +1,7 @@
 # Thinking Machines Lab Retrospective
 
+> Historical note: this retrospective records the 2026-04-06 live-test baseline. For the current canonical snapshot, asset views and retrieval validation, see `docs/THINKING_MACHINES_LAB_CANONICAL_ASSET.md` and `docs/THINKING_MACHINES_LAB_VALIDATION_2026-04-08.md`.
+
 ## Goal
 
 这次 live test 的目标不是一次性做“绝对全量”的 Thinking Machines Lab 成员库，而是验证一条可复用、可审计、可渐进扩展的 sourcing backend 主链：

@@ -1,5 +1,43 @@
 # Sourcing AI Agent Dev Progress
 
+## 2026-04-08
+
+### Canonical Asset Views、Facet Hard Filters 与文档体系收束
+
+- 已把 Thinking Machines Lab 的分析入口收束为单一 canonical snapshot：
+  - `runtime/company_assets/thinkingmachineslab/20260407T181912`
+  - 并显式拆成：
+    - `canonical_merged`
+    - `strict_roster_only`
+- retrieval 现已支持显式资产视图与更稳的功能过滤：
+  - `asset_view`
+  - `must_have_facet / must_have_facets`
+  - `must_have_primary_role_bucket / must_have_primary_role_buckets`
+- primary-role-bucket 过滤现已贯穿：
+  - request normalization
+  - planning summary
+  - retrieval hard filter
+  - baseline request-family matching
+- 已收紧 retrieval scoring：
+  - `notes` 不再作为 primary role bucket 查询的主要 lexical / semantic 命中来源
+  - 这样 `ops / recruiting / infra_systems / multimodal` 这类切片不会再被 acquisition boilerplate 大面积污染
+- Thinking Machines Lab strict-view live validation 已更新：
+  - `total_matches=9`
+  - `manual_review_queue_count=0`
+  - top matched fields 只剩：
+    - `work_history`
+    - `derived_facets`
+    - `focus_areas`
+- 已补新的当前态文档：
+  - `docs/THINKING_MACHINES_LAB_CANONICAL_ASSET.md`
+  - `docs/THINKING_MACHINES_LAB_VALIDATION_2026-04-08.md`
+  - `docs/DATA_ASSET_GOVERNANCE.md`
+  - `docs/SERVICE_EVOLUTION_STRATEGY.md`
+- 已开始清理 GitHub-facing 文档入口：
+  - 新增 `docs/INDEX.md` 作为 canonical docs map
+  - 根目录 README / ONBOARDING / 子项目 README 已开始从 dated handoff 迁回 current-state docs
+  - canonical docs 中的绝对本机路径链接和 `cd '/home/...'` 命令已改成 GitHub-friendly 相对路径或通用路径
+
 ## 2026-04-07
 
 ### Harvest Auth 恢复、Browser Search Provider 与 PDF 强解析

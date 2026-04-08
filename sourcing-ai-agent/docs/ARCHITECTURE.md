@@ -7,6 +7,11 @@
 - Replaceable providers：模型和外部数据源都通过接口接入
 - Local-first MVP：先用现有 Anthropic 资产跑通链路，再接外部 API
 
+相关策略文档：
+
+- `docs/DATA_ASSET_GOVERNANCE.md`
+- `docs/SERVICE_EVOLUTION_STRATEGY.md`
+
 ## 2. 模块划分
 
 ### `planning.py`
@@ -161,7 +166,7 @@
   - LinkedIn company employees：高质量 roster 获取，适合小公司端到端验证
   - LinkedIn profile scraper：按 URL / public identifier 拉取 full profile，并使用 `moreProfiles` 扩展相似经历线索
 - 成本约束：
-  - 默认不抓 email
+  - app settings 当前默认对 `profile-scraper` 启用 email search；若要降成本，可显式设置 `collect_email=false`
   - profile scraper 默认 `Full`，避免因信息不全而重复调用
   - 仅在最终验证或人工 review 通过后启用高成本调用
 
@@ -169,12 +174,16 @@
 
 - 统一 low-cost search provider abstraction
 - 当前支持：
+  - `dataforseo_google_organic`
   - `serper_google`
+  - `google_browser`
+  - `bing_html`
   - `duckduckgo_html`
   - provider chain fallback
 - 统一输出 `SearchResponse`
 - search raw payload 统一按 `html/json` 形态落盘，便于复用、审计和替换 provider
 - 当前 DuckDuckGo 仍是 best-effort fallback，不再是业务链路直接依赖的单点
+- 对 worker 模式的批量低成本 Google organic，项目已接入 DataForSEO async queue lane
 
 ### `enrichment.py`
 
@@ -418,7 +427,7 @@ User Request
 - `linkedin-profile-scraper`
   - 当已知 LinkedIn URL / public identifier 时，作为默认首选
   - 默认 `Full`
-  - 默认不抓 email
+  - app settings 当前默认启用 email search；需要低成本路径时可切回 no-email 枚举
 - `linkedin-company-employees`
   - 只在“需要批量获取某公司几十人以上候选池”时启用
   - 不用于单人查找，避免固定启动成本被摊薄失败

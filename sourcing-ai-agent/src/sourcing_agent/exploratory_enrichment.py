@@ -32,6 +32,8 @@ class ExploratoryEnrichmentResult:
     artifact_paths: dict[str, str] = field(default_factory=dict)
     explored_candidates: list[dict[str, Any]] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+    queued_candidate_count: int = 0
+    stop_reason: str = ""
 
 
 class ExploratoryWebEnricher:
@@ -134,12 +136,18 @@ class ExploratoryWebEnricher:
                 errors.extend(result["errors"])
 
         summary_path = exploration_dir / "summary.json"
+        queued_candidate_count = len(
+            [item for item in explored_candidates if str(item.get("status") or "") == "queued"]
+        )
+        stop_reason = "queued_background_exploration" if queued_candidate_count > 0 else ""
         logger.write_json(
             summary_path,
             {
                 "target_company": target_company,
                 "explored_candidates": explored_candidates,
                 "errors": errors,
+                "queued_candidate_count": queued_candidate_count,
+                "stop_reason": stop_reason,
                 "worker_daemon": {
                     "cycles": int(daemon_summary.get("cycles") or 0),
                     "retried": list(daemon_summary.get("retried") or []),
@@ -159,6 +167,8 @@ class ExploratoryWebEnricher:
             artifact_paths={"exploration_summary": str(summary_path)},
             explored_candidates=explored_candidates,
             errors=errors,
+            queued_candidate_count=queued_candidate_count,
+            stop_reason=stop_reason,
         )
 
     def _explore_candidate(
@@ -183,6 +193,7 @@ class ExploratoryWebEnricher:
         worker_handle = None
         completed_queries = set()
         interrupted = False
+        checkpoint: dict[str, Any] = {}
         if self.worker_runtime is not None and job_id:
             worker_handle = self.worker_runtime.begin_worker(
                 job_id=job_id,
@@ -243,7 +254,82 @@ class ExploratoryWebEnricher:
                 break
             raw_search_path = candidate_dir / f"query_{index:02d}.html"
             try:
-                response = self.search_provider.search(query_text, max_results=10)
+                if worker_handle and self.worker_runtime:
+                    search_execution = self.search_provider.execute_with_checkpoint(
+                        query_text,
+                        max_results=10,
+                        checkpoint=(
+                            dict(checkpoint.get("active_search_state") or {})
+                            if int(checkpoint.get("active_query_index") or 0) == index
+                            else {}
+                        ),
+                    )
+                    search_artifact_paths = {
+                        str(key): dict(value)
+                        for key, value in dict(checkpoint.get("search_artifact_paths") or {}).items()
+                        if str(key).strip()
+                    }
+                    query_artifact_paths = dict(search_artifact_paths.get(str(index)) or {})
+                    for artifact in list(search_execution.artifacts or []):
+                        artifact_path = _write_search_execution_artifact(
+                            logger=logger,
+                            artifact=artifact,
+                            default_path=raw_search_path,
+                            asset_type="exploration_search_queue_payload",
+                            source_kind="further_exploration",
+                            metadata={
+                                "candidate_id": candidate.candidate_id,
+                                "query": query_text,
+                                "provider_name": search_execution.provider_name,
+                            },
+                        )
+                        query_artifact_paths[str(getattr(artifact, "label", "artifact") or "artifact")] = str(artifact_path)
+                    if query_artifact_paths:
+                        search_artifact_paths[str(index)] = query_artifact_paths
+                    checkpoint = {
+                        **checkpoint,
+                        "active_query_index": index,
+                        "active_query_text": query_text,
+                        "active_search_state": dict(search_execution.checkpoint or {}),
+                        "search_artifact_paths": search_artifact_paths,
+                    }
+                    if search_execution.pending:
+                        summary = {
+                            "candidate_id": candidate.candidate_id,
+                            "display_name": candidate.display_name,
+                            "queries": result_summaries,
+                            "signals": gathered_signals,
+                            "status": "queued",
+                            "active_query_index": index,
+                            "active_query_text": query_text,
+                            "search_state": dict(search_execution.checkpoint or {}),
+                            "search_artifact_paths": query_artifact_paths,
+                            "message": str(search_execution.message or ""),
+                        }
+                        self.worker_runtime.complete_worker(
+                            worker_handle,
+                            status="queued",
+                            checkpoint_payload={**checkpoint, "stage": "waiting_remote_search"},
+                            output_payload={
+                                "queued_query_index": index,
+                                "candidate": candidate.to_record(),
+                                "evidence": [],
+                                "summary": summary,
+                                "errors": errors,
+                            },
+                        )
+                        return {
+                            "candidate": candidate,
+                            "evidence": [],
+                            "summary": summary,
+                            "errors": errors,
+                            "worker_status": "queued",
+                        }
+                    response = search_execution.response
+                    if response is None:
+                        raise RuntimeError("Search provider returned no response.")
+                else:
+                    response = self.search_provider.search(query_text, max_results=10)
                 raw_search_path = candidate_dir / f"query_{index:02d}.{ 'json' if response.raw_format == 'json' else 'html'}"
                 if response.raw_format == "json":
                     logger.write_json(
@@ -275,7 +361,17 @@ class ExploratoryWebEnricher:
                         },
                     )
                 results = [item.to_record() for item in response.results]
+                checkpoint = {
+                    key: value
+                    for key, value in checkpoint.items()
+                    if key not in {"active_query_index", "active_query_text", "active_search_state"}
+                }
             except Exception as exc:
+                checkpoint = {
+                    key: value
+                    for key, value in checkpoint.items()
+                    if key not in {"active_query_index", "active_query_text", "active_search_state"}
+                }
                 errors.append(f"exploration_search:{candidate.display_name}:{str(exc)[:120]}")
                 result_summaries.append({"query": query_text, "raw_path": str(raw_search_path), "error": str(exc)})
                 continue
@@ -356,6 +452,7 @@ class ExploratoryWebEnricher:
                 self.worker_runtime.checkpoint_worker(
                     worker_handle,
                     checkpoint_payload={
+                        **checkpoint,
                         "completed_queries": sorted(completed_queries),
                         "result_summaries": result_summaries,
                         "gathered_signals": gathered_signals,
@@ -429,6 +526,8 @@ def extract_page_signals(html_text: str, base_url: str) -> dict[str, Any]:
 
 def _build_exploration_queries(candidate: Candidate, target_company: str) -> list[str]:
     name = candidate.display_name or candidate.name_en
+    metadata = dict(candidate.metadata or {})
+    publication_title = str(metadata.get("publication_title") or "").strip()
     queries = [
         f'"{name}" "{target_company}"',
         f'"{name}" "{target_company}" site:linkedin.com/in',
@@ -438,12 +537,47 @@ def _build_exploration_queries(candidate: Candidate, target_company: str) -> lis
         f'"{name}" "{target_company}" CV',
         f'"{name}" "{target_company}" homepage',
     ]
+    if publication_title:
+        queries.extend(
+            [
+                f'"{name}" "{publication_title}"',
+                f'"{name}" "{publication_title}" "{target_company}"',
+                f'"{name}" "{publication_title}" author',
+            ]
+        )
     deduped: list[str] = []
     for query in queries:
         normalized = " ".join(query.split())
         if normalized and normalized not in deduped:
             deduped.append(normalized)
     return deduped
+
+
+def _write_search_execution_artifact(
+    *,
+    logger: AssetLogger,
+    artifact,
+    default_path: Path,
+    asset_type: str,
+    source_kind: str,
+    metadata: dict[str, Any] | None = None,
+) -> Path:
+    raw_path = default_path.with_name(f"{default_path.stem}_{str(getattr(artifact, 'label', 'artifact') or 'artifact')}.json")
+    logger.write_json(
+        raw_path,
+        getattr(artifact, "payload", {}),
+        asset_type=asset_type,
+        source_kind=source_kind,
+        is_raw_asset=True,
+        model_safe=False,
+        metadata={
+            **dict(metadata or {}),
+            **dict(getattr(artifact, "metadata", {}) or {}),
+        },
+    )
+    return raw_path
+
+
 def _is_fetchable_detail_page(url: str) -> bool:
     url = str(url or "").strip().lower()
     if not url.startswith("http"):

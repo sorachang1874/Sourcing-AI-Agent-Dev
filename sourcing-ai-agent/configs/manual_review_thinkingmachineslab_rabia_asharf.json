@@ -1,0 +1,36 @@
+{
+  "apply_resolution": true,
+  "fetch_assets": false,
+  "action": "resolved",
+  "reviewer": "user_manual_review",
+  "notes": "Manual review rejects Rabia Asharf as a non-member. The profile is internally inconsistent and highly implausible for a legitimate Thinking Machines Lab affiliation.",
+  "target_company": "Thinking Machines Lab",
+  "candidate_id": "76185c3942a044d0",
+  "candidate_name": "Rabia Asharf",
+  "candidate_patch": {
+    "category": "non_member",
+    "employment_status": "",
+    "organization": "University of Agriculture, Faisalabad",
+    "role": "DPL at University of Agriculture, Faisalabad",
+    "linkedin_url": "https://www.linkedin.com/in/rabia-asharf-7a2b26245",
+    "media_url": "",
+    "metadata": {
+      "target_company_mismatch": true,
+      "membership_review_required": false,
+      "membership_review_reason": "",
+      "membership_review_decision": "manual_non_member",
+      "membership_review_confidence": "high",
+      "membership_review_rationale": "Manual review marked this profile as a non-member because the claimed Thinking Machines Lab/OpenAI/Microsoft trajectory is implausible and inconsistent with the rest of the profile.",
+      "membership_review_triggers": [],
+      "membership_review_trigger_keywords": []
+    }
+  },
+  "source_links": [
+    {
+      "label": "LinkedIn",
+      "url": "https://www.linkedin.com/in/rabia-asharf-7a2b26245",
+      "source_type": "manual_review_link",
+      "notes": "Profile reviewed manually and rejected as a legitimate Thinking Machines Lab member."
+    }
+  ]
+}

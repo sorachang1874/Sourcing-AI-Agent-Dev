@@ -5,8 +5,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=sorachang
-WorkingDirectory=/home/sorachang/projects/Sourcing AI Agent Dev/sourcing-ai-agent
+User=<SERVICE_USER>
+WorkingDirectory=/path/to/sourcing-ai-agent
 Environment=PYTHONPATH=src
 Environment=PYTHONUNBUFFERED=1
 ExecStart=/usr/bin/env python3 -m sourcing_agent.cli run-worker-daemon-service --service-name worker-recovery-daemon --poll-seconds 5 --lease-seconds 300 --stale-after-seconds 180 --total-limit 4
