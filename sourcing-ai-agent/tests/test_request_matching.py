@@ -43,3 +43,52 @@ class RequestMatchingTest(unittest.TestCase):
         score = request_family_score(left, right)
         self.assertFalse(score["exact_family_match"])
         self.assertLess(score["score"], 50.0)
+
+    def test_family_signature_distinguishes_asset_view(self) -> None:
+        left = {
+            "target_company": "xAI",
+            "asset_view": "canonical_merged",
+            "categories": ["employee"],
+            "employment_statuses": ["current"],
+            "keywords": ["systems"],
+        }
+        right = {
+            "target_company": "xAI",
+            "asset_view": "strict_roster_only",
+            "categories": ["employee"],
+            "employment_statuses": ["current"],
+            "keywords": ["systems"],
+        }
+        self.assertNotEqual(request_signature(left), request_signature(right))
+        self.assertNotEqual(request_family_signature(left), request_family_signature(right))
+        score = request_family_score(left, right)
+        self.assertFalse(score["exact_family_match"])
+        self.assertLess(score["score"], 70.0)
+
+    def test_family_signature_normalizes_must_have_facet_aliases(self) -> None:
+        left = {
+            "target_company": "xAI",
+            "must_have_facet": "multimodality",
+            "categories": ["employee"],
+        }
+        right = {
+            "target_company": "xAI",
+            "must_have_facets": ["multimodal"],
+            "categories": ["employee"],
+        }
+        self.assertEqual(request_signature(left), request_signature(right))
+        self.assertEqual(request_family_signature(left), request_family_signature(right))
+
+    def test_family_signature_normalizes_primary_role_bucket_aliases(self) -> None:
+        left = {
+            "target_company": "xAI",
+            "must_have_primary_role_bucket": "infra",
+            "categories": ["employee"],
+        }
+        right = {
+            "target_company": "xAI",
+            "must_have_primary_role_buckets": ["infra_systems"],
+            "categories": ["employee"],
+        }
+        self.assertEqual(request_signature(left), request_signature(right))
+        self.assertEqual(request_family_signature(left), request_family_signature(right))

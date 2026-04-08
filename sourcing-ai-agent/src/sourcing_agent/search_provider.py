@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import base64
 from html import unescape
+from html.parser import HTMLParser
 import json
 import os
 from pathlib import Path
@@ -13,8 +15,19 @@ from urllib import parse
 
 import requests
 
+from .dataforseo_client import (
+    DataForSeoGoogleOrganicClient,
+    extract_google_organic_ready_task_ids,
+    extract_google_organic_result_block,
+    extract_google_organic_task_ids,
+)
 from .settings import SearchProviderSettings
 from .web_fetch import DEFAULT_HEADERS, fetch_search_results_html
+
+_SHARED_LIBRARY_PACKAGE_HINTS = {
+    "libnspr4.so": "libnspr4",
+    "libnss3.so": "libnss3",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,6 +58,26 @@ class SearchResponse:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass(frozen=True, slots=True)
+class SearchExecutionArtifact:
+    label: str
+    payload: Any
+    raw_format: str = "json"
+    content_type: str = "application/json"
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class SearchExecutionResult:
+    provider_name: str
+    query_text: str
+    response: SearchResponse | None = None
+    checkpoint: dict[str, Any] = field(default_factory=dict)
+    pending: bool = False
+    message: str = ""
+    artifacts: list[SearchExecutionArtifact] = field(default_factory=list)
+
+
 class SearchProviderError(RuntimeError):
     def __init__(self, message: str, *, attempts: list[dict[str, str]] | None = None) -> None:
         super().__init__(message)
@@ -56,6 +89,25 @@ class BaseSearchProvider:
 
     def search(self, query_text: str, *, max_results: int = 10, timeout: int | None = None) -> SearchResponse:
         raise NotImplementedError
+
+    def execute_with_checkpoint(
+        self,
+        query_text: str,
+        *,
+        max_results: int = 10,
+        timeout: int | None = None,
+        checkpoint: dict[str, Any] | None = None,
+    ) -> SearchExecutionResult:
+        response = self.search(query_text, max_results=max_results, timeout=timeout)
+        return SearchExecutionResult(
+            provider_name=self.provider_name,
+            query_text=query_text,
+            response=response,
+            checkpoint={
+                "provider_name": self.provider_name,
+                "status": "completed",
+            },
+        )
 
 
 class DuckDuckGoHtmlSearchProvider(BaseSearchProvider):
@@ -76,6 +128,37 @@ class DuckDuckGoHtmlSearchProvider(BaseSearchProvider):
             final_url=fetched.final_url,
             content_type=fetched.content_type,
             metadata={"source_label": fetched.source_label},
+        )
+
+
+class BingHtmlSearchProvider(BaseSearchProvider):
+    provider_name = "bing_html"
+
+    def __init__(self, *, timeout_seconds: int = 30) -> None:
+        self.timeout_seconds = timeout_seconds
+
+    def search(self, query_text: str, *, max_results: int = 10, timeout: int | None = None) -> SearchResponse:
+        response = requests.get(
+            "https://www.bing.com/search",
+            headers={"User-Agent": "Mozilla/5.0"},
+            params={
+                "q": query_text,
+                "count": max(1, min(int(max_results or 10), 20)),
+                "setlang": "en-US",
+                "cc": "us",
+            },
+            timeout=timeout or self.timeout_seconds,
+        )
+        response.raise_for_status()
+        results = parse_bing_html_results(response.text)[:max_results]
+        return SearchResponse(
+            provider_name=self.provider_name,
+            query_text=query_text,
+            results=results,
+            raw_payload=response.text,
+            raw_format="html",
+            final_url=str(response.url),
+            content_type=str(response.headers.get("Content-Type") or "text/html"),
         )
 
 
@@ -112,6 +195,168 @@ class SerperGoogleSearchProvider(BaseSearchProvider):
             raw_format="json",
             final_url=self.base_url,
             content_type="application/json",
+        )
+
+
+class DataForSeoGoogleOrganicSearchProvider(BaseSearchProvider):
+    provider_name = "dataforseo_google_organic"
+
+    def __init__(
+        self,
+        *,
+        login: str,
+        password: str,
+        base_url: str = "https://api.dataforseo.com",
+        location_name: str = "United States",
+        language_name: str = "English",
+        device: str = "desktop",
+        os: str = "windows",
+        depth: int = 10,
+        timeout_seconds: int = 30,
+    ) -> None:
+        self.location_name = str(location_name or "United States").strip() or "United States"
+        self.language_name = str(language_name or "English").strip() or "English"
+        self.device = str(device or "desktop").strip() or "desktop"
+        self.os = str(os or "windows").strip() or "windows"
+        self.depth = max(1, int(depth or 10))
+        self.client = DataForSeoGoogleOrganicClient(
+            login=login,
+            password=password,
+            base_url=base_url,
+            timeout_seconds=timeout_seconds,
+        )
+
+    def search(self, query_text: str, *, max_results: int = 10, timeout: int | None = None) -> SearchResponse:
+        payload = self.client.live_regular(
+            keyword=query_text,
+            location_name=self.location_name,
+            language_name=self.language_name,
+            device=self.device,
+            os=self.os,
+            depth=max(self.depth, max(1, int(max_results or 10))),
+        )
+        result_block = extract_google_organic_result_block(payload)
+        results = parse_dataforseo_google_organic_results(payload)[:max_results]
+        return SearchResponse(
+            provider_name=self.provider_name,
+            query_text=query_text,
+            results=results,
+            raw_payload=payload,
+            raw_format="json",
+            final_url=str(result_block.get("check_url") or ""),
+            content_type="application/json",
+            metadata={
+                "source_label": "dataforseo_google_organic_live",
+                "se_results_count": result_block.get("se_results_count"),
+                "pages_count": result_block.get("pages_count"),
+                "items_count": result_block.get("items_count"),
+            },
+        )
+
+    def execute_with_checkpoint(
+        self,
+        query_text: str,
+        *,
+        max_results: int = 10,
+        timeout: int | None = None,
+        checkpoint: dict[str, Any] | None = None,
+    ) -> SearchExecutionResult:
+        existing = dict(checkpoint or {})
+        task_id = str(existing.get("task_id") or "").strip()
+        base_checkpoint = {
+            "provider_name": self.provider_name,
+            "query_text": query_text,
+            "mode": "dataforseo_standard_queue",
+            "location_name": self.location_name,
+            "language_name": self.language_name,
+            "device": self.device,
+            "os": self.os,
+            "depth": max(self.depth, max(1, int(max_results or 10))),
+        }
+        if not task_id:
+            payload = self.client.task_post(
+                keyword=query_text,
+                location_name=self.location_name,
+                language_name=self.language_name,
+                device=self.device,
+                os=self.os,
+                depth=max(self.depth, max(1, int(max_results or 10))),
+            )
+            task_ids = extract_google_organic_task_ids(payload)
+            task_id = task_ids[0] if task_ids else ""
+            updated_checkpoint = {
+                **base_checkpoint,
+                "task_id": task_id,
+                "status": "submitted",
+            }
+            return SearchExecutionResult(
+                provider_name=self.provider_name,
+                query_text=query_text,
+                checkpoint=updated_checkpoint,
+                pending=True,
+                message=f"Submitted DataForSEO Standard Queue task {task_id or 'unknown'}.",
+                artifacts=[
+                    SearchExecutionArtifact(
+                        label="task_post",
+                        payload=payload,
+                        metadata={"task_id": task_id, "provider_name": self.provider_name},
+                    )
+                ],
+            )
+
+        ready_payload = self.client.tasks_ready()
+        ready_ids = set(extract_google_organic_ready_task_ids(ready_payload))
+        artifacts = [
+            SearchExecutionArtifact(
+                label="tasks_ready",
+                payload=ready_payload,
+                metadata={"task_id": task_id, "provider_name": self.provider_name},
+            )
+        ]
+        if task_id not in ready_ids:
+            return SearchExecutionResult(
+                provider_name=self.provider_name,
+                query_text=query_text,
+                checkpoint={
+                    **base_checkpoint,
+                    "task_id": task_id,
+                    "status": "waiting_for_ready",
+                },
+                pending=True,
+                message=f"Waiting for DataForSEO task {task_id} to become ready.",
+                artifacts=artifacts,
+            )
+
+        payload = self.client.task_get_regular(task_id)
+        result_block = extract_google_organic_result_block(payload)
+        results = parse_dataforseo_google_organic_results(payload)[:max_results]
+        response = SearchResponse(
+            provider_name=self.provider_name,
+            query_text=query_text,
+            results=results,
+            raw_payload=payload,
+            raw_format="json",
+            final_url=str(result_block.get("check_url") or ""),
+            content_type="application/json",
+            metadata={
+                "source_label": "dataforseo_google_organic_task_get",
+                "search_mode": "standard_queue",
+                "task_id": task_id,
+                "se_results_count": result_block.get("se_results_count"),
+                "pages_count": result_block.get("pages_count"),
+                "items_count": result_block.get("items_count"),
+            },
+        )
+        return SearchExecutionResult(
+            provider_name=self.provider_name,
+            query_text=query_text,
+            response=response,
+            checkpoint={
+                **base_checkpoint,
+                "task_id": task_id,
+                "status": "completed",
+            },
+            artifacts=artifacts,
         )
 
 
@@ -190,8 +435,14 @@ class BrowserGoogleSearchProvider(BaseSearchProvider):
             raise SearchProviderError(f"Browser Google search timed out: {exc}") from exc
         if completed.returncode != 0:
             stderr = (completed.stderr or "").strip()
-            raise SearchProviderError(f"Browser Google search failed: {stderr or 'unknown error'}")
+            raise SearchProviderError(_format_browser_search_failure(stderr))
         payload = _parse_browser_provider_payload(completed.stdout)
+        metadata = dict(payload.get("metadata") or {})
+        if metadata.get("blocked"):
+            raise SearchProviderError(
+                "Browser Google search was blocked by Google CAPTCHA. "
+                f"Final URL: {str(payload.get('final_url') or 'unknown')}"
+            )
         results = [
             SearchResultItem(
                 title=str(item.get("title") or "").strip(),
@@ -210,7 +461,7 @@ class BrowserGoogleSearchProvider(BaseSearchProvider):
             raw_format="json",
             final_url=str(payload.get("final_url") or ""),
             content_type="application/json",
-            metadata=dict(payload.get("metadata") or {}),
+            metadata=metadata,
         )
 
 
@@ -233,11 +484,56 @@ class SearchProviderChain(BaseSearchProvider):
             raise SearchProviderError("No search providers are configured.", attempts=attempts)
         raise SearchProviderError(str(last_error), attempts=attempts)
 
+    def execute_with_checkpoint(
+        self,
+        query_text: str,
+        *,
+        max_results: int = 10,
+        timeout: int | None = None,
+        checkpoint: dict[str, Any] | None = None,
+    ) -> SearchExecutionResult:
+        attempts: list[dict[str, str]] = []
+        last_error: Exception | None = None
+        provider_name = str((checkpoint or {}).get("provider_name") or "").strip()
+        if provider_name:
+            pinned = next((provider for provider in self.providers if provider.provider_name == provider_name), None)
+            if pinned is not None:
+                try:
+                    return pinned.execute_with_checkpoint(
+                        query_text,
+                        max_results=max_results,
+                        timeout=timeout,
+                        checkpoint=checkpoint,
+                    )
+                except Exception as exc:
+                    last_error = exc
+                    attempts.append({"provider_name": provider_name, "error": str(exc)})
+                    raise SearchProviderError(str(exc), attempts=attempts)
+        for provider in self.providers:
+            try:
+                return provider.execute_with_checkpoint(
+                    query_text,
+                    max_results=max_results,
+                    timeout=timeout,
+                    checkpoint={},
+                )
+            except Exception as exc:
+                last_error = exc
+                attempts.append({"provider_name": getattr(provider, "provider_name", "unknown"), "error": str(exc)})
+        if last_error is None:
+            raise SearchProviderError("No search providers are configured.", attempts=attempts)
+        raise SearchProviderError(str(last_error), attempts=attempts)
+
 
 def build_search_provider(settings: SearchProviderSettings) -> BaseSearchProvider:
     providers: list[BaseSearchProvider] = []
-    for provider_name in settings.provider_order:
-        normalized = str(provider_name or "").strip().lower()
+    provider_order = [str(item or "").strip().lower() for item in settings.provider_order if str(item or "").strip()]
+    if settings.enable_bing_html and "bing_html" not in provider_order:
+        if "duckduckgo_html" in provider_order:
+            provider_order.insert(provider_order.index("duckduckgo_html"), "bing_html")
+        else:
+            provider_order.append("bing_html")
+    for normalized in provider_order:
         if not normalized:
             continue
         if normalized == "serper_google" and settings.serper_api_key:
@@ -245,6 +541,25 @@ def build_search_provider(settings: SearchProviderSettings) -> BaseSearchProvide
                 SerperGoogleSearchProvider(
                     api_key=settings.serper_api_key,
                     base_url=settings.serper_base_url,
+                    timeout_seconds=settings.timeout_seconds,
+                )
+            )
+        elif (
+            normalized == "dataforseo_google_organic"
+            and settings.enable_dataforseo_google_organic
+            and settings.dataforseo_login
+            and settings.dataforseo_password
+        ):
+            providers.append(
+                DataForSeoGoogleOrganicSearchProvider(
+                    login=settings.dataforseo_login,
+                    password=settings.dataforseo_password,
+                    base_url=settings.dataforseo_base_url,
+                    location_name=settings.dataforseo_default_location_name,
+                    language_name=settings.dataforseo_default_language_name,
+                    device=settings.dataforseo_default_device,
+                    os=settings.dataforseo_default_os,
+                    depth=settings.dataforseo_default_depth,
                     timeout_seconds=settings.timeout_seconds,
                 )
             )
@@ -262,6 +577,8 @@ def build_search_provider(settings: SearchProviderSettings) -> BaseSearchProvide
                     timeout_seconds=settings.timeout_seconds,
                 )
             )
+        elif normalized == "bing_html" and settings.enable_bing_html:
+            providers.append(BingHtmlSearchProvider(timeout_seconds=settings.timeout_seconds))
         elif normalized == "duckduckgo_html" and settings.enable_duckduckgo_html:
             providers.append(DuckDuckGoHtmlSearchProvider(timeout_seconds=settings.timeout_seconds))
     if not providers:
@@ -324,6 +641,29 @@ def parse_duckduckgo_html_results(html_text: str) -> list[SearchResultItem]:
     return results
 
 
+def parse_bing_html_results(html_text: str) -> list[SearchResultItem]:
+    parser = _BingHtmlResultsParser()
+    parser.feed(str(html_text or ""))
+    if parser.results:
+        return parser.results
+    results: list[SearchResultItem] = []
+    seen_urls: set[str] = set()
+    pattern = re.compile(r'<h2[^>]*>\s*<a[^>]*href="([^"]+)"[^>]*>(.*?)</a>\s*</h2>', re.DOTALL)
+    for raw_url, raw_title in pattern.findall(str(html_text or "")):
+        url = _decode_bing_result_url(raw_url)
+        title = _strip_html(raw_title)
+        if not title or not url or url in seen_urls:
+            continue
+        seen_urls.add(url)
+        metadata: dict[str, Any] = {}
+        try:
+            metadata["source_domain"] = parse.urlparse(url).hostname or ""
+        except Exception:
+            metadata["source_domain"] = ""
+        results.append(SearchResultItem(title=title, url=url, snippet="", metadata=metadata))
+    return results
+
+
 def parse_serper_search_results(payload: dict[str, Any]) -> list[SearchResultItem]:
     results: list[SearchResultItem] = []
     for item in list(payload.get("organic") or []):
@@ -346,9 +686,139 @@ def parse_serper_search_results(payload: dict[str, Any]) -> list[SearchResultIte
     return results
 
 
+def parse_dataforseo_google_organic_results(payload: dict[str, Any]) -> list[SearchResultItem]:
+    result_block = extract_google_organic_result_block(payload)
+    results: list[SearchResultItem] = []
+    for item in list(result_block.get("items") or []):
+        if str(item.get("type") or "").strip().lower() != "organic":
+            continue
+        title = str(item.get("title") or "").strip()
+        url = str(item.get("url") or "").strip()
+        snippet = str(item.get("description") or "").strip()
+        if not title or not url:
+            continue
+        results.append(
+            SearchResultItem(
+                title=title,
+                url=url,
+                snippet=snippet,
+                metadata={
+                    "rank_group": item.get("rank_group"),
+                    "rank_absolute": item.get("rank_absolute"),
+                    "page": item.get("page"),
+                    "domain": str(item.get("domain") or "").strip(),
+                    "breadcrumb": str(item.get("breadcrumb") or "").strip(),
+                },
+            )
+        )
+    return results
+
+
+def _decode_bing_result_url(raw_url: str) -> str:
+    url = unescape(str(raw_url or "").strip())
+    if not url:
+        return ""
+    try:
+        parsed = parse.urlparse(url)
+    except Exception:
+        return url
+    if parsed.netloc.endswith("bing.com") and parsed.path.startswith("/ck/a"):
+        encoded_target = (parse.parse_qs(parsed.query).get("u") or [""])[0]
+        if encoded_target.startswith("a1"):
+            encoded_target = encoded_target[2:]
+        if encoded_target:
+            padded = encoded_target + ("=" * (-len(encoded_target) % 4))
+            try:
+                decoded = base64.b64decode(padded).decode("utf-8", errors="ignore").strip()
+            except Exception:
+                decoded = ""
+            if decoded.startswith("http"):
+                return decoded
+    return url
+
+
 def _strip_html(value: str) -> str:
     text = re.sub(r"<[^>]+>", " ", str(value or ""))
     return " ".join(unescape(text).split())
+
+
+class _BingHtmlResultsParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.results: list[SearchResultItem] = []
+        self._result_depth = 0
+        self._in_h2 = False
+        self._in_title_link = False
+        self._in_snippet = False
+        self._current_href = ""
+        self._current_title: list[str] = []
+        self._current_snippet: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attr_map = {key: value or "" for key, value in attrs}
+        class_names = set((attr_map.get("class") or "").split())
+        if tag == "li" and "b_algo" in class_names:
+            if self._result_depth == 0:
+                self._current_href = ""
+                self._current_title = []
+                self._current_snippet = []
+                self._in_h2 = False
+                self._in_title_link = False
+                self._in_snippet = False
+            self._result_depth += 1
+            return
+        if self._result_depth == 0:
+            return
+        if tag == "li":
+            self._result_depth += 1
+            return
+        if tag == "h2":
+            self._in_h2 = True
+            return
+        if tag == "a" and self._in_h2 and not self._current_href:
+            self._current_href = attr_map.get("href", "")
+            self._in_title_link = True
+            return
+        if tag == "p" and not self._current_snippet:
+            self._in_snippet = True
+
+    def handle_endtag(self, tag: str) -> None:
+        if self._result_depth == 0:
+            return
+        if tag == "a" and self._in_title_link:
+            self._in_title_link = False
+            return
+        if tag == "h2":
+            self._in_h2 = False
+            return
+        if tag == "p" and self._in_snippet:
+            self._in_snippet = False
+            return
+        if tag == "li":
+            self._result_depth -= 1
+            if self._result_depth == 0:
+                self._flush_result()
+
+    def handle_data(self, data: str) -> None:
+        if self._result_depth == 0:
+            return
+        if self._in_title_link:
+            self._current_title.append(data)
+        elif self._in_snippet:
+            self._current_snippet.append(data)
+
+    def _flush_result(self) -> None:
+        url = _decode_bing_result_url(self._current_href)
+        title = " ".join(part.strip() for part in self._current_title if part.strip())
+        snippet = " ".join(part.strip() for part in self._current_snippet if part.strip())
+        if not title or not url:
+            return
+        metadata: dict[str, Any] = {}
+        try:
+            metadata["source_domain"] = parse.urlparse(url).hostname or ""
+        except Exception:
+            metadata["source_domain"] = ""
+        self.results.append(SearchResultItem(title=title, url=url, snippet=snippet, metadata=metadata))
 
 
 def _parse_browser_provider_payload(stdout_text: str) -> dict[str, Any]:
@@ -359,3 +829,42 @@ def _parse_browser_provider_payload(stdout_text: str) -> dict[str, Any]:
         return json.loads(text)
     except json.JSONDecodeError as exc:
         raise SearchProviderError(f"Browser Google search returned invalid JSON: {text[:200]}") from exc
+
+
+def _format_browser_search_failure(stderr_text: str) -> str:
+    text = str(stderr_text or "").strip()
+    if not text:
+        return "Browser Google search failed: unknown error"
+    missing_library = _extract_missing_shared_library(text)
+    if missing_library:
+        message = f"Browser Google search failed because Chromium is missing shared library `{missing_library}`."
+        hinted_package = _SHARED_LIBRARY_PACKAGE_HINTS.get(missing_library)
+        if hinted_package:
+            message += f" Install it first, for example on Debian/Ubuntu: `sudo apt-get install -y {hinted_package}`."
+        else:
+            message += " Install the corresponding system package before retrying."
+        message += " If this machine stays minimal, move the browser-search lane to a fuller Linux/server environment."
+        return message
+    if "Host system is missing dependencies" in text or "Missing libraries:" in text:
+        return (
+            "Browser Google search failed because Playwright/Chromium host dependencies are missing. "
+            "Install the required system libraries, for example on Debian/Ubuntu: "
+            "`sudo apt-get install -y libnspr4 libnss3`, or move this lane to a fuller Linux/server environment."
+        )
+    return f"Browser Google search failed: {text}"
+
+
+def _extract_missing_shared_library(stderr_text: str) -> str:
+    patterns = (
+        r"error while loading shared libraries:\s*(lib[^\s:]+\.so(?:\.\d+)*)",
+        r"cannot open shared object file:\s*(lib[^\s:]+\.so(?:\.\d+)*)",
+        r"Missing libraries:\s*(lib[^\s,]+\.so(?:\.\d+)*)",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, stderr_text, re.IGNORECASE)
+        if match:
+            return str(match.group(1)).strip()
+    generic_match = re.search(r"(lib[^\s:]+\.so(?:\.\d+)*)", stderr_text)
+    if generic_match:
+        return str(generic_match.group(1)).strip()
+    return ""

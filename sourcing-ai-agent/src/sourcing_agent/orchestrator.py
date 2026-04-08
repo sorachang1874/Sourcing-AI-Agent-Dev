@@ -1,17 +1,21 @@
 from __future__ import annotations
 
+from collections import defaultdict
 import json
 from pathlib import Path
 import threading
+import time
 import uuid
 from typing import Any
 
 from .acquisition import AcquisitionEngine
 from .agent_runtime import AgentRuntimeCoordinator
 from .asset_catalog import AssetCatalog
+from .candidate_artifacts import CandidateArtifactError, load_company_snapshot_candidate_documents
+from .connectors import CompanyIdentity
 from .confidence_policy import apply_policy_control, build_confidence_policy
 from .criteria_evolution import CriteriaEvolutionEngine
-from .domain import JobRequest
+from .domain import JobRequest, derive_candidate_facets, derive_candidate_role_bucket
 from .ingestion import load_bootstrap_bundle
 from .manual_review import build_manual_review_items
 from .manual_review_resolution import apply_manual_review_resolution
@@ -46,6 +50,7 @@ class SourcingOrchestrator:
         self.store = store
         self.jobs_dir = Path(jobs_dir)
         self.jobs_dir.mkdir(parents=True, exist_ok=True)
+        self.runtime_dir = self.jobs_dir.parent
         self.model_client = model_client
         self.semantic_provider = semantic_provider
         self.acquisition_engine = acquisition_engine
@@ -240,28 +245,41 @@ class SourcingOrchestrator:
             limit=int(payload.get("limit") or 100),
             stale_after_seconds=int(payload.get("stale_after_seconds") or 180),
             lane_id=str(payload.get("lane_id") or ""),
+            job_id=str(payload.get("job_id") or ""),
         )
         return {
             "recoverable_workers": workers,
             "count": len(workers),
             "stale_after_seconds": int(payload.get("stale_after_seconds") or 180),
             "lane_id": str(payload.get("lane_id") or ""),
+            "job_id": str(payload.get("job_id") or ""),
         }
 
     def run_worker_recovery_once(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = dict(payload or {})
         daemon = self._build_worker_recovery_daemon(payload)
         summary = daemon.run_once()
-        return {"status": "completed", "daemon": summary}
+        workflow_resume = self._resume_blocked_workflows_after_recovery(
+            summary,
+            explicit_job_id=str(payload.get("job_id") or ""),
+        )
+        return {"status": "completed", "daemon": summary, "workflow_resume": workflow_resume}
 
     def run_worker_recovery_forever(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = dict(payload or {})
-        daemon = self._build_worker_recovery_daemon(payload)
-        summary = daemon.run_forever(
-            poll_seconds=float(payload.get("poll_seconds") or 5.0),
-            max_ticks=int(payload.get("max_ticks") or 0),
-        )
-        return {"status": "completed", "daemon": summary}
+        owner_id = str(payload.get("owner_id") or f"recovery-daemon-{uuid.uuid4().hex[:8]}")
+        poll_seconds = max(0.1, float(payload.get("poll_seconds") or 5.0))
+        max_ticks = int(payload.get("max_ticks") or 0)
+        tick = 0
+        last_result: dict[str, Any] = {"status": "completed", "daemon": {}, "workflow_resume": []}
+        while True:
+            tick += 1
+            last_result = self.run_worker_recovery_once({**payload, "owner_id": owner_id})
+            last_result["tick"] = tick
+            if max_ticks > 0 and tick >= max_ticks:
+                break
+            time.sleep(poll_seconds)
+        return last_result
 
     def run_worker_daemon_service(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = dict(payload or {})
@@ -315,6 +333,7 @@ class SourcingOrchestrator:
             lease_seconds=int(payload.get("lease_seconds") or 300),
             stale_after_seconds=int(payload.get("stale_after_seconds") or 180),
             total_limit=int(payload.get("total_limit") or 4),
+            job_id=str(payload.get("job_id") or ""),
         )
 
     def _build_worker_daemon_service(self, payload: dict[str, Any]) -> WorkerDaemonService:
@@ -651,103 +670,220 @@ class SourcingOrchestrator:
                     output_payload={"intent_summary": plan.intent_summary},
                     handoff_to_lane="acquisition_specialist",
                 )
-
-            bootstrap_summary = None
-            acquisition_state: dict[str, Any] = {
-                "job_id": job_id,
-                "plan_payload": plan.to_record(),
-                "runtime_mode": "workflow",
-            }
-            current_stage = "acquiring"
-            self.store.save_job(
-                job_id=job_id,
-                job_type="workflow",
-                status="running",
-                stage=current_stage,
-                request_payload=request.to_record(),
-                plan_payload=plan.to_record(),
-                summary_payload={"message": "Running acquisition tasks"},
-            )
-            for task in plan.acquisition_tasks:
-                if request.target_company.strip().lower() == "anthropic" and task.task_type == "acquire_full_roster":
-                    bootstrap_summary = self.ensure_bootstrapped()
-                lane_id = _lane_for_task(task, plan.to_record())
-                with self.agent_runtime.traced_lane(
-                    job_id=job_id,
-                    request=request,
-                    plan_payload=plan.to_record(),
-                    runtime_mode="workflow",
-                    lane_id=lane_id,
-                    span_name=task.task_type,
-                    stage="acquiring",
-                    input_payload={"task": task.to_record()},
-                    handoff_from_lane="triage_planner",
-                ) as task_span:
-                    execution = self.acquisition_engine.execute_task(
-                        task,
-                        request,
-                        request.target_company,
-                        acquisition_state,
-                        bootstrap_summary,
-                    )
-                    self.agent_runtime.complete_span(
-                        task_span,
-                        status=execution.status,
-                        output_payload=execution.payload,
-                        handoff_to_lane="enrichment_specialist" if task.task_type == "acquire_full_roster" else "",
-                    )
-                acquisition_state.update(execution.state_updates)
-                self.store.append_job_event(
-                    job_id,
-                    stage=current_stage,
-                    status=execution.status,
-                    detail=f"{task.title}: {execution.detail}",
-                    payload=execution.payload,
-                )
-                if execution.status == "blocked" and task.blocking:
-                    summary = {
-                        "message": execution.detail,
-                        "blocked_task": task.task_type,
-                    }
-                    self.store.save_job(
-                        job_id=job_id,
-                        job_type="workflow",
-                        status="blocked",
-                        stage="acquiring",
-                        request_payload=request.to_record(),
-                        plan_payload=plan.to_record(),
-                        summary_payload=summary,
-                    )
-                    self.store.update_agent_runtime_session_status(job_id, "blocked")
-                    return
-
-            current_stage = "retrieving"
-            self.store.save_job(
-                job_id=job_id,
-                job_type="workflow",
-                status="running",
-                stage=current_stage,
-                request_payload=request.to_record(),
-                plan_payload=plan.to_record(),
-                summary_payload={"message": "Retrieving candidates"},
-            )
-            self.store.append_job_event(job_id, "retrieving", "running", "Retrieval stage started.")
-            artifact = self._execute_retrieval(job_id, request, plan, job_type="workflow")
-            self.store.update_agent_runtime_session_status(job_id, "completed")
-            self.store.append_job_event(job_id, "completed", "completed", "Workflow completed.", artifact.get("summary", {}))
+            self._run_workflow_from_acquisition(job_id, request, plan)
         except Exception as exc:
-            failure_summary = {"error": str(exc)}
-            self.store.save_job(
+            self._mark_workflow_failed(job_id, request, plan, exc)
+
+    def _run_workflow_from_acquisition(
+        self,
+        job_id: str,
+        request: JobRequest,
+        plan,
+        *,
+        resume_mode: bool = False,
+    ) -> dict[str, Any]:
+        bootstrap_summary = None
+        acquisition_state = self._build_acquisition_state(job_id, plan.to_record())
+        current_stage = "acquiring"
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="running",
+            stage=current_stage,
+            request_payload=request.to_record(),
+            plan_payload=plan.to_record(),
+            summary_payload={"message": "Resuming acquisition tasks" if resume_mode else "Running acquisition tasks"},
+        )
+        self.store.update_agent_runtime_session_status(job_id, "running")
+        if resume_mode:
+            self.store.append_job_event(job_id, "acquiring", "running", "Resuming blocked workflow after worker recovery.")
+        for task in plan.acquisition_tasks:
+            if request.target_company.strip().lower() == "anthropic" and task.task_type == "acquire_full_roster":
+                bootstrap_summary = self.ensure_bootstrapped()
+            lane_id = _lane_for_task(task, plan.to_record())
+            with self.agent_runtime.traced_lane(
                 job_id=job_id,
-                job_type="workflow",
-                status="failed",
-                stage="failed",
-                request_payload=request.to_record(),
+                request=request,
                 plan_payload=plan.to_record(),
-                summary_payload=failure_summary,
+                runtime_mode="workflow",
+                lane_id=lane_id,
+                span_name=task.task_type,
+                stage="acquiring",
+                input_payload={"task": task.to_record(), "resume_mode": resume_mode},
+                handoff_from_lane="triage_planner",
+            ) as task_span:
+                execution = self.acquisition_engine.execute_task(
+                    task,
+                    request,
+                    request.target_company,
+                    acquisition_state,
+                    bootstrap_summary,
+                )
+                self.agent_runtime.complete_span(
+                    task_span,
+                    status=execution.status,
+                    output_payload=execution.payload,
+                    handoff_to_lane="enrichment_specialist" if task.task_type == "acquire_full_roster" else "",
+                )
+            acquisition_state.update(execution.state_updates)
+            self.store.append_job_event(
+                job_id,
+                stage=current_stage,
+                status=execution.status,
+                detail=f"{task.title}: {execution.detail}",
+                payload=execution.payload,
             )
-            self.store.update_agent_runtime_session_status(job_id, "failed")
-            self.store.append_job_event(job_id, "failed", "failed", str(exc))
+            if execution.status == "blocked" and task.blocking:
+                summary = {
+                    "message": execution.detail,
+                    "blocked_task": task.task_type,
+                }
+                self.store.save_job(
+                    job_id=job_id,
+                    job_type="workflow",
+                    status="blocked",
+                    stage="acquiring",
+                    request_payload=request.to_record(),
+                    plan_payload=plan.to_record(),
+                    summary_payload=summary,
+                )
+                self.store.update_agent_runtime_session_status(job_id, "blocked")
+                return {
+                    "status": "blocked",
+                    "blocked_task": task.task_type,
+                    "detail": execution.detail,
+                }
+
+        current_stage = "retrieving"
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="running",
+            stage=current_stage,
+            request_payload=request.to_record(),
+            plan_payload=plan.to_record(),
+            summary_payload={"message": "Retrieving candidates"},
+        )
+        self.store.append_job_event(job_id, "retrieving", "running", "Retrieval stage started.")
+        artifact = self._execute_retrieval(job_id, request, plan, job_type="workflow")
+        self.store.update_agent_runtime_session_status(job_id, "completed")
+        self.store.append_job_event(job_id, "completed", "completed", "Workflow completed.", artifact.get("summary", {}))
+        return {
+            "status": "completed",
+            "artifact": artifact,
+        }
+
+    def _build_acquisition_state(self, job_id: str, plan_payload: dict[str, Any]) -> dict[str, Any]:
+        state: dict[str, Any] = {
+            "job_id": job_id,
+            "plan_payload": plan_payload,
+            "runtime_mode": "workflow",
+        }
+        workers = self.agent_runtime.list_workers(job_id=job_id)
+        for worker in workers:
+            metadata = dict(worker.get("metadata") or {})
+            snapshot_dir = str(metadata.get("snapshot_dir") or "").strip()
+            if snapshot_dir:
+                snapshot_path = Path(snapshot_dir).expanduser()
+                state["snapshot_dir"] = snapshot_path
+                state["snapshot_id"] = snapshot_path.name
+            identity_payload = dict(metadata.get("identity") or {})
+            if identity_payload:
+                try:
+                    state["company_identity"] = CompanyIdentity(**identity_payload)
+                except TypeError:
+                    pass
+            if "snapshot_dir" in state and "company_identity" in state:
+                break
+        return state
+
+    def _resume_blocked_workflows_after_recovery(
+        self,
+        daemon_summary: dict[str, Any],
+        *,
+        explicit_job_id: str = "",
+    ) -> list[dict[str, Any]]:
+        candidate_job_ids = {
+            str(item.get("job_id") or "").strip()
+            for item in list(daemon_summary.get("jobs") or [])
+            if str(item.get("job_id") or "").strip()
+        }
+        if explicit_job_id.strip():
+            candidate_job_ids.add(explicit_job_id.strip())
+        results: list[dict[str, Any]] = []
+        for job_id in sorted(candidate_job_ids):
+            results.append(self._resume_blocked_workflow_if_ready(job_id))
+        return results
+
+    def _resume_blocked_workflow_if_ready(self, job_id: str) -> dict[str, Any]:
+        job = self.store.get_job(job_id)
+        if job is None:
+            return {"job_id": job_id, "status": "not_found"}
+        if str(job.get("job_type") or "") != "workflow":
+            return {"job_id": job_id, "status": "skipped", "reason": "not_workflow_job"}
+        if str(job.get("status") or "") != "blocked" or str(job.get("stage") or "") != "acquiring":
+            return {"job_id": job_id, "status": "skipped", "reason": "job_not_blocked_in_acquisition"}
+        blocked_task = str(dict(job.get("summary") or {}).get("blocked_task") or "")
+        if not blocked_task:
+            return {"job_id": job_id, "status": "skipped", "reason": "blocked_task_missing"}
+
+        workers = self.agent_runtime.list_workers(job_id=job_id)
+        if not workers:
+            return {"job_id": job_id, "status": "skipped", "reason": "no_workers"}
+        pending_workers = [
+            {
+                "worker_id": int(worker.get("worker_id") or 0),
+                "lane_id": str(worker.get("lane_id") or ""),
+                "worker_key": str(worker.get("worker_key") or ""),
+                "status": str(worker.get("status") or ""),
+            }
+            for worker in workers
+            if str(worker.get("status") or "") != "completed"
+        ]
+        if pending_workers:
+            return {
+                "job_id": job_id,
+                "status": "waiting",
+                "reason": "pending_workers_remaining",
+                "pending_worker_count": len(pending_workers),
+                "pending_workers": pending_workers[:10],
+            }
+
+        request = JobRequest.from_payload(dict(job.get("request") or {}))
+        plan = hydrate_sourcing_plan(dict(job.get("plan") or {}))
+        try:
+            resume_result = self._run_workflow_from_acquisition(job_id, request, plan, resume_mode=True)
+            latest_job = self.store.get_job(job_id) or {}
+            return {
+                "job_id": job_id,
+                "status": "resumed",
+                "blocked_task": blocked_task,
+                "resume_result": resume_result,
+                "job_status": str(latest_job.get("status") or ""),
+                "job_stage": str(latest_job.get("stage") or ""),
+            }
+        except Exception as exc:
+            self._mark_workflow_failed(job_id, request, plan, exc)
+            return {
+                "job_id": job_id,
+                "status": "failed",
+                "blocked_task": blocked_task,
+                "error": str(exc),
+            }
+
+    def _mark_workflow_failed(self, job_id: str, request: JobRequest, plan: Any, exc: Exception) -> None:
+        failure_summary = {"error": str(exc)}
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="failed",
+            stage="failed",
+            request_payload=request.to_record(),
+            plan_payload=_plan_payload(plan),
+            summary_payload=failure_summary,
+        )
+        self.store.update_agent_runtime_session_status(job_id, "failed")
+        self.store.append_job_event(job_id, "failed", "failed", str(exc))
 
     def _execute_retrieval(
         self,
@@ -758,7 +894,9 @@ class SourcingOrchestrator:
         runtime_policy: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         runtime_policy = dict(runtime_policy or {})
-        candidates = self.store.list_candidates()
+        candidate_source = self._load_retrieval_candidate_source(request)
+        candidates = list(candidate_source.get("candidates") or [])
+        source_evidence_lookup = dict(candidate_source.get("evidence_lookup") or {})
         criteria_patterns = self.store.list_criteria_patterns(target_company=request.target_company)
         retrieval_strategy = _plan_retrieval_strategy(plan)
         semantic_hits = {}
@@ -793,7 +931,9 @@ class SourcingOrchestrator:
         matches = []
         persisted_results = []
         for rank, item in enumerate(scored[: request.top_k], start=1):
-            evidence = self.store.list_evidence(item.candidate.candidate_id)
+            evidence = list(source_evidence_lookup.get(item.candidate.candidate_id) or [])
+            if not evidence and str(candidate_source.get("source_kind") or "") != "company_snapshot":
+                evidence = self.store.list_evidence(item.candidate.candidate_id)
             evidence_lookup[item.candidate.candidate_id] = evidence
             match = {
                 "candidate_id": item.candidate.candidate_id,
@@ -804,6 +944,8 @@ class SourcingOrchestrator:
                 "target_company": item.candidate.target_company,
                 "organization": item.candidate.organization,
                 "employment_status": item.candidate.employment_status,
+                "role_bucket": derive_candidate_role_bucket(item.candidate),
+                "functional_facets": derive_candidate_facets(item.candidate),
                 "role": item.candidate.role,
                 "team": item.candidate.team,
                 "focus_areas": item.candidate.focus_areas,
@@ -854,6 +996,13 @@ class SourcingOrchestrator:
             "manual_review_queue_count": len(manual_review_items),
             "semantic_hit_count": len(semantic_hits),
             "semantic_rerank_limit": request.semantic_rerank_limit,
+            "candidate_source": {
+                "source_kind": str(candidate_source.get("source_kind") or ""),
+                "snapshot_id": str(candidate_source.get("snapshot_id") or ""),
+                "asset_view": str(candidate_source.get("asset_view") or ""),
+                "candidate_count": len(candidates),
+                "source_path": str(candidate_source.get("source_path") or ""),
+            },
         }
         if control:
             summary["confidence_policy_control"] = {
@@ -892,6 +1041,42 @@ class SourcingOrchestrator:
         )
         artifact["artifact_path"] = str(artifact_path)
         return artifact
+
+    def _load_retrieval_candidate_source(self, request: JobRequest) -> dict[str, Any]:
+        if request.target_company:
+            try:
+                snapshot_payload = load_company_snapshot_candidate_documents(
+                    runtime_dir=self.runtime_dir,
+                    target_company=request.target_company,
+                    view=request.asset_view,
+                )
+            except CandidateArtifactError:
+                if request.asset_view != "canonical_merged":
+                    raise
+                snapshot_payload = {}
+            if list(snapshot_payload.get("candidates") or []):
+                evidence_lookup: dict[str, list[dict[str, Any]]] = defaultdict(list)
+                for item in list(snapshot_payload.get("evidence") or []):
+                    candidate_id = str(item.get("candidate_id") or "").strip()
+                    if not candidate_id:
+                        continue
+                    evidence_lookup[candidate_id].append(item)
+                return {
+                    "source_kind": "company_snapshot",
+                    "snapshot_id": str(snapshot_payload.get("snapshot_id") or ""),
+                    "asset_view": str(snapshot_payload.get("asset_view") or "canonical_merged"),
+                    "source_path": str(snapshot_payload.get("source_path") or ""),
+                    "candidates": list(snapshot_payload.get("candidates") or []),
+                    "evidence_lookup": dict(evidence_lookup),
+                }
+        return {
+            "source_kind": "sqlite_store",
+            "snapshot_id": "",
+            "asset_view": "",
+            "source_path": "",
+            "candidates": self.store.list_candidates(),
+            "evidence_lookup": {},
+        }
 
     def _run_retrieval_job(
         self,
@@ -1212,7 +1397,7 @@ def _plan_semantic_fields(plan: Any) -> list[str]:
             fields = retrieval_plan.get("semantic_fields") or []
             if isinstance(fields, list) and fields:
                 return [str(item) for item in fields if str(item).strip()]
-    return ["role", "team", "focus_areas", "education", "work_history", "notes"]
+    return ["role", "team", "focus_areas", "derived_facets", "education", "work_history", "notes"]
 
 
 def _lane_for_task(task: Any, plan_payload: dict[str, Any]) -> str:

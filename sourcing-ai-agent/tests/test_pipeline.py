@@ -1,17 +1,23 @@
-import tempfile
-import unittest
-from urllib import request as urllib_request
 import json
+from dataclasses import replace
 from pathlib import Path
+import tempfile
 import threading
 import time
+import unittest
+import unittest.mock
+from urllib import request as urllib_request
 
-from sourcing_agent.acquisition import AcquisitionEngine
+from sourcing_agent.acquisition import AcquisitionEngine, AcquisitionExecution
 from sourcing_agent.api import create_server
 from sourcing_agent.asset_catalog import AssetCatalog
-from sourcing_agent.domain import Candidate, JobRequest
+from sourcing_agent.connectors import CompanyIdentity
+from sourcing_agent.domain import AcquisitionTask, Candidate, EvidenceRecord, JobRequest, make_evidence_id
+from sourcing_agent.enrichment import MultiSourceEnrichmentResult
+from sourcing_agent.harvest_connectors import HarvestExecutionResult
 from sourcing_agent.model_provider import DeterministicModelClient
 from sourcing_agent.orchestrator import SourcingOrchestrator
+from sourcing_agent.seed_discovery import SearchSeedSnapshot
 from sourcing_agent.semantic_provider import LocalSemanticProvider
 from sourcing_agent.settings import AppSettings, HarvestActorSettings, HarvestSettings, QwenSettings, SemanticProviderSettings
 from sourcing_agent.storage import SQLiteStore
@@ -65,6 +71,255 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(result["status"], "completed")
         self.assertGreaterEqual(result["summary"]["total_matches"], 1)
         self.assertEqual(result["matches"][0]["name_en"], "Da Yan")
+
+    def test_run_job_prefers_latest_company_snapshot_over_broader_sqlite_pool(self) -> None:
+        company_dir = self.settings.company_assets_dir / "acme"
+        snapshot_dir = company_dir / "20260408T120000"
+        normalized_dir = snapshot_dir / "normalized_artifacts"
+        normalized_dir.mkdir(parents=True, exist_ok=True)
+        (company_dir / "latest_snapshot.json").write_text(
+            json.dumps(
+                {
+                    "snapshot_id": "20260408T120000",
+                    "company_identity": {
+                        "requested_name": "Acme",
+                        "canonical_name": "Acme",
+                        "company_key": "acme",
+                    },
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+
+        snapshot_candidate = Candidate(
+            candidate_id="snap_1",
+            name_en="Snapshot Researcher",
+            display_name="Snapshot Researcher",
+            category="employee",
+            target_company="Acme",
+            organization="Acme",
+            employment_status="current",
+            role="Research Scientist",
+            focus_areas="alignment research",
+            source_dataset="acme_snapshot",
+        )
+        off_snapshot_candidate = Candidate(
+            candidate_id="sqlite_1",
+            name_en="SQLite GPU Engineer",
+            display_name="SQLite GPU Engineer",
+            category="employee",
+            target_company="Acme",
+            organization="Acme",
+            employment_status="current",
+            role="Infrastructure Engineer",
+            focus_areas="gpu cluster platform",
+            source_dataset="acme_sqlite_only",
+        )
+        self.store.upsert_candidate(snapshot_candidate)
+        self.store.upsert_candidate(off_snapshot_candidate)
+        (normalized_dir / "materialized_candidate_documents.json").write_text(
+            json.dumps(
+                {
+                    "candidates": [snapshot_candidate.to_record()],
+                    "evidence": [],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+
+        result = self.orchestrator.run_job(
+            {
+                "target_company": "Acme",
+                "categories": ["employee"],
+                "employment_statuses": ["current"],
+                "keywords": ["gpu"],
+                "top_k": 5,
+            }
+        )
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["summary"]["candidate_source"]["source_kind"], "company_snapshot")
+        self.assertEqual(result["summary"]["candidate_source"]["snapshot_id"], "20260408T120000")
+        self.assertEqual(result["summary"]["candidate_source"]["asset_view"], "canonical_merged")
+        self.assertEqual(result["summary"]["total_matches"], 0)
+
+    def test_run_job_can_explicitly_use_strict_roster_only_view(self) -> None:
+        company_dir = self.settings.company_assets_dir / "acme"
+        snapshot_dir = company_dir / "20260408T120000"
+        normalized_dir = snapshot_dir / "normalized_artifacts"
+        strict_dir = normalized_dir / "strict_roster_only"
+        strict_dir.mkdir(parents=True, exist_ok=True)
+        (company_dir / "latest_snapshot.json").write_text(
+            json.dumps(
+                {
+                    "snapshot_id": "20260408T120000",
+                    "company_identity": {
+                        "requested_name": "Acme",
+                        "canonical_name": "Acme",
+                        "company_key": "acme",
+                    },
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+
+        canonical_candidate = Candidate(
+            candidate_id="canon_1",
+            name_en="Canonical Researcher",
+            display_name="Canonical Researcher",
+            category="employee",
+            target_company="Acme",
+            organization="Acme",
+            employment_status="current",
+            role="Research Scientist",
+            focus_areas="alignment research",
+            source_dataset="acme_snapshot",
+        )
+        strict_candidate = Candidate(
+            candidate_id="strict_1",
+            name_en="Strict Recruiter",
+            display_name="Strict Recruiter",
+            category="employee",
+            target_company="Acme",
+            organization="Acme",
+            employment_status="current",
+            role="Talent Recruiter",
+            focus_areas="technical recruiting",
+            source_dataset="acme_strict_snapshot",
+        )
+        (normalized_dir / "materialized_candidate_documents.json").write_text(
+            json.dumps(
+                {
+                    "candidates": [canonical_candidate.to_record()],
+                    "evidence": [],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        (strict_dir / "materialized_candidate_documents.json").write_text(
+            json.dumps(
+                {
+                    "candidates": [strict_candidate.to_record()],
+                    "evidence": [],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+
+        result = self.orchestrator.run_job(
+            {
+                "target_company": "Acme",
+                "asset_view": "strict_roster_only",
+                "categories": ["employee"],
+                "employment_statuses": ["current"],
+                "keywords": ["recruiting"],
+                "top_k": 5,
+            }
+        )
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["summary"]["candidate_source"]["source_kind"], "company_snapshot")
+        self.assertEqual(result["summary"]["candidate_source"]["asset_view"], "strict_roster_only")
+        self.assertEqual(result["summary"]["total_matches"], 1)
+        self.assertEqual(result["matches"][0]["candidate_id"], "strict_1")
+        self.assertEqual(result["matches"][0]["role_bucket"], "recruiting")
+        self.assertIn("recruiting", result["matches"][0]["functional_facets"])
+
+    def test_run_job_supports_must_have_facet_hard_filter(self) -> None:
+        self.store.replace_bootstrap_data(
+            [
+                Candidate(
+                    candidate_id="recruit_1",
+                    name_en="Recruiter",
+                    display_name="Recruiter",
+                    category="employee",
+                    target_company="FacetCo",
+                    organization="FacetCo",
+                    employment_status="current",
+                    role="Technical Recruiter",
+                    focus_areas="technical recruiting",
+                ),
+                Candidate(
+                    candidate_id="eng_1",
+                    name_en="Engineer",
+                    display_name="Engineer",
+                    category="employee",
+                    target_company="FacetCo",
+                    organization="FacetCo",
+                    employment_status="current",
+                    role="Software Engineer",
+                    focus_areas="training systems",
+                    notes="Occasionally helps with recruiting events.",
+                ),
+            ],
+            [],
+        )
+
+        result = self.orchestrator.run_job(
+            {
+                "target_company": "FacetCo",
+                "categories": ["employee"],
+                "employment_statuses": ["current"],
+                "must_have_facet": "recruiting",
+                "keywords": ["recruiting"],
+                "top_k": 5,
+            }
+        )
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["summary"]["total_matches"], 1)
+        self.assertEqual(result["matches"][0]["candidate_id"], "recruit_1")
+
+    def test_run_job_supports_primary_role_bucket_hard_filter(self) -> None:
+        self.store.replace_bootstrap_data(
+            [
+                Candidate(
+                    candidate_id="founder_1",
+                    name_en="Founder",
+                    display_name="Founder",
+                    category="employee",
+                    target_company="FacetCo",
+                    organization="FacetCo",
+                    employment_status="current",
+                    role="Founder and CTO",
+                    focus_areas="infrastructure systems platform",
+                ),
+                Candidate(
+                    candidate_id="infra_1",
+                    name_en="Infra Engineer",
+                    display_name="Infra Engineer",
+                    category="employee",
+                    target_company="FacetCo",
+                    organization="FacetCo",
+                    employment_status="current",
+                    role="Infrastructure Engineer",
+                    focus_areas="distributed systems runtime platform",
+                ),
+            ],
+            [],
+        )
+
+        result = self.orchestrator.run_job(
+            {
+                "target_company": "FacetCo",
+                "categories": ["employee"],
+                "employment_statuses": ["current"],
+                "must_have_facet": "infra_systems",
+                "must_have_primary_role_bucket": "infra",
+                "keywords": ["infra"],
+                "top_k": 5,
+            }
+        )
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["summary"]["total_matches"], 1)
+        self.assertEqual(result["matches"][0]["candidate_id"], "infra_1")
+        self.assertEqual(result["matches"][0]["role_bucket"], "infra_systems")
 
     def test_plan_and_async_workflow(self) -> None:
         plan_result = self.orchestrator.plan_workflow(
@@ -156,6 +411,666 @@ class PipelineTest(unittest.TestCase):
         )
         self.assertEqual(reviewed["status"], "reviewed")
         self.assertEqual(reviewed["manual_review_item"]["status"], "resolved")
+
+    def test_acquire_search_seed_pool_blocks_when_background_queue_is_pending(self) -> None:
+        identity = CompanyIdentity(
+            requested_name="Thinking Machines Lab",
+            canonical_name="Thinking Machines Lab",
+            company_key="thinkingmachineslab",
+            linkedin_slug="thinkingmachinesai",
+            linkedin_company_url="https://www.linkedin.com/company/thinkingmachinesai/",
+        )
+        snapshot_dir = self.settings.company_assets_dir / "thinkingmachineslab" / "snapshot-queued"
+        summary_path = snapshot_dir / "search_seed_discovery" / "summary.json"
+        summary_path.parent.mkdir(parents=True, exist_ok=True)
+        summary_path.write_text("{}", encoding="utf-8")
+        queued_snapshot = SearchSeedSnapshot(
+            snapshot_id="snapshot-queued",
+            target_company="Thinking Machines Lab",
+            company_identity=identity,
+            snapshot_dir=snapshot_dir,
+            entries=[
+                {
+                    "seed_key": "queued_lead",
+                    "full_name": "Queued Lead",
+                    "source_type": "harvest_profile_search",
+                }
+            ],
+            query_summaries=[
+                {
+                    "query": "Thinking Machines Lab former employee",
+                    "status": "queued",
+                }
+            ],
+            accounts_used=[],
+            errors=[],
+            stop_reason="queued_background_search",
+            summary_path=summary_path,
+        )
+
+        self.acquisition_engine.search_seed_acquirer.discover = lambda *args, **kwargs: queued_snapshot
+        task = AcquisitionTask(
+            task_id="acquire-full-roster",
+            task_type="acquire_full_roster",
+            title="Acquire search seed pool",
+            description="Acquire former employee leads",
+            status="ready",
+            blocking=True,
+            metadata={
+                "strategy_type": "former_employee_search",
+                "search_seed_queries": ["Thinking Machines Lab former employee"],
+                "cost_policy": {},
+                "employment_statuses": ["former"],
+            },
+        )
+        execution = self.acquisition_engine._acquire_search_seed_pool(
+            task,
+            {
+                "company_identity": identity,
+                "snapshot_dir": snapshot_dir,
+                "job_id": "job_queued",
+                "plan_payload": {},
+                "runtime_mode": "workflow",
+            },
+            JobRequest(
+                raw_user_request="Find former Thinking Machines Lab members",
+                target_company="Thinking Machines Lab",
+                categories=["former_employee"],
+                employment_statuses=["former"],
+            ),
+        )
+
+        self.assertEqual(execution.status, "blocked")
+        self.assertEqual(execution.payload["queued_query_count"], 1)
+        self.assertEqual(execution.state_updates["search_seed_snapshot"].stop_reason, "queued_background_search")
+
+    def test_acquire_full_roster_blocks_when_background_harvest_is_pending(self) -> None:
+        identity = CompanyIdentity(
+            requested_name="Thinking Machines Lab",
+            canonical_name="Thinking Machines Lab",
+            company_key="thinkingmachineslab",
+            linkedin_slug="thinkingmachinesai",
+            linkedin_company_url="https://www.linkedin.com/company/thinkingmachinesai/",
+        )
+        snapshot_dir = self.settings.company_assets_dir / "thinkingmachineslab" / "snapshot-harvest-queued"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        self.acquisition_engine.worker_runtime = self.orchestrator.agent_runtime
+        self.acquisition_engine.harvest_company_connector.settings = replace(
+            self.acquisition_engine.harvest_company_connector.settings,
+            enabled=True,
+            api_token="token",
+            actor_id="actor",
+        )
+
+        task = AcquisitionTask(
+            task_id="acquire-full-roster",
+            task_type="acquire_full_roster",
+            title="Acquire roster",
+            description="Acquire company roster",
+            status="ready",
+            blocking=True,
+            metadata={"strategy_type": "full_company_roster", "cost_policy": {"allow_company_employee_api": True}},
+        )
+        with unittest.mock.patch.object(
+            type(self.acquisition_engine.harvest_company_connector),
+            "execute_with_checkpoint",
+            return_value=HarvestExecutionResult(
+                logical_name="harvest_company_employees",
+                checkpoint={"run_id": "run-harvest", "dataset_id": "dataset-harvest", "status": "submitted"},
+                pending=True,
+                message="Submitted async harvest run.",
+            ),
+        ), unittest.mock.patch.object(
+            type(self.acquisition_engine.harvest_company_connector),
+            "fetch_company_roster",
+            side_effect=AssertionError("fetch_company_roster should not run while harvest worker is queued"),
+        ):
+            execution = self.acquisition_engine._acquire_full_roster(
+                task,
+                {
+                    "company_identity": identity,
+                    "snapshot_dir": snapshot_dir,
+                    "job_id": "job_harvest_queued",
+                    "plan_payload": {},
+                    "runtime_mode": "workflow",
+                },
+                JobRequest(
+                    raw_user_request="Find Thinking Machines Lab people",
+                    target_company="Thinking Machines Lab",
+                    categories=["employee"],
+                ),
+            )
+
+        workers = self.orchestrator.agent_runtime.list_workers(job_id="job_harvest_queued", lane_id="acquisition_specialist")
+        self.assertEqual(execution.status, "blocked")
+        self.assertEqual(execution.payload["queued_harvest_worker_count"], 1)
+        self.assertEqual(execution.payload["stop_reason"], "queued_background_harvest")
+        self.assertEqual(len(workers), 1)
+        self.assertEqual(workers[0]["metadata"]["recovery_kind"], "harvest_company_employees")
+
+    def test_enrich_profiles_blocks_when_background_exploration_is_pending(self) -> None:
+        identity = CompanyIdentity(
+            requested_name="Thinking Machines Lab",
+            canonical_name="Thinking Machines Lab",
+            company_key="thinkingmachineslab",
+            linkedin_slug="thinkingmachinesai",
+            linkedin_company_url="https://www.linkedin.com/company/thinkingmachinesai/",
+        )
+        snapshot_dir = self.settings.company_assets_dir / "thinkingmachineslab" / "snapshot-exploration-queued"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        summary_path = snapshot_dir / "search_seed_discovery" / "summary.json"
+        summary_path.parent.mkdir(parents=True, exist_ok=True)
+        summary_path.write_text("{}", encoding="utf-8")
+        search_seed_snapshot = SearchSeedSnapshot(
+            snapshot_id="snapshot-exploration-queued",
+            target_company="Thinking Machines Lab",
+            company_identity=identity,
+            snapshot_dir=snapshot_dir,
+            entries=[
+                {
+                    "seed_key": "lead_1",
+                    "full_name": "Queued Exploration Lead",
+                    "source_type": "harvest_profile_search",
+                    "linkedin_url": "https://www.linkedin.com/in/queued-exploration/",
+                }
+            ],
+            query_summaries=[],
+            accounts_used=[],
+            errors=[],
+            stop_reason="",
+            summary_path=summary_path,
+        )
+        pending_candidate = Candidate(
+            candidate_id="lead_1",
+            name_en="Queued Exploration Lead",
+            display_name="Queued Exploration Lead",
+            category="lead",
+            target_company="Thinking Machines Lab",
+            organization="Thinking Machines Lab",
+            linkedin_url="https://www.linkedin.com/in/queued-exploration/",
+        )
+        original_enrich = self.acquisition_engine.multi_source_enricher.enrich
+        self.acquisition_engine.multi_source_enricher.enrich = lambda *args, **kwargs: MultiSourceEnrichmentResult(
+            candidates=[pending_candidate],
+            evidence=[],
+            artifact_paths={"exploration_summary": str(snapshot_dir / "exploration" / "summary.json")},
+            queued_exploration_count=1,
+            stop_reason="queued_background_exploration",
+        )
+        task = AcquisitionTask(
+            task_id="enrich-profiles",
+            task_type="enrich_profiles_multisource",
+            title="Enrich profiles",
+            description="Run profile enrichment",
+            status="ready",
+            blocking=True,
+            metadata={"cost_policy": {}},
+        )
+        try:
+            execution = self.acquisition_engine._enrich_profiles(
+                task,
+                {
+                    "search_seed_snapshot": search_seed_snapshot,
+                    "snapshot_dir": snapshot_dir,
+                    "job_id": "job_enrichment_queued",
+                    "plan_payload": {},
+                    "runtime_mode": "workflow",
+                },
+                JobRequest(
+                    raw_user_request="Find Thinking Machines Lab people",
+                    target_company="Thinking Machines Lab",
+                    categories=["employee"],
+                ),
+            )
+        finally:
+            self.acquisition_engine.multi_source_enricher.enrich = original_enrich
+
+        self.assertEqual(execution.status, "blocked")
+        self.assertEqual(execution.payload["queued_exploration_count"], 1)
+        self.assertEqual(execution.payload["stop_reason"], "queued_background_exploration")
+
+    def test_enrich_profiles_blocks_when_background_harvest_profile_batch_is_pending(self) -> None:
+        identity = CompanyIdentity(
+            requested_name="Thinking Machines Lab",
+            canonical_name="Thinking Machines Lab",
+            company_key="thinkingmachineslab",
+            linkedin_slug="thinkingmachinesai",
+            linkedin_company_url="https://www.linkedin.com/company/thinkingmachinesai/",
+        )
+        snapshot_dir = self.settings.company_assets_dir / "thinkingmachineslab" / "snapshot-harvest-profile-queued"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        summary_path = snapshot_dir / "search_seed_discovery" / "summary.json"
+        summary_path.parent.mkdir(parents=True, exist_ok=True)
+        summary_path.write_text("{}", encoding="utf-8")
+        search_seed_snapshot = SearchSeedSnapshot(
+            snapshot_id="snapshot-harvest-profile-queued",
+            target_company="Thinking Machines Lab",
+            company_identity=identity,
+            snapshot_dir=snapshot_dir,
+            entries=[
+                {
+                    "seed_key": "lead_1",
+                    "full_name": "Queued Harvest Lead",
+                    "source_type": "harvest_profile_search",
+                    "profile_url": "https://www.linkedin.com/in/queued-harvest/",
+                }
+            ],
+            query_summaries=[],
+            accounts_used=[],
+            errors=[],
+            stop_reason="",
+            summary_path=summary_path,
+        )
+        self.acquisition_engine.multi_source_enricher.worker_runtime = self.orchestrator.agent_runtime
+        self.acquisition_engine.multi_source_enricher.harvest_profile_connector.settings = replace(
+            self.acquisition_engine.multi_source_enricher.harvest_profile_connector.settings,
+            enabled=True,
+            api_token="token",
+            actor_id="actor",
+        )
+        task = AcquisitionTask(
+            task_id="enrich-profiles",
+            task_type="enrich_profiles_multisource",
+            title="Enrich profiles",
+            description="Run profile enrichment",
+            status="ready",
+            blocking=True,
+            metadata={"profile_detail_limit": 5, "slug_resolution_limit": 5, "cost_policy": {}},
+        )
+        with unittest.mock.patch.object(
+            type(self.acquisition_engine.multi_source_enricher.harvest_profile_connector),
+            "execute_batch_with_checkpoint",
+            return_value=HarvestExecutionResult(
+                logical_name="harvest_profile_scraper_batch",
+                checkpoint={"run_id": "run-profile", "dataset_id": "dataset-profile", "status": "submitted"},
+                pending=True,
+                message="Submitted async harvest batch.",
+            ),
+        ), unittest.mock.patch.object(
+            type(self.acquisition_engine.multi_source_enricher.harvest_profile_connector),
+            "fetch_profiles_by_urls",
+            side_effect=AssertionError("fetch_profiles_by_urls should not run while harvest batch worker is queued"),
+        ):
+            execution = self.acquisition_engine._enrich_profiles(
+                task,
+                {
+                    "search_seed_snapshot": search_seed_snapshot,
+                    "snapshot_dir": snapshot_dir,
+                    "job_id": "job_harvest_profile_queued",
+                    "plan_payload": {},
+                    "runtime_mode": "workflow",
+                },
+                JobRequest(
+                    raw_user_request="Find Thinking Machines Lab people",
+                    target_company="Thinking Machines Lab",
+                    categories=["employee"],
+                    profile_detail_limit=5,
+                    slug_resolution_limit=5,
+                ),
+            )
+
+        workers = self.orchestrator.agent_runtime.list_workers(job_id="job_harvest_profile_queued", lane_id="enrichment_specialist")
+        self.assertEqual(execution.status, "blocked")
+        self.assertEqual(execution.payload["queued_harvest_worker_count"], 1)
+        self.assertEqual(execution.payload["stop_reason"], "queued_background_harvest")
+        self.assertEqual(len(workers), 1)
+        self.assertEqual(workers[0]["metadata"]["recovery_kind"], "harvest_profile_batch")
+
+    def test_resume_blocked_workflow_waits_for_exploration_workers_then_resumes(self) -> None:
+        request_payload = {
+            "raw_user_request": "Find Thinking Machines Lab people",
+            "target_company": "Thinking Machines Lab",
+            "categories": ["employee"],
+            "employment_statuses": ["current"],
+            "top_k": 1,
+        }
+        request = JobRequest.from_payload(request_payload)
+        plan_payload = self.orchestrator.plan_workflow(request_payload)["plan"]
+        job_id = "job_resume_exploration_blocked"
+        snapshot_dir = self.settings.company_assets_dir / "thinkingmachineslab" / "snapshot-resume-exploration"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="blocked",
+            stage="acquiring",
+            request_payload=request.to_record(),
+            plan_payload=plan_payload,
+            summary_payload={"message": "Waiting for queued exploration workers", "blocked_task": "enrich_profiles_multisource"},
+        )
+
+        handle = self.orchestrator.agent_runtime.begin_worker(
+            job_id=job_id,
+            request=request,
+            plan_payload=plan_payload,
+            runtime_mode="workflow",
+            lane_id="exploration_specialist",
+            worker_key="candidate::queued_exploration",
+            stage="enriching",
+            span_name="explore_candidate:Queued Exploration Lead",
+            budget_payload={"max_queries": 7},
+            input_payload={
+                "candidate_id": "candidate::queued_exploration",
+                "display_name": "Queued Exploration Lead",
+                "candidate": {"candidate_id": "candidate::queued_exploration", "display_name": "Queued Exploration Lead"},
+            },
+            metadata={
+                "target_company": "Thinking Machines Lab",
+                "snapshot_dir": str(snapshot_dir),
+                "request_payload": request.to_record(),
+                "plan_payload": plan_payload,
+                "runtime_mode": "workflow",
+            },
+            handoff_from_lane="public_media_specialist",
+        )
+
+        waiting = self.orchestrator._resume_blocked_workflow_if_ready(job_id)
+        self.assertEqual(waiting["status"], "waiting")
+        self.assertEqual(waiting["pending_worker_count"], 1)
+
+        self.orchestrator.agent_runtime.complete_worker(
+            handle,
+            status="completed",
+            checkpoint_payload={"stage": "completed"},
+            output_payload={
+                "candidate": {
+                    "candidate_id": "candidate::queued_exploration",
+                    "name_en": "Queued Exploration Lead",
+                    "display_name": "Queued Exploration Lead",
+                },
+                "evidence": [],
+                "summary": {"candidate_id": "candidate::queued_exploration", "status": "completed"},
+                "errors": [],
+            },
+        )
+
+        identity = CompanyIdentity(
+            requested_name="Thinking Machines Lab",
+            canonical_name="Thinking Machines Lab",
+            company_key="thinkingmachineslab",
+            linkedin_slug="thinkingmachinesai",
+            linkedin_company_url="https://www.linkedin.com/company/thinkingmachinesai/",
+        )
+        original_execute_task = self.acquisition_engine.execute_task
+
+        def fake_execute_task(task, job_request, target_company, state, bootstrap_summary=None):
+            if task.task_type == "resolve_company_identity":
+                return AcquisitionExecution(
+                    task_id=task.task_id,
+                    status="completed",
+                    detail="Resolved identity.",
+                    payload={"snapshot_dir": str(snapshot_dir)},
+                    state_updates={
+                        "company_identity": identity,
+                        "snapshot_id": snapshot_dir.name,
+                        "snapshot_dir": snapshot_dir,
+                    },
+                )
+            return AcquisitionExecution(
+                task_id=task.task_id,
+                status="completed",
+                detail=f"{task.task_type} completed.",
+                payload={},
+                state_updates={},
+            )
+
+        self.acquisition_engine.execute_task = fake_execute_task
+        try:
+            resume = self.orchestrator._resume_blocked_workflow_if_ready(job_id)
+        finally:
+            self.acquisition_engine.execute_task = original_execute_task
+
+        snapshot = self.orchestrator.get_job_results(job_id)
+        self.assertEqual(resume["status"], "resumed")
+        self.assertEqual(resume["job_status"], "completed")
+        self.assertIsNotNone(snapshot)
+        assert snapshot is not None
+        self.assertEqual(snapshot["job"]["status"], "completed")
+
+    def test_resume_blocked_workflow_after_workers_complete(self) -> None:
+        request_payload = {
+            "raw_user_request": "Find former xAI employees",
+            "target_company": "xAI",
+            "categories": ["former_employee"],
+            "employment_statuses": ["former"],
+            "organization_keywords": ["xAI"],
+            "top_k": 1,
+        }
+        request = JobRequest.from_payload(request_payload)
+        plan_payload = self.orchestrator.plan_workflow(request_payload)["plan"]
+        job_id = "job_resume_blocked"
+        snapshot_dir = self.settings.company_assets_dir / "xai" / "snapshot-resume"
+        discovery_dir = snapshot_dir / "search_seed_discovery"
+        discovery_dir.mkdir(parents=True, exist_ok=True)
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="blocked",
+            stage="acquiring",
+            request_payload=request.to_record(),
+            plan_payload=plan_payload,
+            summary_payload={"message": "Waiting for queued workers", "blocked_task": "acquire_full_roster"},
+        )
+
+        handle = self.orchestrator.agent_runtime.begin_worker(
+            job_id=job_id,
+            request=request,
+            plan_payload=plan_payload,
+            runtime_mode="workflow",
+            lane_id="search_planner",
+            worker_key="relationship_web::01",
+            stage="acquiring",
+            span_name="search_bundle:relationship_web",
+            budget_payload={"max_results": 10},
+            input_payload={
+                "query_spec": {
+                    "bundle_id": "relationship_web",
+                    "query": "xAI former employee",
+                    "source_family": "public_web_search",
+                },
+                "query": "xAI former employee",
+                "index": 1,
+            },
+            metadata={
+                "index": 1,
+                "identity": CompanyIdentity(
+                    requested_name="xAI",
+                    canonical_name="xAI",
+                    company_key="xai",
+                    linkedin_slug="xai",
+                    linkedin_company_url="https://www.linkedin.com/company/xai/",
+                ).to_record(),
+                "snapshot_dir": str(snapshot_dir),
+                "discovery_dir": str(discovery_dir),
+                "employment_status": "former",
+                "request_payload": request.to_record(),
+                "plan_payload": plan_payload,
+                "runtime_mode": "workflow",
+                "result_limit": 10,
+            },
+            handoff_from_lane="triage_planner",
+        )
+        self.orchestrator.agent_runtime.complete_worker(
+            handle,
+            status="completed",
+            checkpoint_payload={"stage": "completed", "raw_path": str(discovery_dir / "web_query_01.json")},
+            output_payload={"summary": {"query": "xAI former employee", "status": "completed"}, "entries": [], "errors": []},
+        )
+
+        self.store.replace_bootstrap_data(
+            [
+                Candidate(
+                    candidate_id="cand_resume_1",
+                    name_en="Former XAI Engineer",
+                    display_name="Former XAI Engineer",
+                    category="former_employee",
+                    target_company="xAI",
+                    organization="xAI",
+                    employment_status="former",
+                    role="Engineer",
+                    focus_areas="systems",
+                )
+            ],
+            [
+                EvidenceRecord(
+                    evidence_id=make_evidence_id("cand_resume_1", "seed", "xAI former employee", "https://example.com/xai"),
+                    candidate_id="cand_resume_1",
+                    source_type="web_search",
+                    title="xAI former employee",
+                    url="https://example.com/xai",
+                    summary="Synthetic evidence for resume test.",
+                    source_dataset="test",
+                    source_path=str(snapshot_dir / "synthetic_evidence.json"),
+                )
+            ],
+        )
+
+        identity = CompanyIdentity(
+            requested_name="xAI",
+            canonical_name="xAI",
+            company_key="xai",
+            linkedin_slug="xai",
+            linkedin_company_url="https://www.linkedin.com/company/xai/",
+        )
+        original_execute_task = self.acquisition_engine.execute_task
+
+        def fake_execute_task(task, job_request, target_company, state, bootstrap_summary=None):
+            if task.task_type == "resolve_company_identity":
+                return AcquisitionExecution(
+                    task_id=task.task_id,
+                    status="completed",
+                    detail="Resolved identity.",
+                    payload={"snapshot_dir": str(snapshot_dir)},
+                    state_updates={
+                        "company_identity": identity,
+                        "snapshot_id": snapshot_dir.name,
+                        "snapshot_dir": snapshot_dir,
+                    },
+                )
+            return AcquisitionExecution(
+                task_id=task.task_id,
+                status="completed",
+                detail=f"{task.task_type} completed.",
+                payload={},
+                state_updates={},
+            )
+
+        self.acquisition_engine.execute_task = fake_execute_task
+        try:
+            resume = self.orchestrator._resume_blocked_workflow_if_ready(job_id)
+        finally:
+            self.acquisition_engine.execute_task = original_execute_task
+
+        snapshot = self.orchestrator.get_job_results(job_id)
+        self.assertEqual(resume["status"], "resumed")
+        self.assertEqual(resume["job_status"], "completed")
+        self.assertIsNotNone(snapshot)
+        assert snapshot is not None
+        self.assertEqual(snapshot["job"]["status"], "completed")
+        self.assertGreaterEqual(len(snapshot["results"]), 1)
+
+    def test_manual_review_items_are_snapshot_scoped_and_cleanup_old_snapshots(self) -> None:
+        old_snapshot_path = str(
+            self.settings.company_assets_dir / "acme" / "20260406T120000" / "candidate_documents.json"
+        )
+        new_snapshot_path = str(
+            self.settings.company_assets_dir / "acme" / "20260407T120000" / "candidate_documents.json"
+        )
+        old_item = {
+            "candidate_id": "cand_manual",
+            "target_company": "Acme",
+            "review_type": "manual_identity_resolution",
+            "priority": "high",
+            "status": "open",
+            "summary": "Old snapshot item.",
+            "candidate": {
+                "candidate_id": "cand_manual",
+                "name_en": "Alice Example",
+                "display_name": "Alice Example",
+                "category": "lead",
+                "target_company": "Acme",
+                "organization": "Acme",
+                "source_path": old_snapshot_path,
+                "metadata": {},
+            },
+            "evidence": [
+                {
+                    "candidate_id": "cand_manual",
+                    "source_type": "publication_match",
+                    "source_path": old_snapshot_path,
+                    "metadata": {},
+                }
+            ],
+            "metadata": {},
+        }
+        old_other_item = {
+            "candidate_id": "cand_old_only",
+            "target_company": "Acme",
+            "review_type": "needs_human_validation",
+            "priority": "medium",
+            "status": "open",
+            "summary": "Old-only snapshot item.",
+            "candidate": {
+                "candidate_id": "cand_old_only",
+                "name_en": "Bob Old",
+                "display_name": "Bob Old",
+                "category": "employee",
+                "target_company": "Acme",
+                "organization": "Acme",
+                "source_path": old_snapshot_path,
+                "metadata": {},
+            },
+            "evidence": [],
+            "metadata": {},
+        }
+        new_item = {
+            "candidate_id": "cand_manual",
+            "target_company": "Acme",
+            "review_type": "manual_identity_resolution",
+            "priority": "high",
+            "status": "open",
+            "summary": "New snapshot item.",
+            "candidate": {
+                "candidate_id": "cand_manual",
+                "name_en": "Alice Example",
+                "display_name": "Alice Example",
+                "category": "lead",
+                "target_company": "Acme",
+                "organization": "Acme",
+                "source_path": new_snapshot_path,
+                "metadata": {},
+            },
+            "evidence": [
+                {
+                    "candidate_id": "cand_manual",
+                    "source_type": "publication_match",
+                    "source_path": new_snapshot_path,
+                    "metadata": {},
+                }
+            ],
+            "metadata": {},
+        }
+
+        self.store.replace_manual_review_items("job_old", [old_item, old_other_item])
+        self.store.replace_manual_review_items("job_new", [new_item])
+
+        all_items = self.store.list_manual_review_items(target_company="Acme", status="", limit=10)
+        status_by_candidate = {(item["candidate_id"], item["job_id"]): item["status"] for item in all_items}
+        snapshot_by_candidate = {
+            (item["candidate_id"], item["job_id"]): item["metadata"].get("snapshot_id")
+            for item in all_items
+        }
+        self.assertEqual(snapshot_by_candidate[("cand_manual", "job_old")], "20260406T120000")
+        self.assertEqual(snapshot_by_candidate[("cand_manual", "job_new")], "20260407T120000")
+        self.assertEqual(status_by_candidate[("cand_manual", "job_old")], "superseded")
+        self.assertEqual(status_by_candidate[("cand_manual", "job_new")], "open")
+
+        cleanup = self.store.cleanup_manual_review_items(target_company="Acme", snapshot_id="20260407T120000")
+        self.assertGreaterEqual(cleanup["out_of_scope_count"], 1)
+        open_items = self.store.list_manual_review_items(target_company="Acme", status="open", limit=10)
+        self.assertEqual(len(open_items), 1)
+        self.assertEqual(open_items[0]["candidate_id"], "cand_manual")
+        self.assertEqual(open_items[0]["metadata"].get("snapshot_id"), "20260407T120000")
 
     def test_investor_firm_workflow_uses_tiered_firm_roster(self) -> None:
         self.orchestrator.bootstrap()
@@ -781,3 +1696,560 @@ class PipelineTest(unittest.TestCase):
         self.assertTrue(trace["agent_runtime_session"])
         lane_ids = [item["lane_id"] for item in trace["agent_trace_spans"]]
         self.assertIn("retrieval_specialist", lane_ids)
+
+    def test_normalize_snapshot_inherits_historical_explicit_profile_captures(self) -> None:
+        company_dir = self.settings.company_assets_dir / "acme"
+        old_snapshot_dir = company_dir / "20260406T120000"
+        old_artifact_dir = old_snapshot_dir / "normalized_artifacts"
+        current_snapshot_dir = company_dir / "20260407T120000"
+        old_artifact_dir.mkdir(parents=True, exist_ok=True)
+        current_snapshot_dir.mkdir(parents=True, exist_ok=True)
+
+        old_candidate = Candidate(
+            candidate_id="cand_acme_1",
+            name_en="Alice Example",
+            display_name="Alice Example",
+            category="employee",
+            target_company="Acme",
+            organization="Acme",
+            employment_status="current",
+            role="Research Engineer",
+            focus_areas="Research Engineer | distributed systems",
+            education="MIT",
+            work_history="Acme | Example Labs",
+            notes="Historical enriched snapshot.",
+            linkedin_url="https://www.linkedin.com/in/alice-example/",
+            source_dataset="acme_linkedin_company_people",
+            source_path=str(old_snapshot_dir / "harvest_profiles" / "alice-example.json"),
+            metadata={
+                "public_identifier": "alice-example",
+                "profile_url": "https://www.linkedin.com/in/alice-example/",
+                "membership_review_required": True,
+                "membership_review_reason": "suspicious_membership",
+                "membership_review_decision": "suspicious_member",
+                "membership_review_rationale": "Profile content looks implausible for the target company.",
+                "membership_review_triggers": ["suspicious_profile_content"],
+                "membership_review_trigger_keywords": ["healer"],
+            },
+        )
+        old_evidence = [
+            EvidenceRecord(
+                evidence_id=make_evidence_id(
+                    old_candidate.candidate_id,
+                    "linkedin_profile_detail",
+                    "Research Engineer",
+                    "https://www.linkedin.com/in/alice-example/",
+                ),
+                candidate_id=old_candidate.candidate_id,
+                source_type="linkedin_profile_detail",
+                title="Research Engineer",
+                url="https://www.linkedin.com/in/alice-example/",
+                summary="Historical profile detail capture.",
+                source_dataset="linkedin_profile_detail",
+                source_path=str(old_snapshot_dir / "harvest_profiles" / "alice-example.json"),
+            ),
+            EvidenceRecord(
+                evidence_id=make_evidence_id(
+                    old_candidate.candidate_id,
+                    "linkedin_profile_membership_review",
+                    "Membership review",
+                    "https://www.linkedin.com/in/alice-example/",
+                ),
+                candidate_id=old_candidate.candidate_id,
+                source_type="linkedin_profile_membership_review",
+                title="Membership review",
+                url="https://www.linkedin.com/in/alice-example/",
+                summary="Historical suspicious membership review.",
+                source_dataset="linkedin_profile_membership_review",
+                source_path=str(old_snapshot_dir / "harvest_profiles" / "alice-example.json"),
+                metadata={"decision": "suspicious_member"},
+            ),
+        ]
+        historical_lead = Candidate(
+            candidate_id="cand_acme_lead",
+            name_en="Historical Lead",
+            display_name="Historical Lead",
+            category="lead",
+            target_company="Acme",
+            organization="Acme",
+            employment_status="",
+            role="Research lead from publication",
+            source_dataset="publication_match",
+            source_path=str(old_snapshot_dir / "publications" / "lead.json"),
+        )
+        historical_lead_evidence = EvidenceRecord(
+            evidence_id=make_evidence_id(
+                historical_lead.candidate_id,
+                "publication_match",
+                "Great Paper",
+                "https://example.com/paper",
+            ),
+            candidate_id=historical_lead.candidate_id,
+            source_type="publication_match",
+            title="Great Paper",
+            url="https://example.com/paper",
+            summary="Historical lead that should not be dropped by normalize.",
+            source_dataset="publication_match",
+            source_path=str(old_snapshot_dir / "publications" / "lead.json"),
+        )
+        (old_artifact_dir / "materialized_candidate_documents.json").write_text(
+            json.dumps(
+                {
+                    "snapshot": {"snapshot_id": old_snapshot_dir.name},
+                    "candidates": [old_candidate.to_record(), historical_lead.to_record()],
+                    "evidence": [item.to_record() for item in [*old_evidence, historical_lead_evidence]],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+
+        baseline_candidate = Candidate(
+            candidate_id="cand_acme_1",
+            name_en="Alice Example",
+            display_name="Alice Example",
+            category="employee",
+            target_company="Acme",
+            organization="Acme",
+            employment_status="current",
+            role="Member of Technical Staff at Acme",
+            focus_areas="Member of Technical Staff at Acme",
+            notes="LinkedIn company roster baseline. Location: San Francisco.",
+            linkedin_url="https://www.linkedin.com/in/ACwAAExampleBaseline",
+            source_dataset="acme_linkedin_company_people",
+            source_path=str(current_snapshot_dir / "harvest_company_employees" / "visible.json"),
+            metadata={
+                "profile_url": "https://www.linkedin.com/in/ACwAAExampleBaseline",
+                "snapshot_id": current_snapshot_dir.name,
+            },
+        )
+        baseline_evidence = [
+            EvidenceRecord(
+                evidence_id=make_evidence_id(
+                    baseline_candidate.candidate_id,
+                    "acme_linkedin_company_people",
+                    "Roster row",
+                    "https://www.linkedin.com/company/acme/",
+                ),
+                candidate_id=baseline_candidate.candidate_id,
+                source_type="linkedin_company_people",
+                title="Roster row",
+                url="https://www.linkedin.com/company/acme/",
+                summary="Current roster baseline.",
+                source_dataset="acme_linkedin_company_people",
+                source_path=str(current_snapshot_dir / "harvest_company_employees" / "visible.json"),
+            )
+        ]
+        (current_snapshot_dir / "candidate_documents.json").write_text(
+            json.dumps(
+                {
+                    "snapshot": {"snapshot_id": current_snapshot_dir.name},
+                    "candidates": [baseline_candidate.to_record()],
+                    "evidence": [item.to_record() for item in baseline_evidence],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+
+        identity = CompanyIdentity(
+            requested_name="Acme",
+            canonical_name="Acme",
+            company_key="acme",
+            linkedin_slug="acme",
+            linkedin_company_url="https://www.linkedin.com/company/acme/",
+        )
+        task = AcquisitionTask(
+            task_id="normalize",
+            task_type="normalize_asset_snapshot",
+            title="Normalize",
+            description="Persist snapshot",
+        )
+        result = self.acquisition_engine._normalize_snapshot(
+            task,
+            {
+                "company_identity": identity,
+                "snapshot_id": current_snapshot_dir.name,
+                "snapshot_dir": current_snapshot_dir,
+                "candidates": [baseline_candidate],
+                "evidence": baseline_evidence,
+            },
+        )
+
+        self.assertEqual(result.status, "completed")
+        stored_candidate = self.store.get_candidate("cand_acme_1")
+        self.assertIsNotNone(stored_candidate)
+        assert stored_candidate is not None
+        self.assertEqual(stored_candidate.education, "MIT")
+        self.assertEqual(stored_candidate.work_history, "Acme | Example Labs")
+        self.assertTrue(stored_candidate.metadata.get("membership_review_required"))
+        self.assertEqual(stored_candidate.metadata.get("membership_review_decision"), "suspicious_member")
+        self.assertIsNotNone(self.store.get_candidate("cand_acme_lead"))
+
+        stored_evidence = self.store.list_evidence("cand_acme_1")
+        stored_source_types = {item["source_type"] for item in stored_evidence}
+        self.assertIn("linkedin_company_people", stored_source_types)
+        self.assertIn("linkedin_profile_detail", stored_source_types)
+        self.assertIn("linkedin_profile_membership_review", stored_source_types)
+        lead_evidence = self.store.list_evidence("cand_acme_lead")
+        self.assertEqual(lead_evidence[0]["source_type"], "publication_match")
+
+        rewritten_payload = json.loads((current_snapshot_dir / "candidate_documents.json").read_text())
+        rewritten_candidate = rewritten_payload["candidates"][0]
+        rewritten_source_types = {item["source_type"] for item in rewritten_payload["evidence"]}
+        self.assertEqual(rewritten_candidate["education"], "MIT")
+        self.assertEqual(rewritten_candidate["work_history"], "Acme | Example Labs")
+        self.assertTrue(rewritten_candidate["metadata"]["membership_review_required"])
+        self.assertIn("linkedin_profile_detail", rewritten_source_types)
+        self.assertEqual(rewritten_payload["historical_profile_inheritance"]["matched_candidate_count"], 1)
+        self.assertGreaterEqual(rewritten_payload["historical_profile_inheritance"]["inherited_evidence_count"], 2)
+        self.assertEqual(rewritten_payload["historical_profile_inheritance"]["carried_forward_candidate_count"], 1)
+        rewritten_candidate_ids = {item["candidate_id"] for item in rewritten_payload["candidates"]}
+        self.assertIn("cand_acme_lead", rewritten_candidate_ids)
+
+    def test_normalize_snapshot_canonicalizes_same_name_current_candidates(self) -> None:
+        snapshot_dir = self.settings.company_assets_dir / "acme" / "20260407T130000"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+
+        lead_candidate = Candidate(
+            candidate_id="lead_alice",
+            name_en="Alice Example",
+            display_name="Alice Example",
+            category="lead",
+            target_company="Acme",
+            organization="Acme",
+            employment_status="",
+            role="Publication author lead",
+            source_dataset="publication_match",
+            source_path=str(snapshot_dir / "publications" / "alice.html"),
+        )
+        employee_candidate = Candidate(
+            candidate_id="employee_alice",
+            name_en="Alice Example",
+            display_name="Alice Example",
+            category="employee",
+            target_company="Acme",
+            organization="Acme",
+            employment_status="current",
+            role="Research Engineer",
+            linkedin_url="https://www.linkedin.com/in/alice-example/",
+            work_history="Acme",
+            education="MIT",
+            source_dataset="acme_linkedin_company_people",
+            source_path=str(snapshot_dir / "harvest_profiles" / "alice-example.json"),
+            metadata={"public_identifier": "alice-example"},
+        )
+        evidence = [
+            EvidenceRecord(
+                evidence_id=make_evidence_id("lead_alice", "publication_match", "Paper", "https://example.com/paper"),
+                candidate_id="lead_alice",
+                source_type="publication_match",
+                title="Paper",
+                url="https://example.com/paper",
+                summary="Lead from publication.",
+                source_dataset="publication_match",
+                source_path=str(snapshot_dir / "publications" / "alice.html"),
+            ),
+            EvidenceRecord(
+                evidence_id=make_evidence_id(
+                    "employee_alice",
+                    "linkedin_profile_detail",
+                    "Research Engineer",
+                    "https://www.linkedin.com/in/alice-example/",
+                ),
+                candidate_id="employee_alice",
+                source_type="linkedin_profile_detail",
+                title="Research Engineer",
+                url="https://www.linkedin.com/in/alice-example/",
+                summary="Profile detail for Alice.",
+                source_dataset="linkedin_profile_detail",
+                source_path=str(snapshot_dir / "harvest_profiles" / "alice-example.json"),
+            ),
+        ]
+
+        identity = CompanyIdentity(
+            requested_name="Acme",
+            canonical_name="Acme",
+            company_key="acme",
+            linkedin_slug="acme",
+            linkedin_company_url="https://www.linkedin.com/company/acme/",
+        )
+        result = self.acquisition_engine._normalize_snapshot(
+            AcquisitionTask(
+                task_id="normalize_canonical",
+                task_type="normalize_asset_snapshot",
+                title="Normalize canonical",
+                description="Persist snapshot with canonical dedupe.",
+            ),
+            {
+                "company_identity": identity,
+                "snapshot_id": snapshot_dir.name,
+                "snapshot_dir": snapshot_dir,
+                "candidates": [lead_candidate, employee_candidate],
+                "evidence": evidence,
+            },
+        )
+
+        self.assertEqual(result.status, "completed")
+        stored = self.store.list_candidates_for_company("Acme")
+        self.assertEqual(len(stored), 1)
+        self.assertEqual(stored[0].candidate_id, "employee_alice")
+        self.assertEqual(stored[0].category, "employee")
+        self.assertEqual(stored[0].linkedin_url, "https://www.linkedin.com/in/alice-example/")
+        stored_evidence = self.store.list_evidence("employee_alice")
+        stored_source_types = {item["source_type"] for item in stored_evidence}
+        self.assertIn("publication_match", stored_source_types)
+        self.assertIn("linkedin_profile_detail", stored_source_types)
+        payload = json.loads((snapshot_dir / "candidate_documents.json").read_text())
+        self.assertEqual(payload["canonicalization"]["canonical_candidate_count"], 1)
+        self.assertEqual(payload["canonicalization"]["name_merge_count"], 1)
+
+    def test_normalize_snapshot_inherits_manual_review_confirmed_membership(self) -> None:
+        company_dir = self.settings.company_assets_dir / "acme"
+        old_snapshot_dir = company_dir / "20260406T130000"
+        old_artifact_dir = old_snapshot_dir / "normalized_artifacts"
+        current_snapshot_dir = company_dir / "20260407T140000"
+        old_artifact_dir.mkdir(parents=True, exist_ok=True)
+        current_snapshot_dir.mkdir(parents=True, exist_ok=True)
+
+        old_candidate = Candidate(
+            candidate_id="cand_manual_member",
+            name_en="Jeremy Example",
+            display_name="Jeremy Example",
+            category="employee",
+            target_company="Acme",
+            organization="Acme",
+            employment_status="current",
+            role="Publication author lead",
+            media_url="https://jeremy.example.com/",
+            source_dataset="publication_match",
+            source_path=str(old_snapshot_dir / "manual_review_assets" / "jeremy" / "resolution.json"),
+            metadata={
+                "manual_review_artifact_root": str(old_snapshot_dir / "manual_review_assets" / "jeremy"),
+                "manual_review_links": [{"label": "Homepage", "url": "https://jeremy.example.com/"}],
+                "membership_review_required": False,
+                "membership_review_decision": "manual_confirmed_member",
+            },
+        )
+        old_evidence = [
+            EvidenceRecord(
+                evidence_id=make_evidence_id(
+                    old_candidate.candidate_id,
+                    "manual_review",
+                    "Homepage",
+                    "https://jeremy.example.com/",
+                ),
+                candidate_id=old_candidate.candidate_id,
+                source_type="manual_review_link",
+                title="Homepage",
+                url="https://jeremy.example.com/",
+                summary="Manual review confirmed current membership.",
+                source_dataset="manual_review",
+                source_path=str(old_snapshot_dir / "manual_review_assets" / "jeremy" / "source_01.json"),
+            )
+        ]
+        (old_artifact_dir / "materialized_candidate_documents.json").write_text(
+            json.dumps(
+                {
+                    "snapshot": {"snapshot_id": old_snapshot_dir.name},
+                    "candidates": [old_candidate.to_record()],
+                    "evidence": [item.to_record() for item in old_evidence],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+
+        baseline_candidate = Candidate(
+            candidate_id="cand_manual_member",
+            name_en="Jeremy Example",
+            display_name="Jeremy Example",
+            category="lead",
+            target_company="Acme",
+            organization="Acme",
+            employment_status="",
+            role="Publication author lead",
+            source_dataset="publication_match",
+            source_path=str(current_snapshot_dir / "publications" / "jeremy.json"),
+        )
+        baseline_evidence = [
+            EvidenceRecord(
+                evidence_id=make_evidence_id(
+                    baseline_candidate.candidate_id,
+                    "publication_match",
+                    "Blog post",
+                    "https://example.com/jeremy",
+                ),
+                candidate_id=baseline_candidate.candidate_id,
+                source_type="publication_match",
+                title="Blog post",
+                url="https://example.com/jeremy",
+                summary="Current snapshot still only has publication lead evidence.",
+                source_dataset="publication_match",
+                source_path=str(current_snapshot_dir / "publications" / "jeremy.json"),
+            )
+        ]
+
+        identity = CompanyIdentity(
+            requested_name="Acme",
+            canonical_name="Acme",
+            company_key="acme",
+            linkedin_slug="acme",
+            linkedin_company_url="https://www.linkedin.com/company/acme/",
+        )
+        task = AcquisitionTask(
+            task_id="normalize",
+            task_type="normalize_asset_snapshot",
+            title="Normalize",
+            description="Persist snapshot",
+        )
+        result = self.acquisition_engine._normalize_snapshot(
+            task,
+            {
+                "company_identity": identity,
+                "snapshot_id": current_snapshot_dir.name,
+                "snapshot_dir": current_snapshot_dir,
+                "candidates": [baseline_candidate],
+                "evidence": baseline_evidence,
+            },
+        )
+
+        self.assertEqual(result.status, "completed")
+        stored_candidate = self.store.get_candidate("cand_manual_member")
+        self.assertIsNotNone(stored_candidate)
+        assert stored_candidate is not None
+        self.assertEqual(stored_candidate.category, "employee")
+        self.assertEqual(stored_candidate.employment_status, "current")
+        self.assertEqual(stored_candidate.media_url, "https://jeremy.example.com/")
+        self.assertEqual(stored_candidate.metadata.get("membership_review_decision"), "manual_confirmed_member")
+        self.assertFalse(stored_candidate.metadata.get("membership_review_required"))
+        self.assertTrue(stored_candidate.metadata.get("manual_review_artifact_root"))
+
+    def test_normalize_snapshot_inherits_manual_non_member_resolution(self) -> None:
+        company_dir = self.settings.company_assets_dir / "acme"
+        old_snapshot_dir = company_dir / "20260406T140000"
+        old_artifact_dir = old_snapshot_dir / "normalized_artifacts"
+        current_snapshot_dir = company_dir / "20260407T150000"
+        old_artifact_dir.mkdir(parents=True, exist_ok=True)
+        current_snapshot_dir.mkdir(parents=True, exist_ok=True)
+
+        old_candidate = Candidate(
+            candidate_id="cand_manual_non_member",
+            name_en="Rabia Example",
+            display_name="Rabia Example",
+            category="non_member",
+            target_company="Acme",
+            organization="Other Org",
+            employment_status="",
+            role="Data Analyst",
+            linkedin_url="https://www.linkedin.com/in/rabia-example/",
+            source_dataset="acme_search_seed_candidates",
+            source_path=str(old_snapshot_dir / "manual_review_assets" / "rabia" / "resolution.json"),
+            metadata={
+                "manual_review_artifact_root": str(old_snapshot_dir / "manual_review_assets" / "rabia"),
+                "manual_review_links": [{"label": "LinkedIn", "url": "https://www.linkedin.com/in/rabia-example/"}],
+                "target_company_mismatch": True,
+                "membership_review_required": False,
+                "membership_review_decision": "manual_non_member",
+                "membership_review_rationale": "Manual review rejected this profile as unrelated to the target company.",
+            },
+        )
+        old_evidence = [
+            EvidenceRecord(
+                evidence_id=make_evidence_id(
+                    old_candidate.candidate_id,
+                    "manual_review",
+                    "LinkedIn",
+                    "https://www.linkedin.com/in/rabia-example/",
+                ),
+                candidate_id=old_candidate.candidate_id,
+                source_type="manual_review_link",
+                title="LinkedIn",
+                url="https://www.linkedin.com/in/rabia-example/",
+                summary="Manual review rejected this candidate as a non-member.",
+                source_dataset="manual_review",
+                source_path=str(old_snapshot_dir / "manual_review_assets" / "rabia" / "source_01.json"),
+            )
+        ]
+        (old_artifact_dir / "materialized_candidate_documents.json").write_text(
+            json.dumps(
+                {
+                    "snapshot": {"snapshot_id": old_snapshot_dir.name},
+                    "candidates": [old_candidate.to_record()],
+                    "evidence": [item.to_record() for item in old_evidence],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+
+        baseline_candidate = Candidate(
+            candidate_id="cand_manual_non_member",
+            name_en="Rabia Example",
+            display_name="Rabia Example",
+            category="former_employee",
+            target_company="Acme",
+            organization="Acme",
+            employment_status="former",
+            role="OpenAI at Acme",
+            linkedin_url="https://www.linkedin.com/in/rabia-example/",
+            source_dataset="acme_search_seed_candidates",
+            source_path=str(current_snapshot_dir / "search_seeds" / "rabia.json"),
+            metadata={
+                "membership_review_required": True,
+                "membership_review_reason": "suspicious_membership",
+                "membership_review_decision": "suspicious_member",
+            },
+        )
+        baseline_evidence = [
+            EvidenceRecord(
+                evidence_id=make_evidence_id(
+                    baseline_candidate.candidate_id,
+                    "acme_search_seed_candidates",
+                    "Search seed",
+                    "https://www.linkedin.com/in/rabia-example/",
+                ),
+                candidate_id=baseline_candidate.candidate_id,
+                source_type="harvest_profile_search",
+                title="Search seed",
+                url="https://www.linkedin.com/in/rabia-example/",
+                summary="Current snapshot still has the suspicious search-seed candidate.",
+                source_dataset="acme_search_seed_candidates",
+                source_path=str(current_snapshot_dir / "search_seeds" / "rabia.json"),
+            )
+        ]
+
+        identity = CompanyIdentity(
+            requested_name="Acme",
+            canonical_name="Acme",
+            company_key="acme",
+            linkedin_slug="acme",
+            linkedin_company_url="https://www.linkedin.com/company/acme/",
+        )
+        task = AcquisitionTask(
+            task_id="normalize",
+            task_type="normalize_asset_snapshot",
+            title="Normalize",
+            description="Persist snapshot",
+        )
+        result = self.acquisition_engine._normalize_snapshot(
+            task,
+            {
+                "company_identity": identity,
+                "snapshot_id": current_snapshot_dir.name,
+                "snapshot_dir": current_snapshot_dir,
+                "candidates": [baseline_candidate],
+                "evidence": baseline_evidence,
+            },
+        )
+
+        self.assertEqual(result.status, "completed")
+        stored_candidate = self.store.get_candidate("cand_manual_non_member")
+        self.assertIsNotNone(stored_candidate)
+        assert stored_candidate is not None
+        self.assertEqual(stored_candidate.category, "non_member")
+        self.assertEqual(stored_candidate.organization, "Other Org")
+        self.assertEqual(stored_candidate.employment_status, "")
+        self.assertFalse(stored_candidate.metadata.get("membership_review_required"))
+        self.assertTrue(stored_candidate.metadata.get("target_company_mismatch"))
+        self.assertEqual(stored_candidate.metadata.get("membership_review_decision"), "manual_non_member")

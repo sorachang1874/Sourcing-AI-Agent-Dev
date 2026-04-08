@@ -89,6 +89,7 @@ class SearchSeedAcquirer:
         discovery_dir = snapshot_dir / "search_seed_discovery"
         discovery_dir.mkdir(parents=True, exist_ok=True)
         logger = asset_logger or AssetLogger(snapshot_dir)
+        effective_filter_hints = _normalize_harvest_company_filters(identity, filter_hints)
 
         entries: list[dict[str, Any]] = []
         query_summaries: list[dict[str, Any]] = []
@@ -179,9 +180,19 @@ class SearchSeedAcquirer:
             query_summaries.append(dict(result.get("summary") or {}))
             errors.extend(list(result.get("errors") or []))
 
+        queued_query_count = len([item for item in query_summaries if str(item.get("status") or "") == "queued"])
+        queued_background_search = queued_query_count > 0
+        if queued_background_search:
+            stop_reason = "queued_background_search"
+
         entries = _dedupe_seed_entries(entries)
         paid_queries = [item["query"] for item in compiled_queries if item["execution_mode"] == "paid_fallback"] or list(search_seed_queries)
-        if len(entries) < web_result_target and self.accounts and cost_policy.get("provider_people_search_mode") == "fallback_only":
+        if (
+            not queued_background_search
+            and len(entries) < web_result_target
+            and self.accounts
+            and cost_policy.get("provider_people_search_mode") == "fallback_only"
+        ):
             needed = max(web_result_target - len(entries), 0)
             provider_limit = max(needed, web_result_target)
             provider_entries, provider_summaries, provider_errors, provider_accounts = self._provider_people_search_fallback(
@@ -189,7 +200,7 @@ class SearchSeedAcquirer:
                 discovery_dir=discovery_dir,
                 asset_logger=logger,
                 search_seed_queries=paid_queries,
-                filter_hints=filter_hints,
+                filter_hints=effective_filter_hints,
                 employment_status=employment_status,
                 limit=provider_limit,
                 cost_policy=cost_policy,
@@ -208,10 +219,14 @@ class SearchSeedAcquirer:
             "target_company": identity.canonical_name,
             "company_identity": identity.to_record(),
             "entry_count": len(entries),
+            "search_seed_queries": search_seed_queries,
+            "requested_filter_hints": filter_hints,
+            "effective_filter_hints": effective_filter_hints,
             "query_summaries": query_summaries,
             "accounts_used": accounts_used,
             "errors": errors,
             "stop_reason": stop_reason,
+            "queued_query_count": queued_query_count,
             "cost_policy": cost_policy,
             "worker_daemon": {
                 "cycles": int(daemon_summary.get("cycles") or 0),
@@ -328,27 +343,104 @@ class SearchSeedAcquirer:
             if cached_search_path and cached_search_path.exists():
                 parsed_results, search_response = _load_cached_search_response(cached_search_path, query_text)
             else:
-                search_response = self.search_provider.search(query_text, max_results=result_limit)
-                raw_search_path = _write_search_response_raw_asset(
-                    logger=logger,
-                    response=search_response,
-                    default_path=raw_search_path,
-                    asset_type="web_search_payload",
-                    source_kind="search_seed_discovery",
-                    metadata={"query": query_text, "provider_name": search_response.provider_name},
-                )
-                checkpoint = {
-                    **checkpoint,
-                    "stage": "fetched_search_results",
-                    "raw_path": str(raw_search_path),
-                    "provider_name": search_response.provider_name,
-                }
                 if worker_handle:
+                    search_execution = self.search_provider.execute_with_checkpoint(
+                        query_text,
+                        max_results=result_limit,
+                        checkpoint=dict(checkpoint.get("search_state") or {}),
+                    )
+                    artifact_paths = dict(checkpoint.get("search_artifact_paths") or {})
+                    for artifact in list(search_execution.artifacts or []):
+                        artifact_path = _write_search_execution_artifact(
+                            logger=logger,
+                            artifact=artifact,
+                            default_path=raw_search_path,
+                            asset_type="web_search_queue_payload",
+                            source_kind="search_seed_discovery",
+                            metadata={"query": query_text, "provider_name": search_execution.provider_name},
+                        )
+                        artifact_paths[str(artifact.label)] = str(artifact_path)
+                    checkpoint = {
+                        **checkpoint,
+                        "provider_name": search_execution.provider_name,
+                        "search_state": dict(search_execution.checkpoint or {}),
+                        "search_artifact_paths": artifact_paths,
+                    }
+                    if search_execution.pending:
+                        summary = {
+                            "query": query_text,
+                            "bundle_id": query_spec["bundle_id"],
+                            "source_family": query_spec["source_family"],
+                            "execution_mode": query_spec["execution_mode"],
+                            "mode": "web_search",
+                            "status": "queued",
+                            "raw_path": "",
+                            "provider_name": search_execution.provider_name,
+                            "result_count": 0,
+                            "linkedin_result_count": 0,
+                            "seed_entry_count": 0,
+                            "search_state": dict(search_execution.checkpoint or {}),
+                            "search_artifact_paths": artifact_paths,
+                            "message": str(search_execution.message or ""),
+                        }
+                        worker_runtime.complete_worker(
+                            worker_handle,
+                            status="queued",
+                            checkpoint_payload={**checkpoint, "stage": "waiting_remote_search"},
+                            output_payload={"summary": summary, "entries": [], "errors": [], "search_state": dict(search_execution.checkpoint or {})},
+                        )
+                        return {
+                            "index": index,
+                            "entries": [],
+                            "summary": summary,
+                            "errors": [],
+                            "worker_status": "queued",
+                        }
+                    search_response = search_execution.response
+                    if search_response is None:
+                        raise RuntimeError("Search provider returned no response.")
+                    raw_search_path = _write_search_response_raw_asset(
+                        logger=logger,
+                        response=search_response,
+                        default_path=raw_search_path,
+                        asset_type="web_search_payload",
+                        source_kind="search_seed_discovery",
+                        metadata={"query": query_text, "provider_name": search_response.provider_name},
+                    )
+                    checkpoint = {
+                        **checkpoint,
+                        "stage": "fetched_search_results",
+                        "raw_path": str(raw_search_path),
+                        "provider_name": search_response.provider_name,
+                        "search_state": {},
+                    }
                     worker_runtime.checkpoint_worker(
                         worker_handle,
                         checkpoint_payload=checkpoint,
                         output_payload={"raw_path": str(raw_search_path), "provider_name": search_response.provider_name},
                     )
+                else:
+                    search_response = self.search_provider.search(query_text, max_results=result_limit)
+                    raw_search_path = _write_search_response_raw_asset(
+                        logger=logger,
+                        response=search_response,
+                        default_path=raw_search_path,
+                        asset_type="web_search_payload",
+                        source_kind="search_seed_discovery",
+                        metadata={"query": query_text, "provider_name": search_response.provider_name},
+                    )
+                    checkpoint = {
+                        **checkpoint,
+                        "stage": "fetched_search_results",
+                        "raw_path": str(raw_search_path),
+                        "provider_name": search_response.provider_name,
+                    }
+                    if worker_handle:
+                        worker_runtime.checkpoint_worker(
+                            worker_handle,
+                            checkpoint_payload=checkpoint,
+                            output_payload={"raw_path": str(raw_search_path), "provider_name": search_response.provider_name},
+                        )
 
             if search_response is None:
                 raise RuntimeError("Search provider returned no response.")
@@ -859,6 +951,31 @@ def _write_search_response_raw_asset(
     return raw_path
 
 
+def _write_search_execution_artifact(
+    *,
+    logger: AssetLogger,
+    artifact,
+    default_path: Path,
+    asset_type: str,
+    source_kind: str,
+    metadata: dict[str, Any] | None = None,
+) -> Path:
+    raw_path = default_path.with_name(f"{default_path.stem}_{str(getattr(artifact, 'label', 'artifact') or 'artifact')}.json")
+    logger.write_json(
+        raw_path,
+        getattr(artifact, "payload", {}),
+        asset_type=asset_type,
+        source_kind=source_kind,
+        is_raw_asset=True,
+        model_safe=False,
+        metadata={
+            **dict(metadata or {}),
+            **dict(getattr(artifact, "metadata", {}) or {}),
+        },
+    )
+    return raw_path
+
+
 def _load_cached_search_response(path: Path, query_text: str) -> tuple[list[dict[str, str]], SearchResponse]:
     if path.suffix.lower() == ".json":
         payload = json.loads(path.read_text())
@@ -961,6 +1078,48 @@ def _dedupe_seed_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
         seen.add(key)
         deduped.append(entry)
     return deduped
+
+
+def _normalize_harvest_company_filters(identity: CompanyIdentity, filter_hints: dict[str, list[str]]) -> dict[str, list[str]]:
+    normalized = {
+        str(key): [str(item).strip() for item in list(values or []) if str(item).strip()]
+        for key, values in dict(filter_hints or {}).items()
+    }
+    company_url = str(identity.linkedin_company_url or "").strip()
+    if not company_url:
+        return normalized
+
+    target_tokens = {
+        _normalize_company_filter_token(identity.canonical_name),
+        _normalize_company_filter_token(identity.requested_name),
+        _normalize_company_filter_token(identity.company_key),
+        _normalize_company_filter_token(identity.linkedin_slug),
+        _normalize_company_filter_token(company_url),
+    }
+    target_tokens.update(_normalize_company_filter_token(alias) for alias in identity.aliases if alias)
+    target_tokens.discard("")
+    if not target_tokens:
+        return normalized
+
+    for key in ["current_companies", "past_companies", "exclude_current_companies", "exclude_past_companies"]:
+        values = list(normalized.get(key) or [])
+        if not values:
+            continue
+        normalized[key] = [
+            company_url if _normalize_company_filter_token(value) in target_tokens else value
+            for value in values
+        ]
+    return normalized
+
+
+def _normalize_company_filter_token(value: str) -> str:
+    raw = unescape(str(value or "")).strip().lower()
+    if not raw:
+        return ""
+    match = re.search(r"linkedin\.com/company/([^/?#]+)", raw)
+    if match:
+        return re.sub(r"[^a-z0-9]+", "", str(match.group(1) or "").lower())
+    return re.sub(r"[^a-z0-9]+", "", raw)
 
 
 def _compile_query_specs(search_seed_queries: list[str], query_bundles: list[dict[str, Any]]) -> list[dict[str, str]]:

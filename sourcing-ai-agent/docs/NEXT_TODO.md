@@ -2,125 +2,57 @@
 
 ## Goal
 
-这份清单用于在切换账号、切换设备或开启新的 AI session 后，直接继续当前项目，而不依赖聊天上下文。
+这份清单记录当前工作 backlog。它不是默认 onboarding 文档；接手项目时应先读 `docs/INDEX.md` 和 `../PROGRESS.md`，再回到这里看待办。
 
 ## Highest Priority
 
-### 1. Continue Thinking Machines Lab asset accumulation
+### 1. Prepare the repo for clean GitHub sync and collaboration
 
-当前已完成：
+- 持续清理 README / onboarding / docs map，确保 GitHub 上不会出现失效链接和过时入口。
+- 让当前实现、当前 provider 策略、当前资产治理规则都能在 repo 内自解释。
+- push 前至少再做一轮 markdown link audit 和回归测试。
 
-- current roster
-- prioritized current detail
-- former fallback
-- publication supplementation
-- manual review resolution
-- handoff bundle durable sync to R2
-- company-history materialization
-- normalized/reusable candidate artifacts
+### 2. Run a new end-to-end company test on top of the stabilized workflow
 
-当前已知状态：
+- 优先选择一个新的真实组织做完整测试，而不是继续只围绕 TML 调参。
+- 当前候选测试方向是 `Humans&`，目标是从用户 query 出发，验证：
+  - 意图识别
+  - asset reuse / refresh 判定
+  - acquisition
+  - retrieval
+  - manual review routing
+  - result delivery
 
-- Thinking Machines Lab 聚合资产视图已恢复为：
-  - `55` candidates
-  - `75` evidence
-  - `29 current / 25 former / 1 unresolved lead`
-- backlog 已显式拆分为：
-  - `manual_review_backlog.json`
-    - 当前重点：`Horace He`、`Tianle Li`
-  - `profile_completion_backlog.json`
-    - 当前 `25` 人
-    - 主要是 former candidates with LinkedIn URL but no full profile detail
-- 当前设备的 Harvest provider 配置已写回 `runtime/secrets/providers.local.json`
-- `2026-04-07` 新 Harvest token 已重新验证通过：
-  - `company-employees` live smoke test 可用
-  - `profile-scraper` live smoke test 可用
-- 当前更准确的卡点是：
-  - former/current backlog 的 profile completion matching 仍偏保守
-  - browser-search lane 已实现，但本机 live launch 仍缺 `libnspr4.so`
-  - PDF OCR 仍是预留路径，当前最强可用解析器是 `pdfminer.six`
+### 3. Productize asset governance and snapshot promotion
 
-下一步继续补：
-
-- 放宽或重构 profile completion matching，使 fetched detail 能稳定写回 candidate
-- drain `profile_completion_backlog.json`
-- 继续处理 `manual_review_backlog.json`
-- unresolved publication leads
-- corner-case web exploration assets
-- 补 browser-search lane 的系统依赖或迁移到更完整的 Linux/server 环境
-- PDF OCR fallback
-
-### 2. Strengthen object storage sync operability
-
-当前已完成：
-
-- 并发 upload/download
-- per-object retry
-- local/remote bundle index
-- local/remote sync run manifest
-- Thinking Machines Lab handoff bundle R2 `upload -> download -> restore`
-
-下一步要补：
-
-- failed upload/download 的 resume strategy
-- 更细粒度 progress summary
-- “最近可恢复 bundle” / “最近成功 sync run” 的快捷入口
-- 针对大 bundle 的 selective restore / partial pull
-
-### 3. Prepare server-oriented runtime model
-
-后续目标已经明确：
-
-- Sourcing AI Agent 运行在长期在线服务器
-- provider secrets 由 secret manager 注入
-- 高价值 runtime 资产进入 object storage
-- 相似 query 尽量复用既有资产，而不是重复 acquisition
-
-下一步建议：
-
-- 定义 server deployment checklist
-- 定义 object storage prefix / environment layout
-- 定义 server-side runtime bootstrap
-- 定义 asset reuse / asset refresh policy
+- 把 `draft / partial / canonical / superseded / archived` 状态落成可执行规则，而不是只停留在文档。
+- 为 company asset / scoped asset / retrieval artifact 建立更稳定的 registry 和 default pointer。
+- 让上传新资产、替换旧 canonical、保留历史版本的流程标准化。
 
 ## Lower Priority
 
-### 4. Improve object storage provider compatibility
+### 4. Continue service evolution work
 
-当前 provider：
-
-- `filesystem`
-- `s3_compatible`
-
-后续可补：
-
-- direct OSS compatibility tuning
-- richer object metadata
-- lifecycle / retention policy
-
-### 5. Add restore convenience tooling
-
-后续可补：
-
-- `bootstrap-device`
-- `pull-latest-company-handoff`
-- `restore-latest-sqlite`
-- “仅恢复某公司某 snapshot” 的快捷命令
+- 把当前 hybrid 方向继续推进为：
+  - cloud control plane
+  - cloud asset plane
+  - local acquisition-capable runner
+- 先服务化 retrieval-only / asset-backed 请求，再考虑托管 acquisition。
 
 ## Resume Checklist
 
 切换账号之后，先做：
 
-1. 阅读 `docs/HANDOFF_2026-04-06.md`
-2. 阅读 `docs/RECOVERY_TUTORIAL.md`
-3. 阅读这份 `docs/NEXT_TODO.md`
-4. 检查 object storage 配置
-5. 继续做 `Thinking Machines Lab asset accumulation` 和 `server-oriented runtime model`
+1. 阅读 `docs/INDEX.md`
+2. 阅读 `../PROGRESS.md`
+3. 阅读最近的 canonical asset / validation 文档
+4. 检查 provider 和 object storage 配置
+5. 再回到这份 `docs/NEXT_TODO.md`
 
 ## Useful Commands
 
 ```bash
-cd '/home/sorachang/projects/Sourcing AI Agent Dev/sourcing-ai-agent'
+cd "sourcing-ai-agent"
 
 PYTHONPATH=src python3 -m sourcing_agent.cli build-company-candidate-artifacts --company thinkingmachineslab
 PYTHONPATH=src python3 -m sourcing_agent.cli complete-company-assets --company thinkingmachineslab --profile-detail-limit 12 --exploration-limit 2

@@ -10,7 +10,7 @@ from typing import Any
 from urllib import error, parse, request
 
 from .asset_logger import AssetLogger
-from .domain import Candidate, EvidenceRecord, format_display_name, make_evidence_id, normalize_name_token
+from .domain import Candidate, EvidenceRecord, format_display_name, make_evidence_id, normalize_candidate, normalize_name_token
 
 
 def normalize_company_key(value: str) -> str:
@@ -467,7 +467,8 @@ def build_candidates_from_roster(snapshot: CompanyRosterSnapshot) -> tuple[list[
         if row.get("source_account_id"):
             notes += f" Source account: {row['source_account_id']}."
 
-        candidate = Candidate(
+        candidate = normalize_candidate(
+            Candidate(
             candidate_id=candidate_id,
             name_en=full_name,
             display_name=format_display_name(full_name, ""),
@@ -478,7 +479,7 @@ def build_candidates_from_roster(snapshot: CompanyRosterSnapshot) -> tuple[list[
             role=headline,
             team=team,
             focus_areas=headline,
-            work_history=headline,
+            work_history="",
             notes=notes,
             linkedin_url=linkedin_url,
             source_dataset=dataset_name,
@@ -492,6 +493,7 @@ def build_candidates_from_roster(snapshot: CompanyRosterSnapshot) -> tuple[list[
                 "source_account_id": row.get("source_account_id", ""),
                 "snapshot_id": snapshot.snapshot_id,
             },
+            )
         )
         candidates.append(candidate)
 

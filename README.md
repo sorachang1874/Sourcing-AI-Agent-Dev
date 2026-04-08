@@ -1,6 +1,6 @@
 # Sourcing AI Agent Dev
 
-这个目录现在已经整理成一个适合放入 private GitHub repo 的 monorepo 工作区，包含三类内容：
+这个目录现在已经整理成一个适合放入 GitHub repo 的 monorepo 工作区，包含三类内容：
 
 - 历史调研/技能资产
 - 新开发的 `sourcing-ai-agent` 后端
@@ -10,16 +10,14 @@
 
 如果你是新的开发者，或是从新的 AI session 重新接手，请先看：
 
-1. [ONBOARDING.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/ONBOARDING.md)
-2. [CONTRIBUTING.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/CONTRIBUTING.md)
-3. [GITHUB_SYNC_PREP.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/GITHUB_SYNC_PREP.md)
-4. [sourcing-ai-agent/README.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/README.md)
-5. [sourcing-ai-agent/PROGRESS.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/PROGRESS.md)
-6. [sourcing-ai-agent/docs/CROSS_DEVICE_SYNC.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/CROSS_DEVICE_SYNC.md)
-7. [sourcing-ai-agent/docs/HANDOFF_2026-04-06.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/HANDOFF_2026-04-06.md)
-8. [sourcing-ai-agent/docs/RECOVERY_TUTORIAL.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/RECOVERY_TUTORIAL.md)
-9. [sourcing-ai-agent/docs/NEXT_TODO.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/NEXT_TODO.md)
-10. [sourcing-ai-agent/docs/HARVESTAPI_PLAYBOOK.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/HARVESTAPI_PLAYBOOK.md)
+1. [ONBOARDING.md](ONBOARDING.md)
+2. [CONTRIBUTING.md](CONTRIBUTING.md)
+3. [GITHUB_SYNC_PREP.md](GITHUB_SYNC_PREP.md)
+4. [sourcing-ai-agent/README.md](sourcing-ai-agent/README.md)
+5. [sourcing-ai-agent/PROGRESS.md](sourcing-ai-agent/PROGRESS.md)
+6. [sourcing-ai-agent/docs/INDEX.md](sourcing-ai-agent/docs/INDEX.md)
+
+如果你只想快速进入当前有效体系，不要先从 dated handoff / retrospective / todo 文档开始。历史文档仍保留在 `sourcing-ai-agent/docs/`，但已经在 [sourcing-ai-agent/docs/INDEX.md](sourcing-ai-agent/docs/INDEX.md) 里标注为 reference-only。
 
 ## 目录
 
@@ -47,9 +45,9 @@ Sourcing AI Agent Dev/
 
 ## GitHub 同步约束
 
-这个 monorepo 现在可以推送到 private GitHub repo，但必须遵守以下规则：
+这个 monorepo 现在可以推送到 GitHub repo，但必须遵守以下规则：
 
-- 日常协作规则统一以 [CONTRIBUTING.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/CONTRIBUTING.md) 为准
+- 日常协作规则统一以 [CONTRIBUTING.md](CONTRIBUTING.md) 为准
 - 不提交任何真实密钥或 provider secret
 - 不提交 `runtime/` 下的 live data / search payload / profile payload / company assets
 - 不提交历史 `api_accounts.json`
@@ -87,8 +85,8 @@ Sourcing AI Agent Dev/
 如果你后续切换到公司电脑或新的 AI 开发环境，推荐顺序是：
 
 1. 从 GitHub clone 这个 monorepo。
-2. 阅读 [ONBOARDING.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/ONBOARDING.md)。
-3. 阅读 [sourcing-ai-agent/PROGRESS.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/PROGRESS.md) 和 [sourcing-ai-agent/docs/THINKING_MACHINES_LAB_RETROSPECTIVE.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/THINKING_MACHINES_LAB_RETROSPECTIVE.md)。
+2. 阅读 [ONBOARDING.md](ONBOARDING.md)。
+3. 阅读 [sourcing-ai-agent/PROGRESS.md](sourcing-ai-agent/PROGRESS.md) 和 [sourcing-ai-agent/docs/INDEX.md](sourcing-ai-agent/docs/INDEX.md)。
 4. 单独恢复 `runtime/secrets/providers.local.json` 或重新配置环境变量。
 5. 如需复用历史 live data / company assets / profile assets，从单独的安全存储恢复，不要指望 Git 自动带上这些资产。
 

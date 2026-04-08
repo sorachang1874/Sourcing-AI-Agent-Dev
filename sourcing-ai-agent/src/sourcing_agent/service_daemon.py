@@ -124,7 +124,19 @@ class WorkerDaemonService:
         with self._acquire_lock():
             tick = 0
             last_summary: dict[str, Any] = {}
-            self._write_status("starting", tick=tick, last_summary=last_summary)
+            last_nonempty_summary: dict[str, Any] = {}
+            last_nonempty_tick = 0
+            last_nonempty_at = ""
+            cumulative_summary = _empty_cumulative_service_summary()
+            self._write_status(
+                "starting",
+                tick=tick,
+                last_summary=last_summary,
+                last_nonempty_summary=last_nonempty_summary,
+                last_nonempty_tick=last_nonempty_tick,
+                last_nonempty_at=last_nonempty_at,
+                cumulative_summary=cumulative_summary,
+            )
             try:
                 while not self._stop_event.is_set():
                     tick += 1
@@ -136,19 +148,48 @@ class WorkerDaemonService:
                             "total_limit": self.total_limit,
                         }
                     )
-                    self._write_status("running", tick=tick, last_summary=last_summary)
+                    cumulative_summary = _accumulate_cumulative_service_summary(
+                        cumulative_summary,
+                        summary=last_summary,
+                        tick=tick,
+                    )
+                    if _service_summary_has_activity(last_summary):
+                        last_nonempty_summary = dict(last_summary)
+                        last_nonempty_tick = tick
+                        last_nonempty_at = _utc_now()
+                    self._write_status(
+                        "running",
+                        tick=tick,
+                        last_summary=last_summary,
+                        last_nonempty_summary=last_nonempty_summary,
+                        last_nonempty_tick=last_nonempty_tick,
+                        last_nonempty_at=last_nonempty_at,
+                        cumulative_summary=cumulative_summary,
+                    )
                     if max_ticks > 0 and tick >= max_ticks:
                         break
                     if self._sleep_until_next_tick():
                         break
                 final_status = "stopped" if not self._stop_event.is_set() else "stopping"
-                self._write_status(final_status, tick=tick, last_summary=last_summary)
+                self._write_status(
+                    final_status,
+                    tick=tick,
+                    last_summary=last_summary,
+                    last_nonempty_summary=last_nonempty_summary,
+                    last_nonempty_tick=last_nonempty_tick,
+                    last_nonempty_at=last_nonempty_at,
+                    cumulative_summary=cumulative_summary,
+                )
                 return read_service_status(self.runtime_dir, self.service_name)
             except Exception as exc:
                 self._write_status(
                     "failed",
                     tick=tick,
                     last_summary=last_summary,
+                    last_nonempty_summary=last_nonempty_summary,
+                    last_nonempty_tick=last_nonempty_tick,
+                    last_nonempty_at=last_nonempty_at,
+                    cumulative_summary=cumulative_summary,
                     error=str(exc),
                 )
                 raise
@@ -223,6 +264,10 @@ class WorkerDaemonService:
         *,
         tick: int,
         last_summary: dict[str, Any],
+        last_nonempty_summary: dict[str, Any],
+        last_nonempty_tick: int,
+        last_nonempty_at: str,
+        cumulative_summary: dict[str, Any],
         error: str = "",
     ) -> None:
         payload = {
@@ -242,10 +287,84 @@ class WorkerDaemonService:
             "status_path": str(self.status_path),
             "lock_path": str(self.lock_path),
             "last_summary": last_summary,
+            "last_nonempty_summary": last_nonempty_summary,
+            "last_nonempty_tick": int(last_nonempty_tick),
+            "last_nonempty_at": last_nonempty_at,
+            "cumulative_summary": cumulative_summary,
         }
         if error:
             payload["error"] = error
         self.status_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
+
+
+def _empty_cumulative_service_summary() -> dict[str, Any]:
+    return {
+        "tick_count": 0,
+        "active_tick_count": 0,
+        "total_claimed_count": 0,
+        "total_executed_count": 0,
+        "max_recoverable_count": 0,
+        "workflow_resume_status_counts": {},
+        "job_totals": {},
+    }
+
+
+def _service_summary_has_activity(summary: dict[str, Any]) -> bool:
+    daemon = dict(summary.get("daemon") or {})
+    if int(daemon.get("claimed_count") or 0) > 0 or int(daemon.get("executed_count") or 0) > 0:
+        return True
+    workflow_resume = list(summary.get("workflow_resume") or [])
+    return any(str(item.get("status") or "") in {"resumed", "failed"} for item in workflow_resume)
+
+
+def _accumulate_cumulative_service_summary(
+    existing: dict[str, Any],
+    *,
+    summary: dict[str, Any],
+    tick: int,
+) -> dict[str, Any]:
+    daemon = dict(summary.get("daemon") or {})
+    workflow_resume = list(summary.get("workflow_resume") or [])
+    job_totals: dict[str, Any] = {
+        str(job_id): dict(payload)
+        for job_id, payload in dict(existing.get("job_totals") or {}).items()
+        if str(job_id).strip()
+    }
+    for job in list(daemon.get("jobs") or []):
+        job_id = str(job.get("job_id") or "").strip()
+        if not job_id:
+            continue
+        prior = dict(job_totals.get(job_id) or {})
+        job_totals[job_id] = {
+            "claimed_count": int(prior.get("claimed_count") or 0) + int(job.get("claimed_count") or 0),
+            "executed_count": int(prior.get("executed_count") or 0) + int(job.get("executed_count") or 0),
+            "max_backlog_count": max(int(prior.get("max_backlog_count") or 0), int(job.get("backlog_count") or 0)),
+        }
+
+    workflow_resume_status_counts: dict[str, int] = {
+        str(status): int(count)
+        for status, count in dict(existing.get("workflow_resume_status_counts") or {}).items()
+        if str(status).strip()
+    }
+    for item in workflow_resume:
+        status = str(item.get("status") or "").strip()
+        if not status:
+            continue
+        workflow_resume_status_counts[status] = int(workflow_resume_status_counts.get(status) or 0) + 1
+
+    has_activity = _service_summary_has_activity(summary)
+    return {
+        "tick_count": int(tick),
+        "active_tick_count": int(existing.get("active_tick_count") or 0) + (1 if has_activity else 0),
+        "total_claimed_count": int(existing.get("total_claimed_count") or 0) + int(daemon.get("claimed_count") or 0),
+        "total_executed_count": int(existing.get("total_executed_count") or 0) + int(daemon.get("executed_count") or 0),
+        "max_recoverable_count": max(
+            int(existing.get("max_recoverable_count") or 0),
+            int(daemon.get("recoverable_count") or 0),
+        ),
+        "workflow_resume_status_counts": workflow_resume_status_counts,
+        "job_totals": job_totals,
+    }
 
 
 def _utc_now() -> str:

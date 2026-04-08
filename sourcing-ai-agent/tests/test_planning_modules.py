@@ -24,7 +24,7 @@ class PlanningModulesTest(unittest.TestCase):
         self.assertIn("general_web_search_relation_check", strategy.search_channel_order)
         self.assertIn("Researcher", " ".join(strategy.filter_hints.get("job_titles", [])))
         self.assertEqual(strategy.cost_policy.get("provider_people_search_mode"), "fallback_only")
-        self.assertFalse(strategy.cost_policy.get("collect_email"))
+        self.assertTrue(strategy.cost_policy.get("collect_email"))
 
     def test_former_employee_strategy_prefers_past_company_recall(self) -> None:
         request = JobRequest(
@@ -70,3 +70,42 @@ class PlanningModulesTest(unittest.TestCase):
         self.assertIn("semantic_vector_rerank", layer_ids)
         self.assertIn("manual_review_queue", layer_ids)
         self.assertIn("public_interviews", bundle_ids)
+
+    def test_sourcing_plan_surfaces_must_have_facets(self) -> None:
+        request = JobRequest(
+            raw_user_request="找 TML 的 multimodal 成员",
+            query="multimodal",
+            target_company="Thinking Machines Lab",
+            must_have_facets=["multimodal"],
+        )
+        plan = build_sourcing_plan(request, AssetCatalog.discover(), DeterministicModelClient())
+
+        self.assertIn("must_have_facets=['multimodal']", plan.criteria_summary)
+        self.assertIn("must_have_facets=['multimodal']", plan.retrieval_plan.structured_filters)
+        filter_layer = next(item for item in plan.retrieval_plan.filter_layers if item.get("layer_id") == "must_exclude_filters")
+        self.assertEqual(filter_layer["criteria"]["must_have_facets"], ["multimodal"])
+        self.assertIn("derived_facets", plan.retrieval_plan.semantic_fields)
+
+    def test_sourcing_plan_surfaces_primary_role_bucket_filters(self) -> None:
+        request = JobRequest(
+            raw_user_request="找 TML 的 infra 系统主力成员",
+            query="infra systems",
+            target_company="Thinking Machines Lab",
+            must_have_primary_role_buckets=["infra_systems"],
+        )
+        plan = build_sourcing_plan(request, AssetCatalog.discover(), DeterministicModelClient())
+
+        self.assertIn(
+            "must_have_primary_role_buckets=['infra_systems']",
+            plan.criteria_summary,
+        )
+        self.assertIn(
+            "must_have_primary_role_buckets=['infra_systems']",
+            plan.retrieval_plan.structured_filters,
+        )
+        population_layer = next(item for item in plan.retrieval_plan.filter_layers if item.get("layer_id") == "population_scope")
+        self.assertEqual(
+            population_layer["criteria"]["must_have_primary_role_buckets"],
+            ["infra_systems"],
+        )
+        self.assertNotIn("notes", plan.retrieval_plan.semantic_fields)

@@ -113,7 +113,19 @@ def build_rule_change_diff(
     request_changes = _structured_field_changes(
         baseline_version.get("request") or {},
         rerun_version.get("request") or {},
-        ["categories", "employment_statuses", "keywords", "must_have_keywords", "exclude_keywords", "organization_keywords", "retrieval_strategy", "target_scope"],
+        [
+            "asset_view",
+            "categories",
+            "employment_statuses",
+            "keywords",
+            "must_have_facets",
+            "must_have_primary_role_buckets",
+            "must_have_keywords",
+            "exclude_keywords",
+            "organization_keywords",
+            "retrieval_strategy",
+            "target_scope",
+        ],
     )
     plan_changes = _plan_changes(baseline_version.get("plan") or {}, rerun_version.get("plan") or {})
     explanations = _rule_change_explanations(

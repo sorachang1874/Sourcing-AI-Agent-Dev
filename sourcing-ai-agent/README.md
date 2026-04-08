@@ -4,7 +4,19 @@
 
 `用户意图 -> criteria 澄清 -> acquisition plan -> 异步 sourcing workflow -> retrieval -> result artifact`
 
-开始在这个子项目里改代码之前，先阅读 monorepo 根目录的协作规则 [../CONTRIBUTING.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/CONTRIBUTING.md)。
+开始在这个子项目里改代码之前，先阅读 monorepo 根目录的协作规则 [../CONTRIBUTING.md](../CONTRIBUTING.md)。
+
+## Documentation Map
+
+当前有效的文档入口：
+
+- [../ONBOARDING.md](../ONBOARDING.md)
+- [PROGRESS.md](PROGRESS.md)
+- [docs/INDEX.md](docs/INDEX.md)
+- [docs/THINKING_MACHINES_LAB_CANONICAL_ASSET.md](docs/THINKING_MACHINES_LAB_CANONICAL_ASSET.md)
+- [docs/THINKING_MACHINES_LAB_VALIDATION_2026-04-08.md](docs/THINKING_MACHINES_LAB_VALIDATION_2026-04-08.md)
+
+历史 handoff / retrospective / todo 文档仍保留，但已经在 [docs/INDEX.md](docs/INDEX.md) 中标记为 reference-only。
 
 ## 当前目标
 
@@ -34,13 +46,19 @@
     - 确认新增链路是否满足数据资产落盘、可审计、可扩展三项约束
 - 支持稳定的 `search provider abstraction`
   - low-cost search 已不再绑定到单一 DuckDuckGo HTML endpoint
-  - 当前 provider chain 支持 `serper_google -> google_browser -> duckduckgo_html` 的优先级切换
+  - 当前 provider chain 支持 `dataforseo_google_organic -> serper_google -> google_browser -> bing_html -> duckduckgo_html` 的优先级切换
   - `search_seed_discovery / slug_resolution / exploratory_enrichment` 已统一走同一套 provider 接口
   - search raw payload 现在会按 provider 的 `html/json` 形态落盘，便于缓存复用与审计
   - 当前环境下 DuckDuckGo 仍可能出现 TLS EOF，因此 production 推荐显式配置稳定 provider
+  - 已接入 `DataForSEO Google Organic`：
+    - 同步 lane 可走 `live/regular`
+    - 低成本后台批量更推荐 `Standard Queue`
+    - `search_planner / public_media_specialist / exploration_specialist` 的 worker 恢复链路已支持 `task_post -> tasks_ready -> task_get`
+    - 已提供 `scripts/dataforseo_google_organic.py` helper 与 `docs/DATAFORSEO_PLAYBOOK.md`
   - `google_browser` lane 现已接到 Playwright/Chromium provider
   - 对于 OpenClaw 这类“无需 search API 也能做 Google Search”的 Agent，底层思路更接近 `browser automation / Playwright`，而不是普通 search API
-  - 当前这台 WSL 机器上，browser lane 仍受系统共享库 `libnspr4.so` 缺失影响，因此代码已就绪，但 live Google query 仍需要更完整的 Linux/server 环境或补系统依赖
+  - 当前这台 WSL 机器上，browser lane 仍受系统共享库 `libnspr4.so` 缺失影响
+  - 当前代码已补可执行的缺库报错提示，若 live Google query 失败，会直接指出缺失库与建议安装包
 - 支持 `agent runtime`
   - workflow / retrieval 已按 specialist lanes 记录 runtime session 和 trace spans
   - 当前 lane 包括 `triage_planner / search_planner / acquisition_specialist / enrichment_specialist / exploration_specialist / retrieval_specialist / review_specialist`
@@ -80,6 +98,8 @@
   - 若后续发现 LinkedIn URL，可再次进入 profile detail acquisition
   - search-seed acquisition 已能从 `public_interviews / publication_and_blog` 这类低成本 query bundle 中生成 `public_media_lead`
   - 公开视频搜索结果会先保存 `public_media_results / public_media_analysis`，基于标题和摘要做初步关系判断
+  - `Roster-Anchored Scholar Coauthor Expansion` 当前默认只产出 evidence-only prospects，不会默认对全量 prospects 自动发起 search follow-up
+  - 若要真的跑 prospect follow-up，需要显式提供 `scholar_coauthor_follow_up_limit`
 - 支持 model-assisted page analysis：
   - 以通用 `analyze_page_asset` 接口调用页面摘要/校验模型，不把实现写死为 Qwen
   - 当前已有 deterministic fallback，后续可并列接 Claude 等其他模型
@@ -143,14 +163,15 @@
     - known-URL profile completion
     - unresolved lead exploration
     - follow-up profile completion
-  - 当前 Thinking Machines Lab 的聚合资产视图已恢复为：
-    - `55` candidates
-    - `75` evidence
-    - `29` current
-    - `25` former
-    - `1` unresolved lead
+  - Thinking Machines Lab 当前已有单一 canonical snapshot，并显式拆分：
+    - `canonical_merged`
+    - `strict_roster_only`
+  - 当前 authoritative counts、cloud bundle 和 asset-view 使用规则统一见：
+    - `docs/THINKING_MACHINES_LAB_CANONICAL_ASSET.md`
+    - `docs/THINKING_MACHINES_LAB_VALIDATION_2026-04-08.md`
   - 当前设备上 Harvest 配置入口已恢复到 `runtime/secrets/providers.local.json`
-  - 但当前 Harvest token 仍需重新 smoke test 验证；若 auth 失效，former detail 补全仍会保留在 `profile_completion_backlog.json`，而不是静默丢失
+  - `2026-04-07` 新 Harvest token 已重新 smoke test 验证通过
+  - backlog 不再在 README 中写死，以 snapshot 内 `normalized_artifacts/*_backlog.json` 和对应 validation note 为准
 - 支持 `Manual Review Queue`
   - `lead_only`
   - 缺少 LinkedIn profile 的候选人
@@ -195,6 +216,8 @@
 - 支持 object storage durable sync：
   - `upload-asset-bundle / download-asset-bundle` 已支持并发 `max_workers`
   - 单对象上传/下载已补 retry/backoff
+  - 默认会 resume，并跳过已完成且匹配 manifest 的对象
+  - sync summary 会给出 progress / skipped_existing 统计
   - 本地会生成 `runtime/object_sync/bundle_index.json` 与 `runtime/object_sync/runs/*.json`
   - 云端会同步写入 `indexes/bundle_index.json` 与 `indexes/sync_runs/*.json`
   - Thinking Machines Lab handoff bundle 已完成真实 `R2 upload -> R2 download -> local restore`
@@ -210,12 +233,13 @@
   - `HarvestProfileSearchConnector`
   - `HarvestCompanyEmployeesConnector`
   - `HarvestProfileConnector`
-  - 当前可在真实项目根目录下自动复用旧项目中已存的 Apify token
+  - 当前 canonical 配置入口是 `runtime/secrets/providers.local.json`
+  - 旧项目 token 自动发现只作为 recovery fallback，不应作为日常依赖
   - 已验证 Harvest search / company-employees actor 可真实调用并落盘 raw asset
   - 已确认参数差异：
     - `linkedin-profile-search` 可接受 `profileScraperMode=Short`
     - `linkedin-company-employees` 的 `profileScraperMode` 必须使用完整枚举，如 `Short ($4 per 1k)`
-    - `linkedin-profile-scraper` 的 `profileScraperMode` 也必须使用完整枚举，如 `Profile details no email ($4 per 1k)`
+    - `linkedin-profile-scraper` 的 `profileScraperMode` 也必须使用完整枚举，如 `Profile details + email search ($10 per 1k)` 或 `Profile details no email ($4 per 1k)`
     - search / company 两类 actor 都需要满足最小 `maxTotalChargeUsd`，否则会返回 400
   - 已补 known-profile batch enrichment：
     - roster -> candidate 现会保留 `linkedin_url / metadata.profile_url`
@@ -230,7 +254,7 @@
     - `queries`
     - `profileIds`
     - 不应继续使用错误的 `profileUrls`
-  - 已新增 [docs/HARVESTAPI_PLAYBOOK.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/HARVESTAPI_PLAYBOOK.md)，沉淀 actor 链接、payload 规范、TML live 结论与当前已知坑
+  - 已新增 [docs/HARVESTAPI_PLAYBOOK.md](docs/HARVESTAPI_PLAYBOOK.md)，沉淀 actor 链接、payload 规范、TML live 结论与当前已知坑
 
 ## 目录
 
@@ -247,15 +271,16 @@ sourcing-ai-agent/
 
 如果你是新的开发者或新的 AI session，建议按这个顺序进入项目：
 
-1. 根目录 [ONBOARDING.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/ONBOARDING.md)
-2. [PROGRESS.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/PROGRESS.md)
-3. [docs/MODULES.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/MODULES.md)
-4. [docs/DEVELOPMENT_GUIDE.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/DEVELOPMENT_GUIDE.md)
-5. [docs/HARVESTAPI_PLAYBOOK.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/HARVESTAPI_PLAYBOOK.md)
-5. [docs/THINKING_MACHINES_LAB_RETROSPECTIVE.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/THINKING_MACHINES_LAB_RETROSPECTIVE.md)
-6. [docs/CROSS_DEVICE_SYNC.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/CROSS_DEVICE_SYNC.md)
-7. [docs/HANDOFF_2026-04-06.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/HANDOFF_2026-04-06.md)
-8. [docs/RECOVERY_TUTORIAL.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/RECOVERY_TUTORIAL.md)
+1. 根目录 [../ONBOARDING.md](../ONBOARDING.md)
+2. [PROGRESS.md](PROGRESS.md)
+3. [docs/INDEX.md](docs/INDEX.md)
+4. [docs/MODULES.md](docs/MODULES.md)
+5. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+6. [docs/HARVESTAPI_PLAYBOOK.md](docs/HARVESTAPI_PLAYBOOK.md)
+7. [docs/DATAFORSEO_PLAYBOOK.md](docs/DATAFORSEO_PLAYBOOK.md)
+8. [docs/THINKING_MACHINES_LAB_CANONICAL_ASSET.md](docs/THINKING_MACHINES_LAB_CANONICAL_ASSET.md)
+9. [docs/THINKING_MACHINES_LAB_VALIDATION_2026-04-08.md](docs/THINKING_MACHINES_LAB_VALIDATION_2026-04-08.md)
+10. 需要追旧决策或恢复旧环境时，再看 `docs/` 下的 dated reference 文档
 
 ## GitHub Sync Boundary
 
@@ -276,12 +301,12 @@ sourcing-ai-agent/
 
 跨设备恢复的详细设计见：
 
-[docs/CROSS_DEVICE_SYNC.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/CROSS_DEVICE_SYNC.md)
+[docs/CROSS_DEVICE_SYNC.md](docs/CROSS_DEVICE_SYNC.md)
 
 ## 快速开始
 
 ```bash
-cd '/home/sorachang/projects/Sourcing AI Agent Dev/sourcing-ai-agent'
+cd "sourcing-ai-agent"
 PYTHONPATH=src python3 -m sourcing_agent.cli bootstrap
 PYTHONPATH=src python3 -m sourcing_agent.cli plan --file configs/demo_workflow_xai.json
 PYTHONPATH=src python3 -m sourcing_agent.cli plan --file configs/demo_workflow_thinking_machines_lab.json
@@ -437,8 +462,13 @@ Thinking Machines Lab 端到端测试建议入口：
 - former fallback：现已改为 `pastCompanies` recall first，不默认加 `excludeCurrentCompanies`
 - publication supplement：现已执行 official blog / docs / publication surface 抽取，并把 unmatched authors 作为 lead 保留
 - publication lead 的默认顺序已调整为 low-cost first：
-  - 先 slug/web exploration
-  - targeted Harvest name search 默认关闭，只有显式批准时才启用
+  - 先走 `Publication Lead Public-Web Verification`
+  - 先补 public-web affiliation evidence 与 LinkedIn URL
+  - targeted Harvest name search 不再作为 publication lead 的自动下一步；默认需要逐人确认
+- `Roster-Anchored Scholar Coauthor Expansion` 已接入第一版：
+  - 当前后端先用 arXiv author-seed search 扩 confirmed roster member 的 coauthor 图
+  - 未命中的 coauthor 只会进入 prospect artifact，不会直接升 lead
+  - 只有在 public web 确认 affiliation 且拿到 LinkedIn URL 后，才允许继续 profile fetch
 - manual review 现已成为正式数据资产入口：
   - 可把人工补充的 LinkedIn / homepage / CV / social links 写回 `candidate + evidence + manual_review_assets`
   - Thinking Machines Lab 当前已完成：
@@ -446,40 +476,30 @@ Thinking Machines Lab 端到端测试建议入口：
     - `John Schulman`：confirmed current employee，已写回 homepage evidence
     - `Jeremy Bernstein`：confirmed current employee，已写回 homepage + CV evidence
     - `Horace He`：homepage 未直接确认 TML affiliation，保留为 unresolved lead
-- 当前 low-cost search 仍需 provider abstraction：
-  - 现网环境对 DuckDuckGo HTML endpoint 存在 TLS EOF 问题
-  - 因此 web search 继续视为 best-effort source，不能作为唯一验证链
+- 当前 low-cost search provider 状态：
+  - 当前 low-cost search 已经有 provider abstraction
+  - 默认顺序是 `dataforseo_google_organic -> serper_google -> google_browser -> bing_html -> duckduckgo_html`
+  - 现网环境对 DuckDuckGo HTML endpoint 仍存在 TLS EOF 问题，因此它只保留为 best-effort fallback
+  - 更稳定的 Google organic 调用与后台 queue 方案见 `docs/DATAFORSEO_PLAYBOOK.md`
 
 ## 设计文档
 
+- `docs/INDEX.md`
 - `docs/ARCHITECTURE.md`
+- `docs/LEAD_DISCOVERY_METHODS.md`
 - `docs/DATA_ARCHITECTURE.md`
 - `docs/MODULES.md`
 - `docs/PRD.md`
 - `docs/BACKEND_MVP.md`
-- `docs/THINKING_MACHINES_LAB_RETROSPECTIVE.md`
+- `docs/DATA_ASSET_GOVERNANCE.md`
+- `docs/SERVICE_EVOLUTION_STRATEGY.md`
 
 ## 下一步
 
-- 将 HarvestAPI 作为高质量但高成本的最终验证 connector：
-  - 默认不抓 email
-  - profile scraper 默认使用 `Full` 模式，避免因为 detail 不完整而重复调用
-  - 先用 company employees / profile search 建立候选池，再对高优先级 slug 调用 full profile
-  - 仅在人工确认后的最终测试或高价值任务上启用
-- 把 acquisition plan 从“通用 company roster”升级为“按意图选择 roster 获取策略”，例如：
-  - 全量公司成员
-  - 指定公司前员工
-  - 投资过目标公司的投资机构成员
-- 把 retrieval 从单层规则匹配升级为多层过滤：
-  - source-level inclusion
-  - structured hard filters
-  - lexical / alias matching
-  - semantic rerank
-  - confidence banding + review gate
-- 补完更多 profile enrichment connectors，并把现有 publication / co-author 结果真正纳入 retrieval
-- 把 criteria auto-evolution 从“反馈后重编译”继续升级到“反馈后自动建议新 filter / confidence policy”
-- 接入 The Org / Hunter / Scholar / web source adapters
-- 把 LinkedIn Profile 这类高价值资产从本地 runtime 迁移到云端对象存储或文档库
+- 保持 `asset build` 和 `retrieval & delivery` 两条 pipeline 分离，避免 retrieval 默认触发新的 acquisition
+- 把 snapshot promotion / canonical pointer / cloud registry 进一步产品化，落实 `docs/DATA_ASSET_GOVERNANCE.md`
+- 继续把 Web control plane + local runner 的 hybrid 形态落成真实服务入口，见 `docs/SERVICE_EVOLUTION_STRATEGY.md`
+- 用新的公司做真实端到端验证，优先验证意图识别、asset reuse、manual review 和结果交付链
 - 将当前本地 sparse-vector retrieval 升级为外部 embedding / vector store，并补 candidate-level semantic attribution
 - 引入 specialist lanes / handoff runtime / trace spans，把当前 job engine 继续升级成 fully agentic sourcing copilot
 - 再在此基础上做 Demo 前端

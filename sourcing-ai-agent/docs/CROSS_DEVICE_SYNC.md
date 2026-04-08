@@ -4,6 +4,11 @@
 
 这份文档定义一套适合 `Sourcing AI Agent` 的跨设备可恢复方案。
 
+配套规则见：
+
+- `docs/DATA_ASSET_GOVERNANCE.md`
+- `docs/SERVICE_EVOLUTION_STRATEGY.md`
+
 目标不是把所有东西都塞进 Git，而是把不同类型的资产放到正确的存储层里：
 
 - GitHub 负责代码、文档、示例配置、去敏后的方法论资产
@@ -50,7 +55,7 @@
 
 ## Recommended Storage Planes
 
-### 1. GitHub private repo
+### 1. GitHub repo
 
 用途：
 
@@ -285,6 +290,8 @@ sourcing-ai-agent-dev/
 
 - `max_workers` 并发传输
 - per-object retry/backoff
+- resume / skip-existing
+- progress summary
 - upload/download 后同步写出 local/remote sync manifest
 
 当前建议后续继续补：
@@ -301,7 +308,7 @@ sourcing-ai-agent-dev/
 ## Implemented CLI Examples
 
 ```bash
-cd '/home/sorachang/projects/Sourcing AI Agent Dev/sourcing-ai-agent'
+cd "sourcing-ai-agent"
 
 PYTHONPATH=src python3 -m sourcing_agent.cli export-company-snapshot-bundle --company thinkingmachineslab
 PYTHONPATH=src python3 -m sourcing_agent.cli export-company-handoff-bundle --company thinkingmachineslab
@@ -346,9 +353,8 @@ PYTHONPATH=src python3 -m sourcing_agent.cli restore-sqlite-snapshot --manifest 
 
 当前仍待优化的一点：
 
-- 大 handoff bundle 仍按对象串行上传
-- 对于 `500+` 文件的 bundle，真实上传会偏慢
-- 后续应补并发上传 / retry batching
+- 还没有“拉最近成功 bundle / sync run”的快捷命令
+- selective restore / partial pull 还未落地
 
 ## Recommended Phase Plan
 
@@ -397,7 +403,7 @@ PYTHONPATH=src python3 -m sourcing_agent.cli restore-sqlite-snapshot --manifest 
 
 结合当前项目状态，最适合的近期方案是：
 
-1. GitHub private repo  
+1. GitHub repo  
    继续同步代码、文档、示例配置、去敏方法论资产。
 
 2. Secret manager  
