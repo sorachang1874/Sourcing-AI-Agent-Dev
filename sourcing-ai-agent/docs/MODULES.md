@@ -183,7 +183,10 @@ User Request
 
 - 稳定的 search provider abstraction
 - 当前支持：
+  - `dataforseo_google_organic`
   - `serper_google`
+  - `google_browser`
+  - `bing_html`
   - `duckduckgo_html`
   - provider chain fallback
 - 统一输出 `SearchResponse`
@@ -191,12 +194,15 @@ User Request
   - raw payload roundtrip
   - html/json provider 兼容
   - 低成本 search 的替换能力
+  - 对同步 query 使用 live provider
+  - 对 worker 模式的 Google organic query，默认可走 DataForSEO Standard Queue，并以 `queued -> resume -> task_get` 形式恢复
 
 ### `harvest_connectors.py`
 
 - 对接高质量 HarvestAPI provider
 - 当前主要承载已知 LinkedIn URL 时的 full profile scrape
-- 默认不抓 email，默认 `Full`
+- app settings 当前默认启用 email search，且默认 `Full`
+- 若要走低成本路径，仍支持显式切回 no-email 枚举
 
 ### `enrichment.py`
 

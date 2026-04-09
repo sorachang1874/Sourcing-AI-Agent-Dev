@@ -6,7 +6,7 @@ import math
 import re
 from typing import Any
 
-from .domain import Candidate, JobRequest
+from .domain import Candidate, JobRequest, derive_candidate_facets, derive_candidate_role_bucket, sanitize_candidate_notes
 from .scoring import build_query_terms, candidate_matches_structured_filters
 from .semantic_provider import SemanticProvider
 
@@ -16,6 +16,7 @@ SEMANTIC_FIELD_WEIGHTS = {
     "role": 3.0,
     "team": 2.7,
     "focus_areas": 2.8,
+    "derived_facets": 3.2,
     "investment_involvement": 2.0,
     "education": 1.1,
     "work_history": 1.6,
@@ -72,7 +73,7 @@ def rank_semantic_candidates(
     if not query_terms:
         return {}
 
-    fields = list(semantic_fields or SEMANTIC_FIELD_WEIGHTS.keys())
+    fields = _semantic_fields_for_request(request, semantic_fields)
     documents = [_build_document(candidate, fields) for candidate in candidate_pool]
     if semantic_provider is not None and semantic_provider.provider_name() != "local_sparse":
         provider_hits = _rank_with_provider(query_terms, documents, semantic_provider, limit=limit)
@@ -207,12 +208,19 @@ def _build_semantic_query_terms(request: JobRequest, criteria_patterns: list[dic
     return _dedupe(expanded)
 
 
+def _semantic_fields_for_request(request: JobRequest, semantic_fields: list[str] | None) -> list[str]:
+    fields = list(semantic_fields or SEMANTIC_FIELD_WEIGHTS.keys())
+    if request.must_have_primary_role_buckets:
+        return [field_name for field_name in fields if field_name != "notes"]
+    return fields
+
+
 def _build_document(candidate: Candidate, semantic_fields: list[str]) -> _SemanticDocument:
     token_weights: dict[str, float] = {}
     term_fields: dict[str, list[str]] = {}
     field_values: dict[str, str] = {}
     for field_name in semantic_fields:
-        value = str(getattr(candidate, field_name, "") or "").strip()
+        value = _semantic_field_value(candidate, field_name)
         if not value:
             continue
         field_values[field_name] = value
@@ -315,6 +323,15 @@ def _top_overlap_terms(document: _SemanticDocument, query_terms: list[str]) -> l
             ranked.append((weight, term))
     ranked.sort(key=lambda item: (-item[0], item[1]))
     return [term for _, term in ranked[:6]]
+
+
+def _semantic_field_value(candidate: Candidate, field_name: str) -> str:
+    if field_name == "derived_facets":
+        return " | ".join([derive_candidate_role_bucket(candidate)] + derive_candidate_facets(candidate))
+    value = str(getattr(candidate, field_name, "") or "").strip()
+    if field_name == "notes":
+        return sanitize_candidate_notes(value)
+    return value
 
 
 def _text_features(value: str) -> list[str]:

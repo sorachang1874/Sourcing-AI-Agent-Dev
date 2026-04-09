@@ -7,7 +7,7 @@ import sqlite3
 import threading
 from typing import Any
 
-from .domain import Candidate, EvidenceRecord, JobRequest
+from .domain import Candidate, EvidenceRecord, JobRequest, normalize_candidate
 from .request_matching import MATCH_THRESHOLD, request_family_score, request_family_signature, request_signature
 from .worker_scheduler import effective_worker_status, wait_stage
 
@@ -911,9 +911,49 @@ class SQLiteStore:
         return self.get_plan_review_session(review_id)
 
     def replace_manual_review_items(self, job_id: str, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        normalized_items = _prepare_manual_review_items(items)
+        scope_keys = {_manual_review_scope_key(item) for item in normalized_items if _manual_review_scope_key(item)}
+        legacy_scope_keys = {
+            _manual_review_scope_key(item, include_snapshot=False)
+            for item in normalized_items
+            if _manual_review_scope_key(item, include_snapshot=False)
+        }
         with self._lock, self._connection:
             self._connection.execute("DELETE FROM manual_review_items WHERE job_id = ?", (job_id,))
-            for item in items:
+            if legacy_scope_keys:
+                rows = self._connection.execute(
+                    """
+                    SELECT * FROM manual_review_items
+                    WHERE status = 'open'
+                    """,
+                ).fetchall()
+                stale_review_item_ids: list[int] = []
+                for row in rows:
+                    row_scope = _manual_review_scope_key(_manual_review_item_from_row_payload(row))
+                    row_legacy_scope = _manual_review_scope_key(
+                        _manual_review_item_from_row_payload(row),
+                        include_snapshot=False,
+                    )
+                    if row["job_id"] == job_id:
+                        continue
+                    if row_scope in scope_keys or row_legacy_scope in legacy_scope_keys:
+                        stale_review_item_ids.append(int(row["review_item_id"]))
+                for review_item_id in stale_review_item_ids:
+                    self._connection.execute(
+                        """
+                        UPDATE manual_review_items
+                        SET status = 'superseded',
+                            review_notes = CASE
+                                WHEN trim(coalesce(review_notes, '')) = '' THEN 'Superseded by a newer manual-review queue item.'
+                                WHEN instr(review_notes, 'Superseded by a newer manual-review queue item.') > 0 THEN review_notes
+                                ELSE review_notes || ' | Superseded by a newer manual-review queue item.'
+                            END,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE review_item_id = ?
+                        """,
+                        (review_item_id,),
+                    )
+            for item in normalized_items:
                 self._connection.execute(
                     """
                     INSERT INTO manual_review_items (
@@ -934,7 +974,7 @@ class SQLiteStore:
                         json.dumps(item.get("metadata") or {}, ensure_ascii=False),
                     ),
                 )
-        return self.list_manual_review_items(job_id=job_id, status="", limit=max(len(items), 1))
+        return self.list_manual_review_items(job_id=job_id, status="", limit=max(len(normalized_items), 1))
 
     def list_manual_review_items(
         self,
@@ -966,6 +1006,97 @@ class SQLiteStore:
             (*params, limit),
         ).fetchall()
         return [self._manual_review_item_from_row(row) for row in rows]
+
+    def cleanup_manual_review_items(
+        self,
+        *,
+        target_company: str = "",
+        snapshot_id: str = "",
+    ) -> dict[str, Any]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if target_company:
+            clauses.append("lower(target_company) = lower(?)")
+            params.append(target_company)
+        where_clause = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+
+        metadata_updated = 0
+        superseded_count = 0
+        out_of_scope_count = 0
+        with self._lock, self._connection:
+            rows = self._connection.execute(
+                f"""
+                SELECT * FROM manual_review_items
+                {where_clause}
+                ORDER BY updated_at DESC, review_item_id DESC
+                """,
+                params,
+            ).fetchall()
+
+            latest_open_by_scope: dict[tuple[str, str, str], int] = {}
+            for row in rows:
+                payload = _manual_review_item_from_row_payload(row)
+                metadata = dict(payload.get("metadata") or {})
+                inferred_snapshot_id = _infer_manual_review_snapshot_id(payload)
+                if inferred_snapshot_id and str(metadata.get("snapshot_id") or "").strip() != inferred_snapshot_id:
+                    metadata["snapshot_id"] = inferred_snapshot_id
+                    self._connection.execute(
+                        "UPDATE manual_review_items SET metadata_json = ?, updated_at = CURRENT_TIMESTAMP WHERE review_item_id = ?",
+                        (json.dumps(metadata, ensure_ascii=False), int(row["review_item_id"])),
+                    )
+                    payload["metadata"] = metadata
+                    metadata_updated += 1
+
+                row_snapshot_id = str(metadata.get("snapshot_id") or "").strip()
+                if str(row["status"] or "") != "open":
+                    continue
+                if snapshot_id and row_snapshot_id and row_snapshot_id != snapshot_id:
+                    self._connection.execute(
+                        """
+                        UPDATE manual_review_items
+                        SET status = 'out_of_scope',
+                            review_notes = CASE
+                                WHEN trim(coalesce(review_notes, '')) = '' THEN 'Marked out of scope for the active snapshot.'
+                                WHEN instr(review_notes, 'Marked out of scope for the active snapshot.') > 0 THEN review_notes
+                                ELSE review_notes || ' | Marked out of scope for the active snapshot.'
+                            END,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE review_item_id = ?
+                        """,
+                        (int(row["review_item_id"]),),
+                    )
+                    out_of_scope_count += 1
+                    continue
+
+                scope_key = _manual_review_scope_key(payload, include_snapshot=False)
+                if not scope_key:
+                    continue
+                if scope_key in latest_open_by_scope:
+                    self._connection.execute(
+                        """
+                        UPDATE manual_review_items
+                        SET status = 'superseded',
+                            review_notes = CASE
+                                WHEN trim(coalesce(review_notes, '')) = '' THEN 'Superseded by a newer manual-review queue item.'
+                                WHEN instr(review_notes, 'Superseded by a newer manual-review queue item.') > 0 THEN review_notes
+                                ELSE review_notes || ' | Superseded by a newer manual-review queue item.'
+                            END,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE review_item_id = ?
+                        """,
+                        (int(row["review_item_id"]),),
+                    )
+                    superseded_count += 1
+                    continue
+                latest_open_by_scope[scope_key] = int(row["review_item_id"])
+
+        return {
+            "target_company": target_company,
+            "snapshot_id": snapshot_id,
+            "metadata_updated_count": metadata_updated,
+            "superseded_count": superseded_count,
+            "out_of_scope_count": out_of_scope_count,
+        }
 
     def review_manual_review_item(
         self,
@@ -1342,6 +1473,7 @@ class SQLiteStore:
         limit: int = 100,
         stale_after_seconds: int = 300,
         lane_id: str = "",
+        job_id: str = "",
     ) -> list[dict[str, Any]]:
         clauses = [
             "("
@@ -1352,6 +1484,9 @@ class SQLiteStore:
             "(lease_expires_at IS NULL OR datetime(lease_expires_at) <= datetime('now'))",
         ]
         params: list[Any] = [f"-{max(1, int(stale_after_seconds or 300))} seconds"]
+        if job_id:
+            clauses.append("job_id = ?")
+            params.append(job_id)
         if lane_id:
             clauses.append("lane_id = ?")
             params.append(lane_id)
@@ -2779,7 +2914,7 @@ class SQLiteStore:
         )
 
     def _candidate_payload(self, candidate: Candidate) -> dict[str, Any]:
-        payload = candidate.to_record()
+        payload = normalize_candidate(candidate).to_record()
         payload["metadata_json"] = json.dumps(payload.pop("metadata"), ensure_ascii=False)
         return payload
 
@@ -2789,31 +2924,33 @@ class SQLiteStore:
         return payload
 
     def _candidate_from_row(self, row: sqlite3.Row) -> Candidate:
-        return Candidate(
-            candidate_id=row["candidate_id"],
-            name_en=row["name_en"],
-            name_zh=row["name_zh"],
-            display_name=row["display_name"],
-            category=row["category"],
-            target_company=row["target_company"],
-            organization=row["organization"],
-            employment_status=row["employment_status"],
-            role=row["role"],
-            team=row["team"],
-            joined_at=row["joined_at"],
-            left_at=row["left_at"],
-            current_destination=row["current_destination"],
-            ethnicity_background=row["ethnicity_background"],
-            investment_involvement=row["investment_involvement"],
-            focus_areas=row["focus_areas"],
-            education=row["education"],
-            work_history=row["work_history"],
-            notes=row["notes"],
-            linkedin_url=row["linkedin_url"],
-            media_url=row["media_url"],
-            source_dataset=row["source_dataset"],
-            source_path=row["source_path"],
-            metadata=json.loads(row["metadata_json"] or "{}"),
+        return normalize_candidate(
+            Candidate(
+                candidate_id=row["candidate_id"],
+                name_en=row["name_en"],
+                name_zh=row["name_zh"],
+                display_name=row["display_name"],
+                category=row["category"],
+                target_company=row["target_company"],
+                organization=row["organization"],
+                employment_status=row["employment_status"],
+                role=row["role"],
+                team=row["team"],
+                joined_at=row["joined_at"],
+                left_at=row["left_at"],
+                current_destination=row["current_destination"],
+                ethnicity_background=row["ethnicity_background"],
+                investment_involvement=row["investment_involvement"],
+                focus_areas=row["focus_areas"],
+                education=row["education"],
+                work_history=row["work_history"],
+                notes=row["notes"],
+                linkedin_url=row["linkedin_url"],
+                media_url=row["media_url"],
+                source_dataset=row["source_dataset"],
+                source_path=row["source_path"],
+                metadata=json.loads(row["metadata_json"] or "{}"),
+            )
         )
 
 
@@ -2833,3 +2970,97 @@ def _job_match_sort_key(match: dict[str, Any], row: sqlite3.Row | None) -> tuple
         updated_at,
         created_at,
     )
+
+
+def _prepare_manual_review_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    deduped: dict[tuple[str, str, str, str], dict[str, Any]] = {}
+    for item in items:
+        normalized = _normalize_manual_review_item_payload(item)
+        key = _manual_review_scope_key(normalized)
+        if not key:
+            continue
+        deduped[key] = normalized
+    return list(deduped.values())
+
+
+def _normalize_manual_review_item_payload(item: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(item or {})
+    candidate = dict(normalized.get("candidate") or {})
+    evidence = list(normalized.get("evidence") or [])
+    metadata = dict(normalized.get("metadata") or {})
+    snapshot_id = _infer_manual_review_snapshot_id({"candidate": candidate, "evidence": evidence, "metadata": metadata})
+    if snapshot_id:
+        metadata["snapshot_id"] = snapshot_id
+    normalized["candidate"] = candidate
+    normalized["evidence"] = evidence
+    normalized["metadata"] = metadata
+    return normalized
+
+
+def _manual_review_scope_key(payload: dict[str, Any], *, include_snapshot: bool = True) -> tuple[Any, ...]:
+    target_company = str(payload.get("target_company") or "").strip().lower()
+    candidate_id = str(payload.get("candidate_id") or (payload.get("candidate") or {}).get("candidate_id") or "").strip()
+    review_type = str(payload.get("review_type") or "").strip()
+    if not target_company or not candidate_id or not review_type:
+        return ()
+    if not include_snapshot:
+        return (target_company, candidate_id, review_type)
+    snapshot_id = _infer_manual_review_snapshot_id(payload)
+    return (target_company, candidate_id, review_type, snapshot_id)
+
+
+def _infer_manual_review_snapshot_id(payload: dict[str, Any]) -> str:
+    metadata = dict(payload.get("metadata") or {})
+    candidate = dict(payload.get("candidate") or {})
+    evidence = list(payload.get("evidence") or [])
+    for value in [
+        metadata.get("snapshot_id"),
+        metadata.get("source_snapshot_id"),
+        dict(candidate.get("metadata") or {}).get("snapshot_id"),
+    ]:
+        normalized = str(value or "").strip()
+        if normalized:
+            return normalized
+    for value in [
+        candidate.get("source_path"),
+        candidate.get("metadata", {}).get("source_path") if isinstance(candidate.get("metadata"), dict) else "",
+    ]:
+        snapshot_id = _snapshot_id_from_path(str(value or ""))
+        if snapshot_id:
+            return snapshot_id
+    for item in evidence:
+        item_metadata = dict(item.get("metadata") or {})
+        snapshot_id = str(item_metadata.get("snapshot_id") or "").strip()
+        if snapshot_id:
+            return snapshot_id
+        snapshot_id = _snapshot_id_from_path(str(item.get("source_path") or ""))
+        if snapshot_id:
+            return snapshot_id
+    return ""
+
+
+def _snapshot_id_from_path(value: str) -> str:
+    normalized = str(value or "").strip()
+    if not normalized:
+        return ""
+    parts = [segment for segment in normalized.replace("\\", "/").split("/") if segment]
+    for index, segment in enumerate(parts):
+        if segment == "company_assets" and index + 2 < len(parts):
+            return parts[index + 2]
+    return ""
+
+
+def _manual_review_item_from_row_payload(row: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "review_item_id": row["review_item_id"],
+        "job_id": row["job_id"],
+        "candidate_id": row["candidate_id"],
+        "target_company": row["target_company"],
+        "review_type": row["review_type"],
+        "priority": row["priority"],
+        "status": row["status"],
+        "summary": row["summary"],
+        "candidate": json.loads(row["candidate_json"] or "{}"),
+        "evidence": json.loads(row["evidence_json"] or "[]"),
+        "metadata": json.loads(row["metadata_json"] or "{}"),
+    }

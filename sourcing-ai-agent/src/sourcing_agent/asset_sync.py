@@ -259,6 +259,7 @@ class AssetBundleManager:
         client: ObjectStorageClient,
         *,
         max_workers: int | None = None,
+        resume: bool = True,
     ) -> dict:
         manifest_file = Path(manifest_path)
         if not manifest_file.exists():
@@ -279,23 +280,53 @@ class AssetBundleManager:
             for path in upload_paths
             if path.exists() and path.is_file()
         ]
+        pending_transfers: list[dict[str, Any]] = []
+        skipped_existing: list[dict[str, Any]] = []
+        for item in transfers:
+            object_key = f"{remote_prefix}/{item['relative_path']}"
+            path = Path(item["path"])
+            if resume and client.has_object(object_key):
+                skipped_existing.append(
+                    {
+                        "relative_path": item["relative_path"],
+                        "object_key": object_key,
+                        "object_url": client.object_url(object_key),
+                        "size_bytes": path.stat().st_size,
+                        "status": "skipped_existing",
+                    }
+                )
+                continue
+            pending_transfers.append(item)
         uploads = self._parallel_transfer(
-            transfers,
+            pending_transfers,
             max_workers=resolved_max_workers,
             op=lambda item: self._upload_transfer_item(client, remote_prefix, item),
         )
         total_bytes = sum(int(item.get("size_bytes", 0)) for item in uploads)
+        skipped_total_bytes = sum(int(item.get("size_bytes", 0)) for item in skipped_existing)
         summary = {
             "status": "uploaded",
             "bundle_kind": bundle_kind,
             "bundle_id": bundle_id,
             "remote_prefix": remote_prefix,
             "remote_manifest_key": f"{remote_prefix}/bundle_manifest.json",
+            "requested_file_count": len(transfers),
             "uploaded_file_count": len(uploads),
             "uploaded_total_bytes": total_bytes,
-            "provider": uploads[0]["provider"] if uploads else "",
+            "skipped_existing_file_count": len(skipped_existing),
+            "skipped_existing_total_bytes": skipped_total_bytes,
+            "provider": uploads[0]["provider"] if uploads else _provider_name_for_client(client),
             "max_workers": resolved_max_workers,
+            "resume_mode": "skip_existing" if resume else "disabled",
+            "progress": _build_progress_summary(
+                requested_file_count=len(transfers),
+                transferred_file_count=len(uploads),
+                transferred_total_bytes=total_bytes,
+                skipped_file_count=len(skipped_existing),
+                skipped_total_bytes=skipped_total_bytes,
+            ),
             "object_urls_sample": [item.get("object_url", "") for item in uploads[:5]],
+            "skipped_existing_paths_sample": [item["relative_path"] for item in skipped_existing[:5]],
         }
         sync_run = self._record_sync_run(
             action="upload",
@@ -338,6 +369,7 @@ class AssetBundleManager:
         client: ObjectStorageClient,
         output_dir: str | Path | None = None,
         max_workers: int | None = None,
+        resume: bool = True,
     ) -> dict:
         remote_prefix = self._bundle_remote_prefix(bundle_kind, bundle_id)
         export_root = Path(output_dir) if output_dir else self.exports_dir
@@ -358,16 +390,36 @@ class AssetBundleManager:
             pass
         resolved_max_workers = self._resolve_max_workers(client, max_workers)
         transfers = [
-            {"relative_path": record["payload_relative_path"], "path": bundle_dir / record["payload_relative_path"]}
+            {
+                "relative_path": record["payload_relative_path"],
+                "path": bundle_dir / record["payload_relative_path"],
+                "record": dict(record),
+            }
             for record in payload.get("files", [])
         ]
+        pending_transfers: list[dict[str, Any]] = []
+        skipped_existing: list[dict[str, Any]] = []
+        for item in transfers:
+            destination = Path(item["path"])
+            record = dict(item.get("record") or {})
+            if resume and _download_target_matches(destination, record):
+                skipped_existing.append(
+                    {
+                        "relative_path": item["relative_path"],
+                        "size_bytes": int(record.get("size_bytes", destination.stat().st_size)),
+                        "status": "skipped_existing",
+                    }
+                )
+                continue
+            pending_transfers.append(item)
         results = self._parallel_transfer(
-            transfers,
+            pending_transfers,
             max_workers=resolved_max_workers,
             op=lambda item: self._download_transfer_item(client, remote_prefix, item),
         )
         downloaded += len(results)
         total_bytes += sum(int(item.get("size_bytes", 0)) for item in results)
+        skipped_total_bytes = sum(int(item.get("size_bytes", 0)) for item in skipped_existing)
         summary = {
             "status": "downloaded",
             "bundle_kind": bundle_kind,
@@ -378,6 +430,18 @@ class AssetBundleManager:
             "downloaded_total_bytes": total_bytes,
             "remote_prefix": remote_prefix,
             "max_workers": resolved_max_workers,
+            "requested_payload_file_count": len(transfers),
+            "skipped_existing_file_count": len(skipped_existing),
+            "skipped_existing_total_bytes": skipped_total_bytes,
+            "resume_mode": "skip_existing" if resume else "disabled",
+            "progress": _build_progress_summary(
+                requested_file_count=len(transfers),
+                transferred_file_count=len(results),
+                transferred_total_bytes=sum(int(item.get("size_bytes", 0)) for item in results),
+                skipped_file_count=len(skipped_existing),
+                skipped_total_bytes=skipped_total_bytes,
+            ),
+            "skipped_existing_paths_sample": [item["relative_path"] for item in skipped_existing[:5]],
         }
         sync_run = self._record_sync_run(
             action="download",
@@ -714,3 +778,62 @@ def _content_type_for_path(path: Path) -> str:
     if suffix == ".db":
         return "application/octet-stream"
     return "application/octet-stream"
+
+
+def _provider_name_for_client(client: ObjectStorageClient) -> str:
+    config = getattr(client, "config", None)
+    provider = str(getattr(config, "provider", "") or "").strip().lower()
+    if provider:
+        return provider
+    class_name = client.__class__.__name__.lower()
+    if "filesystem" in class_name:
+        return "filesystem"
+    if "s3" in class_name:
+        return "s3_compatible"
+    return ""
+
+
+def _build_progress_summary(
+    *,
+    requested_file_count: int,
+    transferred_file_count: int,
+    transferred_total_bytes: int,
+    skipped_file_count: int,
+    skipped_total_bytes: int,
+) -> dict[str, Any]:
+    requested = max(0, int(requested_file_count))
+    transferred = max(0, int(transferred_file_count))
+    skipped = max(0, int(skipped_file_count))
+    completed = min(requested, transferred + skipped)
+    remaining = max(0, requested - completed)
+    return {
+        "requested_file_count": requested,
+        "transferred_file_count": transferred,
+        "skipped_file_count": skipped,
+        "completed_file_count": completed,
+        "remaining_file_count": remaining,
+        "completion_ratio": 1.0 if requested == 0 else round(completed / requested, 4),
+        "transferred_total_bytes": max(0, int(transferred_total_bytes)),
+        "skipped_total_bytes": max(0, int(skipped_total_bytes)),
+        "processed_total_bytes": max(0, int(transferred_total_bytes)) + max(0, int(skipped_total_bytes)),
+    }
+
+
+def _download_target_matches(destination: Path, record: dict[str, Any]) -> bool:
+    if not destination.exists() or not destination.is_file():
+        return False
+    expected_size = record.get("size_bytes")
+    if expected_size not in {None, ""}:
+        try:
+            if destination.stat().st_size != int(expected_size):
+                return False
+        except (TypeError, ValueError):
+            return False
+    expected_sha256 = str(record.get("sha256") or "").strip().lower()
+    if expected_sha256:
+        try:
+            if _sha256(destination).lower() != expected_sha256:
+                return False
+        except OSError:
+            return False
+    return True

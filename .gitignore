@@ -9,6 +9,11 @@
 **/*.db
 **/providers.local.json
 **/api_accounts.json
+.codex
+.codex/
+TemporaryData/
+sourcing-ai-agent/configs/live_queue_smoke_tml_former.json
+sourcing-ai-agent/configs/plan_review_tml_full_roster_approve_20260407.json
 
 # Live/runtime assets should stay local or move to cloud storage later.
 **/runtime/

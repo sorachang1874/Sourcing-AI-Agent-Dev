@@ -39,7 +39,7 @@
       "actor_id": "LpVuK3Zozwuipa5bp",
       "api_token": "REDACTED",
       "default_mode": "full",
-      "collect_email": false
+      "collect_email": true
     },
     "profile_search": {
       "enabled": true,
@@ -77,7 +77,7 @@
     "https://www.linkedin.com/in/kzl/",
     "https://www.linkedin.com/in/ACwAAA4HOMcBjHQNGyUbyfYCY-sOZshkNFC30Jk"
   ],
-  "profileScraperMode": "Profile details no email ($4 per 1k)"
+  "profileScraperMode": "Profile details + email search ($10 per 1k)"
 }
 ```
 
@@ -90,8 +90,9 @@
   - `queries`
   - `profileIds`
 - `profileScraperMode` 应使用完整枚举
+  - 当前项目默认配置更偏向 `Profile details + email search ($10 per 1k)`
   - `Profile details no email ($4 per 1k)`
-  - 如需邮箱，才切 email 模式
+  - 如需低成本路径，可显式关闭 `collect_email`
 - 适合已知 LinkedIn URL 的 batch enrichment
 - `vanity URL` 与 `opaque LinkedIn URL` 当前都可用
 
