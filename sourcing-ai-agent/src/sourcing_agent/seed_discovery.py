@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from hashlib import sha1
 from html import unescape
 import json
@@ -25,6 +26,9 @@ from .search_provider import (
     search_response_to_record,
 )
 from .worker_daemon import AutonomousWorkerDaemon
+
+_LANE_READY_POLL_MIN_INTERVAL_SECONDS = 15
+_LANE_FETCH_MIN_INTERVAL_SECONDS = 15
 
 
 @dataclass(slots=True)
@@ -69,6 +73,93 @@ class SearchSeedAcquirer:
         self.harvest_search_connector = harvest_search_connector
         self.search_provider = search_provider or DuckDuckGoHtmlSearchProvider()
 
+    def refresh_background_search_workers(self, workers: list[dict[str, Any]]) -> dict[str, Any]:
+        grouped_specs: dict[Path, list[dict[str, Any]]] = {}
+        discovery_dirs: dict[Path, Path] = {}
+        errors: list[str] = []
+        worker_updates: dict[int, dict[str, Any]] = {}
+
+        for worker in workers:
+            lane_id = str(worker.get("lane_id") or "").strip()
+            if lane_id not in {"search_planner", "public_media_specialist"}:
+                continue
+            metadata = dict(worker.get("metadata") or {})
+            input_payload = dict(worker.get("input") or {})
+            checkpoint = dict(worker.get("checkpoint") or {})
+            worker_key = str(worker.get("worker_key") or "").strip()
+            if not worker_key:
+                continue
+
+            discovery_dir_text = str(metadata.get("discovery_dir") or "").strip()
+            snapshot_dir_text = str(metadata.get("snapshot_dir") or "").strip()
+            if discovery_dir_text:
+                discovery_dir = Path(discovery_dir_text).expanduser()
+            elif snapshot_dir_text:
+                discovery_dir = Path(snapshot_dir_text).expanduser() / "search_seed_discovery"
+            else:
+                continue
+            snapshot_dir = (
+                Path(snapshot_dir_text).expanduser()
+                if snapshot_dir_text
+                else discovery_dir.parent
+            )
+            if not discovery_dir.exists():
+                continue
+
+            grouped_specs.setdefault(discovery_dir, []).append(
+                {
+                    "index": int(metadata.get("index") or input_payload.get("index") or 0),
+                    "query_spec": dict(input_payload.get("query_spec") or {}),
+                    "lane_id": lane_id,
+                    "worker_key": worker_key,
+                    "prefetched_search_state": dict(checkpoint.get("search_state") or {}),
+                    "prefetched_search_artifact_paths": dict(checkpoint.get("search_artifact_paths") or {}),
+                    "prefetched_search_raw_path": str(checkpoint.get("raw_path") or ""),
+                    "prefetched_search_manifest_path": str(checkpoint.get("search_manifest_path") or ""),
+                    "prefetched_search_manifest_key": str(checkpoint.get("search_manifest_key") or worker_key),
+                    "worker_id": int(worker.get("worker_id") or 0),
+                }
+            )
+            discovery_dirs[discovery_dir] = snapshot_dir
+
+        for discovery_dir, pending_specs in grouped_specs.items():
+            logger = AssetLogger(discovery_dirs[discovery_dir])
+            errors.extend(
+                _prepare_batched_search_seed_queries(
+                    search_provider=self.search_provider,
+                    logger=logger,
+                    discovery_dir=discovery_dir,
+                    pending_specs=pending_specs,
+                    result_limit=10,
+                )
+            )
+            manifest_path = discovery_dir / "web_search_batch_manifest.json"
+            manifest_entries = _load_search_batch_manifest_entries(manifest_path)
+            for spec in pending_specs:
+                task_key = str(spec.get("worker_key") or "").strip()
+                entry = dict(manifest_entries.get(task_key) or {})
+                if not entry:
+                    continue
+                worker_id = int(spec.get("worker_id") or 0)
+                if worker_id <= 0:
+                    continue
+                worker_updates[worker_id] = {
+                    "search_state": dict(entry.get("search_state") or {}),
+                    "search_artifact_paths": {
+                        str(key): str(value)
+                        for key, value in dict(entry.get("artifact_paths") or {}).items()
+                        if str(key).strip() and str(value).strip()
+                    },
+                    "raw_path": str(entry.get("raw_path") or ""),
+                    "search_manifest_path": str(manifest_path),
+                    "search_manifest_key": task_key,
+                }
+
+        return {
+            "errors": errors,
+            "worker_updates": worker_updates,
+        }
+
     def discover(
         self,
         identity: CompanyIdentity,
@@ -89,6 +180,7 @@ class SearchSeedAcquirer:
         discovery_dir = snapshot_dir / "search_seed_discovery"
         discovery_dir.mkdir(parents=True, exist_ok=True)
         logger = asset_logger or AssetLogger(snapshot_dir)
+        effective_filter_hints = _normalize_harvest_company_filters(identity, filter_hints)
 
         entries: list[dict[str, Any]] = []
         query_summaries: list[dict[str, Any]] = []
@@ -125,6 +217,16 @@ class SearchSeedAcquirer:
             "cycles": 0,
             "daemon_events": [],
         }
+        if worker_runtime is not None and job_id and pending_specs:
+            errors.extend(
+                _prepare_batched_search_seed_queries(
+                    search_provider=self.search_provider,
+                    logger=logger,
+                    discovery_dir=discovery_dir,
+                    pending_specs=pending_specs,
+                    result_limit=result_limit,
+                )
+            )
         if pending_specs:
             if worker_runtime is not None and job_id:
                 daemon = AutonomousWorkerDaemon.from_plan(
@@ -147,6 +249,11 @@ class SearchSeedAcquirer:
                         plan_payload=plan_payload or {},
                         runtime_mode=runtime_mode,
                         result_limit=result_limit,
+                        prefetched_search_state=dict(spec.get("prefetched_search_state") or {}),
+                        prefetched_search_artifact_paths=dict(spec.get("prefetched_search_artifact_paths") or {}),
+                        prefetched_search_raw_path=str(spec.get("prefetched_search_raw_path") or ""),
+                        prefetched_search_manifest_path=str(spec.get("prefetched_search_manifest_path") or ""),
+                        prefetched_search_manifest_key=str(spec.get("prefetched_search_manifest_key") or ""),
                     ),
                 )
                 worker_results.extend(list(daemon_summary.get("results") or []))
@@ -167,6 +274,11 @@ class SearchSeedAcquirer:
                             plan_payload=plan_payload or {},
                             runtime_mode=runtime_mode,
                             result_limit=result_limit,
+                            prefetched_search_state=dict(spec.get("prefetched_search_state") or {}),
+                            prefetched_search_artifact_paths=dict(spec.get("prefetched_search_artifact_paths") or {}),
+                            prefetched_search_raw_path=str(spec.get("prefetched_search_raw_path") or ""),
+                            prefetched_search_manifest_path=str(spec.get("prefetched_search_manifest_path") or ""),
+                            prefetched_search_manifest_key=str(spec.get("prefetched_search_manifest_key") or ""),
                         )
                         for spec in pending_specs
                     ]
@@ -179,9 +291,19 @@ class SearchSeedAcquirer:
             query_summaries.append(dict(result.get("summary") or {}))
             errors.extend(list(result.get("errors") or []))
 
+        queued_query_count = len([item for item in query_summaries if str(item.get("status") or "") == "queued"])
+        queued_background_search = queued_query_count > 0
+        if queued_background_search:
+            stop_reason = "queued_background_search"
+
         entries = _dedupe_seed_entries(entries)
         paid_queries = [item["query"] for item in compiled_queries if item["execution_mode"] == "paid_fallback"] or list(search_seed_queries)
-        if len(entries) < web_result_target and self.accounts and cost_policy.get("provider_people_search_mode") == "fallback_only":
+        if (
+            not queued_background_search
+            and len(entries) < web_result_target
+            and (self.accounts or (self.harvest_search_connector and self.harvest_search_connector.settings.enabled))
+            and cost_policy.get("provider_people_search_mode") == "fallback_only"
+        ):
             needed = max(web_result_target - len(entries), 0)
             provider_limit = max(needed, web_result_target)
             provider_entries, provider_summaries, provider_errors, provider_accounts = self._provider_people_search_fallback(
@@ -189,7 +311,7 @@ class SearchSeedAcquirer:
                 discovery_dir=discovery_dir,
                 asset_logger=logger,
                 search_seed_queries=paid_queries,
-                filter_hints=filter_hints,
+                filter_hints=effective_filter_hints,
                 employment_status=employment_status,
                 limit=provider_limit,
                 cost_policy=cost_policy,
@@ -208,10 +330,14 @@ class SearchSeedAcquirer:
             "target_company": identity.canonical_name,
             "company_identity": identity.to_record(),
             "entry_count": len(entries),
+            "search_seed_queries": search_seed_queries,
+            "requested_filter_hints": filter_hints,
+            "effective_filter_hints": effective_filter_hints,
             "query_summaries": query_summaries,
             "accounts_used": accounts_used,
             "errors": errors,
             "stop_reason": stop_reason,
+            "queued_query_count": queued_query_count,
             "cost_policy": cost_policy,
             "worker_daemon": {
                 "cycles": int(daemon_summary.get("cycles") or 0),
@@ -257,6 +383,11 @@ class SearchSeedAcquirer:
         plan_payload: dict[str, Any],
         runtime_mode: str,
         result_limit: int,
+        prefetched_search_state: dict[str, Any] | None = None,
+        prefetched_search_artifact_paths: dict[str, str] | None = None,
+        prefetched_search_raw_path: str = "",
+        prefetched_search_manifest_path: str = "",
+        prefetched_search_manifest_key: str = "",
     ) -> dict[str, Any]:
         query_text = str(query_spec["query"] or "").strip()
         raw_search_path = discovery_dir / f"web_query_{index:02d}.html"
@@ -311,6 +442,25 @@ class SearchSeedAcquirer:
                     "worker_status": "completed",
                     "daemon_action": "reused_output",
                 }
+            checkpoint, prefetched_applied = _merge_prefetched_search_checkpoint(
+                checkpoint=checkpoint,
+                prefetched_search_state=dict(prefetched_search_state or {}),
+                prefetched_search_artifact_paths=dict(prefetched_search_artifact_paths or {}),
+                prefetched_search_raw_path=str(prefetched_search_raw_path or "").strip(),
+                manifest_path=Path(prefetched_search_manifest_path).expanduser()
+                if str(prefetched_search_manifest_path or "").strip()
+                else None,
+                manifest_key=str(prefetched_search_manifest_key or "").strip(),
+            )
+            if prefetched_applied:
+                worker_runtime.checkpoint_worker(
+                    worker_handle,
+                    checkpoint_payload=checkpoint,
+                    output_payload={
+                        "search_state": dict(checkpoint.get("search_state") or {}),
+                        "search_artifact_paths": dict(checkpoint.get("search_artifact_paths") or {}),
+                    },
+                )
         try:
             if worker_handle and worker_runtime.should_interrupt_worker(worker_handle):
                 summary = _interrupted_query_summary(index, query_spec, query_text, raw_search_path)
@@ -325,30 +475,142 @@ class SearchSeedAcquirer:
 
             cached_search_path = Path(str(checkpoint.get("raw_path") or "")) if checkpoint.get("raw_path") else None
             search_response: SearchResponse | None = None
+            manifest_path = (
+                Path(str(checkpoint.get("search_manifest_path") or "")).expanduser()
+                if str(checkpoint.get("search_manifest_path") or "").strip()
+                else None
+            )
+            manifest_key = str(checkpoint.get("search_manifest_key") or "").strip()
             if cached_search_path and cached_search_path.exists():
                 parsed_results, search_response = _load_cached_search_response(cached_search_path, query_text)
-            else:
-                search_response = self.search_provider.search(query_text, max_results=result_limit)
-                raw_search_path = _write_search_response_raw_asset(
-                    logger=logger,
-                    response=search_response,
-                    default_path=raw_search_path,
-                    asset_type="web_search_payload",
-                    source_kind="search_seed_discovery",
-                    metadata={"query": query_text, "provider_name": search_response.provider_name},
+                raw_search_path = cached_search_path
+                manifest_search_state = _mark_search_state_as_worker_fetched(
+                    dict(checkpoint.get("search_state") or {}),
+                    query_text=query_text,
                 )
-                checkpoint = {
-                    **checkpoint,
-                    "stage": "fetched_search_results",
-                    "raw_path": str(raw_search_path),
-                    "provider_name": search_response.provider_name,
-                }
+                if manifest_search_state:
+                    checkpoint["search_state"] = manifest_search_state
+                    _update_search_batch_manifest_entry(
+                        logger=logger,
+                        manifest_path=manifest_path,
+                        task_key=manifest_key,
+                        search_state=manifest_search_state,
+                        artifact_paths=dict(checkpoint.get("search_artifact_paths") or {}),
+                        raw_path=str(cached_search_path),
+                    )
+            else:
                 if worker_handle:
+                    search_execution = self.search_provider.execute_with_checkpoint(
+                        query_text,
+                        max_results=result_limit,
+                        checkpoint=dict(checkpoint.get("search_state") or {}),
+                    )
+                    artifact_paths = dict(checkpoint.get("search_artifact_paths") or {})
+                    for artifact in list(search_execution.artifacts or []):
+                        artifact_path = _write_search_execution_artifact(
+                            logger=logger,
+                            artifact=artifact,
+                            default_path=raw_search_path,
+                            asset_type="web_search_queue_payload",
+                            source_kind="search_seed_discovery",
+                            metadata={"query": query_text, "provider_name": search_execution.provider_name},
+                        )
+                        artifact_paths[str(artifact.label)] = str(artifact_path)
+                    checkpoint = {
+                        **checkpoint,
+                        "provider_name": search_execution.provider_name,
+                        "search_state": dict(search_execution.checkpoint or {}),
+                        "search_artifact_paths": artifact_paths,
+                    }
+                    if search_execution.pending:
+                        summary = {
+                            "query": query_text,
+                            "bundle_id": query_spec["bundle_id"],
+                            "source_family": query_spec["source_family"],
+                            "execution_mode": query_spec["execution_mode"],
+                            "mode": "web_search",
+                            "status": "queued",
+                            "raw_path": "",
+                            "provider_name": search_execution.provider_name,
+                            "result_count": 0,
+                            "linkedin_result_count": 0,
+                            "seed_entry_count": 0,
+                            "search_state": dict(search_execution.checkpoint or {}),
+                            "search_artifact_paths": artifact_paths,
+                            "message": str(search_execution.message or ""),
+                        }
+                        worker_runtime.complete_worker(
+                            worker_handle,
+                            status="queued",
+                            checkpoint_payload={**checkpoint, "stage": "waiting_remote_search"},
+                            output_payload={"summary": summary, "entries": [], "errors": [], "search_state": dict(search_execution.checkpoint or {})},
+                        )
+                        return {
+                            "index": index,
+                            "entries": [],
+                            "summary": summary,
+                            "errors": [],
+                            "worker_status": "queued",
+                        }
+                    search_response = search_execution.response
+                    if search_response is None:
+                        raise RuntimeError("Search provider returned no response.")
+                    raw_search_path = _write_search_response_raw_asset(
+                        logger=logger,
+                        response=search_response,
+                        default_path=raw_search_path,
+                        asset_type="web_search_payload",
+                        source_kind="search_seed_discovery",
+                        metadata={"query": query_text, "provider_name": search_response.provider_name},
+                    )
+                    manifest_search_state = _mark_search_state_as_worker_fetched(
+                        dict(checkpoint.get("search_state") or {}),
+                        fallback_state=dict(search_execution.checkpoint or {}),
+                        query_text=query_text,
+                    )
+                    checkpoint = {
+                        **checkpoint,
+                        "stage": "fetched_search_results",
+                        "raw_path": str(raw_search_path),
+                        "provider_name": search_response.provider_name,
+                        "search_state": manifest_search_state,
+                    }
+                    if manifest_search_state:
+                        _update_search_batch_manifest_entry(
+                            logger=logger,
+                            manifest_path=manifest_path,
+                            task_key=manifest_key,
+                            search_state=manifest_search_state,
+                            artifact_paths=dict(checkpoint.get("search_artifact_paths") or {}),
+                            raw_path=str(raw_search_path),
+                        )
                     worker_runtime.checkpoint_worker(
                         worker_handle,
                         checkpoint_payload=checkpoint,
                         output_payload={"raw_path": str(raw_search_path), "provider_name": search_response.provider_name},
                     )
+                else:
+                    search_response = self.search_provider.search(query_text, max_results=result_limit)
+                    raw_search_path = _write_search_response_raw_asset(
+                        logger=logger,
+                        response=search_response,
+                        default_path=raw_search_path,
+                        asset_type="web_search_payload",
+                        source_kind="search_seed_discovery",
+                        metadata={"query": query_text, "provider_name": search_response.provider_name},
+                    )
+                    checkpoint = {
+                        **checkpoint,
+                        "stage": "fetched_search_results",
+                        "raw_path": str(raw_search_path),
+                        "provider_name": search_response.provider_name,
+                    }
+                    if worker_handle:
+                        worker_runtime.checkpoint_worker(
+                            worker_handle,
+                            checkpoint_payload=checkpoint,
+                            output_payload={"raw_path": str(raw_search_path), "provider_name": search_response.provider_name},
+                        )
 
             if search_response is None:
                 raise RuntimeError("Search provider returned no response.")
@@ -394,6 +656,7 @@ class SearchSeedAcquirer:
                         identity,
                         query_text,
                         employment_status,
+                        analysis=analysis,
                         source_family=query_spec["source_family"],
                     ):
                         query_entries.append(seed_entry)
@@ -580,19 +843,33 @@ class SearchSeedAcquirer:
         for index, query_text in enumerate(deduped_queries, start=1):
             summary_query = query_text or "__past_company_only__"
             if self.harvest_search_connector and self.harvest_search_connector.settings.enabled:
-                harvest_result = self.harvest_search_connector.search_profiles(
+                harvest_plan = self._resolve_harvest_search_execution_plan(
                     query_text=query_text,
                     filter_hints=filter_hints,
                     employment_status=employment_status,
                     discovery_dir=discovery_dir,
                     asset_logger=asset_logger,
-                    limit=min(limit, self.harvest_search_connector.settings.max_paid_items),
-                    pages=page_count,
+                    requested_limit=limit,
+                    requested_pages=page_count,
+                    allow_shared_provider_cache=bool(cost_policy.get("allow_shared_provider_cache", True)),
                 )
+                harvest_result = harvest_plan.get("initial_result")
+                if harvest_result is None:
+                    harvest_result = self.harvest_search_connector.search_profiles(
+                        query_text=query_text,
+                        filter_hints=filter_hints,
+                        employment_status=employment_status,
+                        discovery_dir=discovery_dir,
+                        asset_logger=asset_logger,
+                        limit=int(harvest_plan.get("effective_limit") or limit),
+                        pages=int(harvest_plan.get("effective_pages") or page_count),
+                        allow_shared_provider_cache=bool(cost_policy.get("allow_shared_provider_cache", True)),
+                    )
                 if harvest_result is not None:
                     rows = list(harvest_result.get("rows") or [])
+                    effective_limit = max(1, int(harvest_plan.get("effective_limit") or limit))
                     query_entries: list[dict[str, Any]] = []
-                    for row in rows[:limit]:
+                    for row in rows[:effective_limit]:
                         entry = {
                             "seed_key": _seed_key(str(row.get("full_name") or ""), str(row.get("profile_url") or summary_query)),
                             "full_name": str(row.get("full_name") or "").strip(),
@@ -619,6 +896,16 @@ class SearchSeedAcquirer:
                             "mode": "harvest_profile_search",
                             "raw_path": str(harvest_result.get("raw_path") or ""),
                             "account_id": "harvest_profile_search",
+                            "requested_limit": max(1, int(limit or 25)),
+                            "requested_pages": max(1, int(page_count or 1)),
+                            "effective_limit": effective_limit,
+                            "effective_pages": max(1, int(harvest_plan.get("effective_pages") or page_count)),
+                            "pagination": dict(harvest_result.get("pagination") or {}),
+                            "probe": {
+                                key: value
+                                for key, value in dict(harvest_plan).items()
+                                if key != "initial_result"
+                            },
                             "seed_entry_count": len(query_entries),
                         }
                     )
@@ -688,6 +975,75 @@ class SearchSeedAcquirer:
                 break
         return entries, query_summaries, errors, accounts_used
 
+    def _resolve_harvest_search_execution_plan(
+        self,
+        *,
+        query_text: str,
+        filter_hints: dict[str, list[str]],
+        employment_status: str,
+        discovery_dir: Path,
+        asset_logger: AssetLogger | None,
+        requested_limit: int,
+        requested_pages: int,
+        allow_shared_provider_cache: bool,
+    ) -> dict[str, Any]:
+        plan = {
+            "probe_performed": False,
+            "probe_query_text": str(query_text or "").strip(),
+            "probe_limit": 25,
+            "probe_pages": 1,
+            "requested_limit": max(1, int(requested_limit or 25)),
+            "requested_pages": max(1, int(requested_pages or 1)),
+            "effective_limit": max(1, int(requested_limit or 25)),
+            "effective_pages": max(1, int(requested_pages or 1)),
+            "provider_total_count": 0,
+            "provider_total_pages": 0,
+            "probe_returned_count": 0,
+            "probe_raw_path": "",
+            "initial_result": None,
+        }
+        if self.harvest_search_connector is None or not self.harvest_search_connector.settings.enabled:
+            return plan
+        if str(employment_status or "").strip().lower() != "former":
+            return plan
+        if not list(filter_hints.get("past_companies") or []):
+            return plan
+        requested_limit_value = int(plan["requested_limit"])
+        requested_pages_value = int(plan["requested_pages"])
+        should_probe = requested_limit_value > 25 or requested_pages_value > 1 or not str(query_text or "").strip()
+        if not should_probe:
+            return plan
+        probe_result = self.harvest_search_connector.search_profiles(
+            query_text=query_text,
+            filter_hints=filter_hints,
+            employment_status=employment_status,
+            discovery_dir=discovery_dir,
+            asset_logger=asset_logger,
+            limit=25,
+            pages=1,
+            allow_shared_provider_cache=allow_shared_provider_cache,
+        )
+        plan["probe_performed"] = True
+        if probe_result is None:
+            return plan
+        pagination = dict(probe_result.get("pagination") or {})
+        total_count = max(0, int(pagination.get("total_elements") or 0))
+        total_pages = max(0, int(pagination.get("total_pages") or 0))
+        probe_returned_count = max(0, int(pagination.get("returned_count") or len(list(probe_result.get("rows") or []))))
+        plan["provider_total_count"] = total_count
+        plan["provider_total_pages"] = total_pages
+        plan["probe_returned_count"] = probe_returned_count
+        plan["probe_raw_path"] = str(probe_result.get("raw_path") or "")
+        if total_count > 0:
+            effective_pages = max(1, total_pages or ((total_count + 24) // 25))
+            plan["effective_limit"] = total_count
+            plan["effective_pages"] = effective_pages
+            if effective_pages == 1 and probe_returned_count >= total_count:
+                plan["initial_result"] = probe_result
+            return plan
+        plan["initial_result"] = probe_result
+        return plan
+
     def _search_people(self, query_text: str, *, limit: int) -> tuple[dict[str, Any] | None, RapidApiAccount | None, list[str]]:
         errors_seen: list[str] = []
         for account in self.accounts:
@@ -707,6 +1063,552 @@ class SearchSeedAcquirer:
             except Exception as exc:
                 errors_seen.append(f"provider_people_search:{account.account_id}:{str(exc)[:120]}")
         return None, None, errors_seen
+
+
+def _prepare_batched_search_seed_queries(
+    *,
+    search_provider: BaseSearchProvider,
+    logger: AssetLogger,
+    discovery_dir: Path,
+    pending_specs: list[dict[str, Any]],
+    result_limit: int,
+) -> list[str]:
+    manifest_path = discovery_dir / "web_search_batch_manifest.json"
+    manifest_entries = _load_search_batch_manifest_entries(manifest_path)
+    pending_by_key = {
+        str(spec.get("worker_key") or "").strip(): spec
+        for spec in pending_specs
+        if str(spec.get("worker_key") or "").strip()
+    }
+    for task_key, spec in pending_by_key.items():
+        entry = dict(manifest_entries.get(task_key) or {})
+        search_state = dict(entry.get("search_state") or {})
+        if str(search_state.get("task_id") or "").strip():
+            spec["prefetched_search_state"] = search_state
+            spec["prefetched_search_artifact_paths"] = dict(entry.get("artifact_paths") or {})
+            spec["prefetched_search_raw_path"] = str(entry.get("raw_path") or "")
+            spec["prefetched_search_manifest_path"] = str(manifest_path)
+            spec["prefetched_search_manifest_key"] = task_key
+
+    unresolved_requests: list[dict[str, Any]] = []
+    for task_key, spec in pending_by_key.items():
+        if dict(spec.get("prefetched_search_state") or {}).get("task_id"):
+            continue
+        query_text = str(dict(spec.get("query_spec") or {}).get("query") or "").strip()
+        if not query_text:
+            continue
+        unresolved_requests.append(
+            {
+                "task_key": task_key,
+                "query_text": query_text,
+                "max_results": result_limit,
+            }
+        )
+    provider_name = str(
+        dict(next(iter(manifest_entries.values()), {})).get("search_state", {}).get("provider_name")
+        or getattr(search_provider, "provider_name", "")
+        or ""
+    ).strip()
+    artifact_paths: dict[str, str] = {}
+    batch_message = ""
+    submitted_query_count = 0
+
+    if unresolved_requests:
+        submit_batch = getattr(search_provider, "submit_batch_queries", None)
+        if not callable(submit_batch):
+            return []
+
+        try:
+            batch_result = submit_batch(unresolved_requests)
+        except Exception as exc:
+            return [f"web_search_batch_submit:{str(exc)[:160]}"]
+        if batch_result is None:
+            return []
+
+        provider_name = str(getattr(batch_result, "provider_name", "") or provider_name).strip()
+        batch_message = str(getattr(batch_result, "message", "") or "")
+        submitted_query_count = len(batch_result.tasks or [])
+        artifact_paths = {}
+        for artifact in list(batch_result.artifacts or []):
+            artifact_label = str(getattr(artifact, "label", "artifact") or "artifact")
+            default_path = discovery_dir / f"web_search_{artifact_label}.json"
+            artifact_path = _write_search_execution_artifact(
+                logger=logger,
+                artifact=artifact,
+                default_path=default_path,
+                asset_type="web_search_batch_queue_payload",
+                source_kind="search_seed_discovery",
+                metadata={"provider_name": provider_name, "submitted_query_count": len(unresolved_requests)},
+            )
+            artifact_paths[artifact_label] = str(artifact_path)
+
+        for task in list(batch_result.tasks or []):
+            task_key = str(getattr(task, "task_key", "") or "").strip()
+            if not task_key:
+                continue
+            entry = {
+                "task_key": task_key,
+                "query": str(getattr(task, "query_text", "") or "").strip(),
+                "search_state": dict(getattr(task, "checkpoint", {}) or {}),
+                "artifact_paths": {},
+                "metadata": dict(getattr(task, "metadata", {}) or {}),
+            }
+            artifact_label = str(entry["metadata"].get("artifact_label") or "").strip()
+            if artifact_label and artifact_label in artifact_paths:
+                entry["artifact_paths"] = {artifact_label: artifact_paths[artifact_label]}
+            manifest_entries[task_key] = entry
+            spec = pending_by_key.get(task_key)
+            if spec is not None:
+                spec["prefetched_search_state"] = dict(entry["search_state"] or {})
+                spec["prefetched_search_artifact_paths"] = dict(entry["artifact_paths"] or {})
+                spec["prefetched_search_manifest_path"] = str(manifest_path)
+                spec["prefetched_search_manifest_key"] = task_key
+
+    ready_errors = _refresh_batched_search_seed_ready_cache(
+        search_provider=search_provider,
+        logger=logger,
+        discovery_dir=discovery_dir,
+        manifest_path=manifest_path,
+        manifest_entries=manifest_entries,
+        pending_by_key=pending_by_key,
+    )
+    fetch_errors = _fetch_batched_search_seed_ready_results(
+        search_provider=search_provider,
+        logger=logger,
+        discovery_dir=discovery_dir,
+        manifest_path=manifest_path,
+        manifest_entries=manifest_entries,
+        pending_by_key=pending_by_key,
+    )
+
+    if not manifest_entries and not artifact_paths:
+        return [*ready_errors, *fetch_errors]
+
+    root_artifact_paths = {
+        str(key): str(value)
+        for key, value in dict(artifact_paths).items()
+        if str(key).strip() and str(value).strip()
+    }
+    for entry in manifest_entries.values():
+        for key, value in dict(entry.get("artifact_paths") or {}).items():
+            normalized_key = str(key or "").strip()
+            normalized_value = str(value or "").strip()
+            if normalized_key and normalized_value and normalized_key not in root_artifact_paths:
+                root_artifact_paths[normalized_key] = normalized_value
+    logger.write_json(
+        manifest_path,
+        {
+            "provider_name": provider_name,
+            "submitted_query_count": submitted_query_count,
+            "artifact_paths": root_artifact_paths,
+            "entries": [manifest_entries[key] for key in sorted(manifest_entries)],
+            "message": batch_message,
+            "updated_at": _batch_lane_timestamp(),
+        },
+        asset_type="web_search_batch_manifest",
+        source_kind="search_seed_discovery",
+        is_raw_asset=False,
+        model_safe=False,
+    )
+    return [*ready_errors, *fetch_errors]
+
+
+def _refresh_batched_search_seed_ready_cache(
+    *,
+    search_provider: BaseSearchProvider,
+    logger: AssetLogger,
+    discovery_dir: Path,
+    manifest_path: Path,
+    manifest_entries: dict[str, dict[str, Any]],
+    pending_by_key: dict[str, dict[str, Any]],
+) -> list[str]:
+    poll_ready = getattr(search_provider, "poll_ready_batch", None)
+    if not callable(poll_ready):
+        return []
+
+    poll_specs: list[dict[str, Any]] = []
+    attempted_at = _batch_lane_timestamp()
+    for task_key, spec in pending_by_key.items():
+        entry = dict(manifest_entries.get(task_key) or {})
+        search_state = dict(entry.get("search_state") or {})
+        task_id = str(search_state.get("task_id") or "").strip()
+        if not task_id:
+            continue
+        if str(search_state.get("status") or "").strip() in {"completed", "fetched_cached", "ready_cached"}:
+            continue
+        if _timestamp_within_seconds(str(search_state.get("ready_attempted_at") or ""), _LANE_READY_POLL_MIN_INTERVAL_SECONDS):
+            continue
+        search_state["ready_attempted_at"] = attempted_at
+        entry["search_state"] = search_state
+        manifest_entries[task_key] = entry
+        poll_specs.append(
+            {
+                "task_key": task_key,
+                "query_text": str(entry.get("query") or dict(spec.get("query_spec") or {}).get("query") or "").strip(),
+                "checkpoint": search_state,
+            }
+        )
+    if not poll_specs:
+        return []
+
+    try:
+        ready_result = poll_ready(poll_specs)
+    except Exception as exc:
+        return [f"web_search_ready_poll:{str(exc)[:160]}"]
+    if ready_result is None:
+        return []
+
+    poll_token = _batch_lane_timestamp(compact=True)
+    poll_artifact_paths: dict[str, str] = {}
+    for artifact in list(ready_result.artifacts or []):
+        artifact_label = str(getattr(artifact, "label", "artifact") or "artifact")
+        artifact_key = f"{artifact_label}_{poll_token}"
+        default_path = discovery_dir / f"web_search_{artifact_key}.json"
+        artifact_path = _write_search_execution_artifact(
+            logger=logger,
+            artifact=artifact,
+            default_path=default_path,
+            asset_type="web_search_ready_poll_payload",
+            source_kind="search_seed_discovery",
+            metadata={"provider_name": ready_result.provider_name, "poll_token": poll_token},
+        )
+        poll_artifact_paths[artifact_key] = str(artifact_path)
+
+    for task in list(ready_result.tasks or []):
+        task_key = str(getattr(task, "task_key", "") or "").strip()
+        if not task_key:
+            continue
+        entry = dict(manifest_entries.get(task_key) or {})
+        search_state = dict(getattr(task, "checkpoint", {}) or {})
+        search_state["ready_attempted_at"] = attempted_at
+        search_state["ready_poll_token"] = poll_token
+        search_state["ready_checked_at"] = _batch_lane_timestamp()
+        search_state["ready_poll_source"] = "lane_batch"
+        search_state["ready_poll_label"] = "tasks_ready_batch"
+        entry["search_state"] = search_state
+        entry_artifact_paths = {
+            str(key): str(value)
+            for key, value in dict(entry.get("artifact_paths") or {}).items()
+            if str(key).strip() and str(value).strip()
+        }
+        entry_artifact_paths.update(poll_artifact_paths)
+        entry["artifact_paths"] = entry_artifact_paths
+        manifest_entries[task_key] = entry
+        spec = pending_by_key.get(task_key)
+        if spec is not None:
+            spec["prefetched_search_state"] = search_state
+            spec["prefetched_search_artifact_paths"] = dict(entry_artifact_paths)
+            spec["prefetched_search_manifest_path"] = str(manifest_path)
+            spec["prefetched_search_manifest_key"] = task_key
+    return []
+
+
+def _fetch_batched_search_seed_ready_results(
+    *,
+    search_provider: BaseSearchProvider,
+    logger: AssetLogger,
+    discovery_dir: Path,
+    manifest_path: Path,
+    manifest_entries: dict[str, dict[str, Any]],
+    pending_by_key: dict[str, dict[str, Any]],
+) -> list[str]:
+    fetch_ready = getattr(search_provider, "fetch_ready_batch", None)
+    if not callable(fetch_ready):
+        return []
+
+    fetch_specs: list[dict[str, Any]] = []
+    attempted_at = _batch_lane_timestamp()
+    for task_key, spec in pending_by_key.items():
+        entry = dict(manifest_entries.get(task_key) or {})
+        search_state = dict(entry.get("search_state") or {})
+        if str(search_state.get("status") or "").strip() != "ready_cached":
+            continue
+        raw_path = str(entry.get("raw_path") or "").strip()
+        if raw_path and Path(raw_path).exists():
+            continue
+        if _timestamp_within_seconds(str(search_state.get("fetch_attempted_at") or ""), _LANE_FETCH_MIN_INTERVAL_SECONDS):
+            continue
+        search_state["fetch_attempted_at"] = attempted_at
+        search_state["lane_fetch_cooldown_seconds"] = _LANE_FETCH_MIN_INTERVAL_SECONDS
+        entry["search_state"] = search_state
+        manifest_entries[task_key] = entry
+        fetch_specs.append(
+            {
+                "task_key": task_key,
+                "query_text": str(entry.get("query") or dict(spec.get("query_spec") or {}).get("query") or "").strip(),
+                "checkpoint": search_state,
+            }
+        )
+    if not fetch_specs:
+        return []
+
+    try:
+        fetch_result = fetch_ready(fetch_specs)
+    except Exception as exc:
+        return [f"web_search_task_get:{str(exc)[:160]}"]
+    if fetch_result is None:
+        return []
+
+    fetch_token = _batch_lane_timestamp(compact=True)
+    fetch_artifact_paths: dict[str, str] = {}
+    for artifact in list(fetch_result.artifacts or []):
+        artifact_label = str(getattr(artifact, "label", "artifact") or "artifact")
+        artifact_key = f"{artifact_label}_{fetch_token}"
+        default_path = discovery_dir / f"web_search_{artifact_key}.json"
+        artifact_path = _write_search_execution_artifact(
+            logger=logger,
+            artifact=artifact,
+            default_path=default_path,
+            asset_type="web_search_task_get_payload",
+            source_kind="search_seed_discovery",
+            metadata={"provider_name": fetch_result.provider_name, "fetch_token": fetch_token},
+        )
+        fetch_artifact_paths[artifact_key] = str(artifact_path)
+
+    for task in list(fetch_result.tasks or []):
+        task_key = str(getattr(task, "task_key", "") or "").strip()
+        if not task_key:
+            continue
+        spec = pending_by_key.get(task_key)
+        entry = dict(manifest_entries.get(task_key) or {})
+        response = getattr(task, "response", None)
+        if response is None or spec is None:
+            continue
+        index = int(spec.get("index") or 0)
+        default_path = discovery_dir / f"web_query_{index:02d}.html"
+        raw_path = _write_search_response_raw_asset(
+            logger=logger,
+            response=response,
+            default_path=default_path,
+            asset_type="web_search_payload",
+            source_kind="search_seed_discovery",
+            metadata={"query": str(entry.get("query") or ""), "provider_name": response.provider_name},
+        )
+        search_state = dict(getattr(task, "checkpoint", {}) or {})
+        search_state["fetch_attempted_at"] = attempted_at
+        search_state["fetched_at"] = _batch_lane_timestamp()
+        search_state["fetch_token"] = fetch_token
+        search_state["lane_fetch_cooldown_seconds"] = _LANE_FETCH_MIN_INTERVAL_SECONDS
+        entry["search_state"] = search_state
+        entry["raw_path"] = str(raw_path)
+        entry_artifact_paths = {
+            str(key): str(value)
+            for key, value in dict(entry.get("artifact_paths") or {}).items()
+            if str(key).strip() and str(value).strip()
+        }
+        entry_artifact_paths.update(fetch_artifact_paths)
+        entry["artifact_paths"] = entry_artifact_paths
+        manifest_entries[task_key] = entry
+        spec["prefetched_search_state"] = search_state
+        spec["prefetched_search_artifact_paths"] = dict(entry_artifact_paths)
+        spec["prefetched_search_raw_path"] = str(raw_path)
+        spec["prefetched_search_manifest_path"] = str(manifest_path)
+        spec["prefetched_search_manifest_key"] = task_key
+    return []
+
+
+def _load_search_batch_manifest_entries(manifest_path: Path) -> dict[str, dict[str, Any]]:
+    if not manifest_path.exists():
+        return {}
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    entries: dict[str, dict[str, Any]] = {}
+    for item in list(payload.get("entries") or []):
+        task_key = str((item or {}).get("task_key") or "").strip()
+        if task_key:
+            entries[task_key] = dict(item or {})
+    return entries
+
+
+def _update_search_batch_manifest_entry(
+    *,
+    logger: AssetLogger,
+    manifest_path: Path | None,
+    task_key: str,
+    search_state: dict[str, Any],
+    artifact_paths: dict[str, str],
+    raw_path: str,
+) -> None:
+    if manifest_path is None or not str(task_key or "").strip():
+        return
+    payload: dict[str, Any] = {}
+    if manifest_path.exists():
+        try:
+            payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            payload = {}
+    entries = _load_search_batch_manifest_entries(manifest_path)
+    entry = dict(entries.get(task_key) or {})
+    if not entry:
+        return
+    entry["search_state"] = dict(search_state or {})
+    merged_artifact_paths = {
+        str(key): str(value)
+        for key, value in dict(entry.get("artifact_paths") or {}).items()
+        if str(key).strip() and str(value).strip()
+    }
+    for key, value in dict(artifact_paths or {}).items():
+        normalized_key = str(key or "").strip()
+        normalized_value = str(value or "").strip()
+        if normalized_key and normalized_value and normalized_key not in merged_artifact_paths:
+            merged_artifact_paths[normalized_key] = normalized_value
+    if merged_artifact_paths:
+        entry["artifact_paths"] = merged_artifact_paths
+    normalized_raw_path = str(raw_path or "").strip()
+    if normalized_raw_path:
+        entry["raw_path"] = normalized_raw_path
+    entries[task_key] = entry
+
+    root_artifact_paths = {
+        str(key): str(value)
+        for key, value in dict(payload.get("artifact_paths") or {}).items()
+        if str(key).strip() and str(value).strip()
+    }
+    for key, value in merged_artifact_paths.items():
+        if key not in root_artifact_paths:
+            root_artifact_paths[key] = value
+    logger.write_json(
+        manifest_path,
+        {
+            "provider_name": str(payload.get("provider_name") or ""),
+            "submitted_query_count": int(payload.get("submitted_query_count") or 0),
+            "artifact_paths": root_artifact_paths,
+            "entries": [entries[key] for key in sorted(entries)],
+            "message": str(payload.get("message") or ""),
+            "updated_at": _batch_lane_timestamp(),
+        },
+        asset_type="web_search_batch_manifest",
+        source_kind="search_seed_discovery",
+        is_raw_asset=False,
+        model_safe=False,
+    )
+
+
+def _mark_search_state_as_worker_fetched(
+    existing_state: dict[str, Any],
+    *,
+    fallback_state: dict[str, Any] | None = None,
+    query_text: str,
+) -> dict[str, Any]:
+    normalized_existing = dict(existing_state or {})
+    normalized_fallback = dict(fallback_state or {})
+    task_id = str(normalized_existing.get("task_id") or normalized_fallback.get("task_id") or "").strip()
+    if not task_id:
+        return {}
+    current_timestamp = _batch_lane_timestamp()
+    fetch_token = str(normalized_existing.get("fetch_token") or normalized_fallback.get("fetch_token") or "").strip()
+    if not fetch_token:
+        fetch_token = f"worker_direct_{_batch_lane_timestamp(compact=True)}"
+    return {
+        **normalized_fallback,
+        **normalized_existing,
+        "task_id": task_id,
+        "query_text": str(normalized_existing.get("query_text") or normalized_fallback.get("query_text") or query_text),
+        "status": "fetched_cached",
+        "fetch_attempted_at": str(
+            normalized_existing.get("fetch_attempted_at")
+            or normalized_fallback.get("fetch_attempted_at")
+            or current_timestamp
+        ),
+        "fetched_at": str(
+            normalized_existing.get("fetched_at")
+            or normalized_fallback.get("fetched_at")
+            or current_timestamp
+        ),
+        "fetch_token": fetch_token,
+    }
+
+
+def _merge_prefetched_search_checkpoint(
+    *,
+    checkpoint: dict[str, Any],
+    prefetched_search_state: dict[str, Any],
+    prefetched_search_artifact_paths: dict[str, str],
+    prefetched_search_raw_path: str,
+    manifest_path: Path | None,
+    manifest_key: str,
+) -> tuple[dict[str, Any], bool]:
+    updated = dict(checkpoint or {})
+    existing_state = dict(updated.get("search_state") or {})
+
+    recovered_entry: dict[str, Any] = {}
+    if not prefetched_search_state and manifest_path is not None and manifest_path.exists() and manifest_key:
+        recovered_entry = dict(_load_search_batch_manifest_entries(manifest_path).get(manifest_key) or {})
+        prefetched_search_state = dict(recovered_entry.get("search_state") or {})
+        prefetched_search_artifact_paths = {
+            str(key): str(value)
+            for key, value in dict(recovered_entry.get("artifact_paths") or {}).items()
+            if str(key).strip() and str(value).strip()
+        }
+        prefetched_search_raw_path = str(recovered_entry.get("raw_path") or prefetched_search_raw_path or "").strip()
+
+    if not str(dict(prefetched_search_state or {}).get("task_id") or "").strip():
+        return updated, False
+
+    existing_task_id = str(existing_state.get("task_id") or "").strip()
+    prefetched_task_id = str(dict(prefetched_search_state or {}).get("task_id") or "").strip()
+    should_replace = False
+    if not existing_task_id:
+        should_replace = True
+    elif existing_task_id == prefetched_task_id:
+        existing_poll = str(existing_state.get("ready_poll_token") or "").strip()
+        prefetched_poll = str(dict(prefetched_search_state or {}).get("ready_poll_token") or "").strip()
+        existing_status = str(existing_state.get("status") or "").strip()
+        prefetched_status = str(dict(prefetched_search_state or {}).get("status") or "").strip()
+        existing_raw_path = str(updated.get("raw_path") or "").strip()
+        prefetched_raw_path = str(prefetched_search_raw_path or "").strip()
+        should_replace = (
+            prefetched_poll != existing_poll
+            or prefetched_status != existing_status
+            or (prefetched_raw_path and prefetched_raw_path != existing_raw_path)
+        )
+    if not should_replace:
+        return updated, False
+
+    merged_artifact_paths = {
+        str(key): str(value)
+        for key, value in dict(updated.get("search_artifact_paths") or {}).items()
+        if str(key).strip() and str(value).strip()
+    }
+    for key, value in dict(prefetched_search_artifact_paths or {}).items():
+        normalized_key = str(key or "").strip()
+        normalized_value = str(value or "").strip()
+        if normalized_key and normalized_value and normalized_key not in merged_artifact_paths:
+            merged_artifact_paths[normalized_key] = normalized_value
+    updated["search_state"] = dict(prefetched_search_state or {})
+    if merged_artifact_paths:
+        updated["search_artifact_paths"] = merged_artifact_paths
+    normalized_raw_path = str(prefetched_search_raw_path or "").strip()
+    if normalized_raw_path:
+        current_raw_path = str(updated.get("raw_path") or "").strip()
+        if not current_raw_path or not Path(current_raw_path).exists():
+            updated["raw_path"] = normalized_raw_path
+    if manifest_path is not None and str(manifest_key or "").strip():
+        updated["search_manifest_path"] = str(manifest_path)
+        updated["search_manifest_key"] = str(manifest_key)
+    return updated, True
+
+
+def _batch_lane_timestamp(*, compact: bool = False) -> str:
+    current = datetime.now(timezone.utc)
+    if compact:
+        return current.strftime("%Y%m%dT%H%M%SZ")
+    return current.isoformat()
+
+
+def _timestamp_within_seconds(value: str, seconds: int) -> bool:
+    normalized = str(value or "").strip()
+    if not normalized:
+        return False
+    try:
+        parsed = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - parsed.astimezone(timezone.utc)).total_seconds() < max(0, int(seconds or 0))
 
 
 def build_candidates_from_seed_snapshot(snapshot: SearchSeedSnapshot) -> tuple[list[Candidate], list[EvidenceRecord]]:
@@ -859,6 +1761,31 @@ def _write_search_response_raw_asset(
     return raw_path
 
 
+def _write_search_execution_artifact(
+    *,
+    logger: AssetLogger,
+    artifact,
+    default_path: Path,
+    asset_type: str,
+    source_kind: str,
+    metadata: dict[str, Any] | None = None,
+) -> Path:
+    raw_path = default_path.with_name(f"{default_path.stem}_{str(getattr(artifact, 'label', 'artifact') or 'artifact')}.json")
+    logger.write_json(
+        raw_path,
+        getattr(artifact, "payload", {}),
+        asset_type=asset_type,
+        source_kind=source_kind,
+        is_raw_asset=True,
+        model_safe=False,
+        metadata={
+            **dict(metadata or {}),
+            **dict(getattr(artifact, "metadata", {}) or {}),
+        },
+    )
+    return raw_path
+
+
 def _load_cached_search_response(path: Path, query_text: str) -> tuple[list[dict[str, str]], SearchResponse]:
     if path.suffix.lower() == ".json":
         payload = json.loads(path.read_text())
@@ -913,6 +1840,7 @@ def _lead_entries_from_public_result(
     query_text: str,
     employment_status: str,
     *,
+    analysis: dict[str, Any] | None = None,
     source_family: str,
 ) -> list[dict[str, Any]]:
     url = str(result.get("url") or "").strip()
@@ -921,9 +1849,15 @@ def _lead_entries_from_public_result(
     title = str(result.get("title") or "").strip()
     if not title:
         return []
+    relation = str((analysis or {}).get("target_company_relation") or "").strip().lower()
+    confidence_label = str((analysis or {}).get("confidence_label") or "").strip().lower()
+    if relation != "explicit" or confidence_label not in {"high", "medium"}:
+        return []
     names = infer_public_names_from_result_title(title, identity)
     entries: list[dict[str, Any]] = []
     for name in names[:2]:
+        if not _looks_like_person_name(name, identity):
+            continue
         entries.append(
             {
                 "seed_key": _seed_key(name, url),
@@ -961,6 +1895,48 @@ def _dedupe_seed_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
         seen.add(key)
         deduped.append(entry)
     return deduped
+
+
+def _normalize_harvest_company_filters(identity: CompanyIdentity, filter_hints: dict[str, list[str]]) -> dict[str, list[str]]:
+    normalized = {
+        str(key): [str(item).strip() for item in list(values or []) if str(item).strip()]
+        for key, values in dict(filter_hints or {}).items()
+    }
+    company_url = str(identity.linkedin_company_url or "").strip()
+    if not company_url:
+        return normalized
+
+    target_tokens = {
+        _normalize_company_filter_token(identity.canonical_name),
+        _normalize_company_filter_token(identity.requested_name),
+        _normalize_company_filter_token(identity.company_key),
+        _normalize_company_filter_token(identity.linkedin_slug),
+        _normalize_company_filter_token(company_url),
+    }
+    target_tokens.update(_normalize_company_filter_token(alias) for alias in identity.aliases if alias)
+    target_tokens.discard("")
+    if not target_tokens:
+        return normalized
+
+    for key in ["current_companies", "past_companies", "exclude_current_companies", "exclude_past_companies"]:
+        values = list(normalized.get(key) or [])
+        if not values:
+            continue
+        normalized[key] = [
+            company_url if _normalize_company_filter_token(value) in target_tokens else value
+            for value in values
+        ]
+    return normalized
+
+
+def _normalize_company_filter_token(value: str) -> str:
+    raw = unescape(str(value or "")).strip().lower()
+    if not raw:
+        return ""
+    match = re.search(r"linkedin\.com/company/([^/?#]+)", raw)
+    if match:
+        return re.sub(r"[^a-z0-9]+", "", str(match.group(1) or "").lower())
+    return re.sub(r"[^a-z0-9]+", "", raw)
 
 
 def _compile_query_specs(search_seed_queries: list[str], query_bundles: list[dict[str, Any]]) -> list[dict[str, str]]:
@@ -1016,9 +1992,64 @@ def infer_public_names_from_result_title(title: str, identity: CompanyIdentity) 
         normalized = " ".join(item.split()).strip()
         if not normalized or normalized.lower() in blocked:
             continue
+        if not _looks_like_person_name(normalized, identity):
+            continue
         if normalized not in results:
             results.append(normalized)
     return results[:3]
+
+
+def _looks_like_person_name(value: str, identity: CompanyIdentity | None = None) -> bool:
+    tokens = [token for token in str(value or "").split() if token]
+    if len(tokens) < 2 or len(tokens) > 3:
+        return False
+    blocked_tokens = {
+        "acknowledgment",
+        "acknowledgments",
+        "acknowledgement",
+        "acknowledgements",
+        "author",
+        "authors",
+        "authorship",
+        "biomedical",
+        "blog",
+        "build",
+        "conference",
+        "contributor",
+        "contributors",
+        "engineering",
+        "episode",
+        "guidelines",
+        "human",
+        "interview",
+        "launch",
+        "launches",
+        "nature",
+        "official",
+        "podcast",
+        "research",
+        "roadmap",
+        "section",
+        "team",
+        "with",
+        "your",
+    }
+    company_tokens = {
+        normalize_name_token(str(identity.canonical_name or "")),
+        normalize_name_token(str(identity.requested_name or "")),
+    } if identity is not None else set()
+    company_tokens.discard("")
+    for token in tokens:
+        normalized = normalize_name_token(token)
+        if not normalized:
+            return False
+        if normalized in blocked_tokens:
+            return False
+        if normalized in company_tokens:
+            return False
+        if not re.fullmatch(r"[^\W\d_]+(?:[-'][^\W\d_]+)*", token, flags=re.UNICODE):
+            return False
+    return True
 
 
 def _seed_candidate_category(row: dict[str, Any]) -> str:

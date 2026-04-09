@@ -11,6 +11,8 @@ from .domain import (
 )
 from .model_provider import ModelClient
 
+MODEL_WRITTEN_SEARCH_PLANNING_MODES = {"llm_brief", "product_brief_model_assisted"}
+
 
 def compile_search_strategy(
     request: JobRequest,
@@ -24,6 +26,9 @@ def compile_search_strategy(
         publication_coverage,
         provider_name=model_client.provider_name(),
     )
+    if request.planning_mode.lower() not in MODEL_WRITTEN_SEARCH_PLANNING_MODES:
+        deterministic.planner_mode = "deterministic"
+        return deterministic
     draft = deterministic.to_record()
     model_payload = model_client.plan_search_strategy(
         request,

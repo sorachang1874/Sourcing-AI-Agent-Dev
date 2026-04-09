@@ -31,6 +31,12 @@ def _build_handler(orchestrator: SourcingOrchestrator):
                 return self._send_json(HTTPStatus.OK, orchestrator.list_recoverable_agent_workers())
             if self.path == "/api/workers/daemon/status":
                 return self._send_json(HTTPStatus.OK, orchestrator.get_worker_daemon_status())
+            progress_match = re.fullmatch(r"/api/jobs/([A-Za-z0-9]+)/progress", self.path)
+            if progress_match:
+                payload = orchestrator.get_job_progress(progress_match.group(1))
+                if payload is None:
+                    return self._send_json(HTTPStatus.NOT_FOUND, {"error": "job not found"})
+                return self._send_json(HTTPStatus.OK, payload)
             job_match = re.fullmatch(r"/api/jobs/([A-Za-z0-9]+)/results", self.path)
             if job_match:
                 payload = orchestrator.get_job_results(job_match.group(1))
@@ -75,14 +81,43 @@ def _build_handler(orchestrator: SourcingOrchestrator):
                 result = orchestrator.run_job(payload)
                 return self._send_json(HTTPStatus.CREATED, result)
             if self.path == "/api/workflows":
+                payload.setdefault("auto_job_daemon", True)
                 result = orchestrator.start_workflow(payload)
                 return self._send_json(HTTPStatus.ACCEPTED, result)
+            if self.path == "/api/company-assets/supplement":
+                result = orchestrator.supplement_company_assets(payload)
+                status = HTTPStatus.OK if result.get("status") != "invalid" else HTTPStatus.BAD_REQUEST
+                return self._send_json(status, result)
             if self.path == "/api/criteria/feedback":
                 result = orchestrator.record_criteria_feedback(payload)
                 return self._send_json(HTTPStatus.CREATED, result)
             if self.path == "/api/plan/review":
                 result = orchestrator.review_plan_session(payload)
                 status = HTTPStatus.OK if result.get("status") != "not_found" else HTTPStatus.NOT_FOUND
+                return self._send_json(status, result)
+            if self.path == "/api/plan/review/compile-instruction":
+                result = orchestrator.compile_plan_review_instruction(payload)
+                status = HTTPStatus.OK
+                if result.get("status") == "not_found":
+                    status = HTTPStatus.NOT_FOUND
+                elif result.get("status") == "invalid":
+                    status = HTTPStatus.BAD_REQUEST
+                return self._send_json(status, result)
+            if self.path == "/api/results/refine/compile-instruction":
+                result = orchestrator.compile_post_acquisition_refinement(payload)
+                status = HTTPStatus.OK
+                if result.get("status") == "not_found":
+                    status = HTTPStatus.NOT_FOUND
+                elif result.get("status") == "invalid":
+                    status = HTTPStatus.BAD_REQUEST
+                return self._send_json(status, result)
+            if self.path == "/api/results/refine":
+                result = orchestrator.apply_post_acquisition_refinement(payload)
+                status = HTTPStatus.OK
+                if result.get("status") == "not_found":
+                    status = HTTPStatus.NOT_FOUND
+                elif result.get("status") == "invalid":
+                    status = HTTPStatus.BAD_REQUEST
                 return self._send_json(status, result)
             if self.path == "/api/criteria/confidence-policy":
                 result = orchestrator.configure_confidence_policy(payload)
@@ -98,6 +133,14 @@ def _build_handler(orchestrator: SourcingOrchestrator):
                 if result.get("status") == "not_found":
                     status = HTTPStatus.NOT_FOUND
                 elif result.get("status") in {"invalid", "candidate_not_found"}:
+                    status = HTTPStatus.BAD_REQUEST
+                return self._send_json(status, result)
+            if self.path == "/api/manual-review/synthesize":
+                result = orchestrator.synthesize_manual_review_item(payload)
+                status = HTTPStatus.OK
+                if result.get("status") == "not_found":
+                    status = HTTPStatus.NOT_FOUND
+                elif result.get("status") == "invalid":
                     status = HTTPStatus.BAD_REQUEST
                 return self._send_json(status, result)
             if self.path == "/api/criteria/recompile":

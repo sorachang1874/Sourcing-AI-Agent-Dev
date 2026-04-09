@@ -2,7 +2,17 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from hashlib import sha1
+import re
 from typing import Any
+
+from .company_registry import infer_target_company_from_text
+from .execution_preferences import (
+    apply_execution_preference_policy,
+    infer_execution_preferences_from_text,
+    merge_execution_preferences,
+    normalize_execution_preferences,
+)
+from .query_intent_rewrite import apply_query_intent_rewrite
 
 
 def _clean(value: Any) -> str:
@@ -83,15 +93,19 @@ class JobRequest:
     raw_user_request: str = ""
     query: str = ""
     target_company: str = ""
+    asset_view: str = "canonical_merged"
     target_scope: str = "full_company_asset"
     categories: list[str] = field(default_factory=list)
     employment_statuses: list[str] = field(default_factory=list)
     keywords: list[str] = field(default_factory=list)
+    must_have_facets: list[str] = field(default_factory=list)
+    must_have_primary_role_buckets: list[str] = field(default_factory=list)
     must_have_keywords: list[str] = field(default_factory=list)
     exclude_keywords: list[str] = field(default_factory=list)
     organization_keywords: list[str] = field(default_factory=list)
     retrieval_strategy: str = ""
     planning_mode: str = "heuristic"
+    execution_preferences: dict[str, Any] = field(default_factory=dict)
     semantic_rerank_limit: int = 15
     top_k: int = 10
     slug_resolution_limit: int = 8
@@ -99,30 +113,67 @@ class JobRequest:
     publication_scan_limit: int = 8
     publication_lead_limit: int = 12
     exploration_limit: int = 6
+    scholar_coauthor_follow_up_limit: int = 0
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> "JobRequest":
-        raw_user_request = _clean(payload.get("raw_user_request")) or _clean(payload.get("query"))
+        normalized_payload = apply_query_intent_rewrite(payload)
+        raw_user_request = _clean(normalized_payload.get("raw_user_request")) or _clean(normalized_payload.get("query"))
+        target_company = _clean(normalized_payload.get("target_company"))
+        if not target_company:
+            inferred_company = infer_target_company_from_text(raw_user_request)
+            target_company = str(inferred_company.get("canonical_name") or "").strip()
+            if target_company:
+                normalized_payload["target_company"] = target_company
+        explicit_execution_preferences = normalize_execution_preferences(normalized_payload, target_company=target_company)
+        inferred_execution_preferences = infer_execution_preferences_from_text(raw_user_request, target_company=target_company)
+        merged_execution_preferences = merge_execution_preferences(
+            explicit_execution_preferences,
+            inferred_execution_preferences,
+        )
         return cls(
             raw_user_request=raw_user_request,
-            query=_clean(payload.get("query")),
-            target_company=_clean(payload.get("target_company")),
-            target_scope=_clean(payload.get("target_scope")) or "full_company_asset",
-            categories=_normalize_list(payload.get("categories")),
-            employment_statuses=_normalize_list(payload.get("employment_statuses")),
-            keywords=_normalize_list(payload.get("keywords")),
-            must_have_keywords=_normalize_list(payload.get("must_have_keywords")),
-            exclude_keywords=_normalize_list(payload.get("exclude_keywords")),
-            organization_keywords=_normalize_list(payload.get("organization_keywords")),
-            retrieval_strategy=_clean(payload.get("retrieval_strategy")),
-            planning_mode=_clean(payload.get("planning_mode")) or "heuristic",
-            semantic_rerank_limit=_normalize_semantic_limit(payload.get("semantic_rerank_limit")),
-            top_k=_normalize_top_k(payload.get("top_k")),
-            slug_resolution_limit=_normalize_small_limit(payload.get("slug_resolution_limit"), default=8, maximum=50),
-            profile_detail_limit=_normalize_small_limit(payload.get("profile_detail_limit"), default=5, maximum=50),
-            publication_scan_limit=_normalize_small_limit(payload.get("publication_scan_limit"), default=8, maximum=50),
-            publication_lead_limit=_normalize_small_limit(payload.get("publication_lead_limit"), default=12, maximum=100),
-            exploration_limit=_normalize_small_limit(payload.get("exploration_limit"), default=6, maximum=50),
+            query=_clean(normalized_payload.get("query")),
+            target_company=target_company,
+            asset_view=_normalize_asset_view(normalized_payload.get("asset_view")),
+            target_scope=_clean(normalized_payload.get("target_scope")) or "full_company_asset",
+            categories=_normalize_list(normalized_payload.get("categories")),
+            employment_statuses=_normalize_list(normalized_payload.get("employment_statuses")),
+            keywords=_normalize_list(normalized_payload.get("keywords")),
+            must_have_facets=normalize_requested_facets(
+                normalized_payload.get("must_have_facets")
+                if normalized_payload.get("must_have_facets") is not None
+                else normalized_payload.get("must_have_facet")
+            ),
+            must_have_primary_role_buckets=normalize_requested_role_buckets(
+                normalized_payload.get("must_have_primary_role_buckets")
+                if normalized_payload.get("must_have_primary_role_buckets") is not None
+                else normalized_payload.get("must_have_primary_role_bucket")
+            ),
+            must_have_keywords=_normalize_list(normalized_payload.get("must_have_keywords")),
+            exclude_keywords=_normalize_list(normalized_payload.get("exclude_keywords")),
+            organization_keywords=_normalize_list(normalized_payload.get("organization_keywords")),
+            retrieval_strategy=_clean(normalized_payload.get("retrieval_strategy")),
+            planning_mode=_clean(normalized_payload.get("planning_mode")) or "heuristic",
+            execution_preferences=apply_execution_preference_policy(
+                merged_execution_preferences,
+                raw_text=raw_user_request,
+                target_company=target_company,
+                categories=_normalize_list(normalized_payload.get("categories")),
+                employment_statuses=_normalize_list(normalized_payload.get("employment_statuses")),
+            ),
+            semantic_rerank_limit=_normalize_semantic_limit(normalized_payload.get("semantic_rerank_limit")),
+            top_k=_normalize_top_k(normalized_payload.get("top_k")),
+            slug_resolution_limit=_normalize_small_limit(normalized_payload.get("slug_resolution_limit"), default=8, maximum=50),
+            profile_detail_limit=_normalize_small_limit(normalized_payload.get("profile_detail_limit"), default=5, maximum=50),
+            publication_scan_limit=_normalize_small_limit(normalized_payload.get("publication_scan_limit"), default=8, maximum=50),
+            publication_lead_limit=_normalize_small_limit(normalized_payload.get("publication_lead_limit"), default=12, maximum=100),
+            exploration_limit=_normalize_small_limit(normalized_payload.get("exploration_limit"), default=6, maximum=50),
+            scholar_coauthor_follow_up_limit=_normalize_small_limit(
+                normalized_payload.get("scholar_coauthor_follow_up_limit"),
+                default=0,
+                maximum=100,
+            ),
         )
 
     def to_record(self) -> dict[str, Any]:
@@ -163,11 +214,61 @@ def _normalize_small_limit(value: Any, default: int, maximum: int) -> int:
     return max(0, min(parsed, maximum))
 
 
+def _normalize_asset_view(value: Any) -> str:
+    normalized = _clean(value).lower()
+    if not normalized:
+        return "canonical_merged"
+    if normalized in {"canonical_merged", "strict_roster_only"}:
+        return normalized
+    return "canonical_merged"
+
+
 CATEGORY_PRIORITY = {
     "employee": 4,
     "former_employee": 4,
     "investor": 3,
     "lead": 1,
+}
+
+FACET_PRIORITY = [
+    "investor",
+    "founding",
+    "leadership",
+    "recruiting",
+    "ops",
+    "infra_systems",
+    "research",
+    "engineering",
+]
+
+ROLE_BUCKET_PRIORITY = FACET_PRIORITY + ["generalist"]
+
+FACET_ALIAS_MAP = {
+    "investor": {"investor", "investment"},
+    "founding": {"founding", "founder", "cofounder", "co-founder"},
+    "leadership": {"leadership", "leader", "head", "director", "vp", "vice president", "chief"},
+    "recruiting": {"recruiting", "recruiter", "talent", "talent acquisition"},
+    "ops": {"ops", "operations", "business operations", "people operations", "programs", "chief of staff"},
+    "infra_systems": {"infra_systems", "infra", "infrastructure", "systems", "platform", "distributed systems"},
+    "research": {"research", "researcher", "scientist", "applied scientist"},
+    "engineering": {"engineering", "engineer", "technical staff", "member of technical staff"},
+    "multimodal": {"multimodal", "multimodality", "vision-language", "vision language"},
+    "safety": {"safety", "alignment", "evals", "evaluation"},
+    "training": {"training", "pretraining", "pre-training", "post-training", "reinforcement learning"},
+    "inference": {"inference", "serving", "runtime", "decoding"},
+    "data": {"data", "data systems", "data platform", "datasets"},
+}
+
+ROLE_BUCKET_ALIAS_MAP = {
+    "investor": {"investment"},
+    "founding": {"founder", "cofounder", "co-founder", "founders"},
+    "leadership": {"leader", "leaders", "head", "exec", "executive", "management"},
+    "recruiting": {"recruiter", "talent", "talent acquisition", "sourcer"},
+    "ops": {"operations", "operation", "bizops", "business operations", "people operations", "chief of staff"},
+    "infra_systems": {"infra", "infrastructure", "systems", "system", "platform", "distributed systems"},
+    "research": {"researcher", "scientist", "applied scientist"},
+    "engineering": {"engineer", "eng", "technical staff", "member of technical staff"},
+    "generalist": {"general", "generalists", "member"},
 }
 
 
@@ -188,13 +289,265 @@ def merge_candidate(existing: Candidate, incoming: Candidate) -> Candidate:
             merged[key] = value
     if not merged["display_name"]:
         merged["display_name"] = format_display_name(merged["name_en"], merged["name_zh"])
-    return Candidate(**merged)
+    return normalize_candidate(Candidate(**merged))
 
 
 def format_display_name(name_en: str, name_zh: str) -> str:
     if _clean(name_zh):
         return f"{_clean(name_en)}（{_clean(name_zh)}）"
     return _clean(name_en)
+
+
+def normalize_candidate(candidate: Candidate) -> Candidate:
+    record = candidate.to_record()
+    metadata = dict(record.get("metadata") or {})
+    category = _clean(record.get("category")).lower()
+    employment_status = _clean(record.get("employment_status")).lower()
+    role = _clean(record.get("role"))
+    focus_areas = _clean(record.get("focus_areas"))
+    membership_decision = _clean(metadata.get("membership_review_decision")).lower()
+
+    if category in {"employee", ""} and _role_indicates_investor(role):
+        category = "investor"
+        if not _clean(record.get("investment_involvement")):
+            record["investment_involvement"] = "是"
+
+    if category in {"employee", ""} and employment_status == "former":
+        category = "former_employee"
+    elif category == "former_employee" and not employment_status:
+        employment_status = "former"
+
+    if category in {"employee", ""} and _focus_indicates_investor(focus_areas):
+        category = "investor"
+        if not _clean(record.get("investment_involvement")):
+            record["investment_involvement"] = "是"
+
+    if category == "investor" and not employment_status:
+        employment_status = "current"
+
+    if membership_decision.endswith("non_member") or bool(metadata.get("target_company_mismatch")):
+        category = "non_member"
+        if employment_status not in {"current", "former"}:
+            employment_status = ""
+
+    record["category"] = category
+    record["employment_status"] = employment_status
+    return Candidate(**record)
+
+
+def sanitize_candidate_notes(notes: str) -> str:
+    text = str(notes or "").strip()
+    if not text:
+        return ""
+    cleaned_parts: list[str] = []
+    for raw_part in re.split(r"\s+\|\s+", text):
+        part = raw_part
+        part = re.sub(r"LinkedIn company roster baseline\.\s*", "", part, flags=re.IGNORECASE)
+        part = re.sub(r"Location:\s*[^.|]+\.?\s*", "", part, flags=re.IGNORECASE)
+        part = re.sub(r"Source account:\s*[^.|]+\.?\s*", "", part, flags=re.IGNORECASE)
+        part = " ".join(part.split()).strip(" .|;")
+        if part:
+            cleaned_parts.append(part)
+    return " | ".join(cleaned_parts)
+
+
+def normalize_requested_facet(value: str) -> str:
+    normalized = _clean(value).lower().replace("-", " ")
+    normalized = " ".join(normalized.replace("_", " ").split())
+    if not normalized:
+        return ""
+    for canonical, aliases in FACET_ALIAS_MAP.items():
+        if normalized == canonical or normalized in aliases:
+            return canonical
+    return normalized.replace(" ", "_")
+
+
+def normalize_requested_facets(values: Any) -> list[str]:
+    if values is None:
+        return []
+    raw_items: list[str] = []
+    if isinstance(values, str):
+        raw_items.extend(re.split(r"[,/|]", values))
+    else:
+        for item in list(values):
+            if isinstance(item, str):
+                raw_items.extend(re.split(r"[,/|]", item))
+            else:
+                raw_items.append(str(item or ""))
+    normalized = [normalize_requested_facet(item) for item in raw_items]
+    return _dedupe_preserve_order(normalized)
+
+
+def normalize_requested_role_bucket(value: str) -> str:
+    normalized = _clean(value).lower().replace("-", " ")
+    normalized = " ".join(normalized.replace("_", " ").split())
+    if not normalized:
+        return ""
+    for canonical in ROLE_BUCKET_PRIORITY:
+        if normalized == canonical.replace("_", " "):
+            return canonical
+    for canonical, aliases in ROLE_BUCKET_ALIAS_MAP.items():
+        if normalized in aliases:
+            return canonical
+    return normalized.replace(" ", "_")
+
+
+def normalize_requested_role_buckets(values: Any) -> list[str]:
+    if values is None:
+        return []
+    raw_items: list[str] = []
+    if isinstance(values, str):
+        raw_items.extend(re.split(r"[,/|]", values))
+    else:
+        for item in list(values):
+            if isinstance(item, str):
+                raw_items.extend(re.split(r"[,/|]", item))
+            else:
+                raw_items.append(str(item or ""))
+    normalized = [normalize_requested_role_bucket(item) for item in raw_items]
+    allowed = set(ROLE_BUCKET_PRIORITY)
+    return [item for item in _dedupe_preserve_order(normalized) if item in allowed]
+
+
+def derive_candidate_facets(candidate: Candidate) -> list[str]:
+    text = _candidate_signal_text(candidate, include_notes=False)
+    facets: list[str] = []
+
+    if candidate.category == "investor" or _contains_any(
+        text,
+        [
+            "investor",
+            "venture partner",
+            "seed investor",
+            "angel investor",
+            "investment partner",
+        ],
+    ):
+        facets.append("investor")
+    if _contains_any(text, ["founder", "co-founder", "cofounder", "founding"]):
+        facets.append("founding")
+    if _contains_any(text, ["ceo", "cto", "chief", "vp ", "vice president", "head of", "director", "general partner"]):
+        facets.append("leadership")
+    if _contains_any(text, ["recruit", "talent", "talent acquisition", "sourcer", "people partner"]):
+        facets.extend(["recruiting", "ops"])
+    if _contains_any(
+        text,
+        [
+            "operations",
+            "business operations",
+            "people operations",
+            "program manager",
+            "program management",
+            "program staff",
+            "programs staff",
+            "chief of staff",
+            "finance",
+            "legal",
+            "hr",
+        ],
+    ):
+        facets.append("ops")
+    if _contains_any(
+        text,
+        [
+            "infrastructure",
+            "infra",
+            "platform",
+            "distributed systems",
+            "systems",
+            "runtime",
+            "serving",
+            "compiler",
+            "kernel",
+            "cluster",
+            "gpu",
+            "compute",
+            "backend",
+            "performance",
+        ],
+    ):
+        facets.append("infra_systems")
+    if _contains_any(text, ["research scientist", "research engineer", "researcher", "scientist", "applied scientist", "research"]):
+        facets.append("research")
+    if _contains_any(text, ["engineer", "engineering", "member of technical staff", "technical staff", "developer", "architect"]):
+        facets.append("engineering")
+    if _contains_any(text, ["multimodal", "multimodality", "vision-language", "vision language", "vision", "image", "video", "audio", "speech", "diffusion"]):
+        facets.append("multimodal")
+    if _contains_any(text, ["alignment", "safety", "red team", "red-teaming", "evals", "evaluation"]):
+        facets.append("safety")
+    if _contains_any(text, ["training", "pretraining", "pre-training", "post-training", "finetuning", "fine-tuning", "reinforcement learning"]):
+        facets.append("training")
+    if _contains_any(text, ["inference", "decoding", "latency", "serving runtime"]):
+        facets.append("inference")
+    if _contains_any(text, ["data engineer", "data platform", "data infrastructure", "dataset", "data systems"]):
+        facets.append("data")
+    return _dedupe_preserve_order(facets)
+
+
+def derive_candidate_role_bucket(candidate: Candidate) -> str:
+    facets = derive_candidate_facets(candidate)
+    for facet in FACET_PRIORITY:
+        if facet in facets:
+            return facet
+    if facets:
+        return facets[0]
+    if candidate.category in {"employee", "former_employee"}:
+        return "generalist"
+    return candidate.category or "unknown"
+
+
+def derive_candidate_filter_facets(candidate: Candidate) -> list[str]:
+    facets = list(derive_candidate_facets(candidate))
+    role_bucket = derive_candidate_role_bucket(candidate)
+    if role_bucket not in {"", "unknown", "generalist"}:
+        facets.insert(0, role_bucket)
+    return _dedupe_preserve_order(facets)
+
+
+def _role_indicates_investor(role: str) -> bool:
+    normalized = _clean(role).lower()
+    if not normalized:
+        return False
+    return normalized.startswith("investor at ") or normalized == "investor" or normalized.startswith("investor,")
+
+
+def _focus_indicates_investor(focus_areas: str) -> bool:
+    normalized = _clean(focus_areas).lower()
+    if not normalized:
+        return False
+    return normalized.startswith("investor at ") or normalized.startswith("investor |")
+
+
+def _candidate_signal_text(candidate: Candidate, *, include_notes: bool) -> str:
+    return " ".join(
+        part
+        for part in [
+            candidate.category,
+            candidate.organization,
+            candidate.role,
+            candidate.team,
+            candidate.focus_areas,
+            candidate.work_history,
+            sanitize_candidate_notes(candidate.notes) if include_notes else "",
+        ]
+        if _clean(part)
+    ).lower()
+
+
+def _contains_any(text: str, patterns: list[str]) -> bool:
+    return any(pattern in text for pattern in patterns)
+
+
+def _dedupe_preserve_order(items: list[str]) -> list[str]:
+    seen: set[str] = set()
+    results: list[str] = []
+    for item in items:
+        normalized = _clean(item).lower()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        results.append(normalized)
+    return results
 
 
 @dataclass(slots=True)
@@ -297,6 +650,17 @@ class SearchStrategyPlan:
 
 
 @dataclass(slots=True)
+class IntentPlanBrief:
+    identified_request: list[str] = field(default_factory=list)
+    target_output: list[str] = field(default_factory=list)
+    default_execution_strategy: list[str] = field(default_factory=list)
+    review_focus: list[str] = field(default_factory=list)
+
+    def to_record(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
 class SourcingPlan:
     target_company: str
     target_scope: str
@@ -307,6 +671,7 @@ class SourcingPlan:
     publication_coverage: PublicationCoveragePlan
     search_strategy: SearchStrategyPlan
     acquisition_tasks: list[AcquisitionTask]
+    intent_brief: IntentPlanBrief = field(default_factory=IntentPlanBrief)
     assumptions: list[str] = field(default_factory=list)
     open_questions: list[str] = field(default_factory=list)
 
@@ -317,4 +682,5 @@ class SourcingPlan:
         record["publication_coverage"] = self.publication_coverage.to_record()
         record["search_strategy"] = self.search_strategy.to_record()
         record["acquisition_tasks"] = [task.to_record() for task in self.acquisition_tasks]
+        record["intent_brief"] = self.intent_brief.to_record()
         return record

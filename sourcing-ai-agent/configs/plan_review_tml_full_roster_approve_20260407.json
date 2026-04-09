@@ -1,0 +1,16 @@
+{
+  "review_id": 10,
+  "action": "approved",
+  "reviewer": "codex",
+  "notes": "Approved for Thinking Machines Lab full roster refresh, including Harvest company-employees across all available pages and follow-up paid detail when explicitly requested later.",
+  "decision": {
+    "confirmed_company_scope": [
+      "Thinking Machines Lab"
+    ],
+    "extra_source_families": [
+      "Official Team Pages"
+    ],
+    "allow_high_cost_sources": true,
+    "precision_recall_bias": "balanced"
+  }
+}

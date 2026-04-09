@@ -30,13 +30,23 @@ def read_service_status(runtime_dir: str | Path, service_name: str = "worker-rec
             "status_path": str(status_path),
         }
     try:
-        return json.loads(status_path.read_text())
+        payload = json.loads(status_path.read_text())
     except (OSError, json.JSONDecodeError):
         return {
             "service_name": service_name,
             "status": "corrupted",
             "status_path": str(status_path),
         }
+    lock_path = Path(str(payload.get("lock_path") or service_state_dir(runtime_dir, service_name) / "service.lock"))
+    lock_status = _probe_service_lock_status(lock_path)
+    payload["lock_status"] = lock_status
+    payload.setdefault("service_name", service_name)
+    payload.setdefault("status_path", str(status_path))
+    if str(payload.get("status") or "") in {"starting", "running", "stopping"} and lock_status != "locked":
+        payload["reported_status"] = str(payload.get("status") or "")
+        payload["status"] = "stale"
+        payload["stale_reason"] = "lock_not_held"
+    return payload
 
 
 def render_systemd_unit(
@@ -98,6 +108,7 @@ class WorkerDaemonService:
         recovery_callback: ServiceCallback,
         service_name: str = "worker-recovery-daemon",
         owner_id: str = "",
+        callback_payload: dict[str, Any] | None = None,
         poll_seconds: float = 5.0,
         lease_seconds: int = 300,
         stale_after_seconds: int = 180,
@@ -107,9 +118,10 @@ class WorkerDaemonService:
         self.service_name = service_name.strip() or "worker-recovery-daemon"
         self.recovery_callback = recovery_callback
         self.owner_id = owner_id.strip() or f"{self.service_name}-{socket.gethostname()}-{os.getpid()}"
+        self.callback_payload = dict(callback_payload or {})
         self.poll_seconds = max(0.1, float(poll_seconds or 5.0))
         self.lease_seconds = max(30, int(lease_seconds or 300))
-        self.stale_after_seconds = max(30, int(stale_after_seconds or 180))
+        self.stale_after_seconds = max(1, int(stale_after_seconds or 180))
         self.total_limit = max(1, int(total_limit or 4))
         self.root_dir = service_state_dir(self.runtime_dir, self.service_name)
         self.root_dir.mkdir(parents=True, exist_ok=True)
@@ -124,32 +136,82 @@ class WorkerDaemonService:
         with self._acquire_lock():
             tick = 0
             last_summary: dict[str, Any] = {}
-            self._write_status("starting", tick=tick, last_summary=last_summary)
+            last_nonempty_summary: dict[str, Any] = {}
+            last_nonempty_tick = 0
+            last_nonempty_at = ""
+            cumulative_summary = _empty_cumulative_service_summary()
+            self._write_status(
+                "starting",
+                tick=tick,
+                last_summary=last_summary,
+                last_nonempty_summary=last_nonempty_summary,
+                last_nonempty_tick=last_nonempty_tick,
+                last_nonempty_at=last_nonempty_at,
+                cumulative_summary=cumulative_summary,
+            )
             try:
                 while not self._stop_event.is_set():
                     tick += 1
-                    last_summary = self.recovery_callback(
-                        {
-                            "owner_id": self.owner_id,
-                            "lease_seconds": self.lease_seconds,
-                            "stale_after_seconds": self.stale_after_seconds,
-                            "total_limit": self.total_limit,
-                        }
+                    callback_payload = self._build_callback_payload()
+                    self._write_status(
+                        "running",
+                        tick=tick,
+                        last_summary=last_summary,
+                        last_nonempty_summary=last_nonempty_summary,
+                        last_nonempty_tick=last_nonempty_tick,
+                        last_nonempty_at=last_nonempty_at,
+                        cumulative_summary=cumulative_summary,
+                        cycle_state="running_callback",
+                        callback_payload=callback_payload,
                     )
-                    self._write_status("running", tick=tick, last_summary=last_summary)
+                    last_summary = self.recovery_callback(dict(callback_payload))
+                    cumulative_summary = _accumulate_cumulative_service_summary(
+                        cumulative_summary,
+                        summary=last_summary,
+                        tick=tick,
+                    )
+                    if _service_summary_has_activity(last_summary):
+                        last_nonempty_summary = dict(last_summary)
+                        last_nonempty_tick = tick
+                        last_nonempty_at = _utc_now()
+                    self._write_status(
+                        "running",
+                        tick=tick,
+                        last_summary=last_summary,
+                        last_nonempty_summary=last_nonempty_summary,
+                        last_nonempty_tick=last_nonempty_tick,
+                        last_nonempty_at=last_nonempty_at,
+                        cumulative_summary=cumulative_summary,
+                        cycle_state="idle",
+                        callback_payload=callback_payload,
+                    )
                     if max_ticks > 0 and tick >= max_ticks:
                         break
                     if self._sleep_until_next_tick():
                         break
                 final_status = "stopped" if not self._stop_event.is_set() else "stopping"
-                self._write_status(final_status, tick=tick, last_summary=last_summary)
+                self._write_status(
+                    final_status,
+                    tick=tick,
+                    last_summary=last_summary,
+                    last_nonempty_summary=last_nonempty_summary,
+                    last_nonempty_tick=last_nonempty_tick,
+                    last_nonempty_at=last_nonempty_at,
+                    cumulative_summary=cumulative_summary,
+                    cycle_state="stopping" if self._stop_event.is_set() else "idle",
+                )
                 return read_service_status(self.runtime_dir, self.service_name)
             except Exception as exc:
                 self._write_status(
                     "failed",
                     tick=tick,
                     last_summary=last_summary,
+                    last_nonempty_summary=last_nonempty_summary,
+                    last_nonempty_tick=last_nonempty_tick,
+                    last_nonempty_at=last_nonempty_at,
+                    cumulative_summary=cumulative_summary,
                     error=str(exc),
+                    cycle_state="failed",
                 )
                 raise
 
@@ -217,13 +279,29 @@ class WorkerDaemonService:
                 return True
         return False
 
+    def _build_callback_payload(self) -> dict[str, Any]:
+        payload = {
+            "owner_id": self.owner_id,
+            "lease_seconds": self.lease_seconds,
+            "stale_after_seconds": self.stale_after_seconds,
+            "total_limit": self.total_limit,
+        }
+        payload.update(self.callback_payload)
+        return payload
+
     def _write_status(
         self,
         status: str,
         *,
         tick: int,
         last_summary: dict[str, Any],
+        last_nonempty_summary: dict[str, Any],
+        last_nonempty_tick: int,
+        last_nonempty_at: str,
+        cumulative_summary: dict[str, Any],
         error: str = "",
+        cycle_state: str = "",
+        callback_payload: dict[str, Any] | None = None,
     ) -> None:
         payload = {
             "service_name": self.service_name,
@@ -242,10 +320,112 @@ class WorkerDaemonService:
             "status_path": str(self.status_path),
             "lock_path": str(self.lock_path),
             "last_summary": last_summary,
+            "last_nonempty_summary": last_nonempty_summary,
+            "last_nonempty_tick": int(last_nonempty_tick),
+            "last_nonempty_at": last_nonempty_at,
+            "cumulative_summary": cumulative_summary,
         }
+        if cycle_state:
+            payload["cycle_state"] = cycle_state
+        if callback_payload:
+            payload["callback_payload"] = dict(callback_payload)
         if error:
             payload["error"] = error
         self.status_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
+
+
+def _empty_cumulative_service_summary() -> dict[str, Any]:
+    return {
+        "tick_count": 0,
+        "active_tick_count": 0,
+        "total_claimed_count": 0,
+        "total_executed_count": 0,
+        "max_recoverable_count": 0,
+        "workflow_resume_status_counts": {},
+        "job_totals": {},
+    }
+
+
+def _service_summary_has_activity(summary: dict[str, Any]) -> bool:
+    daemon = dict(summary.get("daemon") or {})
+    if int(daemon.get("claimed_count") or 0) > 0 or int(daemon.get("executed_count") or 0) > 0:
+        return True
+    workflow_resume = list(summary.get("workflow_resume") or [])
+    return any(str(item.get("status") or "") in {"resumed", "failed"} for item in workflow_resume)
+
+
+def _accumulate_cumulative_service_summary(
+    existing: dict[str, Any],
+    *,
+    summary: dict[str, Any],
+    tick: int,
+) -> dict[str, Any]:
+    daemon = dict(summary.get("daemon") or {})
+    workflow_resume = list(summary.get("workflow_resume") or [])
+    job_totals: dict[str, Any] = {
+        str(job_id): dict(payload)
+        for job_id, payload in dict(existing.get("job_totals") or {}).items()
+        if str(job_id).strip()
+    }
+    for job in list(daemon.get("jobs") or []):
+        job_id = str(job.get("job_id") or "").strip()
+        if not job_id:
+            continue
+        prior = dict(job_totals.get(job_id) or {})
+        job_totals[job_id] = {
+            "claimed_count": int(prior.get("claimed_count") or 0) + int(job.get("claimed_count") or 0),
+            "executed_count": int(prior.get("executed_count") or 0) + int(job.get("executed_count") or 0),
+            "max_backlog_count": max(int(prior.get("max_backlog_count") or 0), int(job.get("backlog_count") or 0)),
+        }
+
+    workflow_resume_status_counts: dict[str, int] = {
+        str(status): int(count)
+        for status, count in dict(existing.get("workflow_resume_status_counts") or {}).items()
+        if str(status).strip()
+    }
+    for item in workflow_resume:
+        status = str(item.get("status") or "").strip()
+        if not status:
+            continue
+        workflow_resume_status_counts[status] = int(workflow_resume_status_counts.get(status) or 0) + 1
+
+    has_activity = _service_summary_has_activity(summary)
+    return {
+        "tick_count": int(tick),
+        "active_tick_count": int(existing.get("active_tick_count") or 0) + (1 if has_activity else 0),
+        "total_claimed_count": int(existing.get("total_claimed_count") or 0) + int(daemon.get("claimed_count") or 0),
+        "total_executed_count": int(existing.get("total_executed_count") or 0) + int(daemon.get("executed_count") or 0),
+        "max_recoverable_count": max(
+            int(existing.get("max_recoverable_count") or 0),
+            int(daemon.get("recoverable_count") or 0),
+        ),
+        "workflow_resume_status_counts": workflow_resume_status_counts,
+        "job_totals": job_totals,
+    }
+
+
+def _probe_service_lock_status(lock_path: Path) -> str:
+    if not lock_path.exists():
+        return "missing"
+    handle = None
+    locked_here = False
+    try:
+        handle = lock_path.open("a+")
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            locked_here = True
+            return "free"
+        except BlockingIOError:
+            return "locked"
+    except OSError:
+        return "unknown"
+    finally:
+        if handle is not None:
+            try:
+                if locked_here:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            finally:
+                handle.close()
 
 
 def _utc_now() -> str:

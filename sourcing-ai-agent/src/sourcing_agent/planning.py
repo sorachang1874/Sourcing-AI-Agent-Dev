@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+from typing import Any
+
 from .acquisition_strategy import compile_acquisition_strategy
 from .asset_catalog import AssetCatalog
+from .company_shard_planning import build_default_company_employee_shard_policy
+from .company_registry import normalize_company_key
 from .domain import (
     AcquisitionStrategyPlan,
     AcquisitionTask,
+    IntentPlanBrief,
     JobRequest,
     PublicationCoveragePlan,
     PublicationSourcePlan,
@@ -13,11 +18,28 @@ from .domain import (
     SearchStrategyPlan,
     SourcingPlan,
 )
-from .model_provider import ModelClient
+from .model_provider import DeterministicModelClient, ModelClient
 from .publication_planning import compile_publication_coverage_plan
+from .query_intent_rewrite import summarize_query_intent_rewrite
 from .search_planning import compile_search_strategy
 
-
+MODEL_WRITTEN_PLANNING_MODES = {"llm_brief", "product_brief_model_assisted"}
+FULL_COMPANY_EMPLOYEES_PAGE_LIMIT = 25
+FULL_COMPANY_EMPLOYEES_DEFAULT_MAX_PAGES = 20
+FULL_COMPANY_EMPLOYEES_LARGE_ORG_MAX_PAGES = 100
+FULL_COMPANY_EMPLOYEES_LARGE_ORG_KEYS = {
+    "anthropic",
+    "openai",
+    "meta",
+    "facebook",
+    "google",
+    "alphabet",
+    "microsoft",
+    "amazon",
+    "apple",
+    "bytedance",
+    "tiktok",
+}
 def build_sourcing_plan(
     request: JobRequest,
     catalog: AssetCatalog,
@@ -37,6 +59,9 @@ def build_sourcing_plan(
         publication_coverage,
         search_strategy,
     )
+    criteria_summary = _criteria_summary(request, categories, employment_statuses)
+    assumptions = _build_assumptions(request, categories, retrieval_plan.strategy, acquisition_strategy)
+    open_questions = _build_open_questions(request, categories, employment_statuses, acquisition_strategy)
 
     draft_plan = {
         "target_company": request.target_company,
@@ -47,11 +72,26 @@ def build_sourcing_plan(
         "publication_coverage": publication_coverage.to_record(),
         "search_strategy": search_strategy.to_record(),
         "acquisition_tasks": [task.to_record() for task in acquisition_tasks],
+        "criteria_summary": criteria_summary,
+        "assumptions": assumptions,
+        "open_questions": open_questions,
     }
-    intent_summary = model_client.interpret_intent(request, draft_plan)
-    criteria_summary = _criteria_summary(request, categories, employment_statuses)
-    assumptions = _build_assumptions(request, categories, retrieval_plan.strategy, acquisition_strategy)
-    open_questions = _build_open_questions(request, acquisition_strategy)
+    intent_brief = _build_intent_brief(
+        model_client=model_client,
+        request=request,
+        draft_plan=draft_plan,
+        categories=categories,
+        employment_statuses=employment_statuses,
+        retrieval_plan=retrieval_plan,
+        acquisition_strategy=acquisition_strategy,
+        search_strategy=search_strategy,
+        open_questions=open_questions,
+    )
+    draft_plan["intent_brief"] = intent_brief.to_record()
+    if request.planning_mode.lower() in MODEL_WRITTEN_PLANNING_MODES:
+        intent_summary = model_client.interpret_intent(request, draft_plan)
+    else:
+        intent_summary = DeterministicModelClient().interpret_intent(request, draft_plan)
 
     return SourcingPlan(
         target_company=request.target_company,
@@ -63,6 +103,7 @@ def build_sourcing_plan(
         publication_coverage=publication_coverage,
         search_strategy=search_strategy,
         acquisition_tasks=acquisition_tasks,
+        intent_brief=intent_brief,
         assumptions=assumptions,
         open_questions=open_questions,
     )
@@ -151,9 +192,249 @@ def hydrate_sourcing_plan(payload: dict[str, object]) -> SourcingPlan:
             review_triggers=list(search_payload.get("review_triggers") or []),
         ),
         acquisition_tasks=acquisition_tasks,
+        intent_brief=IntentPlanBrief(
+            identified_request=list((payload.get("intent_brief") or {}).get("identified_request") or []),
+            target_output=list((payload.get("intent_brief") or {}).get("target_output") or []),
+            default_execution_strategy=list((payload.get("intent_brief") or {}).get("default_execution_strategy") or []),
+            review_focus=list((payload.get("intent_brief") or {}).get("review_focus") or []),
+        ),
         assumptions=list(payload.get("assumptions") or []),
         open_questions=list(payload.get("open_questions") or []),
     )
+
+
+def _build_intent_brief(
+    *,
+    model_client: ModelClient,
+    request: JobRequest,
+    draft_plan: dict[str, object],
+    categories: list[str],
+    employment_statuses: list[str],
+    retrieval_plan: RetrievalPlan,
+    acquisition_strategy: AcquisitionStrategyPlan,
+    search_strategy: SearchStrategyPlan,
+    open_questions: list[str],
+) -> IntentPlanBrief:
+    deterministic = _deterministic_intent_brief(
+        request=request,
+        categories=categories,
+        employment_statuses=employment_statuses,
+        retrieval_plan=retrieval_plan,
+        acquisition_strategy=acquisition_strategy,
+        search_strategy=search_strategy,
+        open_questions=open_questions,
+    )
+    if request.planning_mode.lower() not in MODEL_WRITTEN_PLANNING_MODES:
+        return deterministic
+    model_payload = model_client.draft_intent_brief(
+        request,
+        {
+            "request": request.to_record(),
+            "draft_plan": draft_plan,
+            "deterministic_brief": deterministic.to_record(),
+        },
+    )
+    return IntentPlanBrief(
+        identified_request=_normalize_brief_section(
+            model_payload.get("identified_request"),
+            fallback=deterministic.identified_request,
+        ),
+        target_output=_normalize_brief_section(
+            model_payload.get("target_output"),
+            fallback=deterministic.target_output,
+        ),
+        default_execution_strategy=_normalize_brief_section(
+            model_payload.get("default_execution_strategy"),
+            fallback=deterministic.default_execution_strategy,
+        ),
+        review_focus=_normalize_brief_section(
+            model_payload.get("review_focus"),
+            fallback=deterministic.review_focus,
+        ),
+    )
+
+
+def _deterministic_intent_brief(
+    *,
+    request: JobRequest,
+    categories: list[str],
+    employment_statuses: list[str],
+    retrieval_plan: RetrievalPlan,
+    acquisition_strategy: AcquisitionStrategyPlan,
+    search_strategy: SearchStrategyPlan,
+    open_questions: list[str],
+) -> IntentPlanBrief:
+    target_company = request.target_company or "待确认组织"
+    population_label = _population_label(categories)
+    scope_terms = _dedupe_terms(request.organization_keywords)
+    focus_terms = _dedupe_terms(
+        request.must_have_facets
+        + request.must_have_primary_role_buckets
+        + request.must_have_keywords
+        + request.keywords
+    )
+    identified_request = [
+        f"目标组织：{target_company}",
+        f"目标人群：{population_label}",
+    ]
+    if scope_terms:
+        identified_request.append(f"团队或子组织范围：{' / '.join(scope_terms[:4])}")
+    if focus_terms:
+        identified_request.append(f"方向约束：{' / '.join(focus_terms[:6])}")
+    if employment_statuses:
+        identified_request.append(f"雇佣状态：{' / '.join(employment_statuses)}")
+    rewrite_summary = summarize_query_intent_rewrite(request.raw_user_request or request.query)
+    if rewrite_summary:
+        identified_request.append(rewrite_summary)
+    identified_request.append(f"任务类型：{_task_type_label(acquisition_strategy.strategy_type, request.target_scope)}")
+
+    target_output = [
+        _target_output_line(target_company, population_label, focus_terms, scope_terms),
+        _employment_focus_line(employment_statuses),
+        "若存在边界不清、弱证据或组织归属冲突的人，进入 manual review，而不是静默丢弃。",
+    ]
+    if request.top_k > 0:
+        target_output.append(f"默认返回前 {request.top_k} 个高相关结果，并保留关键 evidence 供复核。")
+    if rewrite_summary:
+        target_output.append("这类简称默认按公开的地区 / 语言 / 学习工作经历口径理解，而不是身份标签判断。")
+
+    execution_strategy = [
+        "先做 company identity resolve，确认正式组织身份、LinkedIn company URL、slug 与 canonical alias。",
+        f"先判断是否已有可复用资产；若没有，则进入{_acquisition_step_label(acquisition_strategy.strategy_type)}。",
+        _retrieval_strategy_line(retrieval_plan.strategy),
+        _search_strategy_line(search_strategy),
+        "结果输出时显式附带 manual review items、关键证据和需要用户确认的风险点。",
+    ]
+    if bool(request.execution_preferences.get("use_company_employees_lane")):
+        execution_strategy.insert(2, "当前计划优先走 Harvest company-employees lane，先拿当前组织 roster 再进入后续检索。")
+    if bool(request.execution_preferences.get("force_fresh_run")):
+        execution_strategy.insert(3, "本次按 fresh run 执行，不复用 cached roster、共享 provider cache 或历史 profile inheritance。")
+    if "allow_high_cost_sources" in request.execution_preferences and not bool(
+        request.execution_preferences.get("allow_high_cost_sources")
+    ):
+        execution_strategy.insert(4, "默认不启用高成本 LinkedIn source，只有用户后续显式放开才升级。")
+    else:
+        execution_strategy.insert(4, "公开网页和低成本 search 优先，只有在无法确认成员关系时才升级到高成本 LinkedIn provider。")
+
+    review_focus = [_localize_review_question(item) for item in open_questions[:4]]
+    return IntentPlanBrief(
+        identified_request=identified_request,
+        target_output=target_output,
+        default_execution_strategy=execution_strategy,
+        review_focus=review_focus,
+    )
+
+
+def _normalize_brief_section(value: object, *, fallback: list[str]) -> list[str]:
+    items = value if isinstance(value, list) else []
+    cleaned: list[str] = []
+    for item in items:
+        candidate = str(item or "").strip()
+        if not candidate or candidate in cleaned:
+            continue
+        cleaned.append(candidate)
+    return cleaned[:8] or list(fallback)
+
+
+def _population_label(categories: list[str]) -> str:
+    if not categories:
+        return "未明确指定的人群"
+    return " / ".join(categories)
+
+
+def _dedupe_terms(items: list[str]) -> list[str]:
+    results: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        normalized = str(item or "").strip()
+        if not normalized:
+            continue
+        key = normalized.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        results.append(normalized)
+    return results
+
+
+def _task_type_label(strategy_type: str, target_scope: str) -> str:
+    if strategy_type == "full_company_roster":
+        return "新组织全量 sourcing test" if target_scope == "full_company_asset" else "全量资产获取"
+    if strategy_type == "scoped_search_roster":
+        return "范围限定的组织 sourcing"
+    if strategy_type == "former_employee_search":
+        return "former member recall"
+    if strategy_type == "investor_firm_roster":
+        return "investor firm roster sourcing"
+    return "通用 sourcing workflow"
+
+
+def _target_output_line(
+    target_company: str,
+    population_label: str,
+    focus_terms: list[str],
+    scope_terms: list[str],
+) -> str:
+    company_fragment = target_company
+    if scope_terms:
+        company_fragment = f"{target_company} 的 {' / '.join(scope_terms[:3])}"
+    if focus_terms:
+        return (
+            f"找到与 {company_fragment} 相关、方向偏 {' / '.join(focus_terms[:5])} 的"
+            f" {population_label}。"
+        )
+    return f"找到与 {company_fragment} 相关的 {population_label}。"
+
+
+def _employment_focus_line(employment_statuses: list[str]) -> str:
+    normalized = {item.lower() for item in employment_statuses}
+    if normalized == {"current"}:
+        return "优先返回高置信当前成员。"
+    if normalized == {"former"}:
+        return "优先返回明确有该组织经历的已离职成员。"
+    if normalized == {"current", "former"} or normalized == {"former", "current"}:
+        return "当前成员优先，former 作为辅助背景补充。"
+    return "若雇佣状态未限定，则允许 current / former 共同参与初始召回。"
+
+
+def _acquisition_step_label(strategy_type: str) -> str:
+    if strategy_type == "full_company_roster":
+        return "全量组织 roster 获取"
+    if strategy_type == "scoped_search_roster":
+        return "范围限定 roster 获取"
+    if strategy_type == "former_employee_search":
+        return "former member 搜索种子获取"
+    if strategy_type == "investor_firm_roster":
+        return "投资机构 roster 获取"
+    return "资产获取"
+
+
+def _retrieval_strategy_line(strategy: str) -> str:
+    if strategy == "structured":
+        return "acquisition 后优先走 structured filters、facet / role bucket 和 lexical / alias matching。"
+    if strategy == "semantic":
+        return "acquisition 后以 semantic recall 为主，再用 structured filters 做约束。"
+    return "acquisition 后做多层 retrieval：structured filters -> facet / role bucket -> lexical / alias matching -> semantic recall。"
+
+
+def _search_strategy_line(search_strategy: SearchStrategyPlan) -> str:
+    bundle_ids = [item.bundle_id for item in search_strategy.query_bundles]
+    if not bundle_ids:
+        return "默认只保留必要的 search lane，不做无边界扩张。"
+    bundles = " / ".join(bundle_ids[:4])
+    return f"默认启用的 search lane 以 {bundles} 为主，必要时再扩展新的 source family。"
+
+
+def _localize_review_question(question: str) -> str:
+    normalized = " ".join(str(question or "").split())
+    lowered = normalized.lower()
+    if "high-cost linkedin provider calls" in lowered:
+        return "是否允许在低成本公开网页验证不足时，升级到高成本 LinkedIn provider。"
+    if "roster should be limited to" in lowered:
+        return "是否需要将 roster 范围限制在指定 team / sub-org，而不是整个组织。"
+    if "former employees should exclude anyone who has already returned" in lowered:
+        return "former 检索是否要排除后来回流到目标组织的人。"
+    return normalized
 
 
 def _build_retrieval_plan(request: JobRequest, categories: list[str]) -> RetrievalPlan:
@@ -163,6 +444,10 @@ def _build_retrieval_plan(request: JobRequest, categories: list[str]) -> Retriev
         structured_filters.append(f"categories={categories}")
     if request.employment_statuses:
         structured_filters.append(f"employment_statuses={request.employment_statuses}")
+    if request.must_have_facets:
+        structured_filters.append(f"must_have_facets={request.must_have_facets}")
+    if request.must_have_primary_role_buckets:
+        structured_filters.append(f"must_have_primary_role_buckets={request.must_have_primary_role_buckets}")
     if request.organization_keywords:
         structured_filters.append(f"organization_keywords={request.organization_keywords}")
 
@@ -178,7 +463,7 @@ def _build_retrieval_plan(request: JobRequest, categories: list[str]) -> Retriev
         strategy=strategy,
         reason=reason,
         structured_filters=structured_filters,
-        semantic_fields=["role", "team", "focus_areas", "education", "work_history", "notes"],
+        semantic_fields=_semantic_fields_for_request(request),
         filter_layers=_build_filter_layers(request, strategy, categories),
     )
 
@@ -192,6 +477,19 @@ def _build_acquisition_tasks(
     search_strategy: SearchStrategyPlan,
 ) -> list[AcquisitionTask]:
     has_target_company = bool(request.target_company.strip())
+    roster_max_pages = _default_full_company_roster_max_pages(request, acquisition_strategy)
+    include_former_search_seed = _should_include_default_former_search_seed(
+        categories=categories,
+        employment_statuses=employment_statuses,
+        acquisition_strategy=acquisition_strategy,
+        execution_preferences=request.execution_preferences,
+    )
+    company_employee_shard_policy = _default_full_company_roster_shard_policy(
+        request=request,
+        acquisition_strategy=acquisition_strategy,
+        max_pages=roster_max_pages,
+        page_limit=FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
+    )
 
     tasks = [
         AcquisitionTask(
@@ -222,8 +520,13 @@ def _build_acquisition_tasks(
                 "search_query_bundles": [bundle.to_record() for bundle in search_strategy.query_bundles],
                 "filter_hints": acquisition_strategy.filter_hints,
                 "cost_policy": acquisition_strategy.cost_policy,
-                "max_pages": 10,
-                "page_limit": 50,
+                "max_pages": roster_max_pages,
+                "page_limit": FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
+                "company_employee_shards": [],
+                "company_employee_shard_policy": company_employee_shard_policy,
+                "company_employee_shard_strategy": str(company_employee_shard_policy.get("strategy_id") or "").strip(),
+                "include_former_search_seed": include_former_search_seed,
+                "former_provider_people_search_min_expected_results": 50,
             },
         ),
         AcquisitionTask(
@@ -245,6 +548,9 @@ def _build_acquisition_tasks(
                 "publication_scan_limit": request.publication_scan_limit,
                 "publication_lead_limit": request.publication_lead_limit,
                 "exploration_limit": request.exploration_limit,
+                "scholar_coauthor_follow_up_limit": request.scholar_coauthor_follow_up_limit,
+                "full_roster_profile_prefetch": acquisition_strategy.strategy_type == "full_company_roster",
+                "reuse_existing_roster": bool(request.execution_preferences.get("reuse_existing_roster")),
             },
         ),
         AcquisitionTask(
@@ -269,6 +575,53 @@ def _build_acquisition_tasks(
     return tasks
 
 
+def _default_full_company_roster_max_pages(
+    request: JobRequest,
+    acquisition_strategy: AcquisitionStrategyPlan,
+) -> int:
+    if acquisition_strategy.strategy_type != "full_company_roster":
+        return 10
+    company_key = normalize_company_key(request.target_company)
+    if company_key in FULL_COMPANY_EMPLOYEES_LARGE_ORG_KEYS:
+        return FULL_COMPANY_EMPLOYEES_LARGE_ORG_MAX_PAGES
+    return FULL_COMPANY_EMPLOYEES_DEFAULT_MAX_PAGES
+
+
+def _default_full_company_roster_shard_policy(
+    *,
+    request: JobRequest,
+    acquisition_strategy: AcquisitionStrategyPlan,
+    max_pages: int,
+    page_limit: int,
+) -> dict[str, Any]:
+    if acquisition_strategy.strategy_type != "full_company_roster":
+        return {}
+    company_key = normalize_company_key(request.target_company)
+    return build_default_company_employee_shard_policy(
+        company_key,
+        max_pages=max_pages,
+        page_limit=page_limit,
+    )
+
+
+def _should_include_default_former_search_seed(
+    *,
+    categories: list[str],
+    employment_statuses: list[str],
+    acquisition_strategy: AcquisitionStrategyPlan,
+    execution_preferences: dict[str, Any] | None = None,
+) -> bool:
+    if acquisition_strategy.strategy_type != "full_company_roster":
+        return False
+    preferences = dict(execution_preferences or {})
+    if "run_former_search_seed" in preferences:
+        return bool(preferences.get("run_former_search_seed"))
+    normalized_categories = {str(item or "").strip().lower() for item in categories if str(item or "").strip()}
+    if "investor" in normalized_categories:
+        return False
+    return True
+
+
 def _infer_categories(request: JobRequest) -> list[str]:
     text = f"{request.raw_user_request} {request.query}"
     if any(token in text for token in ["投资", "VC", "investor", "投融资"]):
@@ -289,7 +642,12 @@ def _infer_employment_statuses(request: JobRequest) -> list[str]:
 
 def _infer_retrieval_strategy(request: JobRequest) -> str:
     text = f"{request.raw_user_request} {request.query}"
-    if request.must_have_keywords or request.organization_keywords:
+    if (
+        request.must_have_keywords
+        or request.must_have_facets
+        or request.must_have_primary_role_buckets
+        or request.organization_keywords
+    ):
         return "structured"
     if len(request.keywords) >= 5:
         return "hybrid"
@@ -304,6 +662,10 @@ def _criteria_summary(request: JobRequest, categories: list[str], employment_sta
         segments.append(f"employment_statuses={employment_statuses}")
     if request.keywords:
         segments.append(f"keywords={request.keywords}")
+    if request.must_have_facets:
+        segments.append(f"must_have_facets={request.must_have_facets}")
+    if request.must_have_primary_role_buckets:
+        segments.append(f"must_have_primary_role_buckets={request.must_have_primary_role_buckets}")
     if request.must_have_keywords:
         segments.append(f"must_have={request.must_have_keywords}")
     if request.exclude_keywords:
@@ -325,14 +687,38 @@ def _build_assumptions(request: JobRequest, categories: list[str], strategy: str
     return assumptions
 
 
-def _build_open_questions(request: JobRequest, acquisition_strategy) -> list[str]:
+def _build_open_questions(
+    request: JobRequest,
+    categories: list[str],
+    employment_statuses: list[str],
+    acquisition_strategy,
+) -> list[str]:
     questions = []
     if not request.target_company:
         questions.append("Which company should be scanned first?")
-    if not request.categories:
+    if not request.categories and _needs_population_confirmation(request, categories, employment_statuses, acquisition_strategy):
         questions.append("Should the search include current employees, former employees, investors, or all of them?")
     questions.extend(acquisition_strategy.confirmation_points)
     return questions
+
+
+def _needs_population_confirmation(
+    request: JobRequest,
+    categories: list[str],
+    employment_statuses: list[str],
+    acquisition_strategy,
+) -> bool:
+    if request.categories:
+        return False
+    normalized_statuses = {str(item).strip().lower() for item in employment_statuses if str(item).strip()}
+    if normalized_statuses in ({"current"}, {"former"}):
+        return False
+    if acquisition_strategy.strategy_type == "full_company_roster":
+        return False
+    normalized_categories = {str(item).strip().lower() for item in categories if str(item).strip()}
+    if normalized_categories in ({"employee"}, {"former_employee"}, {"investor"}):
+        return False
+    return True
 
 
 def _build_filter_layers(request: JobRequest, strategy: str, categories: list[str]) -> list[dict[str, object]]:
@@ -346,6 +732,8 @@ def _build_filter_layers(request: JobRequest, strategy: str, categories: list[st
                 "target_scope": request.target_scope,
                 "categories": categories,
                 "employment_statuses": request.employment_statuses,
+                "must_have_facets": request.must_have_facets,
+                "must_have_primary_role_buckets": request.must_have_primary_role_buckets,
             },
         },
         {
@@ -353,6 +741,8 @@ def _build_filter_layers(request: JobRequest, strategy: str, categories: list[st
             "kind": "hard_filter",
             "description": "Apply must-have, exclude, and organization filters before recall-heavy ranking.",
             "criteria": {
+                "must_have_facets": request.must_have_facets,
+                "must_have_primary_role_buckets": request.must_have_primary_role_buckets,
                 "must_have_keywords": request.must_have_keywords,
                 "exclude_keywords": request.exclude_keywords,
                 "organization_keywords": request.organization_keywords,
@@ -393,3 +783,10 @@ def _build_filter_layers(request: JobRequest, strategy: str, categories: list[st
         ]
     )
     return layers
+
+
+def _semantic_fields_for_request(request: JobRequest) -> list[str]:
+    fields = ["role", "team", "focus_areas", "derived_facets", "education", "work_history", "notes"]
+    if request.must_have_primary_role_buckets:
+        return [field_name for field_name in fields if field_name != "notes"]
+    return fields

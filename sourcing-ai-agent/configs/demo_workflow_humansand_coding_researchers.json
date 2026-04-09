@@ -1,0 +1,20 @@
+{
+  "raw_user_request": "我想了解 Humans& 的 Coding 方向的 Researcher。",
+  "target_company": "Humans&",
+  "categories": ["researcher"],
+  "employment_statuses": ["current"],
+  "keywords": [
+    "coding",
+    "code generation",
+    "coding agents",
+    "developer tools",
+    "software engineering",
+    "program synthesis"
+  ],
+  "organization_keywords": ["Humans&", "humansand"],
+  "top_k": 8,
+  "slug_resolution_limit": 8,
+  "profile_detail_limit": 6,
+  "publication_scan_limit": 6,
+  "publication_lead_limit": 8
+}

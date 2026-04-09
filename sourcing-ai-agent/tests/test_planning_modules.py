@@ -24,7 +24,7 @@ class PlanningModulesTest(unittest.TestCase):
         self.assertIn("general_web_search_relation_check", strategy.search_channel_order)
         self.assertIn("Researcher", " ".join(strategy.filter_hints.get("job_titles", [])))
         self.assertEqual(strategy.cost_policy.get("provider_people_search_mode"), "fallback_only")
-        self.assertFalse(strategy.cost_policy.get("collect_email"))
+        self.assertTrue(strategy.cost_policy.get("collect_email"))
 
     def test_former_employee_strategy_prefers_past_company_recall(self) -> None:
         request = JobRequest(
@@ -70,3 +70,165 @@ class PlanningModulesTest(unittest.TestCase):
         self.assertIn("semantic_vector_rerank", layer_ids)
         self.assertIn("manual_review_queue", layer_ids)
         self.assertIn("public_interviews", bundle_ids)
+
+    def test_sourcing_plan_surfaces_must_have_facets(self) -> None:
+        request = JobRequest(
+            raw_user_request="找 TML 的 multimodal 成员",
+            query="multimodal",
+            target_company="Thinking Machines Lab",
+            must_have_facets=["multimodal"],
+        )
+        plan = build_sourcing_plan(request, AssetCatalog.discover(), DeterministicModelClient())
+
+        self.assertIn("must_have_facets=['multimodal']", plan.criteria_summary)
+        self.assertIn("must_have_facets=['multimodal']", plan.retrieval_plan.structured_filters)
+        filter_layer = next(item for item in plan.retrieval_plan.filter_layers if item.get("layer_id") == "must_exclude_filters")
+        self.assertEqual(filter_layer["criteria"]["must_have_facets"], ["multimodal"])
+        self.assertIn("derived_facets", plan.retrieval_plan.semantic_fields)
+
+    def test_sourcing_plan_surfaces_primary_role_bucket_filters(self) -> None:
+        request = JobRequest(
+            raw_user_request="找 TML 的 infra 系统主力成员",
+            query="infra systems",
+            target_company="Thinking Machines Lab",
+            must_have_primary_role_buckets=["infra_systems"],
+        )
+        plan = build_sourcing_plan(request, AssetCatalog.discover(), DeterministicModelClient())
+
+        self.assertIn(
+            "must_have_primary_role_buckets=['infra_systems']",
+            plan.criteria_summary,
+        )
+        self.assertIn(
+            "must_have_primary_role_buckets=['infra_systems']",
+            plan.retrieval_plan.structured_filters,
+        )
+        population_layer = next(item for item in plan.retrieval_plan.filter_layers if item.get("layer_id") == "population_scope")
+        self.assertEqual(
+            population_layer["criteria"]["must_have_primary_role_buckets"],
+            ["infra_systems"],
+        )
+        self.assertNotIn("notes", plan.retrieval_plan.semantic_fields)
+
+    def test_sourcing_plan_contains_structured_intent_brief(self) -> None:
+        request = JobRequest(
+            raw_user_request="我想了解 Humans& 的 Coding 方向的 Researcher。",
+            target_company="Humans&",
+            categories=["researcher"],
+            employment_statuses=["current"],
+            keywords=["coding", "code generation", "developer tools"],
+            top_k=8,
+        )
+
+        plan = build_sourcing_plan(request, AssetCatalog.discover(), DeterministicModelClient())
+
+        self.assertIn("目标组织：Humans&", plan.intent_brief.identified_request)
+        self.assertIn("目标人群：researcher", plan.intent_brief.identified_request)
+        self.assertTrue(
+            any("Coding" in item or "coding" in item for item in plan.intent_brief.identified_request),
+        )
+        self.assertTrue(
+            any("优先返回高置信当前成员" in item for item in plan.intent_brief.target_output),
+        )
+        self.assertTrue(
+            any("company identity resolve" in item for item in plan.intent_brief.default_execution_strategy),
+        )
+
+    def test_sourcing_plan_rewrites_natural_language_shorthand_into_auditable_filters(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "帮我找 Anthropic 的华人成员",
+                "target_company": "Anthropic",
+            }
+        )
+
+        plan = build_sourcing_plan(request, AssetCatalog.discover(), DeterministicModelClient())
+
+        self.assertEqual(
+            request.keywords,
+            ["Greater China experience", "Chinese bilingual outreach"],
+        )
+        self.assertTrue(
+            any("自然语言简称改写" in item for item in plan.intent_brief.identified_request),
+        )
+        self.assertIn(
+            "这类简称默认按公开的地区 / 语言 / 学习工作经历口径理解，而不是身份标签判断。",
+            plan.intent_brief.target_output,
+        )
+
+    def test_full_company_preferences_surface_in_plan_without_extra_review(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "我想要 Humans& 公司全量成员，重新跑，不要高成本。",
+                "target_company": "Humans&",
+                "planning_mode": "heuristic",
+            }
+        )
+
+        plan = build_sourcing_plan(request, AssetCatalog.discover(), DeterministicModelClient())
+
+        self.assertEqual(request.execution_preferences["acquisition_strategy_override"], "full_company_roster")
+        self.assertTrue(request.execution_preferences["force_fresh_run"])
+        self.assertTrue(request.execution_preferences["use_company_employees_lane"])
+        self.assertFalse(request.execution_preferences["allow_high_cost_sources"])
+        self.assertEqual(plan.acquisition_strategy.strategy_type, "full_company_roster")
+        self.assertTrue(plan.acquisition_strategy.cost_policy["allow_company_employee_api"])
+        self.assertFalse(plan.acquisition_strategy.cost_policy["allow_cached_roster_fallback"])
+        self.assertFalse(plan.acquisition_strategy.cost_policy["allow_historical_profile_inheritance"])
+        self.assertFalse(plan.acquisition_strategy.cost_policy["allow_shared_provider_cache"])
+        self.assertFalse(plan.acquisition_strategy.cost_policy["high_cost_requires_approval"])
+        self.assertEqual(plan.open_questions, [])
+        self.assertTrue(
+            any("company-employees lane" in item for item in plan.intent_brief.default_execution_strategy),
+        )
+        self.assertTrue(
+            any("fresh run" in item for item in plan.intent_brief.default_execution_strategy),
+        )
+
+    def test_incremental_roster_reuse_preferences_are_inferred_from_text(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "基于现有 roster 只做增量，补 former，不要重抓 current roster。",
+                "target_company": "Anthropic",
+            }
+        )
+
+        self.assertTrue(request.execution_preferences["reuse_existing_roster"])
+        self.assertTrue(request.execution_preferences["run_former_search_seed"])
+
+    def test_incremental_roster_reuse_preferences_support_more_colloquial_text(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "基于之前抓过的 roster 继续做增量，只补 former 和新的方法，不重新拉公司全量。",
+                "target_company": "Anthropic",
+            }
+        )
+
+        self.assertTrue(request.execution_preferences["reuse_existing_roster"])
+        self.assertTrue(request.execution_preferences["run_former_search_seed"])
+
+    def test_full_company_roster_plan_uses_large_org_budget_and_default_former_seed(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "帮我找出 Anthropic 的所有成员，先全量获取 roster。",
+                "target_company": "Anthropic",
+            }
+        )
+
+        plan = build_sourcing_plan(request, AssetCatalog.discover(), DeterministicModelClient())
+        acquire_task = next(task for task in plan.acquisition_tasks if task.task_type == "acquire_full_roster")
+
+        self.assertEqual(plan.acquisition_strategy.strategy_type, "full_company_roster")
+        self.assertEqual(acquire_task.metadata["max_pages"], 100)
+        self.assertEqual(acquire_task.metadata["page_limit"], 25)
+        self.assertEqual(acquire_task.metadata["company_employee_shard_strategy"], "adaptive_us_function_partition")
+        self.assertEqual(acquire_task.metadata["company_employee_shards"], [])
+        self.assertEqual(
+            acquire_task.metadata["company_employee_shard_policy"]["root_filters"],
+            {"locations": ["United States"]},
+        )
+        self.assertEqual(
+            acquire_task.metadata["company_employee_shard_policy"]["partition_rules"][0]["include_patch"]["function_ids"],
+            ["8"],
+        )
+        self.assertTrue(acquire_task.metadata["include_former_search_seed"])
