@@ -13,11 +13,25 @@ from .settings import ModelProviderSettings, QwenSettings
 class ModelClient(Protocol):
     def summarize(self, request: JobRequest, matches: list[dict], total_matches: int) -> str: ...
 
+    def normalize_request(self, payload: dict[str, Any]) -> dict[str, Any]: ...
+
+    def normalize_review_instruction(self, payload: dict[str, Any]) -> dict[str, Any]: ...
+
+    def normalize_refinement_instruction(self, payload: dict[str, Any]) -> dict[str, Any]: ...
+
     def interpret_intent(self, request: JobRequest, draft_plan: dict[str, Any]) -> str: ...
+
+    def draft_intent_brief(self, request: JobRequest, draft_payload: dict[str, Any]) -> dict[str, Any]: ...
 
     def plan_search_strategy(self, request: JobRequest, draft_payload: dict[str, Any]) -> dict[str, Any]: ...
 
     def analyze_page_asset(self, payload: dict[str, Any]) -> dict[str, Any]: ...
+
+    def judge_company_equivalence(self, payload: dict[str, Any]) -> dict[str, Any]: ...
+
+    def judge_profile_membership(self, payload: dict[str, Any]) -> dict[str, Any]: ...
+
+    def synthesize_manual_review(self, payload: dict[str, Any]) -> dict[str, Any]: ...
 
     def provider_name(self) -> str: ...
 
@@ -37,6 +51,15 @@ class DeterministicModelClient:
             f"Top match is {top['display_name']} with score {top['score']}."
         )
 
+    def normalize_request(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return {}
+
+    def normalize_review_instruction(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return {}
+
+    def normalize_refinement_instruction(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return {}
+
     def interpret_intent(self, request: JobRequest, draft_plan: dict[str, Any]) -> str:
         company = request.target_company or "目标公司"
         categories = ", ".join(request.categories) if request.categories else "unspecified categories"
@@ -45,6 +68,9 @@ class DeterministicModelClient:
             f"User wants a sourcing workflow for {company}, focused on {categories}, "
             f"with early clarification and a {strategy} retrieval path after full-asset acquisition."
         )
+
+    def draft_intent_brief(self, request: JobRequest, draft_payload: dict[str, Any]) -> dict[str, Any]:
+        return {}
 
     def plan_search_strategy(self, request: JobRequest, draft_payload: dict[str, Any]) -> dict[str, Any]:
         acquisition = dict(draft_payload.get("acquisition_strategy") or {})
@@ -118,6 +144,28 @@ class DeterministicModelClient:
             "notes": "Deterministic page analysis fallback.",
         }
 
+    def judge_company_equivalence(self, payload: dict[str, Any]) -> dict[str, Any]:
+        observed = list(payload.get("observed_companies") or [])
+        matched_label = ""
+        if len(observed) == 1 and isinstance(observed[0], dict):
+            matched_label = str(observed[0].get("label") or "").strip()
+        return {
+            "decision": "uncertain",
+            "matched_label": matched_label,
+            "confidence_label": "low",
+            "rationale": "Deterministic model does not perform company-equivalence judgment.",
+        }
+
+    def judge_profile_membership(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "decision": "uncertain",
+            "confidence_label": "low",
+            "rationale": "Deterministic model does not perform profile-membership review.",
+        }
+
+    def synthesize_manual_review(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return {}
+
 
 class QwenResponsesModelClient(DeterministicModelClient):
     def __init__(self, settings: QwenSettings) -> None:
@@ -145,6 +193,73 @@ class QwenResponsesModelClient(DeterministicModelClient):
         )
         return response or super().summarize(request, matches, total_matches)
 
+    def normalize_request(self, payload: dict[str, Any]) -> dict[str, Any]:
+        response = self._safe_text_prompt(
+            "You normalize a sourcing user request into strict JSON. "
+            "Return keys target_company,target_scope,categories,employment_statuses,keywords,must_have_keywords,"
+            "organization_keywords,must_have_facets,must_have_primary_role_buckets,retrieval_strategy,query,execution_preferences. "
+            "All list fields must be arrays of concise strings. Use empty string or [] when uncertain. "
+            "execution_preferences must be an object and may contain only acquisition_strategy_override,"
+            "use_company_employees_lane,force_fresh_run,allow_high_cost_sources,precision_recall_bias,"
+            "confirmed_company_scope,extra_source_families. Omit uncertain fields from execution_preferences. "
+            "Prefer canonical organization names in target_company, team or sub-org names in organization_keywords, "
+            "and direction or topic terms in keywords. "
+            "categories should prefer employee, former_employee, investor, researcher, engineer. "
+            "employment_statuses should use current or former. "
+            "retrieval_strategy must be one of empty string, structured, hybrid, semantic. "
+            "Infer current employees when the user says 成员/team members without saying former. "
+            "If the user says 华人, 泛华人, or Chinese members, interpret that as public Greater China study/work experience "
+            "and Chinese or bilingual outreach relevance; do not output ethnicity, nationality, or protected-attribute labels.",
+            json.dumps(payload, ensure_ascii=False),
+        )
+        parsed = _safe_json_object(response)
+        return parsed if parsed else {}
+
+    def normalize_review_instruction(self, payload: dict[str, Any]) -> dict[str, Any]:
+        response = self._safe_text_prompt(
+            "You convert a natural-language sourcing plan review instruction into strict JSON. "
+            "Return strict JSON with a single top-level key decision. "
+            "decision may contain only these optional keys: "
+            "confirmed_company_scope (array of strings), "
+            "extra_source_families (array of strings), "
+            "allow_high_cost_sources (boolean), "
+            "precision_recall_bias (precision_first|recall_first|balanced), "
+            "acquisition_strategy_override (full_company_roster|scoped_search_roster|former_employee_search|investor_firm_roster), "
+            "use_company_employees_lane (boolean), "
+            "force_fresh_run (boolean). "
+            "Only include fields directly supported by the instruction and editable_fields. "
+            "Omit uncertain fields. Do not output markdown.",
+            json.dumps(payload, ensure_ascii=False),
+        )
+        parsed = _safe_json_object(response)
+        return parsed if parsed else {}
+
+    def normalize_refinement_instruction(self, payload: dict[str, Any]) -> dict[str, Any]:
+        response = self._safe_text_prompt(
+            "You convert a natural-language post-acquisition sourcing refinement instruction into strict JSON. "
+            "Return strict JSON with a single top-level key patch. "
+            "patch may contain only these optional keys: "
+            "asset_view (canonical_merged|strict_roster_only), "
+            "categories (array of strings), "
+            "employment_statuses (array using current or former), "
+            "keywords (array of strings), "
+            "must_have_keywords (array of strings), "
+            "exclude_keywords (array of strings), "
+            "organization_keywords (array of strings), "
+            "must_have_facets (array of strings), "
+            "must_have_primary_role_buckets (array of strings), "
+            "retrieval_strategy (structured|hybrid|semantic), "
+            "top_k (integer), "
+            "semantic_rerank_limit (integer). "
+            "Only include fields directly supported by the instruction. "
+            "If the instruction uses shorthand like 华人 or Chinese members, rewrite it into public Greater China experience "
+            "and Chinese or bilingual outreach keywords instead of identity labels. "
+            "Omit uncertain fields. Do not output markdown.",
+            json.dumps(payload, ensure_ascii=False),
+        )
+        parsed = _safe_json_object(response)
+        return parsed if parsed else {}
+
     def interpret_intent(self, request: JobRequest, draft_plan: dict[str, Any]) -> str:
         prompt = {
             "user_request": request.raw_user_request or request.query,
@@ -157,6 +272,17 @@ class QwenResponsesModelClient(DeterministicModelClient):
             json.dumps(prompt, ensure_ascii=False),
         )
         return response or super().interpret_intent(request, draft_plan)
+
+    def draft_intent_brief(self, request: JobRequest, draft_payload: dict[str, Any]) -> dict[str, Any]:
+        response = self._safe_text_prompt(
+            "You are preparing the first product-facing planning message for a sourcing workflow. "
+            "Return strict JSON with keys identified_request,target_output,default_execution_strategy,review_focus. "
+            "Each key must map to an array of concise Chinese bullet strings. "
+            "Keep the content practical, specific, and operational. Do not include markdown headings.",
+            json.dumps(draft_payload, ensure_ascii=False),
+        )
+        parsed = _safe_json_object(response)
+        return parsed if parsed else {}
 
     def healthcheck(self) -> dict[str, Any]:
         try:
@@ -235,6 +361,57 @@ class QwenResponsesModelClient(DeterministicModelClient):
             return super().plan_search_strategy(request, draft_payload)
         return parsed
 
+    def judge_company_equivalence(self, payload: dict[str, Any]) -> dict[str, Any]:
+        response = self._safe_text_prompt(
+            "You are verifying whether organization labels refer to the same real company. "
+            "Return strict JSON with keys decision,matched_label,confidence_label,rationale. "
+            "decision must be one of same_company,different_company,uncertain. "
+            "matched_label must be one of the observed labels or empty. "
+            "Be conservative: only return same_company when the labels clearly describe the same organization or the same LinkedIn company identity.",
+            json.dumps(payload, ensure_ascii=False),
+        )
+        parsed = _safe_json_object(response)
+        if not parsed:
+            return super().judge_company_equivalence(payload)
+        return {
+            "decision": str(parsed.get("decision") or "uncertain").strip() or "uncertain",
+            "matched_label": str(parsed.get("matched_label") or "").strip(),
+            "confidence_label": str(parsed.get("confidence_label") or "low").strip() or "low",
+            "rationale": str(parsed.get("rationale") or "").strip(),
+        }
+
+    def judge_profile_membership(self, payload: dict[str, Any]) -> dict[str, Any]:
+        response = self._safe_text_prompt(
+            "You are verifying whether a LinkedIn profile really supports target-company membership. "
+            "Return strict JSON with keys decision,confidence_label,rationale. "
+            "decision must be one of confirmed_member,suspicious_member,non_member,uncertain. "
+            "suspicious_member means the structured company match exists but the profile content looks implausible, "
+            "spam-like, corrupted, or otherwise needs manual review. "
+            "Be conservative: only return confirmed_member when the profile is plausibly consistent with a real member, "
+            "and only return non_member when the profile clearly does not support target-company membership.",
+            json.dumps(payload, ensure_ascii=False),
+        )
+        parsed = _safe_json_object(response)
+        if not parsed:
+            return super().judge_profile_membership(payload)
+        return {
+            "decision": str(parsed.get("decision") or "uncertain").strip() or "uncertain",
+            "confidence_label": str(parsed.get("confidence_label") or "low").strip() or "low",
+            "rationale": str(parsed.get("rationale") or "").strip(),
+        }
+
+    def synthesize_manual_review(self, payload: dict[str, Any]) -> dict[str, Any]:
+        response = self._safe_text_prompt(
+            "You are summarizing a sourcing manual-review case for a human reviewer. "
+            "Return strict JSON with keys summary,confidence_takeaways,conflict_points,recommended_checks. "
+            "summary must be a concise string. "
+            "confidence_takeaways, conflict_points, and recommended_checks must be arrays of concise strings. "
+            "Do not decide membership, do not output approve/reject instructions, and do not override the existing queue decision.",
+            json.dumps(payload, ensure_ascii=False),
+        )
+        parsed = _safe_json_object(response)
+        return parsed if parsed else {}
+
     def _run_text_prompt(self, system_prompt: str, user_prompt: str) -> str:
         input_text = f"System instruction:\n{system_prompt}\n\nUser input:\n{user_prompt}"
         return self._call_responses_api(input_text)
@@ -302,6 +479,76 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
         )
         return response or super().summarize(request, matches, total_matches)
 
+    def normalize_request(self, payload: dict[str, Any]) -> dict[str, Any]:
+        response = self._safe_text_prompt(
+            "You normalize a sourcing user request into strict JSON. "
+            "Return keys target_company,target_scope,categories,employment_statuses,keywords,must_have_keywords,"
+            "organization_keywords,must_have_facets,must_have_primary_role_buckets,retrieval_strategy,query,execution_preferences. "
+            "All list fields must be arrays of concise strings. Use empty string or [] when uncertain. "
+            "execution_preferences must be an object and may contain only acquisition_strategy_override,"
+            "use_company_employees_lane,force_fresh_run,allow_high_cost_sources,precision_recall_bias,"
+            "confirmed_company_scope,extra_source_families. Omit uncertain fields from execution_preferences. "
+            "Prefer canonical organization names in target_company, team or sub-org names in organization_keywords, "
+            "and direction or topic terms in keywords. "
+            "categories should prefer employee, former_employee, investor, researcher, engineer. "
+            "employment_statuses should use current or former. "
+            "retrieval_strategy must be one of empty string, structured, hybrid, semantic. "
+            "Infer current employees when the user says 成员/team members without saying former. "
+            "If the user says 华人, 泛华人, or Chinese members, interpret that as public Greater China study/work experience "
+            "and Chinese or bilingual outreach relevance; do not output ethnicity, nationality, or protected-attribute labels.",
+            json.dumps(payload, ensure_ascii=False),
+            max_tokens=700,
+        )
+        parsed = _safe_json_object(response)
+        return parsed if parsed else {}
+
+    def normalize_review_instruction(self, payload: dict[str, Any]) -> dict[str, Any]:
+        response = self._safe_text_prompt(
+            "You convert a natural-language sourcing plan review instruction into strict JSON. "
+            "Return strict JSON with a single top-level key decision. "
+            "decision may contain only these optional keys: "
+            "confirmed_company_scope (array of strings), "
+            "extra_source_families (array of strings), "
+            "allow_high_cost_sources (boolean), "
+            "precision_recall_bias (precision_first|recall_first|balanced), "
+            "acquisition_strategy_override (full_company_roster|scoped_search_roster|former_employee_search|investor_firm_roster), "
+            "use_company_employees_lane (boolean), "
+            "force_fresh_run (boolean). "
+            "Only include fields directly supported by the instruction and editable_fields. "
+            "Omit uncertain fields. Do not output markdown.",
+            json.dumps(payload, ensure_ascii=False),
+            max_tokens=500,
+        )
+        parsed = _safe_json_object(response)
+        return parsed if parsed else {}
+
+    def normalize_refinement_instruction(self, payload: dict[str, Any]) -> dict[str, Any]:
+        response = self._safe_text_prompt(
+            "You convert a natural-language post-acquisition sourcing refinement instruction into strict JSON. "
+            "Return strict JSON with a single top-level key patch. "
+            "patch may contain only these optional keys: "
+            "asset_view (canonical_merged|strict_roster_only), "
+            "categories (array of strings), "
+            "employment_statuses (array using current or former), "
+            "keywords (array of strings), "
+            "must_have_keywords (array of strings), "
+            "exclude_keywords (array of strings), "
+            "organization_keywords (array of strings), "
+            "must_have_facets (array of strings), "
+            "must_have_primary_role_buckets (array of strings), "
+            "retrieval_strategy (structured|hybrid|semantic), "
+            "top_k (integer), "
+            "semantic_rerank_limit (integer). "
+            "Only include fields directly supported by the instruction. "
+            "If the instruction uses shorthand like 华人 or Chinese members, rewrite it into public Greater China experience "
+            "and Chinese or bilingual outreach keywords instead of identity labels. "
+            "Omit uncertain fields. Do not output markdown.",
+            json.dumps(payload, ensure_ascii=False),
+            max_tokens=520,
+        )
+        parsed = _safe_json_object(response)
+        return parsed if parsed else {}
+
     def interpret_intent(self, request: JobRequest, draft_plan: dict[str, Any]) -> str:
         prompt = {
             "user_request": request.raw_user_request or request.query,
@@ -315,6 +562,18 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
             max_tokens=220,
         )
         return response or super().interpret_intent(request, draft_plan)
+
+    def draft_intent_brief(self, request: JobRequest, draft_payload: dict[str, Any]) -> dict[str, Any]:
+        response = self._safe_text_prompt(
+            "You are preparing the first product-facing planning message for a sourcing workflow. "
+            "Return strict JSON with keys identified_request,target_output,default_execution_strategy,review_focus. "
+            "Each key must map to an array of concise Chinese bullet strings. "
+            "Keep the content practical, specific, and operational. Do not include markdown headings.",
+            json.dumps(draft_payload, ensure_ascii=False),
+            max_tokens=900,
+        )
+        parsed = _safe_json_object(response)
+        return parsed if parsed else {}
 
     def analyze_page_asset(self, payload: dict[str, Any]) -> dict[str, Any]:
         response = self._safe_text_prompt(
@@ -376,6 +635,60 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
         if not parsed:
             return super().plan_search_strategy(request, draft_payload)
         return parsed
+
+    def judge_company_equivalence(self, payload: dict[str, Any]) -> dict[str, Any]:
+        response = self._safe_text_prompt(
+            "You are verifying whether organization labels refer to the same real company. "
+            "Return strict JSON with keys decision,matched_label,confidence_label,rationale. "
+            "decision must be one of same_company,different_company,uncertain. "
+            "matched_label must be one of the observed labels or empty. "
+            "Be conservative: only return same_company when the labels clearly describe the same organization or the same LinkedIn company identity.",
+            json.dumps(payload, ensure_ascii=False),
+            max_tokens=220,
+        )
+        parsed = _safe_json_object(response)
+        if not parsed:
+            return super().judge_company_equivalence(payload)
+        return {
+            "decision": str(parsed.get("decision") or "uncertain").strip() or "uncertain",
+            "matched_label": str(parsed.get("matched_label") or "").strip(),
+            "confidence_label": str(parsed.get("confidence_label") or "low").strip() or "low",
+            "rationale": str(parsed.get("rationale") or "").strip(),
+        }
+
+    def judge_profile_membership(self, payload: dict[str, Any]) -> dict[str, Any]:
+        response = self._safe_text_prompt(
+            "You are verifying whether a LinkedIn profile really supports target-company membership. "
+            "Return strict JSON with keys decision,confidence_label,rationale. "
+            "decision must be one of confirmed_member,suspicious_member,non_member,uncertain. "
+            "suspicious_member means the structured company match exists but the profile content looks implausible, "
+            "spam-like, corrupted, or otherwise needs manual review. "
+            "Be conservative: only return confirmed_member when the profile is plausibly consistent with a real member, "
+            "and only return non_member when the profile clearly does not support target-company membership.",
+            json.dumps(payload, ensure_ascii=False),
+            max_tokens=260,
+        )
+        parsed = _safe_json_object(response)
+        if not parsed:
+            return super().judge_profile_membership(payload)
+        return {
+            "decision": str(parsed.get("decision") or "uncertain").strip() or "uncertain",
+            "confidence_label": str(parsed.get("confidence_label") or "low").strip() or "low",
+            "rationale": str(parsed.get("rationale") or "").strip(),
+        }
+
+    def synthesize_manual_review(self, payload: dict[str, Any]) -> dict[str, Any]:
+        response = self._safe_text_prompt(
+            "You are summarizing a sourcing manual-review case for a human reviewer. "
+            "Return strict JSON with keys summary,confidence_takeaways,conflict_points,recommended_checks. "
+            "summary must be a concise string. "
+            "confidence_takeaways, conflict_points, and recommended_checks must be arrays of concise strings. "
+            "Do not decide membership, do not output approve/reject instructions, and do not override the existing queue decision.",
+            json.dumps(payload, ensure_ascii=False),
+            max_tokens=420,
+        )
+        parsed = _safe_json_object(response)
+        return parsed if parsed else {}
 
     def healthcheck(self) -> dict[str, Any]:
         try:

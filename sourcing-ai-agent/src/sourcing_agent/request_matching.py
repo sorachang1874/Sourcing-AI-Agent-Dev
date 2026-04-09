@@ -4,6 +4,8 @@ import json
 from hashlib import sha1
 from typing import Any
 
+from .domain import normalize_requested_facets, normalize_requested_role_buckets
+
 
 MATCH_THRESHOLD = 30.0
 
@@ -57,17 +59,23 @@ def request_family_score(left: dict[str, Any], right: dict[str, Any]) -> dict[st
     score = 0.0
     reasons: list[str] = []
     for field, weight in [
+        ("asset_view", 12.0),
         ("target_scope", 12.0),
         ("retrieval_strategy", 8.0),
     ]:
         if left_norm[field] and left_norm[field] == right_norm[field]:
             score += weight
             reasons.append(f"{field}_match")
+        elif left_norm[field] and right_norm[field]:
+            score -= min(8.0, weight * 0.5)
+            reasons.append(f"{field}_mismatch")
 
     for field, weight in [
         ("categories", 20.0),
         ("employment_statuses", 14.0),
         ("keywords", 30.0),
+        ("must_have_facets", 12.0),
+        ("must_have_primary_role_buckets", 14.0),
         ("must_have_keywords", 8.0),
         ("exclude_keywords", 4.0),
         ("organization_keywords", 10.0),
@@ -110,10 +118,15 @@ def baseline_selection_reason(match: dict[str, Any]) -> str:
 def _normalized_request_payload(payload: dict[str, Any], *, include_runtime_limits: bool) -> dict[str, Any]:
     normalized = {
         "target_company": _normalize_scalar(payload.get("target_company")),
+        "asset_view": _normalize_scalar(payload.get("asset_view")) or "canonical_merged",
         "target_scope": _normalize_scalar(payload.get("target_scope")),
         "categories": _normalize_list(payload.get("categories")),
         "employment_statuses": _normalize_list(payload.get("employment_statuses")),
         "keywords": _normalize_list(payload.get("keywords")),
+        "must_have_facets": normalize_requested_facets(payload.get("must_have_facets") or payload.get("must_have_facet")),
+        "must_have_primary_role_buckets": normalize_requested_role_buckets(
+            payload.get("must_have_primary_role_buckets") or payload.get("must_have_primary_role_bucket")
+        ),
         "must_have_keywords": _normalize_list(payload.get("must_have_keywords")),
         "exclude_keywords": _normalize_list(payload.get("exclude_keywords")),
         "organization_keywords": _normalize_list(payload.get("organization_keywords")),
@@ -129,6 +142,7 @@ def _normalized_request_payload(payload: dict[str, Any], *, include_runtime_limi
                 "publication_scan_limit": _normalize_int(payload.get("publication_scan_limit")),
                 "publication_lead_limit": _normalize_int(payload.get("publication_lead_limit")),
                 "exploration_limit": _normalize_int(payload.get("exploration_limit")),
+                "scholar_coauthor_follow_up_limit": _normalize_int(payload.get("scholar_coauthor_follow_up_limit")),
             }
         )
     return normalized

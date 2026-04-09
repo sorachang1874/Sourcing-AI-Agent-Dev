@@ -273,6 +273,17 @@ def _apply_candidate_patch(
         "work_history_signals": list(signals.get("work_history_signals") or [])[:8],
         "affiliation_signals": list(signals.get("affiliation_signals") or [])[:6],
     }
+    category = str(record.get("category") or "").strip().lower()
+    employment_status = str(record.get("employment_status") or "").strip()
+    if "membership_review_required" not in metadata and category != "lead":
+        metadata["membership_review_required"] = False
+    if not str(metadata.get("membership_review_reason") or "").strip() and not bool(metadata.get("membership_review_required")):
+        metadata["membership_review_reason"] = ""
+    if not str(metadata.get("membership_review_decision") or "").strip():
+        if category == "non_member" or bool(metadata.get("target_company_mismatch")):
+            metadata["membership_review_decision"] = "manual_non_member"
+        elif category in {"employee", "former_employee"} and employment_status:
+            metadata["membership_review_decision"] = "manual_confirmed_member"
     if not str(record.get("linkedin_url") or "").strip() and signals.get("linkedin_urls"):
         record["linkedin_url"] = signals["linkedin_urls"][0]
         metadata["profile_url"] = signals["linkedin_urls"][0]

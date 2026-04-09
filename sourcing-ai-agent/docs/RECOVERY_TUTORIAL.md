@@ -1,5 +1,7 @@
 # Recovery Tutorial
 
+> Reference note: this tutorial is still useful for environment recovery, but current default entry docs are `../../ONBOARDING.md` and `docs/INDEX.md`.
+
 ## Goal
 
 这份教程用于在以下场景里快速恢复项目进度：
@@ -28,9 +30,10 @@
 恢复前先看：
 
 1. `ONBOARDING.md`
-2. `docs/HANDOFF_2026-04-06.md`
-3. `docs/CROSS_DEVICE_SYNC.md`
-4. `docs/THINKING_MACHINES_LAB_RETROSPECTIVE.md`
+2. `docs/SERVER_RUNTIME_BOOTSTRAP.md`
+3. `docs/HANDOFF_2026-04-06.md`
+4. `docs/CROSS_DEVICE_SYNC.md`
+5. `docs/THINKING_MACHINES_LAB_RETROSPECTIVE.md`
 
 ## Scenario A: Same Machine, New Account
 
@@ -40,11 +43,11 @@
 2. 确认 `runtime/` 仍然存在
 3. 确认 `runtime/secrets/providers.local.json` 仍然存在
 4. 如果本机之前启用了增强解析/浏览器能力，确认 `runtime/vendor/` 仍然存在
-4. 重新打开 repo
-5. 运行：
+5. 重新打开 repo
+6. 运行：
 
 ```bash
-cd '/home/sorachang/projects/Sourcing AI Agent Dev/sourcing-ai-agent'
+cd "sourcing-ai-agent"
 PYTHONPATH=src python3 -m unittest discover -s tests -v
 PYTHONPATH=src python3 -m sourcing_agent.cli test-model
 ```
@@ -105,6 +108,11 @@ PYTHONPATH=src python3 -m sourcing_agent.cli restore-asset-bundle \
   --target-runtime-dir ./runtime
 ```
 
+重复执行同一个 `download-asset-bundle` 命令时，当前默认会 resume：
+
+- 已存在且匹配 manifest 的 payload 会被跳过
+- 中断后重跑会优先补剩余缺口
+
 ### 4. Restore SQLite if needed
 
 如果你需要恢复 DB：
@@ -124,12 +132,19 @@ PYTHONPATH=src python3 -m sourcing_agent.cli test-model
 PYTHONPATH=src python3 -m sourcing_agent.cli show-manual-review --target-company thinkingmachineslab
 ```
 
+如果你这次恢复后准备继续跑 DataForSEO queue lane，建议额外检查：
+
+```bash
+PYTHONPATH=src python3 -m unittest -q tests.test_seed_discovery tests.test_search_provider tests.test_worker_recovery_daemon
+PYTHONPATH=src python3 -m sourcing_agent.cli show-daemon-status
+```
+
 ## How To Export Before Switching Devices
 
 如果你还在旧机器上，准备迁移：
 
 ```bash
-cd '/home/sorachang/projects/Sourcing AI Agent Dev/sourcing-ai-agent'
+cd "sourcing-ai-agent"
 
 PYTHONPATH=src python3 -m sourcing_agent.cli export-company-handoff-bundle --company thinkingmachineslab
 PYTHONPATH=src python3 -m sourcing_agent.cli export-sqlite-snapshot
@@ -226,6 +241,58 @@ Cloudflare R2 这轮已经真实验证过可用的关键点：
 - `manual_review_assets/thinkingmachineslab/` 已恢复
 - `jobs/` 里含 Thinking Machines Lab 相关 job JSON
 - 如需复用当前 DB，`sourcing_agent.db` 已恢复
+
+## DataForSEO Queue Recovery Notes
+
+截至 `2026-04-08`，这台机器上已经补过两条真实 queue-lane smoke：
+
+- worker-direct path：
+  - job：`2831b4f4c9e3`
+  - 结论：`ready_cached` 后，worker 若不是被 lane fetch 抢先处理，也能自己把 manifest 推进到 `fetched_cached`
+- normal daemon path：
+  - job：`c7b34da2bab1`
+  - 结论：`run-worker-daemon` 能正常把 worker 从 `waiting_remote_search` 推到 lane `task_get_batch`，再完成 worker consume
+
+如果你在恢复后看到某个 DataForSEO worker 卡着，不要只看 worker 状态，要同时看 worker 和 manifest：
+
+1. 先看：
+
+```bash
+PYTHONPATH=src python3 -m sourcing_agent.cli show-workers --job-id <job_id>
+```
+
+2. 再看 snapshot 里的：
+  - `search_seed_discovery/web_search_batch_manifest.json`
+  - 或 `exploration/search_batch_manifest.json`
+
+判断口径：
+
+- worker `status=queued` 且 `checkpoint.stage=waiting_remote_search`
+  - 这通常是正常等待远端 queue
+- manifest `search_state.status=ready_cached`
+  - 说明 ready poll 已成功，但 fetch 还没完成
+- manifest `search_state.status=fetched_cached` 且有 `raw_path`
+  - 才代表这条远端结果已经真正落盘
+- `fetch_token` 以 `worker_direct_` 开头
+  - 代表是 worker direct fetch
+- `fetch_token` 是普通 timestamp
+  - 代表是 lane-level `task_get_batch`
+
+注意：
+
+- `ready_cached` 后立刻恢复 worker，可能会因为 `lane_fetch_cooldown_seconds=15` 再返回一次 `queued`
+- 这不是坏状态
+- 正确做法是：
+  1. 让 `run-worker-daemon-service` 再 tick 一轮
+  2. 或手动等待 `15s+` 再 resume
+
+当前 `2026-04-08` 之后，worker 完成后还应满足：
+
+- worker `checkpoint.search_state.status == fetched_cached`
+- manifest `search_state.status == fetched_cached`
+- worker summary 的 `raw_path` 与 manifest `raw_path` 一致
+
+如果这些都满足，就不需要再重复做 provider 级 smoke，只需要继续业务 workflow。
 
 ## Is Anything Missing From The TML Retrospective?
 

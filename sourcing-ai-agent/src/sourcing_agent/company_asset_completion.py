@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
 from .asset_logger import AssetLogger
 from .candidate_artifacts import (
+    _has_explicit_profile_capture,
+    _has_reusable_profile_fields,
     _resolve_company_snapshot,
     build_company_candidate_artifacts,
     build_evidence_records_from_payloads,
@@ -14,8 +17,10 @@ from .candidate_artifacts import (
 from .connectors import CompanyIdentity
 from .domain import Candidate
 from .enrichment import (
+    _apply_non_member_profile,
     _apply_verified_profile,
     _candidate_profile_urls,
+    _names_match,
     _profile_matches_candidate,
     extract_linkedin_slug,
 )
@@ -25,6 +30,9 @@ from .model_provider import DeterministicModelClient, ModelClient
 from .search_provider import build_search_provider
 from .settings import AppSettings
 from .storage import SQLiteStore
+
+_PROFILE_COMPLETION_URL_BATCH_SIZE = 100
+_PROFILE_COMPLETION_PARALLEL_BATCH_WORKERS = 4
 
 
 class CompanyAssetCompletionError(RuntimeError):
@@ -87,6 +95,7 @@ class CompanyAssetCompletionManager:
         )
         materialized_candidates = list(materialized_view["candidates"])
         materialized_evidence = build_evidence_records_from_payloads(list(materialized_view["evidence"]))
+        evidence_by_candidate = _evidence_by_candidate(materialized_evidence)
         for candidate in materialized_candidates:
             self.store.upsert_candidate(candidate)
         if materialized_evidence:
@@ -98,7 +107,7 @@ class CompanyAssetCompletionManager:
         completion_dir = snapshot_dir / "asset_completion"
         completion_dir.mkdir(parents=True, exist_ok=True)
 
-        profile_targets = self._select_profile_targets(materialized_candidates, limit=profile_detail_limit)
+        profile_targets = self._select_profile_targets(materialized_candidates, evidence_by_candidate=evidence_by_candidate, limit=profile_detail_limit)
         profile_results = self._complete_known_profile_targets(
             identity=identity,
             snapshot_dir=snapshot_dir,
@@ -132,9 +141,18 @@ class CompanyAssetCompletionManager:
         post_exploration_candidates = self.store.list_candidates_for_company(company_name)
         if not post_exploration_candidates and company_name != target_company:
             post_exploration_candidates = self.store.list_candidates_for_company(target_company)
+        refreshed_view = materialize_company_candidate_view(
+            runtime_dir=self.runtime_dir,
+            store=self.store,
+            target_company=company_name,
+            snapshot_id=snapshot_dir.name,
+        )
+        post_exploration_evidence = build_evidence_records_from_payloads(list(refreshed_view["evidence"]))
+        post_exploration_evidence_by_candidate = _evidence_by_candidate(post_exploration_evidence)
         followup_targets = self._select_profile_targets(
             post_exploration_candidates,
-            limit=max(0, profile_detail_limit - len(profile_results["completed_candidates"])),
+            evidence_by_candidate=post_exploration_evidence_by_candidate,
+            limit=max(0, profile_detail_limit - int(profile_results.get("resolved_candidate_count") or 0)),
             preferred_ids={item["candidate_id"] for item in (exploration_result.explored_candidates if exploration_result else [])},
         )
         followup_results = self._complete_known_profile_targets(
@@ -142,7 +160,18 @@ class CompanyAssetCompletionManager:
             snapshot_dir=snapshot_dir,
             logger=logger,
             candidates=followup_targets,
-        ) if followup_targets else {"completed_candidates": [], "skipped_candidates": [], "errors": []}
+        ) if followup_targets else {
+            "provider_enabled": bool(getattr(getattr(self.harvest_profile_connector, "settings", None), "enabled", True)),
+            "requested_candidate_count": 0,
+            "requested_url_count": 0,
+            "fetched_profile_count": 0,
+            "resolved_candidate_count": 0,
+            "completed_candidates": [],
+            "non_member_candidates": [],
+            "manual_review_candidates": [],
+            "skipped_candidates": [],
+            "errors": [],
+        }
 
         artifact_result = {}
         if build_artifacts:
@@ -186,6 +215,94 @@ class CompanyAssetCompletionManager:
         summary["summary_path"] = str(summary_path)
         return summary
 
+    def complete_snapshot_profiles(
+        self,
+        *,
+        target_company: str,
+        snapshot_id: str = "",
+        employment_scope: str = "all",
+        profile_limit: int = 12,
+        only_missing_profile_detail: bool = True,
+        force_refresh: bool = False,
+        build_artifacts: bool = True,
+    ) -> dict[str, Any]:
+        company_key, snapshot_dir, identity_payload = _resolve_company_snapshot(self.runtime_dir, target_company, snapshot_id=snapshot_id)
+        logger = AssetLogger(snapshot_dir)
+        identity = CompanyIdentity(
+            requested_name=str(identity_payload.get("requested_name") or target_company).strip() or target_company,
+            canonical_name=str(identity_payload.get("canonical_name") or target_company).strip() or target_company,
+            company_key=str(identity_payload.get("company_key") or company_key).strip() or company_key,
+            linkedin_slug=str(identity_payload.get("linkedin_slug") or "").strip(),
+            linkedin_company_url=str(identity_payload.get("linkedin_company_url") or "").strip(),
+            domain=str(identity_payload.get("domain") or "").strip(),
+            aliases=[str(item).strip() for item in list(identity_payload.get("aliases") or []) if str(item).strip()],
+            resolver=str(identity_payload.get("resolver") or "materialized").strip() or "materialized",
+            confidence=str(identity_payload.get("confidence") or "high").strip() or "high",
+            notes=str(identity_payload.get("notes") or "").strip(),
+            local_asset_available=bool(identity_payload.get("local_asset_available", True)),
+            metadata=dict(identity_payload.get("metadata") or {}),
+        )
+        company_name = identity.canonical_name or target_company
+        materialized_view = materialize_company_candidate_view(
+            runtime_dir=self.runtime_dir,
+            store=self.store,
+            target_company=company_name,
+            snapshot_id=snapshot_dir.name,
+        )
+        materialized_candidates = list(materialized_view["candidates"])
+        materialized_evidence = build_evidence_records_from_payloads(list(materialized_view["evidence"]))
+        evidence_by_candidate = _evidence_by_candidate(materialized_evidence)
+        targets = self._select_targeted_profile_targets(
+            materialized_candidates,
+            evidence_by_candidate=evidence_by_candidate,
+            employment_scope=employment_scope,
+            limit=profile_limit,
+            only_missing_profile_detail=only_missing_profile_detail,
+        )
+        result = self._complete_known_profile_targets(
+            identity=identity,
+            snapshot_dir=snapshot_dir,
+            logger=logger,
+            candidates=targets,
+            force_refresh=force_refresh,
+        )
+
+        artifact_result = {}
+        if build_artifacts:
+            artifact_result = build_company_candidate_artifacts(
+                runtime_dir=self.runtime_dir,
+                store=self.store,
+                target_company=company_name,
+                snapshot_id=snapshot_dir.name,
+            )
+
+        completion_dir = snapshot_dir / "asset_completion"
+        completion_dir.mkdir(parents=True, exist_ok=True)
+        scope_key = _normalize_profile_employment_scope(employment_scope)
+        mode_key = "missing_detail" if only_missing_profile_detail else "all_known_urls"
+        summary = {
+            "status": "completed",
+            "target_company": company_name,
+            "company_key": company_key,
+            "snapshot_id": snapshot_dir.name,
+            "employment_scope": scope_key,
+            "profile_mode": mode_key,
+            "force_refresh": bool(force_refresh),
+            "target_candidate_count": len(targets),
+            "result": result,
+            "artifact_result": artifact_result,
+        }
+        summary_path = logger.write_json(
+            completion_dir / f"profile_enrichment_{scope_key}_{mode_key}.json",
+            summary,
+            asset_type="company_asset_profile_enrichment_summary",
+            source_kind="company_asset_completion",
+            is_raw_asset=False,
+            model_safe=True,
+        )
+        summary["summary_path"] = str(summary_path)
+        return summary
+
     def _complete_known_profile_targets(
         self,
         *,
@@ -193,6 +310,7 @@ class CompanyAssetCompletionManager:
         snapshot_dir: Path,
         logger: AssetLogger,
         candidates: list[Candidate],
+        force_refresh: bool = False,
     ) -> dict[str, Any]:
         provider_enabled = bool(getattr(getattr(self.harvest_profile_connector, "settings", None), "enabled", True))
         if not candidates:
@@ -201,7 +319,10 @@ class CompanyAssetCompletionManager:
                 "requested_candidate_count": 0,
                 "requested_url_count": 0,
                 "fetched_profile_count": 0,
+                "resolved_candidate_count": 0,
                 "completed_candidates": [],
+                "non_member_candidates": [],
+                "manual_review_candidates": [],
                 "skipped_candidates": [],
                 "errors": [],
             }
@@ -212,19 +333,41 @@ class CompanyAssetCompletionManager:
                 if profile_url not in requested_urls:
                     requested_urls.append(profile_url)
                 candidate_by_url[profile_url].append(candidate)
-        fetched = self.harvest_profile_connector.fetch_profiles_by_urls(requested_urls, snapshot_dir, asset_logger=logger)
-        completed_candidates: list[dict[str, Any]] = []
-        skipped_candidates: list[dict[str, Any]] = []
         errors: list[str] = []
+        fetched, fetch_errors = self._fetch_profile_batches(
+            requested_urls,
+            snapshot_dir=snapshot_dir,
+            logger=logger,
+            use_cache=not force_refresh,
+        )
+        errors.extend(fetch_errors)
+        completed_candidates: list[dict[str, Any]] = []
+        non_member_candidates: list[dict[str, Any]] = []
+        manual_review_candidates: list[dict[str, Any]] = []
+        skipped_candidates: list[dict[str, Any]] = []
         resolved_ids: set[str] = set()
         for profile_url, payload in fetched.items():
             parsed = dict(payload.get("parsed") or {})
             raw_path = Path(str(payload.get("raw_path") or ""))
             matched = False
+            prioritized_candidates: list[Candidate] = []
+            prioritized_ids: set[str] = set()
             for candidate in candidate_by_url.get(profile_url, []):
+                if candidate.candidate_id in prioritized_ids or candidate.candidate_id in resolved_ids:
+                    continue
+                prioritized_candidates.append(candidate)
+                prioritized_ids.add(candidate.candidate_id)
+            # Harvest batch responses are not guaranteed to preserve request order, so
+            # fall back to the remaining unresolved candidates when the URL bucket misses.
+            for candidate in candidates:
+                if candidate.candidate_id in prioritized_ids or candidate.candidate_id in resolved_ids:
+                    continue
+                prioritized_candidates.append(candidate)
+                prioritized_ids.add(candidate.candidate_id)
+            for candidate in prioritized_candidates:
                 if candidate.candidate_id in resolved_ids:
                     continue
-                if not _profile_matches_candidate(parsed, candidate, identity):
+                if not _profile_matches_candidate(parsed, candidate, identity, model_client=self.model_client):
                     continue
                 merged_candidate, resolved_profile, evidence = _apply_verified_profile(
                     candidate,
@@ -233,12 +376,16 @@ class CompanyAssetCompletionManager:
                     str(payload.get("account_id") or "harvest_profile_scraper"),
                     extract_linkedin_slug(profile_url),
                     identity,
+                    model_client=self.model_client,
                     resolution_source="company_asset_completion",
                 )
                 self.store.upsert_candidate(merged_candidate)
                 if evidence:
                     self.store.upsert_evidence_records(evidence)
-                completed_candidates.append(resolved_profile)
+                if resolved_profile.get("membership_review_required"):
+                    manual_review_candidates.append(resolved_profile)
+                else:
+                    completed_candidates.append(resolved_profile)
                 resolved_ids.add(candidate.candidate_id)
                 matched = True
                 break
@@ -254,27 +401,196 @@ class CompanyAssetCompletionManager:
                     "linkedin_urls": _candidate_profile_urls(candidate),
                 }
             )
+
+        refresh_requested_urls: list[str] = []
+        for item in skipped_candidates:
+            for profile_url in list(item.get("linkedin_urls") or []):
+                normalized_url = str(profile_url or "").strip()
+                if normalized_url and normalized_url not in refresh_requested_urls:
+                    refresh_requested_urls.append(normalized_url)
+        refreshed_profiles, refresh_errors = self._fetch_profile_batches(
+            refresh_requested_urls,
+            snapshot_dir=snapshot_dir,
+            logger=logger,
+            use_cache=False,
+        )
+        errors.extend(refresh_errors)
+
+        final_skipped_candidates: list[dict[str, Any]] = []
+        for candidate in candidates:
+            if candidate.candidate_id in resolved_ids:
+                continue
+            refreshed = False
+            for profile_url in _candidate_profile_urls(candidate):
+                profile = refreshed_profiles.get(profile_url)
+                if profile is None:
+                    continue
+                refreshed = True
+                parsed = dict(profile.get("parsed") or {})
+                raw_path = Path(str(profile.get("raw_path") or ""))
+                if _profile_matches_candidate(parsed, candidate, identity, model_client=self.model_client):
+                    merged_candidate, resolved_profile, evidence = _apply_verified_profile(
+                        candidate,
+                        parsed,
+                        raw_path,
+                        str(profile.get("account_id") or "harvest_profile_scraper"),
+                        extract_linkedin_slug(profile_url),
+                        identity,
+                        model_client=self.model_client,
+                        resolution_source="company_asset_completion",
+                    )
+                    self.store.upsert_candidate(merged_candidate)
+                    if evidence:
+                        self.store.upsert_evidence_records(evidence)
+                    if resolved_profile.get("membership_review_required"):
+                        manual_review_candidates.append(resolved_profile)
+                    else:
+                        completed_candidates.append(resolved_profile)
+                    resolved_ids.add(candidate.candidate_id)
+                    break
+                if _names_match(candidate.name_en, str(parsed.get("full_name") or "")):
+                    merged_candidate, resolved_profile, evidence = _apply_non_member_profile(
+                        candidate,
+                        parsed,
+                        raw_path,
+                        str(profile.get("account_id") or "harvest_profile_scraper"),
+                    )
+                    self.store.upsert_candidate(merged_candidate)
+                    if evidence:
+                        self.store.upsert_evidence_records(evidence)
+                    non_member_candidates.append(resolved_profile)
+                    resolved_ids.add(candidate.candidate_id)
+                    break
+            if candidate.candidate_id in resolved_ids:
+                continue
+            if refreshed:
+                errors.append(f"profile_completion_still_unmatched:{candidate.candidate_id}")
+            final_skipped_candidates.append(
+                {
+                    "candidate_id": candidate.candidate_id,
+                    "display_name": candidate.display_name,
+                    "linkedin_urls": _candidate_profile_urls(candidate),
+                }
+            )
         return {
             "provider_enabled": provider_enabled,
             "requested_candidate_count": len(candidates),
             "requested_url_count": len(requested_urls),
             "fetched_profile_count": len(fetched),
+            "resolved_candidate_count": len(resolved_ids),
+            "batch_count": len(_chunk_values(requested_urls, _PROFILE_COMPLETION_URL_BATCH_SIZE)),
+            "parallel_batch_workers": min(
+                _PROFILE_COMPLETION_PARALLEL_BATCH_WORKERS,
+                max(1, len(_chunk_values(requested_urls, _PROFILE_COMPLETION_URL_BATCH_SIZE))),
+            ),
             "completed_candidates": completed_candidates,
-            "skipped_candidates": skipped_candidates,
+            "non_member_candidates": non_member_candidates,
+            "manual_review_candidates": manual_review_candidates,
+            "skipped_candidates": final_skipped_candidates,
             "errors": errors,
         }
+
+    def _fetch_profile_batches(
+        self,
+        requested_urls: list[str],
+        *,
+        snapshot_dir: Path,
+        logger: AssetLogger,
+        use_cache: bool,
+    ) -> tuple[dict[str, dict[str, Any]], list[str]]:
+        if not requested_urls:
+            return {}, []
+        url_batches = _chunk_values(requested_urls, _PROFILE_COMPLETION_URL_BATCH_SIZE)
+        if len(url_batches) == 1:
+            try:
+                return (
+                    self.harvest_profile_connector.fetch_profiles_by_urls(
+                        url_batches[0],
+                        snapshot_dir,
+                        asset_logger=logger,
+                        use_cache=use_cache,
+                    ),
+                    [],
+                )
+            except Exception as exc:
+                return {}, [f"profile_completion_batch_failed:{len(url_batches[0])}:{exc}"]
+
+        fetched: dict[str, dict[str, Any]] = {}
+        errors: list[str] = []
+        max_workers = min(_PROFILE_COMPLETION_PARALLEL_BATCH_WORKERS, len(url_batches))
+
+        def _fetch_batch(url_batch: list[str]) -> dict[str, dict[str, Any]]:
+            return self.harvest_profile_connector.fetch_profiles_by_urls(
+                url_batch,
+                snapshot_dir,
+                asset_logger=logger,
+                use_cache=use_cache,
+            )
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(_fetch_batch, url_batch): list(url_batch) for url_batch in url_batches}
+            for future in as_completed(futures):
+                url_batch = futures[future]
+                try:
+                    batch_payload = future.result() or {}
+                except Exception as exc:
+                    errors.append(f"profile_completion_batch_failed:{len(url_batch)}:{exc}")
+                    continue
+                for profile_url, payload in batch_payload.items():
+                    normalized_url = str(profile_url or "").strip()
+                    if normalized_url:
+                        fetched[normalized_url] = payload
+        return fetched, errors
 
     def _select_profile_targets(
         self,
         candidates: list[Candidate],
         *,
+        evidence_by_candidate: dict[str, list[dict[str, Any]]],
         limit: int,
         preferred_ids: set[str] | None = None,
     ) -> list[Candidate]:
         preferred_ids = preferred_ids or set()
-        targets = [candidate for candidate in candidates if _needs_profile_completion(candidate)]
+        targets = [
+            candidate
+            for candidate in candidates
+            if _needs_profile_completion(candidate, evidence_by_candidate.get(candidate.candidate_id, []))
+        ]
         targets.sort(key=lambda item: _profile_priority(item, preferred=item.candidate_id in preferred_ids), reverse=True)
         return targets[: max(0, limit)]
+
+    def _select_targeted_profile_targets(
+        self,
+        candidates: list[Candidate],
+        *,
+        evidence_by_candidate: dict[str, list[dict[str, Any]]],
+        employment_scope: str,
+        limit: int,
+        only_missing_profile_detail: bool,
+    ) -> list[Candidate]:
+        normalized_scope = _normalize_profile_employment_scope(employment_scope)
+        targets: list[Candidate] = []
+        for candidate in candidates:
+            if not _candidate_profile_urls(candidate):
+                continue
+            status = str(candidate.employment_status or "").strip().lower()
+            if normalized_scope == "current" and status != "current":
+                continue
+            if normalized_scope == "former" and status != "former":
+                continue
+            if only_missing_profile_detail and not _needs_profile_completion(candidate, evidence_by_candidate.get(candidate.candidate_id, [])):
+                continue
+            targets.append(candidate)
+        targets.sort(
+            key=lambda item: _profile_priority(
+                item,
+                preferred=only_missing_profile_detail and _needs_profile_completion(item, evidence_by_candidate.get(item.candidate_id, [])),
+            ),
+            reverse=True,
+        )
+        if limit <= 0:
+            return targets
+        return targets[:limit]
 
     def _select_exploration_targets(self, candidates: list[Candidate], *, limit: int) -> list[Candidate]:
         if limit <= 0:
@@ -288,16 +604,30 @@ class CompanyAssetCompletionManager:
         return targets[:limit]
 
 
-def _needs_profile_completion(candidate: Candidate) -> bool:
+def _needs_profile_completion(candidate: Candidate, evidence: list[dict[str, Any]]) -> bool:
     linkedin_url = str(candidate.linkedin_url or "").strip()
     if not linkedin_url:
         return False
-    if candidate.education or candidate.work_history:
+    if _has_explicit_profile_capture(evidence):
         return False
-    metadata = dict(candidate.metadata or {})
-    if metadata.get("profile_account_id") or metadata.get("public_identifier") or metadata.get("more_profiles"):
+    if _has_reusable_profile_fields(candidate):
         return False
     return True
+
+
+def _evidence_by_candidate(evidence: list[Any]) -> dict[str, list[dict[str, Any]]]:
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for item in evidence:
+        if hasattr(item, "to_record"):
+            record = dict(item.to_record())
+        elif isinstance(item, dict):
+            record = dict(item)
+        else:
+            continue
+        candidate_id = str(record.get("candidate_id") or "").strip()
+        if candidate_id:
+            grouped[candidate_id].append(record)
+    return grouped
 
 
 def _profile_priority(candidate: Candidate, *, preferred: bool) -> tuple[int, int, int]:
@@ -334,6 +664,18 @@ def _profile_priority(candidate: Candidate, *, preferred: bool) -> tuple[int, in
 def _exploration_priority(candidate: Candidate) -> tuple[int, int]:
     has_media = 1 if str(candidate.media_url or "").strip() else 0
     return (2 if candidate.category == "lead" else 1, has_media)
+
+
+def _normalize_profile_employment_scope(value: str) -> str:
+    normalized = str(value or "all").strip().lower()
+    if normalized in {"current", "former"}:
+        return normalized
+    return "all"
+
+
+def _chunk_values(values: list[str], chunk_size: int) -> list[list[str]]:
+    size = max(1, int(chunk_size or 1))
+    return [list(values[index:index + size]) for index in range(0, len(values), size)]
 
 
 def _has_manual_review_confirmation(candidate: Candidate) -> bool:

@@ -78,6 +78,75 @@ class ObjectStorageSyncTest(unittest.TestCase):
         remote_runs = sorted((self.object_store_dir / "sourcing-ai-agent-dev-test" / "indexes" / "sync_runs").glob("*.json"))
         self.assertEqual(len(remote_runs), 2)
 
+    def test_upload_and_download_resume_only_transfer_missing_or_changed_payloads(self) -> None:
+        snapshot_dir = self.runtime_dir / "company_assets" / "acme" / "20260406T120000"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        (snapshot_dir / "manifest.json").write_text(json.dumps({"snapshot_id": "20260406T120000"}))
+        (snapshot_dir / "candidate_documents.json").write_text(json.dumps({"count": 2}))
+        latest_path = self.runtime_dir / "company_assets" / "acme" / "latest_snapshot.json"
+        latest_path.write_text(
+            json.dumps(
+                {
+                    "snapshot_id": "20260406T120000",
+                    "snapshot_dir": str(snapshot_dir),
+                    "company_identity": {"canonical_name": "Acme", "aliases": ["acme"]},
+                }
+            )
+        )
+        export = self.bundle_manager.export_company_snapshot_bundle("Acme")
+        first_upload = self.bundle_manager.upload_bundle(export["manifest_path"], self.client, max_workers=4)
+        self.assertEqual(first_upload["uploaded_file_count"], 5)
+        self.assertEqual(first_upload["progress"]["completion_ratio"], 1.0)
+
+        remote_bundle_dir = (
+            self.object_store_dir
+            / "sourcing-ai-agent-dev-test"
+            / "bundles"
+            / "company_snapshot"
+            / first_upload["bundle_id"]
+        )
+        remote_payload = remote_bundle_dir / "payload" / "company_assets" / "acme" / "20260406T120000" / "candidate_documents.json"
+        remote_payload.unlink()
+
+        resumed_upload = self.bundle_manager.upload_bundle(export["manifest_path"], self.client, max_workers=2)
+        self.assertEqual(resumed_upload["provider"], "filesystem")
+        self.assertEqual(resumed_upload["uploaded_file_count"], 1)
+        self.assertEqual(resumed_upload["skipped_existing_file_count"], 4)
+        self.assertEqual(resumed_upload["progress"]["completed_file_count"], 5)
+        self.assertEqual(resumed_upload["progress"]["remaining_file_count"], 0)
+        self.assertEqual(resumed_upload["progress"]["completion_ratio"], 1.0)
+
+        download_dir = self.project_root / "downloaded"
+        first_download = self.bundle_manager.download_bundle(
+            bundle_kind=first_upload["bundle_kind"],
+            bundle_id=first_upload["bundle_id"],
+            client=self.client,
+            output_dir=download_dir,
+            max_workers=3,
+        )
+        self.assertEqual(first_download["requested_payload_file_count"], 3)
+        self.assertEqual(first_download["progress"]["transferred_file_count"], 3)
+        self.assertEqual(first_download["progress"]["skipped_file_count"], 0)
+
+        download_bundle_dir = Path(first_download["manifest_path"]).parent
+        local_payload = download_bundle_dir / "payload" / "company_assets" / "acme" / "20260406T120000" / "candidate_documents.json"
+        original_bytes = local_payload.read_bytes()
+        local_payload.write_bytes(b"x" * len(original_bytes))
+
+        resumed_download = self.bundle_manager.download_bundle(
+            bundle_kind=first_upload["bundle_kind"],
+            bundle_id=first_upload["bundle_id"],
+            client=self.client,
+            output_dir=download_dir,
+            max_workers=2,
+        )
+        self.assertEqual(resumed_download["downloaded_file_count"], 3)
+        self.assertEqual(resumed_download["skipped_existing_file_count"], 2)
+        self.assertEqual(resumed_download["progress"]["transferred_file_count"], 1)
+        self.assertEqual(resumed_download["progress"]["skipped_file_count"], 2)
+        self.assertEqual(resumed_download["progress"]["remaining_file_count"], 0)
+        self.assertEqual(local_payload.read_bytes(), original_bytes)
+
     def test_restore_sqlite_snapshot_creates_backup(self) -> None:
         sqlite_path = self.runtime_dir / "sourcing_agent.db"
         sqlite_path.write_bytes(b"old-db")

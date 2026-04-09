@@ -1,0 +1,36 @@
+{
+  "apply_resolution": true,
+  "fetch_assets": false,
+  "action": "resolved",
+  "reviewer": "user_manual_review",
+  "notes": "Manual review rejects this profile as a non-member/spam profile attached to the company page.",
+  "target_company": "Thinking Machines Lab",
+  "candidate_id": "dd0d6c3b2c2e8bc7",
+  "candidate_name": "الشيخ محمد علي الخليفة",
+  "candidate_patch": {
+    "category": "non_member",
+    "employment_status": "",
+    "organization": "",
+    "role": "--الرياض السعوديةشيخ روحاني متخصص في تنزيل الأموال والعلاجات الشرعية بالأوراد النورانية",
+    "linkedin_url": "https://www.linkedin.com/in/الشيخ-محمد-علي-الخليفة-408612379",
+    "media_url": "",
+    "metadata": {
+      "target_company_mismatch": true,
+      "membership_review_required": false,
+      "membership_review_reason": "",
+      "membership_review_decision": "manual_non_member",
+      "membership_review_confidence": "high",
+      "membership_review_rationale": "Manual review marked this profile as a non-member because it is a spiritual-healing spam profile with implausible company affiliation.",
+      "membership_review_triggers": [],
+      "membership_review_trigger_keywords": []
+    }
+  },
+  "source_links": [
+    {
+      "label": "LinkedIn",
+      "url": "https://www.linkedin.com/in/الشيخ-محمد-علي-الخليفة-408612379",
+      "source_type": "manual_review_link",
+      "notes": "Profile reviewed manually and rejected as a legitimate Thinking Machines Lab member."
+    }
+  ]
+}

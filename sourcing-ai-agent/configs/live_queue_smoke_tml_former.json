@@ -1,0 +1,20 @@
+{
+  "raw_user_request": "Small queue smoke test for Thinking Machines Lab former search",
+  "target_company": "Thinking Machines Lab",
+  "categories": [
+    "former_employee"
+  ],
+  "employment_statuses": [
+    "former"
+  ],
+  "organization_keywords": [
+    "Thinking Machines Lab"
+  ],
+  "top_k": 5,
+  "slug_resolution_limit": 0,
+  "profile_detail_limit": 0,
+  "publication_scan_limit": 0,
+  "publication_lead_limit": 0,
+  "exploration_limit": 0,
+  "skip_plan_review": true
+}

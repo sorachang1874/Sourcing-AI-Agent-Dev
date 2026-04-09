@@ -6,16 +6,15 @@ import json
 from pathlib import Path
 import re
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib import error, parse, request
 
 from .asset_logger import AssetLogger
-from .domain import Candidate, EvidenceRecord, format_display_name, make_evidence_id, normalize_name_token
+from .company_registry import BUILTIN_COMPANY_IDENTITIES, COMPANY_ALIASES, normalize_company_key
+from .domain import Candidate, EvidenceRecord, format_display_name, make_evidence_id, normalize_candidate, normalize_name_token
 
-
-def normalize_company_key(value: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "", value.lower())
-
+if TYPE_CHECKING:
+    from .model_provider import ModelClient
 
 @dataclass(slots=True)
 class RapidApiAccount:
@@ -112,65 +111,17 @@ class CompanyRosterSnapshot:
             "summary_path": str(self.summary_path),
         }
 
-
-_COMPANY_IDENTITY_DEFAULTS: dict[str, dict[str, Any]] = {
-    "anthropic": {
-        "canonical_name": "Anthropic",
-        "linkedin_slug": "anthropicresearch",
-        "domain": "anthropic.com",
-        "aliases": ["anthropicresearch"],
-        "resolver": "builtin",
-        "confidence": "high",
-        "local_asset_available": True,
-        "notes": "Mapped to the local Anthropic asset package and the verified LinkedIn company slug.",
-    },
-    "xai": {
-        "canonical_name": "xAI",
-        "linkedin_slug": "xai",
-        "domain": "x.ai",
-        "aliases": ["x.ai", "x ai"],
-        "resolver": "builtin",
-        "confidence": "high",
-        "notes": "LinkedIn company slug was validated via live company roster calls.",
-    },
-    "thinkingmachineslab": {
-        "canonical_name": "Thinking Machines Lab",
-        "linkedin_slug": "thinkingmachinesai",
-        "domain": "thinkingmachines.ai",
-        "aliases": ["thinking machines", "thinking machines ai", "thinkingmachinesai", "tml"],
-        "resolver": "builtin",
-        "confidence": "high",
-        "notes": "LinkedIn company slug was validated via live Harvest company-employees calls.",
-    },
-}
-
-_COMPANY_ALIASES = {
-    "xai": "xai",
-    "xaiinc": "xai",
-    "xaicorp": "xai",
-    "xaicompany": "xai",
-    "xaiorg": "xai",
-    "xairesearch": "xai",
-    "xaiholdings": "xai",
-    "xaiincorporated": "xai",
-    "xaiartificialintelligence": "xai",
-    "xaiartificial": "xai",
-    "xaiai": "xai",
-    "xaix": "xai",
-    "anthropic": "anthropic",
-    "anthropicresearch": "anthropic",
-    "thinkingmachineslab": "thinkingmachineslab",
-    "thinkingmachines": "thinkingmachineslab",
-    "thinkingmachinesai": "thinkingmachineslab",
-    "tml": "thinkingmachineslab",
-}
-
-
-def resolve_company_identity(target_company: str, legacy_company_ids_path: Path | None = None) -> CompanyIdentity:
+def resolve_company_identity(
+    target_company: str,
+    legacy_company_ids_path: Path | None = None,
+    *,
+    model_client: "ModelClient | None" = None,
+    observed_companies: list[dict[str, Any]] | None = None,
+) -> CompanyIdentity:
     requested = target_company.strip()
     company_key = normalize_company_key(requested)
-    alias_key = _COMPANY_ALIASES.get(company_key, company_key)
-    builtin = _COMPANY_IDENTITY_DEFAULTS.get(alias_key)
+    alias_key = COMPANY_ALIASES.get(company_key, company_key)
+    builtin = BUILTIN_COMPANY_IDENTITIES.get(alias_key)
     if builtin:
         linkedin_slug = str(builtin.get("linkedin_slug", "")).strip()
         return CompanyIdentity(
@@ -189,9 +140,22 @@ def resolve_company_identity(target_company: str, legacy_company_ids_path: Path 
 
     company_ids = _load_legacy_company_ids(legacy_company_ids_path)
     legacy_slug = company_ids.get(company_key, "")
-    heuristic_slug = legacy_slug or company_key
-    confidence = "medium" if legacy_slug else "low"
-    notes = "Resolved from legacy company_ids mapping." if legacy_slug else "Resolved heuristically from the company name."
+    if legacy_slug:
+        heuristic_slug = legacy_slug
+        confidence = "medium"
+        notes = "Resolved from legacy company_ids mapping."
+    else:
+        model_identity = _resolve_company_identity_from_observed_candidates(
+            requested,
+            company_key,
+            model_client=model_client,
+            observed_companies=observed_companies,
+        )
+        if model_identity is not None:
+            return model_identity
+        heuristic_slug = company_key
+        confidence = "low"
+        notes = "Resolved heuristically from the company name."
     return CompanyIdentity(
         requested_name=requested,
         canonical_name=requested,
@@ -204,6 +168,269 @@ def resolve_company_identity(target_company: str, legacy_company_ids_path: Path 
         notes=notes,
         local_asset_available=False,
     )
+
+
+def _resolve_company_identity_from_observed_candidates(
+    requested_name: str,
+    company_key: str,
+    *,
+    model_client: "ModelClient | None",
+    observed_companies: list[dict[str, Any]] | None,
+) -> CompanyIdentity | None:
+    observed = _normalize_observed_company_candidates(observed_companies or [])
+    if not observed:
+        return None
+    exact_match = _find_exact_observed_company_match(requested_name, company_key, observed)
+    if exact_match is not None:
+        return exact_match
+    plausible_observed = _select_plausible_observed_company_candidates(requested_name, company_key, observed)
+    if model_client is None or not plausible_observed:
+        return None
+    decision = model_client.judge_company_equivalence(
+        {
+            "target_company": requested_name,
+            "observed_companies": plausible_observed,
+            "instruction": (
+                "Choose same_company only when the candidate clearly refers to the requested company. "
+                "Prefer LinkedIn company labels and be conservative with short or ambiguous names."
+            ),
+        }
+    )
+    if str(decision.get("decision") or "").strip() != "same_company":
+        return None
+    confidence = str(decision.get("confidence_label") or "low").strip().lower() or "low"
+    if confidence not in {"high", "medium"}:
+        return None
+    matched_label = str(decision.get("matched_label") or "").strip()
+    selected = next(
+        (
+            item
+            for item in plausible_observed
+            if matched_label and str(item.get("label") or "").strip() == matched_label
+        ),
+        None,
+    )
+    if selected is None and len(plausible_observed) == 1:
+        selected = plausible_observed[0]
+    if selected is None:
+        return None
+    linkedin_slug = str(selected.get("linkedin_slug") or "").strip()
+    if not linkedin_slug:
+        return None
+    aliases = _dedupe_company_aliases(
+        [
+            requested_name,
+            str(selected.get("label") or "").strip(),
+            str(selected.get("linkedin_slug") or "").strip(),
+            str(selected.get("domain_hint") or "").strip(),
+        ]
+    )
+    rationale = str(decision.get("rationale") or "").strip()
+    return CompanyIdentity(
+        requested_name=requested_name,
+        canonical_name=str(selected.get("label") or requested_name).strip() or requested_name,
+        company_key=_canonical_company_key_for_identity(
+            requested_name=requested_name,
+            label=str(selected.get("label") or requested_name).strip() or requested_name,
+            linkedin_slug=linkedin_slug,
+            fallback_company_key=company_key,
+        ),
+        linkedin_slug=linkedin_slug,
+        linkedin_company_url=str(selected.get("linkedin_company_url") or _company_url(linkedin_slug)).strip(),
+        domain=str(selected.get("domain_hint") or "").strip(),
+        aliases=[alias for alias in aliases if normalize_company_key(alias) != normalize_company_key(requested_name)],
+        resolver="observed_candidates_model_assisted",
+        confidence=confidence,
+        notes=rationale or "Resolved from observed LinkedIn company candidates with model-assisted adjudication.",
+        local_asset_available=False,
+        metadata={"matched_label": str(selected.get("label") or "").strip()},
+    )
+
+
+def _normalize_observed_company_candidates(observed_companies: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    normalized: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for item in observed_companies:
+        if not isinstance(item, dict):
+            continue
+        company_url = str(item.get("linkedin_company_url") or "").strip()
+        linkedin_slug = _extract_company_slug(company_url) or str(item.get("linkedin_slug") or "").strip()
+        label = " ".join(str(item.get("label") or "").split()).strip()
+        if not linkedin_slug or not label:
+            continue
+        key = (label.lower(), linkedin_slug.lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        normalized.append(
+            {
+                "label": label,
+                "linkedin_slug": linkedin_slug,
+                "linkedin_company_url": company_url or _company_url(linkedin_slug),
+                "domain_hint": str(item.get("domain_hint") or "").strip(),
+            }
+        )
+    return normalized
+
+
+def _find_exact_observed_company_match(
+    requested_name: str,
+    company_key: str,
+    observed_companies: list[dict[str, Any]],
+) -> CompanyIdentity | None:
+    target_tokens = {
+        normalize_company_key(requested_name),
+        company_key,
+    }
+    target_tokens.discard("")
+    for item in observed_companies:
+        label = str(item.get("label") or "").strip()
+        linkedin_slug = str(item.get("linkedin_slug") or "").strip()
+        candidate_tokens = {
+            normalize_company_key(label),
+            normalize_company_key(linkedin_slug),
+        }
+        candidate_tokens.discard("")
+        if not target_tokens or not candidate_tokens or not (target_tokens & candidate_tokens):
+            continue
+        return CompanyIdentity(
+            requested_name=requested_name,
+            canonical_name=label or requested_name,
+            company_key=_canonical_company_key_for_identity(
+                requested_name=requested_name,
+                label=label or requested_name,
+                linkedin_slug=linkedin_slug,
+                fallback_company_key=company_key,
+            ),
+            linkedin_slug=linkedin_slug,
+            linkedin_company_url=str(item.get("linkedin_company_url") or _company_url(linkedin_slug)).strip(),
+            domain=str(item.get("domain_hint") or "").strip(),
+            aliases=[alias for alias in _dedupe_company_aliases([requested_name, label, linkedin_slug]) if normalize_company_key(alias) != normalize_company_key(requested_name)],
+            resolver="observed_candidates_exact_match",
+            confidence="medium",
+            notes="Resolved from observed LinkedIn company candidates by exact normalized match.",
+            local_asset_available=False,
+        )
+    return None
+
+
+def _select_plausible_observed_company_candidates(
+    requested_name: str,
+    company_key: str,
+    observed_companies: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    plausible: list[dict[str, Any]] = []
+    requested_key = normalize_company_key(requested_name)
+    for item in observed_companies:
+        label = str(item.get("label") or "").strip()
+        linkedin_slug = str(item.get("linkedin_slug") or "").strip()
+        if _looks_plausibly_related_company_label(
+            requested_name=requested_name,
+            requested_key=requested_key or company_key,
+            label=label,
+            linkedin_slug=linkedin_slug,
+        ):
+            plausible.append(item)
+    return plausible[:5]
+
+
+def _looks_plausibly_related_company_label(
+    *,
+    requested_name: str,
+    requested_key: str,
+    label: str,
+    linkedin_slug: str,
+) -> bool:
+    requested_norm = normalize_company_key(requested_name)
+    label_norm = normalize_company_key(label)
+    slug_norm = normalize_company_key(linkedin_slug)
+    if not requested_norm or not (label_norm or slug_norm):
+        return False
+    if requested_norm in {label_norm, slug_norm} or requested_key in {label_norm, slug_norm}:
+        return True
+
+    requested_tokens = _company_resolution_tokens(requested_name)
+    candidate_tokens = _company_resolution_tokens(f"{label} {linkedin_slug}")
+    if requested_tokens and candidate_tokens:
+        overlap = requested_tokens & candidate_tokens
+        if len(overlap) >= 2:
+            return True
+        if overlap and len(requested_tokens) == 1:
+            return True
+
+    for candidate_norm in [label_norm, slug_norm]:
+        if not candidate_norm:
+            continue
+        prefix_length = _common_company_prefix_length(requested_norm, candidate_norm)
+        if prefix_length >= 6 and prefix_length / max(1, min(len(requested_norm), len(candidate_norm))) >= 0.6:
+            return True
+    return False
+
+
+def _company_resolution_tokens(value: str) -> set[str]:
+    normalized = (
+        str(value or "")
+        .lower()
+        .replace("&", " and ")
+        .replace("+", " ")
+    )
+    stopwords = {"and", "the", "inc", "llc", "corp", "co", "company", "limited", "ltd", "lab"}
+    return {
+        token
+        for token in re.split(r"[^a-z0-9]+", normalized)
+        if token and token not in stopwords and len(token) >= 2
+    }
+
+
+def _common_company_prefix_length(left: str, right: str) -> int:
+    count = 0
+    for left_char, right_char in zip(left, right):
+        if left_char != right_char:
+            break
+        count += 1
+    return count
+
+
+def _extract_company_slug(url: str) -> str:
+    match = re.search(r"linkedin\.com/company/([^/?#]+)", str(url or "").strip(), flags=re.IGNORECASE)
+    if not match:
+        return ""
+    return str(match.group(1) or "").strip()
+
+
+def _dedupe_company_aliases(values: list[str]) -> list[str]:
+    results: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        normalized = " ".join(str(value or "").split()).strip()
+        if not normalized:
+            continue
+        key = normalized.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        results.append(normalized)
+    return results
+
+
+def _canonical_company_key_for_identity(
+    *,
+    requested_name: str,
+    label: str,
+    linkedin_slug: str,
+    fallback_company_key: str,
+) -> str:
+    ordered_candidates = [
+        normalize_company_key(linkedin_slug),
+        normalize_company_key(label),
+        normalize_company_key(requested_name),
+        normalize_company_key(fallback_company_key),
+    ]
+    for candidate in ordered_candidates:
+        if not candidate:
+            continue
+        return COMPANY_ALIASES.get(candidate, candidate)
+    return normalize_company_key(fallback_company_key)
 
 
 def load_rapidapi_accounts(secret_file: Path | None = None, legacy_file: Path | None = None) -> list[RapidApiAccount]:
@@ -467,7 +694,8 @@ def build_candidates_from_roster(snapshot: CompanyRosterSnapshot) -> tuple[list[
         if row.get("source_account_id"):
             notes += f" Source account: {row['source_account_id']}."
 
-        candidate = Candidate(
+        candidate = normalize_candidate(
+            Candidate(
             candidate_id=candidate_id,
             name_en=full_name,
             display_name=format_display_name(full_name, ""),
@@ -478,7 +706,7 @@ def build_candidates_from_roster(snapshot: CompanyRosterSnapshot) -> tuple[list[
             role=headline,
             team=team,
             focus_areas=headline,
-            work_history=headline,
+            work_history="",
             notes=notes,
             linkedin_url=linkedin_url,
             source_dataset=dataset_name,
@@ -492,6 +720,7 @@ def build_candidates_from_roster(snapshot: CompanyRosterSnapshot) -> tuple[list[
                 "source_account_id": row.get("source_account_id", ""),
                 "snapshot_id": snapshot.snapshot_id,
             },
+            )
         )
         candidates.append(candidate)
 

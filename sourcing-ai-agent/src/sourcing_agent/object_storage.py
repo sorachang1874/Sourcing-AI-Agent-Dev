@@ -45,6 +45,8 @@ class ObjectStorageClient(Protocol):
 
     def download_bytes(self, object_key: str) -> bytes: ...
 
+    def has_object(self, object_key: str) -> bool: ...
+
     def object_url(self, object_key: str) -> str: ...
 
 
@@ -102,6 +104,9 @@ class FilesystemObjectStorageClient:
         if not source.exists():
             raise ObjectStorageNotFoundError(f"Object not found: {object_key}")
         return source.read_bytes()
+
+    def has_object(self, object_key: str) -> bool:
+        return (self.root / _join_key(self.config.prefix, object_key)).exists()
 
     def object_url(self, object_key: str) -> str:
         return f"file://{(self.root / _join_key(self.config.prefix, object_key)).as_posix()}"
@@ -170,6 +175,15 @@ class S3CompatibleObjectStorageClient:
         if response.status_code != 200:
             raise ObjectStorageError(f"Download failed for {object_key}: {response.status_code} {response.text[:300]}")
         return response.content
+
+    def has_object(self, object_key: str) -> bool:
+        url, signed_headers = self._signed_request(method="HEAD", object_key=object_key, payload=b"")
+        response = self._session().head(url, headers=signed_headers, timeout=self.config.timeout_seconds)
+        if response.status_code == 404:
+            return False
+        if response.status_code in {200, 204}:
+            return True
+        raise ObjectStorageError(f"HEAD failed for {object_key}: {response.status_code} {response.text[:300]}")
 
     def object_url(self, object_key: str) -> str:
         return self._build_url(object_key)

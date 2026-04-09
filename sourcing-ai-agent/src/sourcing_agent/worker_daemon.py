@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
+import inspect
 from pathlib import Path
 import time
 from typing import Any, Callable
@@ -138,19 +139,22 @@ class PersistentWorkerRecoveryDaemon:
         lease_seconds: int = 300,
         stale_after_seconds: int = 180,
         total_limit: int = 4,
+        job_id: str = "",
     ) -> None:
         self.store = store
         self.agent_runtime = agent_runtime
         self.acquisition_engine = acquisition_engine
         self.owner_id = owner_id
         self.lease_seconds = max(30, int(lease_seconds or 300))
-        self.stale_after_seconds = max(30, int(stale_after_seconds or 180))
+        self.stale_after_seconds = max(1, int(stale_after_seconds or 180))
         self.total_limit = max(1, int(total_limit or 4))
+        self.job_id = str(job_id or "")
 
     def run_once(self) -> dict[str, Any]:
         recoverable = self.store.list_recoverable_agent_workers(
             limit=max(10, self.total_limit * 10),
             stale_after_seconds=self.stale_after_seconds,
+            job_id=self.job_id,
         )
         grouped: dict[str, list[dict[str, Any]]] = {}
         for worker in recoverable:
@@ -161,8 +165,9 @@ class PersistentWorkerRecoveryDaemon:
         total_executed = 0
         for job_id, workers in grouped.items():
             job = self.store.get_job(job_id)
-            if not job or str(job.get("status") or "") in {"completed", "failed"}:
+            if not job or str(job.get("status") or "") == "failed":
                 continue
+            self._refresh_recoverable_search_workers(workers)
             plan_payload = dict(job.get("plan") or {})
             recoverable_ids = {int(worker.get("worker_id") or 0) for worker in workers}
             existing_workers = [
@@ -249,11 +254,111 @@ class PersistentWorkerRecoveryDaemon:
 
         return {
             "owner_id": self.owner_id,
+            "job_id": self.job_id,
             "recoverable_count": len(recoverable),
             "claimed_count": total_claimed,
             "executed_count": total_executed,
             "jobs": job_summaries,
         }
+
+    def _refresh_recoverable_search_workers(self, workers: list[dict[str, Any]]) -> None:
+        search_workers = [
+            worker
+            for worker in workers
+            if str(worker.get("lane_id") or "").strip() in {"search_planner", "public_media_specialist"}
+        ]
+        exploration_workers = [
+            worker
+            for worker in workers
+            if str(worker.get("lane_id") or "").strip() == "exploration_specialist"
+        ]
+        search_refresher = getattr(self.acquisition_engine.search_seed_acquirer, "refresh_background_search_workers", None)
+        if callable(search_refresher) and search_workers:
+            self._apply_search_worker_refresh(search_workers, search_refresher(search_workers))
+        exploration_refresher = getattr(
+            self.acquisition_engine.multi_source_enricher.exploratory_enricher,
+            "refresh_background_search_workers",
+            None,
+        )
+        if callable(exploration_refresher) and exploration_workers:
+            self._apply_exploration_worker_refresh(exploration_workers, exploration_refresher(exploration_workers))
+
+    def _apply_search_worker_refresh(self, workers: list[dict[str, Any]], refresh_result: dict[str, Any]) -> None:
+        for worker in workers:
+            worker_id = int(worker.get("worker_id") or 0)
+            if worker_id <= 0:
+                continue
+            update = dict(dict(refresh_result.get("worker_updates") or {}).get(worker_id) or {})
+            if not update:
+                continue
+            checkpoint = dict(worker.get("checkpoint") or {})
+            output = dict(worker.get("output") or {})
+            search_state = dict(update.get("search_state") or {})
+            search_artifact_paths = {
+                str(key): str(value)
+                for key, value in dict(update.get("search_artifact_paths") or {}).items()
+                if str(key).strip() and str(value).strip()
+            }
+            raw_path = str(update.get("raw_path") or "").strip()
+            manifest_path = str(update.get("search_manifest_path") or "").strip()
+            manifest_key = str(update.get("search_manifest_key") or "").strip()
+
+            if search_state:
+                checkpoint["search_state"] = search_state
+                output["search_state"] = search_state
+            if search_artifact_paths:
+                checkpoint["search_artifact_paths"] = search_artifact_paths
+                output["search_artifact_paths"] = search_artifact_paths
+            if raw_path:
+                checkpoint["raw_path"] = raw_path
+            if manifest_path:
+                checkpoint["search_manifest_path"] = manifest_path
+            if manifest_key:
+                checkpoint["search_manifest_key"] = manifest_key
+
+            summary = dict(output.get("summary") or {})
+            if raw_path:
+                summary["raw_path"] = raw_path
+            if search_state:
+                summary["search_state"] = search_state
+            if summary:
+                output["summary"] = summary
+
+            self.store.checkpoint_agent_worker(
+                worker_id,
+                checkpoint_payload=checkpoint,
+                output_payload=output,
+                status=str(worker.get("status") or "queued"),
+            )
+
+    def _apply_exploration_worker_refresh(self, workers: list[dict[str, Any]], refresh_result: dict[str, Any]) -> None:
+        for worker in workers:
+            worker_id = int(worker.get("worker_id") or 0)
+            if worker_id <= 0:
+                continue
+            update = dict(dict(refresh_result.get("worker_updates") or {}).get(worker_id) or {})
+            prefetched_queries = {
+                str(key): dict(value)
+                for key, value in dict(update.get("prefetched_queries") or {}).items()
+                if str(key).strip()
+            }
+            if not prefetched_queries:
+                continue
+            checkpoint = dict(worker.get("checkpoint") or {})
+            output = dict(worker.get("output") or {})
+            checkpoint["prefetched_queries"] = prefetched_queries
+
+            summary = dict(output.get("summary") or {})
+            summary["prefetched_query_count"] = len(prefetched_queries)
+            output["summary"] = summary
+            output["prefetched_query_count"] = len(prefetched_queries)
+
+            self.store.checkpoint_agent_worker(
+                worker_id,
+                checkpoint_payload=checkpoint,
+                output_payload=output,
+                status=str(worker.get("status") or "queued"),
+            )
 
     def run_forever(self, *, poll_seconds: float = 5.0, max_ticks: int = 0) -> dict[str, Any]:
         tick = 0
@@ -277,6 +382,10 @@ class PersistentWorkerRecoveryDaemon:
                 result = self._resume_search_worker(worker)
             elif lane_id == "exploration_specialist":
                 result = self._resume_exploration_worker(worker)
+            elif lane_id == "acquisition_specialist":
+                result = self._resume_acquisition_worker(worker)
+            elif lane_id == "enrichment_specialist":
+                result = self._resume_enrichment_worker(worker)
             else:
                 self.store.release_agent_worker_lease(worker_id, lease_owner=self.owner_id, error_text="unsupported_lane")
                 return {
@@ -316,6 +425,7 @@ class PersistentWorkerRecoveryDaemon:
     def _resume_search_worker(self, worker: dict[str, Any]) -> dict[str, Any]:
         metadata = dict(worker.get("metadata") or {})
         input_payload = dict(worker.get("input") or {})
+        checkpoint = dict(worker.get("checkpoint") or {})
         identity = CompanyIdentity(**dict(metadata.get("identity") or {}))
         snapshot_dir = Path(str(metadata.get("snapshot_dir") or "")).expanduser()
         discovery_dir = Path(str(metadata.get("discovery_dir") or snapshot_dir / "search_seed_discovery")).expanduser()
@@ -332,11 +442,19 @@ class PersistentWorkerRecoveryDaemon:
             plan_payload=dict(metadata.get("plan_payload") or {}),
             runtime_mode=str(metadata.get("runtime_mode") or "daemon_recovery"),
             result_limit=int(metadata.get("result_limit") or 10),
+            prefetched_search_state=dict(checkpoint.get("search_state") or {}),
+            prefetched_search_artifact_paths=dict(checkpoint.get("search_artifact_paths") or {}),
+            prefetched_search_raw_path=str(checkpoint.get("raw_path") or ""),
+            prefetched_search_manifest_path=str(checkpoint.get("search_manifest_path") or ""),
+            prefetched_search_manifest_key=str(
+                checkpoint.get("search_manifest_key") or worker.get("worker_key") or ""
+            ),
         )
 
     def _resume_exploration_worker(self, worker: dict[str, Any]) -> dict[str, Any]:
         metadata = dict(worker.get("metadata") or {})
         input_payload = dict(worker.get("input") or {})
+        checkpoint = dict(worker.get("checkpoint") or {})
         candidate = Candidate(**dict(input_payload.get("candidate") or {}))
         snapshot_dir = Path(str(metadata.get("snapshot_dir") or "")).expanduser()
         return self.acquisition_engine.multi_source_enricher.exploratory_enricher._explore_candidate(
@@ -348,4 +466,72 @@ class PersistentWorkerRecoveryDaemon:
             request_payload=dict(metadata.get("request_payload") or {}),
             plan_payload=dict(metadata.get("plan_payload") or {}),
             runtime_mode=str(metadata.get("runtime_mode") or "daemon_recovery"),
+            prefetched_search_queries={
+                str(key): dict(value)
+                for key, value in dict(checkpoint.get("prefetched_queries") or {}).items()
+                if str(key).strip()
+            },
         )
+
+    def _resume_acquisition_worker(self, worker: dict[str, Any]) -> dict[str, Any]:
+        metadata = dict(worker.get("metadata") or {})
+        recovery_kind = str(metadata.get("recovery_kind") or "")
+        if recovery_kind != "harvest_company_employees":
+            return {
+                "worker_status": "skipped",
+                "reason": "unsupported_recovery_kind",
+                "recovery_kind": recovery_kind,
+            }
+        identity = CompanyIdentity(**dict(metadata.get("identity") or {}))
+        snapshot_dir = Path(str(metadata.get("snapshot_dir") or "")).expanduser()
+        return self._invoke_with_supported_kwargs(
+            self.acquisition_engine._execute_harvest_company_roster_worker,
+            identity=identity,
+            snapshot_dir=snapshot_dir,
+            max_pages=int(metadata.get("max_pages") or 10),
+            page_limit=int(metadata.get("page_limit") or 25),
+            job_id=str(worker.get("job_id") or ""),
+            request_payload=dict(metadata.get("request_payload") or {}),
+            plan_payload=dict(metadata.get("plan_payload") or {}),
+            runtime_mode=str(metadata.get("runtime_mode") or "daemon_recovery"),
+            allow_shared_provider_cache=bool(metadata.get("allow_shared_provider_cache", True)),
+            company_filters=dict(metadata.get("company_filters") or {}),
+            worker_key_suffix=str(metadata.get("worker_key_suffix") or ""),
+            span_name_suffix=str(metadata.get("span_name_suffix") or ""),
+            root_snapshot_dir=Path(
+                str(metadata.get("root_snapshot_dir") or metadata.get("snapshot_dir") or "")
+            ).expanduser(),
+        )
+
+    def _resume_enrichment_worker(self, worker: dict[str, Any]) -> dict[str, Any]:
+        metadata = dict(worker.get("metadata") or {})
+        recovery_kind = str(metadata.get("recovery_kind") or "")
+        if recovery_kind != "harvest_profile_batch":
+            return {
+                "worker_status": "skipped",
+                "reason": "unsupported_recovery_kind",
+                "recovery_kind": recovery_kind,
+            }
+        snapshot_dir = Path(str(metadata.get("snapshot_dir") or "")).expanduser()
+        return self.acquisition_engine.multi_source_enricher._execute_harvest_profile_batch_worker(
+            profile_urls=list(metadata.get("profile_urls") or []),
+            snapshot_dir=snapshot_dir,
+            job_id=str(worker.get("job_id") or ""),
+            request_payload=dict(metadata.get("request_payload") or {}),
+            plan_payload=dict(metadata.get("plan_payload") or {}),
+            runtime_mode=str(metadata.get("runtime_mode") or "daemon_recovery"),
+            allow_shared_provider_cache=bool(metadata.get("allow_shared_provider_cache", True)),
+        )
+
+    @staticmethod
+    def _invoke_with_supported_kwargs(func: Callable[..., dict[str, Any]], /, **kwargs: Any) -> dict[str, Any]:
+        signature = inspect.signature(func)
+        parameters = signature.parameters
+        if any(parameter.kind == inspect.Parameter.VAR_KEYWORD for parameter in parameters.values()):
+            return func(**kwargs)
+        supported_kwargs = {
+            key: value
+            for key, value in kwargs.items()
+            if key in parameters
+        }
+        return func(**supported_kwargs)

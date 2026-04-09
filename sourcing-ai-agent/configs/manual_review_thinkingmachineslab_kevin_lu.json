@@ -13,7 +13,7 @@
     "organization": "Thinking Machines Lab",
     "role": "Publication author lead",
     "source_dataset": "thinkingmachinesai_official_feed",
-    "source_path": "/home/sorachang/projects/Sourcing AI Agent Dev/sourcing-ai-agent/runtime/company_assets/thinkingmachineslab/20260406T172439/publications/official_surfaces/blogonpolicydistillation.html",
+    "source_path": "runtime/company_assets/thinkingmachineslab/20260406T172439/publications/official_surfaces/blogonpolicydistillation.html",
     "metadata": {
       "publication_url": "https://thinkingmachines.ai/blog/on-policy-distillation/"
     }

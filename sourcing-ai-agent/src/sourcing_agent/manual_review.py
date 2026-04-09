@@ -43,6 +43,7 @@ def build_manual_review_items(
                     "matched_fields": item.matched_fields,
                     "explanation": item.explanation,
                     "reasons": reasons,
+                    "snapshot_id": _candidate_snapshot_id(candidate, evidence),
                 },
             }
         )
@@ -51,7 +52,10 @@ def build_manual_review_items(
 
 def _review_decision(item: ScoredCandidate) -> tuple[str, str, list[str]]:
     candidate = item.candidate
+    metadata = dict(candidate.metadata or {})
     reasons: list[str] = []
+    if bool(metadata.get("membership_review_required")):
+        reasons.append("suspicious_membership")
     if candidate.category == "lead" or item.confidence_label == "lead_only":
         reasons.append("unverified_membership")
     if not candidate.linkedin_url:
@@ -61,6 +65,8 @@ def _review_decision(item: ScoredCandidate) -> tuple[str, str, list[str]]:
 
     if not reasons:
         return "", "", []
+    if "suspicious_membership" in reasons:
+        return "manual_identity_resolution", "high", reasons
     if "unverified_membership" in reasons:
         return "manual_identity_resolution", "high", reasons
     if "missing_linkedin_profile" in reasons:
@@ -74,3 +80,33 @@ def _summary(candidate: Candidate, item: ScoredCandidate, reasons: list[str]) ->
         f"{candidate.display_name} requires manual review because {joined_reasons}. "
         f"Current confidence is {item.confidence_label} ({item.confidence_score})."
     )
+
+
+def _candidate_snapshot_id(candidate: Candidate, evidence: list[dict[str, Any]]) -> str:
+    metadata = dict(candidate.metadata or {})
+    snapshot_id = str(metadata.get("snapshot_id") or "").strip()
+    if snapshot_id:
+        return snapshot_id
+    snapshot_id = _snapshot_id_from_path(candidate.source_path)
+    if snapshot_id:
+        return snapshot_id
+    for item in evidence:
+        evidence_metadata = dict(item.get("metadata") or {})
+        snapshot_id = str(evidence_metadata.get("snapshot_id") or "").strip()
+        if snapshot_id:
+            return snapshot_id
+        snapshot_id = _snapshot_id_from_path(str(item.get("source_path") or ""))
+        if snapshot_id:
+            return snapshot_id
+    return ""
+
+
+def _snapshot_id_from_path(value: str) -> str:
+    normalized = str(value or "").strip()
+    if not normalized:
+        return ""
+    parts = [segment for segment in normalized.replace("\\", "/").split("/") if segment]
+    for index, segment in enumerate(parts):
+        if segment == "company_assets" and index + 2 < len(parts):
+            return parts[index + 2]
+    return ""

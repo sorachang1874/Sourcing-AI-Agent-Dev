@@ -223,7 +223,7 @@
 
 跨设备恢复与云端 durable storage 的设计，见：
 
-- [CROSS_DEVICE_SYNC.md](/home/sorachang/projects/Sourcing%20AI%20Agent%20Dev/sourcing-ai-agent/docs/CROSS_DEVICE_SYNC.md)
+- [CROSS_DEVICE_SYNC.md](CROSS_DEVICE_SYNC.md)
 
 未来推荐拆成两层：
 
