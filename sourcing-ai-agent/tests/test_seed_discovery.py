@@ -86,7 +86,7 @@ class SeedDiscoveryTest(unittest.TestCase):
         )
         self.assertEqual(entries, [])
 
-    def test_resolve_company_identity_uses_model_assisted_observed_candidates(self) -> None:
+    def test_resolve_company_identity_prefers_builtin_mapping_over_model_assisted_observed_candidates(self) -> None:
         class _FakeModelClient:
             def judge_company_equivalence(self, payload):
                 self.payload = payload
@@ -112,10 +112,11 @@ class SeedDiscoveryTest(unittest.TestCase):
         self.assertEqual(identity.linkedin_slug, "humansand")
         self.assertEqual(identity.linkedin_company_url, "https://www.linkedin.com/company/humansand/")
         self.assertEqual(identity.company_key, "humansand")
-        self.assertEqual(identity.resolver, "observed_candidates_model_assisted")
+        self.assertEqual(identity.resolver, "builtin")
         self.assertEqual(identity.confidence, "high")
+        self.assertFalse(hasattr(client, "payload"))
 
-    def test_resolve_company_identity_uses_observed_exact_match_without_model_client(self) -> None:
+    def test_resolve_company_identity_prefers_builtin_mapping_over_observed_exact_match_without_model_client(self) -> None:
         identity = resolve_company_identity(
             "Humans&",
             observed_companies=[
@@ -129,8 +130,8 @@ class SeedDiscoveryTest(unittest.TestCase):
         self.assertEqual(identity.linkedin_slug, "humansand")
         self.assertEqual(identity.linkedin_company_url, "https://www.linkedin.com/company/humansand/")
         self.assertEqual(identity.company_key, "humansand")
-        self.assertEqual(identity.resolver, "observed_candidates_exact_match")
-        self.assertEqual(identity.confidence, "medium")
+        self.assertEqual(identity.resolver, "builtin")
+        self.assertEqual(identity.confidence, "high")
 
     def test_resolve_company_identity_prefers_alias_mapped_linkedin_slug_for_company_key(self) -> None:
         identity = resolve_company_identity(
@@ -163,8 +164,8 @@ class SeedDiscoveryTest(unittest.TestCase):
             ],
         )
 
-        self.assertEqual(identity.resolver, "heuristic")
-        self.assertEqual(identity.confidence, "low")
+        self.assertEqual(identity.resolver, "builtin")
+        self.assertEqual(identity.confidence, "high")
 
     def test_former_paid_fallback_prefers_past_company_only_harvest_query(self) -> None:
         class _FakeSettings:
