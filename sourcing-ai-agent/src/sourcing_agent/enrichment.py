@@ -83,6 +83,13 @@ ACK_STOPWORDS = {
     "supplementary material",
 }
 
+HARVEST_PROFILE_PREFETCH_BATCH_SIZE = 250
+
+
+def _chunk_strings(values: list[str], chunk_size: int) -> list[list[str]]:
+    size = max(1, int(chunk_size or 1))
+    return [values[index : index + size] for index in range(0, len(values), size)]
+
 
 @dataclass(slots=True)
 class MultiSourceEnrichmentResult:
@@ -184,9 +191,11 @@ class MultiSourceEnricher:
         runtime_mode: str = "workflow",
         parallel_exploration_workers: int = 2,
         cost_policy: dict[str, Any] | None = None,
+        full_roster_profile_prefetch: bool = False,
     ) -> MultiSourceEnrichmentResult:
         logger = asset_logger or AssetLogger(snapshot_dir)
         effective_cost_policy = dict(cost_policy or {})
+        allow_shared_provider_cache = bool(effective_cost_policy.get("allow_shared_provider_cache", True))
         candidate_map = _candidate_name_map(candidates)
         evidence: list[EvidenceRecord] = []
         resolved_profiles: list[dict[str, Any]] = []
@@ -201,9 +210,12 @@ class MultiSourceEnricher:
         profile_detail_limit = job_request.profile_detail_limit
         profile_fetch_count = 0
         prefetched_harvest_profiles: dict[str, dict[str, Any]] = {}
+        background_prefetch_urls: set[str] = set()
         if self.harvest_profile_connector is not None and slug_resolution_limit > 0 and profile_detail_limit > 0:
+            resolution_prefetch_candidates = prioritized[:slug_resolution_limit]
+            background_prefetch_candidates = prioritized if full_roster_profile_prefetch else resolution_prefetch_candidates
             known_profile_urls: list[str] = []
-            for candidate in prioritized[:slug_resolution_limit]:
+            for candidate in background_prefetch_candidates:
                 for profile_url in _candidate_profile_urls(candidate):
                     if profile_url not in known_profile_urls:
                         known_profile_urls.append(profile_url)
@@ -213,34 +225,58 @@ class MultiSourceEnricher:
                 and job_id
                 and bool(getattr(getattr(self.harvest_profile_connector, "settings", None), "enabled", False))
             ):
-                harvest_worker = self._execute_harvest_profile_batch_worker(
-                    profile_urls=known_profile_urls,
-                    snapshot_dir=snapshot_dir,
-                    job_id=job_id,
-                    request_payload=request_payload or job_request.to_record(),
-                    plan_payload=plan_payload or {},
-                    runtime_mode=runtime_mode,
-                )
-                if str(harvest_worker.get("worker_status") or "") == "queued":
-                    queued_harvest_worker_count = 1
+                queue_artifact_paths: list[str] = []
+                for profile_url_chunk in _chunk_strings(known_profile_urls, HARVEST_PROFILE_PREFETCH_BATCH_SIZE):
+                    harvest_worker = self._execute_harvest_profile_batch_worker(
+                        profile_urls=profile_url_chunk,
+                        snapshot_dir=snapshot_dir,
+                        job_id=job_id,
+                        request_payload=request_payload or job_request.to_record(),
+                        plan_payload=plan_payload or {},
+                        runtime_mode=runtime_mode,
+                        allow_shared_provider_cache=allow_shared_provider_cache,
+                    )
+                    if str(harvest_worker.get("worker_status") or "") == "queued":
+                        queued_harvest_worker_count += 1
+                        background_prefetch_urls.update(profile_url_chunk)
                     worker_summary = dict(harvest_worker.get("summary") or {})
-                    if str(worker_summary.get("summary_path") or "").strip():
-                        artifact_paths["harvest_profile_batch_queue"] = str(worker_summary.get("summary_path") or "")
+                    summary_path_value = str(worker_summary.get("summary_path") or "").strip()
+                    if summary_path_value:
+                        queue_artifact_paths.append(summary_path_value)
+                if queue_artifact_paths:
+                    if len(queue_artifact_paths) == 1:
+                        artifact_paths["harvest_profile_batch_queue"] = queue_artifact_paths[0]
+                    else:
+                        for index, path_value in enumerate(queue_artifact_paths, start=1):
+                            artifact_paths[f"harvest_profile_batch_queue_{index:02d}"] = path_value
+                if full_roster_profile_prefetch and queued_harvest_worker_count > 0:
                     return MultiSourceEnrichmentResult(
                         candidates=sorted(list(candidate_map.values()), key=lambda item: item.display_name),
                         evidence=evidence,
-                        resolved_profiles=resolved_profiles,
-                        unresolved_candidates=unresolved_candidates,
                         artifact_paths=artifact_paths,
                         errors=errors,
                         queued_harvest_worker_count=queued_harvest_worker_count,
                         stop_reason="queued_background_harvest",
                     )
-            prefetched_harvest_profiles = self.harvest_profile_connector.fetch_profiles_by_urls(
-                known_profile_urls,
-                snapshot_dir,
-                asset_logger=logger,
-            )
+                if queued_harvest_worker_count == 0:
+                    prefetched_harvest_profiles = self.harvest_profile_connector.fetch_profiles_by_urls(
+                        [
+                            profile_url
+                            for candidate in resolution_prefetch_candidates
+                            for profile_url in _candidate_profile_urls(candidate)
+                        ],
+                        snapshot_dir,
+                        asset_logger=logger,
+                        allow_shared_provider_cache=allow_shared_provider_cache,
+                    )
+                elif not full_roster_profile_prefetch:
+                    background_prefetch_urls.update(
+                        [
+                            profile_url
+                            for candidate in resolution_prefetch_candidates
+                            for profile_url in _candidate_profile_urls(candidate)
+                        ]
+                    )
         search_inputs: list[Candidate] = []
         for candidate in prioritized[:slug_resolution_limit]:
             verified, profile_fetch_count = self._resolve_candidate_with_known_refs(
@@ -254,6 +290,8 @@ class MultiSourceEnricher:
                 evidence,
                 asset_logger=logger,
                 prefetched_harvest_profiles=prefetched_harvest_profiles,
+                background_prefetch_urls=background_prefetch_urls,
+                allow_shared_provider_cache=allow_shared_provider_cache,
             )
             if not verified:
                 search_inputs.append(candidate)
@@ -406,23 +444,6 @@ class MultiSourceEnricher:
                     explored_candidate,
                 )
             queued_exploration_count += int(getattr(exploration, "queued_candidate_count", 0) or 0)
-            if queued_exploration_count > 0:
-                final_candidates = list(candidate_map.values())
-                return MultiSourceEnrichmentResult(
-                    candidates=sorted(final_candidates, key=lambda item: item.display_name),
-                    evidence=evidence,
-                    resolved_profiles=resolved_profiles,
-                    unresolved_candidates=unresolved_candidates,
-                    publication_matches=publication_result["publication_matches"],
-                    lead_candidates=publication_result["lead_candidates"],
-                    coauthor_edges=publication_result["coauthor_edges"],
-                    artifact_paths=artifact_paths,
-                    errors=errors,
-                    queued_harvest_worker_count=queued_harvest_worker_count,
-                    queued_exploration_count=queued_exploration_count,
-                    stop_reason=str(getattr(exploration, "stop_reason", "") or "queued_background_exploration"),
-                )
-
             post_exploration_candidates = _prioritize_candidates(exploration.candidates)
             for explored_candidate in post_exploration_candidates:
                 if profile_fetch_count >= profile_detail_limit:
@@ -439,6 +460,7 @@ class MultiSourceEnricher:
                     resolved_profiles,
                     evidence,
                     asset_logger=logger,
+                    allow_shared_provider_cache=allow_shared_provider_cache,
                 )
                 if verified:
                     _drop_unresolved_candidate(unresolved_candidates, explored_candidate.candidate_id)
@@ -475,27 +497,12 @@ class MultiSourceEnricher:
                 request_payload=request_payload or job_request.to_record(),
                 plan_payload=plan_payload or {},
                 runtime_mode=runtime_mode,
+                allow_shared_provider_cache=allow_shared_provider_cache,
             )
             errors.extend(scholar_coauthor_errors)
             if scholar_coauthor_follow_up_summary_path is not None:
                 artifact_paths["scholar_coauthor_follow_up"] = str(scholar_coauthor_follow_up_summary_path)
             queued_exploration_count += scholar_coauthor_queued_count
-            if queued_exploration_count > 0:
-                final_candidates = list(candidate_map.values())
-                return MultiSourceEnrichmentResult(
-                    candidates=sorted(final_candidates, key=lambda item: item.display_name),
-                    evidence=evidence,
-                    resolved_profiles=resolved_profiles,
-                    unresolved_candidates=unresolved_candidates,
-                    publication_matches=publication_result["publication_matches"],
-                    lead_candidates=publication_result["lead_candidates"],
-                    coauthor_edges=publication_result["coauthor_edges"],
-                    artifact_paths=artifact_paths,
-                    errors=errors,
-                    queued_harvest_worker_count=queued_harvest_worker_count,
-                    queued_exploration_count=queued_exploration_count,
-                    stop_reason="queued_background_exploration",
-                )
 
         remaining_profile_budget = max(profile_detail_limit - profile_fetch_count, 0)
         remaining_leads_to_resolve = [
@@ -533,12 +540,18 @@ class MultiSourceEnricher:
                 unresolved_candidates=unresolved_candidates,
                 evidence=evidence,
                 asset_logger=logger,
+                allow_shared_provider_cache=allow_shared_provider_cache,
             )
             if targeted_resolution_summary_path is not None:
                 artifact_paths["publication_lead_targeted_resolution"] = str(targeted_resolution_summary_path)
 
         evidence.extend(publication_result["evidence"])
         final_candidates = list(candidate_map.values())
+        stop_reason = ""
+        if queued_exploration_count > 0:
+            stop_reason = "queued_background_exploration"
+        elif queued_harvest_worker_count > 0:
+            stop_reason = "queued_background_harvest"
         return MultiSourceEnrichmentResult(
             candidates=sorted(final_candidates, key=lambda item: item.display_name),
             evidence=evidence,
@@ -551,6 +564,7 @@ class MultiSourceEnricher:
             errors=errors,
             queued_harvest_worker_count=queued_harvest_worker_count,
             queued_exploration_count=queued_exploration_count,
+            stop_reason=stop_reason,
         )
 
     def _execute_harvest_profile_batch_worker(
@@ -562,6 +576,7 @@ class MultiSourceEnricher:
         request_payload: dict[str, Any],
         plan_payload: dict[str, Any],
         runtime_mode: str,
+        allow_shared_provider_cache: bool,
     ) -> dict[str, Any]:
         if self.harvest_profile_connector is None or self.worker_runtime is None or not job_id:
             return {"worker_status": "skipped"}
@@ -595,6 +610,7 @@ class MultiSourceEnricher:
                 "request_payload": request_payload,
                 "plan_payload": plan_payload,
                 "runtime_mode": runtime_mode,
+                "allow_shared_provider_cache": allow_shared_provider_cache,
             },
             handoff_from_lane="acquisition_specialist",
         )
@@ -623,6 +639,7 @@ class MultiSourceEnricher:
             normalized_urls,
             snapshot_dir,
             checkpoint=checkpoint,
+            allow_shared_provider_cache=allow_shared_provider_cache,
         )
         artifact_paths = {
             str(key): str(value)
@@ -678,6 +695,22 @@ class MultiSourceEnricher:
             )
             return {"worker_status": "queued", "summary": updated_output["summary"]}
 
+        persisted_profile_count = 0
+        unresolved_urls: list[str] = []
+        if execution.body is not None:
+            persisted = self.harvest_profile_connector.persist_profiles_from_batch_body(
+                normalized_urls,
+                execution.body,
+                snapshot_dir,
+                asset_logger=logger,
+            )
+            persisted_profile_count = len(dict(persisted.get("profiles") or {}))
+            unresolved_urls = [str(item) for item in list(persisted.get("unresolved_urls") or []) if str(item).strip()]
+            updated_output["persisted_profile_count"] = persisted_profile_count
+            updated_output["unresolved_urls"] = unresolved_urls
+            updated_output["summary"]["persisted_profile_count"] = persisted_profile_count
+            updated_output["summary"]["unresolved_url_count"] = len(unresolved_urls)
+
         self.worker_runtime.complete_worker(
             worker_handle,
             status="completed",
@@ -686,6 +719,53 @@ class MultiSourceEnricher:
             handoff_to_lane="enrichment_specialist",
         )
         return {"worker_status": "completed", "summary": updated_output["summary"]}
+
+    def _fetch_harvest_profiles_for_urls(
+        self,
+        profile_urls: list[str],
+        snapshot_dir: Path,
+        *,
+        asset_logger: AssetLogger,
+        prefetched_harvest_profiles: dict[str, dict[str, Any]] | None = None,
+        background_prefetch_urls: set[str] | None = None,
+        allow_shared_provider_cache: bool = True,
+    ) -> dict[str, dict[str, Any]]:
+        normalized_urls: list[str] = []
+        for profile_url in profile_urls:
+            normalized_profile_url = str(profile_url or "").strip()
+            if normalized_profile_url and normalized_profile_url not in normalized_urls:
+                normalized_urls.append(normalized_profile_url)
+        if self.harvest_profile_connector is None or not normalized_urls:
+            return {}
+
+        pending_prefetch_urls = {
+            str(item or "").strip()
+            for item in list(background_prefetch_urls or set())
+            if str(item or "").strip()
+        }
+        fetched: dict[str, dict[str, Any]] = {}
+        pending_urls: list[str] = []
+        for normalized_profile_url in normalized_urls:
+            profile = None
+            if prefetched_harvest_profiles is not None:
+                profile = prefetched_harvest_profiles.get(normalized_profile_url)
+            if profile is not None:
+                fetched[normalized_profile_url] = profile
+                continue
+            if normalized_profile_url in pending_prefetch_urls:
+                continue
+            pending_urls.append(normalized_profile_url)
+
+        if pending_urls:
+            fetched.update(
+                self.harvest_profile_connector.fetch_profiles_by_urls(
+                    pending_urls,
+                    snapshot_dir,
+                    asset_logger=asset_logger,
+                    allow_shared_provider_cache=allow_shared_provider_cache,
+                )
+            )
+        return fetched
 
     def _follow_up_roster_anchored_scholar_coauthor_prospects(
         self,
@@ -704,6 +784,7 @@ class MultiSourceEnricher:
         request_payload: dict[str, Any],
         plan_payload: dict[str, Any],
         runtime_mode: str,
+        allow_shared_provider_cache: bool = True,
     ) -> tuple[int, Path | None, list[str], int]:
         if not prospects or exploration_limit <= 0:
             return profile_fetch_count, None, [], 0
@@ -792,6 +873,7 @@ class MultiSourceEnricher:
                             resolved_profiles,
                             evidence,
                             asset_logger=asset_logger,
+                            allow_shared_provider_cache=allow_shared_provider_cache,
                         )
                     new_evidence_records = list(evidence[prior_evidence_count:])
                     for item in new_evidence_records:
@@ -952,6 +1034,7 @@ class MultiSourceEnricher:
         unresolved_candidates: list[dict[str, Any]],
         evidence: list[EvidenceRecord],
         asset_logger: AssetLogger,
+        allow_shared_provider_cache: bool = True,
     ) -> tuple[int, Path | None]:
         if (
             self.harvest_profile_search_connector is None
@@ -967,51 +1050,65 @@ class MultiSourceEnricher:
         search_root.mkdir(parents=True, exist_ok=True)
         company_url = str(identity.linkedin_company_url or "").strip()
         searches_used = 0
-        attempts_summary: list[dict[str, Any]] = []
+        attempt_runtime: list[dict[str, Any]] = []
 
         for lead_candidate in lead_candidates:
-            if searches_used >= remaining_profile_budget:
-                break
             current_candidate = candidate_map.get(_candidate_key(lead_candidate), lead_candidate)
             if current_candidate.category != "lead":
                 continue
-
             query_text = (current_candidate.display_name or current_candidate.name_en).strip()
             if not query_text:
                 continue
             candidate_dir = search_root / current_candidate.candidate_id
             candidate_dir.mkdir(parents=True, exist_ok=True)
-            attempt = {
-                "candidate_id": current_candidate.candidate_id,
-                "display_name": current_candidate.display_name,
-                "query_text": query_text,
-                "attempts": [],
-                "resolved": False,
-            }
-            search_variants = [
+            attempt_runtime.append(
                 {
-                    "employment_status": "current",
-                    "filter_hints": {"current_companies": [company_url] if company_url else []},
-                    "label": "current_company_exact_name",
-                },
-                {
-                    "employment_status": "former",
-                    "filter_hints": {"past_companies": [company_url] if company_url else []},
-                    "label": "past_company_exact_name",
-                },
-            ]
+                    "candidate": current_candidate,
+                    "candidate_dir": candidate_dir,
+                    "attempt": {
+                        "candidate_id": current_candidate.candidate_id,
+                        "display_name": current_candidate.display_name,
+                        "query_text": query_text,
+                        "attempts": [],
+                        "resolved": False,
+                    },
+                    "variants": {},
+                }
+            )
 
-            resolved = False
-            for variant_index, variant in enumerate(search_variants, start=1):
-                if searches_used >= remaining_profile_budget:
-                    break
+        search_variants = [
+            {
+                "employment_status": "current",
+                "filter_hints": {"current_companies": [company_url] if company_url else []},
+                "label": "current_company_exact_name",
+            },
+            {
+                "employment_status": "former",
+                "filter_hints": {"past_companies": [company_url] if company_url else []},
+                "label": "past_company_exact_name",
+            },
+        ]
+
+        for variant in search_variants:
+            if searches_used >= remaining_profile_budget:
+                break
+            phase_urls: list[str] = []
+            for runtime_item in attempt_runtime:
+                attempt = runtime_item["attempt"]
+                if attempt["resolved"] or searches_used >= remaining_profile_budget:
+                    continue
+                current_candidate = candidate_map.get(_candidate_key(runtime_item["candidate"]), runtime_item["candidate"])
+                runtime_item["candidate"] = current_candidate
+                if current_candidate.category != "lead":
+                    continue
                 search_result = self.harvest_profile_search_connector.search_profiles(
-                    query_text=query_text,
+                    query_text=str(attempt.get("query_text") or ""),
                     filter_hints=dict(variant["filter_hints"]),
                     employment_status=str(variant["employment_status"]),
-                    discovery_dir=candidate_dir,
+                    discovery_dir=runtime_item["candidate_dir"],
                     asset_logger=asset_logger,
                     limit=min(self.harvest_profile_search_connector.settings.max_paid_items, 10),
+                    allow_shared_provider_cache=allow_shared_provider_cache,
                 )
                 searches_used += 1
                 variant_summary = {
@@ -1023,31 +1120,49 @@ class MultiSourceEnricher:
                     "profile_url": "",
                     "verified": False,
                 }
-                if search_result is None:
-                    attempt["attempts"].append(variant_summary)
-                    continue
-
-                rows = [
-                    row
-                    for row in list(search_result.get("rows") or [])
-                    if _names_match(current_candidate.name_en, str(row.get("full_name") or ""))
-                ]
-                variant_summary["matched_names"] = [str(row.get("full_name") or "") for row in rows]
+                rows = []
+                if search_result is not None:
+                    rows = [
+                        row
+                        for row in list(search_result.get("rows") or [])
+                        if _names_match(current_candidate.name_en, str(row.get("full_name") or ""))
+                    ]
+                    variant_summary["matched_names"] = [str(row.get("full_name") or "") for row in rows]
                 profile_urls: list[str] = []
                 for row in rows:
                     profile_url = str(row.get("profile_url") or "").strip()
                     if profile_url and profile_url not in profile_urls:
                         profile_urls.append(profile_url)
-                prefetched_profiles = self.harvest_profile_connector.fetch_profiles_by_urls(
-                    profile_urls,
-                    snapshot_dir,
-                    asset_logger=asset_logger,
-                ) if profile_urls else {}
-                for row in rows:
+                    if profile_url and profile_url not in phase_urls:
+                        phase_urls.append(profile_url)
+                attempt["attempts"].append(variant_summary)
+                runtime_item["variants"][str(variant["label"])] = {
+                    "rows": rows,
+                    "summary": variant_summary,
+                }
+
+            fetched_profiles = self._fetch_harvest_profiles_for_urls(
+                phase_urls,
+                snapshot_dir,
+                asset_logger=asset_logger,
+                allow_shared_provider_cache=allow_shared_provider_cache,
+            )
+            for runtime_item in attempt_runtime:
+                attempt = runtime_item["attempt"]
+                if attempt["resolved"]:
+                    continue
+                variant_runtime = dict(runtime_item["variants"].get(str(variant["label"])) or {})
+                if not variant_runtime:
+                    continue
+                current_candidate = candidate_map.get(_candidate_key(runtime_item["candidate"]), runtime_item["candidate"])
+                runtime_item["candidate"] = current_candidate
+                if current_candidate.category != "lead":
+                    continue
+                for row in list(variant_runtime.get("rows") or []):
                     profile_url = str(row.get("profile_url") or "").strip()
                     if not profile_url:
                         continue
-                    profile = prefetched_profiles.get(profile_url)
+                    profile = fetched_profiles.get(profile_url)
                     if profile is None or not _profile_matches_candidate(
                         profile["parsed"],
                         current_candidate,
@@ -1069,29 +1184,33 @@ class MultiSourceEnricher:
                     resolved_profiles.append(resolved_profile)
                     evidence.extend(profile_evidence)
                     _drop_unresolved_candidate(unresolved_candidates, current_candidate.candidate_id)
-                    variant_summary["profile_url"] = profile_url
-                    variant_summary["verified"] = True
+                    summary = variant_runtime.get("summary")
+                    if isinstance(summary, dict):
+                        summary["profile_url"] = profile_url
+                        summary["verified"] = True
                     attempt["resolved"] = True
-                    resolved = True
-                    break
-                attempt["attempts"].append(variant_summary)
-                if resolved:
                     break
 
-            if not resolved:
-                if current_candidate.candidate_id not in {
-                    str(item.get("candidate_id") or "").strip() for item in unresolved_candidates
-                }:
-                    unresolved_candidates.append(
-                        {
-                            "candidate_id": current_candidate.candidate_id,
-                            "display_name": current_candidate.display_name,
-                            "attempted_slugs": [],
-                            "query_summaries": attempt["attempts"],
-                            "resolution_source": "publication_lead_targeted_harvest",
-                        }
-                    )
-            attempts_summary.append(attempt)
+        attempts_summary = [dict(item["attempt"] or {}) for item in attempt_runtime]
+        unresolved_candidate_ids = {
+            str(item.get("candidate_id") or "").strip() for item in unresolved_candidates
+        }
+        for attempt in attempts_summary:
+            if attempt.get("resolved"):
+                continue
+            candidate_id = str(attempt.get("candidate_id") or "").strip()
+            if not candidate_id or candidate_id in unresolved_candidate_ids:
+                continue
+            unresolved_candidates.append(
+                {
+                    "candidate_id": candidate_id,
+                    "display_name": str(attempt.get("display_name") or ""),
+                    "attempted_slugs": [],
+                    "query_summaries": list(attempt.get("attempts") or []),
+                    "resolution_source": "publication_lead_targeted_harvest",
+                }
+            )
+            unresolved_candidate_ids.add(candidate_id)
 
         summary_path = resolution_dir / "summary.json"
         asset_logger.write_json(
@@ -1122,19 +1241,24 @@ class MultiSourceEnricher:
         *,
         asset_logger: AssetLogger,
         prefetched_harvest_profiles: dict[str, dict[str, Any]] | None = None,
+        background_prefetch_urls: set[str] | None = None,
+        allow_shared_provider_cache: bool = True,
     ) -> tuple[bool, int]:
         if profile_fetch_count >= profile_detail_limit:
             return False, profile_fetch_count
 
         profile_urls = _candidate_profile_urls(candidate)
+        harvested_profiles = self._fetch_harvest_profiles_for_urls(
+            profile_urls,
+            snapshot_dir,
+            asset_logger=asset_logger,
+            prefetched_harvest_profiles=prefetched_harvest_profiles,
+            background_prefetch_urls=background_prefetch_urls,
+            allow_shared_provider_cache=allow_shared_provider_cache,
+        )
         for profile_url in profile_urls:
-            if self.harvest_profile_connector is None:
-                continue
-            profile = None
-            if prefetched_harvest_profiles is not None:
-                profile = prefetched_harvest_profiles.get(profile_url)
-            if profile is None:
-                profile = self.harvest_profile_connector.fetch_profile_by_url(profile_url, snapshot_dir, asset_logger=asset_logger)
+            normalized_profile_url = str(profile_url or "").strip()
+            profile = harvested_profiles.get(normalized_profile_url)
             if profile is None or not _profile_matches_candidate(
                 profile["parsed"],
                 candidate,
@@ -1148,7 +1272,7 @@ class MultiSourceEnricher:
                 profile["parsed"],
                 profile["raw_path"],
                 profile["account_id"],
-                _extract_seed_slug(candidate) or extract_linkedin_slug(profile_url),
+                _extract_seed_slug(candidate) or extract_linkedin_slug(normalized_profile_url),
                 identity,
                 model_client=self.model_client,
                 resolution_source="known_profile_url_harvest",
@@ -2839,6 +2963,7 @@ def _merge_profile_into_candidate(
         identity,
         model_client=model_client,
     )
+    can_refresh_membership = candidate.category in {"lead", "employee", "former_employee"}
     membership_review = dict(membership_review or {})
     review_required = bool(membership_review.get("requires_manual_review"))
     review_note = str(membership_review.get("note") or "").strip()
@@ -2847,10 +2972,10 @@ def _merge_profile_into_candidate(
         candidate_id=candidate.candidate_id,
         name_en=profile.get("full_name") or candidate.name_en,
         display_name=profile.get("full_name") or candidate.display_name,
-        category=resolved_category if candidate.category == "lead" else candidate.category,
+        category=resolved_category if can_refresh_membership else candidate.category,
         target_company=candidate.target_company,
         organization=candidate.organization,
-        employment_status=resolved_employment_status if candidate.category == "lead" else candidate.employment_status,
+        employment_status=resolved_employment_status if can_refresh_membership else candidate.employment_status,
         role=profile.get("headline") or candidate.role,
         team=candidate.team or _infer_team_from_text(profile.get("headline", "")),
         focus_areas=candidate.focus_areas or profile.get("headline", ""),
@@ -2879,6 +3004,9 @@ def _merge_profile_into_candidate(
     )
     merged = merge_candidate(candidate, incoming)
     merged_record = merged.to_record()
+    if can_refresh_membership:
+        merged_record["category"] = resolved_category
+        merged_record["employment_status"] = resolved_employment_status
     if profile.get("profile_url"):
         merged_record["linkedin_url"] = profile["profile_url"]
     if profile.get("headline"):

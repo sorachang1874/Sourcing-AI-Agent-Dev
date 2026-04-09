@@ -31,6 +31,10 @@ User Request
 
 - 将原始用户请求编译成 `JobRequest + SourcingPlan`
 - 输出 acquisition tasks、retrieval strategy、open questions
+- 新增输出 `intent_brief`
+  - 显式承载 `identified_request / target_output / default_execution_strategy / review_focus`
+  - 作为产品原生第一段解释层，而不是只保留 `intent_summary` 两句摘要
+- 在 `model_assisted` 下，先通过模型做 request normalization，再用稳定模板生成 brief
 - 调用 `AcquisitionStrategyCompiler` 和 `PublicationCoveragePlanner`
 - 当前也会输出 `search_strategy` 和 retrieval `filter_layers`
 

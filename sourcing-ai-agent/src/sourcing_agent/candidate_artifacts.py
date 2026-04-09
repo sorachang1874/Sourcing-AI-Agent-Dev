@@ -544,13 +544,55 @@ def _evidence_payload_from_item(payload: dict[str, Any]) -> dict[str, Any] | Non
 
 
 def _merge_candidates(existing: Candidate, incoming: Candidate, *, prefer_incoming: bool) -> Candidate:
-    primary = incoming if prefer_incoming else existing
-    secondary = existing if prefer_incoming else incoming
+    existing_score = _materialized_merge_score(existing)
+    incoming_score = _materialized_merge_score(incoming)
+    if incoming_score > existing_score:
+        primary = incoming
+        secondary = existing
+    elif existing_score > incoming_score:
+        primary = existing
+        secondary = incoming
+    else:
+        primary = incoming if prefer_incoming else existing
+        secondary = existing if prefer_incoming else incoming
     merged = merge_candidate(primary, secondary)
     authoritative = _select_authoritative_membership_candidate(primary, secondary)
     if authoritative is None:
         return merged
     return _apply_authoritative_membership_fields(merged, authoritative)
+
+
+def _materialized_merge_score(candidate: Candidate) -> int:
+    metadata = dict(candidate.metadata or {})
+    score = 0
+    status = str(candidate.employment_status or "").strip().lower()
+    category = str(candidate.category or "").strip().lower()
+    if metadata.get("membership_claim_category"):
+        score += 30
+    if metadata.get("public_identifier"):
+        score += 20
+    if metadata.get("profile_url"):
+        score += 15
+    if status == "current":
+        score += 12
+    elif status == "former":
+        score += 6
+    if category == "employee":
+        score += 10
+    elif category == "former_employee":
+        score += 5
+    for value in [
+        candidate.linkedin_url,
+        candidate.role,
+        candidate.team,
+        candidate.focus_areas,
+        candidate.education,
+        candidate.work_history,
+        candidate.notes,
+    ]:
+        if str(value or "").strip():
+            score += 1
+    return score
 
 
 def _select_authoritative_membership_candidate(*candidates: Candidate) -> Candidate | None:
@@ -1003,15 +1045,26 @@ def _resolve_company_snapshot(runtime_dir: str | Path, target_company: str, *, s
     root = Path(runtime_dir)
     company_assets_dir = root / "company_assets"
     normalized_target = _normalize_key(target_company)
-    company_dir = None
+    matched_company_dirs: list[tuple[int, str, Path, dict[str, Any]]] = []
     for candidate in sorted(company_assets_dir.iterdir()) if company_assets_dir.exists() else []:
-        if candidate.is_dir() and _normalize_key(candidate.name) == normalized_target:
-            company_dir = candidate
-            break
-    if company_dir is None:
+        if not candidate.is_dir():
+            continue
+        latest_payload = _load_company_snapshot_json(candidate / "latest_snapshot.json")
+        preview_identity = dict(latest_payload.get("company_identity") or {})
+        preview_snapshot_id = str(snapshot_id or latest_payload.get("snapshot_id") or "").strip()
+        if snapshot_id and not (candidate / snapshot_id).exists():
+            continue
+        if preview_snapshot_id:
+            preview_identity = _load_company_snapshot_identity(candidate / preview_snapshot_id, fallback_payload=latest_payload)
+        match_score = _score_company_snapshot_dir_match(candidate, preview_identity, normalized_target)
+        if match_score > 0:
+            matched_company_dirs.append((match_score, preview_snapshot_id, candidate, latest_payload))
+    if not matched_company_dirs:
         raise CandidateArtifactError(f"Company assets not found for {target_company}")
-    latest_path = company_dir / "latest_snapshot.json"
-    latest_payload = json.loads(latest_path.read_text()) if latest_path.exists() else {}
+    _, _, company_dir, latest_payload = max(
+        matched_company_dirs,
+        key=lambda item: (item[0], item[1], item[2].name),
+    )
     resolved_snapshot_id = str(snapshot_id or latest_payload.get("snapshot_id") or "").strip()
     if not resolved_snapshot_id:
         snapshot_dirs = sorted(path.name for path in company_dir.iterdir() if path.is_dir())
@@ -1021,7 +1074,68 @@ def _resolve_company_snapshot(runtime_dir: str | Path, target_company: str, *, s
     snapshot_dir = company_dir / resolved_snapshot_id
     if not snapshot_dir.exists():
         raise CandidateArtifactError(f"Snapshot not found: {snapshot_dir}")
-    return company_dir.name, snapshot_dir, dict(latest_payload.get("company_identity") or {})
+    identity_payload = _load_company_snapshot_identity(snapshot_dir, fallback_payload=latest_payload)
+    resolved_company_key = str(identity_payload.get("company_key") or company_dir.name).strip() or company_dir.name
+    return resolved_company_key, snapshot_dir, identity_payload
+
+
+def _load_company_snapshot_json(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return dict(payload) if isinstance(payload, dict) else {}
+
+
+def _load_company_snapshot_identity(snapshot_dir: Path, *, fallback_payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    for path, key_path in [
+        (snapshot_dir / "identity.json", ("",)),
+        (snapshot_dir / "manifest.json", ("company_identity",)),
+        (snapshot_dir / "candidate_documents.json", ("snapshot", "company_identity")),
+    ]:
+        payload = _load_company_snapshot_json(path)
+        if not payload:
+            continue
+        current: Any = payload
+        for key in key_path:
+            if not key:
+                break
+            current = dict(current).get(key) if isinstance(current, dict) else {}
+        if isinstance(current, dict) and current:
+            return dict(current)
+    return dict((fallback_payload or {}).get("company_identity") or {})
+
+
+def _score_company_snapshot_dir_match(company_dir: Path, identity_payload: dict[str, Any], normalized_target: str) -> int:
+    if not normalized_target:
+        return 0
+    for field in ("requested_name", "canonical_name"):
+        value = _normalize_key(str(identity_payload.get(field) or ""))
+        if value and value == normalized_target:
+            return 120
+
+    company_key = _normalize_key(str(identity_payload.get("company_key") or ""))
+    if company_key and company_key == normalized_target:
+        return 110
+
+    linkedin_slug = _normalize_key(str(identity_payload.get("linkedin_slug") or ""))
+    if linkedin_slug and linkedin_slug == normalized_target:
+        return 105
+
+    aliases = [
+        _normalize_key(str(item))
+        for item in list(identity_payload.get("aliases") or [])
+        if str(item).strip()
+    ]
+    if normalized_target in aliases:
+        return 100
+
+    directory_key = _normalize_key(company_dir.name)
+    if directory_key == normalized_target:
+        return 90
+    return 0
 
 
 def _status_bucket(candidate: Candidate, *, membership_review_required: bool = False) -> str:

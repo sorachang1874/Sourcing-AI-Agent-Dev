@@ -11,6 +11,8 @@ from .domain import (
     derive_candidate_facets,
     derive_candidate_filter_facets,
     derive_candidate_role_bucket,
+    normalize_requested_facet,
+    normalize_requested_role_bucket,
     sanitize_candidate_notes,
 )
 
@@ -49,6 +51,14 @@ QUERY_STOPWORDS = {
     "criteria",
 }
 
+REQUEST_MEMBERSHIP_CATEGORIES = {
+    "employee",
+    "former_employee",
+    "investor",
+    "lead",
+    "non_member",
+}
+
 KEYWORD_ALIAS_MAP = {
     "基础设施": ["infrastructure", "infra", "platform", "distributed systems", "systems"],
     "infra": ["infrastructure", "platform", "distributed systems"],
@@ -68,6 +78,34 @@ KEYWORD_ALIAS_MAP = {
     "infra_systems": ["infrastructure", "infra", "systems", "platform", "distributed systems"],
     "multimodality": ["multimodal", "vision-language", "vision language"],
     "multimodal": ["multimodality", "vision-language", "vision language"],
+    "greater china experience": [
+        "greater china",
+        "mainland china",
+        "china",
+        "中国大陆",
+        "中国",
+        "hong kong",
+        "hong kong sar",
+        "香港",
+        "taiwan",
+        "台灣",
+        "台湾",
+        "taipei",
+        "hsinchu",
+        "新竹",
+        "singapore",
+        "新加坡",
+    ],
+    "chinese bilingual outreach": [
+        "中文",
+        "chinese",
+        "mandarin",
+        "cantonese",
+        "bilingual",
+        "双语",
+        "simplified chinese",
+        "traditional chinese",
+    ],
 }
 
 CONFIDENCE_PATTERN_BASE = {
@@ -128,6 +166,7 @@ def score_candidate(
     if not candidate_matches_structured_filters(candidate, request):
         return None
 
+    membership_categories, requested_role_categories = _requested_category_filters(request)
     keywords = build_query_terms(request, criteria_patterns or [])
 
     score = 0.0
@@ -158,7 +197,9 @@ def score_candidate(
         if found:
             score += 0.5
 
-    if request.categories and candidate.category in request.categories:
+    if membership_categories and candidate.category in membership_categories:
+        score += 1.5
+    if requested_role_categories and _candidate_matches_requested_role_categories(candidate, requested_role_categories):
         score += 1.5
     if request.employment_statuses and candidate.employment_status in request.employment_statuses:
         score += 1.0
@@ -258,13 +299,16 @@ def _search_fields_for_request(request: JobRequest) -> dict[str, float]:
 def candidate_matches_structured_filters(candidate: Candidate, request: JobRequest) -> bool:
     if request.target_company and _normalize(candidate.target_company) != _normalize(request.target_company):
         return False
-    if request.categories and candidate.category not in request.categories:
+    membership_categories, requested_role_categories = _requested_category_filters(request)
+    if membership_categories and candidate.category not in membership_categories:
         return False
     if request.employment_statuses and candidate.employment_status not in request.employment_statuses:
         return False
 
     searchable_blob = _normalize(_candidate_blob(candidate))
     candidate_facets = {_normalize(item) for item in derive_candidate_filter_facets(candidate)}
+    if requested_role_categories and not _candidate_matches_requested_role_categories(candidate, requested_role_categories):
+        return False
     if candidate.category == "investor" and _is_direct_investment_search(request):
         involvement_label = _investment_label(candidate.investment_involvement)
         if involvement_label == "no":
@@ -285,6 +329,40 @@ def candidate_matches_structured_filters(candidate: Candidate, request: JobReque
     if request.exclude_keywords and any(_normalize(token) in searchable_blob for token in request.exclude_keywords):
         return False
     return True
+
+
+def _requested_category_filters(request: JobRequest) -> tuple[list[str], list[str]]:
+    membership_categories: list[str] = []
+    requested_role_categories: list[str] = []
+    seen_membership: set[str] = set()
+    seen_role_like: set[str] = set()
+    for raw_category in request.categories:
+        normalized_category = _normalize(raw_category)
+        if not normalized_category:
+            continue
+        if normalized_category in REQUEST_MEMBERSHIP_CATEGORIES:
+            if normalized_category not in seen_membership:
+                seen_membership.add(normalized_category)
+                membership_categories.append(normalized_category)
+            continue
+        for role_like in (
+            normalize_requested_role_bucket(raw_category),
+            normalize_requested_facet(raw_category),
+        ):
+            normalized_role_like = _normalize(role_like)
+            if not normalized_role_like or normalized_role_like in seen_role_like:
+                continue
+            seen_role_like.add(normalized_role_like)
+            requested_role_categories.append(normalized_role_like)
+    return membership_categories, requested_role_categories
+
+
+def _candidate_matches_requested_role_categories(candidate: Candidate, requested_role_categories: list[str]) -> bool:
+    if not requested_role_categories:
+        return True
+    candidate_role_bucket = _normalize(derive_candidate_role_bucket(candidate))
+    candidate_facets = {_normalize(item) for item in derive_candidate_filter_facets(candidate)}
+    return any(role_like in candidate_facets or role_like == candidate_role_bucket for role_like in requested_role_categories)
 
 
 def _is_direct_investment_search(request: JobRequest) -> bool:
