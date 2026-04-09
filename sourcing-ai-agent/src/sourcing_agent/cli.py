@@ -373,6 +373,28 @@ def main() -> None:
 
     subparsers.add_parser("test-model", help="Run provider healthcheck")
 
+    chinese_affinity_parser = subparsers.add_parser(
+        "chinese-affinity-filter",
+        help="对已有候选人资产池进行华人亲缘分层筛选（Layer 0-3）",
+    )
+    chinese_affinity_parser.add_argument("--company", required=True, help="目标公司名或 key（如 anthropic / thinkingmachineslab）")
+    chinese_affinity_parser.add_argument("--snapshot-id", default="", help="Snapshot ID（不填则取最新）")
+    chinese_affinity_parser.add_argument(
+        "--asset-view",
+        default="canonical_merged",
+        choices=["canonical_merged", "strict_roster_only"],
+        help="资产视图（默认 canonical_merged）",
+    )
+    chinese_affinity_parser.add_argument(
+        "--target-layer",
+        type=int,
+        default=0,
+        choices=[0, 1, 2, 3],
+        help="输出过滤层（0=全量打标, 1=姓名信号及以上, 2=泛华人地区及以上, 3=大陆强信号）",
+    )
+    chinese_affinity_parser.add_argument("--output", default="", help="输出 JSON 文件路径（不填则打印摘要到 stdout）")
+    chinese_affinity_parser.add_argument("--query", default="华人亲缘分层筛选", help="查询描述（用于报告）")
+
     serve_parser = subparsers.add_parser("serve", help="Start the HTTP API")
     serve_parser.add_argument("--host", default="127.0.0.1")
     serve_parser.add_argument("--port", type=int, default=8765)
@@ -876,6 +898,50 @@ def main() -> None:
 
     if args.command == "show-manual-review":
         print(json.dumps(orchestrator.list_manual_review_items(args.target_company, args.job_id), ensure_ascii=False, indent=2))
+        return
+
+    if args.command == "chinese-affinity-filter":
+        from .chinese_affinity_filter import load_candidates_from_snapshot, run_chinese_affinity_filter
+        catalog = AssetCatalog.discover()
+        settings = load_settings(catalog.project_root)
+        runtime_dir = settings.runtime_dir
+        print(f"[chinese-affinity-filter] 加载候选人资产: company={args.company}, snapshot={args.snapshot_id or '最新'}, view={args.asset_view}")
+        candidates, resolved_snapshot_id, company_key = load_candidates_from_snapshot(
+            runtime_dir=runtime_dir,
+            target_company=args.company,
+            snapshot_id=args.snapshot_id,
+            asset_view=args.asset_view,
+        )
+        print(f"[chinese-affinity-filter] 加载完成: {len(candidates)} 个候选人，snapshot={resolved_snapshot_id}")
+        result = run_chinese_affinity_filter(
+            candidates=candidates,
+            target_company=args.company,
+            snapshot_id=resolved_snapshot_id,
+            target_layer=args.target_layer,
+            query_description=args.query,
+        )
+        print("\n" + "=" * 60)
+        print(result["summary"])
+        print("=" * 60)
+        if args.output:
+            from pathlib import Path as _Path
+            out_path = _Path(args.output)
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+            print(f"\n结果已写入: {out_path}")
+        else:
+            print(f"\n过滤后候选人数: {result['filtered_count']}")
+            if result["results"]:
+                print("\n前 10 个结果示例（按层级降序）：")
+                for item in result["results"][:10]:
+                    affinity = item.get("chinese_affinity") or {}
+                    print(
+                        f"  [Layer {affinity.get('layer', 0)}] {item.get('name_en', '')} "
+                        f"({item.get('name_zh', '') or '-'}) | {str(item.get('role', ''))[:50]}"
+                    )
+                    for layer_key, reasons in list((affinity.get("hit_reasons") or {}).items())[:2]:
+                        for reason in reasons[:2]:
+                            print(f"      {layer_key}: {str(reason)[:120]}")
         return
 
     if args.command == "test-model":
