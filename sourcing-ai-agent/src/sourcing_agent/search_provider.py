@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import base64
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from html import unescape
 from html.parser import HTMLParser
 import json
@@ -17,9 +18,12 @@ import requests
 
 from .dataforseo_client import (
     DataForSeoGoogleOrganicClient,
+    MAX_TASK_POST_BATCH_SIZE,
     extract_google_organic_ready_task_ids,
     extract_google_organic_result_block,
+    extract_google_organic_submitted_tasks,
     extract_google_organic_task_ids,
+    build_google_organic_task,
 )
 from .settings import SearchProviderSettings
 from .web_fetch import DEFAULT_HEADERS, fetch_search_results_html
@@ -28,6 +32,7 @@ _SHARED_LIBRARY_PACKAGE_HINTS = {
     "libnspr4.so": "libnspr4",
     "libnss3.so": "libnss3",
 }
+_DEFAULT_LANE_FETCH_COOLDOWN_SECONDS = 15
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,6 +83,57 @@ class SearchExecutionResult:
     artifacts: list[SearchExecutionArtifact] = field(default_factory=list)
 
 
+@dataclass(frozen=True, slots=True)
+class SearchBatchSubmissionTask:
+    task_key: str
+    query_text: str
+    checkpoint: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class SearchBatchSubmissionResult:
+    provider_name: str
+    tasks: list[SearchBatchSubmissionTask] = field(default_factory=list)
+    artifacts: list[SearchExecutionArtifact] = field(default_factory=list)
+    message: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class SearchBatchReadyTask:
+    task_key: str
+    task_id: str
+    query_text: str
+    checkpoint: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class SearchBatchReadyResult:
+    provider_name: str
+    tasks: list[SearchBatchReadyTask] = field(default_factory=list)
+    artifacts: list[SearchExecutionArtifact] = field(default_factory=list)
+    message: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class SearchBatchFetchTask:
+    task_key: str
+    task_id: str
+    query_text: str
+    response: SearchResponse | None = None
+    checkpoint: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class SearchBatchFetchResult:
+    provider_name: str
+    tasks: list[SearchBatchFetchTask] = field(default_factory=list)
+    artifacts: list[SearchExecutionArtifact] = field(default_factory=list)
+    message: str = ""
+
+
 class SearchProviderError(RuntimeError):
     def __init__(self, message: str, *, attempts: list[dict[str, str]] | None = None) -> None:
         super().__init__(message)
@@ -108,6 +164,15 @@ class BaseSearchProvider:
                 "status": "completed",
             },
         )
+
+    def submit_batch_queries(self, query_specs: list[dict[str, Any]]) -> SearchBatchSubmissionResult | None:
+        return None
+
+    def poll_ready_batch(self, query_specs: list[dict[str, Any]]) -> SearchBatchReadyResult | None:
+        return None
+
+    def fetch_ready_batch(self, query_specs: list[dict[str, Any]]) -> SearchBatchFetchResult | None:
+        return None
 
 
 class DuckDuckGoHtmlSearchProvider(BaseSearchProvider):
@@ -226,6 +291,38 @@ class DataForSeoGoogleOrganicSearchProvider(BaseSearchProvider):
             timeout_seconds=timeout_seconds,
         )
 
+    def _build_queue_checkpoint(self, *, query_text: str, depth: int, task_id: str, status: str) -> dict[str, Any]:
+        return {
+            "provider_name": self.provider_name,
+            "query_text": query_text,
+            "mode": "dataforseo_standard_queue",
+            "location_name": self.location_name,
+            "language_name": self.language_name,
+            "device": self.device,
+            "os": self.os,
+            "depth": depth,
+            "task_id": task_id,
+            "status": status,
+        }
+
+    def _overlay_ready_metadata(self, checkpoint: dict[str, Any], reference: dict[str, Any]) -> dict[str, Any]:
+        updated = dict(checkpoint or {})
+        for key in [
+            "ready_poll_token",
+            "ready_checked_at",
+            "ready_attempted_at",
+            "ready_poll_source",
+            "ready_poll_label",
+            "fetch_attempted_at",
+            "fetched_at",
+            "fetch_token",
+            "lane_fetch_cooldown_seconds",
+        ]:
+            value = (reference or {}).get(key)
+            if str(value or "").strip():
+                updated[key] = value
+        return updated
+
     def search(self, query_text: str, *, max_results: int = 10, timeout: int | None = None) -> SearchResponse:
         payload = self.client.live_regular(
             keyword=query_text,
@@ -253,6 +350,224 @@ class DataForSeoGoogleOrganicSearchProvider(BaseSearchProvider):
             },
         )
 
+    def submit_batch_queries(self, query_specs: list[dict[str, Any]]) -> SearchBatchSubmissionResult | None:
+        normalized_specs: list[dict[str, Any]] = []
+        for spec in list(query_specs or []):
+            query_text = " ".join(str((spec or {}).get("query_text") or "").split()).strip()
+            if not query_text:
+                continue
+            max_results = max(1, int((spec or {}).get("max_results") or 10))
+            task_key = str((spec or {}).get("task_key") or query_text).strip() or query_text
+            depth = max(self.depth, max_results)
+            normalized_specs.append(
+                {
+                    "task_key": task_key,
+                    "query_text": query_text,
+                    "max_results": max_results,
+                    "depth": depth,
+                    "task": build_google_organic_task(
+                        keyword=query_text,
+                        location_name=self.location_name,
+                        language_name=self.language_name,
+                        device=self.device,
+                        os=self.os,
+                        depth=depth,
+                        tag=task_key,
+                    ),
+                }
+            )
+        if not normalized_specs:
+            return None
+
+        submitted_tasks: list[SearchBatchSubmissionTask] = []
+        artifacts: list[SearchExecutionArtifact] = []
+        for batch_index, start in enumerate(range(0, len(normalized_specs), MAX_TASK_POST_BATCH_SIZE), start=1):
+            batch_specs = normalized_specs[start : start + MAX_TASK_POST_BATCH_SIZE]
+            batch_tasks = [dict(item["task"]) for item in batch_specs]
+            payload = self.client.task_post_many(batch_tasks)
+            artifact_label = f"task_post_batch_{batch_index:02d}"
+            artifacts.append(
+                SearchExecutionArtifact(
+                    label=artifact_label,
+                    payload=payload,
+                    metadata={
+                        "batch_index": batch_index,
+                        "task_count": len(batch_specs),
+                        "provider_name": self.provider_name,
+                    },
+                )
+            )
+            submitted = extract_google_organic_submitted_tasks(payload, fallback_tasks=batch_tasks)
+            for offset, spec in enumerate(batch_specs):
+                echoed = submitted[offset] if offset < len(submitted) else {}
+                task_id = str(echoed.get("task_id") or "").strip()
+                submitted_tasks.append(
+                    SearchBatchSubmissionTask(
+                        task_key=str(spec["task_key"]),
+                        query_text=str(spec["query_text"]),
+                        checkpoint=self._build_queue_checkpoint(
+                            query_text=str(spec["query_text"]),
+                            depth=int(spec["depth"]),
+                            task_id=task_id,
+                            status="submitted",
+                        ),
+                        metadata={
+                            "artifact_label": artifact_label,
+                            "batch_index": batch_index,
+                            "task_id": task_id,
+                        },
+                    )
+                )
+        return SearchBatchSubmissionResult(
+            provider_name=self.provider_name,
+            tasks=submitted_tasks,
+            artifacts=artifacts,
+            message=(
+                f"Submitted {len(submitted_tasks)} DataForSEO Standard Queue tasks "
+                f"across {len(artifacts)} batch request(s)."
+            ),
+        )
+
+    def poll_ready_batch(self, query_specs: list[dict[str, Any]]) -> SearchBatchReadyResult | None:
+        normalized_specs: list[dict[str, Any]] = []
+        for spec in list(query_specs or []):
+            checkpoint = dict((spec or {}).get("checkpoint") or {})
+            task_id = str((spec or {}).get("task_id") or checkpoint.get("task_id") or "").strip()
+            if not task_id:
+                continue
+            query_text = str((spec or {}).get("query_text") or checkpoint.get("query_text") or "").strip()
+            task_key = str((spec or {}).get("task_key") or query_text or task_id).strip() or task_id
+            depth = max(self.depth, max(1, int(checkpoint.get("depth") or (spec or {}).get("max_results") or 10)))
+            normalized_specs.append(
+                {
+                    "task_key": task_key,
+                    "task_id": task_id,
+                    "query_text": query_text,
+                    "checkpoint": checkpoint,
+                    "depth": depth,
+                }
+            )
+        if not normalized_specs:
+            return None
+
+        payload = self.client.tasks_ready()
+        ready_ids = set(extract_google_organic_ready_task_ids(payload))
+        tasks: list[SearchBatchReadyTask] = []
+        for spec in normalized_specs:
+            is_ready = str(spec["task_id"]) in ready_ids
+            checkpoint = self._build_queue_checkpoint(
+                query_text=str(spec["query_text"]),
+                depth=int(spec["depth"]),
+                task_id=str(spec["task_id"]),
+                status="ready_cached" if is_ready else "waiting_for_ready_cached",
+            )
+            checkpoint = self._overlay_ready_metadata(checkpoint, dict(spec.get("checkpoint") or {}))
+            tasks.append(
+                SearchBatchReadyTask(
+                    task_key=str(spec["task_key"]),
+                    task_id=str(spec["task_id"]),
+                    query_text=str(spec["query_text"]),
+                    checkpoint=checkpoint,
+                    metadata={"ready": is_ready},
+                )
+            )
+        return SearchBatchReadyResult(
+            provider_name=self.provider_name,
+            tasks=tasks,
+            artifacts=[
+                SearchExecutionArtifact(
+                    label="tasks_ready_batch",
+                    payload=payload,
+                    metadata={
+                        "provider_name": self.provider_name,
+                        "task_count": len(normalized_specs),
+                        "ready_count": len([item for item in tasks if item.metadata.get("ready")]),
+                    },
+                )
+            ],
+            message=f"{len([item for item in tasks if item.metadata.get('ready')])}/{len(tasks)} tasks ready.",
+        )
+
+    def fetch_ready_batch(self, query_specs: list[dict[str, Any]]) -> SearchBatchFetchResult | None:
+        normalized_specs: list[dict[str, Any]] = []
+        for spec in list(query_specs or []):
+            checkpoint = dict((spec or {}).get("checkpoint") or {})
+            task_id = str((spec or {}).get("task_id") or checkpoint.get("task_id") or "").strip()
+            if not task_id:
+                continue
+            query_text = str((spec or {}).get("query_text") or checkpoint.get("query_text") or "").strip()
+            task_key = str((spec or {}).get("task_key") or query_text or task_id).strip() or task_id
+            depth = max(self.depth, max(1, int(checkpoint.get("depth") or (spec or {}).get("max_results") or 10)))
+            normalized_specs.append(
+                {
+                    "task_key": task_key,
+                    "task_id": task_id,
+                    "query_text": query_text,
+                    "checkpoint": checkpoint,
+                    "depth": depth,
+                }
+            )
+        if not normalized_specs:
+            return None
+
+        tasks: list[SearchBatchFetchTask] = []
+        artifacts: list[SearchExecutionArtifact] = []
+        for index, spec in enumerate(normalized_specs, start=1):
+            payload = self.client.task_get_regular(str(spec["task_id"]))
+            artifacts.append(
+                SearchExecutionArtifact(
+                    label=f"task_get_batch_{index:02d}",
+                    payload=payload,
+                    metadata={
+                        "provider_name": self.provider_name,
+                        "task_key": str(spec["task_key"]),
+                        "task_id": str(spec["task_id"]),
+                    },
+                )
+            )
+            result_block = extract_google_organic_result_block(payload)
+            results = parse_dataforseo_google_organic_results(payload)
+            response = SearchResponse(
+                provider_name=self.provider_name,
+                query_text=str(spec["query_text"]),
+                results=results,
+                raw_payload=payload,
+                raw_format="json",
+                final_url=str(result_block.get("check_url") or ""),
+                content_type="application/json",
+                metadata={
+                    "source_label": "dataforseo_google_organic_task_get",
+                    "search_mode": "standard_queue",
+                    "task_id": str(spec["task_id"]),
+                    "se_results_count": result_block.get("se_results_count"),
+                    "pages_count": result_block.get("pages_count"),
+                    "items_count": result_block.get("items_count"),
+                },
+            )
+            checkpoint = self._build_queue_checkpoint(
+                query_text=str(spec["query_text"]),
+                depth=int(spec["depth"]),
+                task_id=str(spec["task_id"]),
+                status="fetched_cached",
+            )
+            checkpoint = self._overlay_ready_metadata(checkpoint, dict(spec.get("checkpoint") or {}))
+            tasks.append(
+                SearchBatchFetchTask(
+                    task_key=str(spec["task_key"]),
+                    task_id=str(spec["task_id"]),
+                    query_text=str(spec["query_text"]),
+                    response=response,
+                    checkpoint=checkpoint,
+                    metadata={"fetched": True},
+                )
+            )
+        return SearchBatchFetchResult(
+            provider_name=self.provider_name,
+            tasks=tasks,
+            artifacts=artifacts,
+            message=f"Fetched {len(tasks)} ready task result(s).",
+        )
+
     def execute_with_checkpoint(
         self,
         query_text: str,
@@ -263,16 +578,14 @@ class DataForSeoGoogleOrganicSearchProvider(BaseSearchProvider):
     ) -> SearchExecutionResult:
         existing = dict(checkpoint or {})
         task_id = str(existing.get("task_id") or "").strip()
-        base_checkpoint = {
-            "provider_name": self.provider_name,
-            "query_text": query_text,
-            "mode": "dataforseo_standard_queue",
-            "location_name": self.location_name,
-            "language_name": self.language_name,
-            "device": self.device,
-            "os": self.os,
-            "depth": max(self.depth, max(1, int(max_results or 10))),
-        }
+        status = str(existing.get("status") or "").strip()
+        depth = max(self.depth, max(1, int(max_results or 10)))
+        base_checkpoint = self._build_queue_checkpoint(
+            query_text=query_text,
+            depth=depth,
+            task_id=task_id,
+            status=status,
+        )
         if not task_id:
             payload = self.client.task_post(
                 keyword=query_text,
@@ -280,15 +593,16 @@ class DataForSeoGoogleOrganicSearchProvider(BaseSearchProvider):
                 language_name=self.language_name,
                 device=self.device,
                 os=self.os,
-                depth=max(self.depth, max(1, int(max_results or 10))),
+                depth=depth,
             )
             task_ids = extract_google_organic_task_ids(payload)
             task_id = task_ids[0] if task_ids else ""
-            updated_checkpoint = {
-                **base_checkpoint,
-                "task_id": task_id,
-                "status": "submitted",
-            }
+            updated_checkpoint = self._build_queue_checkpoint(
+                query_text=query_text,
+                depth=depth,
+                task_id=task_id,
+                status="submitted",
+            )
             return SearchExecutionResult(
                 provider_name=self.provider_name,
                 query_text=query_text,
@@ -302,6 +616,63 @@ class DataForSeoGoogleOrganicSearchProvider(BaseSearchProvider):
                         metadata={"task_id": task_id, "provider_name": self.provider_name},
                     )
                 ],
+            )
+
+        if status == "waiting_for_ready_cached":
+            return SearchExecutionResult(
+                provider_name=self.provider_name,
+                query_text=query_text,
+                checkpoint=self._overlay_ready_metadata(base_checkpoint, existing),
+                pending=True,
+                message=f"Waiting for DataForSEO task {task_id} to become ready (lane cache).",
+            )
+
+        if status == "ready_cached":
+            fetch_cooldown_seconds = max(
+                1,
+                int(existing.get("lane_fetch_cooldown_seconds") or _DEFAULT_LANE_FETCH_COOLDOWN_SECONDS),
+            )
+            if (
+                not str(existing.get("fetched_at") or "").strip()
+                and _timestamp_within_seconds(str(existing.get("fetch_attempted_at") or ""), fetch_cooldown_seconds)
+            ):
+                return SearchExecutionResult(
+                    provider_name=self.provider_name,
+                    query_text=query_text,
+                    checkpoint=self._overlay_ready_metadata(base_checkpoint, existing),
+                    pending=True,
+                    message=f"Waiting for lane-level DataForSEO fetch cache for task {task_id}.",
+                )
+            payload = self.client.task_get_regular(task_id)
+            result_block = extract_google_organic_result_block(payload)
+            results = parse_dataforseo_google_organic_results(payload)[:max_results]
+            response = SearchResponse(
+                provider_name=self.provider_name,
+                query_text=query_text,
+                results=results,
+                raw_payload=payload,
+                raw_format="json",
+                final_url=str(result_block.get("check_url") or ""),
+                content_type="application/json",
+                metadata={
+                    "source_label": "dataforseo_google_organic_task_get",
+                    "search_mode": "standard_queue",
+                    "task_id": task_id,
+                    "se_results_count": result_block.get("se_results_count"),
+                    "pages_count": result_block.get("pages_count"),
+                    "items_count": result_block.get("items_count"),
+                },
+            )
+            return SearchExecutionResult(
+                provider_name=self.provider_name,
+                query_text=query_text,
+                response=response,
+                checkpoint=self._build_queue_checkpoint(
+                    query_text=query_text,
+                    depth=depth,
+                    task_id=task_id,
+                    status="completed",
+                ),
             )
 
         ready_payload = self.client.tasks_ready()
@@ -351,11 +722,12 @@ class DataForSeoGoogleOrganicSearchProvider(BaseSearchProvider):
             provider_name=self.provider_name,
             query_text=query_text,
             response=response,
-            checkpoint={
-                **base_checkpoint,
-                "task_id": task_id,
-                "status": "completed",
-            },
+            checkpoint=self._build_queue_checkpoint(
+                query_text=query_text,
+                depth=depth,
+                task_id=task_id,
+                status="completed",
+            ),
             artifacts=artifacts,
         )
 
@@ -523,6 +895,40 @@ class SearchProviderChain(BaseSearchProvider):
         if last_error is None:
             raise SearchProviderError("No search providers are configured.", attempts=attempts)
         raise SearchProviderError(str(last_error), attempts=attempts)
+
+    def submit_batch_queries(self, query_specs: list[dict[str, Any]]) -> SearchBatchSubmissionResult | None:
+        for provider in self.providers:
+            try:
+                result = provider.submit_batch_queries(query_specs)
+            except Exception:
+                continue
+            if result is not None:
+                return result
+        return None
+
+    def poll_ready_batch(self, query_specs: list[dict[str, Any]]) -> SearchBatchReadyResult | None:
+        provider_name = str((query_specs[0] or {}).get("provider_name") or dict((query_specs[0] or {}).get("checkpoint") or {}).get("provider_name") or "").strip() if query_specs else ""
+        if provider_name:
+            pinned = next((provider for provider in self.providers if provider.provider_name == provider_name), None)
+            if pinned is not None:
+                return pinned.poll_ready_batch(query_specs)
+        for provider in self.providers:
+            result = provider.poll_ready_batch(query_specs)
+            if result is not None:
+                return result
+        return None
+
+    def fetch_ready_batch(self, query_specs: list[dict[str, Any]]) -> SearchBatchFetchResult | None:
+        provider_name = str((query_specs[0] or {}).get("provider_name") or dict((query_specs[0] or {}).get("checkpoint") or {}).get("provider_name") or "").strip() if query_specs else ""
+        if provider_name:
+            pinned = next((provider for provider in self.providers if provider.provider_name == provider_name), None)
+            if pinned is not None:
+                return pinned.fetch_ready_batch(query_specs)
+        for provider in self.providers:
+            result = provider.fetch_ready_batch(query_specs)
+            if result is not None:
+                return result
+        return None
 
 
 def build_search_provider(settings: SearchProviderSettings) -> BaseSearchProvider:
@@ -868,3 +1274,16 @@ def _extract_missing_shared_library(stderr_text: str) -> str:
     if generic_match:
         return str(generic_match.group(1)).strip()
     return ""
+
+
+def _timestamp_within_seconds(value: str, seconds: int) -> bool:
+    normalized = str(value or "").strip()
+    if not normalized:
+        return False
+    try:
+        parsed = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - parsed.astimezone(timezone.utc)).total_seconds() < max(0, int(seconds or 0))

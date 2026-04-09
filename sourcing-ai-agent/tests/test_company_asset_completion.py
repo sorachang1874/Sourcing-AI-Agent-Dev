@@ -1,8 +1,11 @@
 import json
 from pathlib import Path
 import tempfile
+import threading
 import unittest
+from unittest import mock
 
+from sourcing_agent.asset_logger import AssetLogger
 from sourcing_agent.company_asset_completion import CompanyAssetCompletionManager
 from sourcing_agent.domain import Candidate
 from sourcing_agent.model_provider import DeterministicModelClient
@@ -237,6 +240,42 @@ class _RefreshBatchOnlyHarvestProfileConnector:
 
     def fetch_profile_by_url(self, profile_url, snapshot_dir, asset_logger=None, use_cache=True):
         raise AssertionError("refresh path should use batched fetch_profiles_by_urls instead of single profile fetches")
+
+
+class _ParallelTrackingHarvestProfileConnector:
+    def __init__(self) -> None:
+        self.batch_calls: list[list[str]] = []
+        self._lock = threading.Lock()
+        self._active_calls = 0
+        self.max_active_calls = 0
+        self._second_batch_started = threading.Event()
+
+    def fetch_profiles_by_urls(self, profile_urls, snapshot_dir, asset_logger=None, use_cache=True):
+        with self._lock:
+            self.batch_calls.append(list(profile_urls))
+            self._active_calls += 1
+            self.max_active_calls = max(self.max_active_calls, self._active_calls)
+            if len(self.batch_calls) >= 2:
+                self._second_batch_started.set()
+        self._second_batch_started.wait(timeout=0.5)
+        raw_path = Path(snapshot_dir) / "harvest_profiles" / f"parallel_{len(profile_urls)}.json"
+        raw_path.parent.mkdir(parents=True, exist_ok=True)
+        raw_path.write_text(json.dumps({"ok": True, "use_cache": use_cache}))
+        try:
+            return {
+                url: {
+                    "raw_path": raw_path,
+                    "account_id": "fake_harvest",
+                    "parsed": {"profile_url": url, "full_name": url.rsplit("/", 1)[-1]},
+                }
+                for url in profile_urls
+            }
+        finally:
+            with self._lock:
+                self._active_calls -= 1
+
+    def fetch_profile_by_url(self, profile_url, snapshot_dir, asset_logger=None, use_cache=True):
+        return self.fetch_profiles_by_urls([profile_url], snapshot_dir, asset_logger=asset_logger, use_cache=use_cache).get(profile_url)
 
 
 class CompanyAssetCompletionTest(unittest.TestCase):
@@ -483,6 +522,92 @@ class CompanyAssetCompletionTest(unittest.TestCase):
         assert candidate is not None
         self.assertTrue(candidate.metadata.get("membership_review_required"))
         self.assertEqual(candidate.metadata.get("membership_review_reason"), "suspicious_membership")
+
+    def test_complete_snapshot_profiles_filters_by_employment_scope(self) -> None:
+        manager = CompanyAssetCompletionManager(
+            runtime_dir=self.runtime_dir,
+            store=self.store,
+            settings=self.settings,
+            model_client=DeterministicModelClient(),
+            harvest_profile_connector=_FakeHarvestProfileConnector(),
+        )
+        captured: dict[str, object] = {}
+
+        def _capture_targets(**kwargs):
+            captured["candidate_ids"] = [candidate.candidate_id for candidate in kwargs["candidates"]]
+            return {
+                "provider_enabled": True,
+                "requested_candidate_count": len(kwargs["candidates"]),
+                "requested_url_count": len(kwargs["candidates"]),
+                "fetched_profile_count": 0,
+                "resolved_candidate_count": 0,
+                "completed_candidates": [],
+                "non_member_candidates": [],
+                "manual_review_candidates": [],
+                "skipped_candidates": [],
+                "errors": [],
+            }
+
+        with mock.patch.object(manager, "_complete_known_profile_targets", side_effect=_capture_targets):
+            result = manager.complete_snapshot_profiles(
+                target_company="Acme",
+                snapshot_id="20260406T120000",
+                employment_scope="current",
+                profile_limit=0,
+                only_missing_profile_detail=True,
+                build_artifacts=False,
+            )
+
+        self.assertEqual(result["employment_scope"], "current")
+        self.assertEqual(captured["candidate_ids"], ["current1"])
+
+    def test_complete_snapshot_profiles_can_force_refresh_profile_fetches(self) -> None:
+        connector = _RefreshBatchOnlyHarvestProfileConnector()
+        manager = CompanyAssetCompletionManager(
+            runtime_dir=self.runtime_dir,
+            store=self.store,
+            settings=self.settings,
+            model_client=DeterministicModelClient(),
+            harvest_profile_connector=connector,
+        )
+        result = manager.complete_snapshot_profiles(
+            target_company="Acme",
+            snapshot_id="20260406T120000",
+            employment_scope="current",
+            profile_limit=1,
+            only_missing_profile_detail=False,
+            force_refresh=True,
+            build_artifacts=False,
+        )
+
+        self.assertEqual(result["force_refresh"], True)
+        self.assertGreaterEqual(len(connector.batch_calls), 1)
+        self.assertEqual(connector.batch_calls[0]["use_cache"], False)
+
+    def test_fetch_profile_batches_submits_multiple_batches_in_parallel(self) -> None:
+        connector = _ParallelTrackingHarvestProfileConnector()
+        manager = CompanyAssetCompletionManager(
+            runtime_dir=self.runtime_dir,
+            store=self.store,
+            settings=self.settings,
+            model_client=DeterministicModelClient(),
+            harvest_profile_connector=connector,
+        )
+        snapshot_dir = self.runtime_dir / "company_assets" / "acme" / "20260406T120000"
+        logger = AssetLogger(snapshot_dir)
+        urls = [f"https://www.linkedin.com/in/parallel-batch-{index:03d}/" for index in range(250)]
+
+        fetched, errors = manager._fetch_profile_batches(
+            urls,
+            snapshot_dir=snapshot_dir,
+            logger=logger,
+            use_cache=False,
+        )
+
+        self.assertEqual(errors, [])
+        self.assertEqual(len(fetched), 250)
+        self.assertEqual(len(connector.batch_calls), 3)
+        self.assertGreaterEqual(connector.max_active_calls, 2)
 
 
 if __name__ == "__main__":

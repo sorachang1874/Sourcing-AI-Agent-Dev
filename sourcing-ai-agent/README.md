@@ -13,8 +13,15 @@
 - [../ONBOARDING.md](../ONBOARDING.md)
 - [PROGRESS.md](PROGRESS.md)
 - [docs/INDEX.md](docs/INDEX.md)
+- [docs/FRONTEND_API_CONTRACT.md](docs/FRONTEND_API_CONTRACT.md)
 - [docs/THINKING_MACHINES_LAB_CANONICAL_ASSET.md](docs/THINKING_MACHINES_LAB_CANONICAL_ASSET.md)
 - [docs/THINKING_MACHINES_LAB_VALIDATION_2026-04-08.md](docs/THINKING_MACHINES_LAB_VALIDATION_2026-04-08.md)
+
+前端集成若需要直接复用类型和调用示例，可参考：
+
+- [contracts/frontend_api_contract.ts](contracts/frontend_api_contract.ts)
+- [contracts/frontend_api_adapter.ts](contracts/frontend_api_adapter.ts)
+- [contracts/frontend_react_hooks.example.tsx](contracts/frontend_react_hooks.example.tsx)
 
 历史 handoff / retrospective / todo 文档仍保留，但已经在 [docs/INDEX.md](docs/INDEX.md) 中标记为 reference-only。
 
@@ -30,6 +37,12 @@
 - 自动发现并读取 `Anthropic华人专项` 解压后的工作簿和 JSON 资产
 - 将在职员工、离职员工、投资方成员、Scholar 线索导入 SQLite
 - 支持从原始用户请求生成 sourcing plan
+- plan 阶段新增 `intent_brief`
+  - 显式输出 `identified_request / target_output / default_execution_strategy / review_focus`
+  - 用于产品原生第一段交互，也方便后续修正 Claude / Qwen 的意图识别表现
+  - `planning_mode=heuristic` 走纯 deterministic planning
+  - `planning_mode=model_assisted` 先让模型做请求归一化，再走 deterministic brief / intent / search planning
+  - 若要实验模型直接写 brief / search planning，可使用更激进的 planning mode
 - 支持 `Plan Review Gate`
   - plan 阶段会生成 `plan_review_gate`
   - 对 scoped roster、investor firm roster、高成本 source 等场景要求先 review 再执行 workflow
@@ -278,9 +291,12 @@ sourcing-ai-agent/
 5. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 6. [docs/HARVESTAPI_PLAYBOOK.md](docs/HARVESTAPI_PLAYBOOK.md)
 7. [docs/DATAFORSEO_PLAYBOOK.md](docs/DATAFORSEO_PLAYBOOK.md)
-8. [docs/THINKING_MACHINES_LAB_CANONICAL_ASSET.md](docs/THINKING_MACHINES_LAB_CANONICAL_ASSET.md)
-9. [docs/THINKING_MACHINES_LAB_VALIDATION_2026-04-08.md](docs/THINKING_MACHINES_LAB_VALIDATION_2026-04-08.md)
-10. 需要追旧决策或恢复旧环境时，再看 `docs/` 下的 dated reference 文档
+8. [docs/TERMINAL_WORKFLOW.md](docs/TERMINAL_WORKFLOW.md)
+9. [docs/FRONTEND_API_CONTRACT.md](docs/FRONTEND_API_CONTRACT.md)
+10. [docs/QUERY_GUARDRAILS.md](docs/QUERY_GUARDRAILS.md)
+11. [docs/THINKING_MACHINES_LAB_CANONICAL_ASSET.md](docs/THINKING_MACHINES_LAB_CANONICAL_ASSET.md)
+12. [docs/THINKING_MACHINES_LAB_VALIDATION_2026-04-08.md](docs/THINKING_MACHINES_LAB_VALIDATION_2026-04-08.md)
+13. 需要追旧决策或恢复旧环境时，再看 `docs/` 下的 dated reference 文档
 
 ## GitHub Sync Boundary
 
@@ -310,12 +326,16 @@ cd "sourcing-ai-agent"
 PYTHONPATH=src python3 -m sourcing_agent.cli bootstrap
 PYTHONPATH=src python3 -m sourcing_agent.cli plan --file configs/demo_workflow_xai.json
 PYTHONPATH=src python3 -m sourcing_agent.cli plan --file configs/demo_workflow_thinking_machines_lab.json
-PYTHONPATH=src python3 -m sourcing_agent.cli show-plan-reviews --target-company xAI
+PYTHONPATH=src python3 -m sourcing_agent.cli show-plan-reviews --target-company xAI --brief
 PYTHONPATH=src python3 -m sourcing_agent.cli review-plan --file configs/plan_review_approve.example.json
+PYTHONPATH=src python3 -m sourcing_agent.cli review-plan --review-id 12 --reviewer sora --instruction "改成 full company roster，走 Harvest company-employees lane，强制 fresh run，不允许高成本 source。" --preview
+PYTHONPATH=src python3 -m sourcing_agent.cli review-plan --review-id 12 --reviewer sora --instruction "改成 full company roster，走 Harvest company-employees lane，强制 fresh run，不允许高成本 source。"
 PYTHONPATH=src python3 -m sourcing_agent.cli start-workflow --file configs/demo_workflow_xai.json
+PYTHONPATH=src python3 -m sourcing_agent.cli start-workflow --plan-review-id 12
 PYTHONPATH=src python3 -m sourcing_agent.cli start-workflow --file configs/demo_workflow_anthropic.json
 PYTHONPATH=src python3 -m sourcing_agent.cli start-workflow --file configs/demo_workflow_thinking_machines_lab.json
 PYTHONPATH=src python3 -m sourcing_agent.cli run-job --file configs/demo_current_infra.json
+PYTHONPATH=src python3 -m sourcing_agent.cli show-progress --job-id <job_id>
 PYTHONPATH=src python3 -m sourcing_agent.cli show-trace --job-id <job_id>
 PYTHONPATH=src python3 -m sourcing_agent.cli show-workers --job-id <job_id>
 PYTHONPATH=src python3 -m sourcing_agent.cli show-scheduler --job-id <job_id>
@@ -395,6 +415,13 @@ Thinking Machines Lab 端到端测试建议入口：
 3. 再执行 `start-workflow --file configs/demo_workflow_thinking_machines_lab.json`
 
 ## API
+
+更明确的 Web 层消费约定见：
+
+- [docs/FRONTEND_API_CONTRACT.md](docs/FRONTEND_API_CONTRACT.md)
+- [contracts/frontend_api_contract.ts](contracts/frontend_api_contract.ts)
+- [contracts/frontend_api_contract.schema.json](contracts/frontend_api_contract.schema.json)
+- [contracts/frontend_api_adapter.ts](contracts/frontend_api_adapter.ts)
 
 - `GET /health`
 - `GET /api/providers/health`

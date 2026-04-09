@@ -155,6 +155,52 @@ class SemanticRetrievalTest(unittest.TestCase):
         self.assertIn("cand_ops", semantic_hits)
         self.assertNotIn("cand_research", semantic_hits)
 
+    def test_role_like_categories_filter_on_facets_not_membership_category(self) -> None:
+        candidates = [
+            Candidate(
+                candidate_id="cand_researcher",
+                name_en="Research Person",
+                display_name="Research Person",
+                category="employee",
+                target_company="Humans&",
+                organization="Humans&",
+                employment_status="current",
+                role="Research Scientist",
+                focus_areas="coding agents",
+            ),
+            Candidate(
+                candidate_id="cand_recruiter",
+                name_en="Recruiting Person",
+                display_name="Recruiting Person",
+                category="employee",
+                target_company="Humans&",
+                organization="Humans&",
+                employment_status="current",
+                role="Technical Recruiter",
+                focus_areas="talent acquisition",
+            ),
+            Candidate(
+                candidate_id="cand_former_researcher",
+                name_en="Former Researcher",
+                display_name="Former Researcher",
+                category="former_employee",
+                target_company="Humans&",
+                organization="Humans&",
+                employment_status="former",
+                role="Research Engineer",
+                focus_areas="code generation",
+            ),
+        ]
+        request = JobRequest(
+            raw_user_request="我想了解 Humans& 的 Coding 方向的 Researcher。",
+            target_company="Humans&",
+            categories=["employee", "researcher"],
+            employment_statuses=["current"],
+        )
+
+        scored = score_candidates(candidates, request)
+        self.assertEqual([item.candidate.candidate_id for item in scored], ["cand_researcher"])
+
     def test_must_have_facet_filters_out_note_only_leakage(self) -> None:
         candidates = [
             Candidate(

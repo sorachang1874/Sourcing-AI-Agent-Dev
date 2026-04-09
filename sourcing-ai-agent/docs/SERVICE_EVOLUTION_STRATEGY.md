@@ -128,6 +128,67 @@
 
 这时 retrieval-only 任务基本都能云端完成。
 
+## Query Storage And Parallel Isolation
+
+如果后续部署到云端，不同 query 和并行运行必须按下面方式隔离：
+
+### 1. Request / Plan / Execution 分层持久化
+
+每个用户请求至少拆成 4 个对象：
+
+- `JobRequest`
+- `plan_review_session`
+- `job`
+- `job events / worker runs`
+
+这样才能回答：
+
+- 这个 query 原始请求是什么
+- AI 当时如何理解它
+- 用户是否修改过 plan
+- 最终执行的是哪个 approved plan
+
+### 2. Asset 与 Query Result 分开存
+
+- company / scoped asset 是可复用资产
+- retrieval result 是一次 query 的交付物
+
+同一个组织的并行 query 不应互相覆盖，因为它们共享的是 immutable asset，而不是共享可变结果文件。
+
+### 3. Fresh Acquisition 只能写入新 snapshot
+
+如果两个 query 同时要求刷新同一组织：
+
+- 都必须写入新的 `snapshot_id`
+- 不允许直接覆盖当前 canonical snapshot
+- promotion 发生在验证通过之后
+
+这样并行 fresh run 最多只会产生多个 draft/partial snapshot，不会把同一个资产目录写坏。
+
+### 4. Worker 与 Provider Queue 以 Job 为边界
+
+异步 worker、Harvest run、DataForSEO task、search batch 都必须记录：
+
+- `job_id`
+- `lane_id`
+- provider run/task id
+- checkpoint
+
+恢复 daemon 只能基于这些边界 resume，不能跨 job 复用“还没被消费的远端任务状态”。
+
+### 5. 未来应增加 Workspace / Tenant 作用域
+
+当前本地开发默认是单 workspace。
+
+云端化后建议至少增加：
+
+- `workspace_id`
+- `user_id`
+- `asset visibility`
+- `provider credential scope`
+
+对象存储路径、job 表、asset registry 都应带上这个上层作用域。
+
 ### Long Term
 
 最后才考虑：

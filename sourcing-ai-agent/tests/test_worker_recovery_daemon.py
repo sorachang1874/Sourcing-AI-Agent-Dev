@@ -14,6 +14,7 @@ class _FakeSearchSeedAcquirer:
     def __init__(self, store: SQLiteStore) -> None:
         self.store = store
         self.calls: list[dict[str, str]] = []
+        self.refresh_calls: list[list[int]] = []
 
     def _execute_query_spec(
         self,
@@ -30,6 +31,11 @@ class _FakeSearchSeedAcquirer:
         plan_payload: dict,
         runtime_mode: str,
         result_limit: int,
+        prefetched_search_state: dict | None = None,
+        prefetched_search_artifact_paths: dict | None = None,
+        prefetched_search_raw_path: str = "",
+        prefetched_search_manifest_path: str = "",
+        prefetched_search_manifest_key: str = "",
     ) -> dict[str, object]:
         self.calls.append(
             {
@@ -37,6 +43,8 @@ class _FakeSearchSeedAcquirer:
                 "query": str(query_spec.get("query") or ""),
                 "runtime_mode": runtime_mode,
                 "company_key": identity.company_key,
+                "prefetched_search_manifest_path": prefetched_search_manifest_path,
+                "prefetched_search_manifest_key": prefetched_search_manifest_key,
             }
         )
         lane_id = "public_media_specialist" if query_spec.get("source_family") in {"public_interviews", "publication_and_blog"} else "search_planner"
@@ -54,11 +62,59 @@ class _FakeSearchSeedAcquirer:
             )
         return {"worker_status": "completed", "summary": {"query": str(query_spec.get("query") or "")}}
 
+    def refresh_background_search_workers(self, workers: list[dict[str, object]]) -> dict[str, object]:
+        self.refresh_calls.append([int(worker.get("worker_id") or 0) for worker in workers])
+        updates: dict[int, dict[str, object]] = {}
+        for worker in workers:
+            worker_id = int(worker.get("worker_id") or 0)
+            worker_key = str(worker.get("worker_key") or "")
+            checkpoint = dict(worker.get("checkpoint") or {})
+            updates[worker_id] = {
+                "search_state": {
+                    **dict(checkpoint.get("search_state") or {}),
+                    "status": "ready_cached",
+                    "task_id": "task_ready_1",
+                    "ready_poll_token": "20260408T110000Z",
+                },
+                "search_artifact_paths": {
+                    "tasks_ready_batch_20260408T110000Z": "/tmp/tasks_ready_batch.json",
+                },
+                "raw_path": "",
+                "search_manifest_path": "/tmp/web_search_batch_manifest.json",
+                "search_manifest_key": worker_key,
+            }
+        return {"errors": [], "worker_updates": updates}
+
 
 class _FakeExploratoryEnricher:
     def __init__(self, store: SQLiteStore) -> None:
         self.store = store
         self.calls: list[dict[str, str]] = []
+        self.refresh_calls: list[list[int]] = []
+
+    def refresh_background_search_workers(self, workers: list[dict[str, object]]) -> dict[str, object]:
+        self.refresh_calls.append([int(worker.get("worker_id") or 0) for worker in workers])
+        updates: dict[int, dict[str, object]] = {}
+        for worker in workers:
+            worker_id = int(worker.get("worker_id") or 0)
+            updates[worker_id] = {
+                "prefetched_queries": {
+                    "1": {
+                        "task_key": f"{worker.get('worker_key')}::01",
+                        "query": "Queued Exploration Lead xAI",
+                        "search_state": {
+                            "provider_name": "dataforseo_google_organic",
+                            "task_id": "task_explore_ready_1",
+                            "status": "ready_cached",
+                        },
+                        "artifact_paths": {
+                            "tasks_ready_batch_20260408T120000Z": "/tmp/exploration_tasks_ready_batch.json",
+                        },
+                        "raw_path": "/tmp/exploration_prefetched_query_01.json",
+                    }
+                }
+            }
+        return {"errors": [], "worker_updates": updates}
 
     def _explore_candidate(
         self,
@@ -71,6 +127,7 @@ class _FakeExploratoryEnricher:
         request_payload: dict,
         plan_payload: dict,
         runtime_mode: str,
+        prefetched_search_queries: dict | None = None,
     ) -> dict[str, object]:
         self.calls.append(
             {
@@ -78,6 +135,7 @@ class _FakeExploratoryEnricher:
                 "candidate_id": candidate.candidate_id,
                 "runtime_mode": runtime_mode,
                 "target_company": target_company,
+                "prefetched_query_count": str(len(dict(prefetched_search_queries or {}))),
             }
         )
         worker = self.store.get_agent_worker(
@@ -117,6 +175,7 @@ class _FakeAcquisitionEngine:
         request_payload: dict,
         plan_payload: dict,
         runtime_mode: str,
+        allow_shared_provider_cache: bool = True,
     ) -> dict[str, object]:
         self.harvest_company_calls.append(
             {
@@ -124,6 +183,7 @@ class _FakeAcquisitionEngine:
                 "company_key": identity.company_key,
                 "runtime_mode": runtime_mode,
                 "snapshot_dir": str(snapshot_dir),
+                "allow_shared_provider_cache": str(bool(allow_shared_provider_cache)).lower(),
             }
         )
         worker = self.store.get_agent_worker(
@@ -149,6 +209,7 @@ class _FakeAcquisitionEngine:
         request_payload: dict,
         plan_payload: dict,
         runtime_mode: str,
+        allow_shared_provider_cache: bool = True,
     ) -> dict[str, object]:
         self.harvest_profile_batch_calls.append(
             {
@@ -156,6 +217,7 @@ class _FakeAcquisitionEngine:
                 "runtime_mode": runtime_mode,
                 "snapshot_dir": str(snapshot_dir),
                 "requested_url_count": str(len(profile_urls)),
+                "allow_shared_provider_cache": str(bool(allow_shared_provider_cache)).lower(),
             }
         )
         worker = self.store.list_agent_workers(job_id=job_id, lane_id="enrichment_specialist")
@@ -392,6 +454,73 @@ class PersistentWorkerRecoveryDaemonTest(unittest.TestCase):
         self.assertEqual(worker["checkpoint"]["candidate_id"], candidate.candidate_id)
         self.assertEqual(worker["output"]["candidate_id"], candidate.candidate_id)
 
+    def test_persistent_daemon_refreshes_exploration_prefetch_before_resuming_worker(self) -> None:
+        job_id = "job_exploration_prefetch_refresh"
+        snapshot_dir = Path(self.tempdir.name) / "company_assets" / "xai" / "snapshot-exploration-prefetch"
+        candidate = Candidate(
+            candidate_id="cand_prefetch_1",
+            name_en="Queued Exploration Lead",
+            display_name="Queued Exploration Lead",
+            category="lead",
+            target_company="xAI",
+            organization="xAI",
+        )
+        self._save_job(job_id)
+        handle = self.controller_runtime.begin_worker(
+            job_id=job_id,
+            request=self.request,
+            plan_payload=self.plan_payload,
+            runtime_mode="workflow",
+            lane_id="exploration_specialist",
+            worker_key=candidate.candidate_id,
+            stage="enriching",
+            span_name="explore_candidate:Queued Exploration Lead",
+            budget_payload={"max_queries": 6},
+            input_payload={
+                "candidate_id": candidate.candidate_id,
+                "display_name": candidate.display_name,
+                "candidate": candidate.to_record(),
+            },
+            metadata={
+                "target_company": "xAI",
+                "snapshot_dir": str(snapshot_dir),
+                "request_payload": self.request.to_record(),
+                "plan_payload": self.plan_payload,
+                "runtime_mode": "workflow",
+            },
+            handoff_from_lane="enrichment_specialist",
+        )
+        self.controller_runtime.complete_worker(
+            handle,
+            status="queued",
+            checkpoint_payload={"stage": "waiting_remote_search"},
+            output_payload={"summary": {"status": "queued"}},
+        )
+
+        daemon = PersistentWorkerRecoveryDaemon(
+            store=self.daemon_store,
+            agent_runtime=self.daemon_runtime,
+            acquisition_engine=self.fake_engine,
+            owner_id="daemon-exploration-prefetch",
+            stale_after_seconds=180,
+            total_limit=2,
+        )
+        summary = daemon.run_once()
+        worker = self.controller_store.get_agent_worker(worker_id=handle.worker_id)
+
+        self.assertEqual(summary["claimed_count"], 1)
+        self.assertEqual(summary["executed_count"], 1)
+        self.assertEqual(
+            self.fake_engine.multi_source_enricher.exploratory_enricher.refresh_calls,
+            [[handle.worker_id]],
+        )
+        self.assertEqual(
+            self.fake_engine.multi_source_enricher.exploratory_enricher.calls[0]["prefetched_query_count"],
+            "1",
+        )
+        self.assertIsNotNone(worker)
+        self.assertEqual(worker["status"], "completed")
+
     def test_persistent_daemon_can_filter_single_job(self) -> None:
         target_job_id = "job_target_only"
         other_job_id = "job_should_skip"
@@ -474,6 +603,82 @@ class PersistentWorkerRecoveryDaemonTest(unittest.TestCase):
         self.assertEqual(target_worker["status"], "completed")
         self.assertIsNotNone(other_worker)
         self.assertEqual(other_worker["status"], "queued")
+
+    def test_persistent_daemon_refreshes_search_prefetch_before_resuming_worker(self) -> None:
+        job_id = "job_search_prefetch_refresh"
+        snapshot_dir = Path(self.tempdir.name) / "company_assets" / "xai" / "snapshot-prefetch"
+        discovery_dir = snapshot_dir / "search_seed_discovery"
+        self._save_job(job_id)
+        handle = self.controller_runtime.begin_worker(
+            job_id=job_id,
+            request=self.request,
+            plan_payload=self.plan_payload,
+            runtime_mode="workflow",
+            lane_id="search_planner",
+            worker_key="bundle::01",
+            stage="acquiring",
+            span_name="search_bundle:bundle",
+            budget_payload={"max_results": 10},
+            input_payload={
+                "query_spec": {"bundle_id": "bundle", "query": "xAI RL researcher", "source_family": "web_search"},
+                "query": "xAI RL researcher",
+                "index": 1,
+            },
+            metadata={
+                "index": 1,
+                "identity": CompanyIdentity(
+                    requested_name="xAI",
+                    canonical_name="xAI",
+                    company_key="xai",
+                    linkedin_slug="xai",
+                ).to_record(),
+                "snapshot_dir": str(snapshot_dir),
+                "discovery_dir": str(discovery_dir),
+                "employment_status": "current",
+                "request_payload": self.request.to_record(),
+                "plan_payload": self.plan_payload,
+                "runtime_mode": "workflow",
+                "result_limit": 10,
+            },
+            handoff_from_lane="triage_planner",
+        )
+        self.controller_runtime.complete_worker(
+            handle,
+            status="queued",
+            checkpoint_payload={
+                "stage": "waiting_remote_search",
+                "search_manifest_path": str(discovery_dir / "web_search_batch_manifest.json"),
+                "search_manifest_key": "bundle::01",
+                "search_state": {"task_id": "task_submitted_1", "status": "waiting_for_ready_cached"},
+            },
+            output_payload={"summary": {"query": "xAI RL researcher", "status": "queued"}},
+        )
+
+        daemon = PersistentWorkerRecoveryDaemon(
+            store=self.daemon_store,
+            agent_runtime=self.daemon_runtime,
+            acquisition_engine=self.fake_engine,
+            owner_id="daemon-prefetch-refresh",
+            stale_after_seconds=180,
+            total_limit=2,
+        )
+        summary = daemon.run_once()
+        worker = self.controller_store.get_agent_worker(worker_id=handle.worker_id)
+
+        self.assertEqual(summary["claimed_count"], 1)
+        self.assertEqual(summary["executed_count"], 1)
+        self.assertEqual(self.fake_engine.search_seed_acquirer.refresh_calls, [[handle.worker_id]])
+        self.assertEqual(len(self.fake_engine.search_seed_acquirer.calls), 1)
+        self.assertEqual(
+            self.fake_engine.search_seed_acquirer.calls[0]["prefetched_search_manifest_key"],
+            "bundle::01",
+        )
+        self.assertEqual(
+            self.fake_engine.search_seed_acquirer.calls[0]["prefetched_search_manifest_path"],
+            "/tmp/web_search_batch_manifest.json",
+        )
+        self.assertIsNotNone(worker)
+        self.assertEqual(worker["status"], "completed")
 
     def test_persistent_daemon_resumes_harvest_company_worker(self) -> None:
         job_id = "job_harvest_company_recovery"
@@ -583,3 +788,66 @@ class PersistentWorkerRecoveryDaemonTest(unittest.TestCase):
         self.assertIsNotNone(worker)
         self.assertEqual(worker["status"], "completed")
         self.assertEqual(worker["checkpoint"]["recovery_kind"], "harvest_profile_batch")
+
+    def test_persistent_daemon_processes_remote_wait_worker_for_completed_job(self) -> None:
+        job_id = "job_completed_exploration_followup"
+        snapshot_dir = Path(self.tempdir.name) / "company_assets" / "xai" / "snapshot-completed-followup"
+        candidate = Candidate(
+            candidate_id="cand_completed_1",
+            name_en="Completed Follow Up",
+            display_name="Completed Follow Up",
+            category="lead",
+            target_company="xAI",
+            organization="xAI",
+        )
+        self._save_job(job_id, stage="completed", status="completed")
+        handle = self.controller_runtime.begin_worker(
+            job_id=job_id,
+            request=self.request,
+            plan_payload=self.plan_payload,
+            runtime_mode="workflow",
+            lane_id="exploration_specialist",
+            worker_key=candidate.candidate_id,
+            stage="enriching",
+            span_name="explore_candidate:Completed Follow Up",
+            budget_payload={"max_queries": 6},
+            input_payload={
+                "candidate_id": candidate.candidate_id,
+                "display_name": candidate.display_name,
+                "candidate": candidate.to_record(),
+            },
+            metadata={
+                "target_company": "xAI",
+                "snapshot_dir": str(snapshot_dir),
+                "request_payload": self.request.to_record(),
+                "plan_payload": self.plan_payload,
+                "runtime_mode": "workflow",
+            },
+            handoff_from_lane="enrichment_specialist",
+        )
+        self.controller_runtime.complete_worker(
+            handle,
+            status="running",
+            checkpoint_payload={"stage": "waiting_remote_search"},
+            output_payload={"summary": {"status": "queued"}},
+        )
+
+        daemon = PersistentWorkerRecoveryDaemon(
+            store=self.daemon_store,
+            agent_runtime=self.daemon_runtime,
+            acquisition_engine=self.fake_engine,
+            owner_id="daemon-completed-job",
+            stale_after_seconds=180,
+            total_limit=2,
+        )
+        summary = daemon.run_once()
+        worker = self.controller_store.get_agent_worker(worker_id=handle.worker_id)
+        job = self.controller_store.get_job(job_id)
+
+        self.assertEqual(summary["claimed_count"], 1)
+        self.assertEqual(summary["executed_count"], 1)
+        self.assertEqual(len(self.fake_engine.multi_source_enricher.exploratory_enricher.calls), 1)
+        self.assertIsNotNone(worker)
+        self.assertEqual(worker["status"], "completed")
+        self.assertIsNotNone(job)
+        self.assertEqual(job["status"], "completed")

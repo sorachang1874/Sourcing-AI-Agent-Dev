@@ -120,6 +120,16 @@
   - `pastCompanies` 两页能返回接近 LinkedIn 官网 former 搜索页的结果
   - `excludeCurrentCompanies` 会把结果压成 `0`
 - `profile-search` 适合 former fallback，不适合默认承担 exact-name resolution
+- former search 不应再静态写死页数上限
+  - 正确做法是先发一轮小 probe
+  - 从 provider 返回里读取 `total_elements / total_pages`
+  - 再按 provider 总量重发 full request
+- 请求扩张时，timeout / `max_paid_items` / charge cap 也应同步放大
+- Anthropic 的美国 former case 已验证：
+  - probe：`25 items / 1 page`
+  - provider total：`562 items / 23 pages`
+  - full request：`takePages=23`、`maxItems=562`
+  - 实际返回：`556`
 
 ### 3. `linkedin-company-employees`
 
@@ -162,8 +172,101 @@
 - 小公司可以视预算改成 `company-employees Full`
 - 但默认仍建议分层，因为：
   - retry 更简单
-  - raw asset 更清晰
-  - 可以先积累人口池，再按优先级补 detail
+- raw asset 更清晰
+- 可以先积累人口池，再按优先级补 detail
+
+## 大组织的 adaptive shard 策略
+
+对于 Anthropic 这类 large org，当前不再把 shard 写死成固定的两片。
+
+现在的推荐做法是：
+
+1. 先对 root scope 发 `company-employees` probe
+2. 从 Harvest actor log 里解析：
+   - `Found X profiles total for input ...`
+   - 是否触发 `limited to 2500 items`
+3. 只有当 root scope 超过 provider cap 时，才继续按预设 partition rules 做下一层 probe
+4. 最终只执行 live estimated count 已确认落到 cap 以内的 shard
+
+当前 Anthropic 的默认 root scope 是：
+
+- `locations=["United States"]`
+
+当前默认 partition rules 是按 function 逐步切：
+
+- `Engineering`
+- `Research`
+- `Product Management`
+- `Operations`
+- `Business Development`
+- `Sales`
+
+注意这里的关键差异：
+
+- 旧逻辑：直接写死 `United States / Engineering` 和 `United States / Exclude Engineering`
+- 新逻辑：先 probe 根范围，再决定是否真的需要切，以及切到哪一层为止
+
+这意味着：
+
+- 如果 root scope 本身已经低于 2500，就不会再人为切 shard
+- 如果 `Engineering` 已经足够把范围压到 cap 内，就只切这一层
+- 如果 root probe 或 branch probe 已经能证明需要继续拆，才会继续往下 probe
+
+当前 live smoke 已验证：
+
+- `Anthropic / United States`
+  - `estimated_total_count=2837`
+  - `provider_result_limited=true`
+- `Anthropic / United States / Engineering`
+  - `estimated_total_count=1098`
+  - `provider_result_limited=false`
+- `Anthropic / United States / Remaining after Engineering`
+  - `estimated_total_count=1928`
+  - `provider_result_limited=false`
+
+这说明 Anthropic 的第一层 live shard 现在已经稳定收敛为：
+
+- `United States / Engineering`
+- `United States / Remaining after Engineering`
+
+并且两片都在 provider cap 以内，不需要继续往 `Research / Product Management / Operations ...` 方向下钻。
+
+补充说明：
+
+- `runtime/company_assets/anthropic/20260409T080131/harvest_company_employees/adaptive_shard_plan.json`
+  已经落下当前可执行 plan。
+- `live_tests` 里的 Harvest probe summary 现在可被后续真实 snapshot 直接复用，不会因为 summary 缺少 `input_payload`
+  就重复发远端 probe。
+
+## Profile enrich 的执行策略
+
+对于已经拿到 LinkedIn URL 的 current / former roster，`profile-scraper` 不应再完全串行。
+
+当前推荐做法是：
+
+1. 先做 URL 级去重
+2. 以 `100` 左右为一个 batch
+3. 同时保留多个 in-flight batch
+4. 只对失败或未返回 detail 的 URL 做定向 retry
+
+这样做的原因：
+
+- 一次 `100` 条即使局部失败，也不会丢整批上下文
+- 可以避免“上一批完全结束之后才发下一批”的低利用率串行模式
+- retry 只打 unresolved subset，不会把已成功 URL 再跑一遍
+
+Anthropic 当前 snapshot 的 former enrich 已验证：
+
+- 目标 URL：`258`
+- 批次数：`3`
+- 并行 worker：`3`
+- 成功 detail：`258`
+- 转成 `non_member`：`2`
+- 剩余错误：`2`
+
+对应 summary：
+
+- `runtime/company_assets/anthropic/20260409T080131/asset_completion/profile_enrichment_former_missing_detail.json`
 
 ## Thinking Machines Lab 真实经验
 

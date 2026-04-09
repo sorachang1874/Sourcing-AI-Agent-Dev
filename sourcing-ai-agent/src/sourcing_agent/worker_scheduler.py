@@ -23,6 +23,8 @@ RESUME_PRIORITY = {
     "already_running": 0,
 }
 
+REMOTE_WAIT_STAGES = {"waiting_remote_search", "waiting_remote_harvest"}
+
 
 def lane_limits_from_plan(plan_payload: dict[str, Any]) -> dict[str, int]:
     acquisition_strategy = dict(plan_payload.get("acquisition_strategy") or {})
@@ -60,7 +62,7 @@ def summarize_scheduler(
     resumable: list[dict[str, Any]] = []
     for worker in workers:
         lane_id = str(worker.get("lane_id") or "")
-        status = str(worker.get("status") or "")
+        status = effective_worker_status(worker)
         lane_counter.setdefault(lane_id, Counter()).update([status or "unknown"])
         resume_mode = infer_resume_mode(worker)
         if resume_mode != "already_running":
@@ -70,6 +72,8 @@ def summarize_scheduler(
                     "lane_id": lane_id,
                     "worker_key": str(worker.get("worker_key") or ""),
                     "status": status,
+                    "raw_status": str(worker.get("status") or ""),
+                    "wait_stage": wait_stage(worker),
                     "resume_mode": resume_mode,
                     "checkpoint_keys": sorted(list(dict(worker.get("checkpoint") or {}).keys())),
                     "priority_score": _priority_score(lane_id, resume_mode, int(worker.get("worker_id") or 0)),
@@ -84,11 +88,15 @@ def summarize_scheduler(
                 "lane_id": lane_id,
                 "limit": int(limits.get(lane_id, 1)),
                 "budget_cap": int(budget_caps.get(lane_id, 1)),
-                "queued": int(counter.get("queued", 0)),
+                "queued": int(counter.get("queued", 0))
+                + int(counter.get("waiting_remote_search", 0))
+                + int(counter.get("waiting_remote_harvest", 0)),
                 "running": int(counter.get("running", 0)),
                 "interrupted": int(counter.get("interrupted", 0)),
                 "failed": int(counter.get("failed", 0)),
                 "completed": int(counter.get("completed", 0)),
+                "waiting_remote_search": int(counter.get("waiting_remote_search", 0)),
+                "waiting_remote_harvest": int(counter.get("waiting_remote_harvest", 0)),
             }
         )
     return {
@@ -159,7 +167,7 @@ def infer_resume_mode(worker: dict[str, Any] | None) -> str:
     if not worker:
         return "fresh_start"
     status = str(worker.get("status") or "")
-    if status == "running":
+    if status == "running" and not is_remote_waiting_worker(worker):
         return "already_running"
     checkpoint = dict(worker.get("checkpoint") or {})
     if status == "interrupted":
@@ -171,6 +179,26 @@ def infer_resume_mode(worker: dict[str, Any] | None) -> str:
     if checkpoint:
         return "resume_from_checkpoint"
     return "fresh_start"
+
+
+def wait_stage(worker: dict[str, Any] | None) -> str:
+    checkpoint = dict((worker or {}).get("checkpoint") or {})
+    stage = str(checkpoint.get("stage") or "").strip()
+    if stage in REMOTE_WAIT_STAGES:
+        return stage
+    return ""
+
+
+def is_remote_waiting_worker(worker: dict[str, Any] | None) -> bool:
+    return bool(wait_stage(worker))
+
+
+def effective_worker_status(worker: dict[str, Any] | None) -> str:
+    if not worker:
+        return "unknown"
+    if is_remote_waiting_worker(worker):
+        return wait_stage(worker)
+    return str(worker.get("status") or "unknown")
 
 
 def _priority_score(lane_id: str, resume_mode: str, ordinal: int) -> int:

@@ -5,6 +5,15 @@ from hashlib import sha1
 import re
 from typing import Any
 
+from .company_registry import infer_target_company_from_text
+from .execution_preferences import (
+    apply_execution_preference_policy,
+    infer_execution_preferences_from_text,
+    merge_execution_preferences,
+    normalize_execution_preferences,
+)
+from .query_intent_rewrite import apply_query_intent_rewrite
+
 
 def _clean(value: Any) -> str:
     if value is None:
@@ -96,6 +105,7 @@ class JobRequest:
     organization_keywords: list[str] = field(default_factory=list)
     retrieval_strategy: str = ""
     planning_mode: str = "heuristic"
+    execution_preferences: dict[str, Any] = field(default_factory=dict)
     semantic_rerank_limit: int = 15
     top_k: int = 10
     slug_resolution_limit: int = 8
@@ -107,40 +117,60 @@ class JobRequest:
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> "JobRequest":
-        raw_user_request = _clean(payload.get("raw_user_request")) or _clean(payload.get("query"))
+        normalized_payload = apply_query_intent_rewrite(payload)
+        raw_user_request = _clean(normalized_payload.get("raw_user_request")) or _clean(normalized_payload.get("query"))
+        target_company = _clean(normalized_payload.get("target_company"))
+        if not target_company:
+            inferred_company = infer_target_company_from_text(raw_user_request)
+            target_company = str(inferred_company.get("canonical_name") or "").strip()
+            if target_company:
+                normalized_payload["target_company"] = target_company
+        explicit_execution_preferences = normalize_execution_preferences(normalized_payload, target_company=target_company)
+        inferred_execution_preferences = infer_execution_preferences_from_text(raw_user_request, target_company=target_company)
+        merged_execution_preferences = merge_execution_preferences(
+            explicit_execution_preferences,
+            inferred_execution_preferences,
+        )
         return cls(
             raw_user_request=raw_user_request,
-            query=_clean(payload.get("query")),
-            target_company=_clean(payload.get("target_company")),
-            asset_view=_normalize_asset_view(payload.get("asset_view")),
-            target_scope=_clean(payload.get("target_scope")) or "full_company_asset",
-            categories=_normalize_list(payload.get("categories")),
-            employment_statuses=_normalize_list(payload.get("employment_statuses")),
-            keywords=_normalize_list(payload.get("keywords")),
+            query=_clean(normalized_payload.get("query")),
+            target_company=target_company,
+            asset_view=_normalize_asset_view(normalized_payload.get("asset_view")),
+            target_scope=_clean(normalized_payload.get("target_scope")) or "full_company_asset",
+            categories=_normalize_list(normalized_payload.get("categories")),
+            employment_statuses=_normalize_list(normalized_payload.get("employment_statuses")),
+            keywords=_normalize_list(normalized_payload.get("keywords")),
             must_have_facets=normalize_requested_facets(
-                payload.get("must_have_facets")
-                if payload.get("must_have_facets") is not None
-                else payload.get("must_have_facet")
+                normalized_payload.get("must_have_facets")
+                if normalized_payload.get("must_have_facets") is not None
+                else normalized_payload.get("must_have_facet")
             ),
             must_have_primary_role_buckets=normalize_requested_role_buckets(
-                payload.get("must_have_primary_role_buckets")
-                if payload.get("must_have_primary_role_buckets") is not None
-                else payload.get("must_have_primary_role_bucket")
+                normalized_payload.get("must_have_primary_role_buckets")
+                if normalized_payload.get("must_have_primary_role_buckets") is not None
+                else normalized_payload.get("must_have_primary_role_bucket")
             ),
-            must_have_keywords=_normalize_list(payload.get("must_have_keywords")),
-            exclude_keywords=_normalize_list(payload.get("exclude_keywords")),
-            organization_keywords=_normalize_list(payload.get("organization_keywords")),
-            retrieval_strategy=_clean(payload.get("retrieval_strategy")),
-            planning_mode=_clean(payload.get("planning_mode")) or "heuristic",
-            semantic_rerank_limit=_normalize_semantic_limit(payload.get("semantic_rerank_limit")),
-            top_k=_normalize_top_k(payload.get("top_k")),
-            slug_resolution_limit=_normalize_small_limit(payload.get("slug_resolution_limit"), default=8, maximum=50),
-            profile_detail_limit=_normalize_small_limit(payload.get("profile_detail_limit"), default=5, maximum=50),
-            publication_scan_limit=_normalize_small_limit(payload.get("publication_scan_limit"), default=8, maximum=50),
-            publication_lead_limit=_normalize_small_limit(payload.get("publication_lead_limit"), default=12, maximum=100),
-            exploration_limit=_normalize_small_limit(payload.get("exploration_limit"), default=6, maximum=50),
+            must_have_keywords=_normalize_list(normalized_payload.get("must_have_keywords")),
+            exclude_keywords=_normalize_list(normalized_payload.get("exclude_keywords")),
+            organization_keywords=_normalize_list(normalized_payload.get("organization_keywords")),
+            retrieval_strategy=_clean(normalized_payload.get("retrieval_strategy")),
+            planning_mode=_clean(normalized_payload.get("planning_mode")) or "heuristic",
+            execution_preferences=apply_execution_preference_policy(
+                merged_execution_preferences,
+                raw_text=raw_user_request,
+                target_company=target_company,
+                categories=_normalize_list(normalized_payload.get("categories")),
+                employment_statuses=_normalize_list(normalized_payload.get("employment_statuses")),
+            ),
+            semantic_rerank_limit=_normalize_semantic_limit(normalized_payload.get("semantic_rerank_limit")),
+            top_k=_normalize_top_k(normalized_payload.get("top_k")),
+            slug_resolution_limit=_normalize_small_limit(normalized_payload.get("slug_resolution_limit"), default=8, maximum=50),
+            profile_detail_limit=_normalize_small_limit(normalized_payload.get("profile_detail_limit"), default=5, maximum=50),
+            publication_scan_limit=_normalize_small_limit(normalized_payload.get("publication_scan_limit"), default=8, maximum=50),
+            publication_lead_limit=_normalize_small_limit(normalized_payload.get("publication_lead_limit"), default=12, maximum=100),
+            exploration_limit=_normalize_small_limit(normalized_payload.get("exploration_limit"), default=6, maximum=50),
             scholar_coauthor_follow_up_limit=_normalize_small_limit(
-                payload.get("scholar_coauthor_follow_up_limit"),
+                normalized_payload.get("scholar_coauthor_follow_up_limit"),
                 default=0,
                 maximum=100,
             ),
@@ -620,6 +650,17 @@ class SearchStrategyPlan:
 
 
 @dataclass(slots=True)
+class IntentPlanBrief:
+    identified_request: list[str] = field(default_factory=list)
+    target_output: list[str] = field(default_factory=list)
+    default_execution_strategy: list[str] = field(default_factory=list)
+    review_focus: list[str] = field(default_factory=list)
+
+    def to_record(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
 class SourcingPlan:
     target_company: str
     target_scope: str
@@ -630,6 +671,7 @@ class SourcingPlan:
     publication_coverage: PublicationCoveragePlan
     search_strategy: SearchStrategyPlan
     acquisition_tasks: list[AcquisitionTask]
+    intent_brief: IntentPlanBrief = field(default_factory=IntentPlanBrief)
     assumptions: list[str] = field(default_factory=list)
     open_questions: list[str] = field(default_factory=list)
 
@@ -640,4 +682,5 @@ class SourcingPlan:
         record["publication_coverage"] = self.publication_coverage.to_record()
         record["search_strategy"] = self.search_strategy.to_record()
         record["acquisition_tasks"] = [task.to_record() for task in self.acquisition_tasks]
+        record["intent_brief"] = self.intent_brief.to_record()
         return record

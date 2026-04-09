@@ -9,6 +9,7 @@ from typing import Any
 
 from .domain import Candidate, EvidenceRecord, JobRequest, normalize_candidate
 from .request_matching import MATCH_THRESHOLD, request_family_score, request_family_signature, request_signature
+from .worker_scheduler import effective_worker_status, wait_stage
 
 
 class SQLiteStore:
@@ -1156,6 +1157,30 @@ class SQLiteStore:
             return None
         return self._manual_review_item_from_row(row)
 
+    def merge_manual_review_item_metadata(
+        self,
+        review_item_id: int,
+        metadata_merge: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        existing = self.get_manual_review_item(review_item_id)
+        if existing is None:
+            return None
+        merged_metadata = dict(existing.get("metadata") or {})
+        merged_metadata.update(dict(metadata_merge or {}))
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                UPDATE manual_review_items
+                SET metadata_json = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE review_item_id = ?
+                """,
+                (
+                    json.dumps(merged_metadata, ensure_ascii=False),
+                    review_item_id,
+                ),
+            )
+        return self.get_manual_review_item(review_item_id)
+
     def create_agent_runtime_session(
         self,
         *,
@@ -1451,7 +1476,11 @@ class SQLiteStore:
         job_id: str = "",
     ) -> list[dict[str, Any]]:
         clauses = [
-            "((status IN ('queued', 'interrupted', 'failed')) OR (status = 'running' AND datetime(updated_at) <= datetime('now', ?)))",
+            "("
+            "(status IN ('queued', 'interrupted', 'failed')) "
+            "OR (status = 'running' AND json_extract(checkpoint_json, '$.stage') IN ('waiting_remote_search', 'waiting_remote_harvest')) "
+            "OR (status = 'running' AND datetime(updated_at) <= datetime('now', ?))"
+            ")",
             "(lease_expires_at IS NULL OR datetime(lease_expires_at) <= datetime('now'))",
         ]
         params: list[Any] = [f"-{max(1, int(stale_after_seconds or 300))} seconds"]
@@ -2748,7 +2777,7 @@ class SQLiteStore:
         }
 
     def _agent_worker_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
-        return {
+        worker = {
             "worker_id": row["worker_id"],
             "session_id": row["session_id"],
             "job_id": row["job_id"],
@@ -2769,6 +2798,9 @@ class SQLiteStore:
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
         }
+        worker["wait_stage"] = wait_stage(worker)
+        worker["effective_status"] = effective_worker_status(worker)
+        return worker
 
     def upsert_criteria_pattern(
         self,
@@ -2868,6 +2900,15 @@ class SQLiteStore:
                 :evidence_id, :candidate_id, :source_type, :title, :url, :summary,
                 :source_dataset, :source_path, :metadata_json
             )
+            ON CONFLICT(evidence_id) DO UPDATE SET
+                candidate_id = excluded.candidate_id,
+                source_type = excluded.source_type,
+                title = excluded.title,
+                url = excluded.url,
+                summary = excluded.summary,
+                source_dataset = excluded.source_dataset,
+                source_path = excluded.source_path,
+                metadata_json = excluded.metadata_json
             """,
             [self._evidence_payload(item) for item in evidence],
         )

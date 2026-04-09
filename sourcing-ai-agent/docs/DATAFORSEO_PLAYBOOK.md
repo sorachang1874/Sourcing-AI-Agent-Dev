@@ -16,6 +16,18 @@
   - 质量：能稳定返回和 `Thinking Machines Lab` 相关的公开网页、论文、OpenReview 等结果
 - `task_post -> tasks_ready -> task_get/regular/{task_id}` 已在本机真实验证通过。
   - 这条链更适合低成本后台批处理。
+- `2026-04-08` 又补了两条 queue-lane live smoke，确认两种收口路径都正常。
+  - worker-direct path：
+    - job：`2831b4f4c9e3`
+    - 观察到：`submitted -> waiting_remote_search -> ready_cached -> worker_direct fetched_cached`
+    - manifest 的 `fetch_token` 形如 `worker_direct_20260408T114051Z`
+  - normal daemon path：
+    - job：`c7b34da2bab1`
+    - 观察到：`submitted -> waiting_remote_search -> ready_cached -> lane task_get fetched_cached -> worker consume`
+    - manifest 的 `fetch_token` 是 lane fetch timestamp，例如 `20260408T114503Z`
+- `2026-04-08` 还补了一条 live re-check，确认 lane fetch 后 worker summary 的 `raw_path` 与 manifest `raw_path` 一致。
+  - job：`e2afd5f9241d`
+  - 当前不再出现 manifest 已是 `.json`，但 worker summary 仍保留默认 `.html` 路径的偏差。
 
 ## 默认成本策略
 
@@ -92,6 +104,50 @@
   - `*_task_post.json`
   - `*_tasks_ready.json`
 - 真正完成后，最终 `task_get` payload 会随 `SearchResponse` 一起落盘。
+- queue lane 当前有两种合法完成方式：
+  - lane fetch 先完成：
+    - manifest 会出现 `task_get_batch_*`
+    - `fetch_token` 是普通 timestamp
+    - worker 后续消费的是已缓存 `raw_path`
+  - worker direct fetch：
+    - 发生在 worker 恢复时，lane fetch 还没先一步完成
+    - `fetch_token` 形如 `worker_direct_*`
+    - manifest 仍会被回写成 `fetched_cached`
+- `ready_cached` 不是最终完成态。
+  - 如果 worker 在刚进入 `ready_cached` 后立刻恢复，provider 会尊重 `lane_fetch_cooldown_seconds=15`
+  - 这时 worker 可能先返回一次 `queued`
+  - 正常做法是：
+    - 让 `run-worker-daemon` / `run-worker-daemon-service` 再跑一轮
+    - 或手动等待 `15s+` 再恢复 worker
+
+## 如何复核 queue lane
+
+- 先看 worker：
+
+```bash
+PYTHONPATH=src python3 -m sourcing_agent.cli show-workers --job-id <job_id>
+```
+
+- 再看对应 snapshot 下的 manifest：
+  - `search_seed_discovery/web_search_batch_manifest.json`
+  - 或 `exploration/search_batch_manifest.json`
+
+- 重点字段：
+  - `search_state.status`
+    - `waiting_for_ready_cached`：远端还没 ready
+    - `ready_cached`：ready 已缓存，但还没完成 fetch
+    - `fetched_cached`：raw payload 已落盘，可被 worker 直接消费
+  - `search_state.fetch_token`
+    - `worker_direct_*`：worker direct fetch
+    - 普通 timestamp：lane-level `task_get_batch`
+  - `raw_path`
+    - 存在且文件可读，才代表 fetch 真正完成
+
+- 当前 machine 上如果要看已知正常样本，可参考：
+  - `runtime/live_smoke/dataforseo_worker_direct_20260408T113938Z/`
+  - `runtime/live_smoke/dataforseo_daemon_normal_20260408T114441Z/`
+  - `runtime/live_smoke/dataforseo_daemon_summary_fix_20260408T114758Z/`
+  - 这些是本机 runtime 资产，不保证在新机器上存在。
 
 ## 推荐参数
 

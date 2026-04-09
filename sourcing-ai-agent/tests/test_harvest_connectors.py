@@ -13,7 +13,13 @@ from sourcing_agent.harvest_connectors import (
     HarvestCompanyEmployeesConnector,
     HarvestProfileConnector,
     HarvestProfileSearchConnector,
+    _apply_harvest_search_filters,
+    _load_cached_harvest_payload,
     _profile_scraper_mode,
+    _recommended_harvest_profile_charge_cap_usd,
+    _recommended_harvest_profile_timeout_seconds,
+    _recommended_harvest_company_timeout_seconds,
+    parse_harvest_company_employee_run_log,
     parse_harvest_company_employee_rows,
     parse_harvest_profile_payload,
     parse_harvest_search_rows,
@@ -38,6 +44,23 @@ class _AliasJudgingModelClient(DeterministicModelClient):
 
 
 class HarvestConnectorTest(unittest.TestCase):
+    def test_apply_harvest_search_filters_carries_locations_for_former_scope(self) -> None:
+        payload = {}
+        _apply_harvest_search_filters(
+            payload,
+            {
+                "past_companies": ["https://www.linkedin.com/company/anthropicresearch/"],
+                "locations": ["United States"],
+                "exclude_locations": ["Canada"],
+                "keywords": ["Anthropic"],
+            },
+            "former",
+        )
+        self.assertEqual(payload["pastCompanies"], ["https://www.linkedin.com/company/anthropicresearch/"])
+        self.assertEqual(payload["locations"], ["United States"])
+        self.assertEqual(payload["excludeLocations"], ["Canada"])
+        self.assertEqual(payload["searchQuery"], "Anthropic")
+
     def test_parse_harvest_profile_payload(self) -> None:
         payload = {
             "firstName": "Jane",
@@ -58,6 +81,49 @@ class HarvestConnectorTest(unittest.TestCase):
         self.assertEqual(parsed["current_company"], "xAI")
         self.assertEqual(parsed["location"], "San Francisco Bay Area")
         self.assertEqual(len(parsed["more_profiles"]), 1)
+
+    def test_parse_harvest_profile_payload_keeps_provider_profile_url_even_with_requested_opaque_url(self) -> None:
+        payload = {
+            "_harvest_request": {
+                "kind": "url",
+                "value": "https://www.linkedin.com/in/ACwAACi6kRQBOm_dcRKuOnhoIVJZLitAECAHwp0",
+                "profile_url": "https://www.linkedin.com/in/ACwAACi6kRQBOm_dcRKuOnhoIVJZLitAECAHwp0",
+            },
+            "item": {
+                "firstName": "Edison",
+                "lastName": "Li",
+                "headline": "Anthropic Senior Staff AI Research Scientist",
+                "linkedinUrl": "https://www.linkedin.com/in/ellamine-ibrahim",
+                "publicIdentifier": "ellamine-ibrahim",
+            },
+        }
+        parsed = parse_harvest_profile_payload(payload)
+        self.assertEqual(
+            parsed["profile_url"],
+            "https://www.linkedin.com/in/ellamine-ibrahim",
+        )
+        self.assertEqual(
+            parsed["requested_profile_url"],
+            "https://www.linkedin.com/in/ACwAACi6kRQBOm_dcRKuOnhoIVJZLitAECAHwp0",
+        )
+
+    def test_parse_harvest_profile_payload_keeps_provider_vanity_when_name_aligned(self) -> None:
+        payload = {
+            "_harvest_request": {
+                "kind": "url",
+                "value": "https://www.linkedin.com/in/ACwAAOldFormer",
+                "profile_url": "https://www.linkedin.com/in/ACwAAOldFormer",
+            },
+            "item": {
+                "firstName": "Former",
+                "lastName": "Example",
+                "headline": "Research Engineer at NewCo",
+                "linkedinUrl": "https://www.linkedin.com/in/former-example/",
+                "publicIdentifier": "former-example",
+            },
+        }
+        parsed = parse_harvest_profile_payload(payload)
+        self.assertEqual(parsed["profile_url"], "https://www.linkedin.com/in/former-example/")
 
     def test_lead_profile_merge_upgrades_membership(self) -> None:
         identity = CompanyIdentity(
@@ -95,6 +161,81 @@ class HarvestConnectorTest(unittest.TestCase):
         self.assertEqual(merged.employment_status, "current")
         label = _classify_profile_membership(profile, identity)
         self.assertEqual(label, ("employee", "current"))
+
+    def test_former_profile_merge_can_upgrade_to_current_membership(self) -> None:
+        identity = CompanyIdentity(
+            requested_name="Anthropic",
+            canonical_name="Anthropic",
+            company_key="anthropic",
+            linkedin_slug="anthropicresearch",
+            linkedin_company_url="https://www.linkedin.com/company/anthropicresearch/",
+            aliases=["anthropicresearch"],
+        )
+        candidate = Candidate(
+            candidate_id="former-upgrade-1",
+            name_en="Deanna Graham",
+            display_name="Deanna Graham",
+            category="former_employee",
+            target_company="Anthropic",
+            employment_status="former",
+            linkedin_url="https://www.linkedin.com/in/deannagraham2023",
+            source_dataset="test_seed",
+        )
+        profile = {
+            "full_name": "Deanna Graham",
+            "headline": "Head of Marketing Insights & Research at Anthropic",
+            "profile_url": "https://www.linkedin.com/in/deannagraham2023",
+            "public_identifier": "deannagraham2023",
+            "summary": "Marketing and insights leader.",
+            "location": "San Francisco, California, United States",
+            "current_company": "Anthropic",
+            "experience": [{"companyName": "Anthropic", "title": "Head of Marketing Insights & Research"}],
+            "education": [],
+            "publications": [],
+            "more_profiles": [],
+        }
+        merged = _merge_profile_into_candidate(candidate, profile, Path("/tmp/profile.json"), "harvest_profile_scraper", identity)
+        self.assertEqual(merged.category, "employee")
+        self.assertEqual(merged.employment_status, "current")
+
+    def test_current_profile_merge_can_downgrade_to_former_membership(self) -> None:
+        identity = CompanyIdentity(
+            requested_name="Thinking Machines Lab",
+            canonical_name="Thinking Machines Lab",
+            company_key="thinkingmachineslab",
+            linkedin_slug="thinkingmachinesai",
+            linkedin_company_url="https://www.linkedin.com/company/thinkingmachinesai/",
+            aliases=["thinking machines ai", "tml"],
+        )
+        candidate = Candidate(
+            candidate_id="current-downgrade-1",
+            name_en="Andrew Tulloch",
+            display_name="Andrew Tulloch",
+            category="employee",
+            target_company="Thinking Machines Lab",
+            employment_status="current",
+            linkedin_url="https://www.linkedin.com/in/andrew-tulloch-17238745",
+            source_dataset="test_seed",
+        )
+        profile = {
+            "full_name": "Andrew Tulloch",
+            "headline": "AI Researcher at Meta",
+            "profile_url": "https://www.linkedin.com/in/andrew-tulloch-17238745",
+            "public_identifier": "andrew-tulloch-17238745",
+            "summary": "AI Researcher at Meta.",
+            "location": "London, England, United Kingdom",
+            "current_company": "Meta",
+            "experience": [
+                {"companyName": "Meta", "title": "AI Researcher"},
+                {"companyName": "Thinking Machines Lab", "title": "Member of Technical Staff"},
+            ],
+            "education": [],
+            "publications": [],
+            "more_profiles": [],
+        }
+        merged = _merge_profile_into_candidate(candidate, profile, Path("/tmp/profile.json"), "harvest_profile_scraper", identity)
+        self.assertEqual(merged.category, "former_employee")
+        self.assertEqual(merged.employment_status, "former")
 
     def test_profile_match_accepts_normalized_linkedin_identifier(self) -> None:
         identity = CompanyIdentity(
@@ -254,6 +395,65 @@ class HarvestConnectorTest(unittest.TestCase):
         self.assertEqual(rows[0]["full_name"], "Jane Doe")
         self.assertEqual(rows[0]["username"], "jane-doe")
 
+    def test_persist_profiles_from_batch_body_writes_individual_profile_payloads(self) -> None:
+        connector = HarvestProfileConnector(
+            HarvestActorSettings(
+                enabled=True,
+                api_token="token",
+                actor_id="actor",
+            )
+        )
+        with tempfile.TemporaryDirectory() as tempdir:
+            snapshot_dir = Path(tempdir)
+            requested_urls = [
+                "https://www.linkedin.com/in/jane-doe/",
+                "https://www.linkedin.com/in/john-smith/",
+            ]
+            body = [
+                {
+                    "firstName": "Jane",
+                    "lastName": "Doe",
+                    "headline": "Research Engineer at Anthropic",
+                    "linkedinUrl": "https://www.linkedin.com/in/jane-doe/",
+                    "publicIdentifier": "jane-doe",
+                },
+                {
+                    "firstName": "John",
+                    "lastName": "Smith",
+                    "headline": "Engineer at Anthropic",
+                    "linkedinUrl": "https://www.linkedin.com/in/john-smith/",
+                    "publicIdentifier": "john-smith",
+                },
+            ]
+            persisted = connector.persist_profiles_from_batch_body(
+                requested_urls,
+                body,
+                snapshot_dir,
+            )
+            self.assertEqual(len(persisted["profiles"]), 2)
+            self.assertEqual(persisted["unresolved_urls"], [])
+            for url in requested_urls:
+                item = persisted["profiles"][url]
+                self.assertTrue(Path(item["raw_path"]).exists())
+                self.assertEqual(item["account_id"], "harvest_profile_scraper")
+                self.assertEqual(item["parsed"]["profile_url"], url)
+
+    def test_large_harvest_company_timeout_is_more_conservative(self) -> None:
+        self.assertEqual(_recommended_harvest_company_timeout_seconds(25), 300)
+        self.assertEqual(_recommended_harvest_company_timeout_seconds(2500), 1500)
+
+    def test_large_harvest_profile_timeout_and_charge_budget_are_more_conservative(self) -> None:
+        self.assertEqual(_recommended_harvest_profile_timeout_seconds(25, collect_email=False), 300)
+        self.assertEqual(_recommended_harvest_profile_timeout_seconds(100, collect_email=True), 900)
+        self.assertEqual(
+            _recommended_harvest_profile_charge_cap_usd(
+                "Profile details + email search ($10 per 1k)",
+                100,
+                fallback_per_1k=10.0,
+            ),
+            1.25,
+        )
+
     def test_parse_harvest_company_employee_rows(self) -> None:
         payload = [
             {
@@ -279,7 +479,7 @@ class HarvestConnectorTest(unittest.TestCase):
         self.assertEqual(_profile_scraper_mode(settings), "Profile details no email ($4 per 1k)")
 
     def test_harvest_profile_search_supports_multi_page_former_search(self) -> None:
-        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="short", max_paid_items=50)
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="short", max_paid_items=25)
         connector = HarvestProfileSearchConnector(settings)
         with tempfile.TemporaryDirectory() as tempdir:
             capture = {}
@@ -287,7 +487,22 @@ class HarvestConnectorTest(unittest.TestCase):
             def _fake_run(actor_settings, payload):
                 capture["payload"] = dict(payload)
                 capture["max_total_charge_usd"] = actor_settings.max_total_charge_usd
-                return []
+                capture["timeout_seconds"] = actor_settings.timeout_seconds
+                return [
+                    {
+                        "firstName": "Alexis",
+                        "lastName": "Dunn",
+                        "linkedinUrl": "https://www.linkedin.com/in/alexis-aleyza-dunn/",
+                        "_meta": {
+                            "pagination": {
+                                "totalElements": 559,
+                                "totalPages": 23,
+                                "pageNumber": 1,
+                                "pageSize": 25,
+                            }
+                        },
+                    }
+                ]
 
             with patch("sourcing_agent.harvest_connectors._run_harvest_actor", side_effect=_fake_run):
                 result = connector.search_profiles(
@@ -295,8 +510,8 @@ class HarvestConnectorTest(unittest.TestCase):
                     filter_hints={"past_companies": ["https://www.linkedin.com/company/thinkingmachinesai/"]},
                     employment_status="former",
                     discovery_dir=Path(tempdir),
-                    limit=25,
-                    pages=2,
+                    limit=500,
+                    pages=20,
                 )
                 request_manifest_path = Path(str(result["raw_path"])).with_name(f"{Path(str(result['raw_path'])).stem}.request.json")
                 self.assertTrue(request_manifest_path.exists())
@@ -305,13 +520,16 @@ class HarvestConnectorTest(unittest.TestCase):
                 self.assertEqual(manifest["request_context"]["query_text"], "Thinking Machines Lab")
                 self.assertEqual(manifest["request_context"]["employment_status"], "former")
         self.assertIsNotNone(result)
-        self.assertEqual(capture["payload"]["takePages"], 2)
-        self.assertEqual(capture["payload"]["maxItems"], 50)
-        self.assertGreaterEqual(capture["max_total_charge_usd"], 0.2)
+        self.assertEqual(capture["payload"]["takePages"], 20)
+        self.assertEqual(capture["payload"]["maxItems"], 500)
+        self.assertGreaterEqual(capture["max_total_charge_usd"], 2.3)
+        self.assertGreaterEqual(capture["timeout_seconds"], 400)
         self.assertEqual(
             capture["payload"]["pastCompanies"],
             ["https://www.linkedin.com/company/thinkingmachinesai/"],
         )
+        self.assertEqual(result["pagination"]["total_elements"], 559)
+        self.assertEqual(result["pagination"]["total_pages"], 23)
 
     def test_harvest_profile_search_reuses_matching_live_test_asset_without_token(self) -> None:
         settings = HarvestActorSettings(enabled=False, api_token="", actor_id="actor", default_mode="short", max_paid_items=50)
@@ -392,6 +610,44 @@ class HarvestConnectorTest(unittest.TestCase):
         self.assertIn("urls", capture["payload"])
         self.assertNotIn("profileUrls", capture["payload"])
 
+    def test_harvest_profile_connector_single_url_uses_batch_manifest_before_fallback(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        connector = HarvestProfileConnector(settings)
+        with tempfile.TemporaryDirectory() as tempdir:
+            requests_seen = []
+
+            def _fake_run(_settings, payload):
+                requests_seen.append(dict(payload))
+                return [
+                    {
+                        "firstName": "Jane",
+                        "lastName": "Doe",
+                        "linkedinUrl": "https://www.linkedin.com/in/jane-doe/",
+                        "publicIdentifier": "jane-doe",
+                    }
+                ]
+
+            with patch("sourcing_agent.harvest_connectors._run_harvest_actor", side_effect=_fake_run):
+                result = connector.fetch_profiles_by_urls(
+                    ["https://www.linkedin.com/in/jane-doe/"],
+                    Path(tempdir),
+                    use_cache=False,
+                )
+            self.assertEqual(len(requests_seen), 1)
+            self.assertEqual(
+                requests_seen[0]["urls"],
+                ["https://www.linkedin.com/in/jane-doe/"],
+            )
+            batch_request_paths = list((Path(tempdir) / "harvest_profiles").glob("harvest_profile_batch_*.request.json"))
+            self.assertEqual(len(batch_request_paths), 1)
+            manifest = json.loads(batch_request_paths[0].read_text())
+            self.assertEqual(manifest["logical_name"], "harvest_profile_scraper_batch")
+            self.assertEqual(
+                manifest["request_payload"]["urls"],
+                ["https://www.linkedin.com/in/jane-doe/"],
+            )
+            self.assertIn("https://www.linkedin.com/in/jane-doe/", result)
+
     def test_harvest_profile_connector_matches_batch_results_by_profile_url_not_order(self) -> None:
         settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
         connector = HarvestProfileConnector(settings)
@@ -438,6 +694,116 @@ class HarvestConnectorTest(unittest.TestCase):
                         "https://www.linkedin.com/in/jane-doe/",
                         "https://www.linkedin.com/in/john-smith/",
                     },
+                )
+
+    def test_harvest_profile_connector_matches_batch_results_by_original_query_url(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        connector = HarvestProfileConnector(settings)
+        with tempfile.TemporaryDirectory() as tempdir:
+            requests_seen = []
+
+            def _fake_run(_settings, payload):
+                requests_seen.append(dict(payload))
+                return [
+                    {
+                        "firstName": "Edison",
+                        "lastName": "Li",
+                        "linkedinUrl": "https://www.linkedin.com/in/ellamine-ibrahim",
+                        "publicIdentifier": "ellamine-ibrahim",
+                        "originalQuery": {
+                            "url": "https://www.linkedin.com/in/ACwAAA0rngkBg1Y2wZtwA_at2ZRrf-3jQ4oMfqY"
+                        },
+                    },
+                    {
+                        "firstName": "Sai",
+                        "lastName": "Ponnaganti",
+                        "linkedinUrl": "https://www.linkedin.com/in/sai-ponnaganti",
+                        "publicIdentifier": "sai-ponnaganti",
+                        "originalQuery": {
+                            "url": "https://www.linkedin.com/in/ACwAAAExampleOpaqueSai"
+                        },
+                    },
+                ]
+
+            with patch("sourcing_agent.harvest_connectors._run_harvest_actor", side_effect=_fake_run):
+                result = connector.fetch_profiles_by_urls(
+                    [
+                        "https://www.linkedin.com/in/ACwAAA0rngkBg1Y2wZtwA_at2ZRrf-3jQ4oMfqY",
+                        "https://www.linkedin.com/in/ACwAAAExampleOpaqueSai",
+                    ],
+                    Path(tempdir),
+                    use_cache=False,
+                )
+                self.assertEqual(len(requests_seen), 1)
+                self.assertEqual(
+                    result["https://www.linkedin.com/in/ACwAAA0rngkBg1Y2wZtwA_at2ZRrf-3jQ4oMfqY"]["parsed"]["profile_url"],
+                    "https://www.linkedin.com/in/ellamine-ibrahim",
+                )
+                self.assertEqual(
+                    result["https://www.linkedin.com/in/ACwAAAExampleOpaqueSai"]["parsed"]["profile_url"],
+                    "https://www.linkedin.com/in/sai-ponnaganti",
+                )
+
+    def test_harvest_profile_connector_retries_smaller_batches_before_direct_fallback(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        connector = HarvestProfileConnector(settings)
+        with tempfile.TemporaryDirectory() as tempdir:
+            requests_seen = []
+            requested_urls = [f"https://www.linkedin.com/in/opaque-{index}" for index in range(6)]
+
+            def _fake_run(_settings, payload):
+                requests_seen.append(dict(payload))
+                if "publicIdentifiers" in payload or "profileIds" in payload:
+                    raise AssertionError("expected smaller batch retries before single fallback")
+                urls = list(payload.get("urls") or [])
+                if len(urls) == 6:
+                    return None
+                return [
+                    {
+                        "firstName": f"Person{index}",
+                        "lastName": "Example",
+                        "linkedinUrl": f"https://www.linkedin.com/in/person-{index}",
+                        "publicIdentifier": f"person-{index}",
+                        "originalQuery": {"url": url},
+                    }
+                    for index, url in enumerate(urls, start=1)
+                ]
+
+            with patch("sourcing_agent.harvest_connectors._run_harvest_actor", side_effect=_fake_run):
+                result = connector.fetch_profiles_by_urls(
+                    requested_urls,
+                    Path(tempdir),
+                    use_cache=False,
+                )
+                self.assertEqual(len(result), 6)
+                self.assertEqual(
+                    [len(payload.get("urls") or []) for payload in requests_seen],
+                    [6, 5, 1],
+                )
+
+    def test_harvest_profile_connector_does_not_fan_out_large_unresolved_batches_into_single_requests(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        connector = HarvestProfileConnector(settings)
+        with tempfile.TemporaryDirectory() as tempdir:
+            requests_seen = []
+            requested_urls = [f"https://www.linkedin.com/in/opaque-{index}" for index in range(12)]
+
+            def _fake_run(_settings, payload):
+                requests_seen.append(dict(payload))
+                if "publicIdentifiers" in payload or "profileIds" in payload:
+                    raise AssertionError("unexpected direct single fallback for large unresolved batch")
+                return None
+
+            with patch("sourcing_agent.harvest_connectors._run_harvest_actor", side_effect=_fake_run):
+                result = connector.fetch_profiles_by_urls(
+                    requested_urls,
+                    Path(tempdir),
+                    use_cache=False,
+                )
+                self.assertEqual(result, {})
+                self.assertEqual(
+                    [len(payload.get("urls") or []) for payload in requests_seen],
+                    [12, 10, 2, 5, 5, 2],
                 )
 
     def test_harvest_profile_connector_single_url_falls_back_to_public_identifier(self) -> None:
@@ -581,6 +947,175 @@ class HarvestConnectorTest(unittest.TestCase):
         self.assertEqual(snapshot.page_summaries[0]["entry_count"], 1)
         self.assertEqual(snapshot.page_summaries[1]["entry_count"], 1)
 
+    def test_harvest_company_employees_applies_company_filters(self) -> None:
+        settings = HarvestActorSettings(
+            enabled=True,
+            api_token="token",
+            actor_id="actor",
+            default_mode="short",
+            max_total_charge_usd=0.2,
+            max_paid_items=25,
+        )
+        connector = HarvestCompanyEmployeesConnector(settings)
+        identity = CompanyIdentity(
+            requested_name="Anthropic",
+            canonical_name="Anthropic",
+            company_key="anthropic",
+            linkedin_slug="anthropicresearch",
+            linkedin_company_url="https://www.linkedin.com/company/anthropicresearch/",
+        )
+        with tempfile.TemporaryDirectory() as tempdir:
+            snapshot_dir = Path(tempdir) / "runtime" / "company_assets" / "anthropic" / "snap-filtered"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            capture = {}
+
+            def _fake_run(actor_settings, payload):
+                capture["payload"] = dict(payload)
+                return [
+                    {
+                        "firstName": "Ada",
+                        "lastName": "Example",
+                        "linkedinUrl": "https://www.linkedin.com/in/ada-example/",
+                        "publicIdentifier": "ada-example",
+                        "location": {"linkedinText": "San Francisco Bay Area"},
+                        "_meta": {"pagination": {"pageNumber": 1}},
+                    }
+                ]
+
+            with patch("sourcing_agent.harvest_connectors._run_harvest_actor", side_effect=_fake_run):
+                snapshot = connector.fetch_company_roster(
+                    identity,
+                    snapshot_dir,
+                    max_pages=8,
+                    page_limit=50,
+                    company_filters={
+                        "locations": ["United States"],
+                        "function_ids": ["8"],
+                        "exclude_function_ids": ["24"],
+                    },
+                )
+
+        self.assertEqual(capture["payload"]["locations"], ["United States"])
+        self.assertEqual(capture["payload"]["functionIds"], ["8"])
+        self.assertEqual(capture["payload"]["excludeFunctionIds"], ["24"])
+        self.assertEqual(snapshot.visible_entries[0]["location_normalized"]["raw_text"], "San Francisco Bay Area")
+
+    def test_parse_harvest_company_employee_run_log_extracts_total_count_and_limit(self) -> None:
+        log_text = """
+2026-04-08T20:55:45.131Z Scraping query: {"currentCompanies":["https://www.linkedin.com/company/anthropicresearch/"]}
+2026-04-08T20:55:49.785Z Found 4845 profiles total for input {"currentCompanies":["https://www.linkedin.com/company/anthropicresearch/"]}
+2026-04-08T20:55:49.867Z  [WARNING]
+2026-04-08T20:55:49.868Z The search results are limited to 2500 items (out of total 4845) because LinkedIn does not allow to scrape more for one query.
+2026-04-08T20:55:49.864Z Scraped search page 1. Found 25 profiles on the page.
+""".strip()
+
+        summary = parse_harvest_company_employee_run_log(log_text)
+
+        self.assertEqual(summary["estimated_total_count"], 4845)
+        self.assertTrue(summary["provider_result_limited"])
+        self.assertEqual(summary["scraped_page_count"], 1)
+
+    def test_harvest_company_probe_company_roster_query_records_probe_summary(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="short")
+        connector = HarvestCompanyEmployeesConnector(settings)
+        identity = CompanyIdentity(
+            requested_name="Anthropic",
+            canonical_name="Anthropic",
+            company_key="anthropic",
+            linkedin_slug="anthropicresearch",
+            linkedin_company_url="https://www.linkedin.com/company/anthropicresearch/",
+        )
+        with tempfile.TemporaryDirectory() as tempdir:
+            snapshot_dir = Path(tempdir) / "runtime" / "company_assets" / "anthropic" / "probe-snap"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            with patch(
+                "sourcing_agent.harvest_connectors._submit_harvest_actor_run",
+                return_value={"data": {"id": "run-probe-1", "defaultDatasetId": "dataset-probe-1", "status": "RUNNING"}},
+            ), patch(
+                "sourcing_agent.harvest_connectors._get_harvest_actor_run",
+                return_value={"data": {"id": "run-probe-1", "defaultDatasetId": "dataset-probe-1", "status": "SUCCEEDED"}},
+            ), patch(
+                "sourcing_agent.harvest_connectors._get_harvest_actor_run_log",
+                return_value=(
+                    '2026-04-09T00:01:40.783Z Found 1100 profiles total for input '
+                    '{"location":["United States"],"functionIds":["8"]}\n'
+                    "2026-04-09T00:01:40.852Z Scraped search page 1. Found 25 profiles on the page.\n"
+                ),
+            ), patch(
+                "sourcing_agent.harvest_connectors._get_harvest_dataset_items",
+                return_value=[{"firstName": "Ada"}],
+            ), patch(
+                "sourcing_agent.harvest_connectors.time.sleep",
+                return_value=None,
+            ):
+                summary = connector.probe_company_roster_query(
+                    identity,
+                    snapshot_dir,
+                    company_filters={"locations": ["United States"], "function_ids": ["8"]},
+                    probe_id="engineering",
+                    title="United States / Engineering",
+                )
+
+        self.assertEqual(summary["estimated_total_count"], 1100)
+        self.assertEqual(summary["returned_item_count"], 1)
+        self.assertTrue(summary["summary_path"].endswith(".summary.json"))
+        self.assertTrue(summary["log_path"].endswith(".log.txt"))
+
+    def test_load_cached_harvest_payload_reuses_live_probe_summary_via_request_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime"
+            snapshot_dir = runtime_dir / "company_assets" / "anthropic" / "snap-cache"
+            live_probe_dir = runtime_dir / "live_tests" / "adaptive_probe" / "harvest_company_employees" / "probes"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            live_probe_dir.mkdir(parents=True, exist_ok=True)
+
+            payload = {
+                "profileScraperMode": "Short ($4 per 1k)",
+                "companies": ["https://www.linkedin.com/company/anthropicresearch/"],
+                "takePages": 1,
+                "maxItems": 25,
+                "locations": ["United States"],
+            }
+            summary_payload = {
+                "probe_id": "anthropic_us_root_smoke",
+                "title": "Anthropic / United States",
+                "status": "completed",
+                "estimated_total_count": 2837,
+                "provider_result_limited": True,
+            }
+            summary_path = live_probe_dir / "harvest_company_employees_probe_anthropic_us_root_smoke.summary.json"
+            request_path = live_probe_dir / "harvest_company_employees_probe_anthropic_us_root_smoke.request.json"
+            summary_path.write_text(json.dumps(summary_payload, ensure_ascii=False, indent=2))
+            request_path.write_text(
+                json.dumps(
+                    {
+                        "logical_name": "harvest_company_employees_probe",
+                        "payload_hash": "ignored",
+                        "request_payload": payload,
+                        "request_context": {"title": "Anthropic / United States"},
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+
+            cached_body, cache_source, cache_origin = _load_cached_harvest_payload(
+                snapshot_dir,
+                logical_name="harvest_company_employees_probe_summary",
+                payload=payload,
+            )
+            self.assertEqual(cached_body, summary_payload)
+            self.assertEqual(cache_source, "live_test_bridge_summary")
+            self.assertEqual(Path(str(cache_origin)), summary_path)
+
+            second_body, second_source, _ = _load_cached_harvest_payload(
+                snapshot_dir,
+                logical_name="harvest_company_employees_probe_summary",
+                payload=payload,
+            )
+            self.assertEqual(second_body, summary_payload)
+            self.assertEqual(second_source, "shared_cache")
+
     def test_harvest_profile_batch_execute_with_checkpoint_submits_async_run(self) -> None:
         settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
         connector = HarvestProfileConnector(settings)
@@ -646,6 +1181,94 @@ class HarvestConnectorTest(unittest.TestCase):
         self.assertEqual(len(result.body), 1)
         self.assertTrue(any(path.name.endswith(".request.json") for path in cache_files))
         self.assertTrue(any(path.name.endswith(".json") and not path.name.endswith(".request.json") for path in cache_files))
+
+    def test_harvest_company_execute_with_checkpoint_can_bypass_shared_cache(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="short")
+        connector = HarvestCompanyEmployeesConnector(settings)
+        identity = CompanyIdentity(
+            requested_name="Humans&",
+            canonical_name="Humans&",
+            company_key="humansand",
+            linkedin_slug="humansand",
+            linkedin_company_url="https://www.linkedin.com/company/humansand/",
+        )
+        with tempfile.TemporaryDirectory() as tempdir:
+            snapshot_dir = Path(tempdir) / "runtime" / "company_assets" / "humansand" / "snap-fresh"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            with patch(
+                "sourcing_agent.harvest_connectors._load_cached_harvest_payload",
+                return_value=([{"cached": True}], "shared_cache", snapshot_dir / "provider_cache.json"),
+            ), patch(
+                "sourcing_agent.harvest_connectors._submit_harvest_actor_run",
+                return_value={"data": {"id": "run-fresh-1", "defaultDatasetId": "dataset-fresh-1", "status": "RUNNING"}},
+            ) as submit_mock:
+                result = connector.execute_with_checkpoint(
+                    identity,
+                    snapshot_dir,
+                    max_pages=1,
+                    page_limit=25,
+                    allow_shared_provider_cache=False,
+                )
+        self.assertTrue(result.pending)
+        self.assertEqual(result.checkpoint["run_id"], "run-fresh-1")
+        self.assertEqual(result.checkpoint["status"], "submitted")
+        self.assertEqual(submit_mock.call_count, 1)
+
+    def test_harvest_company_employees_reuses_completed_queue_dataset_without_rerunning_actor(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="short")
+        connector = HarvestCompanyEmployeesConnector(settings)
+        identity = CompanyIdentity(
+            requested_name="Anthropic",
+            canonical_name="Anthropic",
+            company_key="anthropic",
+            linkedin_slug="anthropicresearch",
+            linkedin_company_url="https://www.linkedin.com/company/anthropicresearch/",
+        )
+        with tempfile.TemporaryDirectory() as tempdir:
+            snapshot_dir = Path(tempdir) / "runtime" / "company_assets" / "anthropic" / "snap-queue"
+            harvest_dir = snapshot_dir / "harvest_company_employees"
+            harvest_dir.mkdir(parents=True, exist_ok=True)
+            dataset_items_path = harvest_dir / "harvest_company_employees_queue_dataset_items.json"
+            dataset_items_path.write_text(
+                json.dumps(
+                    [
+                        {
+                            "firstName": "Dario",
+                            "lastName": "Amodei",
+                            "linkedinUrl": "https://www.linkedin.com/in/dario-amodei/",
+                            "publicIdentifier": "dario-amodei",
+                            "_meta": {"pagination": {"pageNumber": 1}},
+                        }
+                    ],
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            (harvest_dir / "harvest_company_employees_queue_summary.json").write_text(
+                json.dumps(
+                    {
+                        "status": "completed",
+                        "artifact_paths": {
+                            "dataset_items": str(dataset_items_path),
+                        },
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            with patch(
+                "sourcing_agent.harvest_connectors._run_harvest_actor",
+                side_effect=AssertionError("live actor should not rerun when completed queue dataset exists"),
+            ):
+                snapshot = connector.fetch_company_roster(identity, snapshot_dir, max_pages=10, page_limit=50)
+
+            manifest = json.loads((harvest_dir / "harvest_company_employees_raw.request.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["request_context"]["cache_status"], "completed_queue_dataset")
+            self.assertEqual(len(snapshot.visible_entries), 1)
+            self.assertEqual(snapshot.visible_entries[0]["full_name"], "Dario Amodei")
 
     def test_build_candidates_from_roster_carries_linkedin_url(self) -> None:
         identity = CompanyIdentity(

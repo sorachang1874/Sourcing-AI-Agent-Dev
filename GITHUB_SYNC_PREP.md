@@ -42,7 +42,6 @@
 - Disallow branch deletion
 
 后续如果新增前端 CI、lint 或其他 required checks，需要同步更新 GitHub protection 设置。
-
 ## 当前建议的提交分组
 
 如果本次准备把当前版本同步到 GitHub，建议至少按下面口径检查 staging，而不是直接 `git add .`。

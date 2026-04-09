@@ -400,7 +400,14 @@ class EnrichmentHelpersTest(unittest.TestCase):
             def __init__(self) -> None:
                 self.batch_calls = []
 
-            def fetch_profiles_by_urls(self, profile_urls, snapshot_dir, asset_logger=None, use_cache=True):
+            def fetch_profiles_by_urls(
+                self,
+                profile_urls,
+                snapshot_dir,
+                asset_logger=None,
+                use_cache=True,
+                allow_shared_provider_cache=True,
+            ):
                 self.batch_calls.append(list(profile_urls))
                 raw_path = snapshot_dir / "harvest_profiles" / "kevin-lu.json"
                 raw_path.parent.mkdir(parents=True, exist_ok=True)
@@ -501,6 +508,270 @@ class EnrichmentHelpersTest(unittest.TestCase):
             self.assertEqual(unresolved, [])
             self.assertEqual(len(evidence), 1)
             self.assertEqual(fake_profile_connector.batch_calls, [["https://www.linkedin.com/in/kevin-lu/"]])
+
+    def test_publication_lead_targeted_harvest_batches_current_phase_urls_across_candidates(self) -> None:
+        class _FakeSearchSettings:
+            enabled = True
+            max_paid_items = 10
+
+        class _FakeSearchConnector:
+            settings = _FakeSearchSettings()
+
+            def search_profiles(self, **kwargs):
+                query_text = kwargs["query_text"]
+                discovery_dir = kwargs["discovery_dir"]
+                raw_path = discovery_dir / f"{query_text.replace(' ', '_')}.json"
+                raw_path.write_text("[]")
+                profile_url = {
+                    "Kevin Lu": "https://www.linkedin.com/in/kevin-lu/",
+                    "Alice Wu": "https://www.linkedin.com/in/alice-wu/",
+                }[query_text]
+                return {
+                    "raw_path": raw_path,
+                    "rows": [
+                        {
+                            "full_name": query_text,
+                            "headline": "Research Engineer at Thinking Machines Lab",
+                            "profile_url": profile_url,
+                            "username": profile_url.rstrip("/").split("/")[-1],
+                            "current_company": "Thinking Machines Lab",
+                        }
+                    ],
+                }
+
+        class _FakeProfileConnector:
+            def __init__(self) -> None:
+                self.batch_calls = []
+
+            def fetch_profiles_by_urls(
+                self,
+                profile_urls,
+                snapshot_dir,
+                asset_logger=None,
+                use_cache=True,
+                allow_shared_provider_cache=True,
+            ):
+                self.batch_calls.append(list(profile_urls))
+                payloads = {}
+                for profile_url in profile_urls:
+                    slug = profile_url.rstrip("/").split("/")[-1]
+                    raw_path = snapshot_dir / "harvest_profiles" / f"{slug}.json"
+                    raw_path.parent.mkdir(parents=True, exist_ok=True)
+                    raw_path.write_text("{}")
+                    full_name = "Kevin Lu" if slug == "kevin-lu" else "Alice Wu"
+                    payloads[profile_url] = {
+                        "raw_path": raw_path,
+                        "account_id": "harvest_profile_scraper",
+                        "parsed": {
+                            "full_name": full_name,
+                            "headline": "Research Engineer at Thinking Machines Lab",
+                            "profile_url": profile_url,
+                            "public_identifier": slug,
+                            "summary": "Works on training systems.",
+                            "location": "San Francisco Bay Area",
+                            "current_company": "Thinking Machines Lab",
+                            "experience": [{"company": "Thinking Machines Lab", "title": "Research Engineer", "is_current": True}],
+                            "education": [],
+                            "publications": [],
+                            "more_profiles": [],
+                        },
+                    }
+                return payloads
+
+            def fetch_profile_by_url(self, profile_url, snapshot_dir, asset_logger=None):
+                raise AssertionError("publication lead targeted harvest should stay on batch profile fetching")
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            catalog = AssetCatalog(
+                project_root=root,
+                dev_root=root,
+                anthropic_root=root,
+                anthropic_workbook=root / "anthropic.xlsx",
+                anthropic_readme=root / "README.md",
+                anthropic_progress=root / "PROGRESS.md",
+                legacy_api_accounts=root / "api_accounts.json",
+                legacy_company_ids=root / "company_ids.json",
+                anthropic_publications=root / "publications.json",
+                scholar_scan_results=root / "scholar.json",
+                investor_members_json=root / "investor.json",
+                employee_scan_skill=root / "employee_skill.md",
+                investor_scan_skill=root / "investor_skill.md",
+                onepager_skill=root / "onepager_skill.md",
+            )
+            fake_profile_connector = _FakeProfileConnector()
+            enricher = MultiSourceEnricher(
+                catalog,
+                accounts=[],
+                harvest_profile_connector=fake_profile_connector,
+                harvest_profile_search_connector=_FakeSearchConnector(),
+            )
+            identity = CompanyIdentity(
+                requested_name="Thinking Machines Lab",
+                canonical_name="Thinking Machines Lab",
+                company_key="thinkingmachineslab",
+                linkedin_slug="thinkingmachinesai",
+                linkedin_company_url="https://www.linkedin.com/company/thinkingmachinesai/",
+            )
+            lead_one = Candidate(
+                candidate_id="lead1",
+                name_en="Kevin Lu",
+                display_name="Kevin Lu",
+                category="lead",
+                target_company="Thinking Machines Lab",
+                organization="Thinking Machines Lab",
+            )
+            lead_two = Candidate(
+                candidate_id="lead2",
+                name_en="Alice Wu",
+                display_name="Alice Wu",
+                category="lead",
+                target_company="Thinking Machines Lab",
+                organization="Thinking Machines Lab",
+            )
+            candidate_map = {"kevinlu": lead_one, "alicewu": lead_two}
+            resolved_profiles = []
+            unresolved = []
+            evidence = []
+
+            used_budget, summary_path = enricher._resolve_publication_leads_with_harvest_search(
+                lead_candidates=[lead_one, lead_two],
+                identity=identity,
+                snapshot_dir=root,
+                remaining_profile_budget=4,
+                candidate_map=candidate_map,
+                resolved_profiles=resolved_profiles,
+                unresolved_candidates=unresolved,
+                evidence=evidence,
+                asset_logger=AssetLogger(root),
+            )
+
+            self.assertEqual(used_budget, 2)
+            self.assertTrue(summary_path.exists())
+            self.assertEqual(len(resolved_profiles), 2)
+            self.assertEqual(len(evidence), 2)
+            self.assertEqual(
+                fake_profile_connector.batch_calls,
+                [[
+                    "https://www.linkedin.com/in/kevin-lu/",
+                    "https://www.linkedin.com/in/alice-wu/",
+                ]],
+            )
+
+    def test_resolve_candidate_with_known_refs_batches_known_profile_urls(self) -> None:
+        class _BatchOnlyHarvestProfileConnector:
+            def __init__(self) -> None:
+                self.batch_calls = []
+
+            def fetch_profiles_by_urls(
+                self,
+                profile_urls,
+                snapshot_dir,
+                asset_logger=None,
+                use_cache=True,
+                allow_shared_provider_cache=True,
+            ):
+                self.batch_calls.append(list(profile_urls))
+                results = {}
+                for profile_url in profile_urls:
+                    slug = profile_url.rstrip("/").split("/")[-1]
+                    raw_path = snapshot_dir / "harvest_profiles" / f"{slug}.json"
+                    raw_path.parent.mkdir(parents=True, exist_ok=True)
+                    raw_path.write_text("{}")
+                    full_name = "Wrong Person" if slug == "mismatch" else "Kevin Lu"
+                    results[profile_url] = {
+                        "raw_path": raw_path,
+                        "account_id": "harvest_profile_scraper",
+                        "parsed": {
+                            "full_name": full_name,
+                            "headline": "Research Engineer at Thinking Machines Lab",
+                            "profile_url": profile_url,
+                            "public_identifier": slug,
+                            "summary": "Works on training systems.",
+                            "location": "San Francisco Bay Area",
+                            "current_company": "Thinking Machines Lab",
+                            "experience": [{"company": "Thinking Machines Lab", "title": "Research Engineer", "is_current": True}],
+                            "education": [],
+                            "publications": [],
+                            "more_profiles": [],
+                        },
+                    }
+                return results
+
+            def fetch_profile_by_url(self, profile_url, snapshot_dir, asset_logger=None):
+                raise AssertionError("known profile URL resolution should not fall back to single Harvest fetches")
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            catalog = AssetCatalog(
+                project_root=root,
+                dev_root=root,
+                anthropic_root=root,
+                anthropic_workbook=root / "anthropic.xlsx",
+                anthropic_readme=root / "README.md",
+                anthropic_progress=root / "PROGRESS.md",
+                legacy_api_accounts=root / "api_accounts.json",
+                legacy_company_ids=root / "company_ids.json",
+                anthropic_publications=root / "publications.json",
+                scholar_scan_results=root / "scholar.json",
+                investor_members_json=root / "investor.json",
+                employee_scan_skill=root / "employee_skill.md",
+                investor_scan_skill=root / "investor_skill.md",
+                onepager_skill=root / "onepager_skill.md",
+            )
+            harvest_profile_connector = _BatchOnlyHarvestProfileConnector()
+            enricher = MultiSourceEnricher(
+                catalog,
+                accounts=[],
+                harvest_profile_connector=harvest_profile_connector,
+            )
+            identity = CompanyIdentity(
+                requested_name="Thinking Machines Lab",
+                canonical_name="Thinking Machines Lab",
+                company_key="thinkingmachineslab",
+                linkedin_slug="thinkingmachinesai",
+                linkedin_company_url="https://www.linkedin.com/company/thinkingmachinesai/",
+            )
+            candidate = Candidate(
+                candidate_id="lead1",
+                name_en="Kevin Lu",
+                display_name="Kevin Lu",
+                category="lead",
+                target_company="Thinking Machines Lab",
+                organization="Thinking Machines Lab",
+                linkedin_url="https://www.linkedin.com/in/mismatch/",
+                metadata={
+                    "profile_url": "https://www.linkedin.com/in/kevin-lu/",
+                },
+            )
+            candidate_map = {"kevinlu": candidate}
+            resolved_profiles = []
+            evidence = []
+
+            resolved, fetch_count = enricher._resolve_candidate_with_known_refs(
+                candidate,
+                identity,
+                root,
+                0,
+                5,
+                candidate_map,
+                resolved_profiles,
+                evidence,
+                asset_logger=AssetLogger(root),
+            )
+
+            self.assertTrue(resolved)
+            self.assertEqual(fetch_count, 1)
+            self.assertEqual(
+                harvest_profile_connector.batch_calls,
+                [[
+                    "https://www.linkedin.com/in/mismatch/",
+                    "https://www.linkedin.com/in/kevin-lu/",
+                ]],
+            )
+            self.assertEqual(candidate_map["kevinlu"].category, "employee")
+            self.assertEqual(len(resolved_profiles), 1)
+            self.assertEqual(len(evidence), 1)
 
     def test_publication_lead_public_web_gate_requires_candidate_confirmation_for_paid_search(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

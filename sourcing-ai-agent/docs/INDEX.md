@@ -16,6 +16,16 @@
   当前模块职责与上下游关系。
 - [ARCHITECTURE.md](ARCHITECTURE.md)
   当前系统分层、provider 抽象和 runtime 设计。
+- [INTENT_PLANNING_BRIEF.md](INTENT_PLANNING_BRIEF.md)
+  `plan` 阶段第一段产品原生解释卡片的标准结构。
+- [FRONTEND_API_CONTRACT.md](FRONTEND_API_CONTRACT.md)
+  Web 层如何消费 `plan / review / workflow / progress / results`，以及 `intent_rewrite` 的稳定 contract。
+- [../contracts/frontend_api_contract.ts](../contracts/frontend_api_contract.ts) / [../contracts/frontend_api_contract.schema.json](../contracts/frontend_api_contract.schema.json) / [../contracts/frontend_api_adapter.ts](../contracts/frontend_api_adapter.ts) / [../contracts/frontend_react_hooks.example.tsx](../contracts/frontend_react_hooks.example.tsx)
+  与上面 contract 对齐的 TypeScript interface / JSON Schema / fetch adapter / React hooks 示例资产。
+- [TERMINAL_WORKFLOW.md](TERMINAL_WORKFLOW.md)
+  终端里如何走 `plan -> review -> workflow -> progress/results`。
+- [QUERY_GUARDRAILS.md](QUERY_GUARDRAILS.md)
+  用户 query 的能力边界、澄清口径和敏感属性禁区。
 - [DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md)
   工程实现约束与 live-test 纪律。
 - [DATA_ASSET_GOVERNANCE.md](DATA_ASSET_GOVERNANCE.md)
@@ -55,6 +65,7 @@
 
 - [THINKING_MACHINES_LAB_RETROSPECTIVE.md](THINKING_MACHINES_LAB_RETROSPECTIVE.md)
 - [HANDOFF_2026-04-06.md](HANDOFF_2026-04-06.md)
+- [HANDOFF_2026-04-09.md](HANDOFF_2026-04-09.md)
 - [RECOVERY_TUTORIAL.md](RECOVERY_TUTORIAL.md)
 - [NEXT_TODO.md](NEXT_TODO.md)
 

@@ -318,6 +318,166 @@ class SearchProviderTest(unittest.TestCase):
         self.assertEqual(execution.checkpoint["task_id"], "task_123")
         self.assertEqual(execution.artifacts[0].label, "task_post")
 
+    def test_dataforseo_provider_submit_batch_queries(self) -> None:
+        provider = DataForSeoGoogleOrganicSearchProvider(
+            login="login",
+            password="password",
+            location_name="United States",
+            language_name="English",
+            device="desktop",
+            os="windows",
+            depth=10,
+            timeout_seconds=30,
+        )
+        payload = {
+            "tasks": [
+                {
+                    "id": "task_123",
+                    "status_code": 20100,
+                    "data": {"keyword": "Jane Doe Thinking Machines Lab", "tag": "seed_queries::01"},
+                    "result": None,
+                },
+                {
+                    "id": "task_456",
+                    "status_code": 20100,
+                    "data": {"keyword": "John Smith Thinking Machines Lab", "tag": "seed_queries::02"},
+                    "result": None,
+                },
+            ]
+        }
+        with patch.object(provider.client, "task_post_many", return_value=payload):
+            result = provider.submit_batch_queries(
+                [
+                    {
+                        "task_key": "seed_queries::01",
+                        "query_text": "Jane Doe Thinking Machines Lab",
+                        "max_results": 10,
+                    },
+                    {
+                        "task_key": "seed_queries::02",
+                        "query_text": "John Smith Thinking Machines Lab",
+                        "max_results": 10,
+                    },
+                ]
+            )
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result.provider_name, "dataforseo_google_organic")
+        self.assertEqual(len(result.tasks), 2)
+        self.assertEqual(result.tasks[0].task_key, "seed_queries::01")
+        self.assertEqual(result.tasks[0].checkpoint["task_id"], "task_123")
+        self.assertEqual(result.tasks[0].metadata["artifact_label"], "task_post_batch_01")
+        self.assertEqual(result.artifacts[0].label, "task_post_batch_01")
+
+    def test_dataforseo_provider_poll_ready_batch(self) -> None:
+        provider = DataForSeoGoogleOrganicSearchProvider(
+            login="login",
+            password="password",
+            location_name="United States",
+            language_name="English",
+            device="desktop",
+            os="windows",
+            depth=10,
+            timeout_seconds=30,
+        )
+        ready_payload = {
+            "tasks": [
+                {
+                    "result": [
+                        {
+                            "id": "task_123",
+                        }
+                    ]
+                }
+            ]
+        }
+        with patch.object(provider.client, "tasks_ready", return_value=ready_payload):
+            result = provider.poll_ready_batch(
+                [
+                    {
+                        "task_key": "seed_queries::01",
+                        "query_text": "Jane Doe Thinking Machines Lab",
+                        "checkpoint": {
+                            "provider_name": "dataforseo_google_organic",
+                            "task_id": "task_123",
+                            "status": "submitted",
+                        },
+                    },
+                    {
+                        "task_key": "seed_queries::02",
+                        "query_text": "John Smith Thinking Machines Lab",
+                        "checkpoint": {
+                            "provider_name": "dataforseo_google_organic",
+                            "task_id": "task_456",
+                            "status": "submitted",
+                        },
+                    },
+                ]
+            )
+        self.assertIsNotNone(result)
+        self.assertEqual(result.tasks[0].checkpoint["status"], "ready_cached")
+        self.assertEqual(result.tasks[1].checkpoint["status"], "waiting_for_ready_cached")
+        self.assertEqual(result.artifacts[0].label, "tasks_ready_batch")
+
+    def test_dataforseo_provider_fetch_ready_batch(self) -> None:
+        provider = DataForSeoGoogleOrganicSearchProvider(
+            login="login",
+            password="password",
+            location_name="United States",
+            language_name="English",
+            device="desktop",
+            os="windows",
+            depth=10,
+            timeout_seconds=30,
+        )
+        task_payload = {
+            "tasks": [
+                {
+                    "status_code": 20000,
+                    "result": [
+                        {
+                            "check_url": "https://www.google.com/search?q=Kevin+Lu",
+                            "items_count": 10,
+                            "items": [
+                                {
+                                    "type": "organic",
+                                    "rank_group": 1,
+                                    "rank_absolute": 1,
+                                    "page": 1,
+                                    "domain": "www.linkedin.com",
+                                    "title": "Kevin Lu - LinkedIn",
+                                    "description": "Research Engineer at Thinking Machines Lab.",
+                                    "url": "https://www.linkedin.com/in/kzl/",
+                                    "breadcrumb": "https://www.linkedin.com",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ]
+        }
+        with patch.object(provider.client, "task_get_regular", return_value=task_payload) as task_get_mock:
+            result = provider.fetch_ready_batch(
+                [
+                    {
+                        "task_key": "seed_queries::01",
+                        "query_text": "Kevin Lu Thinking Machines Lab LinkedIn",
+                        "checkpoint": {
+                            "provider_name": "dataforseo_google_organic",
+                            "task_id": "task_123",
+                            "status": "ready_cached",
+                            "ready_poll_token": "poll_1",
+                        },
+                    }
+                ]
+            )
+        self.assertIsNotNone(result)
+        self.assertEqual(len(result.tasks), 1)
+        self.assertEqual(result.tasks[0].checkpoint["status"], "fetched_cached")
+        self.assertEqual(result.tasks[0].response.results[0].url, "https://www.linkedin.com/in/kzl/")
+        self.assertEqual(result.artifacts[0].label, "task_get_batch_01")
+        task_get_mock.assert_called_once_with("task_123")
+
     def test_dataforseo_provider_execute_with_checkpoint_waits_until_ready(self) -> None:
         provider = DataForSeoGoogleOrganicSearchProvider(
             login="login",
@@ -407,6 +567,111 @@ class SearchProviderTest(unittest.TestCase):
         self.assertIsNotNone(execution.response)
         self.assertEqual(execution.response.metadata["search_mode"], "standard_queue")
         self.assertEqual(execution.response.results[0].url, "https://www.linkedin.com/in/kzl/")
+
+    def test_dataforseo_provider_execute_with_checkpoint_respects_waiting_cached(self) -> None:
+        provider = DataForSeoGoogleOrganicSearchProvider(
+            login="login",
+            password="password",
+            location_name="United States",
+            language_name="English",
+            device="desktop",
+            os="windows",
+            depth=10,
+            timeout_seconds=30,
+        )
+        with patch.object(provider.client, "tasks_ready") as tasks_ready_mock:
+            execution = provider.execute_with_checkpoint(
+                "Kevin Lu Thinking Machines Lab LinkedIn",
+                checkpoint={
+                    "provider_name": "dataforseo_google_organic",
+                    "task_id": "task_123",
+                    "status": "waiting_for_ready_cached",
+                    "ready_poll_token": "poll_1",
+                },
+            )
+        self.assertTrue(execution.pending)
+        self.assertEqual(execution.checkpoint["status"], "waiting_for_ready_cached")
+        tasks_ready_mock.assert_not_called()
+
+    def test_dataforseo_provider_execute_with_checkpoint_respects_ready_cached(self) -> None:
+        provider = DataForSeoGoogleOrganicSearchProvider(
+            login="login",
+            password="password",
+            location_name="United States",
+            language_name="English",
+            device="desktop",
+            os="windows",
+            depth=10,
+            timeout_seconds=30,
+        )
+        task_payload = {
+            "tasks": [
+                {
+                    "status_code": 20000,
+                    "result": [
+                        {
+                            "check_url": "https://www.google.com/search?q=Kevin+Lu",
+                            "items_count": 10,
+                            "items": [
+                                {
+                                    "type": "organic",
+                                    "rank_group": 1,
+                                    "rank_absolute": 1,
+                                    "page": 1,
+                                    "domain": "www.linkedin.com",
+                                    "title": "Kevin Lu - LinkedIn",
+                                    "description": "Research Engineer at Thinking Machines Lab.",
+                                    "url": "https://www.linkedin.com/in/kzl/",
+                                    "breadcrumb": "https://www.linkedin.com",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ]
+        }
+        with patch.object(provider.client, "tasks_ready") as tasks_ready_mock:
+            with patch.object(provider.client, "task_get_regular", return_value=task_payload):
+                execution = provider.execute_with_checkpoint(
+                    "Kevin Lu Thinking Machines Lab LinkedIn",
+                    checkpoint={
+                        "provider_name": "dataforseo_google_organic",
+                        "task_id": "task_123",
+                        "status": "ready_cached",
+                        "ready_poll_token": "poll_1",
+                    },
+                )
+        self.assertFalse(execution.pending)
+        self.assertEqual(execution.response.results[0].url, "https://www.linkedin.com/in/kzl/")
+        tasks_ready_mock.assert_not_called()
+
+    def test_dataforseo_provider_execute_with_checkpoint_respects_recent_fetch_cooldown(self) -> None:
+        provider = DataForSeoGoogleOrganicSearchProvider(
+            login="login",
+            password="password",
+            location_name="United States",
+            language_name="English",
+            device="desktop",
+            os="windows",
+            depth=10,
+            timeout_seconds=30,
+        )
+        recent_attempt = "2099-01-01T00:00:00+00:00"
+        with patch.object(provider.client, "task_get_regular") as task_get_mock:
+            with patch("sourcing_agent.search_provider._timestamp_within_seconds", return_value=True):
+                execution = provider.execute_with_checkpoint(
+                    "Kevin Lu Thinking Machines Lab LinkedIn",
+                    checkpoint={
+                        "provider_name": "dataforseo_google_organic",
+                        "task_id": "task_123",
+                        "status": "ready_cached",
+                        "fetch_attempted_at": recent_attempt,
+                        "lane_fetch_cooldown_seconds": 15,
+                    },
+                )
+        self.assertTrue(execution.pending)
+        self.assertEqual(execution.checkpoint["status"], "ready_cached")
+        task_get_mock.assert_not_called()
 
     def test_build_search_provider_includes_google_browser_when_enabled(self) -> None:
         settings = SearchProviderSettings(

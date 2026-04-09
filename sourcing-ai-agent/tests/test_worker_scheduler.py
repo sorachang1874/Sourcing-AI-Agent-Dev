@@ -1,6 +1,12 @@
 import unittest
 
-from sourcing_agent.worker_scheduler import infer_resume_mode, lane_limits_from_plan, schedule_work_specs, summarize_scheduler
+from sourcing_agent.worker_scheduler import (
+    effective_worker_status,
+    infer_resume_mode,
+    lane_limits_from_plan,
+    schedule_work_specs,
+    summarize_scheduler,
+)
 
 
 class WorkerSchedulerTest(unittest.TestCase):
@@ -30,7 +36,13 @@ class WorkerSchedulerTest(unittest.TestCase):
         plan = {"acquisition_strategy": {"cost_policy": {"parallel_search_workers": 4, "parallel_exploration_workers": 2}}}
         workers = [
             {"worker_id": 1, "lane_id": "search_planner", "worker_key": "a", "status": "interrupted", "checkpoint": {"html_path": "/tmp/a"}},
-            {"worker_id": 2, "lane_id": "exploration_specialist", "worker_key": "c", "status": "running", "checkpoint": {}},
+            {
+                "worker_id": 2,
+                "lane_id": "exploration_specialist",
+                "worker_key": "c",
+                "status": "running",
+                "checkpoint": {"stage": "waiting_remote_search"},
+            },
         ]
         summary = summarize_scheduler(plan_payload=plan, workers=workers)
         self.assertEqual(summary["lane_limits"]["search_planner"], 4)
@@ -38,12 +50,22 @@ class WorkerSchedulerTest(unittest.TestCase):
         self.assertEqual(summary["lane_budget_caps"]["search_planner"], 8)
         self.assertEqual(summary["resumable_workers"][0]["worker_key"], "a")
         self.assertEqual(summary["lane_summary"][0]["lane_id"], "exploration_specialist")
+        self.assertEqual(summary["lane_summary"][0]["waiting_remote_search"], 1)
+        self.assertEqual(summary["lane_summary"][0]["queued"], 1)
 
     def test_resume_mode_classifier(self) -> None:
         self.assertEqual(infer_resume_mode(None), "fresh_start")
         self.assertEqual(infer_resume_mode({"status": "running", "checkpoint": {}}), "already_running")
+        self.assertEqual(
+            infer_resume_mode({"status": "running", "checkpoint": {"stage": "waiting_remote_harvest"}}),
+            "resume_from_checkpoint",
+        )
         self.assertEqual(infer_resume_mode({"status": "completed", "checkpoint": {"stage": "done"}}), "reuse_checkpoint")
         self.assertEqual(
             lane_limits_from_plan({"acquisition_strategy": {"cost_policy": {"parallel_search_workers": 5}}})["search_planner"],
             5,
+        )
+        self.assertEqual(
+            effective_worker_status({"status": "running", "checkpoint": {"stage": "waiting_remote_search"}}),
+            "waiting_remote_search",
         )

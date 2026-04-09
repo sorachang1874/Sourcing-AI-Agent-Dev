@@ -9,6 +9,9 @@ class DataForSeoClientError(RuntimeError):
     pass
 
 
+MAX_TASK_POST_BATCH_SIZE = 100
+
+
 def build_google_organic_task(
     *,
     keyword: str,
@@ -59,6 +62,26 @@ def extract_google_organic_ready_task_ids(payload: dict[str, Any]) -> list[str]:
             if task_id:
                 task_ids.append(task_id)
     return task_ids
+
+
+def extract_google_organic_submitted_tasks(
+    payload: dict[str, Any],
+    *,
+    fallback_tasks: list[dict[str, Any]] | None = None,
+) -> list[dict[str, str]]:
+    submitted: list[dict[str, str]] = []
+    fallback_items = list(fallback_tasks or [])
+    for index, task in enumerate(list(payload.get("tasks") or [])):
+        echoed = dict(task.get("data") or {})
+        fallback = dict(fallback_items[index] or {}) if index < len(fallback_items) else {}
+        submitted.append(
+            {
+                "task_id": str(task.get("id") or "").strip(),
+                "keyword": str(echoed.get("keyword") or fallback.get("keyword") or "").strip(),
+                "tag": str(echoed.get("tag") or fallback.get("tag") or "").strip(),
+            }
+        )
+    return submitted
 
 
 class DataForSeoGoogleOrganicClient:
@@ -117,7 +140,17 @@ class DataForSeoGoogleOrganicClient:
             depth=depth,
             tag=tag,
         )
-        return self._request("POST", "/v3/serp/google/organic/task_post", payload=[task])
+        return self.task_post_many([task])
+
+    def task_post_many(self, tasks: list[dict[str, Any]]) -> dict[str, Any]:
+        normalized_tasks = [dict(task or {}) for task in list(tasks or []) if isinstance(task, dict)]
+        if not normalized_tasks:
+            raise DataForSeoClientError("At least one DataForSEO task is required.")
+        if len(normalized_tasks) > MAX_TASK_POST_BATCH_SIZE:
+            raise DataForSeoClientError(
+                f"DataForSEO task_post supports at most {MAX_TASK_POST_BATCH_SIZE} tasks per request."
+            )
+        return self._request("POST", "/v3/serp/google/organic/task_post", payload=normalized_tasks)
 
     def tasks_ready(self) -> dict[str, Any]:
         return self._request("GET", "/v3/serp/google/organic/tasks_ready")
