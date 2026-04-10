@@ -602,7 +602,7 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(plan_result["plan_review_gate"]["status"], "requires_review")
         self.assertTrue(plan_result["plan_review_gate"]["required_before_execution"])
         self.assertIn("google_scope_ambiguity_requires_confirmation", plan_result["plan_review_gate"]["reasons"])
-        self.assertNotIn("targeted_people_search", [item["bundle_id"] for item in plan_result["plan"]["search_strategy"]["query_bundles"]])
+        self.assertIn("targeted_people_search", [item["bundle_id"] for item in plan_result["plan"]["search_strategy"]["query_bundles"]])
         self.assertTrue(any("团队或子组织范围：" in item and "Veo" in item for item in plan_result["plan"]["intent_brief"]["identified_request"]))
 
     def test_model_assisted_request_normalization_preserves_natural_language_shorthand_rewrite(self) -> None:
