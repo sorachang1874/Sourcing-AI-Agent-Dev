@@ -154,3 +154,13 @@ PYTHONPATH=src python3 -m sourcing_agent.cli run-worker-daemon-once --job-id <jo
 3. workflow 统一走非阻塞 + daemon 恢复。
 4. 进度以 `show-progress` 为主，问题定位看 `show-workers/show-trace`。
 5. 对重复 query 统一检查 `query-dispatches`，不要盲目重跑。
+
+## 7. 采集并行策略（2026-04-10 更新）
+
+`acquire_full_roster` 现在不是“先 current 再 former”的严格串行，默认策略改为：
+
+- 当 `company-employees(current)` 进入 background queued 时，立即并行触发 `profile-search(former)`。
+- 在非 worker 的同步采集路径里，也会并行启动 former（进入 enrichment 前 join）。
+- 若 former 处于 `queued_background_search`，workflow 会保持 `blocked`，等待 daemon 恢复后继续到 enrichment。
+
+这能显著减少大组织查询的端到端等待时间，同时保留“先 probe 再全量”的成本控制。
