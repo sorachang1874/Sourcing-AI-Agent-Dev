@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import json
 from hashlib import sha1
 from pathlib import Path
+import re
 import sqlite3
 import threading
 from typing import Any
+from urllib import parse
 
 from .domain import Candidate, EvidenceRecord, JobRequest, normalize_candidate
 from .request_matching import MATCH_THRESHOLD, request_family_score, request_family_signature, request_signature
@@ -73,6 +76,11 @@ class SQLiteStore:
                     plan_json TEXT,
                     summary_json TEXT,
                     artifact_path TEXT,
+                    request_signature TEXT,
+                    request_family_signature TEXT,
+                    requester_id TEXT,
+                    tenant_id TEXT,
+                    idempotency_key TEXT,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
                 );
@@ -324,6 +332,87 @@ class SQLiteStore:
                     UNIQUE(job_id, lane_id, worker_key)
                 );
 
+                CREATE TABLE IF NOT EXISTS query_dispatches (
+                    dispatch_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    target_company TEXT,
+                    request_signature TEXT NOT NULL,
+                    request_family_signature TEXT NOT NULL,
+                    requester_id TEXT,
+                    tenant_id TEXT,
+                    idempotency_key TEXT,
+                    strategy TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    source_job_id TEXT,
+                    created_job_id TEXT,
+                    payload_json TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS linkedin_profile_registry (
+                    profile_url_key TEXT PRIMARY KEY,
+                    profile_url TEXT NOT NULL,
+                    raw_linkedin_url TEXT,
+                    sanity_linkedin_url TEXT,
+                    status TEXT NOT NULL DEFAULT 'queued',
+                    retry_count INTEGER NOT NULL DEFAULT 0,
+                    last_error TEXT,
+                    last_run_id TEXT,
+                    last_dataset_id TEXT,
+                    last_snapshot_dir TEXT,
+                    last_raw_path TEXT,
+                    first_queued_at TEXT,
+                    last_queued_at TEXT,
+                    last_fetched_at TEXT,
+                    last_failed_at TEXT,
+                    source_shards_json TEXT NOT NULL DEFAULT '[]',
+                    source_jobs_json TEXT NOT NULL DEFAULT '[]',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS linkedin_profile_registry_aliases (
+                    alias_url_key TEXT PRIMARY KEY,
+                    profile_url_key TEXT NOT NULL,
+                    alias_url TEXT NOT NULL,
+                    alias_kind TEXT NOT NULL DEFAULT 'observed',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS linkedin_profile_registry_leases (
+                    profile_url_key TEXT PRIMARY KEY,
+                    lease_owner TEXT NOT NULL,
+                    lease_token TEXT NOT NULL,
+                    lease_expires_at TEXT NOT NULL,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS linkedin_profile_registry_events (
+                    event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    profile_url_key TEXT NOT NULL,
+                    event_type TEXT NOT NULL,
+                    event_status TEXT,
+                    detail TEXT,
+                    run_id TEXT,
+                    dataset_id TEXT,
+                    metadata_json TEXT,
+                    duration_ms INTEGER,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS linkedin_profile_registry_backfill_runs (
+                    run_key TEXT PRIMARY KEY,
+                    scope_company TEXT,
+                    scope_snapshot_id TEXT,
+                    checkpoint_json TEXT NOT NULL DEFAULT '{}',
+                    summary_json TEXT NOT NULL DEFAULT '{}',
+                    status TEXT NOT NULL DEFAULT 'running',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
                 CREATE INDEX IF NOT EXISTS idx_candidates_target_company
                     ON candidates (target_company, category, employment_status);
 
@@ -374,11 +463,34 @@ class SQLiteStore:
 
                 CREATE INDEX IF NOT EXISTS idx_agent_worker_runs_job
                     ON agent_worker_runs (job_id, lane_id, worker_id);
+
+                CREATE INDEX IF NOT EXISTS idx_linkedin_profile_registry_status
+                    ON linkedin_profile_registry (status, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_linkedin_profile_registry_run
+                    ON linkedin_profile_registry (last_run_id, last_dataset_id, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_linkedin_profile_registry_alias_canonical
+                    ON linkedin_profile_registry_aliases (profile_url_key, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_linkedin_profile_registry_leases_expires
+                    ON linkedin_profile_registry_leases (lease_expires_at);
+
+                CREATE INDEX IF NOT EXISTS idx_linkedin_profile_registry_event_type
+                    ON linkedin_profile_registry_events (event_type, created_at);
+
+                CREATE INDEX IF NOT EXISTS idx_linkedin_profile_registry_event_profile
+                    ON linkedin_profile_registry_events (profile_url_key, created_at);
                 """
             )
             self._ensure_column("jobs", "job_type", "TEXT NOT NULL DEFAULT 'retrieval'")
             self._ensure_column("jobs", "stage", "TEXT NOT NULL DEFAULT 'pending'")
             self._ensure_column("jobs", "plan_json", "TEXT")
+            self._ensure_column("jobs", "request_signature", "TEXT")
+            self._ensure_column("jobs", "request_family_signature", "TEXT")
+            self._ensure_column("jobs", "requester_id", "TEXT")
+            self._ensure_column("jobs", "tenant_id", "TEXT")
+            self._ensure_column("jobs", "idempotency_key", "TEXT")
             self._ensure_column("job_results", "confidence_label", "TEXT")
             self._ensure_column("job_results", "confidence_score", "REAL")
             self._ensure_column("job_results", "confidence_reason", "TEXT")
@@ -445,6 +557,98 @@ class SQLiteStore:
             self._ensure_column("agent_worker_runs", "lease_expires_at", "TEXT")
             self._ensure_column("agent_worker_runs", "attempt_count", "INTEGER NOT NULL DEFAULT 0")
             self._ensure_column("agent_worker_runs", "last_error", "TEXT")
+            self._ensure_column("query_dispatches", "request_signature", "TEXT")
+            self._ensure_column("query_dispatches", "request_family_signature", "TEXT")
+            self._ensure_column("query_dispatches", "requester_id", "TEXT")
+            self._ensure_column("query_dispatches", "tenant_id", "TEXT")
+            self._ensure_column("query_dispatches", "idempotency_key", "TEXT")
+            self._ensure_column("linkedin_profile_registry", "profile_url", "TEXT NOT NULL DEFAULT ''")
+            self._ensure_column("linkedin_profile_registry", "raw_linkedin_url", "TEXT")
+            self._ensure_column("linkedin_profile_registry", "sanity_linkedin_url", "TEXT")
+            self._ensure_column("linkedin_profile_registry", "status", "TEXT NOT NULL DEFAULT 'queued'")
+            self._ensure_column("linkedin_profile_registry", "retry_count", "INTEGER NOT NULL DEFAULT 0")
+            self._ensure_column("linkedin_profile_registry", "last_error", "TEXT")
+            self._ensure_column("linkedin_profile_registry", "last_run_id", "TEXT")
+            self._ensure_column("linkedin_profile_registry", "last_dataset_id", "TEXT")
+            self._ensure_column("linkedin_profile_registry", "last_snapshot_dir", "TEXT")
+            self._ensure_column("linkedin_profile_registry", "last_raw_path", "TEXT")
+            self._ensure_column("linkedin_profile_registry", "first_queued_at", "TEXT")
+            self._ensure_column("linkedin_profile_registry", "last_queued_at", "TEXT")
+            self._ensure_column("linkedin_profile_registry", "last_fetched_at", "TEXT")
+            self._ensure_column("linkedin_profile_registry", "last_failed_at", "TEXT")
+            self._ensure_column("linkedin_profile_registry", "source_shards_json", "TEXT NOT NULL DEFAULT '[]'")
+            self._ensure_column("linkedin_profile_registry", "source_jobs_json", "TEXT NOT NULL DEFAULT '[]'")
+            self._connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_jobs_request_signature_status
+                ON jobs (request_signature, status, updated_at)
+                """
+            )
+            self._connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_jobs_request_family_signature_status
+                ON jobs (request_family_signature, status, updated_at)
+                """
+            )
+            self._connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_jobs_scope_status
+                ON jobs (tenant_id, requester_id, status, updated_at)
+                """
+            )
+            self._connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_jobs_idempotency_scope
+                ON jobs (idempotency_key, tenant_id, requester_id, updated_at)
+                """
+            )
+            self._connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_query_dispatches_signature
+                ON query_dispatches (request_signature, created_at)
+                """
+            )
+            self._connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_query_dispatches_scope
+                ON query_dispatches (tenant_id, requester_id, created_at)
+                """
+            )
+            self._connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_query_dispatches_idempotency
+                ON query_dispatches (idempotency_key, tenant_id, requester_id, created_at)
+                """
+            )
+        self._backfill_job_request_signatures()
+
+    def _backfill_job_request_signatures(self) -> None:
+        with self._lock, self._connection:
+            rows = self._connection.execute(
+                """
+                SELECT job_id, request_json
+                FROM jobs
+                WHERE coalesce(request_signature, '') = '' OR coalesce(request_family_signature, '') = ''
+                """
+            ).fetchall()
+            for row in rows:
+                request_payload: dict[str, Any]
+                try:
+                    request_payload = json.loads(row["request_json"] or "{}")
+                except json.JSONDecodeError:
+                    request_payload = {}
+                self._connection.execute(
+                    """
+                    UPDATE jobs
+                    SET request_signature = ?, request_family_signature = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE job_id = ?
+                    """,
+                    (
+                        request_signature(request_payload),
+                        request_family_signature(request_payload),
+                        str(row["job_id"] or ""),
+                    ),
+                )
 
     def replace_bootstrap_data(self, candidates: list[Candidate], evidence: list[EvidenceRecord]) -> None:
         with self._lock, self._connection:
@@ -683,15 +887,26 @@ class SQLiteStore:
         plan_payload: dict[str, Any] | None = None,
         summary_payload: dict[str, Any] | None = None,
         artifact_path: str = "",
+        requester_id: str = "",
+        tenant_id: str = "",
+        idempotency_key: str = "",
     ) -> None:
         summary_json = json.dumps(summary_payload or {}, ensure_ascii=False)
         request_json = json.dumps(request_payload, ensure_ascii=False)
         plan_json = json.dumps(plan_payload or {}, ensure_ascii=False)
+        request_sig = request_signature(request_payload)
+        request_family_sig = request_family_signature(request_payload)
+        requester_id_value = str(requester_id or "").strip()
+        tenant_id_value = str(tenant_id or "").strip()
+        idempotency_key_value = str(idempotency_key or "").strip()
         with self._lock, self._connection:
             self._connection.execute(
                 """
-                INSERT INTO jobs (job_id, job_type, status, stage, request_json, plan_json, summary_json, artifact_path)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO jobs (
+                    job_id, job_type, status, stage, request_json, plan_json, summary_json, artifact_path,
+                    request_signature, request_family_signature, requester_id, tenant_id, idempotency_key
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(job_id) DO UPDATE SET
                     job_type = excluded.job_type,
                     status = excluded.status,
@@ -700,9 +915,37 @@ class SQLiteStore:
                     plan_json = excluded.plan_json,
                     summary_json = excluded.summary_json,
                     artifact_path = excluded.artifact_path,
+                    request_signature = excluded.request_signature,
+                    request_family_signature = excluded.request_family_signature,
+                    requester_id = CASE
+                        WHEN excluded.requester_id <> '' THEN excluded.requester_id
+                        ELSE jobs.requester_id
+                    END,
+                    tenant_id = CASE
+                        WHEN excluded.tenant_id <> '' THEN excluded.tenant_id
+                        ELSE jobs.tenant_id
+                    END,
+                    idempotency_key = CASE
+                        WHEN excluded.idempotency_key <> '' THEN excluded.idempotency_key
+                        ELSE jobs.idempotency_key
+                    END,
                     updated_at = CURRENT_TIMESTAMP
                 """,
-                (job_id, job_type, status, stage, request_json, plan_json, summary_json, artifact_path),
+                (
+                    job_id,
+                    job_type,
+                    status,
+                    stage,
+                    request_json,
+                    plan_json,
+                    summary_json,
+                    artifact_path,
+                    request_sig,
+                    request_family_sig,
+                    requester_id_value,
+                    tenant_id_value,
+                    idempotency_key_value,
+                ),
             )
 
     def append_job_event(
@@ -749,21 +992,11 @@ class SQLiteStore:
             )
 
     def get_job(self, job_id: str) -> dict[str, Any] | None:
-        row = self._connection.execute("SELECT * FROM jobs WHERE job_id = ?", (job_id,)).fetchone()
+        with self._lock:
+            row = self._connection.execute("SELECT * FROM jobs WHERE job_id = ?", (job_id,)).fetchone()
         if row is None:
             return None
-        return {
-            "job_id": row["job_id"],
-            "job_type": row["job_type"],
-            "status": row["status"],
-            "stage": row["stage"],
-            "request": json.loads(row["request_json"]),
-            "plan": json.loads(row["plan_json"] or "{}"),
-            "summary": json.loads(row["summary_json"] or "{}"),
-            "artifact_path": row["artifact_path"],
-            "created_at": row["created_at"],
-            "updated_at": row["updated_at"],
-        }
+        return self._job_from_row(row)
 
     def get_job_results(self, job_id: str) -> list[dict[str, Any]]:
         rows = self._connection.execute(
@@ -1700,18 +1933,7 @@ class SQLiteStore:
                 continue
             if str(request_payload.get("target_company") or "").strip().lower() != target_company.strip().lower():
                 continue
-            return {
-                "job_id": job_id,
-                "job_type": row["job_type"],
-                "status": row["status"],
-                "stage": row["stage"],
-                "request": request_payload,
-                "plan": json.loads(row["plan_json"] or "{}"),
-                "summary": json.loads(row["summary_json"] or "{}"),
-                "artifact_path": row["artifact_path"],
-                "created_at": row["created_at"],
-                "updated_at": row["updated_at"],
-            }
+            return self._job_from_row(row)
         return None
 
     def find_best_completed_job_match(
@@ -1749,18 +1971,7 @@ class SQLiteStore:
             if str(candidate_request.get("target_company") or "").strip().lower() != target_company.strip().lower():
                 continue
             match = request_family_score(request_payload, candidate_request)
-            job_payload = {
-                "job_id": job_id,
-                "job_type": row["job_type"],
-                "status": row["status"],
-                "stage": row["stage"],
-                "request": candidate_request,
-                "plan": json.loads(row["plan_json"] or "{}"),
-                "summary": json.loads(row["summary_json"] or "{}"),
-                "artifact_path": row["artifact_path"],
-                "created_at": row["created_at"],
-                "updated_at": row["updated_at"],
-            }
+            job_payload = self._job_from_row(row)
             sort_key = _job_match_sort_key(match, row)
             if best_sort_key is None or sort_key > best_sort_key:
                 best_job = job_payload
@@ -1803,6 +2014,1100 @@ class SQLiteStore:
             "reasons": list(best_match.get("reasons") or []),
         }
         return best_job
+
+    def find_latest_job_by_request_signature(
+        self,
+        *,
+        request_signature_value: str,
+        target_company: str = "",
+        statuses: list[str] | None = None,
+        requester_id: str = "",
+        tenant_id: str = "",
+        scope: str = "auto",
+        exclude_job_id: str = "",
+        limit: int = 200,
+    ) -> dict[str, Any] | None:
+        signature = str(request_signature_value or "").strip()
+        if not signature:
+            return None
+        normalized_statuses = [str(item or "").strip() for item in list(statuses or []) if str(item or "").strip()]
+        params: list[Any] = [signature]
+        clauses = ["request_signature = ?"]
+        if normalized_statuses:
+            placeholders = ",".join("?" for _ in normalized_statuses)
+            clauses.append(f"status IN ({placeholders})")
+            params.extend(normalized_statuses)
+        rows = self._connection.execute(
+            f"""
+            SELECT * FROM jobs
+            WHERE {" AND ".join(clauses)}
+            ORDER BY updated_at DESC, created_at DESC
+            LIMIT ?
+            """,
+            (*params, max(1, int(limit or 200))),
+        ).fetchall()
+        scope_mode = _normalize_dispatch_scope(scope, requester_id=requester_id, tenant_id=tenant_id)
+        normalized_target_company = str(target_company or "").strip().lower()
+        for row in rows:
+            payload = self._job_from_row(row)
+            job_id = str(payload.get("job_id") or "")
+            if exclude_job_id and job_id == exclude_job_id:
+                continue
+            request_payload = dict(payload.get("request") or {})
+            if normalized_target_company and str(request_payload.get("target_company") or "").strip().lower() != normalized_target_company:
+                continue
+            if not _job_matches_dispatch_scope(
+                payload,
+                scope=scope_mode,
+                requester_id=str(requester_id or "").strip(),
+                tenant_id=str(tenant_id or "").strip(),
+            ):
+                continue
+            return payload
+        return None
+
+    def find_latest_job_by_idempotency_key(
+        self,
+        *,
+        idempotency_key: str,
+        target_company: str = "",
+        statuses: list[str] | None = None,
+        requester_id: str = "",
+        tenant_id: str = "",
+        scope: str = "auto",
+        limit: int = 200,
+    ) -> dict[str, Any] | None:
+        normalized_idempotency_key = str(idempotency_key or "").strip()
+        if not normalized_idempotency_key:
+            return None
+        normalized_statuses = [str(item or "").strip() for item in list(statuses or []) if str(item or "").strip()]
+        params: list[Any] = [normalized_idempotency_key]
+        clauses = ["idempotency_key = ?"]
+        if normalized_statuses:
+            placeholders = ",".join("?" for _ in normalized_statuses)
+            clauses.append(f"status IN ({placeholders})")
+            params.extend(normalized_statuses)
+        rows = self._connection.execute(
+            f"""
+            SELECT * FROM jobs
+            WHERE {" AND ".join(clauses)}
+            ORDER BY updated_at DESC, created_at DESC
+            LIMIT ?
+            """,
+            (*params, max(1, int(limit or 200))),
+        ).fetchall()
+        scope_mode = _normalize_dispatch_scope(scope, requester_id=requester_id, tenant_id=tenant_id)
+        normalized_target_company = str(target_company or "").strip().lower()
+        for row in rows:
+            payload = self._job_from_row(row)
+            request_payload = dict(payload.get("request") or {})
+            if normalized_target_company and str(request_payload.get("target_company") or "").strip().lower() != normalized_target_company:
+                continue
+            if not _job_matches_dispatch_scope(
+                payload,
+                scope=scope_mode,
+                requester_id=str(requester_id or "").strip(),
+                tenant_id=str(tenant_id or "").strip(),
+            ):
+                continue
+            return payload
+        return None
+
+    def record_query_dispatch(
+        self,
+        *,
+        target_company: str,
+        request_payload: dict[str, Any],
+        strategy: str,
+        status: str,
+        source_job_id: str = "",
+        created_job_id: str = "",
+        requester_id: str = "",
+        tenant_id: str = "",
+        idempotency_key: str = "",
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        normalized_target_company = str(target_company or "").strip()
+        requester_id_value = str(requester_id or "").strip()
+        tenant_id_value = str(tenant_id or "").strip()
+        idempotency_key_value = str(idempotency_key or "").strip()
+        request_sig = request_signature(request_payload)
+        request_family_sig = request_family_signature(request_payload)
+        with self._lock, self._connection:
+            cursor = self._connection.execute(
+                """
+                INSERT INTO query_dispatches (
+                    target_company,
+                    request_signature,
+                    request_family_signature,
+                    requester_id,
+                    tenant_id,
+                    idempotency_key,
+                    strategy,
+                    status,
+                    source_job_id,
+                    created_job_id,
+                    payload_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    normalized_target_company,
+                    request_sig,
+                    request_family_sig,
+                    requester_id_value,
+                    tenant_id_value,
+                    idempotency_key_value,
+                    str(strategy or "").strip(),
+                    str(status or "").strip(),
+                    str(source_job_id or "").strip(),
+                    str(created_job_id or "").strip(),
+                    json.dumps(payload or {}, ensure_ascii=False),
+                ),
+            )
+            dispatch_id = int(cursor.lastrowid)
+        return self.get_query_dispatch(dispatch_id) or {}
+
+    def get_query_dispatch(self, dispatch_id: int) -> dict[str, Any] | None:
+        if dispatch_id <= 0:
+            return None
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT * FROM query_dispatches WHERE dispatch_id = ? LIMIT 1",
+                (dispatch_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return self._query_dispatch_from_row(row)
+
+    def list_query_dispatches(
+        self,
+        *,
+        target_company: str = "",
+        requester_id: str = "",
+        tenant_id: str = "",
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if target_company:
+            clauses.append("lower(target_company) = lower(?)")
+            params.append(target_company)
+        if requester_id:
+            clauses.append("requester_id = ?")
+            params.append(requester_id)
+        if tenant_id:
+            clauses.append("tenant_id = ?")
+            params.append(tenant_id)
+        where_clause = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        with self._lock:
+            rows = self._connection.execute(
+                f"""
+                SELECT * FROM query_dispatches
+                {where_clause}
+                ORDER BY updated_at DESC, dispatch_id DESC
+                LIMIT ?
+                """,
+                (*params, max(1, int(limit or 100))),
+            ).fetchall()
+        return [self._query_dispatch_from_row(row) for row in rows]
+
+    def normalize_linkedin_profile_url(self, profile_url: str) -> str:
+        return _normalize_linkedin_profile_url_key(profile_url)
+
+    def get_linkedin_profile_registry(self, profile_url: str) -> dict[str, Any] | None:
+        key = _normalize_linkedin_profile_url_key(profile_url)
+        if not key:
+            return None
+        with self._lock:
+            resolved_key = self._resolve_linkedin_profile_registry_key_locked(key)
+            row = self._connection.execute(
+                """
+                SELECT * FROM linkedin_profile_registry
+                WHERE profile_url_key = ?
+                LIMIT 1
+                """,
+                (resolved_key,),
+            ).fetchone()
+            alias_urls = self._list_linkedin_profile_alias_urls_locked(resolved_key)
+        if row is None:
+            return None
+        payload = self._linkedin_profile_registry_from_row(row)
+        payload["alias_urls"] = alias_urls
+        return payload
+
+    def get_linkedin_profile_registry_bulk(self, profile_urls: list[str]) -> dict[str, dict[str, Any]]:
+        keys = _dedupe_preserve_order(
+            [
+                _normalize_linkedin_profile_url_key(profile_url)
+                for profile_url in list(profile_urls or [])
+            ]
+        )
+        if not keys:
+            return {}
+        with self._lock:
+            placeholder_keys = ",".join("?" for _ in keys)
+            alias_rows = self._connection.execute(
+                f"""
+                SELECT alias_url_key, profile_url_key
+                FROM linkedin_profile_registry_aliases
+                WHERE alias_url_key IN ({placeholder_keys})
+                """,
+                tuple(keys),
+            ).fetchall()
+            alias_map = {
+                str(row["alias_url_key"] or "").strip(): str(row["profile_url_key"] or "").strip()
+                for row in alias_rows
+                if str(row["alias_url_key"] or "").strip() and str(row["profile_url_key"] or "").strip()
+            }
+            canonical_keys = _dedupe_preserve_order([str(alias_map.get(key) or key).strip() for key in keys if str(alias_map.get(key) or key).strip()])
+            if not canonical_keys:
+                return {}
+            canonical_placeholders = ",".join("?" for _ in canonical_keys)
+            rows = self._connection.execute(
+                f"""
+                SELECT * FROM linkedin_profile_registry
+                WHERE profile_url_key IN ({canonical_placeholders})
+                """,
+                tuple(canonical_keys),
+            ).fetchall()
+            alias_rows_all = self._connection.execute(
+                f"""
+                SELECT profile_url_key, alias_url
+                FROM linkedin_profile_registry_aliases
+                WHERE profile_url_key IN ({canonical_placeholders})
+                ORDER BY updated_at DESC
+                """,
+                tuple(canonical_keys),
+            ).fetchall()
+        aliases_by_canonical: dict[str, list[str]] = {}
+        for alias_row in alias_rows_all:
+            canonical_key = str(alias_row["profile_url_key"] or "").strip()
+            alias_url = str(alias_row["alias_url"] or "").strip()
+            if not canonical_key or not alias_url:
+                continue
+            aliases_by_canonical.setdefault(canonical_key, [])
+            if alias_url not in aliases_by_canonical[canonical_key]:
+                aliases_by_canonical[canonical_key].append(alias_url)
+        payload_by_canonical: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            canonical_key = str(row["profile_url_key"] or "").strip()
+            if not canonical_key:
+                continue
+            payload = self._linkedin_profile_registry_from_row(row)
+            payload["alias_urls"] = list(aliases_by_canonical.get(canonical_key) or [])
+            payload_by_canonical[canonical_key] = payload
+
+        resolved: dict[str, dict[str, Any]] = {}
+        for canonical_key, payload in payload_by_canonical.items():
+            resolved[canonical_key] = payload
+        for key in keys:
+            canonical_key = str(alias_map.get(key) or key).strip()
+            payload = payload_by_canonical.get(canonical_key)
+            if payload is not None:
+                resolved[key] = dict(payload)
+        return resolved
+
+    def get_linkedin_profile_registry_aliases(self, profile_url: str) -> list[str]:
+        key = _normalize_linkedin_profile_url_key(profile_url)
+        if not key:
+            return []
+        with self._lock:
+            canonical_key = self._resolve_linkedin_profile_registry_key_locked(key)
+            return self._list_linkedin_profile_alias_urls_locked(canonical_key)
+
+    def upsert_linkedin_profile_registry_aliases(
+        self,
+        profile_url: str,
+        alias_urls: list[str],
+        *,
+        alias_kind: str = "observed",
+    ) -> int:
+        normalized_profile_url = str(profile_url or "").strip()
+        profile_key = _normalize_linkedin_profile_url_key(normalized_profile_url)
+        normalized_alias_urls = _normalize_linkedin_profile_url_list(alias_urls)
+        if not profile_key and not normalized_alias_urls:
+            return 0
+        with self._lock, self._connection:
+            canonical_key = self._resolve_linkedin_profile_registry_key_locked(profile_key) if profile_key else ""
+            if not canonical_key and normalized_alias_urls:
+                canonical_key = _normalize_linkedin_profile_url_key(normalized_alias_urls[0])
+            if not canonical_key:
+                return 0
+            existing = self._connection.execute(
+                """
+                SELECT profile_url FROM linkedin_profile_registry
+                WHERE profile_url_key = ?
+                LIMIT 1
+                """,
+                (canonical_key,),
+            ).fetchone()
+            canonical_profile_url = str(existing["profile_url"] or "").strip() if existing is not None else ""
+            if not canonical_profile_url:
+                canonical_profile_url = normalized_profile_url or canonical_key
+                self._connection.execute(
+                    """
+                    INSERT INTO linkedin_profile_registry (
+                        profile_url_key,
+                        profile_url,
+                        status,
+                        retry_count,
+                        source_shards_json,
+                        source_jobs_json
+                    ) VALUES (?, ?, 'queued', 0, '[]', '[]')
+                    ON CONFLICT(profile_url_key) DO NOTHING
+                    """,
+                    (canonical_key, canonical_profile_url),
+                )
+            all_alias_urls = _normalize_linkedin_profile_url_list([canonical_profile_url, *normalized_alias_urls])
+            return self._upsert_linkedin_profile_registry_aliases_locked(
+                canonical_key=canonical_key,
+                canonical_profile_url=canonical_profile_url,
+                alias_urls=all_alias_urls,
+                alias_kind=alias_kind,
+            )
+
+    def acquire_linkedin_profile_registry_lease(
+        self,
+        profile_url: str,
+        *,
+        lease_owner: str,
+        lease_seconds: int = 240,
+        lease_token: str = "",
+    ) -> dict[str, Any]:
+        normalized_owner = str(lease_owner or "").strip()
+        normalized_key = _normalize_linkedin_profile_url_key(profile_url)
+        if not normalized_key or not normalized_owner:
+            return {
+                "profile_url_key": normalized_key,
+                "acquired": False,
+                "lease_owner": "",
+                "lease_token": "",
+                "lease_expires_at": "",
+            }
+        normalized_token = str(lease_token or "").strip() or sha1(
+            f"{normalized_key}:{normalized_owner}:{_utc_now_timestamp()}".encode("utf-8")
+        ).hexdigest()[:16]
+        ttl_seconds = max(5, int(lease_seconds or 0))
+        with self._lock, self._connection:
+            canonical_key = self._resolve_linkedin_profile_registry_key_locked(normalized_key)
+            cursor = self._connection.execute(
+                """
+                INSERT INTO linkedin_profile_registry_leases (
+                    profile_url_key,
+                    lease_owner,
+                    lease_token,
+                    lease_expires_at
+                ) VALUES (?, ?, ?, datetime('now', ?))
+                ON CONFLICT(profile_url_key) DO UPDATE SET
+                    lease_owner = excluded.lease_owner,
+                    lease_token = excluded.lease_token,
+                    lease_expires_at = excluded.lease_expires_at,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE datetime(linkedin_profile_registry_leases.lease_expires_at) <= datetime('now')
+                   OR linkedin_profile_registry_leases.lease_owner = excluded.lease_owner
+                   OR linkedin_profile_registry_leases.lease_token = excluded.lease_token
+                """,
+                (
+                    canonical_key,
+                    normalized_owner,
+                    normalized_token,
+                    f"+{ttl_seconds} seconds",
+                ),
+            )
+            lease_row = self._connection.execute(
+                """
+                SELECT * FROM linkedin_profile_registry_leases
+                WHERE profile_url_key = ?
+                LIMIT 1
+                """,
+                (canonical_key,),
+            ).fetchone()
+        lease_payload = self._linkedin_profile_registry_lease_from_row(lease_row)
+        return {
+            **lease_payload,
+            "acquired": bool(cursor.rowcount),
+            "contended": bool(
+                lease_payload
+                and lease_payload.get("lease_owner")
+                and str(lease_payload.get("lease_owner")) != normalized_owner
+                and not bool(cursor.rowcount)
+            ),
+        }
+
+    def get_linkedin_profile_registry_lease(self, profile_url: str) -> dict[str, Any] | None:
+        normalized_key = _normalize_linkedin_profile_url_key(profile_url)
+        if not normalized_key:
+            return None
+        with self._lock:
+            canonical_key = self._resolve_linkedin_profile_registry_key_locked(normalized_key)
+            row = self._connection.execute(
+                """
+                SELECT * FROM linkedin_profile_registry_leases
+                WHERE profile_url_key = ?
+                LIMIT 1
+                """,
+                (canonical_key,),
+            ).fetchone()
+        return self._linkedin_profile_registry_lease_from_row(row)
+
+    def release_linkedin_profile_registry_lease(
+        self,
+        profile_url: str,
+        *,
+        lease_owner: str = "",
+        lease_token: str = "",
+    ) -> bool:
+        normalized_key = _normalize_linkedin_profile_url_key(profile_url)
+        if not normalized_key:
+            return False
+        normalized_owner = str(lease_owner or "").strip()
+        normalized_token = str(lease_token or "").strip()
+        with self._lock, self._connection:
+            canonical_key = self._resolve_linkedin_profile_registry_key_locked(normalized_key)
+            if normalized_owner and normalized_token:
+                cursor = self._connection.execute(
+                    """
+                    DELETE FROM linkedin_profile_registry_leases
+                    WHERE profile_url_key = ? AND lease_owner = ? AND lease_token = ?
+                    """,
+                    (canonical_key, normalized_owner, normalized_token),
+                )
+            elif normalized_owner:
+                cursor = self._connection.execute(
+                    """
+                    DELETE FROM linkedin_profile_registry_leases
+                    WHERE profile_url_key = ? AND lease_owner = ?
+                    """,
+                    (canonical_key, normalized_owner),
+                )
+            elif normalized_token:
+                cursor = self._connection.execute(
+                    """
+                    DELETE FROM linkedin_profile_registry_leases
+                    WHERE profile_url_key = ? AND lease_token = ?
+                    """,
+                    (canonical_key, normalized_token),
+                )
+            else:
+                cursor = self._connection.execute(
+                    """
+                    DELETE FROM linkedin_profile_registry_leases
+                    WHERE profile_url_key = ?
+                    """,
+                    (canonical_key,),
+                )
+        return bool(cursor.rowcount)
+
+    def record_linkedin_profile_registry_event(
+        self,
+        profile_url: str,
+        *,
+        event_type: str,
+        event_status: str = "",
+        detail: str = "",
+        run_id: str = "",
+        dataset_id: str = "",
+        metadata: dict[str, Any] | None = None,
+        duration_ms: int | None = None,
+    ) -> None:
+        normalized_key = _normalize_linkedin_profile_url_key(profile_url)
+        if not normalized_key:
+            return
+        with self._lock, self._connection:
+            canonical_key = self._resolve_linkedin_profile_registry_key_locked(normalized_key)
+            self._connection.execute(
+                """
+                INSERT INTO linkedin_profile_registry_events (
+                    profile_url_key,
+                    event_type,
+                    event_status,
+                    detail,
+                    run_id,
+                    dataset_id,
+                    metadata_json,
+                    duration_ms
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    canonical_key,
+                    str(event_type or "").strip(),
+                    str(event_status or "").strip(),
+                    str(detail or "").strip(),
+                    str(run_id or "").strip(),
+                    str(dataset_id or "").strip(),
+                    json.dumps(metadata or {}, ensure_ascii=False),
+                    int(duration_ms) if duration_ms is not None else None,
+                ),
+            )
+
+    def get_linkedin_profile_registry_metrics(self, *, lookback_hours: int = 24) -> dict[str, Any]:
+        lookback = max(0, int(lookback_hours or 0))
+        where_clause = ""
+        params: list[Any] = []
+        if lookback > 0:
+            where_clause = "WHERE datetime(created_at) >= datetime('now', ?)"
+            params.append(f"-{lookback} hours")
+        with self._lock:
+            rows = self._connection.execute(
+                f"""
+                SELECT event_type, event_status, detail, metadata_json, duration_ms, created_at
+                FROM linkedin_profile_registry_events
+                {where_clause}
+                ORDER BY event_id ASC
+                """,
+                tuple(params),
+            ).fetchall()
+            status_row = self._connection.execute(
+                """
+                SELECT status, COUNT(*) AS count
+                FROM linkedin_profile_registry
+                GROUP BY status
+                """
+            ).fetchall()
+        total_events = len(rows)
+        lookup_attempts = 0
+        cache_hits = 0
+        live_fetch_requests = 0
+        duplicate_skips = 0
+        live_fetch_success = 0
+        live_fetch_failed = 0
+        retry_success = 0
+        retry_failures = 0
+        unrecoverable_failures = 0
+        queue_durations_ms: list[int] = []
+        for row in rows:
+            event_type = str(row["event_type"] or "").strip()
+            event_status = str(row["event_status"] or "").strip().lower()
+            if event_type == "lookup_attempt":
+                lookup_attempts += 1
+            if event_type in {"cache_hit_registry", "cache_hit_local_raw", "cache_hit_lease_wait"}:
+                cache_hits += 1
+            if event_type == "live_fetch_requested":
+                live_fetch_requests += 1
+            if event_type in {"duplicate_fetch_blocked", "lease_contended_skip"}:
+                duplicate_skips += 1
+            metadata: dict[str, Any] = {}
+            try:
+                metadata = dict(json.loads(row["metadata_json"] or "{}"))
+            except (TypeError, ValueError, json.JSONDecodeError):
+                metadata = {}
+            retry_before = int(metadata.get("retry_count_before") or 0)
+            if event_type == "live_fetch_success":
+                live_fetch_success += 1
+                if retry_before > 0:
+                    retry_success += 1
+                duration_ms = row["duration_ms"]
+                if duration_ms is not None:
+                    try:
+                        queue_durations_ms.append(max(0, int(duration_ms)))
+                    except (TypeError, ValueError):
+                        pass
+            elif event_type == "live_fetch_failed":
+                live_fetch_failed += 1
+                if retry_before > 0:
+                    retry_failures += 1
+                if event_status == "unrecoverable":
+                    unrecoverable_failures += 1
+        queue_duration_p50 = _percentile(queue_durations_ms, 50)
+        queue_duration_p95 = _percentile(queue_durations_ms, 95)
+        retry_attempts = retry_success + retry_failures
+        terminal_attempts = live_fetch_success + live_fetch_failed
+        registry_status_counts = {
+            str(row["status"] or "").strip(): int(row["count"] or 0)
+            for row in status_row
+            if str(row["status"] or "").strip()
+        }
+        return {
+            "window_hours": lookback,
+            "event_count": total_events,
+            "lookup_attempts": lookup_attempts,
+            "cache_hits": cache_hits,
+            "cache_hit_rate": (cache_hits / lookup_attempts) if lookup_attempts else 0.0,
+            "live_fetch_requests": live_fetch_requests,
+            "duplicate_fetch_skips": duplicate_skips,
+            "duplicate_request_rate": (duplicate_skips / (live_fetch_requests + duplicate_skips)) if (live_fetch_requests + duplicate_skips) else 0.0,
+            "live_fetch_success": live_fetch_success,
+            "live_fetch_failed": live_fetch_failed,
+            "queued_duration_ms_p50": queue_duration_p50,
+            "queued_duration_ms_p95": queue_duration_p95,
+            "retry_success_count": retry_success,
+            "retry_failure_count": retry_failures,
+            "retry_success_rate": (retry_success / retry_attempts) if retry_attempts else 0.0,
+            "unrecoverable_failures": unrecoverable_failures,
+            "unrecoverable_ratio": (unrecoverable_failures / terminal_attempts) if terminal_attempts else 0.0,
+            "registry_status_counts": registry_status_counts,
+        }
+
+    def get_linkedin_profile_registry_backfill_run(self, run_key: str) -> dict[str, Any] | None:
+        normalized_run_key = str(run_key or "").strip()
+        if not normalized_run_key:
+            return None
+        with self._lock:
+            row = self._connection.execute(
+                """
+                SELECT * FROM linkedin_profile_registry_backfill_runs
+                WHERE run_key = ?
+                LIMIT 1
+                """,
+                (normalized_run_key,),
+            ).fetchone()
+        if row is None:
+            return None
+        return self._linkedin_profile_registry_backfill_from_row(row)
+
+    def upsert_linkedin_profile_registry_backfill_run(
+        self,
+        run_key: str,
+        *,
+        scope_company: str = "",
+        scope_snapshot_id: str = "",
+        checkpoint: dict[str, Any] | None = None,
+        summary: dict[str, Any] | None = None,
+        status: str = "running",
+    ) -> dict[str, Any] | None:
+        normalized_run_key = str(run_key or "").strip()
+        if not normalized_run_key:
+            return None
+        checkpoint_payload = checkpoint or {}
+        summary_payload = summary or {}
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO linkedin_profile_registry_backfill_runs (
+                    run_key,
+                    scope_company,
+                    scope_snapshot_id,
+                    checkpoint_json,
+                    summary_json,
+                    status
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(run_key) DO UPDATE SET
+                    scope_company = excluded.scope_company,
+                    scope_snapshot_id = excluded.scope_snapshot_id,
+                    checkpoint_json = excluded.checkpoint_json,
+                    summary_json = excluded.summary_json,
+                    status = excluded.status,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (
+                    normalized_run_key,
+                    str(scope_company or "").strip(),
+                    str(scope_snapshot_id or "").strip(),
+                    json.dumps(checkpoint_payload, ensure_ascii=False),
+                    json.dumps(summary_payload, ensure_ascii=False),
+                    str(status or "running").strip() or "running",
+                ),
+            )
+            row = self._connection.execute(
+                """
+                SELECT * FROM linkedin_profile_registry_backfill_runs
+                WHERE run_key = ?
+                LIMIT 1
+                """,
+                (normalized_run_key,),
+            ).fetchone()
+        if row is None:
+            return None
+        return self._linkedin_profile_registry_backfill_from_row(row)
+
+    def mark_linkedin_profile_registry_queued(
+        self,
+        profile_url: str,
+        *,
+        source_shards: list[str] | None = None,
+        source_jobs: list[str] | None = None,
+        alias_urls: list[str] | None = None,
+        raw_linkedin_url: str = "",
+        sanity_linkedin_url: str = "",
+        run_id: str = "",
+        dataset_id: str = "",
+        snapshot_dir: str = "",
+    ) -> dict[str, Any] | None:
+        return self._upsert_linkedin_profile_registry(
+            profile_url=profile_url,
+            status="queued",
+            source_shards=source_shards,
+            source_jobs=source_jobs,
+            alias_urls=alias_urls,
+            raw_linkedin_url=raw_linkedin_url,
+            sanity_linkedin_url=sanity_linkedin_url,
+            run_id=run_id,
+            dataset_id=dataset_id,
+            snapshot_dir=snapshot_dir,
+            preserve_unrecoverable=True,
+        )
+
+    def mark_linkedin_profile_registry_fetched(
+        self,
+        profile_url: str,
+        *,
+        raw_path: str,
+        source_shards: list[str] | None = None,
+        source_jobs: list[str] | None = None,
+        alias_urls: list[str] | None = None,
+        raw_linkedin_url: str = "",
+        sanity_linkedin_url: str = "",
+        run_id: str = "",
+        dataset_id: str = "",
+        snapshot_dir: str = "",
+    ) -> dict[str, Any] | None:
+        return self._upsert_linkedin_profile_registry(
+            profile_url=profile_url,
+            status="fetched",
+            retry_count=0,
+            last_error="",
+            raw_path=raw_path,
+            source_shards=source_shards,
+            source_jobs=source_jobs,
+            alias_urls=alias_urls,
+            raw_linkedin_url=raw_linkedin_url,
+            sanity_linkedin_url=sanity_linkedin_url,
+            run_id=run_id,
+            dataset_id=dataset_id,
+            snapshot_dir=snapshot_dir,
+            preserve_unrecoverable=False,
+        )
+
+    def mark_linkedin_profile_registry_failed(
+        self,
+        profile_url: str,
+        *,
+        error: str,
+        retryable: bool = True,
+        source_shards: list[str] | None = None,
+        source_jobs: list[str] | None = None,
+        alias_urls: list[str] | None = None,
+        raw_linkedin_url: str = "",
+        sanity_linkedin_url: str = "",
+        run_id: str = "",
+        dataset_id: str = "",
+        snapshot_dir: str = "",
+    ) -> dict[str, Any] | None:
+        return self._upsert_linkedin_profile_registry(
+            profile_url=profile_url,
+            status="failed_retryable" if retryable else "unrecoverable",
+            increment_retry=retryable,
+            last_error=str(error or "").strip(),
+            source_shards=source_shards,
+            source_jobs=source_jobs,
+            alias_urls=alias_urls,
+            raw_linkedin_url=raw_linkedin_url,
+            sanity_linkedin_url=sanity_linkedin_url,
+            run_id=run_id,
+            dataset_id=dataset_id,
+            snapshot_dir=snapshot_dir,
+            preserve_unrecoverable=not retryable,
+        )
+
+    def upsert_linkedin_profile_registry_sources(
+        self,
+        profile_url: str,
+        *,
+        source_shards: list[str] | None = None,
+        source_jobs: list[str] | None = None,
+        alias_urls: list[str] | None = None,
+        raw_linkedin_url: str = "",
+        sanity_linkedin_url: str = "",
+    ) -> dict[str, Any] | None:
+        return self._upsert_linkedin_profile_registry(
+            profile_url=profile_url,
+            status="",
+            source_shards=source_shards,
+            source_jobs=source_jobs,
+            alias_urls=alias_urls,
+            raw_linkedin_url=raw_linkedin_url,
+            sanity_linkedin_url=sanity_linkedin_url,
+            preserve_unrecoverable=True,
+        )
+
+    def _upsert_linkedin_profile_registry(
+        self,
+        *,
+        profile_url: str,
+        status: str,
+        source_shards: list[str] | None = None,
+        source_jobs: list[str] | None = None,
+        alias_urls: list[str] | None = None,
+        raw_linkedin_url: str = "",
+        sanity_linkedin_url: str = "",
+        alias_kind: str = "observed",
+        run_id: str = "",
+        dataset_id: str = "",
+        snapshot_dir: str = "",
+        raw_path: str = "",
+        retry_count: int | None = None,
+        increment_retry: bool = False,
+        last_error: str | None = None,
+        preserve_unrecoverable: bool = True,
+    ) -> dict[str, Any] | None:
+        normalized_key = _normalize_linkedin_profile_url_key(profile_url)
+        normalized_profile_url = str(profile_url or "").strip()
+        if not normalized_key:
+            return None
+        normalized_raw_linkedin_url = str(raw_linkedin_url or "").strip()
+        normalized_sanity_linkedin_url = str(sanity_linkedin_url or "").strip()
+        normalized_alias_urls = _normalize_linkedin_profile_url_list(
+            [*list(alias_urls or []), normalized_profile_url, normalized_raw_linkedin_url, normalized_sanity_linkedin_url]
+        )
+        normalized_status = str(status or "").strip()
+        normalized_run_id = str(run_id or "").strip()
+        normalized_dataset_id = str(dataset_id or "").strip()
+        normalized_snapshot_dir = str(snapshot_dir or "").strip()
+        normalized_raw_path = str(raw_path or "").strip()
+        normalized_source_shards = _normalize_registry_label_list(source_shards)
+        normalized_source_jobs = _normalize_registry_label_list(source_jobs)
+        now_timestamp = _utc_now_timestamp()
+        with self._lock, self._connection:
+            canonical_key = self._resolve_linkedin_profile_registry_key_locked(normalized_key)
+            existing = self._connection.execute(
+                """
+                SELECT * FROM linkedin_profile_registry
+                WHERE profile_url_key = ?
+                LIMIT 1
+                """,
+                (canonical_key,),
+            ).fetchone()
+            existing_payload = self._linkedin_profile_registry_from_row(existing) if existing is not None else {}
+            existing_status = str(existing_payload.get("status") or "").strip()
+
+            merged_source_shards = _merge_registry_label_lists(
+                list(existing_payload.get("source_shards") or []),
+                normalized_source_shards,
+            )
+            merged_source_jobs = _merge_registry_label_lists(
+                list(existing_payload.get("source_jobs") or []),
+                normalized_source_jobs,
+            )
+            effective_status = normalized_status or existing_status or "queued"
+            if preserve_unrecoverable and existing_status == "unrecoverable" and effective_status != "fetched":
+                effective_status = "unrecoverable"
+            if normalized_status == "unrecoverable":
+                effective_status = "unrecoverable"
+            if normalized_status == "fetched":
+                effective_status = "fetched"
+            if retry_count is not None:
+                effective_retry_count = max(0, int(retry_count))
+            else:
+                effective_retry_count = max(0, int(existing_payload.get("retry_count") or 0))
+                if increment_retry:
+                    effective_retry_count += 1
+            effective_last_error = (
+                str(last_error)
+                if last_error is not None
+                else str(existing_payload.get("last_error") or "")
+            )
+            if normalized_status == "fetched":
+                effective_last_error = ""
+            effective_profile_url = normalized_profile_url or str(existing_payload.get("profile_url") or "")
+            effective_raw_linkedin_url = normalized_raw_linkedin_url or str(existing_payload.get("raw_linkedin_url") or "")
+            effective_sanity_linkedin_url = normalized_sanity_linkedin_url or str(existing_payload.get("sanity_linkedin_url") or "")
+            effective_run_id = normalized_run_id or str(existing_payload.get("last_run_id") or "")
+            effective_dataset_id = normalized_dataset_id or str(existing_payload.get("last_dataset_id") or "")
+            effective_snapshot_dir = normalized_snapshot_dir or str(existing_payload.get("last_snapshot_dir") or "")
+            effective_raw_path = normalized_raw_path or str(existing_payload.get("last_raw_path") or "")
+            effective_first_queued_at = str(existing_payload.get("first_queued_at") or "")
+            effective_last_queued_at = str(existing_payload.get("last_queued_at") or "")
+            effective_last_fetched_at = str(existing_payload.get("last_fetched_at") or "")
+            effective_last_failed_at = str(existing_payload.get("last_failed_at") or "")
+            if normalized_status == "queued":
+                if not effective_first_queued_at:
+                    effective_first_queued_at = now_timestamp
+                effective_last_queued_at = now_timestamp
+            if normalized_status == "fetched":
+                effective_last_fetched_at = now_timestamp
+            if normalized_status in {"failed_retryable", "unrecoverable"}:
+                effective_last_failed_at = now_timestamp
+
+            self._connection.execute(
+                """
+                INSERT INTO linkedin_profile_registry (
+                    profile_url_key,
+                    profile_url,
+                    raw_linkedin_url,
+                    sanity_linkedin_url,
+                    status,
+                    retry_count,
+                    last_error,
+                    last_run_id,
+                    last_dataset_id,
+                    last_snapshot_dir,
+                    last_raw_path,
+                    first_queued_at,
+                    last_queued_at,
+                    last_fetched_at,
+                    last_failed_at,
+                    source_shards_json,
+                    source_jobs_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(profile_url_key) DO UPDATE SET
+                    profile_url = excluded.profile_url,
+                    raw_linkedin_url = excluded.raw_linkedin_url,
+                    sanity_linkedin_url = excluded.sanity_linkedin_url,
+                    status = excluded.status,
+                    retry_count = excluded.retry_count,
+                    last_error = excluded.last_error,
+                    last_run_id = excluded.last_run_id,
+                    last_dataset_id = excluded.last_dataset_id,
+                    last_snapshot_dir = excluded.last_snapshot_dir,
+                    last_raw_path = excluded.last_raw_path,
+                    first_queued_at = excluded.first_queued_at,
+                    last_queued_at = excluded.last_queued_at,
+                    last_fetched_at = excluded.last_fetched_at,
+                    last_failed_at = excluded.last_failed_at,
+                    source_shards_json = excluded.source_shards_json,
+                    source_jobs_json = excluded.source_jobs_json,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (
+                    canonical_key,
+                    effective_profile_url,
+                    effective_raw_linkedin_url,
+                    effective_sanity_linkedin_url,
+                    effective_status,
+                    effective_retry_count,
+                    effective_last_error,
+                    effective_run_id,
+                    effective_dataset_id,
+                    effective_snapshot_dir,
+                    effective_raw_path,
+                    effective_first_queued_at,
+                    effective_last_queued_at,
+                    effective_last_fetched_at,
+                    effective_last_failed_at,
+                    json.dumps(merged_source_shards, ensure_ascii=False),
+                    json.dumps(merged_source_jobs, ensure_ascii=False),
+                ),
+            )
+            canonical_profile_url = effective_profile_url or canonical_key
+            self._upsert_linkedin_profile_registry_aliases_locked(
+                canonical_key=canonical_key,
+                canonical_profile_url=canonical_profile_url,
+                alias_urls=normalized_alias_urls,
+                alias_kind=alias_kind,
+            )
+            row = self._connection.execute(
+                """
+                SELECT * FROM linkedin_profile_registry
+                WHERE profile_url_key = ?
+                LIMIT 1
+                """,
+                (canonical_key,),
+            ).fetchone()
+        if row is None:
+            return None
+        payload = self._linkedin_profile_registry_from_row(row)
+        payload["alias_urls"] = self.get_linkedin_profile_registry_aliases(payload.get("profile_url") or payload.get("profile_url_key") or "")
+        return payload
+
+    def _resolve_linkedin_profile_registry_key_locked(self, profile_url_key: str) -> str:
+        normalized_key = str(profile_url_key or "").strip()
+        if not normalized_key:
+            return ""
+        current_key = normalized_key
+        seen: set[str] = set()
+        while current_key and current_key not in seen:
+            seen.add(current_key)
+            row = self._connection.execute(
+                """
+                SELECT profile_url_key
+                FROM linkedin_profile_registry_aliases
+                WHERE alias_url_key = ?
+                LIMIT 1
+                """,
+                (current_key,),
+            ).fetchone()
+            if row is None:
+                break
+            mapped_key = str(row["profile_url_key"] or "").strip()
+            if not mapped_key or mapped_key == current_key:
+                break
+            current_key = mapped_key
+        return current_key or normalized_key
+
+    def _list_linkedin_profile_alias_urls_locked(self, canonical_key: str) -> list[str]:
+        normalized_canonical_key = str(canonical_key or "").strip()
+        if not normalized_canonical_key:
+            return []
+        rows = self._connection.execute(
+            """
+            SELECT alias_url
+            FROM linkedin_profile_registry_aliases
+            WHERE profile_url_key = ?
+            ORDER BY updated_at DESC
+            """,
+            (normalized_canonical_key,),
+        ).fetchall()
+        aliases: list[str] = []
+        for row in rows:
+            alias_url = str(row["alias_url"] or "").strip()
+            if alias_url and alias_url not in aliases:
+                aliases.append(alias_url)
+        return aliases
+
+    def _upsert_linkedin_profile_registry_aliases_locked(
+        self,
+        *,
+        canonical_key: str,
+        canonical_profile_url: str,
+        alias_urls: list[str],
+        alias_kind: str = "observed",
+    ) -> int:
+        normalized_canonical_key = str(canonical_key or "").strip()
+        if not normalized_canonical_key:
+            return 0
+        normalized_alias_kind = str(alias_kind or "observed").strip() or "observed"
+        normalized_alias_urls = _normalize_linkedin_profile_url_list([canonical_profile_url, *list(alias_urls or [])])
+        upserted = 0
+        for alias_url in normalized_alias_urls:
+            alias_key = _normalize_linkedin_profile_url_key(alias_url)
+            if not alias_key:
+                continue
+            self._connection.execute(
+                """
+                INSERT INTO linkedin_profile_registry_aliases (
+                    alias_url_key,
+                    profile_url_key,
+                    alias_url,
+                    alias_kind
+                ) VALUES (?, ?, ?, ?)
+                ON CONFLICT(alias_url_key) DO UPDATE SET
+                    profile_url_key = excluded.profile_url_key,
+                    alias_url = excluded.alias_url,
+                    alias_kind = excluded.alias_kind,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (
+                    alias_key,
+                    normalized_canonical_key,
+                    alias_url,
+                    normalized_alias_kind,
+                ),
+            )
+            upserted += 1
+        return upserted
+
+    def find_pending_plan_review_session(
+        self,
+        *,
+        target_company: str,
+        request_payload: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        target = str(target_company or "").strip()
+        if not target:
+            return None
+        request_sig = request_signature(request_payload)
+        row = self._connection.execute(
+            """
+            SELECT * FROM plan_review_sessions
+            WHERE lower(target_company) = lower(?) AND status = 'pending' AND request_signature = ?
+            ORDER BY updated_at DESC, review_id DESC
+            LIMIT 1
+            """,
+            (target, request_sig),
+        ).fetchone()
+        if row is None:
+            return None
+        return self._plan_review_session_from_row(row)
 
     def record_criteria_feedback(self, payload: dict[str, Any]) -> dict[str, Any]:
         target_company, metadata = self._prepare_feedback_context(payload)
@@ -2701,6 +4006,136 @@ class SQLiteStore:
             "updated_at": row["updated_at"],
         }
 
+    def _job_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
+        request_payload = {}
+        plan_payload = {}
+        summary_payload = {}
+        try:
+            request_payload = json.loads(row["request_json"] or "{}")
+        except json.JSONDecodeError:
+            request_payload = {}
+        try:
+            plan_payload = json.loads(row["plan_json"] or "{}")
+        except json.JSONDecodeError:
+            plan_payload = {}
+        try:
+            summary_payload = json.loads(row["summary_json"] or "{}")
+        except json.JSONDecodeError:
+            summary_payload = {}
+        return {
+            "job_id": row["job_id"],
+            "job_type": row["job_type"],
+            "status": row["status"],
+            "stage": row["stage"],
+            "request": request_payload,
+            "plan": plan_payload,
+            "summary": summary_payload,
+            "artifact_path": row["artifact_path"],
+            "request_signature": str(row["request_signature"] or ""),
+            "request_family_signature": str(row["request_family_signature"] or ""),
+            "requester_id": str(row["requester_id"] or ""),
+            "tenant_id": str(row["tenant_id"] or ""),
+            "idempotency_key": str(row["idempotency_key"] or ""),
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }
+
+    def _query_dispatch_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
+        payload = {}
+        try:
+            payload = json.loads(row["payload_json"] or "{}")
+        except json.JSONDecodeError:
+            payload = {}
+        return {
+            "dispatch_id": int(row["dispatch_id"] or 0),
+            "target_company": str(row["target_company"] or ""),
+            "request_signature": str(row["request_signature"] or ""),
+            "request_family_signature": str(row["request_family_signature"] or ""),
+            "requester_id": str(row["requester_id"] or ""),
+            "tenant_id": str(row["tenant_id"] or ""),
+            "idempotency_key": str(row["idempotency_key"] or ""),
+            "strategy": str(row["strategy"] or ""),
+            "status": str(row["status"] or ""),
+            "source_job_id": str(row["source_job_id"] or ""),
+            "created_job_id": str(row["created_job_id"] or ""),
+            "payload": payload,
+            "created_at": str(row["created_at"] or ""),
+            "updated_at": str(row["updated_at"] or ""),
+        }
+
+    def _linkedin_profile_registry_from_row(self, row: sqlite3.Row | None) -> dict[str, Any]:
+        if row is None:
+            return {}
+        source_shards = []
+        source_jobs = []
+        try:
+            source_shards = list(json.loads(row["source_shards_json"] or "[]"))
+        except json.JSONDecodeError:
+            source_shards = []
+        try:
+            source_jobs = list(json.loads(row["source_jobs_json"] or "[]"))
+        except json.JSONDecodeError:
+            source_jobs = []
+        return {
+            "profile_url_key": str(row["profile_url_key"] or ""),
+            "profile_url": str(row["profile_url"] or ""),
+            "raw_linkedin_url": str(row["raw_linkedin_url"] or ""),
+            "sanity_linkedin_url": str(row["sanity_linkedin_url"] or ""),
+            "status": str(row["status"] or ""),
+            "retry_count": int(row["retry_count"] or 0),
+            "last_error": str(row["last_error"] or ""),
+            "last_run_id": str(row["last_run_id"] or ""),
+            "last_dataset_id": str(row["last_dataset_id"] or ""),
+            "last_snapshot_dir": str(row["last_snapshot_dir"] or ""),
+            "last_raw_path": str(row["last_raw_path"] or ""),
+            "first_queued_at": str(row["first_queued_at"] or ""),
+            "last_queued_at": str(row["last_queued_at"] or ""),
+            "last_fetched_at": str(row["last_fetched_at"] or ""),
+            "last_failed_at": str(row["last_failed_at"] or ""),
+            "source_shards": [str(item).strip() for item in source_shards if str(item).strip()],
+            "source_jobs": [str(item).strip() for item in source_jobs if str(item).strip()],
+            "created_at": str(row["created_at"] or ""),
+            "updated_at": str(row["updated_at"] or ""),
+        }
+
+    def _linkedin_profile_registry_lease_from_row(self, row: sqlite3.Row | None) -> dict[str, Any]:
+        if row is None:
+            return {}
+        lease_expires_at = str(row["lease_expires_at"] or "")
+        return {
+            "profile_url_key": str(row["profile_url_key"] or ""),
+            "lease_owner": str(row["lease_owner"] or ""),
+            "lease_token": str(row["lease_token"] or ""),
+            "lease_expires_at": lease_expires_at,
+            "expired": _is_sqlite_timestamp_expired(lease_expires_at),
+            "created_at": str(row["created_at"] or ""),
+            "updated_at": str(row["updated_at"] or ""),
+        }
+
+    def _linkedin_profile_registry_backfill_from_row(self, row: sqlite3.Row | None) -> dict[str, Any]:
+        if row is None:
+            return {}
+        checkpoint_payload: dict[str, Any]
+        summary_payload: dict[str, Any]
+        try:
+            checkpoint_payload = dict(json.loads(row["checkpoint_json"] or "{}"))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            checkpoint_payload = {}
+        try:
+            summary_payload = dict(json.loads(row["summary_json"] or "{}"))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            summary_payload = {}
+        return {
+            "run_key": str(row["run_key"] or ""),
+            "scope_company": str(row["scope_company"] or ""),
+            "scope_snapshot_id": str(row["scope_snapshot_id"] or ""),
+            "checkpoint": checkpoint_payload,
+            "summary": summary_payload,
+            "status": str(row["status"] or ""),
+            "created_at": str(row["created_at"] or ""),
+            "updated_at": str(row["updated_at"] or ""),
+        }
+
     def _plan_review_session_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
         return {
             "review_id": row["review_id"],
@@ -2957,6 +4392,141 @@ class SQLiteStore:
 def _payload_signature(payload: dict[str, Any]) -> str:
     serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True)
     return sha1(serialized.encode("utf-8")).hexdigest()[:16]
+
+
+def _dedupe_preserve_order(values: list[str]) -> list[str]:
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for value in list(values or []):
+        normalized = str(value or "").strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        deduped.append(normalized)
+    return deduped
+
+
+def _normalize_linkedin_profile_url_key(profile_url: str) -> str:
+    raw_value = str(profile_url or "").strip()
+    if not raw_value:
+        return ""
+    if "://" not in raw_value:
+        raw_value = f"https://{raw_value}"
+    parsed = parse.urlsplit(raw_value)
+    netloc = str(parsed.netloc or "").strip().lower()
+    path = str(parsed.path or "").strip()
+    if not netloc and path:
+        reparsed = parse.urlsplit(f"https://{path}")
+        netloc = str(reparsed.netloc or "").strip().lower()
+        path = str(reparsed.path or "").strip()
+    if not netloc:
+        return ""
+    normalized_path = re.sub(r"/{2,}", "/", path).rstrip("/")
+    if not normalized_path:
+        normalized_path = "/"
+    return f"https://{netloc}{normalized_path}".lower()
+
+
+def _normalize_linkedin_profile_url_list(values: list[str] | None) -> list[str]:
+    deduped: list[str] = []
+    seen_keys: set[str] = set()
+    for value in list(values or []):
+        normalized_value = str(value or "").strip()
+        normalized_key = _normalize_linkedin_profile_url_key(normalized_value)
+        if not normalized_key or normalized_key in seen_keys:
+            continue
+        seen_keys.add(normalized_key)
+        deduped.append(normalized_value or normalized_key)
+    return deduped
+
+
+def _utc_now_timestamp() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _parse_sqlite_timestamp(value: str) -> datetime | None:
+    normalized = str(value or "").strip()
+    if not normalized:
+        return None
+    for format_string in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M:%S.%f"):
+        try:
+            parsed = datetime.strptime(normalized, format_string)
+            return parsed.replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+    return None
+
+
+def _is_sqlite_timestamp_expired(value: str, *, now: datetime | None = None) -> bool:
+    parsed = _parse_sqlite_timestamp(value)
+    if parsed is None:
+        return True
+    reference = now or datetime.now(timezone.utc)
+    return parsed <= reference
+
+
+def _milliseconds_between(start_value: str, end_value: str) -> int | None:
+    start = _parse_sqlite_timestamp(start_value)
+    end = _parse_sqlite_timestamp(end_value)
+    if start is None or end is None:
+        return None
+    return max(0, int((end - start).total_seconds() * 1000))
+
+
+def _percentile(values: list[int], percentile: float) -> int:
+    if not values:
+        return 0
+    sorted_values = sorted(max(0, int(value)) for value in values)
+    if len(sorted_values) == 1:
+        return sorted_values[0]
+    rank = (max(0.0, min(100.0, float(percentile))) / 100.0) * (len(sorted_values) - 1)
+    lower = int(rank)
+    upper = min(len(sorted_values) - 1, lower + 1)
+    if lower == upper:
+        return sorted_values[lower]
+    weight = rank - lower
+    interpolated = (sorted_values[lower] * (1.0 - weight)) + (sorted_values[upper] * weight)
+    return int(round(interpolated))
+
+
+def _normalize_registry_label_list(values: list[str] | None) -> list[str]:
+    return _dedupe_preserve_order([str(item or "").strip() for item in list(values or []) if str(item or "").strip()])
+
+
+def _merge_registry_label_lists(existing: list[str], incoming: list[str]) -> list[str]:
+    return _dedupe_preserve_order([*list(existing or []), *list(incoming or [])])
+
+
+def _normalize_dispatch_scope(scope: str, *, requester_id: str = "", tenant_id: str = "") -> str:
+    normalized = str(scope or "").strip().lower()
+    if normalized in {"global", "tenant", "requester"}:
+        return normalized
+    if str(tenant_id or "").strip():
+        return "tenant"
+    if str(requester_id or "").strip():
+        return "requester"
+    return "global"
+
+
+def _job_matches_dispatch_scope(
+    job_payload: dict[str, Any],
+    *,
+    scope: str,
+    requester_id: str = "",
+    tenant_id: str = "",
+) -> bool:
+    normalized_scope = _normalize_dispatch_scope(scope, requester_id=requester_id, tenant_id=tenant_id)
+    job_requester_id = str(job_payload.get("requester_id") or "").strip()
+    job_tenant_id = str(job_payload.get("tenant_id") or "").strip()
+    if normalized_scope == "global":
+        return True
+    if normalized_scope == "tenant":
+        normalized_tenant_id = str(tenant_id or "").strip()
+        return bool(normalized_tenant_id and job_tenant_id and normalized_tenant_id == job_tenant_id)
+    if normalized_scope == "requester":
+        normalized_requester_id = str(requester_id or "").strip()
+        return bool(normalized_requester_id and job_requester_id and normalized_requester_id == job_requester_id)
+    return False
 
 
 def _job_match_sort_key(match: dict[str, Any], row: sqlite3.Row | None) -> tuple[float, str, str]:

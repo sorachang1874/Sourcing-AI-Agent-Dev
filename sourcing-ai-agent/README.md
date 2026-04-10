@@ -14,6 +14,8 @@
 - [PROGRESS.md](PROGRESS.md)
 - [docs/INDEX.md](docs/INDEX.md)
 - [docs/FRONTEND_API_CONTRACT.md](docs/FRONTEND_API_CONTRACT.md)
+- [docs/WORKFLOW_OPERATIONS_PLAYBOOK.md](docs/WORKFLOW_OPERATIONS_PLAYBOOK.md)
+- [docs/GITHUB_DEV_DIFF_REVIEW_2026-04-10.md](docs/GITHUB_DEV_DIFF_REVIEW_2026-04-10.md)
 - [docs/THINKING_MACHINES_LAB_CANONICAL_ASSET.md](docs/THINKING_MACHINES_LAB_CANONICAL_ASSET.md)
 - [docs/THINKING_MACHINES_LAB_VALIDATION_2026-04-08.md](docs/THINKING_MACHINES_LAB_VALIDATION_2026-04-08.md)
 
@@ -96,6 +98,10 @@
     - `write-worker-daemon-systemd-unit` 可生成 systemd unit
     - `show-daemon-status` 可读取 `runtime/services/<service_name>/status.json`
 - 支持异步 workflow，显式区分 `planning`、`acquiring`、`retrieving`
+- 支持 query dispatch 去重与分发：
+  - 对完全相同请求可 `join inflight`（加入在途）或 `reuse completed`（复用已完成结果）
+  - 支持 `requester_id / tenant_id / idempotency_key` 作用域隔离，避免多用户重复消耗
+  - 所有决策会落盘到 `query_dispatches`，并可通过 API 查询审计
 - acquisition runtime 已开始按 strategy 分叉执行：
   - `full_company_roster` 走 company roster connector
   - `scoped_search_roster / former_employee_search` 走低成本 search-seed discovery

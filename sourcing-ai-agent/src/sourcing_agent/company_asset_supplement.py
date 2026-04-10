@@ -54,7 +54,7 @@ class CompanyAssetSupplementManager:
         former_filter_hints: dict[str, list[str]] | None = None,
         profile_scope: str = "none",
         profile_limit: int = 0,
-        profile_only_missing_detail: bool = True,
+        profile_only_missing_detail: bool = False,
         profile_force_refresh: bool = False,
         repair_current_roster_profile_refs: bool = False,
         build_artifacts: bool = True,

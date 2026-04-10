@@ -16,9 +16,11 @@ from .asset_sync import AssetBundleManager
 from .candidate_artifacts import build_company_candidate_artifacts
 from .company_asset_completion import CompanyAssetCompletionManager
 from .company_asset_supplement import CompanyAssetSupplementManager
-from .model_provider import build_model_client
+from .model_provider import OpenAICompatibleChatModelClient, QwenResponsesModelClient, build_model_client
 from .object_storage import build_object_storage_client
 from .orchestrator import SourcingOrchestrator
+from .outreach_layering import analyze_company_outreach_layers
+from .profile_registry_backfill import backfill_linkedin_profile_registry
 from .service_daemon import SingleInstanceError
 from .semantic_provider import build_semantic_provider
 from .settings import load_settings
@@ -326,6 +328,20 @@ def main() -> None:
     company_artifact_parser.add_argument("--snapshot-id", default="", help="Optional snapshot id; defaults to latest")
     company_artifact_parser.add_argument("--output-dir", default="", help="Optional artifact output directory")
 
+    layered_outreach_parser = subparsers.add_parser("segment-company-outreach-layers", help="Build layered outreach segmentation from company candidate JSON assets")
+    layered_outreach_parser.add_argument("--company", required=True, help="Company key or name")
+    layered_outreach_parser.add_argument("--snapshot-id", default="", help="Optional snapshot id; defaults to latest")
+    layered_outreach_parser.add_argument("--asset-view", choices=["canonical_merged", "strict_roster_only"], default="canonical_merged", help="Candidate asset view to read")
+    layered_outreach_parser.add_argument("--query", default="", help="Optional natural-language query used as context for AI verification")
+    layered_outreach_parser.add_argument("--max-ai-verifications", type=int, default=80, help="Max candidates to AI-verify (0 disables)")
+    layered_outreach_parser.add_argument("--ai-workers", type=int, default=8, help="Concurrent AI verification worker count")
+    layered_outreach_parser.add_argument("--ai-max-retries", type=int, default=2, help="Retries for each failed AI verification request")
+    layered_outreach_parser.add_argument("--ai-retry-backoff-seconds", type=float, default=0.8, help="Base backoff seconds for AI retry")
+    layered_outreach_parser.add_argument("--provider", choices=["auto", "openai", "qwen"], default="openai", help="AI provider selection for verification")
+    layered_outreach_parser.add_argument("--no-ai", action="store_true", help="Disable model-based verification and only run deterministic layers")
+    layered_outreach_parser.add_argument("--summary-only", action="store_true", help="Print only compact summary fields")
+    layered_outreach_parser.add_argument("--output-dir", default="", help="Optional output directory for layered analysis artifacts")
+
     complete_company_assets_parser = subparsers.add_parser("complete-company-assets", help="Continue company asset accumulation using known profile URLs and low-cost exploration")
     complete_company_assets_parser.add_argument("--company", required=True, help="Company key or name")
     complete_company_assets_parser.add_argument("--snapshot-id", default="", help="Optional snapshot id; defaults to latest")
@@ -343,10 +359,29 @@ def main() -> None:
     supplement_company_assets_parser.add_argument("--former-keyword", action="append", default=[], help="Optional former search keyword filter; repeatable")
     supplement_company_assets_parser.add_argument("--profile-scope", choices=["none", "current", "former", "all"], default="none", help="Which membership scope to profile-enrich")
     supplement_company_assets_parser.add_argument("--profile-limit", type=int, default=0, help="Max profiles to enrich; 0 means all selected")
-    supplement_company_assets_parser.add_argument("--profile-all-known-urls", action="store_true", help="Enrich all known LinkedIn URLs in the selected scope, not just missing-detail backlog")
+    supplement_company_assets_parser.add_argument(
+        "--profile-only-missing-detail",
+        action="store_true",
+        help="Only enrich missing-detail backlog in the selected scope (default is all known URLs)",
+    )
+    supplement_company_assets_parser.add_argument(
+        "--profile-all-known-urls",
+        action="store_true",
+        help="Deprecated compatibility flag: force all-known-URLs mode (already default)",
+    )
     supplement_company_assets_parser.add_argument("--profile-force-refresh", action="store_true", help="Bypass local profile cache and refetch selected LinkedIn profiles")
     supplement_company_assets_parser.add_argument("--repair-current-roster-profile-refs", action="store_true", help="Restore current-roster canonical profile refs from the original harvest_company_employees visible asset")
     supplement_company_assets_parser.add_argument("--without-artifacts", action="store_true", help="Skip rebuilding normalized/reusable artifacts after supplement")
+
+    backfill_registry_parser = subparsers.add_parser("backfill-linkedin-profile-registry", help="Backfill linkedin_profile_registry from historical runtime/company_assets/*/*/harvest_profiles JSON payloads")
+    backfill_registry_parser.add_argument("--company", default="", help="Optional company key filter (e.g. anthropic)")
+    backfill_registry_parser.add_argument("--snapshot-id", default="", help="Optional snapshot id filter")
+    backfill_registry_parser.add_argument("--checkpoint-path", default="", help="Optional checkpoint file path")
+    backfill_registry_parser.add_argument("--progress-interval", type=int, default=200, help="Emit progress every N processed files")
+    backfill_registry_parser.add_argument("--no-resume", action="store_true", help="Do not resume from prior checkpoint")
+
+    profile_registry_metrics_parser = subparsers.add_parser("show-linkedin-profile-registry-metrics", help="Show profile registry cache/retry/queue metrics")
+    profile_registry_metrics_parser.add_argument("--lookback-hours", type=int, default=24, help="Metrics lookback window in hours; 0 means all history")
 
     restore_bundle_parser = subparsers.add_parser("restore-asset-bundle", help="Restore a previously exported asset bundle into runtime")
     restore_bundle_parser.add_argument("--manifest", required=True, help="Path to bundle_manifest.json")
@@ -378,11 +413,39 @@ def main() -> None:
     serve_parser.add_argument("--port", type=int, default=8765)
 
     args = parser.parse_args()
+    if args.command in {"backfill-linkedin-profile-registry", "show-linkedin-profile-registry-metrics"}:
+        catalog = AssetCatalog.discover()
+        settings = load_settings(catalog.project_root)
+        store = SQLiteStore(settings.db_path)
+        if args.command == "backfill-linkedin-profile-registry":
+            checkpoint_path = Path(args.checkpoint_path).expanduser() if str(args.checkpoint_path or "").strip() else None
+
+            def _progress(payload: dict[str, object]) -> None:
+                print(json.dumps({"progress": payload}, ensure_ascii=False))
+
+            result = backfill_linkedin_profile_registry(
+                runtime_dir=settings.runtime_dir,
+                store=store,
+                company=str(args.company or "").strip(),
+                snapshot_id=str(args.snapshot_id or "").strip(),
+                resume=not bool(args.no_resume),
+                checkpoint_path=checkpoint_path,
+                progress_interval=max(1, int(args.progress_interval or 1)),
+                progress_callback=_progress,
+            )
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return
+        if args.command == "show-linkedin-profile-registry-metrics":
+            metrics = store.get_linkedin_profile_registry_metrics(lookback_hours=max(0, int(args.lookback_hours or 0)))
+            print(json.dumps(metrics, ensure_ascii=False, indent=2))
+            return
+
     if args.command in {
         "export-company-snapshot-bundle",
         "export-company-handoff-bundle",
         "export-sqlite-snapshot",
         "build-company-candidate-artifacts",
+        "segment-company-outreach-layers",
         "complete-company-assets",
         "supplement-company-assets",
         "restore-asset-bundle",
@@ -441,6 +504,70 @@ def main() -> None:
                 )
             )
             return
+        if args.command == "segment-company-outreach-layers":
+            catalog = AssetCatalog.discover()
+            settings = load_settings(catalog.project_root)
+            model_client = None
+            if not args.no_ai:
+                provider = str(args.provider or "auto").strip().lower()
+                if provider == "qwen":
+                    if not settings.qwen.enabled:
+                        raise SystemExit("Qwen is not enabled; provide qwen api key/base_url in runtime/secrets/providers.local.json")
+                    model_client = QwenResponsesModelClient(settings.qwen)
+                elif provider == "openai":
+                    if not settings.model_provider.enabled:
+                        raise SystemExit("OpenAI-compatible provider is not enabled; check model_provider config in runtime/secrets/providers.local.json")
+                    model_client = OpenAICompatibleChatModelClient(settings.model_provider)
+                else:
+                    model_client = build_model_client(settings.model_provider, settings.qwen)
+            result = analyze_company_outreach_layers(
+                runtime_dir=settings.runtime_dir,
+                target_company=args.company,
+                snapshot_id=args.snapshot_id,
+                view=args.asset_view,
+                query=args.query,
+                model_client=model_client,
+                max_ai_verifications=max(0, int(args.max_ai_verifications or 0)),
+                ai_workers=max(1, int(args.ai_workers or 1)),
+                ai_max_retries=max(0, int(args.ai_max_retries or 0)),
+                ai_retry_backoff_seconds=max(0.0, float(args.ai_retry_backoff_seconds or 0.0)),
+                output_dir=args.output_dir or None,
+            )
+            if args.summary_only:
+                compact = {
+                    "status": str(result.get("status") or ""),
+                    "target_company": str(result.get("target_company") or ""),
+                    "snapshot_id": str(result.get("snapshot_id") or ""),
+                    "asset_view": str(result.get("asset_view") or ""),
+                    "ai_prompt_template_version": str((result.get("ai_prompt_template") or {}).get("version") or ""),
+                    "candidate_count": int(result.get("candidate_count") or 0),
+                    "layer_counts": {
+                        "layer_0_roster": int((result.get("layers") or {}).get("layer_0_roster", {}).get("count") or 0),
+                        "layer_1_name_signal": int((result.get("layers") or {}).get("layer_1_name_signal", {}).get("count") or 0),
+                        "layer_2_greater_china_region_experience": int((result.get("layers") or {}).get("layer_2_greater_china_region_experience", {}).get("count") or 0),
+                        "layer_3_mainland_china_experience_or_chinese_language": int(
+                            (result.get("layers") or {}).get("layer_3_mainland_china_experience_or_chinese_language", {}).get("count") or 0
+                        ),
+                    },
+                    "legacy_layer_count_aliases": {
+                        "layer_2_greater_china_experience": int((result.get("layers") or {}).get("layer_2_greater_china_experience", {}).get("count") or 0),
+                        "layer_3_mainland_or_chinese_language": int((result.get("layers") or {}).get("layer_3_mainland_or_chinese_language", {}).get("count") or 0),
+                    },
+                    "cumulative_layer_counts": dict(result.get("cumulative_layer_counts") or {}),
+                    "final_layer_distribution": dict(result.get("final_layer_distribution") or {}),
+                    "ai_verification": dict(result.get("ai_verification") or {}),
+                    "analysis_paths": dict(result.get("analysis_paths") or {}),
+                }
+                print(json.dumps(compact, ensure_ascii=False, indent=2))
+                return
+            print(
+                json.dumps(
+                    result,
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+            return
         if args.command == "complete-company-assets":
             manager = build_asset_completion_manager()
             print(
@@ -471,7 +598,7 @@ def main() -> None:
                         former_filter_hints={"keywords": list(args.former_keyword or [])},
                         profile_scope=str(args.profile_scope or "none"),
                         profile_limit=int(args.profile_limit or 0),
-                        profile_only_missing_detail=not bool(args.profile_all_known_urls),
+                        profile_only_missing_detail=bool(args.profile_only_missing_detail) and not bool(args.profile_all_known_urls),
                         profile_force_refresh=bool(args.profile_force_refresh),
                         repair_current_roster_profile_refs=bool(args.repair_current_roster_profile_refs),
                         build_artifacts=not args.without_artifacts,
@@ -657,7 +784,13 @@ def main() -> None:
             return
         payload["auto_job_daemon"] = not bool(args.no_auto_job_daemon)
         queued = orchestrator.queue_workflow(payload)
-        if queued.get("status") != "needs_plan_review":
+        queue_status = str(queued.get("status") or "")
+        dispatch = dict(queued.get("dispatch") or {})
+        matched_job_status = str(dispatch.get("matched_job_status") or "")
+        should_spawn_runner = queue_status == "queued" or (
+            queue_status == "joined_existing_job" and matched_job_status == "queued"
+        )
+        if should_spawn_runner:
             queued["workflow_runner"] = spawn_workflow_runner(
                 str(queued.get("job_id") or ""),
                 auto_job_daemon=bool(payload.get("auto_job_daemon", False)),
@@ -671,6 +804,10 @@ def main() -> None:
                 ),
                 "scope": "job_scoped",
             }
+        elif queue_status == "needs_plan_review":
+            pass
+        else:
+            queued["job_recovery"] = {"status": "not_needed", "scope": "job_scoped"}
         print(json.dumps(queued, ensure_ascii=False, indent=2))
         return
 

@@ -376,6 +376,191 @@ class SeedDiscoveryTest(unittest.TestCase):
         self.assertEqual(summaries[0]["effective_pages"], 23)
         self.assertEqual(summaries[0]["probe"]["provider_total_count"], 559)
 
+    def test_former_paid_fallback_keyword_only_skips_blank_query(self) -> None:
+        class _FakeSettings:
+            enabled = True
+            max_paid_items = 25
+
+        class _FakeHarvestConnector:
+            settings = _FakeSettings()
+
+            def __init__(self) -> None:
+                self.queries: list[str] = []
+                self.tempdir = Path(".")
+
+            def search_profiles(self, **kwargs):
+                query_text = str(kwargs.get("query_text") or "").strip()
+                self.queries.append(query_text)
+                return {
+                    "raw_path": self.tempdir / f"{query_text or 'blank'}.json",
+                    "rows": [
+                        {
+                            "full_name": "Keyword Former",
+                            "headline": "Research Scientist",
+                            "location": "United States",
+                            "profile_url": f"https://www.linkedin.com/in/{query_text or 'blank'}-former/",
+                            "username": f"{query_text or 'blank'}-former",
+                            "current_company": "Google",
+                        }
+                    ],
+                    "pagination": {
+                        "returned_count": 1,
+                        "total_elements": 1,
+                        "total_pages": 1,
+                        "page_number": 1,
+                        "page_size": 25,
+                    },
+                }
+
+        identity = CompanyIdentity(
+            requested_name="Google",
+            canonical_name="Google",
+            company_key="google",
+            linkedin_slug="google",
+            linkedin_company_url="https://www.linkedin.com/company/google/",
+        )
+        with tempfile.TemporaryDirectory() as tempdir:
+            fake = _FakeHarvestConnector()
+            fake.tempdir = Path(tempdir)
+            acquirer = SearchSeedAcquirer([], harvest_search_connector=fake)
+            entries, summaries, errors, accounts = acquirer._provider_people_search_fallback(
+                identity=identity,
+                discovery_dir=Path(tempdir),
+                asset_logger=None,
+                search_seed_queries=["multimodal Veo", "Nano Banana"],
+                filter_hints={"past_companies": ["https://www.linkedin.com/company/google/"]},
+                employment_status="former",
+                limit=25,
+                cost_policy={
+                    "provider_people_search_query_strategy": "all_queries_union",
+                    "former_keyword_queries_only": True,
+                },
+            )
+
+        self.assertEqual(errors, [])
+        self.assertEqual(accounts, ["harvest_profile_search"])
+        self.assertCountEqual(fake.queries, ["multimodal Veo", "Nano Banana"])
+        self.assertEqual(len(entries), 2)
+        self.assertGreaterEqual(len(summaries), 2)
+        self.assertFalse(any(str(item.get("query") or "") == "__past_company_only__" for item in summaries))
+
+    def test_paid_fallback_all_queries_union_runs_all_harvest_queries(self) -> None:
+        class _FakeSettings:
+            enabled = True
+            max_paid_items = 25
+
+        class _FakeHarvestConnector:
+            settings = _FakeSettings()
+
+            def __init__(self) -> None:
+                self.queries: list[str] = []
+                self.tempdir = Path(".")
+
+            def search_profiles(self, **kwargs):
+                query_text = str(kwargs.get("query_text") or "").strip()
+                self.queries.append(query_text)
+                return {
+                    "raw_path": self.tempdir / f"{query_text or 'blank'}.json",
+                    "rows": [
+                        {
+                            "full_name": f"{query_text} Person".strip(),
+                            "headline": "Research Engineer",
+                            "location": "United States",
+                            "profile_url": f"https://www.linkedin.com/in/{query_text or 'blank'}-person/",
+                            "username": f"{query_text or 'blank'}-person",
+                            "current_company": "Google",
+                        }
+                    ],
+                }
+
+        identity = CompanyIdentity(
+            requested_name="Google",
+            canonical_name="Google",
+            company_key="google",
+            linkedin_slug="google",
+            linkedin_company_url="https://www.linkedin.com/company/google/",
+        )
+        with tempfile.TemporaryDirectory() as tempdir:
+            fake = _FakeHarvestConnector()
+            fake.tempdir = Path(tempdir)
+            acquirer = SearchSeedAcquirer([], harvest_search_connector=fake)
+            entries, summaries, errors, accounts = acquirer._provider_people_search_fallback(
+                identity=identity,
+                discovery_dir=Path(tempdir),
+                asset_logger=None,
+                search_seed_queries=["multimodal Veo", "Nano Banana"],
+                filter_hints={"current_companies": ["https://www.linkedin.com/company/google/"]},
+                employment_status="current",
+                limit=25,
+                cost_policy={"provider_people_search_query_strategy": "all_queries_union"},
+            )
+
+        self.assertEqual(errors, [])
+        self.assertEqual(accounts, ["harvest_profile_search"])
+        self.assertCountEqual(fake.queries, ["multimodal Veo", "Nano Banana"])
+        self.assertEqual(len(entries), 2)
+        self.assertTrue(any(item["source_query"] == "multimodal Veo" for item in entries))
+        self.assertTrue(any(item["source_query"] == "Nano Banana" for item in entries))
+        self.assertGreaterEqual(len(summaries), 2)
+
+    def test_paid_fallback_first_hit_strategy_stops_after_first_harvest_match(self) -> None:
+        class _FakeSettings:
+            enabled = True
+            max_paid_items = 25
+
+        class _FakeHarvestConnector:
+            settings = _FakeSettings()
+
+            def __init__(self) -> None:
+                self.queries: list[str] = []
+                self.tempdir = Path(".")
+
+            def search_profiles(self, **kwargs):
+                query_text = str(kwargs.get("query_text") or "").strip()
+                self.queries.append(query_text)
+                return {
+                    "raw_path": self.tempdir / f"{query_text or 'blank'}.json",
+                    "rows": [
+                        {
+                            "full_name": "First Hit Person",
+                            "headline": "Research Scientist",
+                            "location": "United States",
+                            "profile_url": "https://www.linkedin.com/in/first-hit-person/",
+                            "username": "first-hit-person",
+                            "current_company": "Google",
+                        }
+                    ],
+                }
+
+        identity = CompanyIdentity(
+            requested_name="Google",
+            canonical_name="Google",
+            company_key="google",
+            linkedin_slug="google",
+            linkedin_company_url="https://www.linkedin.com/company/google/",
+        )
+        with tempfile.TemporaryDirectory() as tempdir:
+            fake = _FakeHarvestConnector()
+            fake.tempdir = Path(tempdir)
+            acquirer = SearchSeedAcquirer([], harvest_search_connector=fake)
+            entries, summaries, errors, accounts = acquirer._provider_people_search_fallback(
+                identity=identity,
+                discovery_dir=Path(tempdir),
+                asset_logger=None,
+                search_seed_queries=["multimodal Veo", "Nano Banana"],
+                filter_hints={"current_companies": ["https://www.linkedin.com/company/google/"]},
+                employment_status="current",
+                limit=25,
+                cost_policy={"provider_people_search_query_strategy": "first_hit"},
+            )
+
+        self.assertEqual(errors, [])
+        self.assertEqual(accounts, ["harvest_profile_search"])
+        self.assertEqual(fake.queries, ["multimodal Veo"])
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["source_query"], "multimodal Veo")
+        self.assertEqual(len(summaries), 1)
+
     def test_normalize_harvest_company_filters_prefers_exact_company_url(self) -> None:
         identity = CompanyIdentity(
             requested_name="Thinking Machines Lab",

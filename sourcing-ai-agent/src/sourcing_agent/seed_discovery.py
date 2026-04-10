@@ -828,8 +828,20 @@ class SearchSeedAcquirer:
         errors: list[str] = []
         accounts_used: list[str] = []
         page_count = int(cost_policy.get("provider_people_search_pages", 2 if employment_status == "former" else 1) or 1)
+        query_strategy = str(cost_policy.get("provider_people_search_query_strategy") or "all_queries_union").strip().lower()
+        stop_after_first_hit = query_strategy in {"first_hit", "first_nonempty", "first_non_empty", "first_match"}
+        try:
+            max_query_count = int(cost_policy.get("provider_people_search_max_queries") or 0)
+        except (TypeError, ValueError):
+            max_query_count = 0
+        if max_query_count < 0:
+            max_query_count = 0
         paid_queries = list(search_seed_queries)
-        if employment_status == "former" and list(filter_hints.get("past_companies") or []):
+        if (
+            employment_status == "former"
+            and list(filter_hints.get("past_companies") or [])
+            and not bool(cost_policy.get("former_keyword_queries_only"))
+        ):
             paid_queries = ["", *paid_queries]
         deduped_queries: list[str] = []
         seen_queries: set[str] = set()
@@ -839,80 +851,133 @@ class SearchSeedAcquirer:
                 continue
             seen_queries.add(key)
             deduped_queries.append(key)
+        if max_query_count > 0:
+            deduped_queries = deduped_queries[:max_query_count]
 
-        for index, query_text in enumerate(deduped_queries, start=1):
-            summary_query = query_text or "__past_company_only__"
-            if self.harvest_search_connector and self.harvest_search_connector.settings.enabled:
-                harvest_plan = self._resolve_harvest_search_execution_plan(
+        def _run_harvest_query(summary_query: str, query_text: str) -> dict[str, Any]:
+            if not (self.harvest_search_connector and self.harvest_search_connector.settings.enabled):
+                return {"query_entries": [], "query_summary": None, "account_used": ""}
+            harvest_plan = self._resolve_harvest_search_execution_plan(
+                query_text=query_text,
+                filter_hints=filter_hints,
+                employment_status=employment_status,
+                discovery_dir=discovery_dir,
+                asset_logger=asset_logger,
+                requested_limit=limit,
+                requested_pages=page_count,
+                allow_shared_provider_cache=bool(cost_policy.get("allow_shared_provider_cache", True)),
+            )
+            harvest_result = harvest_plan.get("initial_result")
+            if harvest_result is None:
+                harvest_result = self.harvest_search_connector.search_profiles(
                     query_text=query_text,
                     filter_hints=filter_hints,
                     employment_status=employment_status,
                     discovery_dir=discovery_dir,
                     asset_logger=asset_logger,
-                    requested_limit=limit,
-                    requested_pages=page_count,
+                    limit=int(harvest_plan.get("effective_limit") or limit),
+                    pages=int(harvest_plan.get("effective_pages") or page_count),
                     allow_shared_provider_cache=bool(cost_policy.get("allow_shared_provider_cache", True)),
+                    auto_probe=False,
                 )
-                harvest_result = harvest_plan.get("initial_result")
-                if harvest_result is None:
-                    harvest_result = self.harvest_search_connector.search_profiles(
-                        query_text=query_text,
-                        filter_hints=filter_hints,
-                        employment_status=employment_status,
-                        discovery_dir=discovery_dir,
-                        asset_logger=asset_logger,
-                        limit=int(harvest_plan.get("effective_limit") or limit),
-                        pages=int(harvest_plan.get("effective_pages") or page_count),
-                        allow_shared_provider_cache=bool(cost_policy.get("allow_shared_provider_cache", True)),
+            if harvest_result is None:
+                return {"query_entries": [], "query_summary": None, "account_used": ""}
+
+            rows = list(harvest_result.get("rows") or [])
+            effective_limit = max(1, int(harvest_plan.get("effective_limit") or limit))
+            query_entries: list[dict[str, Any]] = []
+            for row in rows[:effective_limit]:
+                entry = {
+                    "seed_key": _seed_key(str(row.get("full_name") or ""), str(row.get("profile_url") or summary_query)),
+                    "full_name": str(row.get("full_name") or "").strip(),
+                    "headline": str(row.get("headline") or "").strip(),
+                    "location": str(row.get("location") or "").strip(),
+                    "source_type": "harvest_profile_search",
+                    "source_query": summary_query,
+                    "profile_url": str(row.get("profile_url") or "").strip(),
+                    "slug": str(row.get("username") or "").strip() or extract_linkedin_slug(str(row.get("profile_url") or "")),
+                    "employment_status": employment_status,
+                    "target_company": identity.canonical_name,
+                    "metadata": {
+                        "provider_account_id": "harvest_profile_search",
+                        "current_company": str(row.get("current_company") or "").strip(),
+                        "scope_keywords": list(filter_hints.get("scope_keywords") or []),
+                    },
+                }
+                if entry["full_name"]:
+                    query_entries.append(entry)
+            query_summary = {
+                "query": summary_query,
+                "mode": "harvest_profile_search",
+                "raw_path": str(harvest_result.get("raw_path") or ""),
+                "account_id": "harvest_profile_search",
+                "requested_limit": max(1, int(limit or 25)),
+                "requested_pages": max(1, int(page_count or 1)),
+                "effective_limit": effective_limit,
+                "effective_pages": max(1, int(harvest_plan.get("effective_pages") or page_count)),
+                "pagination": dict(harvest_result.get("pagination") or {}),
+                "probe": {
+                    key: value
+                    for key, value in dict(harvest_plan).items()
+                    if key != "initial_result"
+                },
+                "seed_entry_count": len(query_entries),
+            }
+            return {
+                "query_entries": query_entries,
+                "query_summary": query_summary,
+                "account_used": "harvest_profile_search" if query_entries else "",
+            }
+
+        parallel_harvest_results: dict[int, dict[str, Any]] = {}
+        if (
+            deduped_queries
+            and not stop_after_first_hit
+            and self.harvest_search_connector
+            and self.harvest_search_connector.settings.enabled
+        ):
+            try:
+                configured_parallel_workers = int(cost_policy.get("provider_people_search_parallel_queries") or 4)
+            except (TypeError, ValueError):
+                configured_parallel_workers = 4
+            parallel_query_workers = max(
+                1,
+                min(
+                    len(deduped_queries),
+                    configured_parallel_workers,
+                ),
+            )
+            with ThreadPoolExecutor(max_workers=parallel_query_workers) as executor:
+                futures = [
+                    executor.submit(
+                        _run_harvest_query,
+                        query_text or "__past_company_only__",
+                        query_text,
                     )
-                if harvest_result is not None:
-                    rows = list(harvest_result.get("rows") or [])
-                    effective_limit = max(1, int(harvest_plan.get("effective_limit") or limit))
-                    query_entries: list[dict[str, Any]] = []
-                    for row in rows[:effective_limit]:
-                        entry = {
-                            "seed_key": _seed_key(str(row.get("full_name") or ""), str(row.get("profile_url") or summary_query)),
-                            "full_name": str(row.get("full_name") or "").strip(),
-                            "headline": str(row.get("headline") or "").strip(),
-                            "location": str(row.get("location") or "").strip(),
-                            "source_type": "harvest_profile_search",
-                            "source_query": summary_query,
-                            "profile_url": str(row.get("profile_url") or "").strip(),
-                            "slug": str(row.get("username") or "").strip() or extract_linkedin_slug(str(row.get("profile_url") or "")),
-                            "employment_status": employment_status,
-                            "target_company": identity.canonical_name,
-                            "metadata": {
-                                "provider_account_id": "harvest_profile_search",
-                                "current_company": str(row.get("current_company") or "").strip(),
-                                "scope_keywords": list(filter_hints.get("scope_keywords") or []),
-                            },
-                        }
-                        if entry["full_name"]:
-                            query_entries.append(entry)
-                            entries.append(entry)
-                    query_summaries.append(
-                        {
-                            "query": summary_query,
-                            "mode": "harvest_profile_search",
-                            "raw_path": str(harvest_result.get("raw_path") or ""),
-                            "account_id": "harvest_profile_search",
-                            "requested_limit": max(1, int(limit or 25)),
-                            "requested_pages": max(1, int(page_count or 1)),
-                            "effective_limit": effective_limit,
-                            "effective_pages": max(1, int(harvest_plan.get("effective_pages") or page_count)),
-                            "pagination": dict(harvest_result.get("pagination") or {}),
-                            "probe": {
-                                key: value
-                                for key, value in dict(harvest_plan).items()
-                                if key != "initial_result"
-                            },
-                            "seed_entry_count": len(query_entries),
-                        }
-                    )
-                    if query_entries:
-                        if "harvest_profile_search" not in accounts_used:
-                            accounts_used.append("harvest_profile_search")
-                        break
+                    for query_text in deduped_queries
+                ]
+                for index, future in enumerate(futures, start=1):
+                    parallel_harvest_results[index] = dict(future.result() or {})
+
+        for index, query_text in enumerate(deduped_queries, start=1):
+            summary_query = query_text or "__past_company_only__"
+            if self.harvest_search_connector and self.harvest_search_connector.settings.enabled:
+                harvest_payload = (
+                    dict(parallel_harvest_results.get(index) or {})
+                    if not stop_after_first_hit and parallel_harvest_results
+                    else _run_harvest_query(summary_query, query_text)
+                )
+                query_entries = list(harvest_payload.get("query_entries") or [])
+                query_summary = dict(harvest_payload.get("query_summary") or {})
+                account_used = str(harvest_payload.get("account_used") or "").strip()
+                if query_entries:
+                    entries.extend(query_entries)
+                if query_summary:
+                    query_summaries.append(query_summary)
+                if account_used and account_used not in accounts_used:
+                    accounts_used.append(account_used)
+                if query_entries and stop_after_first_hit:
+                    break
             if not query_text:
                 continue
             payload, account, provider_errors = self._search_people(query_text, limit=min(limit, 25))
@@ -971,7 +1036,7 @@ class SearchSeedAcquirer:
                     "seed_entry_count": len(query_entries),
                 }
             )
-            if entries:
+            if query_entries and stop_after_first_hit:
                 break
         return entries, query_summaries, errors, accounts_used
 
@@ -1022,6 +1087,7 @@ class SearchSeedAcquirer:
             limit=25,
             pages=1,
             allow_shared_provider_cache=allow_shared_provider_cache,
+            auto_probe=False,
         )
         plan["probe_performed"] = True
         if probe_result is None:

@@ -27,6 +27,7 @@
   - `#/$defs/ReviewInstructionCompileResponse`
   - `#/$defs/ReviewPlanApplyResponse`
   - `#/$defs/WorkflowStartResponse`
+  - `#/$defs/QueryDispatchListResponse`
   - `#/$defs/JobProgressResponse`
   - `#/$defs/JobResultsResponse`
   - `#/$defs/RetrievalJobResponse`
@@ -297,11 +298,26 @@ export function SourcingConsole() {
 - `plan`
 - `plan_review_session`
 - `intent_rewrite`
+- `dispatch`
 
 推荐做法：
 
 - workflow 创建成功后，把 `job_id` 和当前缓存的 `intent_rewrite` 绑定
 - 若 `POST /api/workflows` 自身也返回了 `intent_rewrite`，以后者为准
+- 若 `status` 为 `joined_existing_job` 或 `reused_completed_job`，直接复用 `dispatch.matched_job_id` 对应结果，不要再提示“新任务已创建”
+
+可选的请求控制字段（都在 `POST /api/workflows` payload 顶层）：
+
+- `requester_id` / `tenant_id`
+  - 用于限定复用作用域（同租户 / 同用户）
+- `idempotency_key`
+  - 强约束幂等键，优先于 request signature 去重
+- `query_dispatch_scope`
+  - `global | tenant | requester`（缺省自动推断）
+- `allow_join_inflight`
+  - 是否允许加入在途任务（默认 `true`）
+- `allow_result_reuse`
+  - 是否允许复用已完成结果（默认 `true`）
 
 ### 4.4 Progress Page
 
@@ -356,6 +372,23 @@ export function SourcingConsole() {
   - 候选人结果
 - `manual_review_items`
   - 边界项
+
+### 4.6 Query Dispatch Audit
+
+接口：
+
+- `GET /api/query-dispatches`
+- `POST /api/query-dispatches/list`
+
+用途：
+
+- 查询最近的 query 分发决策（新建 / 加入在途 / 复用完成）
+- 支持按 `target_company / requester_id / tenant_id / limit` 过滤
+
+推荐做法：
+
+- 前端调试页或运营后台使用 `GET /api/query-dispatches` 展示去重与复用命中情况
+- 如果上游网关不方便拼 query string，可使用 `POST /api/query-dispatches/list` 传同名 JSON 字段
 
 ## 5. 推荐的前端状态模型
 
@@ -456,6 +489,17 @@ type WorkflowUiState = {
 - `stage`
 - `plan`
 - `intent_rewrite`
+- `dispatch`
+
+### `GET /api/query-dispatches`
+
+最重要的稳定字段：
+
+- `query_dispatches[]`
+- `query_dispatches[].strategy`
+- `query_dispatches[].status`
+- `query_dispatches[].source_job_id`
+- `query_dispatches[].created_job_id`
 
 ### `GET /api/jobs/{job_id}/progress`
 

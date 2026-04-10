@@ -418,6 +418,115 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(after["job"]["status"], "completed")
         self.assertGreaterEqual(len(after["results"]), 1)
 
+    def test_queue_workflow_joins_inflight_exact_request(self) -> None:
+        payload = {
+            "raw_user_request": "帮我找 Anthropic 当前偏基础设施方向的技术成员，先获取全量资产再检索。",
+            "target_company": "Anthropic",
+            "categories": ["employee"],
+            "employment_statuses": ["current"],
+            "keywords": ["基础设施", "GPU", "预训练"],
+            "top_k": 3,
+            "skip_plan_review": True,
+        }
+        first = self.orchestrator.queue_workflow(dict(payload))
+        self.assertEqual(first["status"], "queued")
+        second = self.orchestrator.queue_workflow(dict(payload))
+        self.assertEqual(second["status"], "joined_existing_job")
+        self.assertEqual(second["job_id"], first["job_id"])
+        self.assertEqual(second["dispatch"]["strategy"], "join_inflight")
+        dispatches = self.store.list_query_dispatches(target_company="Anthropic", limit=10)
+        self.assertTrue(any(str(item.get("strategy") or "") == "join_inflight" for item in dispatches))
+
+    def test_queue_workflow_reuses_completed_job_with_tenant_scope(self) -> None:
+        payload = {
+            "raw_user_request": "帮我找 Anthropic 当前偏基础设施方向的技术成员，先获取全量资产再检索。",
+            "target_company": "Anthropic",
+            "categories": ["employee"],
+            "employment_statuses": ["current"],
+            "keywords": ["基础设施", "GPU", "预训练"],
+            "top_k": 3,
+            "skip_plan_review": True,
+            "tenant_id": "tenant-a",
+            "requester_id": "user-1",
+        }
+        first = self.orchestrator.queue_workflow(dict(payload))
+        self.assertEqual(first["status"], "queued")
+        run_result = self.orchestrator.run_queued_workflow(str(first.get("job_id") or ""))
+        self.assertEqual(run_result["status"], "completed")
+
+        same_tenant_other_user = self.orchestrator.queue_workflow(
+            {**payload, "requester_id": "user-2"}
+        )
+        self.assertEqual(same_tenant_other_user["status"], "reused_completed_job")
+        self.assertEqual(same_tenant_other_user["job_id"], first["job_id"])
+        self.assertEqual(same_tenant_other_user["dispatch"]["strategy"], "reuse_completed")
+
+        different_tenant = self.orchestrator.queue_workflow(
+            {**payload, "tenant_id": "tenant-b", "requester_id": "user-3"}
+        )
+        self.assertEqual(different_tenant["status"], "queued")
+        self.assertNotEqual(different_tenant["job_id"], first["job_id"])
+
+    def test_queue_workflow_uses_idempotency_key_first(self) -> None:
+        payload = {
+            "raw_user_request": "帮我找 Anthropic 当前偏基础设施方向的技术成员，先获取全量资产再检索。",
+            "target_company": "Anthropic",
+            "categories": ["employee"],
+            "employment_statuses": ["current"],
+            "keywords": ["基础设施", "GPU", "预训练"],
+            "top_k": 3,
+            "skip_plan_review": True,
+            "tenant_id": "tenant-a",
+            "requester_id": "user-1",
+            "idempotency_key": "req-42",
+        }
+        first = self.orchestrator.queue_workflow(dict(payload))
+        self.assertEqual(first["status"], "queued")
+
+        inflight_repeat = self.orchestrator.queue_workflow(
+            {
+                **payload,
+                "keywords": ["this payload is intentionally different"],
+                "query": "same idempotency should still dedupe",
+            }
+        )
+        self.assertEqual(inflight_repeat["status"], "joined_existing_job")
+        self.assertEqual(inflight_repeat["job_id"], first["job_id"])
+        self.assertEqual(inflight_repeat["dispatch"]["strategy"], "join_inflight")
+
+        run_result = self.orchestrator.run_queued_workflow(str(first.get("job_id") or ""))
+        self.assertEqual(run_result["status"], "completed")
+
+        completed_repeat = self.orchestrator.queue_workflow(
+            {
+                **payload,
+                "keywords": ["changed again after completion"],
+                "query": "completed idempotent reuse",
+            }
+        )
+        self.assertEqual(completed_repeat["status"], "reused_completed_job")
+        self.assertEqual(completed_repeat["job_id"], first["job_id"])
+        self.assertEqual(completed_repeat["dispatch"]["strategy"], "reuse_completed")
+
+    def test_start_workflow_reuses_pending_plan_review_session(self) -> None:
+        payload = {
+            "raw_user_request": "帮我找 Anthropic 当前偏基础设施方向的技术成员，先获取全量资产再检索。",
+            "target_company": "Anthropic",
+            "categories": ["employee"],
+            "employment_statuses": ["current"],
+            "keywords": ["基础设施", "GPU", "预训练"],
+            "top_k": 3,
+        }
+        first = self.orchestrator.start_workflow(dict(payload))
+        self.assertEqual(first["status"], "needs_plan_review")
+        second = self.orchestrator.start_workflow(dict(payload))
+        self.assertEqual(second["status"], "needs_plan_review")
+        self.assertEqual(second["reason"], "existing_pending_plan_review")
+        self.assertEqual(
+            int(second["plan_review_session"]["review_id"] or 0),
+            int(first["plan_review_session"]["review_id"] or 0),
+        )
+
     def test_model_assisted_request_normalization_feeds_structured_plan(self) -> None:
         class RequestNormalizingModelClient(DeterministicModelClient):
             def normalize_request(self, payload: dict[str, object]) -> dict[str, object]:
@@ -427,6 +536,12 @@ class PipelineTest(unittest.TestCase):
                     "employment_statuses": ["current"],
                     "organization_keywords": ["Veo"],
                     "keywords": ["Post-train", "Math"],
+                    "scope_disambiguation": {
+                        "inferred_scope": "sub_org_only",
+                        "sub_org_candidates": ["Google DeepMind", "Veo"],
+                        "confidence": 0.86,
+                        "rationale": "Detected product and sub-org terms.",
+                    },
                     "retrieval_strategy": "hybrid",
                     "query": "Google DeepMind Veo post-train math members",
                     "execution_preferences": {
@@ -456,6 +571,11 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(plan_result["request"]["employment_statuses"], ["current"])
         self.assertEqual(plan_result["request"]["organization_keywords"], ["Google DeepMind", "Veo"])
         self.assertEqual(plan_result["request"]["keywords"], ["Post-train", "Math"])
+        self.assertEqual(plan_result["request"]["scope_disambiguation"]["inferred_scope"], "sub_org_only")
+        self.assertEqual(
+            plan_result["request"]["scope_disambiguation"]["sub_org_candidates"],
+            ["Google DeepMind", "Veo"],
+        )
         self.assertEqual(plan_result["request"]["retrieval_strategy"], "hybrid")
         self.assertEqual(
             plan_result["request"]["execution_preferences"],
@@ -464,7 +584,7 @@ class PipelineTest(unittest.TestCase):
                 "precision_recall_bias": "precision_first",
             },
         )
-        self.assertEqual(plan_result["plan"]["acquisition_strategy"]["strategy_type"], "scoped_search_roster")
+        self.assertEqual(plan_result["plan"]["acquisition_strategy"]["strategy_type"], "full_company_roster")
         self.assertIn("Google", plan_result["plan"]["acquisition_strategy"]["company_scope"])
         self.assertIn("Google DeepMind", plan_result["plan"]["acquisition_strategy"]["company_scope"])
         self.assertIn("Veo", plan_result["plan"]["acquisition_strategy"]["company_scope"])
@@ -479,9 +599,10 @@ class PipelineTest(unittest.TestCase):
         )
         self.assertFalse(plan_result["plan"]["acquisition_strategy"]["cost_policy"]["high_cost_requires_approval"])
         self.assertNotIn("high_cost_sources_need_approval", plan_result["plan_review_gate"]["reasons"])
-        self.assertEqual(plan_result["plan_review_gate"]["status"], "ready")
-        self.assertFalse(plan_result["plan_review_gate"]["required_before_execution"])
-        self.assertIn("targeted_people_search", [item["bundle_id"] for item in plan_result["plan"]["search_strategy"]["query_bundles"]])
+        self.assertEqual(plan_result["plan_review_gate"]["status"], "requires_review")
+        self.assertTrue(plan_result["plan_review_gate"]["required_before_execution"])
+        self.assertIn("google_scope_ambiguity_requires_confirmation", plan_result["plan_review_gate"]["reasons"])
+        self.assertNotIn("targeted_people_search", [item["bundle_id"] for item in plan_result["plan"]["search_strategy"]["query_bundles"]])
         self.assertTrue(any("团队或子组织范围：" in item and "Veo" in item for item in plan_result["plan"]["intent_brief"]["identified_request"]))
 
     def test_model_assisted_request_normalization_preserves_natural_language_shorthand_rewrite(self) -> None:
@@ -1153,6 +1274,76 @@ class PipelineTest(unittest.TestCase):
         }.items():
             self.assertEqual(job["request"]["execution_preferences"][key], value)
 
+    def test_queue_workflow_backfills_missing_target_company_from_approved_review_scope(self) -> None:
+        plan_result = self.orchestrator.plan_workflow(
+            {
+                "raw_user_request": "帮我寻找LangChain Infra方向的人",
+                "target_company": "",
+                "keywords": ["infra"],
+            }
+        )
+        review_id = int(plan_result["plan_review_session"]["review_id"] or 0)
+        reviewed = self.orchestrator.review_plan_session(
+            {
+                "review_id": review_id,
+                "action": "approved",
+                "reviewer": "tester",
+                "decision": {
+                    "confirmed_company_scope": ["LangChain"],
+                    "allow_high_cost_sources": True,
+                },
+            }
+        )
+        self.assertEqual(reviewed["status"], "reviewed")
+        self.assertEqual(reviewed["review"]["request"]["target_company"], "LangChain")
+
+        queued = self.orchestrator.queue_workflow({"plan_review_id": review_id})
+        self.assertEqual(queued["status"], "queued")
+        job = self.orchestrator.get_job(queued["job_id"])
+        self.assertIsNotNone(job)
+        assert job is not None
+        self.assertEqual(job["request"]["target_company"], "LangChain")
+
+    def test_queue_workflow_rebuilds_google_keyword_shard_plan_from_approved_review_request(self) -> None:
+        plan_result = self.orchestrator.plan_workflow(
+            {
+                "raw_user_request": "给我 Google 负责多模态和 Veo 的研究员",
+                "target_company": "Google",
+                "keywords": ["multimodal", "Veo", "Nano Banana"],
+                "execution_preferences": {
+                    "use_company_employees_lane": True,
+                    "confirmed_company_scope": ["Google", "Google DeepMind"],
+                },
+            }
+        )
+        review_id = int(plan_result["plan_review_session"]["review_id"] or 0)
+        reviewed = self.orchestrator.review_plan_session(
+            {
+                "review_id": review_id,
+                "action": "approved",
+                "reviewer": "tester",
+                "decision": {
+                    "allow_high_cost_sources": False,
+                },
+            }
+        )
+        self.assertEqual(reviewed["status"], "reviewed")
+
+        queued = self.orchestrator.queue_workflow({"plan_review_id": review_id})
+        self.assertEqual(queued["status"], "queued")
+        acquire_task = next(task for task in queued["plan"]["acquisition_tasks"] if task["task_type"] == "acquire_full_roster")
+        shard_policy = dict(acquire_task["metadata"].get("company_employee_shard_policy") or {})
+
+        self.assertEqual(acquire_task["metadata"]["company_employee_shard_strategy"], "adaptive_large_org_keyword_probe")
+        self.assertEqual(shard_policy.get("mode"), "keyword_union")
+        self.assertTrue(shard_policy.get("force_keyword_shards"))
+        self.assertEqual(
+            shard_policy.get("root_filters", {}).get("function_ids"),
+            ["8", "9", "19", "24"],
+        )
+        self.assertTrue(any("Nano Banana" in query for query in acquire_task["metadata"].get("search_seed_queries") or []))
+        self.assertFalse(any("Researcher" in query for query in acquire_task["metadata"].get("search_seed_queries") or []))
+
     def test_compile_plan_review_instruction_uses_model_then_schema_validation(self) -> None:
         class ReviewInstructionModelClient(DeterministicModelClient):
             def provider_name(self) -> str:
@@ -1300,6 +1491,58 @@ class PipelineTest(unittest.TestCase):
         self.assertTrue(progress["progress"]["milestones"])
         self.assertIn("worker_summary", progress["progress"])
         self.assertGreaterEqual(len(progress["progress"]["completed_stages"]), 1)
+
+    def test_run_workflow_blocking_triggers_job_recovery_when_acquisition_is_blocked(self) -> None:
+        plan_result = self.orchestrator.plan_workflow(
+            {
+                "raw_user_request": "帮我找 Anthropic 当前偏基础设施方向的技术成员，先获取全量资产再检索。",
+                "target_company": "Anthropic",
+                "categories": ["employee"],
+                "employment_statuses": ["current"],
+                "keywords": ["基础设施", "GPU", "预训练"],
+                "top_k": 3,
+            }
+        )
+        review_id = int(plan_result["plan_review_session"]["review_id"] or 0)
+        self.orchestrator.review_plan_session(
+            {
+                "review_id": review_id,
+                "action": "approved",
+                "reviewer": "tester",
+                "decision": {"allow_high_cost_sources": False},
+            }
+        )
+
+        with unittest.mock.patch.object(self.orchestrator, "_run_workflow") as mocked_run_workflow, unittest.mock.patch.object(
+            self.orchestrator, "run_queued_workflow"
+        ) as mocked_run_queued:
+
+            def _mark_blocked(job_id: str, request: JobRequest, plan: object) -> None:
+                self.store.save_job(
+                    job_id=job_id,
+                    job_type="workflow",
+                    status="blocked",
+                    stage="acquiring",
+                    request_payload=request.to_record(),
+                    plan_payload=plan.to_record() if hasattr(plan, "to_record") else {},
+                    summary_payload={
+                        "blocked_task": "acquire_full_roster",
+                        "message": "queued_background_harvest",
+                    },
+                )
+
+            mocked_run_workflow.side_effect = _mark_blocked
+            mocked_run_queued.return_value = {"status": "blocked", "stage": "acquiring"}
+            snapshot = self.orchestrator.run_workflow_blocking(
+                {"plan_review_id": review_id, "job_recovery_poll_seconds": 0.1, "job_recovery_max_ticks": 3}
+            )
+
+        self.assertEqual(snapshot["job"]["status"], "blocked")
+        mocked_run_queued.assert_called_once()
+        _, call_kwargs = mocked_run_queued.call_args
+        recovery_payload = dict(call_kwargs.get("recovery_payload") or {})
+        self.assertTrue(recovery_payload.get("auto_job_daemon"))
+        self.assertEqual(int(recovery_payload.get("job_recovery_max_ticks") or 0), 3)
 
     def test_worker_recovery_reconciles_completed_workflow_results_after_background_exploration(self) -> None:
         company_dir = self.settings.company_assets_dir / "acme"
@@ -4088,6 +4331,67 @@ class PipelineTest(unittest.TestCase):
             self.assertGreaterEqual(len(pattern_resp["patterns"]), 1)
             self.assertGreaterEqual(len(pattern_resp["versions"]), 1)
             self.assertGreaterEqual(len(pattern_resp["compiler_runs"]), 1)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
+    def test_http_api_query_dispatch_filters(self) -> None:
+        first = self.orchestrator.queue_workflow(
+            {
+                "raw_user_request": "帮我找 Anthropic 当前偏基础设施方向的技术成员，先获取全量资产再检索。",
+                "target_company": "Anthropic",
+                "categories": ["employee"],
+                "employment_statuses": ["current"],
+                "keywords": ["基础设施", "GPU", "预训练"],
+                "top_k": 3,
+                "skip_plan_review": True,
+                "tenant_id": "tenant-a",
+                "requester_id": "user-1",
+            }
+        )
+        self.assertEqual(first["status"], "queued")
+        second = self.orchestrator.queue_workflow(
+            {
+                "raw_user_request": "帮我找 Anthropic 当前偏基础设施方向的技术成员，先获取全量资产再检索。",
+                "target_company": "Anthropic",
+                "categories": ["employee"],
+                "employment_statuses": ["current"],
+                "keywords": ["基础设施", "GPU", "预训练"],
+                "top_k": 3,
+                "skip_plan_review": True,
+                "tenant_id": "tenant-a",
+                "requester_id": "user-1",
+            }
+        )
+        self.assertEqual(second["status"], "joined_existing_job")
+
+        server = create_server(self.orchestrator, port=0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        host, port = server.server_address
+        opener = urllib_request.build_opener(urllib_request.ProxyHandler({}))
+        try:
+            filtered_req = urllib_request.Request(
+                f"http://{host}:{port}/api/query-dispatches?target_company=Anthropic&tenant_id=tenant-a&requester_id=user-1&limit=5",
+                method="GET",
+            )
+            with opener.open(filtered_req) as response:
+                filtered_resp = json.loads(response.read().decode("utf-8"))
+            self.assertIn("query_dispatches", filtered_resp)
+            self.assertGreaterEqual(len(filtered_resp["query_dispatches"]), 1)
+            first_dispatch = dict(filtered_resp["query_dispatches"][0])
+            self.assertEqual(first_dispatch.get("target_company"), "Anthropic")
+            self.assertEqual(first_dispatch.get("tenant_id"), "tenant-a")
+            self.assertEqual(first_dispatch.get("requester_id"), "user-1")
+
+            invalid_limit_req = urllib_request.Request(
+                f"http://{host}:{port}/api/query-dispatches?limit=not-a-number",
+                method="GET",
+            )
+            with opener.open(invalid_limit_req) as response:
+                invalid_limit_resp = json.loads(response.read().decode("utf-8"))
+            self.assertIn("query_dispatches", invalid_limit_resp)
         finally:
             server.shutdown()
             server.server_close()

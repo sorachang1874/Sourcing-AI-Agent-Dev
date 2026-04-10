@@ -52,6 +52,8 @@ class HarvestConnectorTest(unittest.TestCase):
                 "past_companies": ["https://www.linkedin.com/company/anthropicresearch/"],
                 "locations": ["United States"],
                 "exclude_locations": ["Canada"],
+                "function_ids": ["8", "24"],
+                "exclude_function_ids": ["25"],
                 "keywords": ["Anthropic"],
             },
             "former",
@@ -59,7 +61,9 @@ class HarvestConnectorTest(unittest.TestCase):
         self.assertEqual(payload["pastCompanies"], ["https://www.linkedin.com/company/anthropicresearch/"])
         self.assertEqual(payload["locations"], ["United States"])
         self.assertEqual(payload["excludeLocations"], ["Canada"])
-        self.assertEqual(payload["searchQuery"], "Anthropic")
+        self.assertEqual(payload["functionIds"], ["8", "24"])
+        self.assertEqual(payload["excludeFunctionIds"], ["25"])
+        self.assertNotIn("searchQuery", payload)
 
     def test_parse_harvest_profile_payload(self) -> None:
         payload = {
@@ -73,6 +77,8 @@ class HarvestConnectorTest(unittest.TestCase):
             "currentPosition": [{"companyName": "xAI"}],
             "experiences": [{"companyName": "xAI", "title": "Research Engineer"}],
             "education": [{"schoolName": "MIT"}],
+            "languages": [{"name": "English"}, {"name": "Mandarin"}],
+            "skills": [{"name": "Python"}, {"name": "LLMs"}],
             "moreProfiles": [{"url": "https://www.linkedin.com/in/jane-doe-2/"}],
         }
         parsed = parse_harvest_profile_payload(payload)
@@ -80,6 +86,8 @@ class HarvestConnectorTest(unittest.TestCase):
         self.assertEqual(parsed["profile_url"], "https://www.linkedin.com/in/jane-doe/")
         self.assertEqual(parsed["current_company"], "xAI")
         self.assertEqual(parsed["location"], "San Francisco Bay Area")
+        self.assertEqual(len(parsed["languages"]), 2)
+        self.assertEqual(len(parsed["skills"]), 2)
         self.assertEqual(len(parsed["more_profiles"]), 1)
 
     def test_parse_harvest_profile_payload_keeps_provider_profile_url_even_with_requested_opaque_url(self) -> None:
@@ -530,6 +538,32 @@ class HarvestConnectorTest(unittest.TestCase):
         )
         self.assertEqual(result["pagination"]["total_elements"], 559)
         self.assertEqual(result["pagination"]["total_pages"], 23)
+
+    def test_harvest_profile_search_caps_request_to_provider_limit(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="short", max_paid_items=25)
+        connector = HarvestProfileSearchConnector(settings)
+        with tempfile.TemporaryDirectory() as tempdir:
+            capture = {}
+
+            def _fake_run(actor_settings, payload):
+                capture["payload"] = dict(payload)
+                capture["max_paid_items"] = actor_settings.max_paid_items
+                return []
+
+            with patch("sourcing_agent.harvest_connectors._run_harvest_actor", side_effect=_fake_run):
+                connector.search_profiles(
+                    query_text="",
+                    filter_hints={"past_companies": ["https://www.linkedin.com/company/google/"]},
+                    employment_status="former",
+                    discovery_dir=Path(tempdir),
+                    limit=100000,
+                    pages=500,
+                    auto_probe=False,
+                )
+
+        self.assertEqual(capture["payload"]["takePages"], 100)
+        self.assertEqual(capture["payload"]["maxItems"], 2500)
+        self.assertEqual(capture["max_paid_items"], 2500)
 
     def test_harvest_profile_search_reuses_matching_live_test_asset_without_token(self) -> None:
         settings = HarvestActorSettings(enabled=False, api_token="", actor_id="actor", default_mode="short", max_paid_items=50)
@@ -989,12 +1023,23 @@ class HarvestConnectorTest(unittest.TestCase):
                     max_pages=8,
                     page_limit=50,
                     company_filters={
+                        "companies": [
+                            "https://www.linkedin.com/company/google/",
+                            "https://www.linkedin.com/company/deepmind/",
+                        ],
                         "locations": ["United States"],
                         "function_ids": ["8"],
                         "exclude_function_ids": ["24"],
                     },
                 )
 
+        self.assertEqual(
+            capture["payload"]["companies"],
+            [
+                "https://www.linkedin.com/company/google/",
+                "https://www.linkedin.com/company/deepmind/",
+            ],
+        )
         self.assertEqual(capture["payload"]["locations"], ["United States"])
         self.assertEqual(capture["payload"]["functionIds"], ["8"])
         self.assertEqual(capture["payload"]["excludeFunctionIds"], ["24"])

@@ -1,0 +1,29 @@
+{
+  "raw_user_request": "Find Google and Google DeepMind researchers working on multimodal, vision-language, and video generation for Veo and Nano Banana. Run keyword-first acquisition.",
+  "query": "Google DeepMind multimodal vision-language video generation Veo Nano Banana researcher",
+  "target_company": "Google",
+  "categories": [
+    "employee",
+    "former_employee"
+  ],
+  "must_have_facets": [
+    "multimodal",
+    "research"
+  ],
+  "must_have_primary_role_buckets": [
+    "research"
+  ],
+  "execution_preferences": {
+    "acquisition_strategy_override": "full_company_roster",
+    "use_company_employees_lane": true,
+    "confirmed_company_scope": [
+      "Google",
+      "Google DeepMind"
+    ],
+    "allow_high_cost_sources": true,
+    "run_former_search_seed": true,
+    "force_fresh_run": true
+  },
+  "requester_id": "human_sim_keyword_cap_v3",
+  "idempotency_key": "google_keyword_cap_v3_20260410"
+}

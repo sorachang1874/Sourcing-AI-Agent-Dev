@@ -24,6 +24,8 @@
   与上面 contract 对齐的 TypeScript interface / JSON Schema / fetch adapter / React hooks 示例资产。
 - [TERMINAL_WORKFLOW.md](TERMINAL_WORKFLOW.md)
   终端里如何走 `plan -> review -> workflow -> progress/results`。
+- [WORKFLOW_OPERATIONS_PLAYBOOK.md](WORKFLOW_OPERATIONS_PLAYBOOK.md)
+  当前版本推荐的 CLI / API 调用方式、进度追踪与恢复交互手册。
 - [QUERY_GUARDRAILS.md](QUERY_GUARDRAILS.md)
   用户 query 的能力边界、澄清口径和敏感属性禁区。
 - [DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md)
@@ -66,6 +68,7 @@
 - [THINKING_MACHINES_LAB_RETROSPECTIVE.md](THINKING_MACHINES_LAB_RETROSPECTIVE.md)
 - [HANDOFF_2026-04-06.md](HANDOFF_2026-04-06.md)
 - [HANDOFF_2026-04-09.md](HANDOFF_2026-04-09.md)
+- [GITHUB_DEV_DIFF_REVIEW_2026-04-10.md](GITHUB_DEV_DIFF_REVIEW_2026-04-10.md)
 - [RECOVERY_TUTORIAL.md](RECOVERY_TUTORIAL.md)
 - [NEXT_TODO.md](NEXT_TODO.md)
 

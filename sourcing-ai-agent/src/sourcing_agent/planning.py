@@ -4,7 +4,10 @@ from typing import Any
 
 from .acquisition_strategy import compile_acquisition_strategy
 from .asset_catalog import AssetCatalog
-from .company_shard_planning import build_default_company_employee_shard_policy
+from .company_shard_planning import (
+    build_default_company_employee_shard_policy,
+    build_large_org_keyword_probe_shard_policy,
+)
 from .company_registry import normalize_company_key
 from .domain import (
     AcquisitionStrategyPlan,
@@ -597,6 +600,16 @@ def _default_full_company_roster_shard_policy(
     if acquisition_strategy.strategy_type != "full_company_roster":
         return {}
     company_key = normalize_company_key(request.target_company)
+    if bool(acquisition_strategy.cost_policy.get("large_org_keyword_probe_mode")):
+        large_org_policy = build_large_org_keyword_probe_shard_policy(
+            company_key,
+            company_scope=list(acquisition_strategy.company_scope or []),
+            keyword_hints=list(acquisition_strategy.filter_hints.get("keywords") or []),
+            max_pages=max_pages,
+            page_limit=page_limit,
+        )
+        if large_org_policy:
+            return large_org_policy
     return build_default_company_employee_shard_policy(
         company_key,
         max_pages=max_pages,

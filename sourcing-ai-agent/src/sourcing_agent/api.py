@@ -5,6 +5,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import re
 from typing import Any
+from urllib.parse import parse_qs, urlsplit
 
 from .orchestrator import SourcingOrchestrator
 
@@ -17,51 +18,54 @@ def create_server(orchestrator: SourcingOrchestrator, host: str = "127.0.0.1", p
 def _build_handler(orchestrator: SourcingOrchestrator):
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:  # noqa: N802
-            if self.path == "/health":
+            path, query_payload = self._request_target_payload()
+            if path == "/health":
                 return self._send_json(HTTPStatus.OK, {"status": "ok"})
-            if self.path == "/api/providers/health":
+            if path == "/api/providers/health":
                 return self._send_json(HTTPStatus.OK, orchestrator.healthcheck_model())
-            if self.path == "/api/criteria/patterns":
+            if path == "/api/criteria/patterns":
                 return self._send_json(HTTPStatus.OK, orchestrator.list_criteria_patterns())
-            if self.path == "/api/plan/reviews":
+            if path == "/api/plan/reviews":
                 return self._send_json(HTTPStatus.OK, orchestrator.list_plan_review_sessions())
-            if self.path == "/api/manual-review":
+            if path == "/api/query-dispatches":
+                return self._send_json(HTTPStatus.OK, orchestrator.list_query_dispatches(query_payload))
+            if path == "/api/manual-review":
                 return self._send_json(HTTPStatus.OK, orchestrator.list_manual_review_items())
-            if self.path == "/api/workers/recoverable":
+            if path == "/api/workers/recoverable":
                 return self._send_json(HTTPStatus.OK, orchestrator.list_recoverable_agent_workers())
-            if self.path == "/api/workers/daemon/status":
+            if path == "/api/workers/daemon/status":
                 return self._send_json(HTTPStatus.OK, orchestrator.get_worker_daemon_status())
-            progress_match = re.fullmatch(r"/api/jobs/([A-Za-z0-9]+)/progress", self.path)
+            progress_match = re.fullmatch(r"/api/jobs/([A-Za-z0-9]+)/progress", path)
             if progress_match:
                 payload = orchestrator.get_job_progress(progress_match.group(1))
                 if payload is None:
                     return self._send_json(HTTPStatus.NOT_FOUND, {"error": "job not found"})
                 return self._send_json(HTTPStatus.OK, payload)
-            job_match = re.fullmatch(r"/api/jobs/([A-Za-z0-9]+)/results", self.path)
+            job_match = re.fullmatch(r"/api/jobs/([A-Za-z0-9]+)/results", path)
             if job_match:
                 payload = orchestrator.get_job_results(job_match.group(1))
                 if payload is None:
                     return self._send_json(HTTPStatus.NOT_FOUND, {"error": "job not found"})
                 return self._send_json(HTTPStatus.OK, payload)
-            trace_match = re.fullmatch(r"/api/jobs/([A-Za-z0-9]+)/trace", self.path)
+            trace_match = re.fullmatch(r"/api/jobs/([A-Za-z0-9]+)/trace", path)
             if trace_match:
                 payload = orchestrator.get_job_trace(trace_match.group(1))
                 if payload is None:
                     return self._send_json(HTTPStatus.NOT_FOUND, {"error": "job not found"})
                 return self._send_json(HTTPStatus.OK, payload)
-            worker_match = re.fullmatch(r"/api/jobs/([A-Za-z0-9]+)/workers", self.path)
+            worker_match = re.fullmatch(r"/api/jobs/([A-Za-z0-9]+)/workers", path)
             if worker_match:
                 payload = orchestrator.get_job_workers(worker_match.group(1))
                 if payload is None:
                     return self._send_json(HTTPStatus.NOT_FOUND, {"error": "job not found"})
                 return self._send_json(HTTPStatus.OK, payload)
-            scheduler_match = re.fullmatch(r"/api/jobs/([A-Za-z0-9]+)/scheduler", self.path)
+            scheduler_match = re.fullmatch(r"/api/jobs/([A-Za-z0-9]+)/scheduler", path)
             if scheduler_match:
                 payload = orchestrator.get_job_scheduler(scheduler_match.group(1))
                 if payload is None:
                     return self._send_json(HTTPStatus.NOT_FOUND, {"error": "job not found"})
                 return self._send_json(HTTPStatus.OK, payload)
-            job_match = re.fullmatch(r"/api/jobs/([A-Za-z0-9]+)", self.path)
+            job_match = re.fullmatch(r"/api/jobs/([A-Za-z0-9]+)", path)
             if job_match:
                 payload = orchestrator.get_job(job_match.group(1))
                 if payload is None:
@@ -70,32 +74,36 @@ def _build_handler(orchestrator: SourcingOrchestrator):
             return self._send_json(HTTPStatus.NOT_FOUND, {"error": "not found"})
 
         def do_POST(self) -> None:  # noqa: N802
+            path, _query_payload = self._request_target_payload()
             payload = self._read_json()
-            if self.path == "/api/bootstrap":
+            if path == "/api/bootstrap":
                 result = orchestrator.bootstrap()
                 return self._send_json(HTTPStatus.OK, result)
-            if self.path == "/api/plan":
+            if path == "/api/plan":
                 result = orchestrator.plan_workflow(payload)
                 return self._send_json(HTTPStatus.OK, result)
-            if self.path == "/api/jobs":
+            if path == "/api/query-dispatches/list":
+                result = orchestrator.list_query_dispatches(payload)
+                return self._send_json(HTTPStatus.OK, result)
+            if path == "/api/jobs":
                 result = orchestrator.run_job(payload)
                 return self._send_json(HTTPStatus.CREATED, result)
-            if self.path == "/api/workflows":
+            if path == "/api/workflows":
                 payload.setdefault("auto_job_daemon", True)
                 result = orchestrator.start_workflow(payload)
                 return self._send_json(HTTPStatus.ACCEPTED, result)
-            if self.path == "/api/company-assets/supplement":
+            if path == "/api/company-assets/supplement":
                 result = orchestrator.supplement_company_assets(payload)
                 status = HTTPStatus.OK if result.get("status") != "invalid" else HTTPStatus.BAD_REQUEST
                 return self._send_json(status, result)
-            if self.path == "/api/criteria/feedback":
+            if path == "/api/criteria/feedback":
                 result = orchestrator.record_criteria_feedback(payload)
                 return self._send_json(HTTPStatus.CREATED, result)
-            if self.path == "/api/plan/review":
+            if path == "/api/plan/review":
                 result = orchestrator.review_plan_session(payload)
                 status = HTTPStatus.OK if result.get("status") != "not_found" else HTTPStatus.NOT_FOUND
                 return self._send_json(status, result)
-            if self.path == "/api/plan/review/compile-instruction":
+            if path == "/api/plan/review/compile-instruction":
                 result = orchestrator.compile_plan_review_instruction(payload)
                 status = HTTPStatus.OK
                 if result.get("status") == "not_found":
@@ -103,7 +111,7 @@ def _build_handler(orchestrator: SourcingOrchestrator):
                 elif result.get("status") == "invalid":
                     status = HTTPStatus.BAD_REQUEST
                 return self._send_json(status, result)
-            if self.path == "/api/results/refine/compile-instruction":
+            if path == "/api/results/refine/compile-instruction":
                 result = orchestrator.compile_post_acquisition_refinement(payload)
                 status = HTTPStatus.OK
                 if result.get("status") == "not_found":
@@ -111,7 +119,7 @@ def _build_handler(orchestrator: SourcingOrchestrator):
                 elif result.get("status") == "invalid":
                     status = HTTPStatus.BAD_REQUEST
                 return self._send_json(status, result)
-            if self.path == "/api/results/refine":
+            if path == "/api/results/refine":
                 result = orchestrator.apply_post_acquisition_refinement(payload)
                 status = HTTPStatus.OK
                 if result.get("status") == "not_found":
@@ -119,15 +127,15 @@ def _build_handler(orchestrator: SourcingOrchestrator):
                 elif result.get("status") == "invalid":
                     status = HTTPStatus.BAD_REQUEST
                 return self._send_json(status, result)
-            if self.path == "/api/criteria/confidence-policy":
+            if path == "/api/criteria/confidence-policy":
                 result = orchestrator.configure_confidence_policy(payload)
                 status = HTTPStatus.OK if result.get("status") != "invalid" else HTTPStatus.BAD_REQUEST
                 return self._send_json(status, result)
-            if self.path == "/api/criteria/suggestions/review":
+            if path == "/api/criteria/suggestions/review":
                 result = orchestrator.review_pattern_suggestion(payload)
                 status = HTTPStatus.OK if result.get("status") != "not_found" else HTTPStatus.NOT_FOUND
                 return self._send_json(status, result)
-            if self.path == "/api/manual-review/review":
+            if path == "/api/manual-review/review":
                 result = orchestrator.review_manual_review_item(payload)
                 status = HTTPStatus.OK
                 if result.get("status") == "not_found":
@@ -135,7 +143,7 @@ def _build_handler(orchestrator: SourcingOrchestrator):
                 elif result.get("status") in {"invalid", "candidate_not_found"}:
                     status = HTTPStatus.BAD_REQUEST
                 return self._send_json(status, result)
-            if self.path == "/api/manual-review/synthesize":
+            if path == "/api/manual-review/synthesize":
                 result = orchestrator.synthesize_manual_review_item(payload)
                 status = HTTPStatus.OK
                 if result.get("status") == "not_found":
@@ -143,10 +151,10 @@ def _build_handler(orchestrator: SourcingOrchestrator):
                 elif result.get("status") == "invalid":
                     status = HTTPStatus.BAD_REQUEST
                 return self._send_json(status, result)
-            if self.path == "/api/criteria/recompile":
+            if path == "/api/criteria/recompile":
                 result = orchestrator.recompile_criteria(payload)
                 return self._send_json(HTTPStatus.OK, result)
-            if self.path == "/api/workers/interrupt":
+            if path == "/api/workers/interrupt":
                 result = orchestrator.interrupt_agent_worker(payload)
                 status = HTTPStatus.OK
                 if result.get("status") == "invalid":
@@ -154,13 +162,23 @@ def _build_handler(orchestrator: SourcingOrchestrator):
                 elif result.get("status") == "not_found":
                     status = HTTPStatus.NOT_FOUND
                 return self._send_json(status, result)
-            if self.path == "/api/workers/daemon/run-once":
+            if path == "/api/workers/daemon/run-once":
                 result = orchestrator.run_worker_recovery_once(payload)
                 return self._send_json(HTTPStatus.OK, result)
-            if self.path == "/api/workers/daemon/systemd-unit":
+            if path == "/api/workers/daemon/systemd-unit":
                 result = orchestrator.write_worker_daemon_systemd_unit(payload)
                 return self._send_json(HTTPStatus.OK, result)
             return self._send_json(HTTPStatus.NOT_FOUND, {"error": "not found"})
+
+        def _request_target_payload(self) -> tuple[str, dict[str, Any]]:
+            parsed = urlsplit(self.path)
+            path = parsed.path or "/"
+            query_payload: dict[str, Any] = {}
+            for key, values in parse_qs(parsed.query, keep_blank_values=False).items():
+                if not values:
+                    continue
+                query_payload[key] = values[-1]
+            return path, query_payload
 
         def _read_json(self) -> dict[str, Any]:
             content_length = int(self.headers.get("Content-Length", "0"))

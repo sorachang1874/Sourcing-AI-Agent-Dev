@@ -104,6 +104,7 @@ class AcquisitionEngine:
             model_client,
             search_provider=search_provider,
             worker_runtime=worker_runtime,
+            store=self.store,
         )
 
     def _resolve_harvest_settings(self, actor_settings: Any, legacy_harvest_token: str) -> Any:
@@ -888,6 +889,14 @@ class AcquisitionEngine:
                 task.metadata.get("former_provider_people_search_min_expected_results") or 50
             ),
         }
+        former_search_seed_queries: list[str] = []
+        if bool(former_cost_policy.get("large_org_keyword_probe_mode")):
+            former_search_seed_queries = [
+                str(item).strip()
+                for item in list(task.metadata.get("search_seed_queries") or [])
+                if str(item).strip()
+            ]
+            former_search_seed_queries = list(dict.fromkeys(former_search_seed_queries))
         former_task = AcquisitionTask(
             task_id=f"{task.task_id}-former-search-seed",
             task_type="acquire_search_seed_pool",
@@ -899,7 +908,7 @@ class AcquisitionEngine:
             metadata={
                 "strategy_type": "former_employee_search",
                 "employment_statuses": ["former"],
-                "search_seed_queries": [],
+                "search_seed_queries": former_search_seed_queries,
                 "search_query_bundles": [],
                 "filter_hints": filter_hints,
                 "cost_policy": former_cost_policy,
@@ -2519,9 +2528,25 @@ def _build_former_filter_hints(
     }
     company_reference = str(identity.linkedin_company_url or identity.canonical_name or identity.requested_name).strip()
     former_filter_hints: dict[str, list[str]] = {}
-    if company_reference:
-        former_filter_hints["past_companies"] = [company_reference]
-    for key in ["scope_keywords", "job_titles", "keywords", "locations", "exclude_locations"]:
+    company_candidates: list[str] = []
+    for key in ["past_companies", "current_companies"]:
+        for item in list(base.get(key) or []):
+            normalized = str(item).strip()
+            if normalized and normalized not in company_candidates:
+                company_candidates.append(normalized)
+    if not company_candidates and company_reference:
+        company_candidates = [company_reference]
+    if company_candidates:
+        former_filter_hints["past_companies"] = company_candidates
+    for key in [
+        "scope_keywords",
+        "job_titles",
+        "keywords",
+        "locations",
+        "exclude_locations",
+        "function_ids",
+        "exclude_function_ids",
+    ]:
         values = list(base.get(key) or [])
         if values:
             former_filter_hints[key] = values
@@ -2543,6 +2568,7 @@ def _normalize_company_employee_shards(value: Any) -> list[dict[str, Any]]:
         company_filters = dict(item.get("company_filters") or {})
         normalized_filters: dict[str, list[str] | str] = {}
         for key in [
+            "companies",
             "locations",
             "exclude_locations",
             "function_ids",

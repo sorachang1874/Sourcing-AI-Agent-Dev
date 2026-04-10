@@ -669,6 +669,29 @@ def _apply_authoritative_membership_fields(candidate: Candidate, authoritative: 
     for key in ["manual_review_links", "manual_review_artifact_root", "manual_review_signals", "profile_url", "public_identifier"]:
         if key in source_metadata:
             metadata[key] = source_metadata.get(key)
+    for key in [
+        "profile_account_id",
+        "profile_location",
+        "more_profiles",
+        "membership_claim_category",
+        "membership_claim_employment_status",
+        "raw_linkedin_url",
+        "sanity_linkedin_url",
+        "source_shards",
+        "source_jobs",
+        "headline",
+        "summary",
+        "about",
+        "location",
+        "languages",
+        "skills",
+    ]:
+        incoming_value = source_metadata.get(key)
+        if incoming_value in ("", None, [], {}):
+            continue
+        existing_value = metadata.get(key)
+        if existing_value in ("", None, [], {}):
+            metadata[key] = incoming_value
 
     record["metadata"] = metadata
     return Candidate(**record)
