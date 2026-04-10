@@ -1,4 +1,5 @@
 import json
+from hashlib import sha1
 from pathlib import Path
 import tempfile
 import threading
@@ -439,7 +440,7 @@ class CompanyAssetCompletionTest(unittest.TestCase):
             exploration_limit=0,
             build_artifacts=False,
         )
-        self.assertEqual(len(connector.batch_calls), 4)
+        self.assertEqual(len(connector.batch_calls), 3)
         self.assertTrue(connector.batch_calls[0]["use_cache"])
         self.assertFalse(connector.batch_calls[1]["use_cache"])
         self.assertEqual(
@@ -450,8 +451,7 @@ class CompanyAssetCompletionTest(unittest.TestCase):
             },
         )
         self.assertEqual(set(connector.batch_calls[0]["urls"]), set(connector.batch_calls[1]["urls"]))
-        self.assertEqual(connector.batch_calls[2], {"urls": ["https://www.linkedin.com/in/current-snapshot"], "use_cache": True})
-        self.assertEqual(connector.batch_calls[3], {"urls": ["https://www.linkedin.com/in/current-snapshot"], "use_cache": False})
+        self.assertEqual(connector.batch_calls[2], {"urls": ["https://www.linkedin.com/in/current-snapshot"], "use_cache": False})
         completed_ids = {item["candidate_id"] for item in result["profile_completion"]["completed_candidates"]}
         self.assertIn("former1", completed_ids)
 
@@ -608,6 +608,105 @@ class CompanyAssetCompletionTest(unittest.TestCase):
         self.assertEqual(len(fetched), 250)
         self.assertEqual(len(connector.batch_calls), 3)
         self.assertGreaterEqual(connector.max_active_calls, 2)
+
+    def test_fetch_profile_batches_reuses_registry_fetched_raw_before_live_fetch(self) -> None:
+        connector = _RefreshBatchOnlyHarvestProfileConnector()
+        manager = CompanyAssetCompletionManager(
+            runtime_dir=self.runtime_dir,
+            store=self.store,
+            settings=self.settings,
+            model_client=DeterministicModelClient(),
+            harvest_profile_connector=connector,
+        )
+        snapshot_dir = self.runtime_dir / "company_assets" / "acme" / "20260406T120000"
+        logger = AssetLogger(snapshot_dir)
+        profile_url = "https://www.linkedin.com/in/registry-cached-profile/"
+        raw_path = snapshot_dir / "harvest_profiles" / "registry_cached_profile.json"
+        raw_path.parent.mkdir(parents=True, exist_ok=True)
+        raw_path.write_text(
+            json.dumps(
+                {
+                    "_harvest_request": {"kind": "url", "value": profile_url, "profile_url": profile_url},
+                    "item": {
+                        "fullName": "Registry Cached Profile",
+                        "profileUrl": profile_url,
+                        "headline": "Research Engineer",
+                        "currentCompany": "Acme",
+                        "location": {"full": "United States"},
+                        "experience": [{"companyName": "Acme", "title": "Research Engineer"}],
+                        "education": [],
+                    },
+                },
+                ensure_ascii=False,
+            )
+        )
+        self.store.mark_linkedin_profile_registry_fetched(
+            profile_url,
+            raw_path=str(raw_path),
+            source_shards=["test_seed"],
+        )
+
+        fetched_cached, cached_errors = manager._fetch_profile_batches(
+            [profile_url],
+            snapshot_dir=snapshot_dir,
+            logger=logger,
+            use_cache=True,
+        )
+        self.assertEqual(cached_errors, [])
+        self.assertEqual(list(fetched_cached.keys()), [profile_url])
+        self.assertEqual(connector.batch_calls, [])
+
+        _, _ = manager._fetch_profile_batches(
+            [profile_url],
+            snapshot_dir=snapshot_dir,
+            logger=logger,
+            use_cache=False,
+        )
+        self.assertEqual(len(connector.batch_calls), 1)
+
+    def test_fetch_profile_batches_uses_local_raw_cache_when_registry_missing(self) -> None:
+        connector = _RefreshBatchOnlyHarvestProfileConnector()
+        manager = CompanyAssetCompletionManager(
+            runtime_dir=self.runtime_dir,
+            store=self.store,
+            settings=self.settings,
+            model_client=DeterministicModelClient(),
+            harvest_profile_connector=connector,
+        )
+        snapshot_dir = self.runtime_dir / "company_assets" / "acme" / "20260406T120000"
+        logger = AssetLogger(snapshot_dir)
+        profile_url = "https://www.linkedin.com/in/local-cache-hit/"
+        cache_key = sha1(profile_url.strip().encode("utf-8")).hexdigest()[:16]
+        raw_path = snapshot_dir / "harvest_profiles" / f"{cache_key}.json"
+        raw_path.parent.mkdir(parents=True, exist_ok=True)
+        raw_path.write_text(
+            json.dumps(
+                {
+                    "_harvest_request": {"kind": "url", "value": profile_url, "profile_url": profile_url},
+                    "item": {
+                        "fullName": "Local Cache Hit",
+                        "profileUrl": profile_url,
+                        "headline": "Research Engineer",
+                        "currentCompany": "Acme",
+                        "experience": [{"companyName": "Acme", "title": "Research Engineer"}],
+                    },
+                }
+            )
+        )
+
+        fetched, errors = manager._fetch_profile_batches(
+            [profile_url],
+            snapshot_dir=snapshot_dir,
+            logger=logger,
+            use_cache=True,
+        )
+        self.assertEqual(errors, [])
+        self.assertIn(profile_url, fetched)
+        self.assertEqual(connector.batch_calls, [])
+        registry_entry = self.store.get_linkedin_profile_registry(profile_url)
+        self.assertIsNotNone(registry_entry)
+        assert registry_entry is not None
+        self.assertEqual(registry_entry["status"], "fetched")
 
 
 if __name__ == "__main__":

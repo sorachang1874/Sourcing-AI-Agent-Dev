@@ -78,7 +78,11 @@ KEYWORD_ALIAS_MAP = {
     "infra_systems": ["infrastructure", "infra", "systems", "platform", "distributed systems"],
     "multimodality": ["multimodal", "vision-language", "vision language"],
     "multimodal": ["multimodality", "vision-language", "vision language"],
+    "多模态": ["multimodal", "vision-language", "vision language", "video generation", "image generation"],
+    "veo": ["video generation", "text-to-video", "multimodal", "vision-language", "vision language"],
+    "nano banana": ["multimodal", "vision-language", "image generation", "video generation"],
     "greater china experience": [
+        "greater_china_region_experience",
         "greater china",
         "mainland china",
         "china",
@@ -97,6 +101,8 @@ KEYWORD_ALIAS_MAP = {
         "新加坡",
     ],
     "chinese bilingual outreach": [
+        "mainland_china_experience_or_chinese_language",
+        "greater_china_region_experience",
         "中文",
         "chinese",
         "mandarin",
@@ -106,6 +112,32 @@ KEYWORD_ALIAS_MAP = {
         "simplified chinese",
         "traditional chinese",
     ],
+    "greater_china_region_experience": [
+        "greater china",
+        "greater china experience",
+        "mainland china",
+        "hong kong",
+        "macau",
+        "taiwan",
+        "singapore",
+    ],
+    "mainland_china_experience_or_chinese_language": [
+        "mainland china",
+        "mandarin",
+        "cantonese",
+        "chinese language",
+        "putonghua",
+        "guoyu",
+        "中文",
+    ],
+}
+
+OUTREACH_ONLY_RETRIEVAL_TERMS = {
+    "greater china experience",
+    "chinese bilingual outreach",
+    "greater_china_region_experience",
+    "mainland_china_experience_or_chinese_language",
+    "mainland or chinese language",
 }
 
 CONFIDENCE_PATTERN_BASE = {
@@ -286,6 +318,8 @@ def build_query_terms(request: JobRequest, criteria_patterns: list[dict[str, Any
         + request.must_have_facets
         + request.must_have_primary_role_buckets
     ):
+        if _is_outreach_only_retrieval_term(keyword):
+            continue
         expanded.extend(_keyword_variants(keyword, criteria_patterns or []))
     return _dedupe(expanded)
 
@@ -324,7 +358,12 @@ def candidate_matches_structured_filters(candidate: Candidate, request: JobReque
         org_blob = _normalize(" ".join([candidate.organization, candidate.role, candidate.team]))
         if not any(_normalize(token) in org_blob for token in request.organization_keywords):
             return False
-    if request.must_have_keywords and not all(_normalize(token) in searchable_blob for token in request.must_have_keywords):
+    must_have_keywords = [
+        token
+        for token in request.must_have_keywords
+        if not _is_outreach_only_retrieval_term(token)
+    ]
+    if must_have_keywords and not all(_normalize(token) in searchable_blob for token in must_have_keywords):
         return False
     if request.exclude_keywords and any(_normalize(token) in searchable_blob for token in request.exclude_keywords):
         return False
@@ -369,6 +408,11 @@ def _is_direct_investment_search(request: JobRequest) -> bool:
     signal_text = " ".join(request.keywords + [request.query])
     direct_terms = ["直接参与", "决策", "领投", "deal lead", "主导", "投资决策"]
     return any(term in signal_text for term in direct_terms)
+
+
+def _is_outreach_only_retrieval_term(value: str) -> bool:
+    normalized = _normalize(value)
+    return normalized in OUTREACH_ONLY_RETRIEVAL_TERMS
 
 
 def _investment_label(value: str) -> str:

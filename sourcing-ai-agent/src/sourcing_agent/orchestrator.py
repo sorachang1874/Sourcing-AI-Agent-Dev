@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from datetime import datetime
 import fcntl
 import json
+import os
 from pathlib import Path
 import threading
 import time
@@ -43,6 +44,7 @@ from .review_plan_instructions import compile_review_payload_from_instruction
 from .result_diff import build_result_diff
 from .rerun_policy import decide_rerun_policy
 from .scoring import score_candidates
+from .outreach_layering import analyze_company_outreach_layers
 from .semantic_retrieval import rank_semantic_candidates
 from .semantic_provider import SemanticProvider
 from .service_daemon import WorkerDaemonService, read_service_status, render_systemd_unit
@@ -50,6 +52,14 @@ from .storage import SQLiteStore
 from .worker_daemon import PersistentWorkerRecoveryDaemon
 from .worker_scheduler import effective_worker_status, summarize_scheduler
 from .execution_preferences import merge_execution_preferences, normalize_execution_preferences
+
+
+_OUTREACH_LAYER_KEY_BY_INDEX = {
+    0: "layer_0_roster",
+    1: "layer_1_name_signal",
+    2: "layer_2_greater_china_region_experience",
+    3: "layer_3_mainland_china_experience_or_chinese_language",
+}
 
 
 class SourcingOrchestrator:
@@ -76,6 +86,7 @@ class SourcingOrchestrator:
         self.criteria_evolution = CriteriaEvolutionEngine(catalog, store, model_client)
         self.agent_runtime = agent_runtime or AgentRuntimeCoordinator(store)
         self.acquisition_engine.worker_runtime = self.agent_runtime
+        self._dispatch_lock = threading.Lock()
         if hasattr(self.acquisition_engine, "multi_source_enricher"):
             exploratory = getattr(self.acquisition_engine.multi_source_enricher, "exploratory_enricher", None)
             if exploratory is not None:
@@ -126,7 +137,7 @@ class SourcingOrchestrator:
             },
             profile_scope=str(payload.get("profile_scope") or "none"),
             profile_limit=int(payload.get("profile_limit") or 0),
-            profile_only_missing_detail=bool(payload.get("profile_only_missing_detail", True)),
+            profile_only_missing_detail=bool(payload.get("profile_only_missing_detail", False)),
             profile_force_refresh=bool(payload.get("profile_force_refresh", False)),
             repair_current_roster_profile_refs=bool(payload.get("repair_current_roster_profile_refs", False)),
             build_artifacts=bool(payload.get("build_artifacts", True)),
@@ -165,9 +176,25 @@ class SourcingOrchestrator:
             return queued
 
         job_id = str(queued.get("job_id") or "")
-        queued["job_recovery"] = self._start_job_scoped_recovery(job_id, payload)
-        worker = threading.Thread(target=self.run_queued_workflow, kwargs={"job_id": job_id}, daemon=True)
-        worker.start()
+        workflow_status = str(queued.get("status") or "").strip()
+        if not job_id:
+            return queued
+        dispatch_payload = dict(queued.get("dispatch") or {})
+        matched_job_status = str(dispatch_payload.get("matched_job_status") or "").strip()
+        should_run_worker = workflow_status == "queued" or (
+            workflow_status == "joined_existing_job" and matched_job_status == "queued"
+        )
+        if should_run_worker:
+            queued["job_recovery"] = self._start_job_scoped_recovery(job_id, payload)
+            worker = threading.Thread(target=self.run_queued_workflow, kwargs={"job_id": job_id}, daemon=True)
+            worker.start()
+            return queued
+        if workflow_status == "joined_existing_job":
+            queued["job_recovery"] = self._start_job_scoped_recovery(job_id, payload)
+            return queued
+        if workflow_status == "reused_completed_job":
+            queued["job_recovery"] = {"status": "not_needed"}
+            return queued
         return queued
 
     def queue_workflow(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -176,7 +203,73 @@ class SourcingOrchestrator:
             return resolved
         request = JobRequest.from_payload(dict(resolved.get("request") or {}))
         plan = hydrate_sourcing_plan(dict(resolved.get("plan") or {}))
-        job_id = self._create_workflow_job(request, plan)
+        dispatch_context = self._build_query_dispatch_context(payload, request)
+        with self._dispatch_lock:
+            dispatch = self._resolve_query_dispatch_decision(request, dispatch_context)
+            strategy = str(dispatch.get("strategy") or "new_job").strip()
+            matched_job = dict(dispatch.get("matched_job") or {})
+            if strategy in {"join_inflight", "reuse_completed"} and matched_job:
+                matched_job_id = str(matched_job.get("job_id") or "")
+                matched_job_status = str(matched_job.get("status") or "").strip()
+                response_status = "joined_existing_job" if strategy == "join_inflight" else "reused_completed_job"
+                dispatch_payload = {
+                    "strategy": strategy,
+                    "scope": str(dispatch.get("scope") or ""),
+                    "request_signature": str(dispatch.get("request_signature") or ""),
+                    "request_family_signature": str(dispatch.get("request_family_signature") or ""),
+                    "matched_job_id": matched_job_id,
+                    "matched_job_status": matched_job_status,
+                    "matched_job_stage": str(matched_job.get("stage") or ""),
+                    "requester_id": str(dispatch_context.get("requester_id") or ""),
+                    "tenant_id": str(dispatch_context.get("tenant_id") or ""),
+                    "idempotency_key": str(dispatch_context.get("idempotency_key") or ""),
+                }
+                self.store.record_query_dispatch(
+                    target_company=request.target_company,
+                    request_payload=request.to_record(),
+                    strategy=strategy,
+                    status=response_status,
+                    source_job_id=matched_job_id,
+                    created_job_id="",
+                    requester_id=str(dispatch_context.get("requester_id") or ""),
+                    tenant_id=str(dispatch_context.get("tenant_id") or ""),
+                    idempotency_key=str(dispatch_context.get("idempotency_key") or ""),
+                    payload=dispatch_payload,
+                )
+                return {
+                    "job_id": matched_job_id,
+                    "status": response_status,
+                    "stage": str(matched_job.get("stage") or ""),
+                    "plan": plan.to_record(),
+                    "plan_review_session": resolved.get("plan_review_session") or {},
+                    "intent_rewrite": _build_intent_rewrite_payload(request_payload=request.to_record()),
+                    "dispatch": dispatch_payload,
+                }
+            job_id = self._create_workflow_job(request, plan, dispatch_context=dispatch_context)
+            dispatch_payload = {
+                "strategy": "new_job",
+                "scope": str(dispatch.get("scope") or ""),
+                "request_signature": str(dispatch.get("request_signature") or ""),
+                "request_family_signature": str(dispatch.get("request_family_signature") or ""),
+                "matched_job_id": "",
+                "matched_job_status": "",
+                "matched_job_stage": "",
+                "requester_id": str(dispatch_context.get("requester_id") or ""),
+                "tenant_id": str(dispatch_context.get("tenant_id") or ""),
+                "idempotency_key": str(dispatch_context.get("idempotency_key") or ""),
+            }
+            self.store.record_query_dispatch(
+                target_company=request.target_company,
+                request_payload=request.to_record(),
+                strategy="new_job",
+                status="queued",
+                source_job_id="",
+                created_job_id=job_id,
+                requester_id=str(dispatch_context.get("requester_id") or ""),
+                tenant_id=str(dispatch_context.get("tenant_id") or ""),
+                idempotency_key=str(dispatch_context.get("idempotency_key") or ""),
+                payload=dispatch_payload,
+            )
         criteria_artifacts = self._persist_criteria_artifacts(
             request=request,
             plan_payload=plan.to_record(),
@@ -191,6 +284,7 @@ class SourcingOrchestrator:
             "plan": plan.to_record(),
             "plan_review_session": resolved.get("plan_review_session") or {},
             "intent_rewrite": _build_intent_rewrite_payload(request_payload=request.to_record()),
+            "dispatch": dispatch_payload,
             **criteria_artifacts,
         }
 
@@ -290,6 +384,22 @@ class SourcingOrchestrator:
             job_id=job_id,
         )
         self._run_workflow(job_id, request, plan)
+        latest_job = self.store.get_job(job_id) or {}
+        if (
+            str(latest_job.get("status") or "") == "blocked"
+            and str(latest_job.get("stage") or "") == "acquiring"
+        ):
+            self.run_queued_workflow(
+                job_id,
+                recovery_payload={
+                    "auto_job_daemon": True,
+                    "job_recovery_poll_seconds": float(payload.get("job_recovery_poll_seconds") or 2.0),
+                    "job_recovery_max_ticks": int(payload.get("job_recovery_max_ticks") or 900),
+                    "job_recovery_lease_seconds": int(payload.get("job_recovery_lease_seconds") or 300),
+                    "job_recovery_stale_after_seconds": int(payload.get("job_recovery_stale_after_seconds") or 2),
+                    "job_recovery_total_limit": int(payload.get("job_recovery_total_limit") or 8),
+                },
+            )
         snapshot = self.get_job_results(job_id)
         if snapshot is None:
             raise RuntimeError(f"Workflow {job_id} disappeared")
@@ -686,6 +796,23 @@ class SourcingOrchestrator:
     def list_plan_review_sessions(self, target_company: str = "", status: str = "") -> dict[str, Any]:
         return {"plan_reviews": self.store.list_plan_review_sessions(target_company=target_company, status=status, limit=100)}
 
+    def list_query_dispatches(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        payload = dict(payload or {})
+        limit = 100
+        raw_limit = payload.get("limit")
+        if raw_limit not in {None, ""}:
+            try:
+                limit = max(1, int(raw_limit))
+            except (TypeError, ValueError):
+                limit = 100
+        dispatches = self.store.list_query_dispatches(
+            target_company=str(payload.get("target_company") or ""),
+            requester_id=str(payload.get("requester_id") or payload.get("user_id") or ""),
+            tenant_id=str(payload.get("tenant_id") or payload.get("workspace_id") or ""),
+            limit=limit,
+        )
+        return {"query_dispatches": dispatches}
+
     def compile_post_acquisition_refinement(self, payload: dict[str, Any]) -> dict[str, Any]:
         baseline_job = self._resolve_baseline_job_for_refinement(payload)
         if isinstance(baseline_job, dict) and baseline_job.get("status") in {"not_found", "invalid"}:
@@ -1064,20 +1191,46 @@ class SourcingOrchestrator:
             review_session = self.store.get_plan_review_session(review_id)
             if review_session is None:
                 return {"status": "needs_plan_review", "reason": "plan_review_id not found", "plan_review_id": review_id}
+            request_payload = dict(review_session.get("request") or {})
+            plan_payload = dict(review_session.get("plan") or {})
+            resolved_target_company = str(request_payload.get("target_company") or "").strip()
+            if resolved_target_company:
+                plan_payload = _ensure_plan_company_scope(plan_payload, resolved_target_company)
+            if not str(request_payload.get("target_company") or "").strip():
+                inferred_target_company = _infer_target_company_from_review_payloads(
+                    request_payload=request_payload,
+                    plan_payload=plan_payload,
+                    decision_payload=dict(review_session.get("decision") or {}),
+                )
+                if inferred_target_company:
+                    request_payload["target_company"] = inferred_target_company
+                    plan_payload = _ensure_plan_company_scope(plan_payload, inferred_target_company)
             if str(review_session.get("status") or "") not in {"approved", "ready"}:
                 return {
                     "status": "needs_plan_review",
                     "reason": "plan review session is not approved yet",
                     "plan_review_session": review_session,
                     "plan_review_gate": review_session.get("gate") or {},
-                    "intent_rewrite": _build_intent_rewrite_payload(request_payload=dict(review_session.get("request") or {})),
+                    "request": request_payload,
+                    "plan": plan_payload,
+                    "intent_rewrite": _build_intent_rewrite_payload(request_payload=request_payload),
                 }
+            try:
+                reviewed_request = JobRequest.from_payload(request_payload)
+                rebuilt_plan = build_sourcing_plan(reviewed_request, self.catalog, self.model_client).to_record()
+                plan_payload = _ensure_plan_company_scope(
+                    rebuilt_plan,
+                    str(reviewed_request.target_company or resolved_target_company or "").strip(),
+                )
+                request_payload = reviewed_request.to_record()
+            except Exception:
+                pass
             return {
                 "status": "ready",
-                "request": dict(review_session.get("request") or {}),
-                "plan": dict(review_session.get("plan") or {}),
+                "request": request_payload,
+                "plan": plan_payload,
                 "plan_review_session": review_session,
-                "intent_rewrite": _build_intent_rewrite_payload(request_payload=dict(review_session.get("request") or {})),
+                "intent_rewrite": _build_intent_rewrite_payload(request_payload=request_payload),
             }
 
         request = JobRequest.from_payload(self._prepare_request_payload(payload))
@@ -1085,6 +1238,22 @@ class SourcingOrchestrator:
         plan_review_gate = build_plan_review_gate(request, plan)
         plan_review_gate = self._augment_plan_review_gate_with_runtime_context(request, plan_review_gate)
         if bool(plan_review_gate.get("required_before_execution")) and not bool(payload.get("skip_plan_review")):
+            existing_pending = self.store.find_pending_plan_review_session(
+                target_company=request.target_company,
+                request_payload=request.to_record(),
+            )
+            if existing_pending is not None:
+                return {
+                    "status": "needs_plan_review",
+                    "reason": "existing_pending_plan_review",
+                    "request": dict(existing_pending.get("request") or {}),
+                    "plan": dict(existing_pending.get("plan") or {}),
+                    "plan_review_gate": dict(existing_pending.get("gate") or {}),
+                    "plan_review_session": existing_pending,
+                    "intent_rewrite": _build_intent_rewrite_payload(
+                        request_payload=dict(existing_pending.get("request") or {})
+                    ),
+                }
             review_session = self.store.create_plan_review_session(
                 target_company=request.target_company,
                 request_payload=request.to_record(),
@@ -1162,8 +1331,133 @@ class SourcingOrchestrator:
         )
         return JobRequest.from_payload(_canonicalize_request_payload(merged_payload)).to_record()
 
-    def _create_workflow_job(self, request: JobRequest, plan) -> str:
+    def _build_query_dispatch_context(self, payload: dict[str, Any], request: JobRequest) -> dict[str, Any]:
+        requester_value = payload.get("requester")
+        requester_value_resolved = (
+            str(dict(requester_value).get("id") or "").strip()
+            if isinstance(requester_value, dict)
+            else str(requester_value or "").strip()
+        )
+        requester_id = str(
+            payload.get("requester_id")
+            or payload.get("user_id")
+            or requester_value_resolved
+            or ""
+        ).strip()
+        tenant_id = str(
+            payload.get("tenant_id")
+            or payload.get("workspace_id")
+            or payload.get("org_id")
+            or ""
+        ).strip()
+        idempotency_key = str(
+            payload.get("idempotency_key")
+            or payload.get("query_idempotency_key")
+            or ""
+        ).strip()
+        scope = str(payload.get("query_dispatch_scope") or "").strip().lower()
+        if scope not in {"global", "tenant", "requester"}:
+            scope = "tenant" if tenant_id else ("requester" if requester_id else "global")
+        force_fresh_run = bool(request.execution_preferences.get("force_fresh_run"))
+        allow_result_reuse = bool(payload.get("allow_result_reuse", True))
+        if force_fresh_run and bool(payload.get("respect_force_fresh", True)):
+            allow_result_reuse = False
+        return {
+            "dispatch_enabled": bool(payload.get("query_dispatch_enabled", True)),
+            "allow_join_inflight": bool(payload.get("allow_join_inflight", True)),
+            "allow_result_reuse": allow_result_reuse,
+            "scope": scope,
+            "requester_id": requester_id,
+            "tenant_id": tenant_id,
+            "idempotency_key": idempotency_key,
+            "request_signature": request_signature(request.to_record()),
+            "request_family_signature": request_family_signature(request.to_record()),
+        }
+
+    def _resolve_query_dispatch_decision(self, request: JobRequest, context: dict[str, Any]) -> dict[str, Any]:
+        request_payload = request.to_record()
+        request_sig = str(context.get("request_signature") or request_signature(request_payload))
+        request_family_sig = str(context.get("request_family_signature") or request_family_signature(request_payload))
+        scope = str(context.get("scope") or "global")
+        requester_id = str(context.get("requester_id") or "")
+        tenant_id = str(context.get("tenant_id") or "")
+        idempotency_key = str(context.get("idempotency_key") or "")
+        if not bool(context.get("dispatch_enabled", True)):
+            return {
+                "strategy": "new_job",
+                "scope": scope,
+                "request_signature": request_sig,
+                "request_family_signature": request_family_sig,
+                "matched_job": {},
+            }
+
+        if idempotency_key:
+            matched_by_idempotency = self.store.find_latest_job_by_idempotency_key(
+                idempotency_key=idempotency_key,
+                target_company=request.target_company,
+                statuses=["queued", "running", "blocked", "completed"],
+                requester_id=requester_id,
+                tenant_id=tenant_id,
+                scope=scope,
+            )
+            if matched_by_idempotency:
+                matched_status = str(matched_by_idempotency.get("status") or "")
+                strategy = "reuse_completed" if matched_status == "completed" else "join_inflight"
+                return {
+                    "strategy": strategy,
+                    "scope": scope,
+                    "request_signature": request_sig,
+                    "request_family_signature": request_family_sig,
+                    "matched_job": matched_by_idempotency,
+                }
+
+        if bool(context.get("allow_join_inflight", True)):
+            inflight_match = self.store.find_latest_job_by_request_signature(
+                request_signature_value=request_sig,
+                target_company=request.target_company,
+                statuses=["queued", "running", "blocked"],
+                requester_id=requester_id,
+                tenant_id=tenant_id,
+                scope=scope,
+            )
+            if inflight_match:
+                return {
+                    "strategy": "join_inflight",
+                    "scope": scope,
+                    "request_signature": request_sig,
+                    "request_family_signature": request_family_sig,
+                    "matched_job": inflight_match,
+                }
+
+        if bool(context.get("allow_result_reuse", True)):
+            completed_match = self.store.find_latest_job_by_request_signature(
+                request_signature_value=request_sig,
+                target_company=request.target_company,
+                statuses=["completed"],
+                requester_id=requester_id,
+                tenant_id=tenant_id,
+                scope=scope,
+            )
+            if completed_match:
+                return {
+                    "strategy": "reuse_completed",
+                    "scope": scope,
+                    "request_signature": request_sig,
+                    "request_family_signature": request_family_sig,
+                    "matched_job": completed_match,
+                }
+
+        return {
+            "strategy": "new_job",
+            "scope": scope,
+            "request_signature": request_sig,
+            "request_family_signature": request_family_sig,
+            "matched_job": {},
+        }
+
+    def _create_workflow_job(self, request: JobRequest, plan, *, dispatch_context: dict[str, Any] | None = None) -> str:
         job_id = uuid.uuid4().hex[:12]
+        dispatch_context = dict(dispatch_context or {})
         self.store.save_job(
             job_id=job_id,
             job_type="workflow",
@@ -1172,13 +1466,23 @@ class SourcingOrchestrator:
             request_payload=request.to_record(),
             plan_payload=plan.to_record(),
             summary_payload={"message": "Workflow queued"},
+            requester_id=str(dispatch_context.get("requester_id") or ""),
+            tenant_id=str(dispatch_context.get("tenant_id") or ""),
+            idempotency_key=str(dispatch_context.get("idempotency_key") or ""),
         )
         self.store.append_job_event(
             job_id,
             stage="planning",
             status="queued",
             detail="Workflow created from user request.",
-            payload={"target_company": request.target_company, "retrieval_strategy": plan.retrieval_plan.strategy},
+            payload={
+                "target_company": request.target_company,
+                "retrieval_strategy": plan.retrieval_plan.strategy,
+                "query_dispatch_scope": str(dispatch_context.get("scope") or ""),
+                "requester_id": str(dispatch_context.get("requester_id") or ""),
+                "tenant_id": str(dispatch_context.get("tenant_id") or ""),
+                "idempotency_key": str(dispatch_context.get("idempotency_key") or ""),
+            },
         )
         return job_id
 
@@ -1298,6 +1602,14 @@ class SourcingOrchestrator:
                     "detail": execution.detail,
                 }
 
+        outreach_layering_summary = self._run_outreach_layering_after_acquisition(
+            job_id=job_id,
+            request=request,
+            acquisition_state=acquisition_state,
+        )
+        if outreach_layering_summary:
+            acquisition_state["outreach_layering"] = outreach_layering_summary
+
         current_stage = "retrieving"
         self.store.save_job(
             job_id=job_id,
@@ -1314,7 +1626,10 @@ class SourcingOrchestrator:
             request,
             plan,
             job_type="workflow",
-            runtime_policy={"workflow_snapshot_id": str(acquisition_state.get("snapshot_id") or "").strip()},
+            runtime_policy={
+                "workflow_snapshot_id": str(acquisition_state.get("snapshot_id") or "").strip(),
+                "outreach_layering": dict(acquisition_state.get("outreach_layering") or {}),
+            },
         )
         self.store.update_agent_runtime_session_status(job_id, "completed")
         self.store.append_job_event(job_id, "retrieving", "completed", "Retrieval stage completed.", artifact.get("summary", {}))
@@ -1347,6 +1662,102 @@ class SourcingOrchestrator:
             if "snapshot_dir" in state and "company_identity" in state:
                 break
         return state
+
+    def _run_outreach_layering_after_acquisition(
+        self,
+        *,
+        job_id: str,
+        request: JobRequest,
+        acquisition_state: dict[str, Any],
+    ) -> dict[str, Any]:
+        if not _env_bool("OUTREACH_LAYERING_ENABLED", True):
+            return {}
+        target_company = str(request.target_company or "").strip()
+        snapshot_id = str(acquisition_state.get("snapshot_id") or "").strip()
+        if not target_company or not snapshot_id:
+            return {}
+        query_text = str(request.raw_user_request or request.query or "").strip()
+        ai_requested = _env_bool("OUTREACH_LAYERING_ENABLE_AI", True)
+        model_client: ModelClient | None = None
+        if ai_requested and bool(getattr(self.model_client, "supports_outreach_ai_verification", lambda: False)()):
+            model_client = self.model_client
+        max_ai_verifications = _env_int("OUTREACH_LAYERING_MAX_AI_VERIFICATIONS", 0) if model_client else 0
+        ai_workers = max(1, _env_int("OUTREACH_LAYERING_AI_WORKERS", 6))
+        ai_max_retries = max(0, _env_int("OUTREACH_LAYERING_AI_MAX_RETRIES", 2))
+        ai_retry_backoff_seconds = _env_float("OUTREACH_LAYERING_AI_RETRY_BACKOFF_SECONDS", 0.8)
+        summary_payload: dict[str, Any]
+        try:
+            result = analyze_company_outreach_layers(
+                runtime_dir=self.runtime_dir,
+                target_company=target_company,
+                snapshot_id=snapshot_id,
+                view=request.asset_view or "canonical_merged",
+                query=query_text,
+                model_client=model_client,
+                max_ai_verifications=max_ai_verifications,
+                ai_workers=ai_workers,
+                ai_max_retries=ai_max_retries,
+                ai_retry_backoff_seconds=ai_retry_backoff_seconds,
+            )
+            layer_schema = dict(result.get("layer_schema") or {})
+            primary_layer_keys = [
+                str(item).strip()
+                for item in list(layer_schema.get("primary_layer_keys") or [])
+                if str(item).strip()
+            ] or [
+                "layer_0_roster",
+                "layer_1_name_signal",
+                "layer_2_greater_china_region_experience",
+                "layer_3_mainland_china_experience_or_chinese_language",
+            ]
+            layer_counts = {
+                key: int((result.get("layers") or {}).get(key, {}).get("count") or 0)
+                for key in primary_layer_keys
+            }
+            summary_payload = {
+                "status": "completed",
+                "target_company": target_company,
+                "snapshot_id": snapshot_id,
+                "query": query_text,
+                "execution_scope": "all_queries_default",
+                "ai_requested": ai_requested,
+                "ai_enabled": bool(model_client),
+                "ai_prompt_template_version": str((result.get("ai_prompt_template") or {}).get("version") or ""),
+                "analysis_paths": dict(result.get("analysis_paths") or {}),
+                "candidate_count": int(result.get("candidate_count") or 0),
+                "layer_schema": layer_schema,
+                "layer_counts": layer_counts,
+                "cumulative_layer_counts": dict(result.get("cumulative_layer_counts") or {}),
+                "final_layer_distribution": dict(result.get("final_layer_distribution") or {}),
+                "ai_verification": dict(result.get("ai_verification") or {}),
+            }
+            self.store.append_job_event(
+                job_id,
+                stage="acquiring",
+                status="completed",
+                detail="Outreach layering completed and attached to retrieval runtime policy.",
+                payload=summary_payload,
+            )
+            return summary_payload
+        except Exception as exc:
+            summary_payload = {
+                "status": "failed",
+                "target_company": target_company,
+                "snapshot_id": snapshot_id,
+                "query": query_text,
+                "execution_scope": "all_queries_default",
+                "ai_requested": ai_requested,
+                "ai_enabled": bool(model_client),
+                "error": str(exc),
+            }
+            self.store.append_job_event(
+                job_id,
+                stage="acquiring",
+                status="completed",
+                detail="Outreach layering failed; workflow continues with base retrieval.",
+                payload=summary_payload,
+            )
+            return summary_payload
 
     def _resume_blocked_workflows_after_recovery(
         self,
@@ -1822,6 +2233,43 @@ class SourcingOrchestrator:
             snapshot_id=str(runtime_policy.get("workflow_snapshot_id") or "").strip(),
         )
         candidates = list(candidate_source.get("candidates") or [])
+        unfiltered_candidate_count = len(candidates)
+        outreach_layering_context = self._load_outreach_layering_context(
+            request=request,
+            candidate_source=candidate_source,
+            runtime_policy=runtime_policy,
+        )
+        if outreach_layering_context:
+            candidates = self._attach_outreach_layering_metadata(candidates, outreach_layering_context)
+        if outreach_layering_context:
+            filter_policy = _resolve_outreach_layer_filter_policy(request)
+            baseline_candidates = list(candidates)
+            applied_filter = {
+                "enabled": False,
+                "policy_scope": str(filter_policy.get("scope") or ""),
+                "initial_candidate_count": len(baseline_candidates),
+                "min_layer": int(filter_policy.get("min_layer") or 0),
+                "fallback_min_layer": int(filter_policy.get("fallback_min_layer") or 0),
+                "fallback_applied": False,
+                "filtered_candidate_count": len(baseline_candidates),
+            }
+            if bool(filter_policy.get("enabled")):
+                min_layer = int(filter_policy.get("min_layer") or 0)
+                fallback_min_layer = int(filter_policy.get("fallback_min_layer") or 0)
+                filtered = [item for item in baseline_candidates if int(item.metadata.get("outreach_layer") or 0) >= min_layer]
+                if not filtered and 0 < fallback_min_layer < min_layer:
+                    fallback_candidates = [
+                        item for item in baseline_candidates if int(item.metadata.get("outreach_layer") or 0) >= fallback_min_layer
+                    ]
+                    if fallback_candidates:
+                        filtered = fallback_candidates
+                        applied_filter["fallback_applied"] = True
+                        applied_filter["min_layer"] = fallback_min_layer
+                if filtered:
+                    candidates = filtered
+                applied_filter["enabled"] = True
+                applied_filter["filtered_candidate_count"] = len(candidates)
+            outreach_layering_context["applied_filter"] = applied_filter
         source_evidence_lookup = dict(candidate_source.get("evidence_lookup") or {})
         criteria_patterns = self.store.list_criteria_patterns(target_company=request.target_company)
         retrieval_strategy = _plan_retrieval_strategy(plan)
@@ -1884,6 +2332,9 @@ class SourcingOrchestrator:
                 "confidence_label": item.confidence_label,
                 "confidence_score": item.confidence_score,
                 "confidence_reason": item.confidence_reason,
+                "outreach_layer": int(item.candidate.metadata.get("outreach_layer") or 0),
+                "outreach_layer_key": str(item.candidate.metadata.get("outreach_layer_key") or ""),
+                "outreach_layer_source": str(item.candidate.metadata.get("outreach_layer_source") or ""),
                 "rank": rank,
                 "matched_fields": item.matched_fields,
                 "explanation": item.explanation,
@@ -1899,6 +2350,9 @@ class SourcingOrchestrator:
                     "confidence_label": item.confidence_label,
                     "confidence_score": item.confidence_score,
                     "confidence_reason": item.confidence_reason,
+                    "outreach_layer": int(item.candidate.metadata.get("outreach_layer") or 0),
+                    "outreach_layer_key": str(item.candidate.metadata.get("outreach_layer_key") or ""),
+                    "outreach_layer_source": str(item.candidate.metadata.get("outreach_layer_source") or ""),
                     "explanation": item.explanation,
                     "matched_fields": item.matched_fields,
                 }
@@ -1927,9 +2381,20 @@ class SourcingOrchestrator:
                 "snapshot_id": str(candidate_source.get("snapshot_id") or ""),
                 "asset_view": str(candidate_source.get("asset_view") or ""),
                 "candidate_count": len(candidates),
+                "unfiltered_candidate_count": unfiltered_candidate_count,
                 "source_path": str(candidate_source.get("source_path") or ""),
             },
         }
+        if outreach_layering_context:
+            summary["outreach_layering"] = {
+                "status": str(outreach_layering_context.get("status") or ""),
+                "analysis_path": str(outreach_layering_context.get("analysis_path") or ""),
+                "layer_counts": dict(outreach_layering_context.get("layer_counts") or {}),
+                "cumulative_layer_counts": dict(outreach_layering_context.get("cumulative_layer_counts") or {}),
+                "ai_verification": dict(outreach_layering_context.get("ai_verification") or {}),
+                "candidate_layer_coverage": int(outreach_layering_context.get("candidate_layer_coverage") or 0),
+                "applied_filter": dict(outreach_layering_context.get("applied_filter") or {}),
+            }
         if control:
             summary["confidence_policy_control"] = {
                 "control_id": int(control.get("control_id") or 0),
@@ -2005,6 +2470,87 @@ class SourcingOrchestrator:
             "candidates": self.store.list_candidates(),
             "evidence_lookup": {},
         }
+
+    def _load_outreach_layering_context(
+        self,
+        *,
+        request: JobRequest,
+        candidate_source: dict[str, Any],
+        runtime_policy: dict[str, Any],
+    ) -> dict[str, Any]:
+        if str(candidate_source.get("source_kind") or "") != "company_snapshot":
+            return {}
+        snapshot_id = str(candidate_source.get("snapshot_id") or "").strip()
+        source_path = str(candidate_source.get("source_path") or "").strip()
+        if not snapshot_id or not source_path:
+            return {}
+        analysis_path = ""
+        runtime_layering = dict(runtime_policy.get("outreach_layering") or {})
+        runtime_analysis_paths = dict(runtime_layering.get("analysis_paths") or {})
+        runtime_full_path = str(runtime_analysis_paths.get("full") or "").strip()
+        if runtime_full_path and Path(runtime_full_path).exists():
+            analysis_path = runtime_full_path
+        else:
+            snapshot_dir = Path(source_path).resolve().parent.parent
+            candidates = sorted(snapshot_dir.glob("layered_segmentation/greater_china_outreach_*/layered_analysis.json"))
+            if candidates:
+                analysis_path = str(candidates[-1])
+        if not analysis_path:
+            return {}
+        try:
+            analysis_payload = json.loads(Path(analysis_path).read_text())
+        except Exception:
+            return {}
+        layer_map: dict[str, dict[str, Any]] = {}
+        for item in list(analysis_payload.get("candidates") or []):
+            candidate_id = str(item.get("candidate_id") or "").strip()
+            if not candidate_id:
+                continue
+            final_layer = int(item.get("final_layer") or 0)
+            layer_map[candidate_id] = {
+                "outreach_layer": final_layer,
+                "outreach_layer_key": _OUTREACH_LAYER_KEY_BY_INDEX.get(final_layer, "layer_0_roster"),
+                "outreach_layer_source": str(item.get("final_layer_source") or ""),
+            }
+        if not layer_map:
+            return {}
+        layer_schema = dict(analysis_payload.get("layer_schema") or {})
+        primary_layer_keys = [
+            str(item).strip()
+            for item in list(layer_schema.get("primary_layer_keys") or [])
+            if str(item).strip()
+        ] or list(_OUTREACH_LAYER_KEY_BY_INDEX.values())
+        layer_counts = {
+            key: int((analysis_payload.get("layers") or {}).get(key, {}).get("count") or 0)
+            for key in primary_layer_keys
+        }
+        return {
+            "status": str(analysis_payload.get("status") or "completed"),
+            "snapshot_id": snapshot_id,
+            "analysis_path": analysis_path,
+            "candidate_layer_coverage": len(layer_map),
+            "layer_map": layer_map,
+            "layer_counts": layer_counts,
+            "cumulative_layer_counts": dict(analysis_payload.get("cumulative_layer_counts") or {}),
+            "ai_verification": dict(analysis_payload.get("ai_verification") or {}),
+        }
+
+    def _attach_outreach_layering_metadata(
+        self,
+        candidates: list[Candidate],
+        context: dict[str, Any],
+    ) -> list[Candidate]:
+        layer_map = dict(context.get("layer_map") or {})
+        if not layer_map:
+            return candidates
+        for candidate in candidates:
+            layer_payload = dict(layer_map.get(candidate.candidate_id) or {})
+            if not layer_payload:
+                continue
+            metadata = dict(candidate.metadata or {})
+            metadata.update(layer_payload)
+            candidate.metadata = metadata
+        return candidates
 
     def _run_retrieval_job(
         self,
@@ -2399,7 +2945,124 @@ def _merge_request_payload(
         candidate = patch_payload.get(key)
         if _has_non_empty_list(candidate):
             merged[key] = list(candidate)
+    merged_scope = merged.get("scope_disambiguation")
+    patch_scope = patch_payload.get("scope_disambiguation")
+    if isinstance(patch_scope, dict) and patch_scope:
+        if not isinstance(merged_scope, dict) or not merged_scope:
+            merged["scope_disambiguation"] = dict(patch_scope)
+        else:
+            merged_scope_dict = dict(merged_scope)
+            for key, value in patch_scope.items():
+                if key not in merged_scope_dict:
+                    merged_scope_dict[key] = value
+            merged["scope_disambiguation"] = merged_scope_dict
     return merged
+
+
+def _infer_target_company_from_review_payloads(
+    *,
+    request_payload: dict[str, Any],
+    plan_payload: dict[str, Any],
+    decision_payload: dict[str, Any],
+) -> str:
+    existing = str(request_payload.get("target_company") or "").strip()
+    if existing:
+        return existing
+
+    candidates: list[str] = []
+    for key in ("target_company", "company", "canonical_company", "company_name"):
+        value = str(decision_payload.get(key) or "").strip()
+        if value:
+            candidates.append(value)
+
+    scope_disambiguation = decision_payload.get("scope_disambiguation")
+    if isinstance(scope_disambiguation, dict):
+        for key in ("target_company", "canonical_company", "parent_company"):
+            value = str(scope_disambiguation.get(key) or "").strip()
+            if value:
+                candidates.append(value)
+
+    for scope_key in ("confirmed_company_scope", "confirmed_scope", "company_scope"):
+        raw_scope = decision_payload.get(scope_key)
+        if raw_scope is None:
+            continue
+        if isinstance(raw_scope, str):
+            scope_items = [raw_scope]
+        else:
+            scope_items = list(raw_scope)
+        for item in scope_items:
+            value = str(item or "").strip()
+            if value:
+                candidates.append(value)
+
+    acquisition_strategy = dict(plan_payload.get("acquisition_strategy") or {})
+    for item in list(acquisition_strategy.get("company_scope") or []):
+        value = str(item).strip()
+        if value:
+            candidates.append(value)
+    filter_hints = dict(acquisition_strategy.get("filter_hints") or {})
+    for item in list(filter_hints.get("current_companies") or []):
+        value = str(item).strip()
+        if value:
+            candidates.append(value)
+
+    seen: set[str] = set()
+    for candidate in candidates:
+        normalized = candidate.strip()
+        if not normalized:
+            continue
+        key = normalized.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        return normalized
+    return ""
+
+
+def _ensure_plan_company_scope(plan_payload: dict[str, Any], target_company: str) -> dict[str, Any]:
+    normalized_target = str(target_company or "").strip()
+    if not normalized_target:
+        return dict(plan_payload or {})
+
+    updated_plan = dict(plan_payload or {})
+    updated_plan["target_company"] = normalized_target
+    acquisition_strategy = dict(updated_plan.get("acquisition_strategy") or {})
+    company_scope = [
+        str(item).strip()
+        for item in list(acquisition_strategy.get("company_scope") or [])
+        if str(item).strip()
+    ]
+    if not company_scope:
+        company_scope = [normalized_target]
+    elif not any(item.lower() == normalized_target.lower() for item in company_scope):
+        company_scope = [normalized_target, *company_scope]
+    acquisition_strategy["company_scope"] = company_scope
+
+    filter_hints = dict(acquisition_strategy.get("filter_hints") or {})
+    current_companies = [
+        str(item).strip()
+        for item in list(filter_hints.get("current_companies") or [])
+        if str(item).strip()
+    ]
+    if not current_companies:
+        current_companies = [normalized_target]
+    elif not any(item.lower() == normalized_target.lower() for item in current_companies):
+        current_companies = [normalized_target, *current_companies]
+    filter_hints["current_companies"] = current_companies
+    acquisition_strategy["filter_hints"] = filter_hints
+
+    updated_plan["acquisition_strategy"] = acquisition_strategy
+
+    acquisition_tasks = list(updated_plan.get("acquisition_tasks") or [])
+    for task in acquisition_tasks:
+        if not isinstance(task, dict):
+            continue
+        status = str(task.get("status") or "").strip()
+        if status == "needs_input":
+            task["status"] = "ready"
+    updated_plan["acquisition_tasks"] = acquisition_tasks
+
+    return updated_plan
 
 
 def _build_job_progress_payload(
@@ -2569,6 +3232,9 @@ def _extract_progress_metrics(
         metrics["manual_review_queue_count"] = int(job_summary.get("manual_review_queue_count") or 0)
     if "semantic_hit_count" in job_summary:
         metrics["semantic_hit_count"] = int(job_summary.get("semantic_hit_count") or 0)
+    outreach_layering = dict(job_summary.get("outreach_layering") or {})
+    if outreach_layering:
+        metrics["outreach_layering"] = outreach_layering
     return metrics
 
 
@@ -2644,12 +3310,115 @@ def _build_single_intent_rewrite_entry(text: str) -> dict[str, Any]:
     }
 
 
+def _resolve_outreach_layer_filter_policy(request: JobRequest) -> dict[str, Any]:
+    globally_enabled = _env_bool("OUTREACH_LAYERING_FILTER_ENABLED", True)
+    force_all_queries = _env_bool("OUTREACH_LAYERING_FILTER_ALL_QUERIES", False)
+    rewrite = interpret_query_intent_rewrite(
+        " ".join(
+            item
+            for item in [
+                str(request.raw_user_request or "").strip(),
+                str(request.query or "").strip(),
+            ]
+            if item
+        )
+    )
+    intent_triggered = _request_targets_greater_china_outreach(request, rewrite)
+    enabled = globally_enabled and (force_all_queries or intent_triggered)
+    min_layer = max(0, min(3, _env_int("OUTREACH_LAYERING_DEFAULT_MIN_LAYER", 2)))
+    fallback_min_layer = max(0, min(3, _env_int("OUTREACH_LAYERING_FALLBACK_MIN_LAYER", 1)))
+    if fallback_min_layer >= min_layer:
+        fallback_min_layer = 0
+    if not enabled or min_layer <= 0:
+        return {
+            "enabled": False,
+            "scope": "all_queries_default" if force_all_queries else "greater_china_intent_only",
+            "min_layer": min_layer,
+            "fallback_min_layer": fallback_min_layer,
+        }
+    return {
+        "enabled": True,
+        "scope": "all_queries_default" if force_all_queries else "greater_china_intent_only",
+        "min_layer": min_layer,
+        "fallback_min_layer": fallback_min_layer,
+    }
+
+
+def _request_targets_greater_china_outreach(request: JobRequest, rewrite: dict[str, Any] | None = None) -> bool:
+    normalized_keywords = {
+        str(item or "").strip().lower()
+        for item in list(request.keywords or [])
+        if str(item or "").strip()
+    }
+    normalized_facets = {
+        str(item or "").strip().lower()
+        for item in list(request.must_have_facets or [])
+        if str(item or "").strip()
+    }
+    normalized_query = " ".join(
+        item
+        for item in [
+            str(request.raw_user_request or "").strip(),
+            str(request.query or "").strip(),
+        ]
+        if item
+    ).lower()
+    if "greater china experience" in normalized_keywords or "chinese bilingual outreach" in normalized_keywords:
+        return True
+    if {
+        "greater_china_region_experience",
+        "mainland_china_experience_or_chinese_language",
+    } & normalized_facets:
+        return True
+    if any(token in normalized_query for token in ["华人", "泛华人", "chinese member", "chinese members"]):
+        return True
+    rewrite_payload = dict(rewrite or {})
+    rewrite_id = str(rewrite_payload.get("rewrite_id") or "").strip()
+    if rewrite_id == "greater_china_outreach":
+        return True
+    for item in list(rewrite_payload.get("additional_rewrites") or []):
+        if str((item or {}).get("rewrite_id") or "").strip() == "greater_china_outreach":
+            return True
+    return False
+
+
 def _has_non_empty_value(value: Any) -> bool:
     return isinstance(value, str) and bool(value.strip())
 
 
 def _has_non_empty_list(value: Any) -> bool:
     return isinstance(value, list) and any(str(item or "").strip() for item in value)
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = str(os.getenv(name) or "").strip().lower()
+    if not raw:
+        return default
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw in {"0", "false", "no", "off"}:
+        return False
+    return default
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = str(os.getenv(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = str(os.getenv(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
 
 
 def _worker_has_background_candidate_output(worker: dict[str, Any]) -> bool:

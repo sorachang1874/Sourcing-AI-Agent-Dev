@@ -140,9 +140,33 @@ export interface WorkflowStartResponse {
   plan_review_gate?: PlanReviewGate;
   reason?: string;
   intent_rewrite?: IntentRewritePayload;
+  dispatch?: QueryDispatchRecord;
   criteria_version_id?: number;
   criteria_compiler_run_id?: number;
   criteria_request_signature?: string;
+  [key: string]: JsonValue | undefined;
+}
+
+export interface QueryDispatchRecord {
+  dispatch_id?: number;
+  target_company?: string;
+  request_signature?: string;
+  request_family_signature?: string;
+  requester_id?: string;
+  tenant_id?: string;
+  idempotency_key?: string;
+  strategy?: string;
+  status?: string;
+  source_job_id?: string;
+  created_job_id?: string;
+  payload?: JsonObject;
+  created_at?: string;
+  updated_at?: string;
+  [key: string]: JsonValue | undefined;
+}
+
+export interface QueryDispatchListResponse {
+  query_dispatches: QueryDispatchRecord[];
   [key: string]: JsonValue | undefined;
 }
 

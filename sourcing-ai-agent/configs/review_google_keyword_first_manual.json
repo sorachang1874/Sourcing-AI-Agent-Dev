@@ -1,0 +1,19 @@
+{
+  "review_id": 61,
+  "action": "approved",
+  "reviewer": "human_sim",
+  "notes": "关键词优先；覆盖 Google + Google DeepMind；包含 current + former；允许高成本来源；不先走全量无关键词抓取。",
+  "decision": {
+    "confirmed_company_scope": [
+      "Google",
+      "Google DeepMind"
+    ],
+    "allow_high_cost_sources": true,
+    "acquisition_strategy_override": "full_company_roster",
+    "use_company_employees_lane": true,
+    "run_former_search_seed": true,
+    "force_fresh_run": true,
+    "keyword_priority_only": true,
+    "former_keyword_queries_only": true
+  }
+}

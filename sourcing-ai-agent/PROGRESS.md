@@ -1,5 +1,28 @@
 # Sourcing AI Agent Dev Progress
 
+## 2026-04-10
+
+### GitHub Dev 差异审阅、操作教程补齐与推送准备
+
+- 已完成本地工作区相对 `origin/dev` 的结构化审阅，并沉淀为可复盘文档：
+  - `docs/GITHUB_DEV_DIFF_REVIEW_2026-04-10.md`
+  - 覆盖 workflow orchestration、acquisition/harvest、profile registry、query rewrite、frontend contract 五大变更面
+- 已补“当前怎么调用 + 怎么追踪进度 + 怎么恢复执行”的实操教程：
+  - `docs/WORKFLOW_OPERATIONS_PLAYBOOK.md`
+  - 统一说明 CLI 与 API 的标准调用路径：
+    - `plan -> review-plan -> start-workflow -> show-progress/show-workers -> show-job/show-trace`
+  - 补充 query dispatch 去重策略与高成本 query 的 plan-only 审查建议
+- 已将上述新文档挂到 canonical 入口：
+  - `docs/INDEX.md`
+  - `README.md`（子项目文档地图）
+- 已对 Google keyword-first 路径做参数层修正（plan-only 复核通过）：
+  - 关键词提取扩大到 `Veo / Nano Banana / vision-language / video generation / multimodality`
+  - `keyword_priority_only` 下的 `search_seed_queries` 改为方向词优先，不再回落到泛化 `... Research Researcher` 模板
+  - large-org keyword 模式下避免把 `job_titles` 强塞进 former profile-search 过滤，降低误收敛风险
+- 当前推送前状态：
+  - 文档入口、进度文档、变更评审文档已补齐
+  - 代码侧已有较大规模改动，建议以 PR 方式先推送到 `dev`，通过 CI 与人工 review 后再合并
+
 ## 2026-04-08
 
 ### Canonical Asset Views、Facet Hard Filters 与文档体系收束

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sourcing-ai-agent.local/contracts/frontend_api_contract.schema.json",
   "title": "Sourcing AI Agent Frontend API Contract Bundle",
-  "description": "Use $defs/PlanResponse, $defs/ReviewInstructionCompileResponse, $defs/WorkflowStartResponse, $defs/JobProgressResponse, $defs/JobResultsResponse, $defs/RetrievalJobResponse, or $defs/RefinementCompileResponse.",
+  "description": "Use $defs/PlanResponse, $defs/ReviewInstructionCompileResponse, $defs/WorkflowStartResponse, $defs/QueryDispatchListResponse, $defs/JobProgressResponse, $defs/JobResultsResponse, $defs/RetrievalJobResponse, or $defs/RefinementCompileResponse.",
   "type": "object",
   "$defs": {
     "JsonObject": {
@@ -192,9 +192,41 @@
         "plan_review_gate": { "$ref": "#/$defs/PlanReviewGate" },
         "reason": { "type": "string" },
         "intent_rewrite": { "$ref": "#/$defs/IntentRewritePayload" },
+        "dispatch": { "$ref": "#/$defs/QueryDispatchRecord" },
         "criteria_version_id": { "type": "integer" },
         "criteria_compiler_run_id": { "type": "integer" },
         "criteria_request_signature": { "type": "string" }
+      }
+    },
+    "QueryDispatchRecord": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "dispatch_id": { "type": "integer" },
+        "target_company": { "type": "string" },
+        "request_signature": { "type": "string" },
+        "request_family_signature": { "type": "string" },
+        "requester_id": { "type": "string" },
+        "tenant_id": { "type": "string" },
+        "idempotency_key": { "type": "string" },
+        "strategy": { "type": "string" },
+        "status": { "type": "string" },
+        "source_job_id": { "type": "string" },
+        "created_job_id": { "type": "string" },
+        "payload": { "$ref": "#/$defs/JsonObject" },
+        "created_at": { "type": "string" },
+        "updated_at": { "type": "string" }
+      }
+    },
+    "QueryDispatchListResponse": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["query_dispatches"],
+      "properties": {
+        "query_dispatches": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/QueryDispatchRecord" }
+        }
       }
     },
     "JobMilestone": {

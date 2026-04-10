@@ -2,6 +2,7 @@ import unittest
 
 from sourcing_agent.company_shard_planning import (
     build_default_company_employee_shard_policy,
+    build_large_org_keyword_probe_shard_policy,
     plan_company_employee_shards_from_policy,
 )
 
@@ -74,6 +75,113 @@ class CompanyShardPlanningTest(unittest.TestCase):
         self.assertEqual(plan["status"], "blocked")
         self.assertEqual(plan["reason"], "partition_branch_over_cap")
         self.assertEqual(plan["overflow_scope"]["estimated_total_count"], 3200)
+
+    def test_build_large_org_keyword_probe_shard_policy_for_google_deepmind(self) -> None:
+        policy = build_large_org_keyword_probe_shard_policy(
+            "google",
+            company_scope=["Google", "Google DeepMind"],
+            keyword_hints=["multimodal", "Veo", "Nano Banana"],
+            max_pages=100,
+            page_limit=25,
+        )
+
+        self.assertEqual(policy["strategy_id"], "adaptive_large_org_keyword_probe")
+        self.assertEqual(policy["mode"], "keyword_union")
+        self.assertTrue(policy["force_keyword_shards"])
+        self.assertTrue(policy["allow_overflow_partial"])
+        self.assertEqual(
+            policy["root_filters"]["companies"],
+            [
+                "https://www.linkedin.com/company/google/",
+                "https://www.linkedin.com/company/deepmind/",
+            ],
+        )
+        self.assertEqual(policy["root_filters"]["locations"], ["United States"])
+        self.assertEqual(policy["root_filters"]["function_ids"], ["8", "9", "19", "24"])
+        self.assertTrue(any("Multimodal" in item["include_patch"]["search_query"] for item in policy["keyword_shards"]))
+        self.assertTrue(any("Veo" in item["include_patch"]["search_query"] for item in policy["keyword_shards"]))
+
+    def test_plan_company_employee_shards_keyword_union_mode(self) -> None:
+        policy = build_large_org_keyword_probe_shard_policy(
+            "google",
+            company_scope=["Google", "Google DeepMind"],
+            keyword_hints=["multimodal", "Veo"],
+            max_pages=100,
+            page_limit=25,
+        )
+
+        def probe_fn(filters, context):  # noqa: ANN001, ANN202
+            search_query = str(filters.get("search_query") or "").strip()
+            if context.get("probe_id") == "root":
+                return {"status": "completed", "estimated_total_count": 15000}
+            if "Multimodal" in search_query:
+                return {"status": "completed", "estimated_total_count": 1800}
+            if "Veo" in search_query:
+                return {"status": "completed", "estimated_total_count": 900}
+            return {"status": "completed", "estimated_total_count": 0}
+
+        plan = plan_company_employee_shards_from_policy(policy, probe_fn=probe_fn)
+
+        self.assertEqual(plan["status"], "planned")
+        self.assertEqual(plan["reason"], "keyword_union_partition")
+        self.assertTrue(plan["union_dedupe_required"])
+        self.assertEqual(len(plan["shards"]), 2)
+        self.assertTrue(any("Multimodal" in item["company_filters"]["search_query"] for item in plan["shards"]))
+        self.assertTrue(any("Veo" in item["company_filters"]["search_query"] for item in plan["shards"]))
+
+    def test_plan_company_employee_shards_keyword_union_respects_force_keyword_only(self) -> None:
+        policy = build_large_org_keyword_probe_shard_policy(
+            "google",
+            company_scope=["Google", "Google DeepMind"],
+            keyword_hints=["multimodal", "Veo"],
+            max_pages=100,
+            page_limit=25,
+        )
+
+        def probe_fn(filters, context):  # noqa: ANN001, ANN202
+            search_query = str(filters.get("search_query") or "").strip()
+            if context.get("probe_id") == "root":
+                return {"status": "completed", "estimated_total_count": 1200}
+            if "Multimodal" in search_query:
+                return {"status": "completed", "estimated_total_count": 300}
+            if "Veo" in search_query:
+                return {"status": "completed", "estimated_total_count": 220}
+            return {"status": "completed", "estimated_total_count": 0}
+
+        plan = plan_company_employee_shards_from_policy(policy, probe_fn=probe_fn)
+
+        self.assertEqual(plan["status"], "planned")
+        self.assertEqual(plan["reason"], "keyword_union_partition")
+        self.assertEqual(len(plan["shards"]), 2)
+
+    def test_plan_company_employee_shards_keyword_union_allows_partial_overflow(self) -> None:
+        policy = build_large_org_keyword_probe_shard_policy(
+            "google",
+            company_scope=["Google", "Google DeepMind"],
+            keyword_hints=["multimodal", "vision-language", "Veo"],
+            max_pages=100,
+            page_limit=25,
+        )
+
+        def probe_fn(filters, context):  # noqa: ANN001, ANN202
+            search_query = str(filters.get("search_query") or "").strip()
+            if context.get("probe_id") == "root":
+                return {"status": "completed", "estimated_total_count": 20000}
+            if "Multimodal" in search_query:
+                return {"status": "completed", "estimated_total_count": 1200}
+            if "vision-language" in search_query:
+                return {"status": "completed", "estimated_total_count": 3200}
+            if "Veo" in search_query:
+                return {"status": "completed", "estimated_total_count": 800}
+            return {"status": "completed", "estimated_total_count": 0}
+
+        plan = plan_company_employee_shards_from_policy(policy, probe_fn=probe_fn)
+
+        self.assertEqual(plan["status"], "planned")
+        self.assertEqual(plan["reason"], "keyword_union_with_capped_shards")
+        self.assertEqual(len(plan["shards"]), 3)
+        self.assertTrue(any("vision-language" in item["title"] for item in plan["overflow_scopes"]))
+        self.assertTrue(any(item.get("provider_cap_limited") for item in plan["shards"]))
 
 
 if __name__ == "__main__":

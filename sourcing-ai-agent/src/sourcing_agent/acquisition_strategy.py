@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import re
+from typing import Any
 
+from .company_registry import normalize_company_key
 from .domain import AcquisitionStrategyPlan, JobRequest, RetrievalPlan
 
 
@@ -16,6 +18,16 @@ LARGE_COMPANY_KEYS = {
     "tiktok",
     "openai",
 }
+
+LARGE_ORG_SCOPE_COMPANY_URLS = {
+    "google": "https://www.linkedin.com/company/google/",
+    "alphabet": "https://www.linkedin.com/company/alphabet-inc/",
+    "googledeepmind": "https://www.linkedin.com/company/deepmind/",
+    "deepmind": "https://www.linkedin.com/company/deepmind/",
+}
+
+LARGE_ORG_PRIORITY_FUNCTION_IDS = ["8", "9", "19", "24"]
+DEFAULT_PRIMARY_LOCATION = "United States"
 
 SCOPE_HINTS = {
     "gemini": "Gemini",
@@ -42,6 +54,36 @@ KEYWORD_CANONICAL_ALIASES = {
     "pre-train": "Pre-train",
     "pre train": "Pre-train",
     "pre-training": "Pre-train",
+    "vision language": "Vision-language",
+    "vision-language": "Vision-language",
+    "video-generation": "Video generation",
+    "multimodality": "Multimodal",
+}
+
+ACQUISITION_KEYWORD_EXCLUSION_KEYS = {
+    "greater china experience",
+    "chinese bilingual outreach",
+    "greater_china_region_experience",
+    "mainland_china_experience_or_chinese_language",
+    "mainland or chinese language",
+}
+
+KEYWORD_PRIORITY_SEARCH_QUERY_ALIASES = {
+    "multimodal": ["Multimodal", "Multimodality"],
+    "veo": ["Veo"],
+    "nanobanana": ["Nano Banana"],
+    "visionlanguage": ["Vision-language", "Vision Language"],
+    "videogeneration": ["Video generation"],
+    "gemini": ["Gemini"],
+}
+
+KEYWORD_PRIORITY_SKIP_KEYS = {
+    "research",
+    "researcher",
+    "employee",
+    "employees",
+    "engineering",
+    "engineer",
 }
 
 
@@ -51,7 +93,8 @@ def compile_acquisition_strategy(
     employment_statuses: list[str],
     retrieval_plan: RetrievalPlan,
 ) -> AcquisitionStrategyPlan:
-    text = _normalize(f"{request.raw_user_request} {request.query}")
+    raw_text = f"{request.raw_user_request} {request.query}".strip()
+    text = _normalize(raw_text)
     execution_preferences = dict(request.execution_preferences or {})
     scope_hints = _merge_scope_hints(
         inferred=_infer_scope_hints(text),
@@ -59,9 +102,18 @@ def compile_acquisition_strategy(
         target_company=request.target_company,
     )
     strategy_type = _infer_strategy_type(request.target_company, categories, employment_statuses, scope_hints, execution_preferences)
-    company_scope = _build_company_scope(request.target_company, scope_hints, strategy_type, execution_preferences)
+    company_scope = _build_company_scope(
+        request.target_company,
+        scope_hints,
+        strategy_type,
+        execution_preferences,
+        scope_disambiguation=request.scope_disambiguation,
+    )
     role_hints = _infer_role_hints(text)
-    keyword_hints = _infer_keyword_hints(text, request.keywords + request.must_have_keywords)
+    keyword_hints = _infer_keyword_hints(
+        text,
+        _acquisition_keyword_candidates(request.keywords + request.must_have_keywords + request.must_have_facets),
+    )
 
     roster_sources = _roster_sources(strategy_type)
     search_channel_order = [
@@ -70,15 +122,38 @@ def compile_acquisition_strategy(
         "provider_people_search_api",
         "profile_detail_api",
     ]
-    search_seed_queries = _build_search_seed_queries(request.target_company, company_scope, role_hints, keyword_hints, employment_statuses)
-    filter_hints = _build_filter_hints(request.target_company, company_scope, role_hints, keyword_hints, employment_statuses)
-    cost_policy = _build_cost_policy(strategy_type, execution_preferences)
+    cost_policy = _build_cost_policy(
+        strategy_type,
+        execution_preferences,
+        target_company=request.target_company,
+        company_scope=company_scope,
+        keyword_hints=keyword_hints,
+    )
+    search_seed_queries = _build_search_seed_queries(
+        request.target_company,
+        company_scope,
+        role_hints,
+        keyword_hints,
+        employment_statuses,
+        keyword_priority_only=bool(cost_policy.get("keyword_priority_only")),
+    )
+    filter_hints = _build_filter_hints(
+        request.target_company,
+        company_scope,
+        role_hints,
+        keyword_hints,
+        employment_statuses,
+        strategy_type=strategy_type,
+        cost_policy=cost_policy,
+    )
     confirmation_points = _build_confirmation_points(
         strategy_type,
         request.target_company,
         company_scope,
         employment_statuses,
         execution_preferences,
+        raw_text=raw_text,
+        keyword_hints=keyword_hints,
     )
     reasoning = _build_reasoning(
         strategy_type,
@@ -136,6 +211,8 @@ def _build_company_scope(
     scope_hints: list[str],
     strategy_type: str,
     execution_preferences: dict[str, object],
+    *,
+    scope_disambiguation: dict[str, Any] | None = None,
 ) -> list[str]:
     normalized_company = target_company.strip()
     confirmed_scope = [
@@ -144,7 +221,33 @@ def _build_company_scope(
         if str(item).strip()
     ]
     if strategy_type == "full_company_roster":
-        return [normalized_company] if normalized_company else []
+        if confirmed_scope:
+            scope: list[str] = [normalized_company] if normalized_company else []
+            for item in confirmed_scope:
+                if normalized_company and item.lower() == normalized_company.lower():
+                    continue
+                if item not in scope:
+                    scope.append(item)
+            if scope:
+                return scope
+        resolved_from_llm = _scope_candidates_from_disambiguation(scope_disambiguation)
+        if resolved_from_llm:
+            scope: list[str] = [normalized_company] if normalized_company else []
+            for item in resolved_from_llm:
+                if normalized_company and item.lower() == normalized_company.lower():
+                    continue
+                if item not in scope:
+                    scope.append(item)
+            if scope:
+                return scope
+        scope: list[str] = [normalized_company] if normalized_company else []
+        if (
+            normalized_company.lower() == "google"
+            and any(hint in {"Gemini", "Veo", "Nano Banana", "Google DeepMind", "DeepMind"} for hint in scope_hints)
+            and "Google DeepMind" not in scope
+        ):
+            scope.append("Google DeepMind")
+        return scope
     if confirmed_scope:
         scope: list[str] = [normalized_company] if normalized_company else []
         for item in confirmed_scope:
@@ -160,9 +263,33 @@ def _build_company_scope(
     for hint in scope_hints:
         if hint not in scope:
             scope.append(hint)
-    if normalized_company.lower() == "google" and "Gemini" in scope_hints and "Google DeepMind" not in scope:
+    if (
+        normalized_company.lower() == "google"
+        and any(hint in {"Gemini", "Veo", "Nano Banana", "Google DeepMind", "DeepMind"} for hint in scope_hints)
+        and "Google DeepMind" not in scope
+    ):
         scope.insert(1, "Google DeepMind")
     return scope
+
+
+def _scope_candidates_from_disambiguation(scope_disambiguation: dict[str, Any] | None) -> list[str]:
+    payload = dict(scope_disambiguation or {})
+    inferred_scope = str(payload.get("inferred_scope") or "").strip().lower()
+    if inferred_scope not in {"sub_org_only", "both", "uncertain"}:
+        return []
+    raw_candidates = payload.get("sub_org_candidates")
+    if isinstance(raw_candidates, str):
+        candidates = [item.strip() for item in raw_candidates.split(",")]
+    elif isinstance(raw_candidates, (list, tuple, set)):
+        candidates = [str(item).strip() for item in raw_candidates]
+    else:
+        return []
+    resolved: list[str] = []
+    for item in candidates:
+        normalized = " ".join(item.split()).strip()
+        if normalized and normalized not in resolved:
+            resolved.append(normalized)
+    return resolved[:6]
 
 
 def _infer_strategy_type(
@@ -189,6 +316,10 @@ def _infer_strategy_type(
         return "investor_firm_roster"
     if employment_statuses == ["former"]:
         return "former_employee_search"
+    if company_key in {"google", "alphabet"}:
+        scope_tokens = {normalize_company_key(item) for item in scope_hints if item}
+        if scope_tokens.intersection({"deepmind", "googledeepmind", "gemini", "veo", "nanobanana"}):
+            return "full_company_roster"
     if company_key in LARGE_COMPANY_KEYS or len(scope_hints) >= 2:
         return "scoped_search_roster"
     return "full_company_roster"
@@ -224,6 +355,13 @@ def _infer_keyword_hints(text: str, explicit_keywords: list[str]) -> list[str]:
         ("post-train", "Post-train"),
         ("post train", "Post-train"),
         ("multimodal", "Multimodal"),
+        ("multimodality", "Multimodal"),
+        ("vision-language", "Vision-language"),
+        ("vision language", "Vision-language"),
+        ("video generation", "Video generation"),
+        ("veo", "Veo"),
+        ("nano banana", "Nano Banana"),
+        ("gemini", "Gemini"),
         ("infrastructure", "Infrastructure"),
         ("infra", "Infra"),
         ("training", "Training"),
@@ -242,6 +380,28 @@ def _infer_keyword_hints(text: str, explicit_keywords: list[str]) -> list[str]:
     return hints[:6]
 
 
+def _keyword_priority_focus_queries(keyword_hints: list[str]) -> list[str]:
+    queries: list[str] = []
+    seen: set[str] = set()
+    for keyword in keyword_hints:
+        label = _canonical_keyword_label(keyword)
+        canonical_key = _canonical_keyword_key(label)
+        if not canonical_key or canonical_key in KEYWORD_PRIORITY_SKIP_KEYS:
+            continue
+        alias_key = "".join(ch for ch in canonical_key.lower() if ch.isalnum())
+        alias_queries = KEYWORD_PRIORITY_SEARCH_QUERY_ALIASES.get(alias_key) or [label]
+        for query in alias_queries:
+            normalized = " ".join(str(query or "").split()).strip()
+            if not normalized:
+                continue
+            dedupe_key = normalized.lower()
+            if dedupe_key in seen:
+                continue
+            seen.add(dedupe_key)
+            queries.append(normalized)
+    return queries
+
+
 def _canonical_keyword_label(value: str) -> str:
     normalized = " ".join(str(value or "").split()).strip()
     if not normalized:
@@ -252,6 +412,23 @@ def _canonical_keyword_label(value: str) -> str:
 def _canonical_keyword_key(value: str) -> str:
     normalized = " ".join(str(value or "").lower().split()).strip()
     return KEYWORD_CANONICAL_ALIASES.get(normalized, normalized)
+
+
+def _acquisition_keyword_candidates(explicit_keywords: list[str]) -> list[str]:
+    filtered: list[str] = []
+    seen: set[str] = set()
+    for keyword in explicit_keywords:
+        candidate = _canonical_keyword_label(keyword)
+        if not candidate:
+            continue
+        key = _canonical_keyword_key(candidate)
+        if key in ACQUISITION_KEYWORD_EXCLUSION_KEYS:
+            continue
+        if key in seen:
+            continue
+        seen.add(key)
+        filtered.append(candidate)
+    return filtered
 
 
 def _roster_sources(strategy_type: str) -> list[str]:
@@ -270,12 +447,20 @@ def _build_search_seed_queries(
     role_hints: list[str],
     keyword_hints: list[str],
     employment_statuses: list[str],
+    *,
+    keyword_priority_only: bool = False,
 ) -> list[str]:
+    if keyword_priority_only and keyword_hints:
+        keyword_queries = _keyword_priority_focus_queries(keyword_hints)
+        if keyword_queries:
+            return keyword_queries[:12]
+
     scope_fragment = " ".join(company_scope[1:] or company_scope[:1]).strip()
     company_fragment = target_company.strip()
     broad_role = role_hints[0] if role_hints else "Employee"
-    focus_fragment = " ".join(keyword_hints[:2]).strip()
     former_fragment = " former" if employment_statuses == ["former"] else ""
+
+    focus_fragment = " ".join(keyword_hints[:2]).strip()
     candidates = [
         f"{company_fragment} {focus_fragment} {broad_role}{former_fragment}".strip(),
         f"{scope_fragment} {focus_fragment} {broad_role}{former_fragment}".strip(),
@@ -296,19 +481,66 @@ def _build_filter_hints(
     role_hints: list[str],
     keyword_hints: list[str],
     employment_statuses: list[str],
+    *,
+    strategy_type: str,
+    cost_policy: dict[str, object],
 ) -> dict[str, list[str]]:
+    large_org_keyword_probe_mode = bool(cost_policy.get("large_org_keyword_probe_mode"))
+    prefer_known_scope_company_urls = large_org_keyword_probe_mode or normalize_company_key(target_company) in {"google", "alphabet"}
+    if strategy_type == "full_company_roster":
+        company_values = _company_scope_company_filters(
+            target_company=target_company,
+            company_scope=company_scope,
+            prefer_known_urls=prefer_known_scope_company_urls,
+        )
+    else:
+        company_values = [target_company.strip()] if target_company.strip() else []
+    if not company_values and target_company.strip():
+        company_values = [target_company.strip()]
     filters: dict[str, list[str]] = {}
     if employment_statuses == ["former"]:
-        filters["past_companies"] = [target_company]
+        filters["past_companies"] = company_values
     else:
-        filters["current_companies"] = [target_company]
+        filters["current_companies"] = company_values
+    if strategy_type == "full_company_roster":
+        filters["locations"] = [DEFAULT_PRIMARY_LOCATION]
+    if large_org_keyword_probe_mode:
+        filters["function_ids"] = list(LARGE_ORG_PRIORITY_FUNCTION_IDS)
     if company_scope[1:]:
         filters["scope_keywords"] = company_scope[1:]
-    if role_hints:
+    if role_hints and not (large_org_keyword_probe_mode and keyword_hints):
         filters["job_titles"] = role_hints
     if keyword_hints:
         filters["keywords"] = keyword_hints
     return filters
+
+
+def _company_scope_company_filters(
+    *,
+    target_company: str,
+    company_scope: list[str],
+    prefer_known_urls: bool,
+) -> list[str]:
+    company_values: list[str] = []
+    target_key = normalize_company_key(target_company)
+    for item in [*company_scope, target_company]:
+        normalized = " ".join(str(item or "").split()).strip()
+        if not normalized:
+            continue
+        if prefer_known_urls:
+            normalized_key = normalize_company_key(normalized)
+            resolved_url = LARGE_ORG_SCOPE_COMPANY_URLS.get(normalized_key)
+            if resolved_url:
+                normalized = resolved_url
+            elif normalized_key != target_key:
+                continue
+        if normalized not in company_values:
+            company_values.append(normalized)
+    if prefer_known_urls and normalize_company_key(target_company) in {"google", "alphabet"}:
+        google_url = LARGE_ORG_SCOPE_COMPANY_URLS["google"]
+        if google_url not in company_values:
+            company_values.insert(0, google_url)
+    return company_values
 
 
 def _build_confirmation_points(
@@ -317,6 +549,9 @@ def _build_confirmation_points(
     company_scope: list[str],
     employment_statuses: list[str],
     execution_preferences: dict[str, object],
+    *,
+    raw_text: str,
+    keyword_hints: list[str],
 ) -> list[str]:
     points: list[str] = []
     confirmed_scope = [
@@ -332,16 +567,125 @@ def _build_confirmation_points(
         points.append("Confirm whether former employees should exclude anyone who has already returned to the target company.")
     if "allow_high_cost_sources" not in execution_preferences:
         points.append("Confirm when the workflow is allowed to spend on high-cost LinkedIn provider calls instead of low-cost web search.")
+    implicit_keywords = _keywords_not_explicitly_mentioned(raw_text, keyword_hints)
+    if implicit_keywords:
+        points.append(
+            "Confirm whether these inferred topic keywords should be used for acquisition/probe shards: "
+            + ", ".join(implicit_keywords[:6])
+            + "."
+        )
+    ambiguous_terms = _potentially_ambiguous_terms_for_confirmation(raw_text, target_company, company_scope, keyword_hints)
+    if ambiguous_terms:
+        points.append(
+            "The query includes terms that may be new labs/models/abbreviations and were not confidently grounded: "
+            + ", ".join(ambiguous_terms[:6])
+            + ". Confirm exact meaning before live execution."
+        )
     return points
 
 
-def _build_cost_policy(strategy_type: str, execution_preferences: dict[str, object]) -> dict[str, object]:
+def _keywords_not_explicitly_mentioned(raw_text: str, keyword_hints: list[str]) -> list[str]:
+    text = " ".join(str(raw_text or "").lower().split())
+    if not text:
+        return []
+    evidence_aliases = {
+        "multimodal": ("multimodal", "multimodality", "多模态"),
+        "vision-language": ("vision-language", "vision language", "视觉语言", "vlm"),
+        "video generation": ("video generation", "视频生成", "文生视频"),
+        "veo": ("veo",),
+        "nano banana": ("nano banana",),
+        "research": ("research", "研究"),
+    }
+    missing: list[str] = []
+    for keyword in keyword_hints:
+        normalized = " ".join(str(keyword or "").lower().split()).strip()
+        if not normalized:
+            continue
+        aliases = evidence_aliases.get(normalized, (normalized,))
+        if any(alias and alias in text for alias in aliases):
+            continue
+        if keyword not in missing:
+            missing.append(str(keyword).strip())
+    return missing
+
+
+def _potentially_ambiguous_terms_for_confirmation(
+    raw_text: str,
+    target_company: str,
+    company_scope: list[str],
+    keyword_hints: list[str],
+) -> list[str]:
+    text = str(raw_text or "")
+    if not text:
+        return []
+    known_terms = {
+        normalize_company_key(target_company),
+        *[normalize_company_key(item) for item in company_scope],
+        *[normalize_company_key(item) for item in keyword_hints],
+        "google",
+        "alphabet",
+        "deepmind",
+        "gemini",
+        "veo",
+        "nanobanana",
+        "multimodal",
+        "multimodality",
+        "research",
+        "researcher",
+    }
+    generic_title_terms = {"researcher", "researchers", "employee", "employees", "member", "members", "team"}
+    candidates: list[str] = []
+    for match in re.findall(r"[\(\[（【\"“'`][^)\]）】\"”'`]{2,40}[\)\]）】\"”'`]", text):
+        candidate = str(match[1:-1]).strip()
+        if not re.search(r"[A-Za-z]", candidate):
+            continue
+        candidate_key = normalize_company_key(candidate)
+        if not candidate_key:
+            continue
+        if candidate_key in known_terms:
+            continue
+        if any(term for term in known_terms if len(term) >= 3 and term in candidate_key):
+            continue
+        if candidate not in candidates:
+            candidates.append(candidate)
+    for token in re.findall(r"\b[A-Z]{2,6}\b", text):
+        if normalize_company_key(token) not in known_terms and token not in candidates:
+            candidates.append(token)
+    for token in re.findall(r"\b[A-Z][A-Za-z0-9_-]{3,}\b", text):
+        key = normalize_company_key(token)
+        if not key or key in known_terms:
+            continue
+        if any(term for term in known_terms if len(term) >= 6 and key in term):
+            continue
+        if token.lower() in generic_title_terms:
+            continue
+        if token not in candidates:
+            candidates.append(token)
+    return candidates
+
+
+def _build_cost_policy(
+    strategy_type: str,
+    execution_preferences: dict[str, object],
+    *,
+    target_company: str,
+    company_scope: list[str],
+    keyword_hints: list[str],
+) -> dict[str, object]:
+    large_org_keyword_probe_mode = _should_enable_large_org_keyword_probe_mode(
+        strategy_type=strategy_type,
+        target_company=target_company,
+        company_scope=company_scope,
+        keyword_hints=keyword_hints,
+    )
     policy = {
         "default_route_when_url_known": "linkedin_profile_scraper",
         "profile_scraper_mode": "full",
         "collect_email": True,
         "provider_people_search_mode": "fallback_only",
+        "provider_people_search_query_strategy": "all_queries_union",
         "provider_people_search_min_expected_results": 10,
+        "provider_people_search_max_queries": 8,
         "company_employees_min_batch_size": 50,
         "company_employees_start_cost_usd": 0.02,
         "profile_search_page_cost_usd": 0.10,
@@ -359,6 +703,10 @@ def _build_cost_policy(strategy_type: str, execution_preferences: dict[str, obje
         "public_media_worker_unit_budget": 6,
         "exploration_worker_unit_budget": 5,
         "worker_retry_limit": 2,
+        "large_org_member_threshold": 10000,
+        "large_org_keyword_probe_mode": large_org_keyword_probe_mode,
+        "keyword_priority_only": large_org_keyword_probe_mode,
+        "former_keyword_queries_only": large_org_keyword_probe_mode,
         "high_cost_requires_approval": "allow_high_cost_sources" not in execution_preferences,
     }
     if strategy_type == "former_employee_search":
@@ -378,7 +726,42 @@ def _build_cost_policy(strategy_type: str, execution_preferences: dict[str, obje
         policy["precision_recall_bias"] = str(execution_preferences.get("precision_recall_bias") or "").strip().lower()
     if bool(execution_preferences.get("use_company_employees_lane")):
         policy["allow_company_employee_api"] = True
+    if "large_org_keyword_probe_mode" in execution_preferences:
+        policy["large_org_keyword_probe_mode"] = bool(execution_preferences.get("large_org_keyword_probe_mode"))
+    if "keyword_priority_only" in execution_preferences:
+        policy["keyword_priority_only"] = bool(execution_preferences.get("keyword_priority_only"))
+    if "former_keyword_queries_only" in execution_preferences:
+        policy["former_keyword_queries_only"] = bool(execution_preferences.get("former_keyword_queries_only"))
+    if "provider_people_search_query_strategy" in execution_preferences:
+        query_strategy = str(execution_preferences.get("provider_people_search_query_strategy") or "").strip().lower()
+        if query_strategy in {"all_queries_union", "first_hit"}:
+            policy["provider_people_search_query_strategy"] = query_strategy
+    if "provider_people_search_max_queries" in execution_preferences:
+        try:
+            policy["provider_people_search_max_queries"] = max(1, int(execution_preferences.get("provider_people_search_max_queries") or 1))
+        except (TypeError, ValueError):
+            pass
     return policy
+
+
+def _should_enable_large_org_keyword_probe_mode(
+    *,
+    strategy_type: str,
+    target_company: str,
+    company_scope: list[str],
+    keyword_hints: list[str],
+) -> bool:
+    if strategy_type != "full_company_roster":
+        return False
+    if not keyword_hints:
+        return False
+    target_key = normalize_company_key(target_company)
+    if target_key not in {"google", "alphabet"}:
+        return False
+    scope_tokens = {normalize_company_key(item) for item in company_scope if item}
+    trigger_tokens = {"deepmind", "googledeepmind", "gemini", "veo", "nanobanana"}
+    keyword_tokens = {normalize_company_key(item) for item in keyword_hints if item}
+    return bool(scope_tokens & trigger_tokens) or bool(keyword_tokens & trigger_tokens)
 
 
 def _build_reasoning(

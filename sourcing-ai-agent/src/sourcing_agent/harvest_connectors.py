@@ -543,6 +543,7 @@ class HarvestProfileSearchConnector:
         limit: int = 25,
         pages: int = 1,
         allow_shared_provider_cache: bool = True,
+        auto_probe: bool = True,
     ) -> dict[str, Any] | None:
         query_text = str(query_text or "").strip()
         search_dir = discovery_dir / "harvest_profile_search"
@@ -550,8 +551,55 @@ class HarvestProfileSearchConnector:
         logger = asset_logger or AssetLogger(discovery_dir.parent)
         take_pages = max(1, min(int(pages or 1), 100))
         requested_limit = max(1, int(limit or 25))
+        provider_cap_items = max(1, min(_HARVEST_PROVIDER_RESULT_CAP, take_pages * 25))
+        requested_limit = min(requested_limit, provider_cap_items)
+        past_companies = [str(item).strip() for item in list(filter_hints.get("past_companies") or []) if str(item).strip()]
+        former_past_company_scan = (
+            str(employment_status or "").strip().lower() == "former"
+            and bool(past_companies)
+            and not query_text
+        )
+        should_probe = bool(auto_probe) and (
+            requested_limit > 25
+            or take_pages > 1
+            or former_past_company_scan
+        )
+        if should_probe:
+            probe_result = self.search_profiles(
+                query_text=query_text,
+                filter_hints=filter_hints,
+                employment_status=employment_status,
+                discovery_dir=discovery_dir,
+                asset_logger=asset_logger,
+                limit=25,
+                pages=1,
+                allow_shared_provider_cache=allow_shared_provider_cache,
+                auto_probe=False,
+            )
+            if probe_result is not None:
+                pagination = dict(probe_result.get("pagination") or {})
+                provider_total_count = max(0, int(pagination.get("total_elements") or 0))
+                provider_total_pages = max(0, int(pagination.get("total_pages") or 0))
+                probe_returned_count = max(0, int(pagination.get("returned_count") or len(list(probe_result.get("rows") or []))))
+                if provider_total_count <= 0:
+                    return probe_result
+                if former_past_company_scan:
+                    requested_limit = provider_total_count
+                    take_pages = max(1, provider_total_pages or ((provider_total_count + 24) // 25))
+                else:
+                    requested_limit = min(requested_limit, provider_total_count)
+                    total_pages_from_count = max(1, provider_total_pages or ((provider_total_count + 24) // 25))
+                    take_pages = min(take_pages, total_pages_from_count)
+                    requested_limit = min(requested_limit, take_pages * 25)
+                take_pages = max(1, min(int(take_pages or 1), 100))
+                provider_cap_items = max(1, min(_HARVEST_PROVIDER_RESULT_CAP, take_pages * 25))
+                requested_limit = min(max(1, int(requested_limit or 25)), provider_cap_items)
+                if take_pages == 1 and probe_returned_count >= requested_limit:
+                    return probe_result
+
         page_coverage_min_items = max(1, ((take_pages - 1) * 25) + 1)
         max_items = requested_limit if requested_limit >= page_coverage_min_items else take_pages * 25
+        max_items = min(max_items, max(1, min(_HARVEST_PROVIDER_RESULT_CAP, take_pages * 25)))
         effective_settings = replace(
             self.settings,
             timeout_seconds=max(
@@ -788,7 +836,7 @@ class HarvestCompanyEmployeesConnector:
             max_paid_items=max(int(self.settings.max_paid_items or 0), requested_items),
             max_total_charge_usd=max(
                 float(self.settings.max_total_charge_usd or 0.0),
-                _estimate_harvest_charge_usd(payload["profileScraperMode"], requested_items, fallback_per_1k=4.0),
+                _recommended_harvest_company_charge_cap_usd(payload["profileScraperMode"], requested_items),
             ),
         )
         submit_payload = _submit_harvest_actor_run(effective_settings, payload)
@@ -896,6 +944,60 @@ class HarvestCompanyEmployeesConnector:
         )
         return summary
 
+    def _resolve_probe_sized_payload(
+        self,
+        *,
+        identity: CompanyIdentity,
+        snapshot_dir: Path,
+        requested_payload: dict[str, Any],
+        requested_items: int,
+        normalized_filters: dict[str, Any],
+        asset_logger: AssetLogger | None = None,
+    ) -> tuple[dict[str, Any], int, dict[str, Any]]:
+        probe_metadata: dict[str, Any] = {
+            "probe_performed": False,
+            "estimated_total_count": 0,
+            "provider_result_limited": False,
+            "status": "",
+            "summary_path": "",
+            "log_path": "",
+            "error": "",
+        }
+        if requested_items <= 25:
+            return dict(requested_payload), max(1, int(requested_items or 25)), probe_metadata
+        effective_payload = dict(requested_payload)
+        effective_items = max(1, int(requested_items or 25))
+        try:
+            summary = self.probe_company_roster_query(
+                identity,
+                snapshot_dir,
+                asset_logger=asset_logger,
+                company_filters=normalized_filters,
+                max_pages=1,
+                page_limit=25,
+            )
+        except Exception as exc:
+            probe_metadata["error"] = str(exc)
+            return effective_payload, effective_items, probe_metadata
+        probe_metadata.update(
+            {
+                "probe_performed": True,
+                "estimated_total_count": max(0, int(summary.get("estimated_total_count") or 0)),
+                "provider_result_limited": bool(summary.get("provider_result_limited")),
+                "status": str(summary.get("status") or "").strip(),
+                "summary_path": str(summary.get("summary_path") or "").strip(),
+                "log_path": str(summary.get("log_path") or "").strip(),
+            }
+        )
+        estimated_total_count = int(probe_metadata.get("estimated_total_count") or 0)
+        if estimated_total_count > 0:
+            effective_items = min(effective_items, estimated_total_count)
+            effective_pages = max(1, min((effective_items + 24) // 25, 100))
+            effective_items = min(effective_items, effective_pages * 25)
+            effective_payload["takePages"] = effective_pages
+            effective_payload["maxItems"] = effective_items
+        return effective_payload, max(1, int(effective_items or requested_items or 25)), probe_metadata
+
     def execute_with_checkpoint(
         self,
         identity: CompanyIdentity,
@@ -916,16 +1018,28 @@ class HarvestCompanyEmployeesConnector:
             page_limit=page_limit,
             company_filters=company_filters,
         )
+        effective_requested_items = max(1, int(requested_items or 25))
+        probe_metadata: dict[str, Any] = {}
+        checkpoint_payload = dict(checkpoint or {})
+        has_existing_run = bool(str(checkpoint_payload.get("run_id") or "").strip())
+        if not has_existing_run:
+            payload, effective_requested_items, probe_metadata = self._resolve_probe_sized_payload(
+                identity=identity,
+                snapshot_dir=snapshot_dir,
+                requested_payload=payload,
+                requested_items=effective_requested_items,
+                normalized_filters=normalized_filters,
+            )
         effective_settings = replace(
             self.settings,
             timeout_seconds=max(
                 int(self.settings.timeout_seconds or 0),
-                _recommended_harvest_company_timeout_seconds(requested_items),
+                _recommended_harvest_company_timeout_seconds(effective_requested_items),
             ),
-            max_paid_items=max(int(self.settings.max_paid_items or 0), requested_items),
+            max_paid_items=max(int(self.settings.max_paid_items or 0), effective_requested_items),
             max_total_charge_usd=max(
                 float(self.settings.max_total_charge_usd or 0.0),
-                _estimate_harvest_charge_usd(payload["profileScraperMode"], requested_items, fallback_per_1k=4.0),
+                _recommended_harvest_company_charge_cap_usd(payload["profileScraperMode"], effective_requested_items),
             ),
         )
         return _execute_harvest_actor_with_checkpoint(
@@ -938,7 +1052,10 @@ class HarvestCompanyEmployeesConnector:
                 "company_identity": identity.to_record(),
                 "max_pages": max_pages,
                 "page_limit": page_limit,
+                "effective_take_pages": int(payload.get("takePages") or max_pages or 1),
+                "effective_max_items": int(payload.get("maxItems") or effective_requested_items),
                 "company_filters": normalized_filters,
+                "probe": probe_metadata,
             },
             allow_shared_provider_cache=allow_shared_provider_cache,
         )
@@ -964,6 +1081,8 @@ class HarvestCompanyEmployeesConnector:
             page_limit=page_limit,
             company_filters=company_filters,
         )
+        effective_requested_items = max(1, int(requested_items or 25))
+        probe_metadata: dict[str, Any] = {}
         raw_path = harvest_dir / "harvest_company_employees_raw.json"
         body = None
         if raw_path.exists():
@@ -1087,59 +1206,119 @@ class HarvestCompanyEmployeesConnector:
         if body is None:
             if not self.settings.enabled:
                 raise RuntimeError("Harvest company-employees connector is not enabled.")
-            effective_settings = replace(
-                self.settings,
-                timeout_seconds=max(
-                    int(self.settings.timeout_seconds or 0),
-                    _recommended_harvest_company_timeout_seconds(requested_items),
-                ),
-                max_paid_items=max(int(self.settings.max_paid_items or 0), requested_items),
-                max_total_charge_usd=max(
-                    float(self.settings.max_total_charge_usd or 0.0),
-                    _estimate_harvest_charge_usd(payload["profileScraperMode"], requested_items, fallback_per_1k=4.0),
-                ),
+            payload_before_probe = dict(payload)
+            payload, effective_requested_items, probe_metadata = self._resolve_probe_sized_payload(
+                identity=identity,
+                snapshot_dir=snapshot_dir,
+                requested_payload=payload,
+                requested_items=effective_requested_items,
+                normalized_filters=normalized_filters,
+                asset_logger=logger,
             )
-            body = _run_harvest_actor(effective_settings, payload)
+            payload_changed_after_probe = payload != payload_before_probe
+            if payload_changed_after_probe and allow_shared_provider_cache:
+                cached_body = None
+                cache_source = None
+                cache_origin = None
+                cached_body, cache_source, cache_origin = _load_cached_harvest_payload(
+                    snapshot_dir,
+                    logical_name="harvest_company_employees",
+                    payload=payload,
+                )
+                if cached_body is not None:
+                    body = cached_body
+                    request_manifest_path = _write_harvest_request_manifest(
+                        logger,
+                        raw_path,
+                        logical_name="harvest_company_employees",
+                        payload=payload,
+                        request_context={
+                            "company_identity": identity.to_record(),
+                            "max_pages": max_pages,
+                            "page_limit": page_limit,
+                            "effective_take_pages": int(payload.get("takePages") or max_pages or 1),
+                            "effective_max_items": int(payload.get("maxItems") or effective_requested_items),
+                            "company_filters": normalized_filters,
+                            "cache_status": str(cache_source or "shared_cache"),
+                            "cache_origin": str(cache_origin or ""),
+                            "probe": probe_metadata,
+                        },
+                    )
+                    logger.write_json(
+                        raw_path,
+                        body,
+                        asset_type="harvest_company_employees_payload",
+                        source_kind="harvest_company_employees",
+                        is_raw_asset=True,
+                        model_safe=False,
+                        metadata={
+                            "company": identity.canonical_name,
+                            "cached": True,
+                            "cache_source": cache_source,
+                            "cache_origin": str(cache_origin or ""),
+                            "request_manifest_path": str(request_manifest_path),
+                        },
+                    )
             if body is None:
-                raise RuntimeError("Harvest company-employees run failed.")
-            request_manifest_path = _write_harvest_request_manifest(
-                logger,
-                raw_path,
-                logical_name="harvest_company_employees",
-                payload=payload,
-                request_context={
-                    "company_identity": identity.to_record(),
-                    "max_pages": max_pages,
-                    "page_limit": page_limit,
-                    "company_filters": normalized_filters,
-                    "cache_status": "live_api",
-                },
-            )
-            logger.write_json(
-                raw_path,
-                body,
-                asset_type="harvest_company_employees_payload",
-                source_kind="harvest_company_employees",
-                is_raw_asset=True,
-                model_safe=False,
-                metadata={
-                    "company": identity.canonical_name,
-                    "cached": False,
-                    "request_manifest_path": str(request_manifest_path),
-                },
-            )
-            _persist_shared_harvest_payload(
-                snapshot_dir,
-                logical_name="harvest_company_employees",
-                payload=payload,
-                body=body,
-                request_context={
-                    "company_identity": identity.to_record(),
-                    "max_pages": max_pages,
-                    "page_limit": page_limit,
-                    "company_filters": normalized_filters,
-                },
-            )
+                effective_settings = replace(
+                    self.settings,
+                    timeout_seconds=max(
+                        int(self.settings.timeout_seconds or 0),
+                        _recommended_harvest_company_timeout_seconds(effective_requested_items),
+                    ),
+                    max_paid_items=max(int(self.settings.max_paid_items or 0), effective_requested_items),
+                    max_total_charge_usd=max(
+                        float(self.settings.max_total_charge_usd or 0.0),
+                        _recommended_harvest_company_charge_cap_usd(payload["profileScraperMode"], effective_requested_items),
+                    ),
+                )
+                body = _run_harvest_actor(effective_settings, payload)
+                if body is None:
+                    raise RuntimeError("Harvest company-employees run failed.")
+                request_manifest_path = _write_harvest_request_manifest(
+                    logger,
+                    raw_path,
+                    logical_name="harvest_company_employees",
+                    payload=payload,
+                    request_context={
+                        "company_identity": identity.to_record(),
+                        "max_pages": max_pages,
+                        "page_limit": page_limit,
+                        "effective_take_pages": int(payload.get("takePages") or max_pages or 1),
+                        "effective_max_items": int(payload.get("maxItems") or effective_requested_items),
+                        "company_filters": normalized_filters,
+                        "cache_status": "live_api",
+                        "probe": probe_metadata,
+                    },
+                )
+                logger.write_json(
+                    raw_path,
+                    body,
+                    asset_type="harvest_company_employees_payload",
+                    source_kind="harvest_company_employees",
+                    is_raw_asset=True,
+                    model_safe=False,
+                    metadata={
+                        "company": identity.canonical_name,
+                        "cached": False,
+                        "request_manifest_path": str(request_manifest_path),
+                    },
+                )
+                _persist_shared_harvest_payload(
+                    snapshot_dir,
+                    logical_name="harvest_company_employees",
+                    payload=payload,
+                    body=body,
+                    request_context={
+                        "company_identity": identity.to_record(),
+                        "max_pages": max_pages,
+                        "page_limit": page_limit,
+                        "effective_take_pages": int(payload.get("takePages") or max_pages or 1),
+                        "effective_max_items": int(payload.get("maxItems") or effective_requested_items),
+                        "company_filters": normalized_filters,
+                        "probe": probe_metadata,
+                    },
+                )
         rows = parse_harvest_company_employee_rows(body)
         deduped_entries = _dedupe_harvest_roster_entries(rows)
         visible_entries = [entry for entry in deduped_entries if not entry["is_headless"]]
@@ -1223,6 +1402,8 @@ def parse_harvest_profile_payload(payload: dict[str, Any]) -> dict[str, Any]:
     location = str(location_normalized.get("raw_text") or "").strip()
     experience = _coerce_list(data.get("experience") or data.get("experiences") or data.get("positions"))
     education = _coerce_list(data.get("education") or data.get("educations") or data.get("schools"))
+    languages = _coerce_list(data.get("languages") or data.get("language") or [])
+    skills = _coerce_list(data.get("skills") or data.get("topSkills") or data.get("top_skills") or [])
     publications = _coerce_list(data.get("publications") or data.get("posts") or [])
     current_company = _extract_current_company(data, experience)
     more_profiles = _coerce_list(data.get("moreProfiles") or data.get("more_profiles") or [])
@@ -1240,6 +1421,8 @@ def parse_harvest_profile_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "current_company": current_company,
         "experience": experience,
         "education": education,
+        "languages": languages,
+        "skills": skills,
         "publications": publications,
         "more_profiles": more_profiles,
     }
@@ -1693,6 +1876,7 @@ def _normalize_profile_identifier(value: str) -> str:
 
 _HARVEST_PROFILE_RETRY_BATCH_SIZES = (25, 10, 5)
 _HARVEST_PROFILE_DIRECT_FALLBACK_THRESHOLD = 5
+_HARVEST_PROVIDER_RESULT_CAP = 2500
 
 
 def _dedupe_preserve_order(values: list[str]) -> list[str]:
@@ -1749,7 +1933,7 @@ def _company_employees_mode(settings: HarvestActorSettings) -> str:
 def _company_employees_max_items(max_pages: int, page_limit: int) -> int:
     take_pages = max(1, min(max_pages, 100))
     per_page_cap = min(max(1, int(page_limit or 25)), 25)
-    return take_pages * per_page_cap
+    return min(_HARVEST_PROVIDER_RESULT_CAP, take_pages * per_page_cap)
 
 
 def _recommended_harvest_company_timeout_seconds(requested_items: int) -> int:
@@ -1786,6 +1970,12 @@ def _recommended_harvest_profile_search_charge_cap_usd(requested_pages: int) -> 
     page_count = max(1, int(requested_pages or 0))
     estimated = round(page_count * 0.10, 2)
     return round(max(estimated + 0.25, estimated * 1.15), 2)
+
+
+def _recommended_harvest_company_charge_cap_usd(mode: str, item_count: int) -> float:
+    estimated = _estimate_harvest_charge_usd(mode, item_count, fallback_per_1k=4.0)
+    buffered = max(estimated + 2.0, estimated * 1.5)
+    return round(buffered, 2)
 
 
 def _execute_harvest_actor_with_checkpoint(
@@ -2143,6 +2333,15 @@ def _build_harvest_company_employees_payload(
     }
     normalized_filters = _normalize_harvest_company_employee_filters(company_filters)
     _apply_harvest_company_employee_filters(payload, normalized_filters)
+    payload_companies = [
+        str(item).strip()
+        for item in list(payload.get("companies") or [])
+        if str(item).strip()
+    ]
+    if payload_companies:
+        payload["companies"] = list(dict.fromkeys(payload_companies))
+    else:
+        payload["companies"] = [company_url]
     return payload, normalized_filters, requested_items
 
 
@@ -2165,6 +2364,7 @@ def _normalize_harvest_company_employee_filters(company_filters: dict[str, Any] 
 
     normalized: dict[str, Any] = {}
     list_key_mapping = {
+        "companies": ("companies",),
         "locations": ("locations",),
         "exclude_locations": ("exclude_locations", "excludeLocations"),
         "function_ids": ("function_ids", "functionIds"),
@@ -2187,6 +2387,7 @@ def _normalize_harvest_company_employee_filters(company_filters: dict[str, Any] 
 
 def _apply_harvest_company_employee_filters(payload: dict[str, Any], company_filters: dict[str, Any]) -> None:
     mapping = {
+        "companies": "companies",
         "locations": "locations",
         "exclude_locations": "excludeLocations",
         "function_ids": "functionIds",
@@ -2215,6 +2416,8 @@ def _apply_harvest_search_filters(payload: dict[str, Any], filter_hints: dict[st
         "job_titles": "currentJobTitles" if employment_status != "former" else "pastJobTitles",
         "locations": "locations",
         "exclude_locations": "excludeLocations",
+        "function_ids": "functionIds",
+        "exclude_function_ids": "excludeFunctionIds",
     }
     for source_key, target_key in mapping.items():
         values = [str(item).strip() for item in filter_hints.get(source_key) or [] if str(item).strip()]
@@ -2224,6 +2427,11 @@ def _apply_harvest_search_filters(payload: dict[str, Any], filter_hints: dict[st
     keyword_values = [str(item).strip() for item in filter_hints.get("keywords") or [] if str(item).strip()]
     query_text = str(payload.get("searchQuery") or "").strip()
     if not query_text:
+        # Keep former past-company probes broad by default. When caller passes an
+        # explicit query_text, payload already carries searchQuery and this branch
+        # will not execute.
+        if str(employment_status or "").strip().lower() == "former" and list(payload.get("pastCompanies") or []):
+            return
         terms = [*scope_keywords[:2], *keyword_values[:2]]
         if terms:
             payload["searchQuery"] = " ".join(dict.fromkeys(terms))

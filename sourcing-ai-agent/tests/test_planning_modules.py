@@ -4,12 +4,88 @@ from sourcing_agent.asset_catalog import AssetCatalog
 from sourcing_agent.acquisition_strategy import compile_acquisition_strategy
 from sourcing_agent.domain import JobRequest, RetrievalPlan
 from sourcing_agent.model_provider import DeterministicModelClient
+from sourcing_agent.plan_review import apply_plan_review_decision, build_plan_review_gate
 from sourcing_agent.planning import build_sourcing_plan
 from sourcing_agent.publication_planning import compile_publication_coverage_plan
 
 
 class PlanningModulesTest(unittest.TestCase):
-    def test_scoped_strategy_for_large_company_query(self) -> None:
+    def test_plan_review_decision_backfills_missing_target_company_from_confirmed_scope(self) -> None:
+        request_payload = {
+            "raw_user_request": "帮我寻找LangChain Infra方向的人",
+            "target_company": "",
+            "execution_preferences": {},
+        }
+        plan_payload = {
+            "acquisition_strategy": {
+                "strategy_type": "full_company_roster",
+                "company_scope": [],
+                "filter_hints": {},
+                "cost_policy": {},
+            },
+            "acquisition_tasks": [],
+        }
+
+        updated_request, updated_plan = apply_plan_review_decision(
+            request_payload,
+            plan_payload,
+            {"confirmed_company_scope": ["LangChain"]},
+        )
+
+        self.assertEqual(updated_request["target_company"], "LangChain")
+        self.assertEqual(updated_plan["acquisition_strategy"]["company_scope"][0], "LangChain")
+        self.assertEqual(updated_plan["acquisition_strategy"]["filter_hints"]["current_companies"][0], "LangChain")
+
+    def test_plan_review_decision_backfills_missing_target_company_from_scope_disambiguation(self) -> None:
+        request_payload = {
+            "raw_user_request": "帮我寻找LangChain Infra方向的人",
+            "target_company": "",
+            "execution_preferences": {},
+        }
+        plan_payload = {
+            "acquisition_strategy": {
+                "strategy_type": "full_company_roster",
+                "company_scope": [],
+                "filter_hints": {},
+                "cost_policy": {},
+            },
+            "acquisition_tasks": [],
+        }
+
+        updated_request, updated_plan = apply_plan_review_decision(
+            request_payload,
+            plan_payload,
+            {"scope_disambiguation": {"target_company": "LangChain"}},
+        )
+
+        self.assertEqual(updated_request["target_company"], "LangChain")
+        self.assertEqual(updated_plan["acquisition_strategy"]["company_scope"][0], "LangChain")
+        self.assertEqual(updated_plan["acquisition_strategy"]["filter_hints"]["current_companies"][0], "LangChain")
+
+    def test_acquisition_keyword_hints_exclude_outreach_only_terms(self) -> None:
+        request = JobRequest(
+            raw_user_request="帮我找 Anthropic 的华人成员，偏多模态研究",
+            query="Anthropic multimodal Veo Nano Banana",
+            target_company="Anthropic",
+            keywords=[
+                "Greater China experience",
+                "Chinese bilingual outreach",
+                "multimodal",
+                "Veo",
+            ],
+            must_have_keywords=["Nano Banana"],
+        )
+        retrieval_plan = RetrievalPlan(strategy="hybrid", reason="test")
+        strategy = compile_acquisition_strategy(request, ["employee"], ["current"], retrieval_plan)
+
+        keyword_hints = list(strategy.filter_hints.get("keywords") or [])
+        self.assertIn("multimodal", keyword_hints)
+        self.assertIn("Veo", keyword_hints)
+        self.assertIn("Nano Banana", keyword_hints)
+        self.assertNotIn("Greater China experience", keyword_hints)
+        self.assertNotIn("Chinese bilingual outreach", keyword_hints)
+
+    def test_google_suborg_signal_prefers_full_roster_strategy(self) -> None:
         request = JobRequest(
             raw_user_request="给我 Gemini Team 的 Pre-train 方向的 Researcher 和 Engineer",
             query="Gemini pre-train researcher engineer",
@@ -18,11 +94,13 @@ class PlanningModulesTest(unittest.TestCase):
         retrieval_plan = RetrievalPlan(strategy="hybrid", reason="test")
         strategy = compile_acquisition_strategy(request, ["employee"], ["current"], retrieval_plan)
 
-        self.assertEqual(strategy.strategy_type, "scoped_search_roster")
+        self.assertEqual(strategy.strategy_type, "full_company_roster")
         self.assertIn("Google DeepMind", strategy.company_scope)
-        self.assertIn("Gemini", strategy.company_scope)
         self.assertIn("general_web_search_relation_check", strategy.search_channel_order)
-        self.assertIn("Researcher", " ".join(strategy.filter_hints.get("job_titles", [])))
+        self.assertEqual(strategy.filter_hints.get("function_ids"), ["8", "9", "19", "24"])
+        self.assertNotIn("job_titles", strategy.filter_hints)
+        self.assertTrue(any("Gemini" in query for query in strategy.search_seed_queries))
+        self.assertTrue(strategy.cost_policy.get("allow_company_employee_api"))
         self.assertEqual(strategy.cost_policy.get("provider_people_search_mode"), "fallback_only")
         self.assertTrue(strategy.cost_policy.get("collect_email"))
 
@@ -156,6 +234,88 @@ class PlanningModulesTest(unittest.TestCase):
             plan.intent_brief.target_output,
         )
 
+    def test_google_suborg_scope_requires_review_for_full_roster(self) -> None:
+        request = JobRequest(
+            raw_user_request="给我 Google 负责多模态（参与 Nano Banana 和 Veo）的华人研究员",
+            query="Google multimodal Veo Nano Banana researchers",
+            target_company="Google",
+            categories=["employee", "researcher"],
+            employment_statuses=["current"],
+            organization_keywords=["Google DeepMind", "Veo", "Nano Banana"],
+            keywords=[
+                "Greater China experience",
+                "Chinese bilingual outreach",
+                "multimodal",
+                "Veo",
+                "Nano Banana",
+            ],
+            execution_preferences={"use_company_employees_lane": True},
+        )
+        plan = build_sourcing_plan(request, AssetCatalog.discover(), DeterministicModelClient())
+        gate = build_plan_review_gate(request, plan)
+
+        self.assertEqual(plan.acquisition_strategy.strategy_type, "full_company_roster")
+        self.assertEqual(gate["status"], "requires_review")
+        self.assertIn("google_scope_ambiguity_requires_confirmation", gate["reasons"])
+
+    def test_google_scope_llm_disambiguation_triggers_review_for_sub_org_scope(self) -> None:
+        request = JobRequest(
+            raw_user_request="给我 Google 负责多模态（参与 Nano Banana 和 Veo）的研究员",
+            query="Google multimodal Veo Nano Banana researchers",
+            target_company="Google",
+            categories=["employee", "researcher"],
+            employment_statuses=["current"],
+            organization_keywords=["Google DeepMind", "Veo", "Nano Banana"],
+            execution_preferences={
+                "use_company_employees_lane": True,
+                "allow_high_cost_sources": False,
+            },
+            scope_disambiguation={
+                "inferred_scope": "sub_org_only",
+                "sub_org_candidates": ["Google DeepMind", "Veo", "Nano Banana"],
+                "confidence": 0.92,
+                "rationale": "User mentions DeepMind product lines explicitly.",
+                "source": "llm",
+            },
+        )
+        plan = build_sourcing_plan(request, AssetCatalog.discover(), DeterministicModelClient())
+        gate = build_plan_review_gate(request, plan)
+
+        self.assertEqual(plan.acquisition_strategy.strategy_type, "full_company_roster")
+        self.assertEqual(gate["status"], "requires_review")
+        self.assertIn("google_scope_ambiguity_requires_confirmation", gate["reasons"])
+        self.assertEqual(gate["scope_disambiguation"]["source"], "llm")
+        self.assertEqual(gate["scope_disambiguation"]["inferred_scope"], "sub_org_only")
+
+    def test_google_scope_review_can_be_skipped_when_scope_is_already_confirmed(self) -> None:
+        request = JobRequest(
+            raw_user_request="给我 Google 负责多模态（参与 Nano Banana 和 Veo）的研究员",
+            query="Google multimodal Veo Nano Banana researchers",
+            target_company="Google",
+            categories=["employee", "researcher"],
+            employment_statuses=["current"],
+            organization_keywords=["Google DeepMind", "Veo", "Nano Banana"],
+            execution_preferences={
+                "use_company_employees_lane": True,
+                "allow_high_cost_sources": False,
+                "confirmed_company_scope": ["Google", "Google DeepMind"],
+            },
+            scope_disambiguation={
+                "inferred_scope": "sub_org_only",
+                "sub_org_candidates": ["Google DeepMind", "Veo", "Nano Banana"],
+                "confidence": 0.88,
+                "rationale": "User intent aligns with DeepMind sub-org.",
+                "source": "llm",
+            },
+        )
+        plan = build_sourcing_plan(request, AssetCatalog.discover(), DeterministicModelClient())
+        gate = build_plan_review_gate(request, plan)
+
+        self.assertEqual(plan.acquisition_strategy.strategy_type, "full_company_roster")
+        self.assertEqual(gate["status"], "ready")
+        self.assertNotIn("google_scope_ambiguity_requires_confirmation", gate["reasons"])
+        self.assertEqual(gate["scope_disambiguation"]["source"], "llm")
+
     def test_full_company_preferences_surface_in_plan_without_extra_review(self) -> None:
         request = JobRequest.from_payload(
             {
@@ -232,3 +392,117 @@ class PlanningModulesTest(unittest.TestCase):
             ["8"],
         )
         self.assertTrue(acquire_task.metadata["include_former_search_seed"])
+
+    def test_google_full_roster_enables_large_org_keyword_probe_mode(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "给我 Google 负责多模态和 Veo 的研究员，全量跑 roster。",
+                "target_company": "Google",
+                "keywords": ["multimodal", "Veo", "Nano Banana"],
+                "execution_preferences": {
+                    "use_company_employees_lane": True,
+                    "confirmed_company_scope": ["Google", "Google DeepMind"],
+                },
+            }
+        )
+
+        plan = build_sourcing_plan(request, AssetCatalog.discover(), DeterministicModelClient())
+        acquire_task = next(task for task in plan.acquisition_tasks if task.task_type == "acquire_full_roster")
+        shard_policy = dict(acquire_task.metadata.get("company_employee_shard_policy") or {})
+
+        self.assertEqual(plan.acquisition_strategy.strategy_type, "full_company_roster")
+        self.assertTrue(plan.acquisition_strategy.cost_policy.get("large_org_keyword_probe_mode"))
+        self.assertTrue(plan.acquisition_strategy.cost_policy.get("keyword_priority_only"))
+        self.assertTrue(plan.acquisition_strategy.cost_policy.get("former_keyword_queries_only"))
+        self.assertEqual(acquire_task.metadata["company_employee_shard_strategy"], "adaptive_large_org_keyword_probe")
+        self.assertEqual(shard_policy.get("mode"), "keyword_union")
+        self.assertTrue(shard_policy.get("force_keyword_shards"))
+        self.assertEqual(
+            shard_policy.get("root_filters", {}).get("companies"),
+            [
+                "https://www.linkedin.com/company/google/",
+                "https://www.linkedin.com/company/deepmind/",
+            ],
+        )
+        self.assertEqual(
+            shard_policy.get("root_filters", {}).get("function_ids"),
+            ["8", "9", "19", "24"],
+        )
+        self.assertEqual(
+            plan.acquisition_strategy.filter_hints.get("locations"),
+            ["United States"],
+        )
+        self.assertEqual(
+            plan.acquisition_strategy.filter_hints.get("function_ids"),
+            ["8", "9", "19", "24"],
+        )
+        self.assertTrue(
+            any("Multimodal" in item["include_patch"]["search_query"] for item in list(shard_policy.get("keyword_shards") or []))
+        )
+        self.assertTrue(any("Nano Banana" in query for query in acquire_task.metadata.get("search_seed_queries", [])))
+        self.assertFalse(any("Researcher" in query for query in acquire_task.metadata.get("search_seed_queries", [])))
+
+    def test_plan_review_sync_keeps_large_org_keyword_shard_policy(self) -> None:
+        request_payload = {
+            "raw_user_request": "给我 Google 多模态研究员",
+            "target_company": "Google",
+            "execution_preferences": {
+                "use_company_employees_lane": True,
+                "confirmed_company_scope": ["Google", "Google DeepMind"],
+            },
+        }
+        plan_payload = {
+            "target_company": "Google",
+            "acquisition_strategy": {
+                "strategy_type": "full_company_roster",
+                "company_scope": ["Google", "Google DeepMind"],
+                "filter_hints": {
+                    "keywords": ["multimodal", "Veo", "Nano Banana"],
+                    "locations": ["United States"],
+                    "function_ids": ["8", "9", "19", "24"],
+                },
+                "cost_policy": {
+                    "large_org_keyword_probe_mode": True,
+                },
+                "search_channel_order": ["provider_people_search_api"],
+                "search_seed_queries": ["Google multimodal researcher"],
+            },
+            "publication_coverage": {"source_families": []},
+            "acquisition_tasks": [
+                {
+                    "task_type": "acquire_full_roster",
+                    "status": "ready",
+                    "metadata": {},
+                }
+            ],
+        }
+
+        _, updated_plan = apply_plan_review_decision(request_payload, plan_payload, {})
+        acquire_task = updated_plan["acquisition_tasks"][0]
+        shard_policy = dict(acquire_task["metadata"].get("company_employee_shard_policy") or {})
+
+        self.assertEqual(acquire_task["metadata"]["company_employee_shard_strategy"], "adaptive_large_org_keyword_probe")
+        self.assertEqual(shard_policy.get("mode"), "keyword_union")
+        self.assertTrue(shard_policy.get("force_keyword_shards"))
+        self.assertEqual(
+            shard_policy.get("root_filters", {}).get("function_ids"),
+            ["8", "9", "19", "24"],
+        )
+
+    def test_open_questions_require_confirmation_for_ambiguous_new_terms(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "给我Google做Avocado和Meta TBD方向的研究员",
+                "query": "Google Avocado Meta TBD researchers",
+                "target_company": "Google",
+                "categories": ["employee", "researcher"],
+                "employment_statuses": ["current"],
+                "execution_preferences": {"use_company_employees_lane": True},
+            }
+        )
+        plan = build_sourcing_plan(request, AssetCatalog.discover(), DeterministicModelClient())
+        gate = build_plan_review_gate(request, plan)
+
+        self.assertTrue(any("Avocado" in item or "TBD" in item for item in plan.open_questions))
+        self.assertEqual(gate["status"], "requires_review")
+        self.assertIn("open_questions_present", gate["reasons"])

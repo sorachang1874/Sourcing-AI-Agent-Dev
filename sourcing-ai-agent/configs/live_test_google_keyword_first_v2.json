@@ -1,0 +1,22 @@
+{
+  "raw_user_request": "给我Google负责multimodal、vision-language、video generation（参与Veo和Nano Banana系列模型）的华人研究员，关键词优先执行。",
+  "query": "Google multimodal vision-language video generation Veo Nano Banana Chinese researcher",
+  "target_company": "Google",
+  "categories": [
+    "employee",
+    "former_employee"
+  ],
+  "execution_preferences": {
+    "acquisition_strategy_override": "full_company_roster",
+    "use_company_employees_lane": true,
+    "confirmed_company_scope": [
+      "Google",
+      "Google DeepMind"
+    ],
+    "allow_high_cost_sources": true,
+    "run_former_search_seed": true,
+    "force_fresh_run": true
+  },
+  "requester_id": "human_sim_keyword_v2",
+  "idempotency_key": "google_keyword_v2_20260410"
+}

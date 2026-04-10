@@ -106,6 +106,7 @@ class JobRequest:
     retrieval_strategy: str = ""
     planning_mode: str = "heuristic"
     execution_preferences: dict[str, Any] = field(default_factory=dict)
+    scope_disambiguation: dict[str, Any] = field(default_factory=dict)
     semantic_rerank_limit: int = 15
     top_k: int = 10
     slug_resolution_limit: int = 8
@@ -162,6 +163,10 @@ class JobRequest:
                 categories=_normalize_list(normalized_payload.get("categories")),
                 employment_statuses=_normalize_list(normalized_payload.get("employment_statuses")),
             ),
+            scope_disambiguation=_normalize_scope_disambiguation(
+                normalized_payload.get("scope_disambiguation"),
+                target_company=target_company,
+            ),
             semantic_rerank_limit=_normalize_semantic_limit(normalized_payload.get("semantic_rerank_limit")),
             top_k=_normalize_top_k(normalized_payload.get("top_k")),
             slug_resolution_limit=_normalize_small_limit(normalized_payload.get("slug_resolution_limit"), default=8, maximum=50),
@@ -188,6 +193,67 @@ def _normalize_list(value: Any) -> list[str]:
     else:
         items = list(value)
     return [_clean(item) for item in items if _clean(item)]
+
+
+def _normalize_scope_disambiguation(value: Any, *, target_company: str = "") -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    aliases = {
+        "parent_company": "parent",
+        "parent_only": "parent",
+        "sub_org": "sub_org_only",
+        "suborg": "sub_org_only",
+        "suborg_only": "sub_org_only",
+        "both_parent_and_sub_org": "both",
+        "all": "both",
+        "ambiguous": "uncertain",
+        "unknown": "uncertain",
+    }
+    allowed_scopes = {"parent", "sub_org_only", "both", "uncertain"}
+    normalized: dict[str, Any] = {}
+
+    inferred_scope = str(value.get("inferred_scope") or value.get("scope") or "").strip().lower()
+    inferred_scope = aliases.get(inferred_scope, inferred_scope)
+    if inferred_scope in allowed_scopes:
+        normalized["inferred_scope"] = inferred_scope
+
+    raw_candidates = value.get("sub_org_candidates")
+    if isinstance(raw_candidates, str):
+        candidate_items = re.split(r"[/,，、;\n]+", raw_candidates)
+    elif isinstance(raw_candidates, (list, tuple, set)):
+        candidate_items = [str(item or "") for item in raw_candidates]
+    else:
+        candidate_items = []
+    sub_org_candidates: list[str] = []
+    for item in candidate_items:
+        candidate = " ".join(str(item or "").split()).strip()
+        if not candidate or candidate in sub_org_candidates:
+            continue
+        sub_org_candidates.append(candidate[:120])
+    if sub_org_candidates:
+        normalized["sub_org_candidates"] = sub_org_candidates[:10]
+
+    raw_confidence = value.get("confidence")
+    if raw_confidence is None:
+        raw_confidence = value.get("confidence_score")
+    try:
+        confidence = float(raw_confidence)
+    except (TypeError, ValueError):
+        confidence = None
+    if confidence is not None:
+        normalized["confidence"] = max(0.0, min(round(confidence, 3), 1.0))
+
+    rationale = " ".join(str(value.get("rationale") or "").split()).strip()
+    if rationale:
+        normalized["rationale"] = rationale[:600]
+
+    source = str(value.get("source") or "").strip().lower()
+    if source in {"llm", "rules", "hybrid"}:
+        normalized["source"] = source
+
+    if target_company:
+        normalized["target_company"] = str(target_company).strip()
+    return normalized
 
 
 def _normalize_top_k(value: Any) -> int:
@@ -257,6 +323,19 @@ FACET_ALIAS_MAP = {
     "training": {"training", "pretraining", "pre-training", "post-training", "reinforcement learning"},
     "inference": {"inference", "serving", "runtime", "decoding"},
     "data": {"data", "data systems", "data platform", "datasets"},
+    "greater_china_region_experience": {
+        "greater_china_region_experience",
+        "greater china experience",
+        "greater china region experience",
+        "greater china",
+        "china experience",
+    },
+    "mainland_china_experience_or_chinese_language": {
+        "mainland_china_experience_or_chinese_language",
+        "mainland or chinese language",
+        "mainland china experience",
+        "chinese language signal",
+    },
 }
 
 ROLE_BUCKET_ALIAS_MAP = {
@@ -481,6 +560,7 @@ def derive_candidate_facets(candidate: Candidate) -> list[str]:
         facets.append("inference")
     if _contains_any(text, ["data engineer", "data platform", "data infrastructure", "dataset", "data systems"]):
         facets.append("data")
+    facets.extend(_derive_outreach_layer_facets(candidate))
     return _dedupe_preserve_order(facets)
 
 
@@ -532,6 +612,20 @@ def _candidate_signal_text(candidate: Candidate, *, include_notes: bool) -> str:
         ]
         if _clean(part)
     ).lower()
+
+
+def _derive_outreach_layer_facets(candidate: Candidate) -> list[str]:
+    metadata = dict(candidate.metadata or {})
+    raw_layer = metadata.get("outreach_layer")
+    try:
+        layer = int(raw_layer)
+    except (TypeError, ValueError):
+        return []
+    if layer >= 3:
+        return ["mainland_china_experience_or_chinese_language", "greater_china_region_experience"]
+    if layer >= 2:
+        return ["greater_china_region_experience"]
+    return []
 
 
 def _contains_any(text: str, patterns: list[str]) -> bool:

@@ -9,6 +9,8 @@ import type {
   MatchResult,
   PlanResponse,
   PlanReviewGate,
+  QueryDispatchListResponse,
+  QueryDispatchRecord,
   RefinementApplyResponse,
   RefinementCompileResponse,
   RetrievalJobResponse,
@@ -97,6 +99,11 @@ export class SourcingAgentApiClient {
     return this.post("/api/results/refine", payload, mapRefinementApplyResponse);
   }
 
+  async listQueryDispatches(filters: JsonObject = {}): Promise<QueryDispatchListResponse> {
+    const query = buildQueryString(filters);
+    return this.get(`/api/query-dispatches${query}`, mapQueryDispatchListResponse);
+  }
+
   private async get<T>(path: string, mapper: (payload: unknown) => T): Promise<T> {
     const response = await this.fetchImpl(buildUrl(this.baseUrl, path), {
       method: "GET",
@@ -180,6 +187,7 @@ export function mapWorkflowStartResponse(payload: unknown): WorkflowStartRespons
     plan_review_gate: source.plan_review_gate ? mapPlanReviewGate(source.plan_review_gate) : undefined,
     reason: asOptionalString(source.reason),
     intent_rewrite: source.intent_rewrite ? mapIntentRewritePayload(source.intent_rewrite) : undefined,
+    dispatch: source.dispatch ? mapQueryDispatchRecord(source.dispatch) : undefined,
     criteria_version_id: asOptionalNumber(source.criteria_version_id),
     criteria_compiler_run_id: asOptionalNumber(source.criteria_compiler_run_id),
     criteria_request_signature: asOptionalString(source.criteria_request_signature),
@@ -464,6 +472,35 @@ export function mapMatchResult(payload: unknown): MatchResult {
   };
 }
 
+export function mapQueryDispatchListResponse(payload: unknown): QueryDispatchListResponse {
+  const source = asObject(payload, "QueryDispatchListResponse");
+  return {
+    ...(source as JsonObject),
+    query_dispatches: asArray(source.query_dispatches).map(mapQueryDispatchRecord),
+  };
+}
+
+export function mapQueryDispatchRecord(payload: unknown): QueryDispatchRecord {
+  const source = asObject(payload, "QueryDispatchRecord");
+  return {
+    ...(source as JsonObject),
+    dispatch_id: asOptionalNumber(source.dispatch_id),
+    target_company: asOptionalString(source.target_company),
+    request_signature: asOptionalString(source.request_signature),
+    request_family_signature: asOptionalString(source.request_family_signature),
+    requester_id: asOptionalString(source.requester_id),
+    tenant_id: asOptionalString(source.tenant_id),
+    idempotency_key: asOptionalString(source.idempotency_key),
+    strategy: asOptionalString(source.strategy),
+    status: asOptionalString(source.status),
+    source_job_id: asOptionalString(source.source_job_id),
+    created_job_id: asOptionalString(source.created_job_id),
+    payload: source.payload ? asJsonObject(source.payload) : undefined,
+    created_at: asOptionalString(source.created_at),
+    updated_at: asOptionalString(source.updated_at),
+  };
+}
+
 async function parseResponse<T>(response: Response, mapper: (payload: unknown) => T): Promise<T> {
   const bodyText = await response.text();
   const payload = bodyText ? safeJsonParse(bodyText) : {};
@@ -492,6 +529,32 @@ function buildUrl(baseUrl: string, path: string): string {
     return path;
   }
   return `${baseUrl}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+function buildQueryString(params: JsonObject): string {
+  const searchParams = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === null || value === undefined) {
+      continue;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        if (isQueryParamPrimitive(item)) {
+          searchParams.append(key, String(item));
+        }
+      }
+      continue;
+    }
+    if (isQueryParamPrimitive(value)) {
+      searchParams.set(key, String(value));
+    }
+  }
+  const encoded = searchParams.toString();
+  return encoded ? `?${encoded}` : "";
+}
+
+function isQueryParamPrimitive(value: unknown): value is string | number | boolean {
+  return typeof value === "string" || typeof value === "number" || typeof value === "boolean";
 }
 
 function normalizeBaseUrl(value: string): string {
