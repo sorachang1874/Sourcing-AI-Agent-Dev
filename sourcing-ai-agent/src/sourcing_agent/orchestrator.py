@@ -338,6 +338,8 @@ class SourcingOrchestrator:
             plan = hydrate_sourcing_plan(dict(job.get("plan") or {}))
             if job_status == "blocked" and job_stage == "acquiring":
                 run_result = self._resume_blocked_workflow_if_ready(job_id, assume_lock=True)
+            elif job_status == "running" and job_stage == "acquiring":
+                run_result = self._resume_running_workflow_if_ready(job_id, assume_lock=True)
             elif job_status == "queued":
                 self._run_workflow(job_id, request, plan)
                 latest_job = self.store.get_job(job_id) or {}
@@ -1774,8 +1776,41 @@ class SourcingOrchestrator:
             candidate_job_ids.add(explicit_job_id.strip())
         results: list[dict[str, Any]] = []
         for job_id in sorted(candidate_job_ids):
-            results.append(self._resume_blocked_workflow_if_ready(job_id))
+            results.append(self._resume_acquiring_workflow_if_ready(job_id))
         return results
+
+    def _resume_acquiring_workflow_if_ready(self, job_id: str, *, assume_lock: bool = False) -> dict[str, Any]:
+        if not assume_lock:
+            with self._job_run_lock(job_id) as lock_handle:
+                if lock_handle is None:
+                    latest_job = self.store.get_job(job_id) or {}
+                    return {
+                        "job_id": job_id,
+                        "status": "skipped",
+                        "stage": str(latest_job.get("stage") or ""),
+                        "reason": "already_running",
+                    }
+                return self._resume_acquiring_workflow_if_ready(job_id, assume_lock=True)
+        job = self.store.get_job(job_id)
+        if job is None:
+            return {"job_id": job_id, "status": "not_found"}
+        if str(job.get("job_type") or "") != "workflow":
+            return {"job_id": job_id, "status": "skipped", "reason": "not_workflow_job"}
+        job_status = str(job.get("status") or "")
+        job_stage = str(job.get("stage") or "")
+        if job_stage != "acquiring":
+            return {"job_id": job_id, "status": "skipped", "reason": "job_not_in_acquisition"}
+        if job_status == "blocked":
+            return self._resume_blocked_workflow_if_ready(job_id, assume_lock=True)
+        if job_status == "running":
+            return self._resume_running_workflow_if_ready(job_id, assume_lock=True)
+        return {
+            "job_id": job_id,
+            "status": "skipped",
+            "reason": "job_not_resumable_acquisition_state",
+            "job_status": job_status,
+            "job_stage": job_stage,
+        }
 
     def _reconcile_completed_workflows_after_recovery(
         self,
@@ -2166,6 +2201,68 @@ class SourcingOrchestrator:
                 "job_id": job_id,
                 "status": "failed",
                 "blocked_task": blocked_task,
+                "error": str(exc),
+            }
+
+    def _resume_running_workflow_if_ready(self, job_id: str, *, assume_lock: bool = False) -> dict[str, Any]:
+        if not assume_lock:
+            with self._job_run_lock(job_id) as lock_handle:
+                if lock_handle is None:
+                    latest_job = self.store.get_job(job_id) or {}
+                    return {
+                        "job_id": job_id,
+                        "status": "skipped",
+                        "stage": str(latest_job.get("stage") or ""),
+                        "reason": "already_running",
+                    }
+                return self._resume_running_workflow_if_ready(job_id, assume_lock=True)
+        job = self.store.get_job(job_id)
+        if job is None:
+            return {"job_id": job_id, "status": "not_found"}
+        if str(job.get("job_type") or "") != "workflow":
+            return {"job_id": job_id, "status": "skipped", "reason": "not_workflow_job"}
+        if str(job.get("status") or "") != "running" or str(job.get("stage") or "") != "acquiring":
+            return {"job_id": job_id, "status": "skipped", "reason": "job_not_running_in_acquisition"}
+
+        workers = self.agent_runtime.list_workers(job_id=job_id)
+        pending_workers = [
+            {
+                "worker_id": int(worker.get("worker_id") or 0),
+                "lane_id": str(worker.get("lane_id") or ""),
+                "worker_key": str(worker.get("worker_key") or ""),
+                "status": str(worker.get("status") or ""),
+            }
+            for worker in workers
+            if str(worker.get("status") or "") != "completed"
+        ]
+        if pending_workers:
+            return {
+                "job_id": job_id,
+                "status": "waiting",
+                "reason": "pending_workers_remaining",
+                "pending_worker_count": len(pending_workers),
+                "pending_workers": pending_workers[:10],
+            }
+
+        request = JobRequest.from_payload(dict(job.get("request") or {}))
+        plan = hydrate_sourcing_plan(dict(job.get("plan") or {}))
+        try:
+            resume_result = self._run_workflow_from_acquisition(job_id, request, plan, resume_mode=True)
+            latest_job = self.store.get_job(job_id) or {}
+            return {
+                "job_id": job_id,
+                "status": "resumed",
+                "resume_mode": "running_acquiring_recovery",
+                "resume_result": resume_result,
+                "job_status": str(latest_job.get("status") or ""),
+                "job_stage": str(latest_job.get("stage") or ""),
+            }
+        except Exception as exc:
+            self._mark_workflow_failed(job_id, request, plan, exc)
+            return {
+                "job_id": job_id,
+                "status": "failed",
+                "resume_mode": "running_acquiring_recovery",
                 "error": str(exc),
             }
 
@@ -2934,17 +3031,39 @@ def _merge_request_payload(
     for key in [
         "categories",
         "employment_statuses",
-        "keywords",
-        "must_have_keywords",
-        "organization_keywords",
-        "must_have_facets",
-        "must_have_primary_role_buckets",
     ]:
         if _has_non_empty_list(merged.get(key)):
             continue
         candidate = patch_payload.get(key)
         if _has_non_empty_list(candidate):
             merged[key] = list(candidate)
+    merged["keywords"] = _merge_unique_string_values(
+        merged.get("keywords"),
+        patch_payload.get("keywords"),
+        patch_payload.get("research_direction_keywords"),
+        patch_payload.get("technology_keywords"),
+        patch_payload.get("model_keywords"),
+        patch_payload.get("product_keywords"),
+    )
+    merged["must_have_keywords"] = _merge_unique_string_values(
+        merged.get("must_have_keywords"),
+        patch_payload.get("must_have_keywords"),
+    )
+    merged["organization_keywords"] = _merge_unique_string_values(
+        merged.get("organization_keywords"),
+        patch_payload.get("organization_keywords"),
+        patch_payload.get("team_keywords"),
+        patch_payload.get("sub_org_keywords"),
+        patch_payload.get("project_keywords"),
+    )
+    merged["must_have_facets"] = _merge_unique_string_values(
+        merged.get("must_have_facets"),
+        patch_payload.get("must_have_facets"),
+    )
+    merged["must_have_primary_role_buckets"] = _merge_unique_string_values(
+        merged.get("must_have_primary_role_buckets"),
+        patch_payload.get("must_have_primary_role_buckets"),
+    )
     merged_scope = merged.get("scope_disambiguation")
     patch_scope = patch_payload.get("scope_disambiguation")
     if isinstance(patch_scope, dict) and patch_scope:
@@ -3388,6 +3507,26 @@ def _has_non_empty_value(value: Any) -> bool:
 
 def _has_non_empty_list(value: Any) -> bool:
     return isinstance(value, list) and any(str(item or "").strip() for item in value)
+
+
+def _merge_unique_string_values(*sources: Any) -> list[str]:
+    merged: list[str] = []
+    seen: set[str] = set()
+    for source in sources:
+        if isinstance(source, str):
+            items = [source]
+        else:
+            items = list(source or [])
+        for item in items:
+            value = " ".join(str(item or "").split()).strip()
+            if not value:
+                continue
+            key = value.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(value)
+    return merged
 
 
 def _env_bool(name: str, default: bool) -> bool:

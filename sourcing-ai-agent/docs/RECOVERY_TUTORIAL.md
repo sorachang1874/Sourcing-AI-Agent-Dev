@@ -316,3 +316,16 @@ PYTHONPATH=src python3 -m sourcing_agent.cli show-workers --job-id <job_id>
 2. 实现 server-side asset registry / sync index
 3. 继续补 Thinking Machines Lab 的 former / publication / unresolved leads
 4. 再进行下一轮正式 live test
+
+## 2026-04-10 Recovery 语义更新
+
+workflow 恢复逻辑新增了对 `running + acquiring` 的续跑支持，不再只处理 `blocked + acquiring`：
+
+- `execute-workflow --job-id <id>` 在 `running/acquiring` 且无 pending workers 时，会直接从 acquisition 继续推进。
+- `run-worker-daemon-once` 的 workflow resume 阶段，已统一走“acquiring 状态恢复”，覆盖 `blocked` 与 `running` 两类。
+
+因此当你看到 job 卡在 `running/acquiring` 时，恢复动作和排查顺序与 `blocked/acquiring` 基本一致：
+
+1. `show-workers` 看是否还有 pending worker。
+2. 若无 pending，执行 `execute-workflow` 或 `run-worker-daemon-once` 触发续跑。
+3. 观察 `show-progress` 是否进入 `retrieving/completed`。

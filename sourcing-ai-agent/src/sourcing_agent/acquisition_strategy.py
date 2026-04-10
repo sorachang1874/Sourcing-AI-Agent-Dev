@@ -34,6 +34,15 @@ SCOPE_HINTS = {
     "deepmind": "Google DeepMind",
     "veo": "Veo",
     "nano banana": "Nano Banana",
+    "chatgpt": "ChatGPT",
+    "reasoning": "Reasoning",
+    "post-training": "Post-Training",
+    "post training": "Post-Training",
+    "alignment": "Alignment",
+    "infra": "Infra",
+    "infrastructure": "Infrastructure",
+    "agent": "Agents",
+    "agents": "Agents",
     "claude": "Claude",
     "research": "Research",
     "engineering": "Engineering",
@@ -54,6 +63,13 @@ KEYWORD_CANONICAL_ALIASES = {
     "pre-train": "Pre-train",
     "pre train": "Pre-train",
     "pre-training": "Pre-train",
+    "chain of thought": "Chain-of-thought",
+    "chain-of-thought": "Chain-of-thought",
+    "inference time compute": "Inference-time compute",
+    "inference-time compute": "Inference-time compute",
+    "reasoning model": "Reasoning",
+    "reasoning models": "Reasoning",
+    "rlhf": "RLHF",
     "vision language": "Vision-language",
     "vision-language": "Vision-language",
     "video-generation": "Video generation",
@@ -75,6 +91,15 @@ KEYWORD_PRIORITY_SEARCH_QUERY_ALIASES = {
     "visionlanguage": ["Vision-language", "Vision Language"],
     "videogeneration": ["Video generation"],
     "gemini": ["Gemini"],
+    "chatgpt": ["ChatGPT"],
+    "reasoning": ["Reasoning", "Reasoning model"],
+    "chainofthought": ["Chain-of-thought"],
+    "inferencetimecompute": ["Inference-time compute"],
+    "rlhf": ["RLHF", "Reinforcement Learning from Human Feedback"],
+    "alignment": ["Alignment"],
+    "infrastructure": ["Infrastructure", "Infra"],
+    "agentic": ["Agentic"],
+    "agents": ["Agents"],
 }
 
 KEYWORD_PRIORITY_SKIP_KEYS = {
@@ -350,6 +375,12 @@ def _infer_keyword_hints(text: str, explicit_keywords: list[str]) -> list[str]:
     lexical_hints = [
         ("reinforcement learning", "Reinforcement Learning"),
         ("rl", "RL"),
+        ("rlhf", "RLHF"),
+        ("reasoning", "Reasoning"),
+        ("chain of thought", "Chain-of-thought"),
+        ("chain-of-thought", "Chain-of-thought"),
+        ("inference time compute", "Inference-time compute"),
+        ("inference-time compute", "Inference-time compute"),
         ("pre-train", "Pre-train"),
         ("pre train", "Pre-train"),
         ("post-train", "Post-train"),
@@ -362,8 +393,15 @@ def _infer_keyword_hints(text: str, explicit_keywords: list[str]) -> list[str]:
         ("veo", "Veo"),
         ("nano banana", "Nano Banana"),
         ("gemini", "Gemini"),
+        ("chatgpt", "ChatGPT"),
+        ("o1", "o1"),
+        ("o3", "o3"),
+        ("alignment", "Alignment"),
         ("infrastructure", "Infrastructure"),
         ("infra", "Infra"),
+        ("agentic", "Agentic"),
+        ("agents", "Agents"),
+        ("tool use", "Tool use"),
         ("training", "Training"),
         ("research", "Research"),
         ("safety", "Safety"),
@@ -377,7 +415,7 @@ def _infer_keyword_hints(text: str, explicit_keywords: list[str]) -> list[str]:
             continue
         seen_keys.add(dedupe_key)
         hints.append(candidate)
-    return hints[:6]
+    return hints[:12]
 
 
 def _keyword_priority_focus_queries(keyword_hints: list[str]) -> list[str]:
@@ -394,7 +432,7 @@ def _keyword_priority_focus_queries(keyword_hints: list[str]) -> list[str]:
             normalized = " ".join(str(query or "").split()).strip()
             if not normalized:
                 continue
-            dedupe_key = normalized.lower()
+            dedupe_key = _search_query_dedupe_key(normalized)
             if dedupe_key in seen:
                 continue
             seen.add(dedupe_key)
@@ -412,6 +450,15 @@ def _canonical_keyword_label(value: str) -> str:
 def _canonical_keyword_key(value: str) -> str:
     normalized = " ".join(str(value or "").lower().split()).strip()
     return KEYWORD_CANONICAL_ALIASES.get(normalized, normalized)
+
+
+def _search_query_dedupe_key(value: str) -> str:
+    normalized = " ".join(str(value or "").lower().split()).strip()
+    if not normalized:
+        return ""
+    compact = re.sub(r"[\s\-_]+", "", normalized)
+    alnum = re.sub(r"[^0-9a-z]+", "", compact)
+    return alnum or compact
 
 
 def _acquisition_keyword_candidates(explicit_keywords: list[str]) -> list[str]:
@@ -468,10 +515,16 @@ def _build_search_seed_queries(
         f"{company_fragment} LinkedIn {focus_fragment} {broad_role}".strip(),
     ]
     deduped: list[str] = []
+    seen: set[str] = set()
     for query in candidates:
         normalized = " ".join(query.split())
-        if normalized and normalized not in deduped:
-            deduped.append(normalized)
+        if not normalized:
+            continue
+        signature = _search_query_dedupe_key(normalized) or normalized.lower()
+        if signature in seen:
+            continue
+        seen.add(signature)
+        deduped.append(normalized)
     return deduped[:6]
 
 

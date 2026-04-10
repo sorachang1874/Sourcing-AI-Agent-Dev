@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 import json
@@ -325,6 +326,51 @@ class AcquisitionEngine:
             job_request.execution_preferences.get("reuse_existing_roster") or task.metadata.get("reuse_existing_roster")
         )
         acquisition_mode = "live_roster_acquisition"
+        explicitly_requested_former_seed = "run_former_search_seed" in dict(job_request.execution_preferences or {})
+        should_run_former_search_seed = self._should_run_default_former_search_seed(task, job_request)
+        former_parallel_executor: ThreadPoolExecutor | None = None
+        former_parallel_future = None
+
+        def _start_parallel_former_search_seed_if_needed() -> None:
+            nonlocal former_parallel_executor, former_parallel_future
+            if not should_run_former_search_seed:
+                return
+            if former_parallel_future is not None:
+                return
+            if self.worker_runtime is not None and job_id:
+                return
+            former_parallel_executor = ThreadPoolExecutor(max_workers=1)
+            former_parallel_future = former_parallel_executor.submit(
+                self._acquire_default_former_search_seed,
+                task,
+                state,
+                job_request,
+                identity,
+            )
+
+        def _shutdown_parallel_former(wait: bool) -> None:
+            nonlocal former_parallel_executor, former_parallel_future
+            if former_parallel_executor is None:
+                return
+            former_parallel_executor.shutdown(wait=wait)
+            former_parallel_executor = None
+            former_parallel_future = None
+
+        def _kickoff_former_search_seed_for_background_roster() -> tuple[SearchSeedSnapshot | None, str, str, str]:
+            if not should_run_former_search_seed:
+                return None, "", "", "skipped"
+            try:
+                former_execution = self._acquire_default_former_search_seed(task, state, job_request, identity)
+            except Exception as exc:
+                return None, "", str(exc), "failed"
+            former_snapshot = former_execution.state_updates.get("search_seed_snapshot")
+            return (
+                former_snapshot if isinstance(former_snapshot, SearchSeedSnapshot) else None,
+                str(former_execution.detail or ""),
+                str(former_execution.detail or "") if former_execution.status == "blocked" else "",
+                str(former_execution.status or ""),
+            )
+
         try:
             if reuse_existing_roster:
                 cached_snapshot = self._load_cached_roster_snapshot(identity, exclude_snapshot_dir=snapshot_dir)
@@ -372,26 +418,45 @@ class AcquisitionEngine:
                             allow_shared_provider_cache=allow_shared_provider_cache,
                         )
                         if int(shard_worker_summary.get("queued_count") or 0) > 0:
+                            (
+                                former_search_seed_snapshot,
+                                former_search_detail,
+                                former_search_error,
+                                former_search_status,
+                            ) = _kickoff_former_search_seed_for_background_roster()
+                            payload: dict[str, Any] = {
+                                "queued_harvest_worker_count": int(shard_worker_summary.get("queued_count") or 0),
+                                "completed_harvest_worker_count": int(
+                                    shard_worker_summary.get("completed_count") or 0
+                                ),
+                                "shard_count": int(shard_worker_summary.get("shard_count") or 0),
+                                "stop_reason": "queued_background_harvest_shards",
+                                "harvest_workers": list(shard_worker_summary.get("queued_summaries") or []),
+                                "completed_harvest_workers": list(
+                                    shard_worker_summary.get("completed_summaries") or []
+                                ),
+                                "former_search_seed_status": former_search_status,
+                            }
+                            if former_search_detail:
+                                payload["former_search_seed_detail"] = former_search_detail
+                            if former_search_error:
+                                payload["former_search_seed_error"] = former_search_error
+                            state_updates: dict[str, Any] = {}
+                            if isinstance(former_search_seed_snapshot, SearchSeedSnapshot):
+                                payload["former_search_seed_snapshot"] = former_search_seed_snapshot.to_record()
+                                payload["former_search_seed_entry_count"] = len(former_search_seed_snapshot.entries)
+                                state_updates["search_seed_snapshot"] = former_search_seed_snapshot
                             return AcquisitionExecution(
                                 task_id=task.task_id,
                                 status="blocked",
                                 detail=(
                                     "Roster acquisition queued background segmented Harvest company-employees runs; "
-                                    "resume after worker recovery completes remote dataset fetch."
+                                    "former seed discovery started in parallel. Resume after worker recovery completes remote dataset fetch."
                                 ),
-                                payload={
-                                    "queued_harvest_worker_count": int(shard_worker_summary.get("queued_count") or 0),
-                                    "completed_harvest_worker_count": int(
-                                        shard_worker_summary.get("completed_count") or 0
-                                    ),
-                                    "shard_count": int(shard_worker_summary.get("shard_count") or 0),
-                                    "stop_reason": "queued_background_harvest_shards",
-                                    "harvest_workers": list(shard_worker_summary.get("queued_summaries") or []),
-                                    "completed_harvest_workers": list(
-                                        shard_worker_summary.get("completed_summaries") or []
-                                    ),
-                                },
+                                payload=payload,
+                                state_updates=state_updates,
                             )
+                    _start_parallel_former_search_seed_if_needed()
                     snapshot = self._fetch_segmented_harvest_company_roster(
                         identity=identity,
                         snapshot_dir=snapshot_dir,
@@ -412,18 +477,36 @@ class AcquisitionEngine:
                     )
                     if str(harvest_worker.get("worker_status") or "") == "queued":
                         summary = dict(harvest_worker.get("summary") or {})
+                        (
+                            former_search_seed_snapshot,
+                            former_search_detail,
+                            former_search_error,
+                            former_search_status,
+                        ) = _kickoff_former_search_seed_for_background_roster()
+                        payload: dict[str, Any] = {
+                            "queued_harvest_worker_count": 1,
+                            "stop_reason": "queued_background_harvest",
+                            "harvest_worker": summary,
+                            "former_search_seed_status": former_search_status,
+                        }
+                        if former_search_detail:
+                            payload["former_search_seed_detail"] = former_search_detail
+                        if former_search_error:
+                            payload["former_search_seed_error"] = former_search_error
+                        state_updates: dict[str, Any] = {}
+                        if isinstance(former_search_seed_snapshot, SearchSeedSnapshot):
+                            payload["former_search_seed_snapshot"] = former_search_seed_snapshot.to_record()
+                            payload["former_search_seed_entry_count"] = len(former_search_seed_snapshot.entries)
+                            state_updates["search_seed_snapshot"] = former_search_seed_snapshot
                         return AcquisitionExecution(
                             task_id=task.task_id,
                             status="blocked",
                             detail=(
                                 "Roster acquisition queued a background Harvest company-employees run; "
-                                "resume after worker recovery completes remote dataset fetch."
+                                "former seed discovery started in parallel. Resume after worker recovery completes remote dataset fetch."
                             ),
-                            payload={
-                                "queued_harvest_worker_count": 1,
-                                "stop_reason": "queued_background_harvest",
-                                "harvest_worker": summary,
-                            },
+                            payload=payload,
+                            state_updates=state_updates,
                         )
                     snapshot = self.harvest_company_connector.fetch_company_roster(
                         identity,
@@ -434,6 +517,7 @@ class AcquisitionEngine:
                         allow_shared_provider_cache=allow_shared_provider_cache,
                     )
                 else:
+                    _start_parallel_former_search_seed_if_needed()
                     snapshot = self.harvest_company_connector.fetch_company_roster(
                         identity,
                         snapshot_dir,
@@ -443,6 +527,7 @@ class AcquisitionEngine:
                         allow_shared_provider_cache=allow_shared_provider_cache,
                     )
             else:
+                _start_parallel_former_search_seed_if_needed()
                 snapshot = self.roster_connector.fetch_company_roster(
                     identity,
                     snapshot_dir,
@@ -451,6 +536,7 @@ class AcquisitionEngine:
                     page_limit=page_limit,
                 )
         except Exception as exc:
+            _shutdown_parallel_former(wait=False)
             cached_snapshot = self._load_cached_roster_snapshot(identity, exclude_snapshot_dir=snapshot_dir) if allow_cached_roster_fallback else None
             if cached_snapshot is not None:
                 self._write_latest_snapshot_pointer(identity, cached_snapshot.snapshot_id, cached_snapshot.snapshot_dir)
@@ -480,6 +566,7 @@ class AcquisitionEngine:
             )
 
         if not snapshot.visible_entries:
+            _shutdown_parallel_former(wait=False)
             cached_snapshot = self._load_cached_roster_snapshot(identity, exclude_snapshot_dir=snapshot_dir) if allow_cached_roster_fallback else None
             if cached_snapshot is not None:
                 self._write_latest_snapshot_pointer(identity, cached_snapshot.snapshot_id, cached_snapshot.snapshot_dir)
@@ -514,23 +601,39 @@ class AcquisitionEngine:
         former_search_seed_snapshot = None
         former_search_detail = ""
         former_search_error = ""
-        explicitly_requested_former_seed = "run_former_search_seed" in dict(job_request.execution_preferences or {})
-        if self._should_run_default_former_search_seed(task, job_request):
-            former_execution = self._acquire_default_former_search_seed(task, state, job_request, identity)
+        if should_run_former_search_seed:
+            if former_parallel_future is not None:
+                try:
+                    former_execution = former_parallel_future.result()
+                finally:
+                    _shutdown_parallel_former(wait=False)
+            else:
+                former_execution = self._acquire_default_former_search_seed(task, state, job_request, identity)
             former_search_seed_snapshot = former_execution.state_updates.get("search_seed_snapshot")
             former_search_detail = former_execution.detail
             if former_execution.status == "blocked":
                 former_search_error = former_execution.detail
-                if explicitly_requested_former_seed:
+                former_payload = dict(former_execution.payload or {})
+                former_stop_reason = str(former_payload.get("stop_reason") or "").strip()
+                former_queued_query_count = int(former_payload.get("queued_query_count") or 0)
+                should_wait_for_former_background = former_stop_reason == "queued_background_search" or former_queued_query_count > 0
+                if explicitly_requested_former_seed or should_wait_for_former_background:
+                    waiting_reason = (
+                        "Former search queued background tasks and will auto-resume to run incremental enrichment on newly discovered URLs."
+                        if should_wait_for_former_background and not explicitly_requested_former_seed
+                        else former_execution.detail
+                    )
                     return AcquisitionExecution(
                         task_id=task.task_id,
                         status="blocked",
-                        detail=former_execution.detail,
+                        detail=waiting_reason,
                         payload={
                             **snapshot.to_record(),
                             "acquisition_mode": acquisition_mode,
                             "former_search_seed_status": "blocked",
                             "former_search_seed_detail": former_search_detail,
+                            "former_search_seed_stop_reason": former_stop_reason,
+                            "former_search_seed_queued_query_count": former_queued_query_count,
                         },
                         state_updates={
                             "roster_snapshot": snapshot,
@@ -566,6 +669,7 @@ class AcquisitionEngine:
         if former_search_detail:
             payload["former_search_seed_detail"] = former_search_detail
 
+        _shutdown_parallel_former(wait=False)
         return AcquisitionExecution(
             task_id=task.task_id,
             status="completed",
@@ -1156,39 +1260,79 @@ class AcquisitionEngine:
         shard_root = snapshot_dir / "harvest_company_employees" / "shards"
         shard_root.mkdir(parents=True, exist_ok=True)
 
-        queued_summaries: list[dict[str, Any]] = []
-        completed_summaries: list[dict[str, Any]] = []
-        for shard in shards:
+        shard_specs: list[dict[str, Any]] = []
+        for index, shard in enumerate(shards, start=1):
             shard_id = _normalize_shard_id(str(shard.get("shard_id") or "shard"))
             shard_title = str(shard.get("title") or "").strip()
             shard_snapshot_dir = shard_root / shard_id
             shard_snapshot_dir.mkdir(parents=True, exist_ok=True)
+            shard_specs.append(
+                {
+                    "index": index,
+                    "shard": dict(shard),
+                    "shard_id": shard_id,
+                    "shard_title": shard_title,
+                    "shard_snapshot_dir": shard_snapshot_dir,
+                }
+            )
+
+        def _run_shard(spec: dict[str, Any]) -> dict[str, Any]:
+            shard_payload = dict(spec.get("shard") or {})
             worker_result = self._execute_harvest_company_roster_worker(
                 identity=identity,
-                snapshot_dir=shard_snapshot_dir,
-                max_pages=int(shard.get("max_pages") or 1),
-                page_limit=int(shard.get("page_limit") or 25),
+                snapshot_dir=Path(spec["shard_snapshot_dir"]),
+                max_pages=int(shard_payload.get("max_pages") or 1),
+                page_limit=int(shard_payload.get("page_limit") or 25),
                 job_id=job_id,
                 request_payload=request_payload,
                 plan_payload=plan_payload,
                 runtime_mode=runtime_mode,
                 allow_shared_provider_cache=allow_shared_provider_cache,
-                company_filters=dict(shard.get("company_filters") or {}),
-                worker_key_suffix=f"::{shard_id}",
-                span_name_suffix=f":{shard_id}",
+                company_filters=dict(shard_payload.get("company_filters") or {}),
+                worker_key_suffix=f"::{spec['shard_id']}",
+                span_name_suffix=f":{spec['shard_id']}",
                 root_snapshot_dir=snapshot_dir,
             )
             summary = {
                 **dict(worker_result.get("summary") or {}),
-                "shard_id": shard_id,
-                "title": shard_title,
-                "strategy_id": str(shard.get("strategy_id") or "").strip(),
-                "scope_note": str(shard.get("scope_note") or "").strip(),
-                "company_filters": dict(shard.get("company_filters") or {}),
-                "snapshot_dir": str(shard_snapshot_dir),
+                "shard_id": spec["shard_id"],
+                "title": spec["shard_title"],
+                "strategy_id": str(shard_payload.get("strategy_id") or "").strip(),
+                "scope_note": str(shard_payload.get("scope_note") or "").strip(),
+                "company_filters": dict(shard_payload.get("company_filters") or {}),
+                "snapshot_dir": str(spec["shard_snapshot_dir"]),
                 "root_snapshot_dir": str(snapshot_dir),
             }
-            if str(worker_result.get("worker_status") or "") == "queued":
+            return {
+                "index": int(spec.get("index") or 0),
+                "worker_status": str(worker_result.get("worker_status") or ""),
+                "summary": summary,
+            }
+
+        shard_results_by_index: dict[int, dict[str, Any]] = {}
+        if shard_specs:
+            parallel_workers = max(1, min(len(shard_specs), 8))
+            if parallel_workers == 1:
+                for spec in shard_specs:
+                    result = _run_shard(spec)
+                    shard_results_by_index[int(result.get("index") or 0)] = result
+            else:
+                with ThreadPoolExecutor(max_workers=parallel_workers) as executor:
+                    future_map = {
+                        executor.submit(_run_shard, spec): int(spec.get("index") or 0)
+                        for spec in shard_specs
+                    }
+                    for future in as_completed(future_map):
+                        result = dict(future.result() or {})
+                        index = int(result.get("index") or future_map.get(future) or 0)
+                        shard_results_by_index[index] = result
+
+        queued_summaries: list[dict[str, Any]] = []
+        completed_summaries: list[dict[str, Any]] = []
+        for spec in sorted(shard_specs, key=lambda item: int(item.get("index") or 0)):
+            result = dict(shard_results_by_index.get(int(spec.get("index") or 0)) or {})
+            summary = dict(result.get("summary") or {})
+            if str(result.get("worker_status") or "") == "queued":
                 queued_summaries.append(summary)
             else:
                 completed_summaries.append(summary)

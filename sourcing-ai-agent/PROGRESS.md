@@ -861,3 +861,13 @@
     - 历史 `api_accounts.json`
     - SQLite / cache / Python 临时文件
   - 当前结论是可以先整理成 publish-ready monorepo，但不能把现有目录原样直接推到 GitHub
+- 2026-04-10（并行与恢复稳定性更新）：
+  - 修复 workflow 恢复门控：`run_queued_workflow` 与 daemon 恢复现在都覆盖 `running+acquiring`，不再只支持 `blocked+acquiring`。
+  - 修复 Harvest company filter 归一化误改写：避免把 `past_companies=[google, deepmind]` 错误写成 `[google, google]`。
+  - 同义 query 泛化去重：`-`/空格/下划线变体统一签名，避免 `Vision-language` 与 `Vision Language` 重复执行。
+  - `company-employees` shard worker 改为并行提交，减少 current roster 侧串行等待。
+  - former 与 current 采集并行化：
+    - current roster queued 时并行触发 former seed。
+    - 非 queued 同步路径也并行启动 former，并在 enrichment 前 join。
+  - former queued 后自动阻塞等待恢复，以保证后续会进入增量 enrichment，而不是“former 到了但没有再吃进召回”。
+  - paid fallback 增加 probe overlap 剪枝：高重叠 query 标记 `skipped_high_overlap`，降低大组织重复调用成本。
