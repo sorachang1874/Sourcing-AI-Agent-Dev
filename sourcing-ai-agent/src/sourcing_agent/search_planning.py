@@ -108,7 +108,15 @@ def _deterministic_search_strategy(
             )
         )
 
-    if acquisition_strategy.strategy_type in {"scoped_search_roster", "former_employee_search"}:
+    requires_paid_people_search_fallback = acquisition_strategy.strategy_type in {
+        "scoped_search_roster",
+        "former_employee_search",
+    } or (
+        acquisition_strategy.strategy_type == "full_company_roster"
+        and bool(acquisition_strategy.cost_policy.get("large_org_keyword_probe_mode"))
+    )
+
+    if requires_paid_people_search_fallback and acquisition_strategy.search_seed_queries:
         bundles.append(
             SearchQueryBundle(
                 bundle_id="targeted_people_search",
