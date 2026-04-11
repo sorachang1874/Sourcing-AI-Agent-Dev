@@ -15,6 +15,7 @@
 - [docs/INDEX.md](docs/INDEX.md)
 - [docs/FRONTEND_API_CONTRACT.md](docs/FRONTEND_API_CONTRACT.md)
 - [docs/WORKFLOW_OPERATIONS_PLAYBOOK.md](docs/WORKFLOW_OPERATIONS_PLAYBOOK.md)
+- [docs/HOSTED_DEPLOYMENT_AND_GITHUB_SCOPE.md](docs/HOSTED_DEPLOYMENT_AND_GITHUB_SCOPE.md)
 - [docs/GITHUB_DEV_DIFF_REVIEW_2026-04-10.md](docs/GITHUB_DEV_DIFF_REVIEW_2026-04-10.md)
 - [docs/THINKING_MACHINES_LAB_CANONICAL_ASSET.md](docs/THINKING_MACHINES_LAB_CANONICAL_ASSET.md)
 - [docs/THINKING_MACHINES_LAB_VALIDATION_2026-04-08.md](docs/THINKING_MACHINES_LAB_VALIDATION_2026-04-08.md)
@@ -24,6 +25,7 @@
 - [contracts/frontend_api_contract.ts](contracts/frontend_api_contract.ts)
 - [contracts/frontend_api_adapter.ts](contracts/frontend_api_adapter.ts)
 - [contracts/frontend_react_hooks.example.tsx](contracts/frontend_react_hooks.example.tsx)
+- [contracts/frontend_runtime_dashboard.example.tsx](contracts/frontend_runtime_dashboard.example.tsx)
 
 历史 handoff / retrospective / todo 文档仍保留，但已经在 [docs/INDEX.md](docs/INDEX.md) 中标记为 reference-only。
 
@@ -98,6 +100,15 @@
     - `write-worker-daemon-systemd-unit` 可生成 systemd unit
     - `show-daemon-status` 可读取 `runtime/services/<service_name>/status.json`
 - 支持异步 workflow，显式区分 `planning`、`acquiring`、`retrieving`
+- 支持 staged workflow feedback：
+  - `GET /api/jobs/{job_id}/progress` 与 `GET /api/jobs/{job_id}/results` 现在都会返回 `workflow_stage_summaries`
+  - 当前稳定阶段顺序为：
+    - `linkedin_stage_1`
+    - `stage_1_preview`
+    - `public_web_stage_2`
+    - `stage_2_final`
+  - snapshot 内也会落盘到 `runtime/company_assets/{company}/{snapshot_id}/workflow_stage_summaries/`
+  - 前端无需再自行读取 snapshot 文件即可渲染阶段漏斗 / 阶段卡片
 - 支持 query dispatch 去重与分发：
   - 对完全相同请求可 `join inflight`（加入在途）或 `reuse completed`（复用已完成结果）
   - 支持 `requester_id / tenant_id / idempotency_key` 作用域隔离，避免多用户重复消耗
@@ -239,7 +250,9 @@
   - sync summary 会给出 progress / skipped_existing 统计
   - 本地会生成 `runtime/object_sync/bundle_index.json` 与 `runtime/object_sync/runs/*.json`
   - 云端会同步写入 `indexes/bundle_index.json` 与 `indexes/sync_runs/*.json`
-  - Thinking Machines Lab handoff bundle 已完成真实 `R2 upload -> R2 download -> local restore`
+  - 当前主路径按 `S3-compatible object storage` 设计
+  - 历史已验证 `R2 upload -> download -> local restore`
+  - 当前默认部署目标已切到阿里云 OSS
 - 已记录高质量 HarvestAPI 接入策略，供后续 Thinking Machines Lab 等小公司端到端验证使用：
   - intent-driven LinkedIn search，用于按用户意图定向检索在职 / 已离职 / 特定岗位人群
   - company employees actor，用于获取小中型公司的高质量 roster
@@ -299,10 +312,11 @@ sourcing-ai-agent/
 7. [docs/DATAFORSEO_PLAYBOOK.md](docs/DATAFORSEO_PLAYBOOK.md)
 8. [docs/TERMINAL_WORKFLOW.md](docs/TERMINAL_WORKFLOW.md)
 9. [docs/FRONTEND_API_CONTRACT.md](docs/FRONTEND_API_CONTRACT.md)
-10. [docs/QUERY_GUARDRAILS.md](docs/QUERY_GUARDRAILS.md)
-11. [docs/THINKING_MACHINES_LAB_CANONICAL_ASSET.md](docs/THINKING_MACHINES_LAB_CANONICAL_ASSET.md)
-12. [docs/THINKING_MACHINES_LAB_VALIDATION_2026-04-08.md](docs/THINKING_MACHINES_LAB_VALIDATION_2026-04-08.md)
-13. 需要追旧决策或恢复旧环境时，再看 `docs/` 下的 dated reference 文档
+10. [docs/HOSTED_DEPLOYMENT_AND_GITHUB_SCOPE.md](docs/HOSTED_DEPLOYMENT_AND_GITHUB_SCOPE.md)
+11. [docs/QUERY_GUARDRAILS.md](docs/QUERY_GUARDRAILS.md)
+12. [docs/THINKING_MACHINES_LAB_CANONICAL_ASSET.md](docs/THINKING_MACHINES_LAB_CANONICAL_ASSET.md)
+13. [docs/THINKING_MACHINES_LAB_VALIDATION_2026-04-08.md](docs/THINKING_MACHINES_LAB_VALIDATION_2026-04-08.md)
+14. 需要追旧决策或恢复旧环境时，再看 `docs/` 下的 dated reference 文档
 
 ## GitHub Sync Boundary
 
@@ -321,9 +335,51 @@ sourcing-ai-agent/
 
 如果后续要在新的电脑上继续做 live test，需要单独恢复 secrets，以及按需恢复高价值 runtime 资产。
 
+准备推送 GitHub 时，建议用下面的最小上传范围来降低部署成本：
+
+- 建议上传：
+  - `src/`
+  - `tests/`
+  - `docs/`
+  - `contracts/`
+  - `configs/*.example.json`
+  - `README.md` / `PROGRESS.md` / `pyproject.toml`
+- 不建议上传：
+  - `runtime/**`
+  - `runtime/secrets/**`
+  - `runtime/company_assets/**`
+  - `runtime/live_tests/**`
+  - `runtime/provider_cache/**`
+  - 本机环境目录（例如 `.venv/`、`node_modules/`、playwright browsers 缓存）
+  - 临时 live smoke 配置（`configs/live_smoke_*.json`、`configs/live_test_*.json`）
+
 跨设备恢复的详细设计见：
 
 [docs/CROSS_DEVICE_SYNC.md](docs/CROSS_DEVICE_SYNC.md)
+
+## Hosted 默认执行路径（云端）
+
+云端默认路径应是 `serve` 托管 workflow，而不是手工运行 detached 脚本去“补一把 execute-workflow”。
+
+推荐常驻进程：
+
+- API: `PYTHONPATH=src python3 -m sourcing_agent.cli serve --host 0.0.0.0 --port 8765`
+- Recovery daemon: `PYTHONPATH=src python3 -m sourcing_agent.cli run-worker-daemon-service --poll-seconds 5`
+
+推荐健康检查：
+
+- `GET /health`
+- `GET /api/providers/health`
+- `GET /api/workers/daemon/status`
+- `GET /api/runtime/health`
+
+前端只应该通过 API 消费 workflow 状态，不应直接读取 `runtime/company_assets/*` 或 `runtime/jobs/*` 文件。
+阶段反馈统一使用 `workflow_stage_summaries`（见 `progress/results` contract）。
+
+完整部署流程见：
+
+- [docs/SERVER_RUNTIME_BOOTSTRAP.md](docs/SERVER_RUNTIME_BOOTSTRAP.md)
+- [docs/WORKFLOW_OPERATIONS_PLAYBOOK.md](docs/WORKFLOW_OPERATIONS_PLAYBOOK.md)
 
 ## 快速开始
 
@@ -367,6 +423,15 @@ PYTHONPATH=src python3 -m sourcing_agent.cli test-model
 PYTHONPATH=src python3 -m sourcing_agent.cli configure-confidence-policy --file configs/confidence_policy_freeze.example.json
 PYTHONPATH=src python3 -m sourcing_agent.cli review-suggestion --file configs/suggestion_review_apply.example.json
 PYTHONPATH=src python3 -m sourcing_agent.cli serve --port 8765
+```
+
+云端部署时，优先使用这组最小命令，而不是一次性执行上面全部命令：
+
+```bash
+cd "sourcing-ai-agent"
+PYTHONPATH=src python3 -m sourcing_agent.cli test-model
+PYTHONPATH=src python3 -m sourcing_agent.cli serve --host 0.0.0.0 --port 8765
+PYTHONPATH=src python3 -m sourcing_agent.cli run-worker-daemon-service --poll-seconds 5
 ```
 
 ## 模型配置

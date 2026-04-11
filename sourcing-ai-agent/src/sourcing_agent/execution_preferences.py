@@ -8,12 +8,15 @@ EXECUTION_PREFERENCE_FIELDS = {
     "confirmed_company_scope",
     "extra_source_families",
     "allow_high_cost_sources",
+    "require_stage2_confirmation",
     "precision_recall_bias",
     "acquisition_strategy_override",
     "use_company_employees_lane",
     "force_fresh_run",
     "reuse_existing_roster",
     "run_former_search_seed",
+    "reuse_snapshot_id",
+    "reuse_baseline_job_id",
 }
 
 EXECUTION_PREFERENCE_ALIASES = {
@@ -22,6 +25,9 @@ EXECUTION_PREFERENCE_ALIASES = {
     "scope": "confirmed_company_scope",
     "source_families": "extra_source_families",
     "high_cost_sources_approved": "allow_high_cost_sources",
+    "pause_before_stage2_analysis": "require_stage2_confirmation",
+    "require_stage2_approval": "require_stage2_confirmation",
+    "wait_for_stage2_approval": "require_stage2_confirmation",
     "force_company_employees": "use_company_employees_lane",
     "allow_company_employee_api": "use_company_employees_lane",
     "require_fresh_snapshot": "force_fresh_run",
@@ -76,6 +82,7 @@ def normalize_execution_preferences(
             continue
         if key in {
             "allow_high_cost_sources",
+            "require_stage2_confirmation",
             "use_company_employees_lane",
             "force_fresh_run",
             "reuse_existing_roster",
@@ -84,6 +91,11 @@ def normalize_execution_preferences(
             value = _coerce_bool(raw_value)
             if value is not None:
                 normalized[key] = value
+            continue
+        if key in {"reuse_snapshot_id", "reuse_baseline_job_id"}:
+            value = str(raw_value or "").strip()
+            if value:
+                normalized[key] = value[:120]
             continue
         if key == "precision_recall_bias":
             value = _normalize_precision_recall_bias(raw_value)
@@ -120,6 +132,9 @@ def infer_execution_preferences_from_text(
     allow_high_cost = _infer_allow_high_cost(lower)
     if allow_high_cost is not None:
         prefs["allow_high_cost_sources"] = allow_high_cost
+    require_stage2_confirmation = _infer_require_stage2_confirmation(lower)
+    if require_stage2_confirmation is not None:
+        prefs["require_stage2_confirmation"] = require_stage2_confirmation
     precision_recall_bias = _infer_precision_recall_bias(lower)
     if precision_recall_bias:
         prefs["precision_recall_bias"] = precision_recall_bias
@@ -390,6 +405,27 @@ def _infer_precision_recall_bias(lower: str) -> str:
     if any(token in lower for token in ["balanced", "平衡", "均衡"]):
         return "balanced"
     return ""
+
+
+def _infer_require_stage2_confirmation(lower: str) -> bool | None:
+    if any(
+        token in lower
+        for token in [
+            "wait for approval",
+            "wait for my approval",
+            "wait for my review",
+            "after preview wait",
+            "preview first",
+            "等我确认",
+            "等我审批",
+            "等我review",
+            "先给我preview",
+            "先给我预览",
+            "先别继续",
+        ]
+    ):
+        return True
+    return None
 
 
 def _infer_confirmed_scope(text: str, lower: str, *, target_company: str) -> list[str]:

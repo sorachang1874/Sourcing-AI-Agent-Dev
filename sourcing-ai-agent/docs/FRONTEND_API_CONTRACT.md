@@ -15,6 +15,7 @@
 - `contracts/frontend_api_contract.schema.json`
 - `contracts/frontend_api_adapter.ts`
 - `contracts/frontend_react_hooks.example.tsx`
+- `contracts/frontend_runtime_dashboard.example.tsx`
 
 推荐用法：
 
@@ -22,6 +23,7 @@
 - 若想直接获得 typed `fetch` 调用示例，可复用 `frontend_api_adapter.ts`
 - 若前端是 React，可直接参考 `frontend_react_hooks.example.tsx`
   - 已示例 `useSourcingPlan / useReviewInstructionPreview / useStartWorkflow / useJobProgress / useJobResults / useWorkflowRun`
+  - 也可直接复用 `getOrderedWorkflowStageSummaries / getWorkflowStageDisplayLabel`
 - 后端或集成测试若需要做 response 校验，可按 JSON Schema 中的 `$defs` 引用：
   - `#/$defs/PlanResponse`
   - `#/$defs/ReviewInstructionCompileResponse`
@@ -55,7 +57,12 @@ console.log(plan.intent_rewrite.request.summary);
 React hook 最小示例：
 
 ```tsx
-import { useSourcingPlan, useWorkflowRun } from "../contracts/frontend_react_hooks.example";
+import {
+  getOrderedWorkflowStageSummaries,
+  getWorkflowStageDisplayLabel,
+  useSourcingPlan,
+  useWorkflowRun,
+} from "../contracts/frontend_react_hooks.example";
 
 export function SourcingConsole() {
   const plan = useSourcingPlan({
@@ -84,6 +91,10 @@ export function SourcingConsole() {
     });
   }
 
+  const stageSummaries = getOrderedWorkflowStageSummaries(
+    workflow.results.data ?? workflow.progress.data,
+  );
+
   return (
     <section>
       <button onClick={handlePlan} disabled={plan.loading}>
@@ -95,6 +106,13 @@ export function SourcingConsole() {
       <pre>{plan.data?.intent_rewrite.request.summary}</pre>
       <pre>{workflow.progress.data?.current_message}</pre>
       <pre>{workflow.results.data?.results?.length ?? 0}</pre>
+      <ul>
+        {stageSummaries.map((item) => (
+          <li key={item.stage}>
+            {getWorkflowStageDisplayLabel(item.stage)}: {item.status ?? "unknown"}
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
@@ -107,6 +125,21 @@ export function SourcingConsole() {
 - `intent_brief` 和 `intent_rewrite` 都应被视为产品语义输出，而不是调试字段
 - `progress` 接口负责阶段状态，不负责重复返回完整语义解释
 - 前端应缓存最早拿到的 `intent_rewrite`，并在 progress / results 页继续复用
+- 前端只能消费 API contract，不直接读取 runtime 文件
+  - 不要扫描 `runtime/company_assets/*`
+  - 不要读取 `runtime/jobs/*`
+  - 不要将 snapshot 文件路径当成前端主数据源
+
+### 1.1 Runtime 边界（强约束）
+
+前端阶段卡片、漏斗、结果摘要统一读取：
+
+- `GET /api/jobs/{job_id}/progress`
+- `GET /api/jobs/{job_id}/results`
+- `workflow_stage_summaries`
+
+不要依赖 snapshot 内部文件（例如 `workflow_stage_summaries/*.json`）做页面逻辑。
+这些文件只用于后端审计/排障，不保证前端兼容性。
 
 ## 2. 核心对象
 
@@ -335,6 +368,7 @@ export function SourcingConsole() {
 - `progress.milestones`
 - `progress.worker_summary`
 - `progress.counters`
+- `workflow_stage_summaries`
 
 前端不应期待：
 
@@ -343,7 +377,15 @@ export function SourcingConsole() {
 推荐做法：
 
 - progress 页直接复用之前缓存的 `intent_rewrite`
+- progress 页直接读取 `workflow_stage_summaries` 渲染阶段卡片/漏斗
 - 若用户刷新页面且本地状态丢失，可再调用 `GET /api/jobs/{job_id}/results`
+
+当前阶段顺序固定为：
+
+- `linkedin_stage_1`
+- `stage_1_preview`
+- `public_web_stage_2`
+- `stage_2_final`
 
 ### 4.5 Results Page
 
@@ -359,6 +401,7 @@ export function SourcingConsole() {
 - `agent_runtime_session`
 - `agent_workers`
 - `intent_rewrite`
+- `workflow_stage_summaries`
 
 用途分工：
 
@@ -372,6 +415,9 @@ export function SourcingConsole() {
   - 候选人结果
 - `manual_review_items`
   - 边界项
+- `workflow_stage_summaries`
+  - 阶段完成态、阶段摘要、阶段文件路径
+  - 前端应该优先用这个字段，而不是自己去读 snapshot 文件
 
 ### 4.6 Query Dispatch Audit
 
@@ -417,6 +463,11 @@ type WorkflowUiState = {
       rewrite: Record<string, unknown>
     }
   }
+  workflowStageSummaries?: {
+    directory?: string
+    stage_order: string[]
+    summaries: Record<string, Record<string, unknown>>
+  }
 }
 ```
 
@@ -430,8 +481,10 @@ type WorkflowUiState = {
    - 写入 `jobId`
 4. `GET /api/jobs/{job_id}/progress`
    - 只刷新状态字段，不覆盖 `intentRewrite`
+   - 刷新 `workflowStageSummaries`
 5. `GET /api/jobs/{job_id}/results`
    - 若需要，以结果页返回的 `intentRewrite` 做最终校正
+   - 用结果页返回的 `workflowStageSummaries` 做最终阶段摘要校正
 
 ## 6. 推荐的渲染方式
 
@@ -511,6 +564,7 @@ type WorkflowUiState = {
 - `blocked_task`
 - `current_message`
 - `progress`
+- `workflow_stage_summaries`
 
 ### `GET /api/jobs/{job_id}/results`
 
@@ -518,6 +572,7 @@ type WorkflowUiState = {
 
 - `job`
 - `results`
+- `workflow_stage_summaries`
 - `manual_review_items`
 - `intent_rewrite`
 

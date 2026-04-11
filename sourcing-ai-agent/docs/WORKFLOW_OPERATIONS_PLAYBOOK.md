@@ -21,6 +21,31 @@ cd "sourcing-ai-agent"
 PYTHONPATH=src python3 -m sourcing_agent.cli run-worker-daemon-service --poll-seconds 5
 ```
 
+## 1.1 云端默认运行方式（推荐）
+
+默认应使用 hosted 路径：
+
+1. `serve` 常驻托管 API 与 workflow 调度
+2. `run-worker-daemon-service` 常驻推进 recoverable workers
+
+最小启动组合：
+
+```bash
+cd "sourcing-ai-agent"
+PYTHONPATH=src python3 -m sourcing_agent.cli test-model
+PYTHONPATH=src python3 -m sourcing_agent.cli serve --host 0.0.0.0 --port 8765
+PYTHONPATH=src python3 -m sourcing_agent.cli run-worker-daemon-service --poll-seconds 5
+```
+
+基础健康检查：
+
+- `GET /health`
+- `GET /api/providers/health`
+- `GET /api/workers/daemon/status`
+- `GET /api/runtime/health`
+
+不推荐把“手工 execute-workflow 续跑”作为常规流程；它应只用于排障。
+
 ## 2. CLI 标准交互
 
 ### 2.1 先做 plan（不执行真实采集）
@@ -81,8 +106,25 @@ PYTHONPATH=src python3 -m sourcing_agent.cli show-trace --job-id <job_id>
 建议优先观察：
 
 - `show-progress` 的 `stage / milestones / worker_summary`
+- `show-progress` 或 `GET /api/jobs/{job_id}/progress` 里的 `workflow_stage_summaries`
 - `show-workers` 的 `status`（`queued/running/blocked/completed`）
 - `show-job` 的 `summary` 与最终结果
+
+当前稳定阶段总结顺序：
+
+- `linkedin_stage_1`
+- `stage_1_preview`
+- `public_web_stage_2`
+- `stage_2_final`
+
+如果需要做前端阶段卡片或漏斗图，优先直接读取：
+
+- `GET /api/jobs/{job_id}/progress`
+- `GET /api/jobs/{job_id}/results`
+
+而不是自己扫描 snapshot 目录。snapshot 里的原始阶段文件现在仅作为运维/审计兜底，路径为：
+
+- `runtime/company_assets/{company}/{snapshot_id}/workflow_stage_summaries/`
 
 ### 3.2 API 侧（前端集成）
 
@@ -100,6 +142,7 @@ PYTHONPATH=src python3 -m sourcing_agent.cli show-trace --job-id <job_id>
 - `POST /api/plan`
 - `POST /api/plan/review`
 - `POST /api/workflows`
+- `POST /api/workers/cleanup`
 - `POST /api/workers/daemon/run-once`
 - `POST /api/workers/interrupt`
 
@@ -147,6 +190,30 @@ PYTHONPATH=src python3 -m sourcing_agent.cli run-worker-daemon-once --job-id <jo
 - `function_ids`
 - keyword shard 是否为方向词而不是泛化词
 
+### 5.3 历史 recoverable worker 残留
+
+如果 workflow 已经 `completed/failed/superseded`，但 `/api/runtime/health` 里仍有较多 `recoverable_worker_count`，先预览再清理：
+
+```bash
+PYTHONPATH=src python3 -m sourcing_agent.cli cleanup-recoverable-workers --dry-run
+```
+
+默认只会挑选“挂在 terminal workflow 下的 recoverable worker”。  
+确认后执行真实清理：
+
+```bash
+PYTHONPATH=src python3 -m sourcing_agent.cli cleanup-recoverable-workers \
+  --reason "Retired stale recoverable workers after workflow cleanup."
+```
+
+如需更精细控制，可加：
+
+- `--target-company Reflection AI`
+- `--parent-job-status completed`
+- `--parent-job-status failed`
+- `--job-id <job_id>`
+- `--lane-id exploration_specialist`
+
 ## 6. 推荐执行纪律
 
 1. 任何高成本 query 先走 plan-only。
@@ -154,6 +221,40 @@ PYTHONPATH=src python3 -m sourcing_agent.cli run-worker-daemon-once --job-id <jo
 3. workflow 统一走非阻塞 + daemon 恢复。
 4. 进度以 `show-progress` 为主，问题定位看 `show-workers/show-trace`。
 5. 对重复 query 统一检查 `query-dispatches`，不要盲目重跑。
+
+## 6.1 前端禁区（避免误用）
+
+前端只使用 API + contract，不直接读取 runtime 文件。
+
+- 应使用：
+  - `GET /api/jobs/{job_id}/progress`
+  - `GET /api/jobs/{job_id}/results`
+  - `workflow_stage_summaries`
+- 不应使用：
+  - `runtime/company_assets/{company}/{snapshot_id}/...`
+  - `runtime/jobs/{job_id}.json`
+
+原因：
+
+- runtime 文件结构是后端内部实现，可调整
+- `workflow_stage_summaries` 才是稳定 contract
+- 直接读 runtime 会导致前端在重构后失效
+
+## 6.2 GitHub 提交边界（部署成本）
+
+提交 GitHub 时建议只提交代码与文档，不提交 runtime 数据资产。
+
+- 建议提交：
+  - `src/` `tests/` `docs/` `contracts/`
+  - `configs/*.example.json`
+  - `README.md` `PROGRESS.md`
+- 不建议提交：
+  - `runtime/**`
+  - `runtime/secrets/**`
+  - `runtime/company_assets/**`
+  - `runtime/live_tests/**`
+  - `.venv/`、浏览器缓存、本机 vendor cache
+  - `configs/live_smoke_*.json`、`configs/live_test_*.json`
 
 ## 7. 采集并行策略（2026-04-10 更新）
 

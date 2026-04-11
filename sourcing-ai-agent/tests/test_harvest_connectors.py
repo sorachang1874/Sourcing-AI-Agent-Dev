@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from urllib import parse as urlparse
 
 from sourcing_agent.settings import HarvestActorSettings
 from sourcing_agent.connectors import CompanyIdentity
@@ -13,6 +14,7 @@ from sourcing_agent.harvest_connectors import (
     HarvestCompanyEmployeesConnector,
     HarvestProfileConnector,
     HarvestProfileSearchConnector,
+    _get_harvest_dataset_items,
     _apply_harvest_search_filters,
     _load_cached_harvest_payload,
     _profile_scraper_mode,
@@ -1183,6 +1185,138 @@ class HarvestConnectorTest(unittest.TestCase):
         self.assertEqual(result.checkpoint["dataset_id"], "dataset-123")
         self.assertEqual(result.checkpoint["status"], "submitted")
         self.assertEqual(result.artifacts[0].label, "run_post")
+
+    def test_get_harvest_dataset_items_paginates_large_dataset_download(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        observed_offsets: list[int] = []
+
+        def _fake_request(endpoint: str, *, payload=None, timeout=180):
+            query = urlparse.parse_qs(urlparse.urlparse(endpoint).query)
+            offset = int(query.get("offset", ["0"])[0])
+            limit = int(query.get("limit", ["0"])[0])
+            observed_offsets.append(offset)
+            self.assertEqual(limit, 100)
+            if offset == 0:
+                return [{"idx": index} for index in range(100)]
+            if offset == 100:
+                return [{"idx": index} for index in range(100, 200)]
+            if offset == 200:
+                return [{"idx": 200}]
+            return []
+
+        with patch("sourcing_agent.harvest_connectors._harvest_json_request", side_effect=_fake_request):
+            items = _get_harvest_dataset_items(
+                settings,
+                "dataset-large",
+                logical_name="harvest_company_employees",
+                run_id="run-large",
+                request_context={"requested_item_count": 2500},
+            )
+
+        self.assertEqual(len(items), 201)
+        self.assertEqual(observed_offsets, [0, 100, 200])
+
+    def test_get_harvest_dataset_items_retries_retryable_page_failure_before_succeeding(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        attempt_counter = {"count": 0}
+
+        def _fake_request(endpoint: str, *, payload=None, timeout=180):
+            attempt_counter["count"] += 1
+            if attempt_counter["count"] < 3:
+                raise RuntimeError("Harvest API request failed: IncompleteRead(2048 bytes read)")
+            return [{"idx": 1}]
+
+        with patch("sourcing_agent.harvest_connectors._harvest_json_request", side_effect=_fake_request):
+            items = _get_harvest_dataset_items(
+                settings,
+                "dataset-retryable",
+                logical_name="harvest_profile_scraper_batch",
+                run_id="run-retryable",
+                request_context={"requested_url_count": 50},
+            )
+
+        self.assertEqual(items, [{"idx": 1}])
+        self.assertEqual(attempt_counter["count"], 3)
+
+    def test_harvest_profile_batch_execute_with_checkpoint_preserves_run_on_retryable_dataset_download_failure(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        connector = HarvestProfileConnector(settings)
+        with tempfile.TemporaryDirectory() as tempdir:
+            snapshot_dir = Path(tempdir) / "runtime" / "company_assets" / "xai" / "snap-async-retry"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            with patch(
+                "sourcing_agent.harvest_connectors._load_cached_harvest_payload",
+                return_value=(None, None, None),
+            ), patch(
+                "sourcing_agent.harvest_connectors._submit_harvest_actor_run",
+                side_effect=AssertionError("existing run should be reused instead of resubmitted"),
+            ), patch(
+                "sourcing_agent.harvest_connectors._get_harvest_actor_run",
+                return_value={"data": {"id": "run-keep", "defaultDatasetId": "dataset-keep", "status": "SUCCEEDED"}},
+            ), patch(
+                "sourcing_agent.harvest_connectors._harvest_json_request",
+                side_effect=RuntimeError("Harvest API request failed: IncompleteRead(1787319 bytes read)"),
+            ):
+                result = connector.execute_batch_with_checkpoint(
+                    ["https://www.linkedin.com/in/jane-doe/"],
+                    snapshot_dir,
+                    checkpoint={"run_id": "run-keep", "dataset_id": "dataset-keep", "status": "running"},
+                )
+
+        self.assertTrue(result.pending)
+        self.assertEqual(result.checkpoint["run_id"], "run-keep")
+        self.assertEqual(result.checkpoint["dataset_id"], "dataset-keep")
+        self.assertEqual(result.checkpoint["status"], "dataset_download_retryable")
+        self.assertEqual(result.checkpoint["dataset_fetch_retry_count"], 1)
+        self.assertIn("will be retried", result.message)
+        self.assertTrue(any(artifact.label == "dataset_items_retryable_error" for artifact in result.artifacts))
+
+    def test_run_harvest_actor_prefers_async_for_large_requests(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full", max_paid_items=2500)
+        payload = {
+            "companies": ["https://www.linkedin.com/company/google/"],
+            "takePages": 100,
+            "maxItems": 2500,
+        }
+        with patch(
+            "sourcing_agent.harvest_connectors._run_harvest_actor_sync_request",
+            side_effect=AssertionError("large request should skip sync path"),
+        ), patch(
+            "sourcing_agent.harvest_connectors._submit_harvest_actor_run",
+            return_value={"data": {"id": "run-async", "defaultDatasetId": "dataset-async", "status": "SUCCEEDED"}},
+        ), patch(
+            "sourcing_agent.harvest_connectors._get_harvest_dataset_items",
+            return_value=[{"idx": 1}],
+        ) as dataset_mock:
+            from sourcing_agent.harvest_connectors import _run_harvest_actor
+
+            body = _run_harvest_actor(settings, payload)
+
+        self.assertEqual(body, [{"idx": 1}])
+        self.assertEqual(dataset_mock.call_count, 1)
+
+    def test_run_harvest_actor_falls_back_to_async_when_sync_returns_none(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full", max_paid_items=25)
+        payload = {
+            "urls": ["https://www.linkedin.com/in/jane-doe/"],
+            "profileScraperMode": "Profile details no email ($4 per 1k)",
+        }
+        with patch(
+            "sourcing_agent.harvest_connectors._run_harvest_actor_sync_request",
+            return_value=None,
+        ), patch(
+            "sourcing_agent.harvest_connectors._submit_harvest_actor_run",
+            return_value={"data": {"id": "run-fallback", "defaultDatasetId": "dataset-fallback", "status": "SUCCEEDED"}},
+        ), patch(
+            "sourcing_agent.harvest_connectors._get_harvest_dataset_items",
+            return_value=[{"idx": 1}],
+        ) as dataset_mock:
+            from sourcing_agent.harvest_connectors import _run_harvest_actor
+
+            body = _run_harvest_actor(settings, payload)
+
+        self.assertEqual(body, [{"idx": 1}])
+        self.assertEqual(dataset_mock.call_count, 1)
 
     def test_harvest_company_execute_with_checkpoint_polls_and_caches_dataset(self) -> None:
         settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="short")

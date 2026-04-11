@@ -15,14 +15,44 @@ from .request_matching import MATCH_THRESHOLD, request_family_score, request_fam
 from .worker_scheduler import effective_worker_status, wait_stage
 
 
+def _json_safe_payload(value: Any) -> Any:
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, datetime):
+        return value.isoformat()
+    to_record = getattr(value, "to_record", None)
+    if callable(to_record):
+        return _json_safe_payload(to_record())
+    if isinstance(value, dict):
+        return {
+            str(key): _json_safe_payload(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, (list, tuple, set)):
+        return [_json_safe_payload(item) for item in value]
+    return value
+
+
 class SQLiteStore:
     def __init__(self, db_path: str | Path) -> None:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
-        self._connection = sqlite3.connect(self.db_path, check_same_thread=False)
+        self._connection = sqlite3.connect(
+            self.db_path,
+            check_same_thread=False,
+            timeout=60.0,
+        )
         self._connection.row_factory = sqlite3.Row
+        self._configure_connection()
         self.init_schema()
+
+    def _configure_connection(self) -> None:
+        with self._lock:
+            self._connection.execute("PRAGMA journal_mode=WAL")
+            self._connection.execute("PRAGMA synchronous=NORMAL")
+            self._connection.execute("PRAGMA busy_timeout = 60000")
+            self._connection.execute("PRAGMA foreign_keys = ON")
 
     def init_schema(self) -> None:
         with self._lock, self._connection:
@@ -332,6 +362,15 @@ class SQLiteStore:
                     UNIQUE(job_id, lane_id, worker_key)
                 );
 
+                CREATE TABLE IF NOT EXISTS workflow_job_leases (
+                    job_id TEXT PRIMARY KEY,
+                    lease_owner TEXT NOT NULL,
+                    lease_token TEXT NOT NULL,
+                    lease_expires_at TEXT NOT NULL,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
                 CREATE TABLE IF NOT EXISTS query_dispatches (
                     dispatch_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     target_company TEXT,
@@ -463,6 +502,9 @@ class SQLiteStore:
 
                 CREATE INDEX IF NOT EXISTS idx_agent_worker_runs_job
                     ON agent_worker_runs (job_id, lane_id, worker_id);
+
+                CREATE INDEX IF NOT EXISTS idx_workflow_job_leases_expires
+                    ON workflow_job_leases (lease_expires_at);
 
                 CREATE INDEX IF NOT EXISTS idx_linkedin_profile_registry_status
                     ON linkedin_profile_registry (status, updated_at);
@@ -891,9 +933,9 @@ class SQLiteStore:
         tenant_id: str = "",
         idempotency_key: str = "",
     ) -> None:
-        summary_json = json.dumps(summary_payload or {}, ensure_ascii=False)
-        request_json = json.dumps(request_payload, ensure_ascii=False)
-        plan_json = json.dumps(plan_payload or {}, ensure_ascii=False)
+        summary_json = json.dumps(_json_safe_payload(summary_payload or {}), ensure_ascii=False)
+        request_json = json.dumps(_json_safe_payload(request_payload), ensure_ascii=False)
+        plan_json = json.dumps(_json_safe_payload(plan_payload or {}), ensure_ascii=False)
         request_sig = request_signature(request_payload)
         request_family_sig = request_family_signature(request_payload)
         requester_id_value = str(requester_id or "").strip()
@@ -956,7 +998,8 @@ class SQLiteStore:
         detail: str,
         payload: dict[str, Any] | None = None,
     ) -> None:
-        payload_json = json.dumps(payload or {}, ensure_ascii=False)
+        payload_dict = _json_safe_payload(dict(payload or {}))
+        payload_json = json.dumps(payload_dict, ensure_ascii=False)
         with self._lock, self._connection:
             self._connection.execute(
                 """
@@ -965,6 +1008,43 @@ class SQLiteStore:
                 """,
                 (job_id, stage, status, detail, payload_json),
             )
+            if stage in {"runtime_heartbeat", "runtime_control"}:
+                self._compact_runtime_job_events_locked(job_id=job_id, stage=stage, payload=payload_dict)
+
+    def _compact_runtime_job_events_locked(self, *, job_id: str, stage: str, payload: dict[str, Any]) -> None:
+        normalized_job_id = str(job_id or "").strip()
+        normalized_stage = str(stage or "").strip()
+        if not normalized_job_id or normalized_stage not in {"runtime_heartbeat", "runtime_control"}:
+            return
+        grouping_key_name = "source" if normalized_stage == "runtime_heartbeat" else "control"
+        keep_latest = 12 if normalized_stage == "runtime_heartbeat" else 8
+        grouping_value = str(payload.get(grouping_key_name) or "").strip()
+        rows = self._connection.execute(
+            """
+            SELECT event_id, payload_json
+            FROM job_events
+            WHERE job_id = ? AND stage = ?
+            ORDER BY event_id DESC
+            """,
+            (normalized_job_id, normalized_stage),
+        ).fetchall()
+        matched_ids: list[int] = []
+        for row in rows:
+            try:
+                row_payload = dict(json.loads(row["payload_json"] or "{}"))
+            except (TypeError, ValueError, json.JSONDecodeError):
+                row_payload = {}
+            row_grouping_value = str(row_payload.get(grouping_key_name) or "").strip()
+            if row_grouping_value != grouping_value:
+                continue
+            matched_ids.append(int(row["event_id"] or 0))
+        if len(matched_ids) <= keep_latest:
+            return
+        delete_ids = matched_ids[keep_latest:]
+        self._connection.executemany(
+            "DELETE FROM job_events WHERE event_id = ?",
+            [(event_id,) for event_id in delete_ids if event_id > 0],
+        )
 
     def replace_job_results(self, job_id: str, results: list[dict[str, Any]]) -> None:
         with self._lock, self._connection:
@@ -997,6 +1077,65 @@ class SQLiteStore:
         if row is None:
             return None
         return self._job_from_row(row)
+
+    def list_stale_workflow_jobs_in_acquiring(
+        self,
+        *,
+        statuses: list[str] | None = None,
+        stale_after_seconds: int = 60,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        normalized_statuses = [
+            str(item or "").strip().lower()
+            for item in list(statuses or ["running", "blocked"])
+            if str(item or "").strip()
+        ]
+        if not normalized_statuses:
+            normalized_statuses = ["running", "blocked"]
+        placeholders = ",".join("?" for _ in normalized_statuses)
+        clauses = [
+            "job_type = 'workflow'",
+            "stage = 'acquiring'",
+            f"lower(status) IN ({placeholders})",
+        ]
+        params: list[Any] = list(normalized_statuses)
+        normalized_stale_after = int(stale_after_seconds or 0)
+        if normalized_stale_after > 0:
+            clauses.append("datetime(updated_at) <= datetime('now', ?)")
+            params.append(f"-{normalized_stale_after} seconds")
+        query = (
+            f"SELECT * FROM jobs WHERE {' AND '.join(clauses)} "
+            "ORDER BY updated_at ASC, created_at ASC LIMIT ?"
+        )
+        params.append(max(1, int(limit or 100)))
+        with self._lock:
+            rows = self._connection.execute(query, tuple(params)).fetchall()
+        return [self._job_from_row(row) for row in rows]
+
+    def list_stale_workflow_jobs_in_queue(
+        self,
+        *,
+        stale_after_seconds: int = 60,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        clauses = [
+            "job_type = 'workflow'",
+            "lower(status) = 'queued'",
+            "stage = 'planning'",
+        ]
+        params: list[Any] = []
+        normalized_stale_after = int(stale_after_seconds or 0)
+        if normalized_stale_after > 0:
+            clauses.append("datetime(updated_at) <= datetime('now', ?)")
+            params.append(f"-{normalized_stale_after} seconds")
+        query = (
+            f"SELECT * FROM jobs WHERE {' AND '.join(clauses)} "
+            "ORDER BY updated_at ASC, created_at ASC LIMIT ?"
+        )
+        params.append(max(1, int(limit or 100)))
+        with self._lock:
+            rows = self._connection.execute(query, tuple(params)).fetchall()
+        return [self._job_from_row(row) for row in rows]
 
     def get_job_results(self, job_id: str) -> list[dict[str, Any]]:
         rows = self._connection.execute(
@@ -1733,6 +1872,82 @@ class SQLiteStore:
             rows = self._connection.execute(query, tuple(params)).fetchall()
         return [self._agent_worker_from_row(row) for row in rows]
 
+    def retire_agent_workers(
+        self,
+        *,
+        worker_ids: list[int],
+        status: str = "cancelled",
+        reason: str = "",
+        cleanup_metadata: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        normalized_worker_ids = [
+            int(worker_id)
+            for worker_id in list(worker_ids or [])
+            if int(worker_id or 0) > 0
+        ]
+        if not normalized_worker_ids:
+            return []
+        normalized_status = str(status or "cancelled").strip().lower() or "cancelled"
+        normalized_reason = str(reason or "").strip()
+        cleanup_metadata = dict(cleanup_metadata or {})
+        immutable_terminal_statuses = {"completed", "cancelled", "canceled", "superseded"}
+
+        refreshed_ids: list[int] = []
+        with self._lock, self._connection:
+            for worker_id in normalized_worker_ids:
+                row = self._connection.execute(
+                    "SELECT * FROM agent_worker_runs WHERE worker_id = ? LIMIT 1",
+                    (worker_id,),
+                ).fetchone()
+                if row is None:
+                    continue
+                current = self._agent_worker_from_row(row)
+                current_status = str(current.get("status") or "").strip().lower()
+                if current_status in immutable_terminal_statuses:
+                    refreshed_ids.append(worker_id)
+                    continue
+
+                metadata = dict(current.get("metadata") or {})
+                cleanup_payload = dict(metadata.get("cleanup") or {})
+                cleanup_payload.update(
+                    {
+                        "reason": normalized_reason,
+                        "status": normalized_status,
+                        "cleaned_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
+                cleanup_payload.update(cleanup_metadata)
+                metadata["cleanup"] = cleanup_payload
+
+                output = dict(current.get("output") or {})
+                output["cleanup"] = cleanup_payload
+
+                self._connection.execute(
+                    """
+                    UPDATE agent_worker_runs
+                    SET status = ?,
+                        output_json = ?,
+                        metadata_json = ?,
+                        lease_owner = NULL,
+                        lease_expires_at = NULL,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE worker_id = ?
+                    """,
+                    (
+                        normalized_status,
+                        json.dumps(output, ensure_ascii=False),
+                        json.dumps(metadata, ensure_ascii=False),
+                        worker_id,
+                    ),
+                )
+                refreshed_ids.append(worker_id)
+
+        return [
+            worker
+            for worker_id in refreshed_ids
+            if (worker := self.get_agent_worker(worker_id=worker_id)) is not None
+        ]
+
     def claim_agent_worker(
         self,
         worker_id: int,
@@ -1759,6 +1974,167 @@ class SQLiteStore:
         if not changed:
             return None
         return self.get_agent_worker(worker_id=worker_id)
+
+    def acquire_workflow_job_lease(
+        self,
+        job_id: str,
+        *,
+        lease_owner: str,
+        lease_seconds: int = 900,
+        lease_token: str = "",
+    ) -> dict[str, Any]:
+        normalized_job_id = str(job_id or "").strip()
+        normalized_owner = str(lease_owner or "").strip()
+        if not normalized_job_id or not normalized_owner:
+            return {
+                "job_id": normalized_job_id,
+                "lease_owner": "",
+                "lease_token": "",
+                "lease_expires_at": "",
+                "expired": True,
+                "acquired": False,
+            }
+        normalized_token = str(lease_token or "").strip() or sha1(
+            f"{normalized_job_id}:{normalized_owner}".encode("utf-8")
+        ).hexdigest()
+        ttl_seconds = max(5, int(lease_seconds or 0))
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO workflow_job_leases (
+                    job_id,
+                    lease_owner,
+                    lease_token,
+                    lease_expires_at
+                ) VALUES (?, ?, ?, datetime('now', ?))
+                ON CONFLICT(job_id) DO UPDATE SET
+                    lease_owner = excluded.lease_owner,
+                    lease_token = excluded.lease_token,
+                    lease_expires_at = excluded.lease_expires_at,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE datetime(workflow_job_leases.lease_expires_at) <= datetime('now')
+                   OR workflow_job_leases.lease_owner = excluded.lease_owner
+                   OR workflow_job_leases.lease_token = excluded.lease_token
+                """,
+                (
+                    normalized_job_id,
+                    normalized_owner,
+                    normalized_token,
+                    f"+{ttl_seconds} seconds",
+                ),
+            )
+            changed = int(self._connection.execute("SELECT changes()").fetchone()[0] or 0)
+            lease_row = self._connection.execute(
+                """
+                SELECT * FROM workflow_job_leases
+                WHERE job_id = ?
+                """,
+                (normalized_job_id,),
+            ).fetchone()
+        payload = self._workflow_job_lease_from_row(lease_row)
+        return {
+            **payload,
+            "acquired": bool(
+                changed
+                and payload
+                and str(payload.get("lease_owner") or "") == normalized_owner
+                and str(payload.get("lease_token") or "") == normalized_token
+            ),
+        }
+
+    def get_workflow_job_lease(self, job_id: str) -> dict[str, Any] | None:
+        normalized_job_id = str(job_id or "").strip()
+        if not normalized_job_id:
+            return None
+        with self._lock:
+            row = self._connection.execute(
+                """
+                SELECT * FROM workflow_job_leases
+                WHERE job_id = ?
+                """,
+                (normalized_job_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return self._workflow_job_lease_from_row(row)
+
+    def renew_workflow_job_lease(
+        self,
+        job_id: str,
+        *,
+        lease_owner: str,
+        lease_seconds: int,
+        lease_token: str = "",
+    ) -> dict[str, Any] | None:
+        normalized_job_id = str(job_id or "").strip()
+        normalized_owner = str(lease_owner or "").strip()
+        normalized_token = str(lease_token or "").strip()
+        if not normalized_job_id or not normalized_owner:
+            return None
+        clauses = ["job_id = ?", "lease_owner = ?"]
+        params: list[Any] = [f"+{max(5, int(lease_seconds or 0))} seconds", normalized_job_id, normalized_owner]
+        if normalized_token:
+            clauses.append("lease_token = ?")
+            params.append(normalized_token)
+        with self._lock, self._connection:
+            self._connection.execute(
+                f"""
+                UPDATE workflow_job_leases
+                SET lease_expires_at = datetime('now', ?),
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE {' AND '.join(clauses)}
+                """,
+                tuple(params),
+            )
+        return self.get_workflow_job_lease(normalized_job_id)
+
+    def release_workflow_job_lease(
+        self,
+        job_id: str,
+        *,
+        lease_owner: str = "",
+        lease_token: str = "",
+    ) -> None:
+        normalized_job_id = str(job_id or "").strip()
+        normalized_owner = str(lease_owner or "").strip()
+        normalized_token = str(lease_token or "").strip()
+        if not normalized_job_id:
+            return
+        with self._lock, self._connection:
+            if normalized_owner and normalized_token:
+                self._connection.execute(
+                    """
+                    DELETE FROM workflow_job_leases
+                    WHERE job_id = ? AND lease_owner = ? AND lease_token = ?
+                    """,
+                    (normalized_job_id, normalized_owner, normalized_token),
+                )
+                return
+            if normalized_owner:
+                self._connection.execute(
+                    """
+                    DELETE FROM workflow_job_leases
+                    WHERE job_id = ? AND lease_owner = ?
+                    """,
+                    (normalized_job_id, normalized_owner),
+                )
+                return
+            if normalized_token:
+                self._connection.execute(
+                    """
+                    DELETE FROM workflow_job_leases
+                    WHERE job_id = ? AND lease_token = ?
+                    """,
+                    (normalized_job_id, normalized_token),
+                )
+                return
+            self._connection.execute(
+                """
+                DELETE FROM workflow_job_leases
+                WHERE job_id = ?
+                """,
+                (normalized_job_id,),
+            )
 
     def renew_agent_worker_lease(
         self,
@@ -1886,11 +2262,26 @@ class SQLiteStore:
             rows = self._connection.execute(query, tuple(params)).fetchall()
         return [self._agent_worker_from_row(row) for row in rows]
 
-    def list_job_events(self, job_id: str) -> list[dict[str, Any]]:
-        rows = self._connection.execute(
-            "SELECT * FROM job_events WHERE job_id = ? ORDER BY event_id",
-            (job_id,),
-        ).fetchall()
+    def list_job_events(
+        self,
+        job_id: str,
+        *,
+        stage: str = "",
+        limit: int = 0,
+        descending: bool = False,
+    ) -> list[dict[str, Any]]:
+        clauses = ["job_id = ?"]
+        params: list[Any] = [job_id]
+        if stage:
+            clauses.append("stage = ?")
+            params.append(stage)
+        order = "DESC" if descending else "ASC"
+        query = f"SELECT * FROM job_events WHERE {' AND '.join(clauses)} ORDER BY event_id {order}"
+        normalized_limit = int(limit or 0)
+        if normalized_limit > 0:
+            query += " LIMIT ?"
+            params.append(normalized_limit)
+        rows = self._connection.execute(query, tuple(params)).fetchall()
         return [
             {
                 "event_id": row["event_id"],
@@ -1902,6 +2293,86 @@ class SQLiteStore:
             }
             for row in rows
         ]
+
+    def list_jobs(
+        self,
+        *,
+        job_type: str = "",
+        statuses: list[str] | None = None,
+        stages: list[str] | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if job_type:
+            clauses.append("job_type = ?")
+            params.append(job_type)
+        normalized_statuses = [str(item or "").strip().lower() for item in list(statuses or []) if str(item or "").strip()]
+        if normalized_statuses:
+            placeholders = ",".join("?" for _ in normalized_statuses)
+            clauses.append(f"lower(status) IN ({placeholders})")
+            params.extend(normalized_statuses)
+        normalized_stages = [str(item or "").strip().lower() for item in list(stages or []) if str(item or "").strip()]
+        if normalized_stages:
+            placeholders = ",".join("?" for _ in normalized_stages)
+            clauses.append(f"lower(stage) IN ({placeholders})")
+            params.extend(normalized_stages)
+        where_clause = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        query = (
+            f"SELECT * FROM jobs {where_clause} "
+            "ORDER BY datetime(updated_at) DESC, datetime(created_at) DESC LIMIT ?"
+        )
+        params.append(max(1, int(limit or 100)))
+        with self._lock:
+            rows = self._connection.execute(query, tuple(params)).fetchall()
+        return [self._job_from_row(row) for row in rows]
+
+    def summarize_jobs(
+        self,
+        *,
+        job_type: str = "",
+        statuses: list[str] | None = None,
+    ) -> dict[str, Any]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if job_type:
+            clauses.append("job_type = ?")
+            params.append(job_type)
+        normalized_statuses = [str(item or "").strip().lower() for item in list(statuses or []) if str(item or "").strip()]
+        if normalized_statuses:
+            placeholders = ",".join("?" for _ in normalized_statuses)
+            clauses.append(f"lower(status) IN ({placeholders})")
+            params.extend(normalized_statuses)
+        where_clause = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        query = (
+            "SELECT lower(status) AS status, lower(stage) AS stage, COUNT(*) AS count "
+            f"FROM jobs {where_clause} "
+            "GROUP BY lower(status), lower(stage)"
+        )
+        with self._lock:
+            rows = self._connection.execute(query, tuple(params)).fetchall()
+        by_status: dict[str, int] = {}
+        by_stage: dict[str, int] = {}
+        by_status_stage: dict[str, int] = {}
+        total = 0
+        for row in rows:
+            status_value = str(row["status"] or "").strip()
+            stage_value = str(row["stage"] or "").strip()
+            count_value = int(row["count"] or 0)
+            total += count_value
+            if status_value:
+                by_status[status_value] = int(by_status.get(status_value) or 0) + count_value
+            if stage_value:
+                by_stage[stage_value] = int(by_stage.get(stage_value) or 0) + count_value
+            key = f"{status_value}:{stage_value}".strip(":")
+            if key:
+                by_status_stage[key] = int(by_status_stage.get(key) or 0) + count_value
+        return {
+            "total": total,
+            "by_status": by_status,
+            "by_stage": by_stage,
+            "by_status_stage": by_status_stage,
+        }
 
     def find_latest_completed_job(
         self,
@@ -2065,6 +2536,195 @@ class SQLiteStore:
                 continue
             return payload
         return None
+
+    def find_latest_job_by_request_family_signature(
+        self,
+        *,
+        request_family_signature_value: str,
+        target_company: str = "",
+        statuses: list[str] | None = None,
+        requester_id: str = "",
+        tenant_id: str = "",
+        scope: str = "auto",
+        exclude_job_id: str = "",
+        limit: int = 200,
+    ) -> dict[str, Any] | None:
+        family_signature = str(request_family_signature_value or "").strip()
+        if not family_signature:
+            return None
+        normalized_statuses = [str(item or "").strip() for item in list(statuses or []) if str(item or "").strip()]
+        params: list[Any] = [family_signature]
+        clauses = ["request_family_signature = ?"]
+        if normalized_statuses:
+            placeholders = ",".join("?" for _ in normalized_statuses)
+            clauses.append(f"status IN ({placeholders})")
+            params.extend(normalized_statuses)
+        rows = self._connection.execute(
+            f"""
+            SELECT * FROM jobs
+            WHERE {" AND ".join(clauses)}
+            ORDER BY updated_at DESC, created_at DESC
+            LIMIT ?
+            """,
+            (*params, max(1, int(limit or 200))),
+        ).fetchall()
+        scope_mode = _normalize_dispatch_scope(scope, requester_id=requester_id, tenant_id=tenant_id)
+        normalized_target_company = str(target_company or "").strip().lower()
+        for row in rows:
+            payload = self._job_from_row(row)
+            job_id = str(payload.get("job_id") or "")
+            if exclude_job_id and job_id == exclude_job_id:
+                continue
+            request_payload = dict(payload.get("request") or {})
+            if normalized_target_company and str(request_payload.get("target_company") or "").strip().lower() != normalized_target_company:
+                continue
+            if not _job_matches_dispatch_scope(
+                payload,
+                scope=scope_mode,
+                requester_id=str(requester_id or "").strip(),
+                tenant_id=str(tenant_id or "").strip(),
+            ):
+                continue
+            return payload
+        return None
+
+    def list_jobs_by_request_signature(
+        self,
+        *,
+        request_signature_value: str,
+        target_company: str = "",
+        statuses: list[str] | None = None,
+        requester_id: str = "",
+        tenant_id: str = "",
+        scope: str = "auto",
+        exclude_job_id: str = "",
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        signature = str(request_signature_value or "").strip()
+        if not signature:
+            return []
+        normalized_statuses = [str(item or "").strip() for item in list(statuses or []) if str(item or "").strip()]
+        params: list[Any] = [signature]
+        clauses = ["request_signature = ?"]
+        if normalized_statuses:
+            placeholders = ",".join("?" for _ in normalized_statuses)
+            clauses.append(f"status IN ({placeholders})")
+            params.extend(normalized_statuses)
+        rows = self._connection.execute(
+            f"""
+            SELECT * FROM jobs
+            WHERE {" AND ".join(clauses)}
+            ORDER BY updated_at DESC, created_at DESC
+            LIMIT ?
+            """,
+            (*params, max(1, int(limit or 200))),
+        ).fetchall()
+        scope_mode = _normalize_dispatch_scope(scope, requester_id=requester_id, tenant_id=tenant_id)
+        normalized_target_company = str(target_company or "").strip().lower()
+        results: list[dict[str, Any]] = []
+        for row in rows:
+            payload = self._job_from_row(row)
+            job_id = str(payload.get("job_id") or "")
+            if exclude_job_id and job_id == exclude_job_id:
+                continue
+            request_payload = dict(payload.get("request") or {})
+            if normalized_target_company and str(request_payload.get("target_company") or "").strip().lower() != normalized_target_company:
+                continue
+            if not _job_matches_dispatch_scope(
+                payload,
+                scope=scope_mode,
+                requester_id=str(requester_id or "").strip(),
+                tenant_id=str(tenant_id or "").strip(),
+            ):
+                continue
+            results.append(payload)
+        return results
+
+    def supersede_workflow_job(
+        self,
+        *,
+        job_id: str,
+        replacement_job_id: str = "",
+        reason: str = "",
+    ) -> dict[str, Any] | None:
+        existing = self.get_job(job_id)
+        if existing is None:
+            return None
+        if str(existing.get("job_type") or "") != "workflow":
+            return None
+
+        normalized_reason = str(reason or "").strip() or "Superseded by a newer workflow run."
+        normalized_replacement_job_id = str(replacement_job_id or "").strip()
+        summary = dict(existing.get("summary") or {})
+        summary["message"] = normalized_reason
+        summary["superseded_reason"] = normalized_reason
+        summary["superseded_at"] = datetime.now(timezone.utc).isoformat()
+        if normalized_replacement_job_id:
+            summary["superseded_by_job_id"] = normalized_replacement_job_id
+
+        superseded_worker_count = 0
+        superseded_trace_count = 0
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                UPDATE jobs
+                SET status = 'superseded',
+                    stage = 'completed',
+                    summary_json = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE job_id = ?
+                """,
+                (
+                    json.dumps(summary, ensure_ascii=False),
+                    str(job_id),
+                ),
+            )
+            self._connection.execute(
+                """
+                UPDATE agent_runtime_sessions
+                SET status = 'superseded',
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE job_id = ?
+                """,
+                (str(job_id),),
+            )
+            worker_cursor = self._connection.execute(
+                """
+                UPDATE agent_worker_runs
+                SET status = 'superseded',
+                    lease_owner = NULL,
+                    lease_expires_at = NULL,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE job_id = ?
+                  AND status IN ('queued', 'running', 'interrupted', 'failed')
+                """,
+                (str(job_id),),
+            )
+            superseded_worker_count = int(worker_cursor.rowcount or 0)
+            trace_cursor = self._connection.execute(
+                """
+                UPDATE agent_trace_spans
+                SET status = CASE WHEN status = 'running' THEN 'superseded' ELSE status END
+                WHERE job_id = ?
+                """,
+                (str(job_id),),
+            )
+            superseded_trace_count = int(trace_cursor.rowcount or 0)
+            self._connection.execute(
+                """
+                DELETE FROM workflow_job_leases
+                WHERE job_id = ?
+                """,
+                (str(job_id),),
+            )
+        refreshed = self.get_job(job_id)
+        if refreshed is None:
+            return None
+        return {
+            "job": refreshed,
+            "superseded_worker_count": superseded_worker_count,
+            "superseded_trace_count": superseded_trace_count,
+        }
 
     def find_latest_job_by_idempotency_key(
         self,
@@ -2879,11 +3539,14 @@ class SQLiteStore:
                 normalized_source_jobs,
             )
             effective_status = normalized_status or existing_status or "queued"
+            existing_raw_path = str(existing_payload.get("last_raw_path") or "").strip()
             if preserve_unrecoverable and existing_status == "unrecoverable" and effective_status != "fetched":
                 effective_status = "unrecoverable"
             if normalized_status == "unrecoverable":
                 effective_status = "unrecoverable"
             if normalized_status == "fetched":
+                effective_status = "fetched"
+            if normalized_status == "queued" and existing_status == "fetched" and existing_raw_path:
                 effective_status = "fetched"
             if retry_count is not None:
                 effective_retry_count = max(0, int(retry_count))
@@ -3118,7 +3781,7 @@ class SQLiteStore:
         notes = str(payload.get("notes") or "").strip()
         job_id = str(payload.get("job_id") or "").strip()
         candidate_id = str(payload.get("candidate_id") or "").strip()
-        payload_json = json.dumps(metadata, ensure_ascii=False)
+        payload_json = json.dumps(_json_safe_payload(metadata), ensure_ascii=False)
         with self._lock, self._connection:
             cursor = self._connection.execute(
                 """
@@ -4104,6 +4767,20 @@ class SQLiteStore:
         lease_expires_at = str(row["lease_expires_at"] or "")
         return {
             "profile_url_key": str(row["profile_url_key"] or ""),
+            "lease_owner": str(row["lease_owner"] or ""),
+            "lease_token": str(row["lease_token"] or ""),
+            "lease_expires_at": lease_expires_at,
+            "expired": _is_sqlite_timestamp_expired(lease_expires_at),
+            "created_at": str(row["created_at"] or ""),
+            "updated_at": str(row["updated_at"] or ""),
+        }
+
+    def _workflow_job_lease_from_row(self, row: sqlite3.Row | None) -> dict[str, Any]:
+        if row is None:
+            return {}
+        lease_expires_at = str(row["lease_expires_at"] or "")
+        return {
+            "job_id": str(row["job_id"] or ""),
             "lease_owner": str(row["lease_owner"] or ""),
             "lease_token": str(row["lease_token"] or ""),
             "lease_expires_at": lease_expires_at,

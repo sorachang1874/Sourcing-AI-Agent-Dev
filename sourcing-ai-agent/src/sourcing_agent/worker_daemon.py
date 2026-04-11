@@ -146,7 +146,7 @@ class PersistentWorkerRecoveryDaemon:
         self.acquisition_engine = acquisition_engine
         self.owner_id = owner_id
         self.lease_seconds = max(30, int(lease_seconds or 300))
-        self.stale_after_seconds = max(1, int(stale_after_seconds or 180))
+        self.stale_after_seconds = max(1, 180 if stale_after_seconds in {None, ""} else int(stale_after_seconds))
         self.total_limit = max(1, int(total_limit or 4))
         self.job_id = str(job_id or "")
 

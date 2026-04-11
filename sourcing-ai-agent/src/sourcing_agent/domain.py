@@ -105,6 +105,7 @@ class JobRequest:
     organization_keywords: list[str] = field(default_factory=list)
     retrieval_strategy: str = ""
     planning_mode: str = "heuristic"
+    analysis_stage_mode: str = "single_stage"
     execution_preferences: dict[str, Any] = field(default_factory=dict)
     scope_disambiguation: dict[str, Any] = field(default_factory=dict)
     semantic_rerank_limit: int = 15
@@ -156,6 +157,7 @@ class JobRequest:
             organization_keywords=_normalize_list(normalized_payload.get("organization_keywords")),
             retrieval_strategy=_clean(normalized_payload.get("retrieval_strategy")),
             planning_mode=_clean(normalized_payload.get("planning_mode")) or "heuristic",
+            analysis_stage_mode=_normalize_analysis_stage_mode(normalized_payload.get("analysis_stage_mode")),
             execution_preferences=apply_execution_preference_policy(
                 merged_execution_preferences,
                 raw_text=raw_user_request,
@@ -287,6 +289,15 @@ def _normalize_asset_view(value: Any) -> str:
     if normalized in {"canonical_merged", "strict_roster_only"}:
         return normalized
     return "canonical_merged"
+
+
+def _normalize_analysis_stage_mode(value: Any) -> str:
+    normalized = _clean(value).lower()
+    if normalized in {"two_stage", "stage1_then_stage2", "preview_then_ai"}:
+        return "two_stage"
+    if normalized in {"single_stage", "single", "immediate"}:
+        return "single_stage"
+    return "single_stage"
 
 
 CATEGORY_PRIORITY = {
@@ -428,6 +439,40 @@ def sanitize_candidate_notes(notes: str) -> str:
         if part:
             cleaned_parts.append(part)
     return " | ".join(cleaned_parts)
+
+
+def candidate_profile_signal_text(candidate: Candidate, *, include_notes: bool = True) -> str:
+    metadata = dict(candidate.metadata or {})
+    parts = _dedupe_preserve_order(
+        [
+            str(metadata.get("headline") or "").strip(),
+            str(metadata.get("summary") or "").strip(),
+            " / ".join(_normalize_metadata_text_list(metadata.get("languages"), limit=8)),
+            " / ".join(_normalize_metadata_text_list(metadata.get("skills"), limit=16)),
+            str(metadata.get("profile_location") or "").strip(),
+            sanitize_candidate_notes(candidate.notes) if include_notes else "",
+        ]
+    )
+    return " | ".join(parts)
+
+
+def candidate_searchable_text(candidate: Candidate, *, include_notes: bool = True) -> str:
+    parts = _dedupe_preserve_order(
+        [
+            candidate.display_name,
+            candidate.organization,
+            candidate.role,
+            candidate.team,
+            candidate.focus_areas,
+            candidate.investment_involvement,
+            candidate.education,
+            candidate.work_history,
+            candidate_profile_signal_text(candidate, include_notes=include_notes),
+            candidate.ethnicity_background,
+            candidate.current_destination,
+        ]
+    )
+    return " | ".join(parts)
 
 
 def normalize_requested_facet(value: str) -> str:
@@ -607,8 +652,9 @@ def _candidate_signal_text(candidate: Candidate, *, include_notes: bool) -> str:
             candidate.role,
             candidate.team,
             candidate.focus_areas,
+            candidate.education,
             candidate.work_history,
-            sanitize_candidate_notes(candidate.notes) if include_notes else "",
+            candidate_profile_signal_text(candidate, include_notes=include_notes),
         ]
         if _clean(part)
     ).lower()
@@ -630,6 +676,31 @@ def _derive_outreach_layer_facets(candidate: Candidate) -> list[str]:
 
 def _contains_any(text: str, patterns: list[str]) -> bool:
     return any(pattern in text for pattern in patterns)
+
+
+def _normalize_metadata_text_list(value: Any, *, limit: int) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        items = [value]
+    elif isinstance(value, (list, tuple, set)):
+        items = list(value)
+    else:
+        items = [value]
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        candidate = _clean(item)
+        if not candidate and isinstance(item, dict):
+            candidate = _clean(item.get("name") or item.get("title") or item.get("value") or item.get("text"))
+        key = candidate.lower()
+        if not candidate or key in seen:
+            continue
+        seen.add(key)
+        normalized.append(candidate)
+        if len(normalized) >= limit:
+            break
+    return normalized
 
 
 def _dedupe_preserve_order(items: list[str]) -> list[str]:

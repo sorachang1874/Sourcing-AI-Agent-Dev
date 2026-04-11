@@ -400,17 +400,24 @@ def build_outreach_layer_analysis(
         for idx, item in enumerate(records)
         if int(item.get("deterministic_proposed_layer") or 0) > 0
     ]
+    ai_eligible_indexes = [
+        idx
+        for idx in eligible_indexes
+        if _record_supports_ai_verification(records[idx])
+    ]
     ai_enabled = model_client is not None
     requested = 0
     attempted = 0
     successful = 0
-    max_ai_verifications_requested = max(0, int(max_ai_verifications or 0))
+    max_ai_verifications_requested = None if max_ai_verifications is None else max(0, int(max_ai_verifications or 0))
     max_ai_verifications_effective = 0
     if ai_enabled:
-        if max_ai_verifications_requested <= 0:
-            selected_indexes = list(eligible_indexes)
+        if max_ai_verifications_requested is None:
+            selected_indexes = list(ai_eligible_indexes)
+        elif max_ai_verifications_requested <= 0:
+            selected_indexes = []
         else:
-            selected_indexes = list(eligible_indexes[:max_ai_verifications_requested])
+            selected_indexes = list(ai_eligible_indexes[:max_ai_verifications_requested])
         max_ai_verifications_effective = len(selected_indexes)
         requested = len(selected_indexes)
         attempted = requested
@@ -533,8 +540,10 @@ def build_outreach_layer_analysis(
         "final_layer_distribution": distribution,
         "ai_verification": {
             "enabled": ai_enabled,
-            "eligible_for_ai_verification": len(eligible_indexes),
-            "max_ai_verifications_requested": max_ai_verifications_requested,
+            "eligible_for_ai_verification": len(ai_eligible_indexes),
+            "max_ai_verifications_requested": (
+                "auto" if max_ai_verifications_requested is None else max_ai_verifications_requested
+            ),
             "max_ai_verifications": max_ai_verifications_effective,
             "ai_workers": max(1, int(ai_workers or 1)),
             "ai_max_retries": max(0, int(ai_max_retries or 0)),
@@ -953,6 +962,21 @@ def _final_layer_distribution(records: list[dict[str, Any]]) -> dict[str, int]:
         layer = _coerce_layer_index(item.get("final_layer"), default=0)
         counts[f"layer_{layer}"] += 1
     return counts
+
+
+def _record_supports_ai_verification(record: dict[str, Any]) -> bool:
+    education = str(record.get("education") or "").strip()
+    work_history = str(record.get("work_history") or "").strip()
+    notes = str(record.get("notes") or "").strip()
+    profile_excerpt = str(record.get("profile_text_excerpt") or "").strip()
+
+    if education or work_history:
+        return True
+    if len(notes) >= 40:
+        return True
+    if len(profile_excerpt) >= 160:
+        return True
+    return False
 
 
 def _evaluate_candidate_with_model(

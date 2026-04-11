@@ -20,9 +20,23 @@ def _build_handler(orchestrator: SourcingOrchestrator):
         def do_GET(self) -> None:  # noqa: N802
             path, query_payload = self._request_target_payload()
             if path == "/health":
-                return self._send_json(HTTPStatus.OK, {"status": "ok"})
+                health = orchestrator.get_runtime_metrics(query_payload)
+                status = HTTPStatus.OK if health.get("status") != "failed" else HTTPStatus.SERVICE_UNAVAILABLE
+                return self._send_json(status, health)
             if path == "/api/providers/health":
                 return self._send_json(HTTPStatus.OK, orchestrator.healthcheck_model())
+            if path == "/api/runtime/health":
+                health = orchestrator.get_runtime_health(query_payload)
+                status = HTTPStatus.OK if health.get("status") != "failed" else HTTPStatus.SERVICE_UNAVAILABLE
+                return self._send_json(status, health)
+            if path == "/api/runtime/metrics":
+                health = orchestrator.get_runtime_metrics(query_payload)
+                status = HTTPStatus.OK if health.get("status") != "failed" else HTTPStatus.SERVICE_UNAVAILABLE
+                return self._send_json(status, health)
+            if path == "/api/runtime/progress":
+                progress = orchestrator.get_system_progress(query_payload)
+                status = HTTPStatus.OK if progress.get("status") != "failed" else HTTPStatus.SERVICE_UNAVAILABLE
+                return self._send_json(status, progress)
             if path == "/api/criteria/patterns":
                 return self._send_json(HTTPStatus.OK, orchestrator.list_criteria_patterns())
             if path == "/api/plan/reviews":
@@ -89,9 +103,35 @@ def _build_handler(orchestrator: SourcingOrchestrator):
                 result = orchestrator.run_job(payload)
                 return self._send_json(HTTPStatus.CREATED, result)
             if path == "/api/workflows":
-                payload.setdefault("auto_job_daemon", True)
-                result = orchestrator.start_workflow(payload)
+                execution_mode = str(
+                    payload.get("runtime_execution_mode")
+                    or payload.get("workflow_runner_mode")
+                    or "hosted"
+                ).strip().lower()
+                payload.setdefault("analysis_stage_mode", "two_stage")
+                if execution_mode in {"managed_subprocess", "runner_managed", "detached_sidecar"}:
+                    payload["runtime_execution_mode"] = execution_mode
+                    payload.setdefault("auto_job_daemon", True)
+                    result = orchestrator.start_workflow_runner_managed(payload)
+                else:
+                    payload["runtime_execution_mode"] = "hosted"
+                    payload.setdefault("auto_job_daemon", False)
+                    result = orchestrator.start_workflow(payload)
                 return self._send_json(HTTPStatus.ACCEPTED, result)
+            continue_stage2_match = re.fullmatch(r"/api/workflows/([A-Za-z0-9_-]+)/continue-stage2", path)
+            if continue_stage2_match:
+                result = orchestrator.continue_workflow_stage2(
+                    {
+                        **payload,
+                        "job_id": continue_stage2_match.group(1),
+                    }
+                )
+                status = HTTPStatus.ACCEPTED
+                if result.get("status") in {"not_found"}:
+                    status = HTTPStatus.NOT_FOUND
+                elif result.get("status") in {"invalid", "conflict"}:
+                    status = HTTPStatus.BAD_REQUEST
+                return self._send_json(status, result)
             if path == "/api/company-assets/supplement":
                 result = orchestrator.supplement_company_assets(payload)
                 status = HTTPStatus.OK if result.get("status") != "invalid" else HTTPStatus.BAD_REQUEST
@@ -162,6 +202,9 @@ def _build_handler(orchestrator: SourcingOrchestrator):
                 elif result.get("status") == "not_found":
                     status = HTTPStatus.NOT_FOUND
                 return self._send_json(status, result)
+            if path == "/api/workers/cleanup":
+                result = orchestrator.cleanup_recoverable_workers(payload)
+                return self._send_json(HTTPStatus.OK, result)
             if path == "/api/workers/daemon/run-once":
                 result = orchestrator.run_worker_recovery_once(payload)
                 return self._send_json(HTTPStatus.OK, result)

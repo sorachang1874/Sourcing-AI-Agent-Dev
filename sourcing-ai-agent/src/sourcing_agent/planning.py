@@ -493,6 +493,14 @@ def _build_acquisition_tasks(
         max_pages=roster_max_pages,
         page_limit=FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
     )
+    linkedin_stage_metadata = {
+        "acquisition_phase": "linkedin_stage_1",
+        "acquisition_phase_title": "LinkedIn Stage 1",
+    }
+    public_web_stage_metadata = {
+        "acquisition_phase": "public_web_stage_2",
+        "acquisition_phase_title": "Public Web Stage 2",
+    }
 
     tasks = [
         AcquisitionTask(
@@ -507,9 +515,9 @@ def _build_acquisition_tasks(
         AcquisitionTask(
             task_id="acquire-full-roster",
             task_type="acquire_full_roster",
-            title="Acquire full company roster",
-            description="Pull the broadest possible roster before applying any sourcing criteria.",
-            source_hint="LinkedIn company people / The Org / domain search / internal CSV / other org sources",
+            title="Acquire current company roster",
+            description="Pull current-member roster coverage from company-member endpoints before applying sourcing criteria.",
+            source_hint="Harvest company employees / LinkedIn company people / internal org roster",
             status="ready" if has_target_company else "needs_input",
             blocking=True,
             metadata={
@@ -528,34 +536,82 @@ def _build_acquisition_tasks(
                 "company_employee_shards": [],
                 "company_employee_shard_policy": company_employee_shard_policy,
                 "company_employee_shard_strategy": str(company_employee_shard_policy.get("strategy_id") or "").strip(),
-                "include_former_search_seed": include_former_search_seed,
-                "former_provider_people_search_min_expected_results": 50,
+                "include_former_search_seed": False,
+                **linkedin_stage_metadata,
             },
         ),
-        AcquisitionTask(
-            task_id="enrich-multisource-profiles",
-            task_type="enrich_profiles_multisource",
-            title="Enrich profiles across sources",
-            description="Add LinkedIn profile details, publications, blog mentions, Scholar, X, GitHub, and other evidence.",
-            source_hint="LinkedIn profile detail / Scholar / arXiv / company blog / GitHub / X",
-            status="ready" if has_target_company else "needs_input",
-            blocking=True,
-            metadata={
-                "strategy_type": acquisition_strategy.strategy_type,
-                "search_channel_order": acquisition_strategy.search_channel_order,
-                "cost_policy": acquisition_strategy.cost_policy,
-                "publication_source_families": [item.family for item in publication_coverage.source_families],
-                "publication_extraction_strategy": publication_coverage.extraction_strategy,
-                "slug_resolution_limit": request.slug_resolution_limit,
-                "profile_detail_limit": request.profile_detail_limit,
-                "publication_scan_limit": request.publication_scan_limit,
-                "publication_lead_limit": request.publication_lead_limit,
-                "exploration_limit": request.exploration_limit,
-                "scholar_coauthor_follow_up_limit": request.scholar_coauthor_follow_up_limit,
-                "full_roster_profile_prefetch": acquisition_strategy.strategy_type == "full_company_roster",
-                "reuse_existing_roster": bool(request.execution_preferences.get("reuse_existing_roster")),
-            },
-        ),
+    ]
+    if include_former_search_seed:
+        tasks.append(
+            AcquisitionTask(
+                task_id="acquire-former-search-seed",
+                task_type="acquire_former_search_seed",
+                title="Acquire former-member LinkedIn search seeds",
+                description="Run LinkedIn profile search against past-company filters to recover former members explicitly.",
+                source_hint="Harvest profile search (past company filters)",
+                status="ready" if has_target_company else "needs_input",
+                blocking=False,
+                metadata={
+                    "strategy_type": "former_employee_search",
+                    "employment_statuses": ["former"],
+                    "search_channel_order": ["harvest_profile_search"],
+                    "search_seed_queries": acquisition_strategy.search_seed_queries,
+                    "search_query_bundles": [bundle.to_record() for bundle in search_strategy.query_bundles],
+                    "filter_hints": acquisition_strategy.filter_hints,
+                    "cost_policy": acquisition_strategy.cost_policy,
+                    "former_provider_people_search_min_expected_results": 50,
+                    **linkedin_stage_metadata,
+                },
+            )
+        )
+    tasks.extend(
+        [
+            AcquisitionTask(
+                task_id="enrich-linkedin-profiles",
+                task_type="enrich_linkedin_profiles",
+                title="Enrich LinkedIn profiles",
+                description="Fetch and merge LinkedIn profile detail for current and former members to build the stage-1 roster baseline.",
+                source_hint="LinkedIn profile detail / Harvest profile scraper",
+                status="ready" if has_target_company else "needs_input",
+                blocking=True,
+                metadata={
+                    "strategy_type": acquisition_strategy.strategy_type,
+                    "search_channel_order": acquisition_strategy.search_channel_order,
+                    "cost_policy": acquisition_strategy.cost_policy,
+                    "slug_resolution_limit": request.slug_resolution_limit,
+                    "profile_detail_limit": request.profile_detail_limit,
+                    "full_roster_profile_prefetch": acquisition_strategy.strategy_type == "full_company_roster",
+                    "reuse_existing_roster": bool(request.execution_preferences.get("reuse_existing_roster")),
+                    "enrichment_scope": "linkedin_stage_1",
+                    **linkedin_stage_metadata,
+                },
+            ),
+            AcquisitionTask(
+                task_id="enrich-public-web-signals",
+                task_type="enrich_public_web_signals",
+                title="Enrich public-web signals",
+                description="Add publications, co-author graph, exploration, and other public-web evidence as stage-2 acquisition.",
+                source_hint="Scholar / arXiv / company blog / GitHub / X / broader web",
+                status="ready" if has_target_company else "needs_input",
+                blocking=True,
+                metadata={
+                    "strategy_type": acquisition_strategy.strategy_type,
+                    "search_channel_order": acquisition_strategy.search_channel_order,
+                    "cost_policy": acquisition_strategy.cost_policy,
+                    "publication_source_families": [item.family for item in publication_coverage.source_families],
+                    "publication_extraction_strategy": publication_coverage.extraction_strategy,
+                    "publication_scan_limit": request.publication_scan_limit,
+                    "publication_lead_limit": request.publication_lead_limit,
+                    "exploration_limit": request.exploration_limit,
+                    "scholar_coauthor_follow_up_limit": request.scholar_coauthor_follow_up_limit,
+                    "enrichment_scope": "public_web_stage_2",
+                    **public_web_stage_metadata,
+                },
+            ),
+        ]
+    )
+    tasks.extend(
+        [
         AcquisitionTask(
             task_id="normalize-asset-snapshot",
             task_type="normalize_asset_snapshot",
@@ -574,7 +630,8 @@ def _build_acquisition_tasks(
             status="ready" if has_target_company else "needs_input",
             blocking=False,
         ),
-    ]
+        ]
+    )
     return tasks
 
 

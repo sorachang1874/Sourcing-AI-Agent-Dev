@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from .domain import (
@@ -187,9 +188,18 @@ def _dedupe(items: list[Any]) -> list[str]:
         value = " ".join(str(item or "").split()).strip()
         if not value:
             continue
-        lowered = value.lower()
-        if lowered in seen:
+        signature = _query_signature(value)
+        if signature in seen:
             continue
-        seen.add(lowered)
+        seen.add(signature)
         results.append(value)
     return results
+
+
+def _query_signature(value: str) -> str:
+    normalized = " ".join(str(value or "").lower().split()).strip()
+    if not normalized:
+        return ""
+    compact = re.sub(r"[\s\-_]+", "", normalized)
+    alnum = re.sub(r"[^0-9a-z]+", "", compact)
+    return alnum or compact

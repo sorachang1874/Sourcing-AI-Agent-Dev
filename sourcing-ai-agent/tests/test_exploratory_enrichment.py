@@ -763,3 +763,132 @@ class ExploratoryEnrichmentTest(unittest.TestCase):
             self.assertTrue(str(first_entry["search_state"]["fetch_token"]).startswith("worker_direct_"))
             self.assertTrue(str(first_entry["raw_path"]).endswith("query_01.json"))
             self.assertEqual(result.queued_candidate_count, 1)
+
+    def test_explore_candidate_reuses_active_prefetched_raw_without_execute(self) -> None:
+        class _NoExecuteSearchProvider:
+            provider_name = "dataforseo_google_organic"
+
+            def __init__(self) -> None:
+                self.execute_calls = 0
+
+            def execute_with_checkpoint(self, query_text, *, max_results=10, timeout=None, checkpoint=None):
+                self.execute_calls += 1
+                raise AssertionError("active prefetched raw should bypass execute_with_checkpoint")
+
+        class _WorkerHandle:
+            worker_id = 1
+
+        class _FakeWorkerRuntime:
+            def __init__(self, checkpoint: dict) -> None:
+                self._checkpoint = dict(checkpoint)
+                self.completed = []
+
+            def begin_worker(self, **kwargs):
+                return _WorkerHandle()
+
+            def get_worker(self, worker_id):
+                return {"checkpoint": dict(self._checkpoint), "output": {}, "status": "queued"}
+
+            def should_interrupt_worker(self, handle):
+                return False
+
+            def complete_worker(self, handle, **kwargs):
+                self.completed.append(dict(kwargs))
+                self._checkpoint = dict(kwargs.get("checkpoint_payload") or self._checkpoint)
+                return kwargs
+
+            def checkpoint_worker(self, handle, **kwargs):
+                self._checkpoint = dict(kwargs.get("checkpoint_payload") or self._checkpoint)
+                return kwargs
+
+        candidate = Candidate(
+            candidate_id="c1",
+            name_en="Jane Doe",
+            display_name="Jane Doe",
+            target_company="Thinking Machines Lab",
+        )
+        with tempfile.TemporaryDirectory() as tempdir:
+            snapshot_dir = Path(tempdir)
+            query_text = _build_exploration_queries(candidate, "Thinking Machines Lab")[0]
+            prefetched_path = snapshot_dir / "exploration" / "c1" / "query_01_prefetched.json"
+            prefetched_path.parent.mkdir(parents=True, exist_ok=True)
+            prefetched_path.write_text(
+                json.dumps(
+                    {
+                        "provider_name": "dataforseo_google_organic",
+                        "query_text": query_text,
+                        "results": [],
+                        "raw_payload": {"tasks": []},
+                        "raw_format": "json",
+                        "final_url": "",
+                        "content_type": "application/json",
+                        "metadata": {},
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            ready_artifact_path = snapshot_dir / "exploration" / "search_tasks_ready_batch_20260410T101252Z_tasks_ready_batch.json"
+            ready_artifact_path.write_text("{}", encoding="utf-8")
+            initial_checkpoint = {
+                "completed_queries": ["2", "3", "4", "5", "6", "7"],
+                "active_query_index": 1,
+                "active_query_text": query_text,
+                "active_search_state": {
+                    "provider_name": "dataforseo_google_organic",
+                    "task_id": "task_1",
+                    "status": "waiting_for_ready",
+                },
+                "prefetched_queries": {
+                    "1": {
+                        "task_key": "c1::01",
+                        "query": query_text,
+                        "search_state": {
+                            "provider_name": "dataforseo_google_organic",
+                            "task_id": "task_1",
+                            "status": "waiting_for_ready",
+                        },
+                        "artifact_paths": {
+                            "tasks_ready_batch_20260410T101252Z": str(ready_artifact_path),
+                        },
+                        "raw_path": "",
+                    }
+                },
+            }
+            prefetched_search_queries = {
+                "1": {
+                    "task_key": "c1::01",
+                    "query": query_text,
+                    "search_state": {
+                        "provider_name": "dataforseo_google_organic",
+                        "task_id": "task_1",
+                        "status": "fetched_cached",
+                        "ready_poll_source": "lane_batch",
+                    },
+                    "artifact_paths": {
+                        "tasks_ready_batch_20260410T101252Z": str(ready_artifact_path),
+                    },
+                    "raw_path": str(prefetched_path),
+                }
+            }
+            runtime = _FakeWorkerRuntime(initial_checkpoint)
+            provider = _NoExecuteSearchProvider()
+            enricher = ExploratoryWebEnricher(
+                worker_runtime=runtime,
+                search_provider=provider,
+            )
+            result = enricher._explore_candidate(
+                snapshot_dir=snapshot_dir,
+                candidate=candidate,
+                target_company="Thinking Machines Lab",
+                logger=AssetLogger(snapshot_dir),
+                job_id="job_prefetched_active",
+                request_payload={"target_company": "Thinking Machines Lab"},
+                plan_payload={},
+                runtime_mode="workflow",
+                prefetched_search_queries=prefetched_search_queries,
+            )
+            self.assertEqual(provider.execute_calls, 0)
+            self.assertEqual(result["worker_status"], "completed")
+            self.assertEqual(runtime.completed[-1]["status"], "completed")

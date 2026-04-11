@@ -129,6 +129,24 @@ class CompanyShardPlanningTest(unittest.TestCase):
         self.assertTrue(any("Multimodal" in item["company_filters"]["search_query"] for item in plan["shards"]))
         self.assertTrue(any("Veo" in item["company_filters"]["search_query"] for item in plan["shards"]))
 
+    def test_large_org_keyword_probe_policy_dedupes_hyphen_space_and_synonym_queries(self) -> None:
+        policy = build_large_org_keyword_probe_shard_policy(
+            "google",
+            company_scope=["Google", "Google DeepMind"],
+            keyword_hints=[
+                "vision-language",
+                "Vision Language",
+                "video-generation",
+                "Video generation",
+            ],
+            max_pages=100,
+            page_limit=25,
+        )
+
+        queries = [str(item.get("include_patch", {}).get("search_query") or "") for item in list(policy.get("keyword_shards") or [])]
+        self.assertEqual(queries.count("Vision-language"), 1)
+        self.assertEqual(queries.count("Video generation"), 1)
+
     def test_plan_company_employee_shards_keyword_union_respects_force_keyword_only(self) -> None:
         policy = build_large_org_keyword_probe_shard_policy(
             "google",
@@ -169,7 +187,7 @@ class CompanyShardPlanningTest(unittest.TestCase):
                 return {"status": "completed", "estimated_total_count": 20000}
             if "Multimodal" in search_query:
                 return {"status": "completed", "estimated_total_count": 1200}
-            if "vision-language" in search_query:
+            if "vision-language" in search_query.lower():
                 return {"status": "completed", "estimated_total_count": 3200}
             if "Veo" in search_query:
                 return {"status": "completed", "estimated_total_count": 800}
@@ -180,7 +198,7 @@ class CompanyShardPlanningTest(unittest.TestCase):
         self.assertEqual(plan["status"], "planned")
         self.assertEqual(plan["reason"], "keyword_union_with_capped_shards")
         self.assertEqual(len(plan["shards"]), 3)
-        self.assertTrue(any("vision-language" in item["title"] for item in plan["overflow_scopes"]))
+        self.assertTrue(any("vision-language" in str(item.get("title") or "").lower() for item in plan["overflow_scopes"]))
         self.assertTrue(any(item.get("provider_cap_limited") for item in plan["shards"]))
 
 

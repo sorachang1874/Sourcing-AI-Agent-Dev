@@ -5,6 +5,35 @@ from sourcing_agent.scoring import score_candidates
 from sourcing_agent.semantic_retrieval import rank_semantic_candidates
 
 
+class _FakeRemoteSemanticProvider:
+    def __init__(self) -> None:
+        self.embed_calls = 0
+        self.rerank_calls = 0
+
+    def provider_name(self) -> str:
+        return "fake_remote"
+
+    def healthcheck(self) -> dict:
+        return {"provider": "fake_remote", "status": "ready"}
+
+    def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        self.embed_calls += 1
+        return [[1.0] for _ in texts]
+
+    def rerank(self, query: str, documents: list[str], *, top_n: int) -> list[dict]:
+        self.rerank_calls += 1
+        return [
+            {
+                "index": 0,
+                "document": documents[0] if documents else "",
+                "relevance_score": 0.9,
+            }
+        ]
+
+    def score_media_records(self, query: str, records: list[dict], *, top_n: int) -> list[dict]:
+        return []
+
+
 class SemanticRetrievalTest(unittest.TestCase):
     def test_semantic_hit_recovers_post_train_variant(self) -> None:
         candidates = [
@@ -107,6 +136,41 @@ class SemanticRetrievalTest(unittest.TestCase):
         )
         self.assertIn("cand_platform", semantic_hits)
         self.assertNotIn("cand_roster_only", semantic_hits)
+
+    def test_semantic_notes_field_uses_profile_metadata_summary(self) -> None:
+        candidates = [
+            Candidate(
+                candidate_id="cand_profile_meta",
+                name_en="Profile Meta Person",
+                display_name="Profile Meta Person",
+                category="employee",
+                target_company="Google",
+                organization="Google DeepMind",
+                employment_status="current",
+                role="Software Engineer",
+                metadata={
+                    "summary": "Builds infrastructure platforms for multimodal training and cluster scheduling.",
+                    "skills": ["Distributed Systems", "Kubernetes"],
+                },
+            )
+        ]
+        request = JobRequest(
+            raw_user_request="Find Google infra people",
+            query="infra kubernetes",
+            target_company="Google",
+            categories=["employee"],
+            employment_statuses=["current"],
+            top_k=5,
+            semantic_rerank_limit=5,
+        )
+
+        semantic_hits = rank_semantic_candidates(
+            candidates,
+            request,
+            semantic_fields=["notes"],
+            limit=5,
+        )
+        self.assertIn("cand_profile_meta", semantic_hits)
 
     def test_derived_facets_support_ops_queries(self) -> None:
         candidates = [
@@ -348,3 +412,39 @@ class SemanticRetrievalTest(unittest.TestCase):
         self.assertTrue(
             all(item["field"] != "notes" for item in semantic_hits["cand_infra_notes"]["matched_fields"])
         )
+
+    def test_remote_semantic_provider_is_skipped_for_low_cost_requests(self) -> None:
+        candidates = [
+            Candidate(
+                candidate_id="cand_reasoning",
+                name_en="Reasoning Person",
+                display_name="Reasoning Person",
+                category="employee",
+                target_company="OpenAI",
+                organization="OpenAI",
+                employment_status="current",
+                role="Research Scientist",
+                focus_areas="reasoning and reinforcement learning",
+            ),
+        ]
+        request = JobRequest(
+            raw_user_request="Find OpenAI reasoning researchers",
+            query="reasoning researchers",
+            target_company="OpenAI",
+            categories=["employee"],
+            employment_statuses=["current"],
+            semantic_rerank_limit=5,
+        )
+        fake_provider = _FakeRemoteSemanticProvider()
+
+        semantic_hits = rank_semantic_candidates(
+            candidates,
+            request,
+            semantic_fields=["role", "focus_areas"],
+            limit=5,
+            semantic_provider=fake_provider,
+        )
+
+        self.assertIn("cand_reasoning", semantic_hits)
+        self.assertEqual(fake_provider.embed_calls, 0)
+        self.assertEqual(fake_provider.rerank_calls, 0)

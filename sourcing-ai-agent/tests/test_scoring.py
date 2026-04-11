@@ -1,7 +1,7 @@
 import unittest
 
 from sourcing_agent.domain import Candidate, JobRequest
-from sourcing_agent.scoring import build_query_terms, candidate_matches_structured_filters
+from sourcing_agent.scoring import build_query_terms, candidate_matches_structured_filters, score_candidates
 
 
 class ScoringOutreachTermTests(unittest.TestCase):
@@ -48,6 +48,32 @@ class ScoringOutreachTermTests(unittest.TestCase):
             must_have_keywords=["multimodal"],
         )
         self.assertFalse(candidate_matches_structured_filters(candidate, topical_request))
+
+    def test_profile_metadata_summary_and_skills_are_searchable(self) -> None:
+        candidate = Candidate(
+            candidate_id="cand_2",
+            name_en="Sam Systems",
+            display_name="Sam Systems",
+            category="employee",
+            target_company="Acme",
+            organization="Acme",
+            employment_status="current",
+            role="Software Engineer",
+            metadata={
+                "summary": "Builds infrastructure platforms for training clusters and internal runtime tooling.",
+                "skills": ["Kubernetes", "Distributed Systems"],
+            },
+        )
+        request = JobRequest(
+            target_company="Acme",
+            categories=["employee"],
+            employment_statuses=["current"],
+            keywords=["infra", "kubernetes"],
+        )
+
+        scored = score_candidates([candidate], request)
+        self.assertEqual(len(scored), 1)
+        self.assertEqual(scored[0].candidate.candidate_id, "cand_2")
 
 
 if __name__ == "__main__":

@@ -310,6 +310,28 @@
         }
       }
     },
+    "WorkflowStageSummaryItem": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "stage": { "type": "string" },
+        "status": { "type": "string" },
+        "summary_path": { "type": "string" }
+      }
+    },
+    "WorkflowStageSummariesPayload": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["stage_order", "summaries"],
+      "properties": {
+        "directory": { "type": "string" },
+        "stage_order": { "$ref": "#/$defs/StringArray" },
+        "summaries": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/WorkflowStageSummaryItem" }
+        }
+      }
+    },
     "JobProgressResponse": {
       "type": "object",
       "additionalProperties": true,
@@ -323,7 +345,8 @@
         "elapsed_seconds": { "type": "integer" },
         "blocked_task": { "type": "string" },
         "current_message": { "type": "string" },
-        "progress": { "$ref": "#/$defs/ProgressPayload" }
+        "progress": { "$ref": "#/$defs/ProgressPayload" },
+        "workflow_stage_summaries": { "$ref": "#/$defs/WorkflowStageSummariesPayload" }
       }
     },
     "MatchResult": {
@@ -400,7 +423,8 @@
           "type": "array",
           "items": { "$ref": "#/$defs/JsonObject" }
         },
-        "intent_rewrite": { "$ref": "#/$defs/IntentRewritePayload" }
+        "intent_rewrite": { "$ref": "#/$defs/IntentRewritePayload" },
+        "workflow_stage_summaries": { "$ref": "#/$defs/WorkflowStageSummariesPayload" }
       }
     },
     "RetrievalJobResponse": {

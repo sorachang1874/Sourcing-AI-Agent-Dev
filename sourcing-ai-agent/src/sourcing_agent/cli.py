@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 from pathlib import Path
-import subprocess
 import sys
+import threading
 import time
+from typing import Any
 
 from .acquisition import AcquisitionEngine
 from .agent_runtime import AgentRuntimeCoordinator
@@ -18,25 +18,22 @@ from .company_asset_completion import CompanyAssetCompletionManager
 from .company_asset_supplement import CompanyAssetSupplementManager
 from .model_provider import OpenAICompatibleChatModelClient, QwenResponsesModelClient, build_model_client
 from .object_storage import build_object_storage_client
-from .orchestrator import SourcingOrchestrator
+from .orchestrator import (
+    SourcingOrchestrator,
+    _runner_subprocess_env,
+    _spawn_detached_process,
+    _workflow_runner_process_alive,
+)
 from .outreach_layering import analyze_company_outreach_layers
 from .profile_registry_backfill import backfill_linkedin_profile_registry
-from .service_daemon import SingleInstanceError
+from .service_daemon import SingleInstanceError, WorkerDaemonService
 from .semantic_provider import build_semantic_provider
 from .settings import load_settings
 from .storage import SQLiteStore
 
 
 def _runner_environment(project_root: Path) -> dict[str, str]:
-    env = os.environ.copy()
-    src_path = str((project_root / "src").resolve())
-    existing_pythonpath = env.get("PYTHONPATH", "").strip()
-    pythonpath_entries = [src_path]
-    if existing_pythonpath:
-        pythonpath_entries.append(existing_pythonpath)
-    env["PYTHONPATH"] = os.pathsep.join(pythonpath_entries)
-    env.setdefault("PYTHONUNBUFFERED", "1")
-    return env
+    return _runner_subprocess_env(project_root)
 
 
 def build_orchestrator() -> SourcingOrchestrator:
@@ -103,69 +100,123 @@ def spawn_workflow_runner(job_id: str, *, auto_job_daemon: bool) -> dict[str, ob
     log_dir = settings.runtime_dir / "service_logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / f"workflow-runner-{job_id}.log"
-    command = [sys.executable, "-m", "sourcing_agent.cli", "execute-workflow", "--job-id", job_id]
+    command = [
+        sys.executable,
+        "-m",
+        "sourcing_agent.cli",
+        "supervise-workflow" if auto_job_daemon else "execute-workflow",
+        "--job-id",
+        job_id,
+    ]
     if auto_job_daemon:
         command.append("--auto-job-daemon")
 
-    log_handle = log_path.open("ab")
-    try:
-        process = subprocess.Popen(
-            command,
-            cwd=str(catalog.project_root),
-            env=runner_env,
-            stdin=subprocess.DEVNULL,
-            stdout=log_handle,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-        )
-    except OSError as exc:
-        log_handle.close()
-        return {
-            "status": "failed_to_start",
-            "job_id": job_id,
-            "pid": 0,
-            "log_path": str(log_path),
-            "command": command,
-            "error": str(exc),
-        }
-    finally:
-        try:
-            log_handle.close()
-        except Exception:
-            pass
-
-    time.sleep(0.15)
-    poll = getattr(process, "poll", None)
-    exit_code = poll() if callable(poll) else None
-    if exit_code is not None:
-        return {
-            "status": "failed_to_start",
-            "job_id": job_id,
-            "pid": process.pid,
-            "log_path": str(log_path),
-            "command": command,
-            "exit_code": int(exit_code),
-            "log_tail": _read_text_tail(log_path),
-        }
-
     return {
-        "status": "started",
         "job_id": job_id,
-        "pid": process.pid,
-        "log_path": str(log_path),
-        "command": command,
+        **_spawn_detached_process(
+            command=command,
+            cwd=catalog.project_root,
+            log_path=log_path,
+            env=runner_env,
+        ),
     }
 
 
-def _read_text_tail(path: Path, *, max_bytes: int = 2000) -> str:
-    try:
-        with path.open("rb") as handle:
-            handle.seek(0, os.SEEK_END)
-            size = handle.tell()
-            handle.seek(max(0, size - max_bytes))
-            return handle.read().decode("utf-8", errors="replace").strip()
-    except OSError:
-        return ""
+def _is_process_alive(pid: int) -> bool:
+    return _workflow_runner_process_alive(pid)
+
+
+def _wait_for_workflow_runner_progress(
+    orchestrator: SourcingOrchestrator,
+    *,
+    job_id: str,
+    pid: int,
+    timeout_seconds: float,
+    poll_seconds: float,
+) -> dict[str, object]:
+    return orchestrator._wait_for_workflow_runner_progress(  # noqa: SLF001
+        job_id=job_id,
+        pid=pid,
+        timeout_seconds=timeout_seconds,
+        poll_seconds=poll_seconds,
+    )
+
+
+def start_workflow_runner_with_handshake(
+    orchestrator: SourcingOrchestrator,
+    *,
+    job_id: str,
+    auto_job_daemon: bool,
+    handshake_timeout_seconds: float,
+    poll_seconds: float = 0.1,
+    max_attempts: int = 2,
+) -> dict[str, object]:
+    return orchestrator._start_workflow_runner_with_handshake(  # noqa: SLF001
+        job_id=job_id,
+        auto_job_daemon=auto_job_daemon,
+        handshake_timeout_seconds=handshake_timeout_seconds,
+        poll_seconds=poll_seconds,
+        max_attempts=max_attempts,
+    )
+
+
+def run_server_runtime_watchdog_once(
+    orchestrator: SourcingOrchestrator,
+    *,
+    shared_service_name: str = "worker-recovery-daemon",
+    hosted_service_name: str = "server-runtime-watchdog",
+) -> dict[str, Any]:
+    return orchestrator.run_hosted_runtime_watchdog_once(
+        {
+            "shared_service_name": shared_service_name,
+            "hosted_runtime_watchdog_service_name": hosted_service_name,
+            "hosted_runtime_source": hosted_service_name,
+        }
+    )
+
+
+def start_server_runtime_watchdog(
+    orchestrator: SourcingOrchestrator,
+    *,
+    poll_seconds: float = 15.0,
+    shared_service_name: str = "worker-recovery-daemon",
+    hosted_service_name: str = "server-runtime-watchdog",
+) -> tuple[threading.Event, threading.Thread]:
+    stop_event = threading.Event()
+
+    def _loop() -> None:
+        while not stop_event.is_set():
+            try:
+                service = WorkerDaemonService(
+                    runtime_dir=orchestrator.runtime_dir,
+                    recovery_callback=lambda _: run_server_runtime_watchdog_once(
+                        orchestrator,
+                        shared_service_name=shared_service_name,
+                        hosted_service_name=hosted_service_name,
+                    ),
+                    service_name=hosted_service_name,
+                    poll_seconds=max(1.0, float(poll_seconds or 15.0)),
+                    callback_payload={"hosted_runtime_source": hosted_service_name},
+                )
+
+                def _stop_bridge() -> None:
+                    stop_event.wait()
+                    service.request_stop()
+
+                threading.Thread(target=_stop_bridge, name=f"{hosted_service_name}-stop", daemon=True).start()
+                service.run_forever()
+            except SingleInstanceError:
+                return
+            except Exception:
+                return
+
+    thread = threading.Thread(
+        target=_loop,
+        name="server-runtime-watchdog",
+        daemon=True,
+    )
+    thread.start()
+    return stop_event, thread
 
 
 def main() -> None:
@@ -217,12 +268,23 @@ def main() -> None:
     execute_workflow_parser = subparsers.add_parser("execute-workflow", help="Internal: execute a queued workflow job")
     execute_workflow_parser.add_argument("--job-id", required=True, help="Queued workflow job identifier")
     execute_workflow_parser.add_argument("--auto-job-daemon", action="store_true", help="Auto-start a dedicated job-scoped recovery daemon")
+    supervise_workflow_parser = subparsers.add_parser("supervise-workflow", help="Internal: supervise workflow execution until it settles")
+    supervise_workflow_parser.add_argument("--job-id", required=True, help="Queued workflow job identifier")
+    supervise_workflow_parser.add_argument("--auto-job-daemon", action="store_true", help="Continuously run workflow recovery while supervising")
+    supervise_workflow_parser.add_argument("--poll-seconds", type=float, default=2.0, help="Sleep between supervisor cycles")
+    supervise_workflow_parser.add_argument("--max-ticks", type=int, default=0, help="Stop after N cycles; 0 means until settled")
 
     show_job_parser = subparsers.add_parser("show-job", help="Show stored job metadata and results")
     show_job_parser.add_argument("--job-id", required=True, help="Job identifier")
 
     show_progress_parser = subparsers.add_parser("show-progress", help="Show workflow progress summary for a job")
     show_progress_parser.add_argument("--job-id", required=True, help="Job identifier")
+
+    show_system_progress_parser = subparsers.add_parser("show-system-progress", help="Show unified runtime/workflow/profile-sync/object-sync progress")
+    show_system_progress_parser.add_argument("--active-limit", type=int, default=10, help="Max active workflow jobs to include")
+    show_system_progress_parser.add_argument("--object-sync-limit", type=int, default=20, help="Max object sync progress snapshots to include")
+    show_system_progress_parser.add_argument("--profile-registry-lookback-hours", type=int, default=24, help="Profile registry metrics lookback window")
+    show_system_progress_parser.add_argument("--force-refresh", action="store_true", help="Bypass cached runtime metrics snapshot")
 
     show_trace_parser = subparsers.add_parser("show-trace", help="Show agent runtime trace for a job")
     show_trace_parser.add_argument("--job-id", required=True, help="Job identifier")
@@ -233,11 +295,59 @@ def main() -> None:
     show_scheduler_parser = subparsers.add_parser("show-scheduler", help="Show worker scheduler state for a job")
     show_scheduler_parser.add_argument("--job-id", required=True, help="Job identifier")
 
+    cleanup_duplicates_parser = subparsers.add_parser(
+        "cleanup-workflow-duplicates",
+        help="Supersede older in-flight workflow jobs when a newer completed job exists for the same request",
+    )
+    cleanup_duplicates_parser.add_argument("--target-company", default="", help="Optional target company filter")
+    cleanup_duplicates_parser.add_argument("--active-limit", type=int, default=200, help="Max active jobs to inspect")
+
+    supersede_jobs_parser = subparsers.add_parser(
+        "supersede-workflow-jobs",
+        help="Force-supersede specific workflow jobs and retire their workers",
+    )
+    supersede_jobs_parser.add_argument("--job-id", action="append", required=True, help="Workflow job id to supersede; repeatable")
+    supersede_jobs_parser.add_argument("--replacement-job-id", default="", help="Optional replacement workflow job id")
+    supersede_jobs_parser.add_argument("--reason", default="Superseded by operator cleanup.", help="Reason recorded on the retired jobs")
+
     show_recoverable_parser = subparsers.add_parser("show-recoverable-workers", help="Show recoverable workers across jobs")
     show_recoverable_parser.add_argument("--stale-after-seconds", type=int, default=180, help="Running workers older than this are recoverable")
     show_recoverable_parser.add_argument("--lane-id", default="", help="Optional lane filter")
     show_recoverable_parser.add_argument("--job-id", default="", help="Optional job filter")
     show_recoverable_parser.add_argument("--limit", type=int, default=100, help="Max workers to return")
+
+    cleanup_recoverable_parser = subparsers.add_parser(
+        "cleanup-recoverable-workers",
+        help="Retire stale recoverable workers, typically those hanging off terminal workflow jobs",
+    )
+    cleanup_recoverable_parser.add_argument("--stale-after-seconds", type=int, default=180, help="Minimum staleness threshold")
+    cleanup_recoverable_parser.add_argument("--lane-id", default="", help="Optional lane filter")
+    cleanup_recoverable_parser.add_argument("--job-id", default="", help="Optional job filter")
+    cleanup_recoverable_parser.add_argument("--target-company", default="", help="Optional target company filter")
+    cleanup_recoverable_parser.add_argument("--parent-job-status", action="append", default=[], help="Optional parent workflow status filter; repeatable")
+    cleanup_recoverable_parser.add_argument("--limit", type=int, default=200, help="Max workers to inspect")
+    cleanup_recoverable_parser.add_argument("--dry-run", action="store_true", help="Preview cleanup candidates without changing state")
+    cleanup_recoverable_parser.add_argument(
+        "--include-missing-jobs",
+        action="store_true",
+        help="Also allow orphan workers whose parent job no longer exists",
+    )
+    cleanup_recoverable_parser.add_argument(
+        "--terminal-workflows-only",
+        action="store_true",
+        default=True,
+        help="Only clean workers whose parent workflow job is terminal",
+    )
+    cleanup_recoverable_parser.add_argument(
+        "--status",
+        default="",
+        help="Optional override terminal worker status; defaults to cancelled or superseded based on parent job",
+    )
+    cleanup_recoverable_parser.add_argument(
+        "--reason",
+        default="Retired stale recoverable worker during operator cleanup.",
+        help="Cleanup reason recorded in worker metadata",
+    )
 
     interrupt_worker_parser = subparsers.add_parser("interrupt-worker", help="Request interrupt for a worker")
     interrupt_worker_parser.add_argument("--worker-id", required=True, type=int, help="Worker identifier")
@@ -265,8 +375,48 @@ def main() -> None:
     daemon_service_parser.add_argument("--stale-after-seconds", type=int, default=180, help="Running workers older than this are recoverable")
     daemon_service_parser.add_argument("--total-limit", type=int, default=4, help="Max workers to recover per daemon cycle")
     daemon_service_parser.add_argument("--job-id", default="", help="Optional job filter")
+    daemon_service_parser.add_argument("--job-scoped", action="store_true", help="Auto-stop once the target job reaches terminal state")
     daemon_service_parser.add_argument("--poll-seconds", type=float, default=5.0, help="Sleep between cycles")
     daemon_service_parser.add_argument("--max-ticks", type=int, default=0, help="Stop after N cycles; 0 means forever")
+    daemon_service_parser.add_argument(
+        "--workflow-auto-resume-stale-after-seconds",
+        type=int,
+        default=60,
+        help="Workflow running/acquiring auto-resume threshold used by the daemon",
+    )
+    daemon_service_parser.add_argument(
+        "--workflow-queue-auto-takeover-stale-after-seconds",
+        type=int,
+        default=60,
+        help="Workflow queued auto-takeover threshold used by the daemon",
+    )
+
+    hosted_watchdog_service_parser = subparsers.add_parser(
+        "run-server-runtime-watchdog-service",
+        help="Run the hosted runtime watchdog as a single-instance service loop",
+    )
+    hosted_watchdog_service_parser.add_argument(
+        "--service-name",
+        default="server-runtime-watchdog",
+        help="Persistent hosted runtime watchdog service name",
+    )
+    hosted_watchdog_service_parser.add_argument(
+        "--shared-service-name",
+        default="worker-recovery-daemon",
+        help="Shared recovery service name monitored by the watchdog",
+    )
+    hosted_watchdog_service_parser.add_argument(
+        "--poll-seconds",
+        type=float,
+        default=15.0,
+        help="Sleep between watchdog cycles",
+    )
+    hosted_watchdog_service_parser.add_argument(
+        "--max-ticks",
+        type=int,
+        default=0,
+        help="Stop after N cycles; 0 means forever",
+    )
 
     daemon_status_parser = subparsers.add_parser("show-daemon-status", help="Show persistent worker daemon service status")
     daemon_status_parser.add_argument("--service-name", default="worker-recovery-daemon", help="Persistent service instance name")
@@ -392,6 +542,7 @@ def main() -> None:
     upload_bundle_parser.add_argument("--manifest", required=True, help="Path to bundle_manifest.json")
     upload_bundle_parser.add_argument("--max-workers", type=int, default=0, help="Optional concurrent upload worker count; 0 uses config default")
     upload_bundle_parser.add_argument("--no-resume", action="store_true", help="Force re-upload even when the remote object already exists")
+    upload_bundle_parser.add_argument("--archive-mode", choices=["auto", "none", "tar", "tar.gz"], default="auto", help="Bundle payload upload mode")
 
     download_bundle_parser = subparsers.add_parser("download-asset-bundle", help="Download an asset bundle from configured object storage")
     download_bundle_parser.add_argument("--bundle-kind", required=True, help="Bundle kind, e.g. company_handoff")
@@ -411,6 +562,8 @@ def main() -> None:
     serve_parser = subparsers.add_parser("serve", help="Start the HTTP API")
     serve_parser.add_argument("--host", default="127.0.0.1")
     serve_parser.add_argument("--port", type=int, default=8765)
+    serve_parser.add_argument("--disable-runtime-watchdog", action="store_true", help="Disable the server-side recovery watchdog loop")
+    serve_parser.add_argument("--runtime-watchdog-poll-seconds", type=float, default=15.0, help="Poll interval for the server-side recovery watchdog")
 
     args = parser.parse_args()
     if args.command in {"backfill-linkedin-profile-registry", "show-linkedin-profile-registry-metrics"}:
@@ -644,6 +797,7 @@ def main() -> None:
                         storage_client,
                         max_workers=args.max_workers or None,
                         resume=not args.no_resume,
+                        archive_mode=str(args.archive_mode or "auto"),
                     ),
                     ensure_ascii=False,
                     indent=2,
@@ -783,31 +937,7 @@ def main() -> None:
             print(json.dumps(orchestrator.run_workflow_blocking(payload), ensure_ascii=False, indent=2))
             return
         payload["auto_job_daemon"] = not bool(args.no_auto_job_daemon)
-        queued = orchestrator.queue_workflow(payload)
-        queue_status = str(queued.get("status") or "")
-        dispatch = dict(queued.get("dispatch") or {})
-        matched_job_status = str(dispatch.get("matched_job_status") or "")
-        should_spawn_runner = queue_status == "queued" or (
-            queue_status == "joined_existing_job" and matched_job_status == "queued"
-        )
-        if should_spawn_runner:
-            queued["workflow_runner"] = spawn_workflow_runner(
-                str(queued.get("job_id") or ""),
-                auto_job_daemon=bool(payload.get("auto_job_daemon", False)),
-            )
-            runner_status = str(dict(queued.get("workflow_runner") or {}).get("status") or "")
-            queued["job_recovery"] = {
-                "status": (
-                    "runner_managed"
-                    if runner_status == "started" and bool(payload.get("auto_job_daemon", False))
-                    else ("runner_failed_to_start" if runner_status == "failed_to_start" else "disabled")
-                ),
-                "scope": "job_scoped",
-            }
-        elif queue_status == "needs_plan_review":
-            pass
-        else:
-            queued["job_recovery"] = {"status": "not_needed", "scope": "job_scoped"}
+        queued = orchestrator.start_workflow_runner_managed(payload)
         print(json.dumps(queued, ensure_ascii=False, indent=2))
         return
 
@@ -817,11 +947,68 @@ def main() -> None:
             recovery_payload = {"auto_job_daemon": True}
         print(
             json.dumps(
-                orchestrator.run_queued_workflow(args.job_id, recovery_payload=recovery_payload),
+                {
+                    "event": "workflow_runner_started",
+                    "job_id": str(args.job_id or ""),
+                    "auto_job_daemon": bool(args.auto_job_daemon),
+                },
                 ensure_ascii=False,
-                indent=2,
-            )
+            ),
+            file=sys.stderr,
+            flush=True,
         )
+        result = orchestrator.run_queued_workflow(args.job_id, recovery_payload=recovery_payload)
+        print(
+            json.dumps(
+                {
+                    "event": "workflow_runner_finished",
+                    "job_id": str(args.job_id or ""),
+                    "status": str(result.get("status") or ""),
+                    "stage": str(result.get("artifact", {}).get("summary", {}).get("stage") or ""),
+                },
+                ensure_ascii=False,
+            ),
+            file=sys.stderr,
+            flush=True,
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+
+    if args.command == "supervise-workflow":
+        print(
+            json.dumps(
+                {
+                    "event": "workflow_runner_started",
+                    "job_id": str(args.job_id or ""),
+                    "auto_job_daemon": bool(args.auto_job_daemon),
+                    "mode": "supervisor",
+                },
+                ensure_ascii=False,
+            ),
+            file=sys.stderr,
+            flush=True,
+        )
+        result = orchestrator.run_workflow_supervisor(
+            args.job_id,
+            auto_job_daemon=bool(args.auto_job_daemon),
+            poll_seconds=float(args.poll_seconds or 2.0),
+            max_ticks=int(args.max_ticks or 0),
+        )
+        print(
+            json.dumps(
+                {
+                    "event": "workflow_runner_finished",
+                    "job_id": str(args.job_id or ""),
+                    "status": str(result.get("status") or ""),
+                    "stage": str(result.get("stage") or ""),
+                    "mode": "supervisor",
+                },
+                ensure_ascii=False,
+            ),
+            file=sys.stderr,
+            flush=True,
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2))
         return
 
     if args.command == "show-job":
@@ -836,6 +1023,23 @@ def main() -> None:
         if result is None:
             raise SystemExit(f"Job {args.job_id} not found")
         print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+
+    if args.command == "show-system-progress":
+        print(
+            json.dumps(
+                orchestrator.get_system_progress(
+                    {
+                        "active_limit": args.active_limit,
+                        "object_sync_limit": args.object_sync_limit,
+                        "profile_registry_lookback_hours": args.profile_registry_lookback_hours,
+                        "force_refresh": bool(args.force_refresh),
+                    }
+                ),
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
         return
 
     if args.command == "show-trace":
@@ -859,6 +1063,37 @@ def main() -> None:
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return
 
+    if args.command == "cleanup-workflow-duplicates":
+        print(
+            json.dumps(
+                orchestrator.cleanup_duplicate_inflight_workflows(
+                    {
+                        "target_company": args.target_company,
+                        "active_limit": args.active_limit,
+                    }
+                ),
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return
+
+    if args.command == "supersede-workflow-jobs":
+        print(
+            json.dumps(
+                orchestrator.supersede_workflow_jobs(
+                    {
+                        "job_ids": list(args.job_id or []),
+                        "replacement_job_id": args.replacement_job_id,
+                        "reason": args.reason,
+                    }
+                ),
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return
+
     if args.command == "show-recoverable-workers":
         print(
             json.dumps(
@@ -868,6 +1103,30 @@ def main() -> None:
                         "lane_id": args.lane_id,
                         "job_id": args.job_id,
                         "limit": args.limit,
+                    }
+                ),
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return
+
+    if args.command == "cleanup-recoverable-workers":
+        print(
+            json.dumps(
+                orchestrator.cleanup_recoverable_workers(
+                    {
+                        "stale_after_seconds": args.stale_after_seconds,
+                        "lane_id": args.lane_id,
+                        "job_id": args.job_id,
+                        "target_company": args.target_company,
+                        "parent_job_statuses": list(args.parent_job_status or []),
+                        "limit": args.limit,
+                        "dry_run": bool(args.dry_run),
+                        "include_missing_jobs": bool(args.include_missing_jobs),
+                        "terminal_workflows_only": bool(args.terminal_workflows_only),
+                        "status": args.status,
+                        "reason": args.reason,
                     }
                 ),
                 ensure_ascii=False,
@@ -925,14 +1184,37 @@ def main() -> None:
                     orchestrator.run_worker_daemon_service(
                         {
                             "service_name": args.service_name,
-                        "owner_id": args.owner_id,
-                        "lease_seconds": args.lease_seconds,
-                        "stale_after_seconds": args.stale_after_seconds,
-                        "total_limit": args.total_limit,
-                        "job_id": args.job_id,
-                        "poll_seconds": args.poll_seconds,
-                        "max_ticks": args.max_ticks,
-                    }
+                            "owner_id": args.owner_id,
+                            "lease_seconds": args.lease_seconds,
+                            "stale_after_seconds": args.stale_after_seconds,
+                            "total_limit": args.total_limit,
+                            "job_id": args.job_id,
+                            "job_scoped": bool(args.job_scoped),
+                            "poll_seconds": args.poll_seconds,
+                            "max_ticks": args.max_ticks,
+                            "workflow_resume_stale_after_seconds": args.workflow_auto_resume_stale_after_seconds,
+                            "workflow_queue_resume_stale_after_seconds": args.workflow_queue_auto_takeover_stale_after_seconds,
+                        }
+                    ),
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+        except SingleInstanceError as exc:
+            raise SystemExit(str(exc)) from exc
+        return
+
+    if args.command == "run-server-runtime-watchdog-service":
+        try:
+            print(
+                json.dumps(
+                    orchestrator.run_hosted_runtime_watchdog_service(
+                        {
+                            "hosted_runtime_watchdog_service_name": args.service_name,
+                            "shared_service_name": args.shared_service_name,
+                            "hosted_runtime_watchdog_poll_seconds": args.poll_seconds,
+                            "hosted_runtime_watchdog_max_ticks": args.max_ticks,
+                        }
                     ),
                     ensure_ascii=False,
                     indent=2,
@@ -1020,6 +1302,13 @@ def main() -> None:
         return
 
     if args.command == "serve":
+        watchdog_stop = None
+        watchdog_thread = None
+        if not args.disable_runtime_watchdog:
+            watchdog_stop, watchdog_thread = start_server_runtime_watchdog(
+                orchestrator,
+                poll_seconds=float(args.runtime_watchdog_poll_seconds or 15.0),
+            )
         server = create_server(orchestrator, host=args.host, port=args.port)
         print(f"Serving on http://{args.host}:{args.port}")
         try:
@@ -1028,6 +1317,10 @@ def main() -> None:
             pass
         finally:
             server.server_close()
+            if watchdog_stop is not None:
+                watchdog_stop.set()
+            if watchdog_thread is not None:
+                watchdog_thread.join(timeout=max(1.0, float(args.runtime_watchdog_poll_seconds or 15.0)))
 
 
 if __name__ == "__main__":

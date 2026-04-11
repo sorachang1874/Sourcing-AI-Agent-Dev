@@ -173,9 +173,11 @@ class AcquisitionEngine:
             if strategy_type == "investor_firm_roster":
                 return self._acquire_investor_firm_roster(task, state, job_request)
             return self._acquire_full_roster(task, state, job_request)
+        if task.task_type == "acquire_former_search_seed":
+            return self._acquire_former_search_seed(task, state, job_request)
         if company_key == "anthropic" and strategy_type != "investor_firm_roster" and use_local_anthropic_assets:
             return self._anthropic_local_asset_task(task, bootstrap_summary or {}, state)
-        if task.task_type == "enrich_profiles_multisource":
+        if task.task_type in {"enrich_profiles_multisource", "enrich_linkedin_profiles", "enrich_public_web_signals"}:
             return self._enrich_profiles(task, state, job_request)
         if task.task_type == "normalize_asset_snapshot":
             return self._normalize_snapshot(task, state, job_request)
@@ -730,6 +732,24 @@ class AcquisitionEngine:
             [item for item in list(snapshot.query_summaries or []) if str(item.get("status") or "") == "queued"]
         )
         if snapshot.stop_reason == "queued_background_search" or queued_query_count > 0:
+            payload = {
+                **snapshot.to_record(),
+                "strategy_type": task.metadata.get("strategy_type", ""),
+                "cost_policy": cost_policy,
+                "queued_query_count": queued_query_count,
+            }
+            if snapshot.entries:
+                return AcquisitionExecution(
+                    task_id=task.task_id,
+                    status="completed",
+                    detail=(
+                        f"Recovered {len(snapshot.entries)} search-seed candidates while "
+                        f"{queued_query_count} background web searches continue; downstream enrichment can proceed "
+                        "and completed workers will reconcile later."
+                    ),
+                    payload=payload,
+                    state_updates={"search_seed_snapshot": snapshot},
+                )
             return AcquisitionExecution(
                 task_id=task.task_id,
                 status="blocked",
@@ -737,12 +757,7 @@ class AcquisitionEngine:
                     f"Search-seed acquisition queued {queued_query_count} background web searches; "
                     "resume the worker daemon to finish remote task_get before fallback or downstream enrichment."
                 ),
-                payload={
-                    **snapshot.to_record(),
-                    "strategy_type": task.metadata.get("strategy_type", ""),
-                    "cost_policy": cost_policy,
-                    "queued_query_count": queued_query_count,
-                },
+                payload=payload,
                 state_updates={"search_seed_snapshot": snapshot},
             )
         if not snapshot.entries:
@@ -769,12 +784,67 @@ class AcquisitionEngine:
             state_updates={"search_seed_snapshot": snapshot},
         )
 
+    def _acquire_former_search_seed(
+        self,
+        task: AcquisitionTask,
+        state: dict[str, Any],
+        job_request: JobRequest,
+    ) -> AcquisitionExecution:
+        identity = state.get("company_identity")
+        snapshot_dir = state.get("snapshot_dir")
+        if not isinstance(identity, CompanyIdentity) or not isinstance(snapshot_dir, Path):
+            return AcquisitionExecution(
+                task_id=task.task_id,
+                status="blocked",
+                detail="Company identity must be resolved before former-member LinkedIn search can run.",
+                payload={},
+            )
+        filter_hints = _build_former_filter_hints(
+            identity=identity,
+            base_filter_hints=dict(task.metadata.get("filter_hints") or {}),
+        )
+        cost_policy = _effective_cost_policy(task.metadata.get("cost_policy"), job_request)
+        former_cost_policy = {
+            **cost_policy,
+            "provider_people_search_mode": "primary_only",
+            "provider_people_search_min_expected_results": int(
+                task.metadata.get("former_provider_people_search_min_expected_results") or 50
+            ),
+        }
+        explicit_task = AcquisitionTask(
+            task_id=task.task_id,
+            task_type="acquire_search_seed_pool",
+            title=task.title,
+            description=task.description,
+            source_hint=task.source_hint,
+            status="ready",
+            blocking=task.blocking,
+            metadata={
+                **dict(task.metadata or {}),
+                "strategy_type": "former_employee_search",
+                "employment_statuses": ["former"],
+                "search_channel_order": ["harvest_profile_search"],
+                "search_query_bundles": [],
+                "filter_hints": filter_hints,
+                "cost_policy": former_cost_policy,
+            },
+        )
+        return self._acquire_search_seed_pool(explicit_task, state, job_request)
+
     def _enrich_profiles(self, task: AcquisitionTask, state: dict[str, Any], job_request: JobRequest) -> AcquisitionExecution:
         snapshot = state.get("roster_snapshot")
         search_seed_snapshot = state.get("search_seed_snapshot")
         snapshot_dir = state.get("snapshot_dir")
         strategy_type = str(task.metadata.get("strategy_type") or "")
         cost_policy = _effective_cost_policy(task.metadata.get("cost_policy"), job_request)
+        enrichment_scope = str(task.metadata.get("enrichment_scope") or "").strip().lower()
+        if not enrichment_scope:
+            if task.task_type == "enrich_linkedin_profiles":
+                enrichment_scope = "linkedin_stage_1"
+            elif task.task_type == "enrich_public_web_signals":
+                enrichment_scope = "public_web_stage_2"
+            else:
+                enrichment_scope = "full"
         if not isinstance(snapshot_dir, Path):
             return AcquisitionExecution(
                 task_id=task.task_id,
@@ -783,11 +853,71 @@ class AcquisitionEngine:
                 payload={},
             )
 
+        def _stage_request() -> JobRequest:
+            if enrichment_scope == "linkedin_stage_1":
+                return JobRequest(
+                    raw_user_request=job_request.raw_user_request,
+                    query=job_request.query,
+                    target_company=job_request.target_company,
+                    slug_resolution_limit=int(task.metadata.get("slug_resolution_limit", job_request.slug_resolution_limit) or 0),
+                    profile_detail_limit=int(task.metadata.get("profile_detail_limit", job_request.profile_detail_limit) or 0),
+                    publication_scan_limit=0,
+                    publication_lead_limit=0,
+                    exploration_limit=0,
+                    scholar_coauthor_follow_up_limit=0,
+                )
+            if enrichment_scope == "public_web_stage_2":
+                return JobRequest(
+                    raw_user_request=job_request.raw_user_request,
+                    query=job_request.query,
+                    target_company=job_request.target_company,
+                    slug_resolution_limit=0,
+                    profile_detail_limit=0,
+                    publication_scan_limit=int(task.metadata.get("publication_scan_limit", job_request.publication_scan_limit) or 0),
+                    publication_lead_limit=int(task.metadata.get("publication_lead_limit", job_request.publication_lead_limit) or 0),
+                    exploration_limit=int(task.metadata.get("exploration_limit", job_request.exploration_limit) or 0),
+                    scholar_coauthor_follow_up_limit=int(
+                        task.metadata.get("scholar_coauthor_follow_up_limit", job_request.scholar_coauthor_follow_up_limit) or 0
+                    ),
+                )
+            return JobRequest(
+                raw_user_request=job_request.raw_user_request,
+                query=job_request.query,
+                target_company=job_request.target_company,
+                slug_resolution_limit=int(task.metadata.get("slug_resolution_limit", job_request.slug_resolution_limit) or 0),
+                profile_detail_limit=int(task.metadata.get("profile_detail_limit", job_request.profile_detail_limit) or 0),
+                publication_scan_limit=int(task.metadata.get("publication_scan_limit", job_request.publication_scan_limit) or 0),
+                publication_lead_limit=int(task.metadata.get("publication_lead_limit", job_request.publication_lead_limit) or 0),
+                exploration_limit=int(task.metadata.get("exploration_limit", job_request.exploration_limit) or 0),
+                scholar_coauthor_follow_up_limit=int(
+                    task.metadata.get("scholar_coauthor_follow_up_limit", job_request.scholar_coauthor_follow_up_limit) or 0
+                ),
+            )
+
         canonicalization_summary: dict[str, Any] = {}
         source_snapshots: dict[str, Any] = {}
-        if isinstance(snapshot, CompanyRosterSnapshot) or isinstance(search_seed_snapshot, SearchSeedSnapshot):
-            candidates = []
-            evidence = []
+        candidates: list[Candidate] = []
+        evidence: list[EvidenceRecord] = []
+        reuse_existing_stage_candidates = (
+            enrichment_scope == "public_web_stage_2"
+            and (
+                list(state.get("candidates") or [])
+                or isinstance(state.get("candidate_doc_path"), Path)
+            )
+        )
+        if strategy_type == "investor_firm_roster" and state.get("candidates"):
+            candidates = list(state.get("candidates") or [])
+            evidence = list(state.get("evidence") or [])
+        elif reuse_existing_stage_candidates:
+            candidates = list(state.get("candidates") or [])
+            evidence = list(state.get("evidence") or [])
+            candidate_doc_path = state.get("candidate_doc_path")
+            if isinstance(candidate_doc_path, Path):
+                source_snapshots["candidate_documents"] = {
+                    "candidate_doc_path": str(candidate_doc_path),
+                    "enrichment_scope": "linkedin_stage_1",
+                }
+        elif isinstance(snapshot, CompanyRosterSnapshot) or isinstance(search_seed_snapshot, SearchSeedSnapshot):
             if isinstance(snapshot, CompanyRosterSnapshot):
                 roster_candidates, roster_evidence = build_candidates_from_roster(snapshot)
                 candidates.extend(roster_candidates)
@@ -800,9 +930,6 @@ class AcquisitionEngine:
                 source_snapshots["search_seed_snapshot"] = search_seed_snapshot.to_record()
             if len(candidates) > 1:
                 candidates, evidence, canonicalization_summary = canonicalize_company_records(candidates, evidence)
-        elif strategy_type == "investor_firm_roster" and state.get("candidates"):
-            candidates = list(state.get("candidates") or [])
-            evidence = list(state.get("evidence") or [])
         else:
             return AcquisitionExecution(
                 task_id=task.task_id,
@@ -815,15 +942,11 @@ class AcquisitionEngine:
                 task_id=task.task_id,
                 status="blocked",
                 detail="Acquisition returned no candidates that could be normalized into candidate documents.",
-                payload=(
-                    source_snapshots
-                    if source_snapshots
-                    else {"strategy_type": strategy_type}
-                ),
+                payload=source_snapshots if source_snapshots else {"strategy_type": strategy_type, "enrichment_scope": enrichment_scope},
             )
 
+        logger = AssetLogger(snapshot_dir)
         if strategy_type == "investor_firm_roster":
-            logger = AssetLogger(snapshot_dir)
             candidate_doc_path = snapshot_dir / "candidate_documents.json"
             logger.write_json(
                 candidate_doc_path,
@@ -845,9 +968,7 @@ class AcquisitionEngine:
             return AcquisitionExecution(
                 task_id=task.task_id,
                 status="completed",
-                detail=(
-                    f"Prepared {len(candidates)} investor-firm candidate documents from tiered firm roster assets."
-                ),
+                detail=f"Prepared {len(candidates)} investor-firm candidate documents from tiered firm roster assets.",
                 payload={
                     "candidate_count": len(candidates),
                     "evidence_count": len(evidence),
@@ -861,22 +982,24 @@ class AcquisitionEngine:
                 },
             )
 
-        enrichment_request = JobRequest(
-            raw_user_request=job_request.raw_user_request,
-            query=job_request.query,
-            target_company=job_request.target_company,
-            slug_resolution_limit=int(task.metadata.get("slug_resolution_limit", job_request.slug_resolution_limit) or 0),
-            profile_detail_limit=int(task.metadata.get("profile_detail_limit", job_request.profile_detail_limit) or 0),
-            publication_scan_limit=int(task.metadata.get("publication_scan_limit", job_request.publication_scan_limit) or 0),
-            publication_lead_limit=int(task.metadata.get("publication_lead_limit", job_request.publication_lead_limit) or 0),
-            exploration_limit=int(task.metadata.get("exploration_limit", job_request.exploration_limit) or 0),
-            scholar_coauthor_follow_up_limit=int(
-                task.metadata.get("scholar_coauthor_follow_up_limit", job_request.scholar_coauthor_follow_up_limit) or 0
-            ),
+        enrichment_request = _stage_request()
+        enrichment_identity = (
+            snapshot.company_identity
+            if isinstance(snapshot, CompanyRosterSnapshot)
+            else (
+                search_seed_snapshot.company_identity
+                if isinstance(search_seed_snapshot, SearchSeedSnapshot)
+                else state.get("company_identity")
+            )
         )
-        enrichment_identity = snapshot.company_identity if isinstance(snapshot, CompanyRosterSnapshot) else search_seed_snapshot.company_identity
-        logger = AssetLogger(snapshot_dir)
-        full_roster_profile_prefetch = bool(task.metadata.get("full_roster_profile_prefetch"))
+        if not isinstance(enrichment_identity, CompanyIdentity):
+            return AcquisitionExecution(
+                task_id=task.task_id,
+                status="blocked",
+                detail="Company identity must be available before enrichment can continue.",
+                payload={"enrichment_scope": enrichment_scope},
+            )
+        full_roster_profile_prefetch = bool(task.metadata.get("full_roster_profile_prefetch")) and enrichment_scope != "public_web_stage_2"
         enrichment = self.multi_source_enricher.enrich(
             enrichment_identity,
             snapshot_dir,
@@ -890,62 +1013,180 @@ class AcquisitionEngine:
             parallel_exploration_workers=int(cost_policy.get("parallel_exploration_workers", 2) or 2),
             cost_policy=cost_policy,
             full_roster_profile_prefetch=full_roster_profile_prefetch,
+            enrichment_scope=enrichment_scope,
         )
+
+        stage_source_kind = (
+            "linkedin_profile_enrichment"
+            if enrichment_scope == "linkedin_stage_1"
+            else (
+                "public_web_enrichment"
+                if enrichment_scope == "public_web_stage_2"
+                else "multisource_enrichment"
+            )
+        )
+        stage_mode = (
+            "linkedin_stage_1"
+            if enrichment_scope == "linkedin_stage_1"
+            else (
+                "linkedin_plus_public_web"
+                if enrichment_scope == "public_web_stage_2"
+                else "roster_plus_multisource"
+            )
+        )
+        stage_archive_path = (
+            snapshot_dir / "candidate_documents.linkedin_stage_1.json"
+            if enrichment_scope == "linkedin_stage_1"
+            else (
+                snapshot_dir / "candidate_documents.public_web_stage_2.json"
+                if enrichment_scope == "public_web_stage_2"
+                else None
+            )
+        )
+        candidate_doc_path = snapshot_dir / "candidate_documents.json"
+
+        def _write_candidate_documents(
+            *,
+            stage_candidates: list[Candidate],
+            stage_evidence: list[EvidenceRecord],
+            stage_enrichment: Any,
+            write_stage_archive: bool = True,
+        ) -> None:
+            payload = {
+                "snapshot": source_snapshots.get("roster_snapshot") or source_snapshots.get("search_seed_snapshot") or {},
+                "acquisition_sources": source_snapshots,
+                "candidates": [candidate.to_record() for candidate in stage_candidates],
+                "evidence": [item.to_record() for item in stage_evidence],
+                "candidate_count": len(stage_candidates),
+                "evidence_count": len(stage_evidence),
+                "enrichment_mode": stage_mode,
+                "enrichment_scope": enrichment_scope,
+                "acquisition_canonicalization": canonicalization_summary,
+                "enrichment_summary": stage_enrichment.to_record(),
+                "acquisition_stage": {
+                    "phase": str(task.metadata.get("acquisition_phase") or ""),
+                    "phase_title": str(task.metadata.get("acquisition_phase_title") or ""),
+                    "task_id": task.task_id,
+                    "task_type": task.task_type,
+                },
+            }
+            if int(getattr(stage_enrichment, "queued_harvest_worker_count", 0) or 0) > 0:
+                payload["background_reconcile"] = {
+                    "kind": "harvest_profile_prefetch",
+                    "queued_harvest_worker_count": int(getattr(stage_enrichment, "queued_harvest_worker_count", 0) or 0),
+                    "stop_reason": str(getattr(stage_enrichment, "stop_reason", "") or ""),
+                }
+            elif int(getattr(stage_enrichment, "queued_exploration_count", 0) or 0) > 0:
+                payload["background_reconcile"] = {
+                    "kind": "public_web_exploration",
+                    "queued_exploration_count": int(getattr(stage_enrichment, "queued_exploration_count", 0) or 0),
+                    "stop_reason": str(getattr(stage_enrichment, "stop_reason", "") or ""),
+                }
+            if enrichment_scope == "linkedin_stage_1":
+                payload["next_connectors"] = {
+                    "profile_detail_accounts": [account.account_id for account in profile_detail_accounts(self.accounts)],
+                    "note": "LinkedIn stage-1 baseline is ready and can power deterministic layering or retrieval preview.",
+                }
+            elif enrichment_scope == "public_web_stage_2":
+                payload["next_connectors"] = {
+                    "note": "Public-web stage-2 enrichment extended the LinkedIn baseline with publications, coauthor, and exploration evidence.",
+                }
+            logger.write_json(
+                candidate_doc_path,
+                payload,
+                asset_type="candidate_documents",
+                source_kind=stage_source_kind,
+                is_raw_asset=False,
+                model_safe=True,
+            )
+            if write_stage_archive and isinstance(stage_archive_path, Path):
+                logger.write_json(
+                    stage_archive_path,
+                    payload,
+                    asset_type="candidate_documents",
+                    source_kind=stage_source_kind,
+                    is_raw_asset=False,
+                    model_safe=True,
+                )
+
+        state_updates: dict[str, Any] = {}
         if full_roster_profile_prefetch and int(getattr(enrichment, "queued_harvest_worker_count", 0) or 0) > 0:
+            candidates = enrichment.candidates
+            _write_candidate_documents(
+                stage_candidates=candidates,
+                stage_evidence=evidence,
+                stage_enrichment=enrichment,
+                write_stage_archive=False,
+            )
+            state_updates = {
+                "candidates": candidates,
+                "evidence": evidence,
+                "candidate_doc_path": candidate_doc_path,
+            }
             return AcquisitionExecution(
                 task_id=task.task_id,
                 status="blocked",
                 detail=(
-                    "Profile enrichment queued background Harvest profile prefetch work; "
-                    "resume after worker recovery completes remote dataset fetch."
+                    f"Built {len(candidates)} interim {str(task.metadata.get('acquisition_phase_title') or 'LinkedIn stage')} candidate documents while "
+                    f"{int(getattr(enrichment, 'queued_harvest_worker_count', 0) or 0)} background Harvest profile "
+                    "prefetch workers continue; Stage 1 will complete after background profile detail is reconciled."
                 ),
                 payload={
                     "candidate_count": len(candidates),
+                    "evidence_count": len(evidence),
+                    "candidate_doc_path": str(candidate_doc_path),
+                    "stage_archive_path": "",
                     "artifact_paths": enrichment.artifact_paths,
                     "queued_harvest_worker_count": int(getattr(enrichment, "queued_harvest_worker_count", 0) or 0),
                     "stop_reason": str(getattr(enrichment, "stop_reason", "") or ""),
+                    "enrichment_mode": stage_mode,
+                    "enrichment_scope": enrichment_scope,
+                    "resolved_profile_count": len(enrichment.resolved_profiles),
+                    "publication_match_count": len(enrichment.publication_matches),
+                    "lead_candidate_count": len(enrichment.lead_candidates),
+                    "acquisition_canonicalization": canonicalization_summary,
                 },
+                state_updates=state_updates,
             )
+
         candidates = enrichment.candidates
         evidence.extend(enrichment.evidence)
+        _write_candidate_documents(stage_candidates=candidates, stage_evidence=evidence, stage_enrichment=enrichment)
+        state_updates = {
+            "candidates": candidates,
+            "evidence": evidence,
+            "candidate_doc_path": candidate_doc_path,
+        }
+        if enrichment_scope == "linkedin_stage_1":
+            state_updates["linkedin_stage_candidate_doc_path"] = stage_archive_path
+            state_updates["linkedin_stage_completed"] = True
+        elif enrichment_scope == "public_web_stage_2":
+            state_updates["public_web_stage_candidate_doc_path"] = stage_archive_path
+            state_updates["public_web_stage_completed"] = True
 
-        candidate_doc_path = snapshot_dir / "candidate_documents.json"
-        logger.write_json(
-            candidate_doc_path,
-            {
-                "snapshot": source_snapshots.get("roster_snapshot") or source_snapshots.get("search_seed_snapshot") or {},
-                "acquisition_sources": source_snapshots,
-                "candidates": [candidate.to_record() for candidate in candidates],
-                "evidence": [item.to_record() for item in evidence],
-                "enrichment_mode": "roster_plus_multisource",
-                "acquisition_canonicalization": canonicalization_summary,
-                "enrichment_summary": enrichment.to_record(),
-                "next_connectors": {
-                    "profile_detail_accounts": [account.account_id for account in profile_detail_accounts(self.accounts)],
-                    "note": (
-                        "Roster baseline is normalized. Remaining adapters should focus on broader company search, "
-                        "higher-recall slug discovery, and cloud persistence for high-value LinkedIn profile assets."
-                    ),
-                },
-            },
-            asset_type="candidate_documents",
-            source_kind="multisource_enrichment",
-            is_raw_asset=False,
-            model_safe=True,
+        detail_prefix = (
+            "Built LinkedIn stage-1 candidate documents."
+            if enrichment_scope == "linkedin_stage_1"
+            else (
+                "Extended candidate documents with public-web stage-2 evidence."
+                if enrichment_scope == "public_web_stage_2"
+                else "Built candidate documents from roster + multisource enrichment."
+            )
         )
-
         return AcquisitionExecution(
             task_id=task.task_id,
             status="completed",
             detail=(
-                f"Built {len(candidates)} candidate documents from roster + multisource enrichment. "
-                f"Resolved {len(enrichment.resolved_profiles)} profile details and matched {len(enrichment.publication_matches)} publications."
+                f"{detail_prefix} Resolved {len(enrichment.resolved_profiles)} profile details and "
+                f"matched {len(enrichment.publication_matches)} publications."
             ),
             payload={
                 "candidate_count": len(candidates),
                 "evidence_count": len(evidence),
                 "candidate_doc_path": str(candidate_doc_path),
-                "enrichment_mode": "roster_plus_multisource",
+                "stage_archive_path": str(stage_archive_path or ""),
+                "enrichment_mode": stage_mode,
+                "enrichment_scope": enrichment_scope,
                 "resolved_profile_count": len(enrichment.resolved_profiles),
                 "publication_match_count": len(enrichment.publication_matches),
                 "lead_candidate_count": len(enrichment.lead_candidates),
@@ -955,11 +1196,7 @@ class AcquisitionEngine:
                 "queued_exploration_count": int(getattr(enrichment, "queued_exploration_count", 0) or 0),
                 "stop_reason": str(getattr(enrichment, "stop_reason", "") or ""),
             },
-            state_updates={
-                "candidates": candidates,
-                "evidence": evidence,
-                "candidate_doc_path": candidate_doc_path,
-            },
+            state_updates=state_updates,
         )
 
     def _should_run_default_former_search_seed(self, task: AcquisitionTask, job_request: JobRequest) -> bool:
@@ -1365,19 +1602,61 @@ class AcquisitionEngine:
         errors: list[str] = []
         seen_keys: set[str] = set()
 
-        for shard in shards:
+        shard_specs: list[dict[str, Any]] = []
+        for index, shard in enumerate(shards, start=1):
             shard_id = str(shard.get("shard_id") or "shard").strip() or "shard"
             shard_snapshot_dir = shard_root / shard_id
             shard_snapshot_dir.mkdir(parents=True, exist_ok=True)
+            shard_specs.append(
+                {
+                    "index": index,
+                    "shard": dict(shard),
+                    "shard_id": shard_id,
+                    "shard_snapshot_dir": shard_snapshot_dir,
+                }
+            )
+
+        def _fetch_shard(spec: dict[str, Any]) -> dict[str, Any]:
+            shard = dict(spec.get("shard") or {})
             shard_snapshot = self.harvest_company_connector.fetch_company_roster(
                 identity,
-                shard_snapshot_dir,
-                asset_logger=logger,
+                Path(spec["shard_snapshot_dir"]),
                 max_pages=int(shard.get("max_pages") or 1),
                 page_limit=int(shard.get("page_limit") or 25),
                 company_filters=dict(shard.get("company_filters") or {}),
                 allow_shared_provider_cache=allow_shared_provider_cache,
             )
+            return {
+                "index": int(spec.get("index") or 0),
+                "shard": shard,
+                "shard_id": str(spec.get("shard_id") or ""),
+                "snapshot": shard_snapshot,
+            }
+
+        fetched_shards_by_index: dict[int, dict[str, Any]] = {}
+        if shard_specs:
+            parallel_workers = max(1, min(len(shard_specs), 8))
+            if parallel_workers == 1:
+                for spec in shard_specs:
+                    result = _fetch_shard(spec)
+                    fetched_shards_by_index[int(result.get("index") or 0)] = result
+            else:
+                with ThreadPoolExecutor(max_workers=parallel_workers) as executor:
+                    future_map = {
+                        executor.submit(_fetch_shard, spec): int(spec.get("index") or 0)
+                        for spec in shard_specs
+                    }
+                    for future in as_completed(future_map):
+                        result = dict(future.result() or {})
+                        index = int(result.get("index") or future_map.get(future) or 0)
+                        fetched_shards_by_index[index] = result
+
+        for spec in sorted(shard_specs, key=lambda item: int(item.get("index") or 0)):
+            shard = dict(spec.get("shard") or {})
+            shard_id = str(spec.get("shard_id") or "shard").strip() or "shard"
+            shard_snapshot = dict(fetched_shards_by_index.get(int(spec.get("index") or 0)) or {}).get("snapshot")
+            if not isinstance(shard_snapshot, CompanyRosterSnapshot):
+                continue
             unique_count = 0
             duplicate_count = 0
             for entry in shard_snapshot.raw_entries:

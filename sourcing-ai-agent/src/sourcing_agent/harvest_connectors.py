@@ -17,6 +17,23 @@ from .connectors import CompanyIdentity, CompanyRosterSnapshot
 from .settings import HarvestActorSettings
 
 
+class HarvestRetryableRequestError(RuntimeError):
+    def __init__(
+        self,
+        message: str,
+        *,
+        endpoint: str = "",
+        logical_name: str = "",
+        run_id: str = "",
+        dataset_id: str = "",
+    ) -> None:
+        super().__init__(message)
+        self.endpoint = str(endpoint or "")
+        self.logical_name = str(logical_name or "")
+        self.run_id = str(run_id or "")
+        self.dataset_id = str(dataset_id or "")
+
+
 @dataclass(frozen=True, slots=True)
 class HarvestExecutionArtifact:
     label: str
@@ -1877,6 +1894,23 @@ def _normalize_profile_identifier(value: str) -> str:
 _HARVEST_PROFILE_RETRY_BATCH_SIZES = (25, 10, 5)
 _HARVEST_PROFILE_DIRECT_FALLBACK_THRESHOLD = 5
 _HARVEST_PROVIDER_RESULT_CAP = 2500
+_HARVEST_DATASET_FETCH_MAX_ATTEMPTS = 3
+_HARVEST_DATASET_PAGE_SIZE_DEFAULT = 200
+_HARVEST_DATASET_PAGE_SIZE_PROFILE_BATCH = 100
+_HARVEST_RETRYABLE_HTTP_STATUS_CODES = {408, 409, 425, 429, 500, 502, 503, 504}
+_HARVEST_RETRYABLE_ERROR_MARKERS = (
+    "incompleteread",
+    "timed out",
+    "timeout",
+    "temporarily unavailable",
+    "temporary failure",
+    "connection aborted",
+    "connection reset",
+    "remote end closed connection",
+    "remotedisconnected",
+    "eof occurred",
+    "invalid json",
+)
 
 
 def _dedupe_preserve_order(values: list[str]) -> list[str]:
@@ -1952,6 +1986,50 @@ def _recommended_harvest_profile_timeout_seconds(requested_items: int, *, collec
 def _recommended_harvest_profile_search_timeout_seconds(requested_pages: int) -> int:
     page_count = max(1, int(requested_pages or 0))
     return max(300, min(1800, page_count * 20))
+
+
+def _recommended_harvest_dataset_page_size(logical_name: str, *, request_context: dict[str, Any] | None = None) -> int:
+    normalized_name = str(logical_name or "").strip().lower()
+    requested_item_count = 0
+    if isinstance(request_context, dict):
+        try:
+            requested_item_count = max(
+                0,
+                int(
+                    request_context.get("requested_url_count")
+                    or request_context.get("requested_item_count")
+                    or request_context.get("requested_items")
+                    or 0
+                ),
+            )
+        except (TypeError, ValueError):
+            requested_item_count = 0
+    if normalized_name == "harvest_profile_scraper_batch":
+        if requested_item_count >= 500:
+            return 50
+        if requested_item_count >= 200:
+            return 75
+        return _HARVEST_DATASET_PAGE_SIZE_PROFILE_BATCH
+    if requested_item_count >= 2000:
+        return 100
+    return _HARVEST_DATASET_PAGE_SIZE_DEFAULT
+
+
+def _harvest_retry_backoff_seconds(attempt_index: int) -> float:
+    return min(8.0, 1.0 * (2 ** max(0, int(attempt_index or 0))))
+
+
+def _is_retryable_harvest_request_error(exc: Exception) -> bool:
+    message = str(exc or "").strip().lower()
+    if not message:
+        return False
+    http_match = re.search(r"harvest api http\s+(\d+)", message)
+    if http_match:
+        try:
+            return int(http_match.group(1)) in _HARVEST_RETRYABLE_HTTP_STATUS_CODES
+        except (TypeError, ValueError):
+            return False
+    return any(marker in message for marker in _HARVEST_RETRYABLE_ERROR_MARKERS)
 
 
 def _estimate_harvest_charge_usd(mode: str, item_count: int, *, fallback_per_1k: float) -> float:
@@ -2033,6 +2111,51 @@ def _execute_harvest_actor_with_checkpoint(
         "actor_id": settings.actor_id,
         "request_context": dict(request_context or {}),
     }
+
+    def _retryable_pending_result(
+        exc: HarvestRetryableRequestError,
+        *,
+        run_id: str,
+        dataset_id: str,
+        artifacts: list[HarvestExecutionArtifact],
+    ) -> HarvestExecutionResult:
+        retry_count = max(0, int(existing.get("dataset_fetch_retry_count") or 0)) + 1
+        message = (
+            f"Harvest dataset download will be retried for run {run_id} / dataset {dataset_id}: {exc}"
+        )
+        retry_artifact = HarvestExecutionArtifact(
+            label="dataset_items_retryable_error",
+            payload={
+                "logical_name": logical_name,
+                "run_id": run_id,
+                "dataset_id": dataset_id,
+                "message": str(exc),
+                "endpoint": exc.endpoint,
+                "retry_count": retry_count,
+            },
+            metadata={
+                "logical_name": logical_name,
+                "run_id": run_id,
+                "dataset_id": dataset_id,
+                "retry_count": retry_count,
+                "provider": "apify",
+            },
+        )
+        return HarvestExecutionResult(
+            logical_name=logical_name,
+            checkpoint={
+                **base_checkpoint,
+                "run_id": run_id,
+                "dataset_id": dataset_id,
+                "status": "dataset_download_retryable",
+                "dataset_fetch_retry_count": retry_count,
+                "last_retryable_error": str(exc),
+            },
+            pending=True,
+            message=message,
+            artifacts=[*artifacts, retry_artifact],
+        )
+
     run_id = str(existing.get("run_id") or "").strip()
     dataset_id = str(existing.get("dataset_id") or existing.get("default_dataset_id") or "").strip()
 
@@ -2057,17 +2180,20 @@ def _execute_harvest_actor_with_checkpoint(
         if not run_id:
             raise RuntimeError(f"Harvest async run submission returned no run id for {logical_name}.")
         if _harvest_run_is_terminal(run_status):
-            return _complete_harvest_execution(
-                settings,
-                logical_name=logical_name,
-                payload=payload,
-                base_path=base_path,
-                run=run,
-                run_id=run_id,
-                dataset_id=dataset_id,
-                artifacts=artifacts,
-                request_context=request_context,
-            )
+            try:
+                return _complete_harvest_execution(
+                    settings,
+                    logical_name=logical_name,
+                    payload=payload,
+                    base_path=base_path,
+                    run=run,
+                    run_id=run_id,
+                    dataset_id=dataset_id,
+                    artifacts=artifacts,
+                    request_context=request_context,
+                )
+            except HarvestRetryableRequestError as exc:
+                return _retryable_pending_result(exc, run_id=run_id, dataset_id=dataset_id, artifacts=artifacts)
         return HarvestExecutionResult(
             logical_name=logical_name,
             checkpoint={
@@ -2110,17 +2236,20 @@ def _execute_harvest_actor_with_checkpoint(
             message=f"Waiting for Harvest actor run {run_id} to finish ({run_status}).",
             artifacts=artifacts,
         )
-    return _complete_harvest_execution(
-        settings,
-        logical_name=logical_name,
-        payload=payload,
-        base_path=base_path,
-        run=run,
-        run_id=run_id,
-        dataset_id=dataset_id,
-        artifacts=artifacts,
-        request_context=request_context,
-    )
+    try:
+        return _complete_harvest_execution(
+            settings,
+            logical_name=logical_name,
+            payload=payload,
+            base_path=base_path,
+            run=run,
+            run_id=run_id,
+            dataset_id=dataset_id,
+            artifacts=artifacts,
+            request_context=request_context,
+        )
+    except HarvestRetryableRequestError as exc:
+        return _retryable_pending_result(exc, run_id=run_id, dataset_id=dataset_id, artifacts=artifacts)
 
 
 def _complete_harvest_execution(
@@ -2142,7 +2271,13 @@ def _complete_harvest_execution(
         raise RuntimeError(f"Harvest actor run {run_id} finished with status {run_status}{detail}.")
     if not dataset_id:
         raise RuntimeError(f"Harvest actor run {run_id} finished without a dataset id.")
-    body = _get_harvest_dataset_items(settings, dataset_id)
+    body = _get_harvest_dataset_items(
+        settings,
+        dataset_id,
+        logical_name=logical_name,
+        run_id=run_id,
+        request_context=request_context,
+    )
     artifacts = [
         *artifacts,
         HarvestExecutionArtifact(
@@ -2208,7 +2343,50 @@ def _get_harvest_actor_run(settings: HarvestActorSettings, run_id: str) -> Any:
     return _harvest_json_request(endpoint, timeout=settings.timeout_seconds + 15)
 
 
-def _get_harvest_dataset_items(settings: HarvestActorSettings, dataset_id: str) -> Any:
+def _get_harvest_dataset_items(
+    settings: HarvestActorSettings,
+    dataset_id: str,
+    *,
+    logical_name: str = "",
+    run_id: str = "",
+    request_context: dict[str, Any] | None = None,
+) -> Any:
+    page_size = _recommended_harvest_dataset_page_size(logical_name, request_context=request_context)
+    offset = 0
+    items: list[Any] = []
+    while True:
+        page = _get_harvest_dataset_items_page(
+            settings,
+            dataset_id,
+            offset=offset,
+            limit=page_size,
+            logical_name=logical_name,
+            run_id=run_id,
+        )
+        if page is None:
+            break
+        if isinstance(page, list):
+            page_items = list(page)
+        else:
+            page_items = [page]
+        if not page_items:
+            break
+        items.extend(page_items)
+        if len(page_items) < page_size:
+            break
+        offset += len(page_items)
+    return items
+
+
+def _get_harvest_dataset_items_page(
+    settings: HarvestActorSettings,
+    dataset_id: str,
+    *,
+    offset: int,
+    limit: int,
+    logical_name: str,
+    run_id: str,
+) -> Any:
     endpoint = (
         f"https://api.apify.com/v2/datasets/{parse.quote(str(dataset_id or '').strip(), safe='')}/items?"
         + parse.urlencode(
@@ -2216,10 +2394,30 @@ def _get_harvest_dataset_items(settings: HarvestActorSettings, dataset_id: str) 
                 "token": settings.api_token,
                 "format": "json",
                 "clean": "true",
+                "offset": max(0, int(offset or 0)),
+                "limit": max(1, int(limit or _HARVEST_DATASET_PAGE_SIZE_DEFAULT)),
             }
         )
     )
-    return _harvest_json_request(endpoint, timeout=settings.timeout_seconds + 15)
+    last_error: Exception | None = None
+    for attempt_index in range(_HARVEST_DATASET_FETCH_MAX_ATTEMPTS):
+        try:
+            return _harvest_json_request(endpoint, timeout=settings.timeout_seconds + 15)
+        except RuntimeError as exc:
+            last_error = exc
+            if not _is_retryable_harvest_request_error(exc):
+                raise
+            if attempt_index + 1 >= _HARVEST_DATASET_FETCH_MAX_ATTEMPTS:
+                break
+            time.sleep(_harvest_retry_backoff_seconds(attempt_index))
+    detail = str(last_error or "unknown dataset download failure")
+    raise HarvestRetryableRequestError(
+        f"Harvest dataset download failed after retries: {detail}",
+        endpoint=endpoint,
+        logical_name=logical_name,
+        run_id=run_id,
+        dataset_id=dataset_id,
+    )
 
 
 def _get_harvest_actor_run_log(settings: HarvestActorSettings, run_id: str) -> str:
@@ -2287,7 +2485,53 @@ def _harvest_run_succeeded(status: str) -> bool:
     return status == "succeeded"
 
 
-def _run_harvest_actor(settings: HarvestActorSettings, payload: dict[str, Any]) -> Any | None:
+def _infer_harvest_sync_logical_name(payload: dict[str, Any]) -> str:
+    normalized_payload = dict(payload or {})
+    if normalized_payload.get("urls") or normalized_payload.get("publicIdentifiers") or normalized_payload.get("profileIds"):
+        return "harvest_profile_scraper_batch"
+    if normalized_payload.get("companies"):
+        return "harvest_company_employees"
+    return "harvest_profile_search"
+
+
+def _infer_harvest_sync_request_context(payload: dict[str, Any], settings: HarvestActorSettings) -> dict[str, Any]:
+    normalized_payload = dict(payload or {})
+    if normalized_payload.get("urls") or normalized_payload.get("publicIdentifiers") or normalized_payload.get("profileIds"):
+        requested_url_count = max(
+            len(list(normalized_payload.get("urls") or [])),
+            len(list(normalized_payload.get("publicIdentifiers") or [])),
+            len(list(normalized_payload.get("profileIds") or [])),
+        )
+        return {
+            "requested_url_count": requested_url_count,
+            "requested_item_count": requested_url_count,
+        }
+    requested_item_count = 0
+    try:
+        requested_item_count = int(normalized_payload.get("maxItems") or 0)
+    except (TypeError, ValueError):
+        requested_item_count = 0
+    if requested_item_count <= 0:
+        requested_item_count = max(0, int(settings.max_paid_items or 0))
+    return {
+        "requested_item_count": requested_item_count,
+        "take_pages": int(normalized_payload.get("takePages") or 0) if str(normalized_payload.get("takePages") or "").strip() else 0,
+    }
+
+
+def _harvest_sync_should_prefer_async(settings: HarvestActorSettings, payload: dict[str, Any]) -> bool:
+    logical_name = _infer_harvest_sync_logical_name(payload)
+    request_context = _infer_harvest_sync_request_context(payload, settings)
+    requested_item_count = max(0, int(request_context.get("requested_item_count") or 0))
+    requested_url_count = max(0, int(request_context.get("requested_url_count") or 0))
+    if logical_name == "harvest_profile_scraper_batch":
+        return requested_url_count >= 50 or requested_item_count >= 50
+    if logical_name == "harvest_company_employees":
+        return requested_item_count >= 100 or int(request_context.get("take_pages") or 0) >= 5
+    return requested_item_count >= 100
+
+
+def _run_harvest_actor_sync_request(settings: HarvestActorSettings, payload: dict[str, Any]) -> Any | None:
     endpoint = (
         f"https://api.apify.com/v2/acts/{parse.quote(settings.actor_id, safe='')}/run-sync-get-dataset-items?"
         + parse.urlencode(
@@ -2310,6 +2554,64 @@ def _run_harvest_actor(settings: HarvestActorSettings, payload: dict[str, Any]) 
         return None
     except Exception:
         return None
+
+
+def _run_harvest_actor_via_async_dataset(
+    settings: HarvestActorSettings,
+    payload: dict[str, Any],
+    *,
+    logical_name: str,
+    request_context: dict[str, Any],
+) -> Any | None:
+    try:
+        submit_payload = _submit_harvest_actor_run(settings, payload)
+        run = _apify_data_record(submit_payload)
+        run_id = str(run.get("id") or run.get("runId") or "").strip()
+        dataset_id = str(run.get("defaultDatasetId") or run.get("datasetId") or "").strip()
+        if not run_id:
+            return None
+        run_status = _normalize_harvest_run_status(run.get("status") or "submitted")
+        deadline = time.monotonic() + max(60, min(2400, int(settings.timeout_seconds or 180) + 120))
+        while not _harvest_run_is_terminal(run_status):
+            if time.monotonic() >= deadline:
+                return None
+            time.sleep(2.0)
+            run_payload = _get_harvest_actor_run(settings, run_id)
+            run = _apify_data_record(run_payload)
+            dataset_id = str(run.get("defaultDatasetId") or run.get("datasetId") or dataset_id).strip()
+            run_status = _normalize_harvest_run_status(run.get("status") or run_status or "running")
+        if not _harvest_run_succeeded(run_status) or not dataset_id:
+            return None
+        return _get_harvest_dataset_items(
+            settings,
+            dataset_id,
+            logical_name=logical_name,
+            run_id=run_id,
+            request_context=request_context,
+        )
+    except Exception:
+        return None
+
+
+def _run_harvest_actor(settings: HarvestActorSettings, payload: dict[str, Any]) -> Any | None:
+    logical_name = _infer_harvest_sync_logical_name(payload)
+    request_context = _infer_harvest_sync_request_context(payload, settings)
+    if _harvest_sync_should_prefer_async(settings, payload):
+        return _run_harvest_actor_via_async_dataset(
+            settings,
+            payload,
+            logical_name=logical_name,
+            request_context=request_context,
+        )
+    body = _run_harvest_actor_sync_request(settings, payload)
+    if body is not None:
+        return body
+    return _run_harvest_actor_via_async_dataset(
+        settings,
+        payload,
+        logical_name=logical_name,
+        request_context=request_context,
+    )
 
 
 def _build_harvest_company_employees_payload(

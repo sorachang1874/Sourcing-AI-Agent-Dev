@@ -1,6 +1,8 @@
 import tempfile
 import threading
+import time
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from sourcing_agent.service_daemon import SingleInstanceError, WorkerDaemonService, read_service_status, render_systemd_unit
@@ -111,6 +113,37 @@ class ServiceDaemonTest(unittest.TestCase):
             self.assertEqual(status["tick"], 1)
             self.assertEqual(status["cycle_state"], "running_callback")
             self.assertEqual(status["callback_payload"]["owner_id"], service.owner_id)
+        finally:
+            release.set()
+            thread.join(timeout=2.0)
+
+    def test_service_refreshes_heartbeat_while_callback_is_in_progress(self) -> None:
+        entered = threading.Event()
+        release = threading.Event()
+
+        def blocking_callback(payload: dict) -> dict:  # noqa: ARG001
+            entered.set()
+            release.wait(timeout=2.0)
+            return {"status": "completed", "daemon": {"claimed_count": 0, "executed_count": 0}}
+
+        service = WorkerDaemonService(
+            runtime_dir=self.runtime_dir,
+            recovery_callback=blocking_callback,
+            service_name="worker-recovery-daemon",
+            poll_seconds=0.25,
+        )
+        thread = threading.Thread(target=lambda: service.run_forever(max_ticks=1), daemon=True)
+        thread.start()
+        self.assertTrue(entered.wait(timeout=1.0))
+        try:
+            first = read_service_status(self.runtime_dir, "worker-recovery-daemon")
+            first_updated_at = str(first["updated_at"])
+            time.sleep(0.6)
+            second = read_service_status(self.runtime_dir, "worker-recovery-daemon")
+            self.assertEqual(second["status"], "running")
+            self.assertEqual(second["cycle_state"], "running_callback")
+            self.assertNotEqual(str(second["updated_at"]), first_updated_at)
+            self.assertLess(float(second["heartbeat_age_seconds"]), float(second["heartbeat_timeout_seconds"]))
         finally:
             release.set()
             thread.join(timeout=2.0)
@@ -268,3 +301,30 @@ class ServiceDaemonTest(unittest.TestCase):
 
         self.assertEqual(status["status"], "running")
         self.assertEqual(status["lock_status"], "locked")
+
+    def test_service_skips_idle_sleep_when_previous_tick_had_activity(self) -> None:
+        callbacks = iter(
+            [
+                {
+                    "status": "completed",
+                    "daemon": {"claimed_count": 1, "executed_count": 1, "recoverable_count": 1, "jobs": []},
+                    "workflow_resume": [],
+                },
+                {
+                    "status": "completed",
+                    "daemon": {"claimed_count": 0, "executed_count": 0, "recoverable_count": 0, "jobs": []},
+                    "workflow_resume": [],
+                },
+            ]
+        )
+        service = WorkerDaemonService(
+            runtime_dir=self.runtime_dir,
+            recovery_callback=lambda payload: next(callbacks),  # noqa: ARG005
+            service_name="worker-recovery-daemon",
+            poll_seconds=5.0,
+        )
+        with mock.patch("sourcing_agent.service_daemon.time.sleep", return_value=None) as sleep_mock:
+            summary = service.run_forever(max_ticks=2)
+
+        self.assertEqual(summary["tick"], 2)
+        sleep_mock.assert_not_called()
