@@ -255,7 +255,6 @@ PYTHONPATH=src python3 -m sourcing_agent.cli cleanup-recoverable-workers \
   - `runtime/live_tests/**`
   - `.venv/`、浏览器缓存、本机 vendor cache
   - `configs/live_smoke_*.json`、`configs/live_test_*.json`
-
 ## 7. 采集并行策略（2026-04-10 更新）
 
 `acquire_full_roster` 现在不是“先 current 再 former”的严格串行，默认策略改为：

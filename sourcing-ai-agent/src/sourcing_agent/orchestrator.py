@@ -5745,7 +5745,6 @@ class SourcingOrchestrator:
                 "planning_completed": planning_completed,
                 "error": str(exc),
             }
-
     def _reconcile_completed_workflows_after_recovery(
         self,
         daemon_summary: dict[str, Any],
@@ -6477,7 +6476,6 @@ class SourcingOrchestrator:
             for worker in workers
             if _worker_blocks_acquisition_resume(worker, blocked_task=blocked_task)
         ]
-
     def _mark_workflow_failed(self, job_id: str, request: JobRequest, plan: Any, exc: Exception) -> None:
         existing = self.store.get_job(job_id) or {}
         if str(existing.get("status") or "") == "completed":
