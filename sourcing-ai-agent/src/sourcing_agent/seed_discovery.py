@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from hashlib import sha1
 from html import unescape
 import json
+import os
 from pathlib import Path
 import re
 from typing import Any
@@ -27,8 +28,30 @@ from .search_provider import (
 )
 from .worker_daemon import AutonomousWorkerDaemon
 
-_LANE_READY_POLL_MIN_INTERVAL_SECONDS = 15
-_LANE_FETCH_MIN_INTERVAL_SECONDS = 15
+def _env_int(name: str, default: int) -> int:
+    raw = str(os.getenv(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return default
+
+
+_LANE_READY_POLL_MIN_INTERVAL_SECONDS = max(
+    1,
+    _env_int(
+        "SEED_DISCOVERY_READY_POLL_MIN_INTERVAL_SECONDS",
+        _env_int("WEB_SEARCH_READY_POLL_MIN_INTERVAL_SECONDS", 15),
+    ),
+)
+_LANE_FETCH_MIN_INTERVAL_SECONDS = max(
+    1,
+    _env_int(
+        "SEED_DISCOVERY_FETCH_MIN_INTERVAL_SECONDS",
+        _env_int("WEB_SEARCH_FETCH_MIN_INTERVAL_SECONDS", 15),
+    ),
+)
 
 
 @dataclass(slots=True)
@@ -43,6 +66,7 @@ class SearchSeedSnapshot:
     errors: list[str]
     stop_reason: str
     summary_path: Path
+    entries_path: Path | None = None
 
     def to_record(self) -> dict[str, Any]:
         return {
@@ -56,6 +80,7 @@ class SearchSeedSnapshot:
             "errors": self.errors,
             "stop_reason": self.stop_reason,
             "summary_path": str(self.summary_path),
+            "entries_path": str(self.entries_path) if isinstance(self.entries_path, Path) else "",
         }
 
 
@@ -181,6 +206,9 @@ class SearchSeedAcquirer:
         discovery_dir.mkdir(parents=True, exist_ok=True)
         logger = asset_logger or AssetLogger(snapshot_dir)
         effective_filter_hints = _normalize_harvest_company_filters(identity, filter_hints)
+        provider_people_search_mode = str(cost_policy.get("provider_people_search_mode") or "fallback_only").strip().lower()
+        provider_search_only = provider_people_search_mode in {"primary_only", "provider_only", "harvest_only"}
+        provider_search_primary = provider_people_search_mode in {"primary", "always", "primary_only", "provider_only", "harvest_only"}
 
         entries: list[dict[str, Any]] = []
         query_summaries: list[dict[str, Any]] = []
@@ -193,7 +221,7 @@ class SearchSeedAcquirer:
         parallel_limit = max(1, min(int(cost_policy.get("parallel_search_workers", 3) or 3), len(compiled_queries) or 1))
         result_limit = max(1, min(int(cost_policy.get("public_media_results_per_query", 10) or 10), 25))
         worker_results: list[dict[str, Any]] = []
-        pending_specs = [
+        pending_specs = [] if provider_search_only else [
             {
                 "index": index,
                 "query_spec": query_spec,
@@ -298,12 +326,15 @@ class SearchSeedAcquirer:
 
         entries = _dedupe_seed_entries(entries)
         paid_queries = [item["query"] for item in compiled_queries if item["execution_mode"] == "paid_fallback"] or list(search_seed_queries)
-        if (
-            not queued_background_search
-            and len(entries) < web_result_target
-            and (self.accounts or (self.harvest_search_connector and self.harvest_search_connector.settings.enabled))
-            and cost_policy.get("provider_people_search_mode") == "fallback_only"
-        ):
+        provider_available = bool(
+            self.accounts or (self.harvest_search_connector and self.harvest_search_connector.settings.enabled)
+        )
+        should_run_provider_people_search = False
+        if provider_search_primary:
+            should_run_provider_people_search = True
+        elif provider_available and len(entries) < web_result_target and provider_people_search_mode == "fallback_only":
+            should_run_provider_people_search = True
+        if should_run_provider_people_search:
             needed = max(web_result_target - len(entries), 0)
             provider_limit = max(needed, web_result_target)
             provider_entries, provider_summaries, provider_errors, provider_accounts = self._provider_people_search_fallback(
@@ -321,9 +352,18 @@ class SearchSeedAcquirer:
             query_summaries.extend(provider_summaries)
             errors.extend(provider_errors)
             accounts_used.extend(provider_accounts)
-            if provider_entries:
-                stop_reason = "provider_people_search_fallback"
+            if provider_entries and not queued_background_search:
+                stop_reason = "provider_people_search_primary" if provider_search_primary else "provider_people_search_fallback"
 
+        entries_path = discovery_dir / "entries.json"
+        logger.write_json(
+            entries_path,
+            entries,
+            asset_type="search_seed_entries",
+            source_kind="search_seed_discovery",
+            is_raw_asset=False,
+            model_safe=True,
+        )
         summary_path = discovery_dir / "summary.json"
         summary_payload = {
             "snapshot_id": snapshot_dir.name,
@@ -366,6 +406,7 @@ class SearchSeedAcquirer:
             errors=errors,
             stop_reason=stop_reason,
             summary_path=summary_path,
+            entries_path=entries_path,
         )
 
     def _execute_query_spec(
@@ -1273,6 +1314,36 @@ def _prepare_batched_search_seed_queries(
     batch_message = ""
     submitted_query_count = 0
 
+    def _write_manifest_snapshot() -> None:
+        if not manifest_entries and not artifact_paths:
+            return
+        root_artifact_paths = {
+            str(key): str(value)
+            for key, value in dict(artifact_paths).items()
+            if str(key).strip() and str(value).strip()
+        }
+        for entry in manifest_entries.values():
+            for key, value in dict(entry.get("artifact_paths") or {}).items():
+                normalized_key = str(key or "").strip()
+                normalized_value = str(value or "").strip()
+                if normalized_key and normalized_value and normalized_key not in root_artifact_paths:
+                    root_artifact_paths[normalized_key] = normalized_value
+        logger.write_json(
+            manifest_path,
+            {
+                "provider_name": provider_name,
+                "submitted_query_count": submitted_query_count,
+                "artifact_paths": root_artifact_paths,
+                "entries": [manifest_entries[key] for key in sorted(manifest_entries)],
+                "message": batch_message,
+                "updated_at": _batch_lane_timestamp(),
+            },
+            asset_type="web_search_batch_manifest",
+            source_kind="search_seed_discovery",
+            is_raw_asset=False,
+            model_safe=False,
+        )
+
     if unresolved_requests:
         submit_batch = getattr(search_provider, "submit_batch_queries", None)
         if not callable(submit_batch):
@@ -1323,6 +1394,7 @@ def _prepare_batched_search_seed_queries(
                 spec["prefetched_search_artifact_paths"] = dict(entry["artifact_paths"] or {})
                 spec["prefetched_search_manifest_path"] = str(manifest_path)
                 spec["prefetched_search_manifest_key"] = task_key
+        _write_manifest_snapshot()
 
     ready_errors = _refresh_batched_search_seed_ready_cache(
         search_provider=search_provider,
@@ -1343,33 +1415,7 @@ def _prepare_batched_search_seed_queries(
 
     if not manifest_entries and not artifact_paths:
         return [*ready_errors, *fetch_errors]
-
-    root_artifact_paths = {
-        str(key): str(value)
-        for key, value in dict(artifact_paths).items()
-        if str(key).strip() and str(value).strip()
-    }
-    for entry in manifest_entries.values():
-        for key, value in dict(entry.get("artifact_paths") or {}).items():
-            normalized_key = str(key or "").strip()
-            normalized_value = str(value or "").strip()
-            if normalized_key and normalized_value and normalized_key not in root_artifact_paths:
-                root_artifact_paths[normalized_key] = normalized_value
-    logger.write_json(
-        manifest_path,
-        {
-            "provider_name": provider_name,
-            "submitted_query_count": submitted_query_count,
-            "artifact_paths": root_artifact_paths,
-            "entries": [manifest_entries[key] for key in sorted(manifest_entries)],
-            "message": batch_message,
-            "updated_at": _batch_lane_timestamp(),
-        },
-        asset_type="web_search_batch_manifest",
-        source_kind="search_seed_discovery",
-        is_raw_asset=False,
-        model_safe=False,
-    )
+    _write_manifest_snapshot()
     return [*ready_errors, *fetch_errors]
 
 

@@ -8,12 +8,13 @@ from .confidence_policy import DEFAULT_HIGH_THRESHOLD, DEFAULT_MEDIUM_THRESHOLD
 from .domain import (
     Candidate,
     JobRequest,
+    candidate_profile_signal_text,
+    candidate_searchable_text,
     derive_candidate_facets,
     derive_candidate_filter_facets,
     derive_candidate_role_bucket,
     normalize_requested_facet,
     normalize_requested_role_bucket,
-    sanitize_candidate_notes,
 )
 
 
@@ -275,19 +276,9 @@ def score_candidate(
 def _candidate_blob(candidate: Candidate) -> str:
     return " ".join(
         [
-            candidate.display_name,
-            candidate.organization,
-            candidate.role,
-            candidate.team,
-            candidate.focus_areas,
+            candidate_searchable_text(candidate),
             " ".join(derive_candidate_facets(candidate)),
             derive_candidate_role_bucket(candidate),
-            candidate.investment_involvement,
-            candidate.education,
-            candidate.work_history,
-            sanitize_candidate_notes(candidate.notes),
-            candidate.ethnicity_background,
-            candidate.current_destination,
         ]
     )
 
@@ -446,10 +437,9 @@ def _build_explanation(
 def _candidate_field_value(candidate: Candidate, field_name: str) -> str:
     if field_name == "derived_facets":
         return " | ".join([derive_candidate_role_bucket(candidate)] + derive_candidate_facets(candidate))
-    value = str(getattr(candidate, field_name) or "").strip()
     if field_name == "notes":
-        return sanitize_candidate_notes(value)
-    return value
+        return candidate_profile_signal_text(candidate, include_notes=True)
+    return str(getattr(candidate, field_name) or "").strip()
 
 
 def _normalize(value: str) -> str:

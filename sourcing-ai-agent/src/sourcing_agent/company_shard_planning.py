@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import re
 from typing import Any, Callable
 
 
@@ -31,12 +32,22 @@ KEYWORD_PROBE_QUERY_ALIASES: dict[str, list[str]] = {
     "veo": ["Veo"],
     "nanobanana": ["Nano Banana", "\"Nano Banana\""],
     "gemini": ["Gemini"],
+    "visionlanguage": ["Vision-language"],
+    "videogeneration": ["Video generation"],
 }
 KEYWORD_PROBE_SKIP_TOKENS = {
     "research",
     "researcher",
     "engineering",
     "engineer",
+}
+
+SEARCH_QUERY_CANONICAL_ALIASES: dict[str, str] = {
+    "vision language": "Vision-language",
+    "vision-language": "Vision-language",
+    "multimodality": "Multimodal",
+    "video-generation": "Video generation",
+    "nano-banana": "Nano Banana",
 }
 
 LARGE_ORG_PRIORITY_FUNCTION_IDS = ["8", "9", "19", "24"]
@@ -201,7 +212,7 @@ def normalize_company_filters(value: Any) -> dict[str, Any]:
             values = [text] if text else []
         if values:
             normalized[key] = list(dict.fromkeys(values))
-    search_query = str(payload.get("search_query") or payload.get("searchQuery") or "").strip()
+    search_query = _canonicalize_search_query(str(payload.get("search_query") or payload.get("searchQuery") or "").strip())
     if search_query:
         normalized["search_query"] = search_query
     return normalized
@@ -680,6 +691,7 @@ def _resolve_large_org_scope_companies(company_key: str, company_scope: list[str
 def _build_keyword_probe_shards(keyword_hints: list[str]) -> list[dict[str, Any]]:
     shards: list[dict[str, Any]] = []
     seen: set[str] = set()
+    seen_queries: set[str] = set()
     for item in keyword_hints:
         token = _normalize_keyword_token(item)
         if not token:
@@ -687,9 +699,13 @@ def _build_keyword_probe_shards(keyword_hints: list[str]) -> list[dict[str, Any]
         if token in KEYWORD_PROBE_SKIP_TOKENS:
             continue
         query_terms = KEYWORD_PROBE_QUERY_ALIASES.get(token) or [str(item).strip()]
-        search_query = " ".join(term for term in query_terms if str(term).strip()).strip()
+        search_query = _canonicalize_search_query(" ".join(term for term in query_terms if str(term).strip()).strip())
         if not search_query:
             continue
+        query_signature = _search_query_signature(search_query)
+        if query_signature in seen_queries:
+            continue
+        seen_queries.add(query_signature)
         shard_id = f"kw_{_normalize_shard_id(token)}"
         if shard_id in seen:
             continue
@@ -706,6 +722,23 @@ def _build_keyword_probe_shards(keyword_hints: list[str]) -> list[dict[str, Any]
 
 def _normalize_keyword_token(value: str) -> str:
     return "".join(ch.lower() for ch in str(value or "") if ch.isalnum())
+
+
+def _canonicalize_search_query(value: str) -> str:
+    normalized = " ".join(str(value or "").split()).strip()
+    if not normalized:
+        return ""
+    lower_key = normalized.lower()
+    return SEARCH_QUERY_CANONICAL_ALIASES.get(lower_key, normalized)
+
+
+def _search_query_signature(value: str) -> str:
+    normalized = " ".join(str(value or "").lower().split()).strip()
+    if not normalized:
+        return ""
+    compact = re.sub(r"[\s\-_]+", "", normalized)
+    alnum = re.sub(r"[^0-9a-z]+", "", compact)
+    return alnum or compact
 
 
 def _normalize_probe_summary(

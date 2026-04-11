@@ -9,8 +9,10 @@ import os
 from pathlib import Path
 import signal
 import socket
+import sys
 import threading
 import time
+import traceback
 from typing import Any, Callable, Iterator
 
 
@@ -40,12 +42,26 @@ def read_service_status(runtime_dir: str | Path, service_name: str = "worker-rec
     lock_path = Path(str(payload.get("lock_path") or service_state_dir(runtime_dir, service_name) / "service.lock"))
     lock_status = _probe_service_lock_status(lock_path)
     payload["lock_status"] = lock_status
+    pid = _coerce_pid(payload.get("pid"))
+    payload["pid"] = pid
+    payload["pid_alive"] = _pid_is_alive(pid)
+    heartbeat_age_seconds = _heartbeat_age_seconds(payload.get("updated_at"))
+    if heartbeat_age_seconds is not None:
+        payload["heartbeat_age_seconds"] = heartbeat_age_seconds
+    heartbeat_timeout_seconds = _heartbeat_timeout_seconds(payload.get("poll_seconds"))
+    payload["heartbeat_timeout_seconds"] = heartbeat_timeout_seconds
     payload.setdefault("service_name", service_name)
     payload.setdefault("status_path", str(status_path))
-    if str(payload.get("status") or "") in {"starting", "running", "stopping"} and lock_status != "locked":
+    if str(payload.get("status") or "") in {"starting", "running", "stopping"} and (
+        lock_status != "locked"
+        or (heartbeat_age_seconds is not None and heartbeat_age_seconds > heartbeat_timeout_seconds)
+    ):
         payload["reported_status"] = str(payload.get("status") or "")
         payload["status"] = "stale"
-        payload["stale_reason"] = "lock_not_held"
+        if heartbeat_age_seconds is not None and heartbeat_age_seconds > heartbeat_timeout_seconds:
+            payload["stale_reason"] = "heartbeat_expired"
+        else:
+            payload["stale_reason"] = "process_not_alive" if pid <= 0 or not bool(payload.get("pid_alive")) else "lock_not_held"
     return payload
 
 
@@ -130,6 +146,7 @@ class WorkerDaemonService:
         self._stop_event = threading.Event()
         self._lock_handle = None
         self._started_at = _utc_now()
+        self._status_lock = threading.Lock()
 
     def run_forever(self, *, max_ticks: int = 0) -> dict[str, Any]:
         self._install_signal_handlers()
@@ -139,6 +156,7 @@ class WorkerDaemonService:
             last_nonempty_summary: dict[str, Any] = {}
             last_nonempty_tick = 0
             last_nonempty_at = ""
+            callback_payload: dict[str, Any] = {}
             cumulative_summary = _empty_cumulative_service_summary()
             self._write_status(
                 "starting",
@@ -148,6 +166,12 @@ class WorkerDaemonService:
                 last_nonempty_tick=last_nonempty_tick,
                 last_nonempty_at=last_nonempty_at,
                 cumulative_summary=cumulative_summary,
+            )
+            self._emit_log(
+                event="service_start",
+                tick=tick,
+                max_ticks=int(max_ticks or 0),
+                callback_payload=self.callback_payload,
             )
             try:
                 while not self._stop_event.is_set():
@@ -164,12 +188,35 @@ class WorkerDaemonService:
                         cycle_state="running_callback",
                         callback_payload=callback_payload,
                     )
-                    last_summary = self.recovery_callback(dict(callback_payload))
+                    heartbeat_stop = threading.Event()
+                    heartbeat_thread = self._start_callback_heartbeat(
+                        stop_event=heartbeat_stop,
+                        tick=tick,
+                        last_summary=last_summary,
+                        last_nonempty_summary=last_nonempty_summary,
+                        last_nonempty_tick=last_nonempty_tick,
+                        last_nonempty_at=last_nonempty_at,
+                        cumulative_summary=cumulative_summary,
+                        callback_payload=callback_payload,
+                    )
+                    try:
+                        last_summary = self.recovery_callback(dict(callback_payload))
+                    finally:
+                        heartbeat_stop.set()
+                        if heartbeat_thread is not None:
+                            heartbeat_thread.join(timeout=max(0.1, min(1.0, self.poll_seconds) + 0.1))
                     cumulative_summary = _accumulate_cumulative_service_summary(
                         cumulative_summary,
                         summary=last_summary,
                         tick=tick,
                     )
+                    if tick == 1 or _service_summary_has_activity(last_summary):
+                        self._emit_log(
+                            event="service_tick",
+                            tick=tick,
+                            cycle_state="callback_completed",
+                            summary=_summarize_service_log_payload(last_summary),
+                        )
                     if _service_summary_has_activity(last_summary):
                         last_nonempty_summary = dict(last_summary)
                         last_nonempty_tick = tick
@@ -187,9 +234,11 @@ class WorkerDaemonService:
                     )
                     if max_ticks > 0 and tick >= max_ticks:
                         break
+                    if _service_summary_has_activity(last_summary):
+                        continue
                     if self._sleep_until_next_tick():
                         break
-                final_status = "stopped" if not self._stop_event.is_set() else "stopping"
+                final_status = "stopped"
                 self._write_status(
                     final_status,
                     tick=tick,
@@ -198,7 +247,14 @@ class WorkerDaemonService:
                     last_nonempty_tick=last_nonempty_tick,
                     last_nonempty_at=last_nonempty_at,
                     cumulative_summary=cumulative_summary,
-                    cycle_state="stopping" if self._stop_event.is_set() else "idle",
+                    cycle_state="stopped" if self._stop_event.is_set() else "idle",
+                    callback_payload=callback_payload,
+                )
+                self._emit_log(
+                    event="service_stop",
+                    tick=tick,
+                    final_status=final_status,
+                    summary=_summarize_service_log_payload(last_summary),
                 )
                 return read_service_status(self.runtime_dir, self.service_name)
             except Exception as exc:
@@ -212,6 +268,12 @@ class WorkerDaemonService:
                     cumulative_summary=cumulative_summary,
                     error=str(exc),
                     cycle_state="failed",
+                )
+                self._emit_log(
+                    event="service_failed",
+                    tick=tick,
+                    error=str(exc),
+                    traceback=traceback.format_exc(limit=10),
                 )
                 raise
 
@@ -270,6 +332,7 @@ class WorkerDaemonService:
             signal.signal(signum, self._handle_signal)
 
     def _handle_signal(self, signum: int, frame: Any) -> None:  # noqa: ARG002
+        self._emit_log(event="service_signal", signal=int(signum))
         self._stop_event.set()
 
     def _sleep_until_next_tick(self) -> bool:
@@ -288,6 +351,47 @@ class WorkerDaemonService:
         }
         payload.update(self.callback_payload)
         return payload
+
+    def _start_callback_heartbeat(
+        self,
+        *,
+        stop_event: threading.Event,
+        tick: int,
+        last_summary: dict[str, Any],
+        last_nonempty_summary: dict[str, Any],
+        last_nonempty_tick: int,
+        last_nonempty_at: str,
+        cumulative_summary: dict[str, Any],
+        callback_payload: dict[str, Any],
+    ) -> threading.Thread | None:
+        interval = max(0.25, min(5.0, self.poll_seconds))
+        if interval <= 0:
+            return None
+
+        def _heartbeat_loop() -> None:
+            while not stop_event.wait(interval):
+                try:
+                    self._write_status(
+                        "running",
+                        tick=tick,
+                        last_summary=last_summary,
+                        last_nonempty_summary=last_nonempty_summary,
+                        last_nonempty_tick=last_nonempty_tick,
+                        last_nonempty_at=last_nonempty_at,
+                        cumulative_summary=cumulative_summary,
+                        cycle_state="running_callback",
+                        callback_payload=callback_payload,
+                    )
+                except Exception:
+                    return
+
+        thread = threading.Thread(
+            target=_heartbeat_loop,
+            name=f"{self.service_name}-heartbeat",
+            daemon=True,
+        )
+        thread.start()
+        return thread
 
     def _write_status(
         self,
@@ -331,7 +435,25 @@ class WorkerDaemonService:
             payload["callback_payload"] = dict(callback_payload)
         if error:
             payload["error"] = error
-        self.status_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
+        with self._status_lock:
+            self.status_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
+
+    def _emit_log(self, *, event: str, **fields: Any) -> None:
+        payload = {
+            "service_name": self.service_name,
+            "owner_id": self.owner_id,
+            "pid": os.getpid(),
+            "event": str(event or "").strip() or "service_event",
+            "observed_at": _utc_now(),
+        }
+        for key, value in fields.items():
+            if value in (None, "", [], {}):
+                continue
+            payload[str(key)] = value
+        try:
+            print(json.dumps(payload, ensure_ascii=False), file=sys.stderr, flush=True)
+        except Exception:
+            return
 
 
 def _empty_cumulative_service_summary() -> dict[str, Any]:
@@ -430,3 +552,57 @@ def _probe_service_lock_status(lock_path: Path) -> str:
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _coerce_pid(value: Any) -> int:
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _pid_is_alive(pid: int) -> bool:
+    normalized_pid = max(0, int(pid or 0))
+    if normalized_pid <= 0:
+        return False
+    try:
+        os.kill(normalized_pid, 0)
+    except OSError:
+        return False
+    return True
+
+
+def _heartbeat_age_seconds(updated_at: Any) -> float | None:
+    raw = str(updated_at or "").strip()
+    if not raw:
+        return None
+    try:
+        observed_at = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    if observed_at.tzinfo is None:
+        observed_at = observed_at.replace(tzinfo=timezone.utc)
+    return max(0.0, (datetime.now(timezone.utc) - observed_at.astimezone(timezone.utc)).total_seconds())
+
+
+def _heartbeat_timeout_seconds(poll_seconds: Any) -> float:
+    try:
+        normalized_poll = max(0.1, float(poll_seconds or 5.0))
+    except (TypeError, ValueError):
+        normalized_poll = 5.0
+    return max(5.0, normalized_poll * 3.0 + 2.0)
+
+
+def _summarize_service_log_payload(summary: dict[str, Any] | None) -> dict[str, Any]:
+    payload = dict(summary or {})
+    daemon = dict(payload.get("daemon") or {})
+    workflow_resume = list(payload.get("workflow_resume") or [])
+    post_completion_reconcile = list(payload.get("post_completion_reconcile") or [])
+    return {
+        "status": str(payload.get("status") or ""),
+        "daemon_recoverable_count": int(daemon.get("recoverable_count") or 0),
+        "daemon_claimed_count": int(daemon.get("claimed_count") or 0),
+        "daemon_executed_count": int(daemon.get("executed_count") or 0),
+        "workflow_resume_count": len(workflow_resume),
+        "post_completion_reconcile_count": len(post_completion_reconcile),
+    }

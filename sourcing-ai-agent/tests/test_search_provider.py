@@ -593,6 +593,58 @@ class SearchProviderTest(unittest.TestCase):
         self.assertEqual(execution.checkpoint["status"], "waiting_for_ready_cached")
         tasks_ready_mock.assert_not_called()
 
+    def test_dataforseo_provider_execute_with_checkpoint_respects_recent_ready_cooldown(self) -> None:
+        provider = DataForSeoGoogleOrganicSearchProvider(
+            login="login",
+            password="password",
+            location_name="United States",
+            language_name="English",
+            device="desktop",
+            os="windows",
+            depth=10,
+            timeout_seconds=30,
+        )
+        with patch.object(provider.client, "tasks_ready") as tasks_ready_mock:
+            with patch("sourcing_agent.search_provider._timestamp_within_seconds", return_value=True):
+                execution = provider.execute_with_checkpoint(
+                    "Kevin Lu Thinking Machines Lab LinkedIn",
+                    checkpoint={
+                        "provider_name": "dataforseo_google_organic",
+                        "task_id": "task_123",
+                        "status": "waiting_for_ready",
+                        "ready_attempted_at": "2099-01-01T00:00:00+00:00",
+                        "lane_ready_cooldown_seconds": 15,
+                    },
+                )
+        self.assertTrue(execution.pending)
+        self.assertEqual(execution.checkpoint["status"], "waiting_for_ready")
+        tasks_ready_mock.assert_not_called()
+
+    def test_dataforseo_provider_execute_with_checkpoint_prefers_lane_ready_cache(self) -> None:
+        provider = DataForSeoGoogleOrganicSearchProvider(
+            login="login",
+            password="password",
+            location_name="United States",
+            language_name="English",
+            device="desktop",
+            os="windows",
+            depth=10,
+            timeout_seconds=30,
+        )
+        with patch.object(provider.client, "tasks_ready") as tasks_ready_mock:
+            execution = provider.execute_with_checkpoint(
+                "Kevin Lu Thinking Machines Lab LinkedIn",
+                checkpoint={
+                    "provider_name": "dataforseo_google_organic",
+                    "task_id": "task_123",
+                    "status": "waiting_for_ready",
+                    "ready_poll_source": "lane_batch",
+                },
+            )
+        self.assertTrue(execution.pending)
+        self.assertEqual(execution.checkpoint["status"], "waiting_for_ready_cached")
+        tasks_ready_mock.assert_not_called()
+
     def test_dataforseo_provider_execute_with_checkpoint_respects_ready_cached(self) -> None:
         provider = DataForSeoGoogleOrganicSearchProvider(
             login="login",

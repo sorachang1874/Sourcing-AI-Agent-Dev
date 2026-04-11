@@ -26,6 +26,8 @@
   终端里如何走 `plan -> review -> workflow -> progress/results`。
 - [WORKFLOW_OPERATIONS_PLAYBOOK.md](WORKFLOW_OPERATIONS_PLAYBOOK.md)
   当前版本推荐的 CLI / API 调用方式、进度追踪与恢复交互手册。
+- [HOSTED_DEPLOYMENT_AND_GITHUB_SCOPE.md](HOSTED_DEPLOYMENT_AND_GITHUB_SCOPE.md)
+  云端 `serve` 默认路径、前端禁区、GitHub 上传边界（降部署成本）。
 - [QUERY_GUARDRAILS.md](QUERY_GUARDRAILS.md)
   用户 query 的能力边界、澄清口径和敏感属性禁区。
 - [DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md)

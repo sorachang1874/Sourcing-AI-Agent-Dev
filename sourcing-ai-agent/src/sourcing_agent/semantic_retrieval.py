@@ -6,7 +6,13 @@ import math
 import re
 from typing import Any
 
-from .domain import Candidate, JobRequest, derive_candidate_facets, derive_candidate_role_bucket, sanitize_candidate_notes
+from .domain import (
+    Candidate,
+    JobRequest,
+    candidate_profile_signal_text,
+    derive_candidate_facets,
+    derive_candidate_role_bucket,
+)
 from .scoring import build_query_terms, candidate_matches_structured_filters
 from .semantic_provider import SemanticProvider
 
@@ -75,7 +81,7 @@ def rank_semantic_candidates(
 
     fields = _semantic_fields_for_request(request, semantic_fields)
     documents = [_build_document(candidate, fields) for candidate in candidate_pool]
-    if semantic_provider is not None and semantic_provider.provider_name() != "local_sparse":
+    if _should_use_remote_semantic_provider(request, semantic_provider):
         provider_hits = _rank_with_provider(query_terms, documents, semantic_provider, limit=limit)
         if provider_hits:
             return provider_hits
@@ -90,6 +96,18 @@ def rank_semantic_candidates(
             hits.append(hit)
     hits.sort(key=lambda item: (-item.semantic_score, -item.cosine_score, item.candidate_id))
     return {item.candidate_id: item.to_record() for item in hits[:limit]}
+
+
+def _should_use_remote_semantic_provider(
+    request: JobRequest,
+    semantic_provider: SemanticProvider | None,
+) -> bool:
+    if semantic_provider is None:
+        return False
+    if semantic_provider.provider_name() == "local_sparse":
+        return False
+    execution_preferences = dict(request.execution_preferences or {})
+    return bool(execution_preferences.get("allow_high_cost_sources"))
 
 
 def _rank_with_provider(
@@ -328,9 +346,9 @@ def _top_overlap_terms(document: _SemanticDocument, query_terms: list[str]) -> l
 def _semantic_field_value(candidate: Candidate, field_name: str) -> str:
     if field_name == "derived_facets":
         return " | ".join([derive_candidate_role_bucket(candidate)] + derive_candidate_facets(candidate))
-    value = str(getattr(candidate, field_name, "") or "").strip()
     if field_name == "notes":
-        return sanitize_candidate_notes(value)
+        return candidate_profile_signal_text(candidate, include_notes=True)
+    value = str(getattr(candidate, field_name, "") or "").strip()
     return value
 
 

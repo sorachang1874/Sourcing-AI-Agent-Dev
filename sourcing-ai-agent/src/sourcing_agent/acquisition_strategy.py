@@ -575,6 +575,7 @@ def _company_scope_company_filters(
     prefer_known_urls: bool,
 ) -> list[str]:
     company_values: list[str] = []
+    seen_company_signatures: set[str] = set()
     target_key = normalize_company_key(target_company)
     for item in [*company_scope, target_company]:
         normalized = " ".join(str(item or "").split()).strip()
@@ -587,13 +588,29 @@ def _company_scope_company_filters(
                 normalized = resolved_url
             elif normalized_key != target_key:
                 continue
+        signature = _company_scope_filter_signature(normalized)
+        if signature in seen_company_signatures:
+            continue
+        seen_company_signatures.add(signature)
         if normalized not in company_values:
             company_values.append(normalized)
     if prefer_known_urls and normalize_company_key(target_company) in {"google", "alphabet"}:
         google_url = LARGE_ORG_SCOPE_COMPANY_URLS["google"]
-        if google_url not in company_values:
+        google_signature = _company_scope_filter_signature(google_url)
+        if google_signature not in seen_company_signatures and google_url not in company_values:
             company_values.insert(0, google_url)
+            seen_company_signatures.add(google_signature)
     return company_values
+
+
+def _company_scope_filter_signature(value: str) -> str:
+    normalized = " ".join(str(value or "").split()).strip().lower().rstrip("/")
+    if not normalized:
+        return ""
+    match = re.search(r"linkedin\.com/company/([^/?#]+)", normalized)
+    if match:
+        return str(match.group(1) or "").strip().lower()
+    return normalize_company_key(normalized)
 
 
 def _build_confirmation_points(

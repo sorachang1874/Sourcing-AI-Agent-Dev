@@ -3,10 +3,12 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import gzip
 import hashlib
 import json
 from pathlib import Path
 import shutil
+import tarfile
 import time
 from typing import Any, Iterable
 
@@ -177,6 +179,7 @@ class AssetBundleManager:
         if conflict not in {"skip", "overwrite", "error"}:
             raise AssetBundleError(f"Unsupported conflict mode: {conflict}")
         bundle_root = manifest_file.parent
+        archive_restore = self._ensure_bundle_payload_materialized(bundle_root, payload)
         runtime_dir = Path(target_runtime_dir) if target_runtime_dir else self.runtime_dir
         restored = 0
         skipped = 0
@@ -208,6 +211,7 @@ class AssetBundleManager:
             "skipped_file_count": skipped,
             "restored_total_bytes": total_bytes,
             "restored_files": restored_files,
+            "archive_restore": archive_restore,
         }
         restore_summary_path = bundle_root / "restore_summary.json"
         restore_summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2))
@@ -229,6 +233,8 @@ class AssetBundleManager:
         if db_entry is None:
             raise AssetBundleError("Bundle does not contain sourcing_agent.db")
         source = manifest_file.parent / db_entry["payload_relative_path"]
+        if not source.exists():
+            self._ensure_bundle_payload_materialized(manifest_file.parent, payload)
         if not source.exists():
             raise AssetBundleError(f"SQLite payload missing: {source}")
         destination = Path(target_db_path) if target_db_path else (self.runtime_dir / "sourcing_agent.db")
@@ -260,6 +266,7 @@ class AssetBundleManager:
         *,
         max_workers: int | None = None,
         resume: bool = True,
+        archive_mode: str = "auto",
     ) -> dict:
         manifest_file = Path(manifest_path)
         if not manifest_file.exists():
@@ -270,10 +277,18 @@ class AssetBundleManager:
         if not bundle_kind or not bundle_id:
             raise AssetBundleError("Bundle manifest missing bundle_kind or bundle_id")
         bundle_root = manifest_file.parent
+        logical_payload_file_count = len(list(payload.get("files") or []))
+        archive_mode_resolved = self._resolve_archive_mode(payload, archive_mode)
+        archive_entry = self._prepare_bundle_archive(bundle_root, payload, archive_mode_resolved)
+        payload = self._persist_bundle_archive_metadata(bundle_root, payload, archive_entry)
         remote_prefix = self._bundle_remote_prefix(bundle_kind, bundle_id)
+        remote_manifest_key = f"{remote_prefix}/bundle_manifest.json"
         upload_paths = [bundle_root / "bundle_manifest.json", bundle_root / "export_summary.json"]
-        for record in payload.get("files", []):
-            upload_paths.append(bundle_root / record["payload_relative_path"])
+        if archive_entry:
+            upload_paths.append(bundle_root / str(archive_entry.get("relative_path") or archive_entry.get("filename") or "payload.tar"))
+        else:
+            for record in payload.get("files", []):
+                upload_paths.append(bundle_root / record["payload_relative_path"])
         resolved_max_workers = self._resolve_max_workers(client, max_workers)
         transfers = [
             {"path": path, "relative_path": path.relative_to(bundle_root).as_posix()}
@@ -282,25 +297,53 @@ class AssetBundleManager:
         ]
         pending_transfers: list[dict[str, Any]] = []
         skipped_existing: list[dict[str, Any]] = []
-        for item in transfers:
-            object_key = f"{remote_prefix}/{item['relative_path']}"
-            path = Path(item["path"])
-            if resume and client.has_object(object_key):
-                skipped_existing.append(
-                    {
-                        "relative_path": item["relative_path"],
-                        "object_key": object_key,
-                        "object_url": client.object_url(object_key),
-                        "size_bytes": path.stat().st_size,
-                        "status": "skipped_existing",
-                    }
-                )
-                continue
-            pending_transfers.append(item)
+        resume_scan_required = bool(resume and client.has_object(remote_manifest_key))
+        if resume_scan_required:
+            for item in transfers:
+                object_key = f"{remote_prefix}/{item['relative_path']}"
+                path = Path(item["path"])
+                if client.has_object(object_key):
+                    skipped_existing.append(
+                        {
+                            "relative_path": item["relative_path"],
+                            "object_key": object_key,
+                            "object_url": client.object_url(object_key),
+                            "size_bytes": path.stat().st_size,
+                            "status": "skipped_existing",
+                        }
+                    )
+                    continue
+                pending_transfers.append(item)
+        else:
+            pending_transfers = list(transfers)
+        progress_path = bundle_root / "upload_progress.json"
+        progress_state = self._build_transfer_progress_state(
+            status="running",
+            bundle_kind=bundle_kind,
+            bundle_id=bundle_id,
+            remote_prefix=remote_prefix,
+            requested_file_count=len(transfers),
+            skipped_existing=skipped_existing,
+        )
+        progress_state["transfer_mode"] = "archive" if archive_entry else "files"
+        progress_state["logical_payload_file_count"] = logical_payload_file_count
+        if archive_entry:
+            progress_state["archive"] = dict(archive_entry)
+        self._write_progress_snapshot(progress_path, progress_state)
+
+        def _on_upload_result(result: dict[str, Any]) -> None:
+            self._advance_transfer_progress(
+                progress_state,
+                requested_file_count=len(transfers),
+                result=result,
+            )
+            self._write_progress_snapshot(progress_path, progress_state)
+
         uploads = self._parallel_transfer(
             pending_transfers,
             max_workers=resolved_max_workers,
             op=lambda item: self._upload_transfer_item(client, remote_prefix, item),
+            on_result=_on_upload_result,
         )
         total_bytes = sum(int(item.get("size_bytes", 0)) for item in uploads)
         skipped_total_bytes = sum(int(item.get("size_bytes", 0)) for item in skipped_existing)
@@ -311,6 +354,7 @@ class AssetBundleManager:
             "remote_prefix": remote_prefix,
             "remote_manifest_key": f"{remote_prefix}/bundle_manifest.json",
             "requested_file_count": len(transfers),
+            "logical_payload_file_count": logical_payload_file_count,
             "uploaded_file_count": len(uploads),
             "uploaded_total_bytes": total_bytes,
             "skipped_existing_file_count": len(skipped_existing),
@@ -318,6 +362,12 @@ class AssetBundleManager:
             "provider": uploads[0]["provider"] if uploads else _provider_name_for_client(client),
             "max_workers": resolved_max_workers,
             "resume_mode": "skip_existing" if resume else "disabled",
+            "resume_scan_required": resume_scan_required,
+            "transfer_mode": "archive" if archive_entry else "files",
+            "requested_archive_mode": str(archive_mode or "auto").strip().lower() or "auto",
+            "effective_archive_mode": str(archive_entry.get("format") or "") if archive_entry else "none",
+            "archive": dict(archive_entry or {}),
+            "progress_path": str(progress_path),
             "progress": _build_progress_summary(
                 requested_file_count=len(transfers),
                 transferred_file_count=len(uploads),
@@ -328,6 +378,19 @@ class AssetBundleManager:
             "object_urls_sample": [item.get("object_url", "") for item in uploads[:5]],
             "skipped_existing_paths_sample": [item["relative_path"] for item in skipped_existing[:5]],
         }
+        self._write_progress_snapshot(
+            progress_path,
+            {
+                **progress_state,
+                "status": "uploaded",
+                "transferred_file_count": len(uploads),
+                "transferred_total_bytes": total_bytes,
+                "completed_file_count": len(uploads) + len(skipped_existing),
+                "remaining_file_count": 0,
+                "completion_ratio": 1.0 if transfers else 1.0,
+                "updated_at": _utc_now_iso(),
+            },
+        )
         sync_run = self._record_sync_run(
             action="upload",
             bundle_kind=bundle_kind,
@@ -348,8 +411,9 @@ class AssetBundleManager:
                 "file_count": int(manifest_stats.get("file_count", len(payload.get("files", [])))),
                 "total_bytes": int(manifest_stats.get("total_bytes", total_bytes)),
             },
+            "archive": dict(archive_entry or {}),
             "remote_prefix": remote_prefix,
-            "remote_manifest_key": f"{remote_prefix}/bundle_manifest.json",
+            "remote_manifest_key": remote_manifest_key,
             "provider": summary["provider"],
             "latest_run_id": sync_run["run_id"],
             "last_uploaded_at": sync_run["created_at"],
@@ -389,14 +453,32 @@ class AssetBundleManager:
         except ObjectStorageNotFoundError:
             pass
         resolved_max_workers = self._resolve_max_workers(client, max_workers)
-        transfers = [
-            {
-                "relative_path": record["payload_relative_path"],
-                "path": bundle_dir / record["payload_relative_path"],
-                "record": dict(record),
-            }
-            for record in payload.get("files", [])
-        ]
+        archive_entry = dict(payload.get("archive") or {})
+        logical_payload_file_count = len(list(payload.get("files") or []))
+        if archive_entry:
+            archive_relative_path = str(archive_entry.get("relative_path") or archive_entry.get("filename") or "").strip()
+            if not archive_relative_path:
+                raise AssetBundleError("Bundle archive metadata missing relative_path")
+            transfers = [
+                {
+                    "relative_path": archive_relative_path,
+                    "path": bundle_dir / archive_relative_path,
+                    "record": {
+                        "payload_relative_path": archive_relative_path,
+                        "size_bytes": int(archive_entry.get("size_bytes") or 0),
+                        "sha256": str(archive_entry.get("sha256") or ""),
+                    },
+                }
+            ]
+        else:
+            transfers = [
+                {
+                    "relative_path": record["payload_relative_path"],
+                    "path": bundle_dir / record["payload_relative_path"],
+                    "record": dict(record),
+                }
+                for record in payload.get("files", [])
+            ]
         pending_transfers: list[dict[str, Any]] = []
         skipped_existing: list[dict[str, Any]] = []
         for item in transfers:
@@ -412,10 +494,34 @@ class AssetBundleManager:
                 )
                 continue
             pending_transfers.append(item)
+        progress_path = bundle_dir / "download_progress.json"
+        progress_state = self._build_transfer_progress_state(
+            status="running",
+            bundle_kind=bundle_kind,
+            bundle_id=bundle_id,
+            remote_prefix=remote_prefix,
+            requested_file_count=len(transfers),
+            skipped_existing=skipped_existing,
+        )
+        progress_state["transfer_mode"] = "archive" if archive_entry else "files"
+        progress_state["logical_payload_file_count"] = logical_payload_file_count
+        if archive_entry:
+            progress_state["archive"] = dict(archive_entry)
+        self._write_progress_snapshot(progress_path, progress_state)
+
+        def _on_download_result(result: dict[str, Any]) -> None:
+            self._advance_transfer_progress(
+                progress_state,
+                requested_file_count=len(transfers),
+                result=result,
+            )
+            self._write_progress_snapshot(progress_path, progress_state)
+
         results = self._parallel_transfer(
             pending_transfers,
             max_workers=resolved_max_workers,
             op=lambda item: self._download_transfer_item(client, remote_prefix, item),
+            on_result=_on_download_result,
         )
         downloaded += len(results)
         total_bytes += sum(int(item.get("size_bytes", 0)) for item in results)
@@ -431,9 +537,14 @@ class AssetBundleManager:
             "remote_prefix": remote_prefix,
             "max_workers": resolved_max_workers,
             "requested_payload_file_count": len(transfers),
+            "logical_payload_file_count": logical_payload_file_count,
             "skipped_existing_file_count": len(skipped_existing),
             "skipped_existing_total_bytes": skipped_total_bytes,
             "resume_mode": "skip_existing" if resume else "disabled",
+            "transfer_mode": "archive" if archive_entry else "files",
+            "effective_archive_mode": str(archive_entry.get("format") or "") if archive_entry else "none",
+            "archive": dict(archive_entry or {}),
+            "progress_path": str(progress_path),
             "progress": _build_progress_summary(
                 requested_file_count=len(transfers),
                 transferred_file_count=len(results),
@@ -443,6 +554,19 @@ class AssetBundleManager:
             ),
             "skipped_existing_paths_sample": [item["relative_path"] for item in skipped_existing[:5]],
         }
+        self._write_progress_snapshot(
+            progress_path,
+            {
+                **progress_state,
+                "status": "downloaded",
+                "transferred_file_count": len(results),
+                "transferred_total_bytes": sum(int(item.get("size_bytes", 0)) for item in results),
+                "completed_file_count": len(results) + len(skipped_existing),
+                "remaining_file_count": 0,
+                "completion_ratio": 1.0 if transfers else 1.0,
+                "updated_at": _utc_now_iso(),
+            },
+        )
         sync_run = self._record_sync_run(
             action="download",
             bundle_kind=bundle_kind,
@@ -464,6 +588,7 @@ class AssetBundleManager:
                 "file_count": int(manifest_stats.get("file_count", len(payload.get("files", [])))),
                 "total_bytes": int(manifest_stats.get("total_bytes", 0)),
             },
+            "archive": dict(archive_entry or {}),
             "remote_prefix": remote_prefix,
             "remote_manifest_key": f"{remote_prefix}/bundle_manifest.json",
             "manifest_sha256": _sha256(manifest_path),
@@ -495,16 +620,26 @@ class AssetBundleManager:
         *,
         max_workers: int,
         op,
+        on_result=None,
     ) -> list[dict]:
         if not items:
             return []
         if max_workers <= 1 or len(items) == 1:
-            return sorted((op(item) for item in items), key=lambda entry: entry["relative_path"])
+            results: list[dict] = []
+            for item in items:
+                result = op(item)
+                results.append(result)
+                if on_result is not None:
+                    on_result(result)
+            return sorted(results, key=lambda entry: entry["relative_path"])
         results: list[dict] = []
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {executor.submit(op, item): item for item in items}
             for future in as_completed(futures):
-                results.append(future.result())
+                result = future.result()
+                results.append(result)
+                if on_result is not None:
+                    on_result(result)
         return sorted(results, key=lambda entry: entry["relative_path"])
 
     def _upload_transfer_item(self, client: ObjectStorageClient, remote_prefix: str, item: dict[str, Any]) -> dict:
@@ -627,6 +762,222 @@ class AssetBundleManager:
             return json.loads(path.read_text())
         except json.JSONDecodeError:
             return default
+
+    def _build_transfer_progress_state(
+        self,
+        *,
+        status: str,
+        bundle_kind: str,
+        bundle_id: str,
+        remote_prefix: str,
+        requested_file_count: int,
+        skipped_existing: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        completed_count = len(skipped_existing)
+        return {
+            "status": status,
+            "bundle_kind": bundle_kind,
+            "bundle_id": bundle_id,
+            "remote_prefix": remote_prefix,
+            "requested_file_count": requested_file_count,
+            "transferred_file_count": 0,
+            "transferred_total_bytes": 0,
+            "skipped_existing_file_count": completed_count,
+            "skipped_existing_total_bytes": sum(int(item.get("size_bytes", 0)) for item in skipped_existing),
+            "completed_file_count": completed_count,
+            "remaining_file_count": max(requested_file_count - completed_count, 0),
+            "completion_ratio": round(completed_count / requested_file_count, 4) if requested_file_count else 1.0,
+            "updated_at": _utc_now_iso(),
+            "last_completed_relative_path": "",
+        }
+
+    def _advance_transfer_progress(
+        self,
+        progress_state: dict[str, Any],
+        *,
+        requested_file_count: int,
+        result: dict[str, Any],
+    ) -> None:
+        progress_state["transferred_file_count"] = int(progress_state.get("transferred_file_count", 0)) + 1
+        progress_state["transferred_total_bytes"] = int(progress_state.get("transferred_total_bytes", 0)) + int(result.get("size_bytes", 0))
+        progress_state["completed_file_count"] = int(progress_state.get("completed_file_count", 0)) + 1
+        progress_state["remaining_file_count"] = max(requested_file_count - int(progress_state["completed_file_count"]), 0)
+        progress_state["completion_ratio"] = (
+            round(int(progress_state["completed_file_count"]) / requested_file_count, 4)
+            if requested_file_count
+            else 1.0
+        )
+        progress_state["updated_at"] = _utc_now_iso()
+        progress_state["last_completed_relative_path"] = str(result.get("relative_path") or "")
+
+    def _write_progress_snapshot(self, path: Path, payload: dict[str, Any]) -> None:
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+
+    def _resolve_archive_mode(self, manifest_payload: dict[str, Any], requested_mode: str) -> str:
+        normalized = str(requested_mode or "auto").strip().lower() or "auto"
+        if normalized not in {"auto", "none", "tar", "tar.gz"}:
+            raise AssetBundleError(f"Unsupported archive mode: {requested_mode}")
+        if normalized != "auto":
+            return normalized
+        stats = dict(manifest_payload.get("stats") or {})
+        file_count = int(stats.get("file_count") or len(list(manifest_payload.get("files") or [])) or 0)
+        total_bytes = int(stats.get("total_bytes") or 0)
+        if file_count >= 128 or total_bytes >= 64 * 1024 * 1024:
+            return "tar"
+        return "none"
+
+    def _prepare_bundle_archive(
+        self,
+        bundle_root: Path,
+        manifest_payload: dict[str, Any],
+        archive_mode: str,
+    ) -> dict[str, Any]:
+        if archive_mode == "none":
+            return {}
+        if archive_mode not in {"tar", "tar.gz"}:
+            raise AssetBundleError(f"Unsupported effective archive mode: {archive_mode}")
+        archive_filename = "payload.tar.gz" if archive_mode == "tar.gz" else "payload.tar"
+        archive_path = bundle_root / archive_filename
+        existing = dict(manifest_payload.get("archive") or {})
+        if existing and self._bundle_archive_matches(existing, archive_path, archive_mode):
+            return {
+                **existing,
+                "format": archive_mode,
+                "filename": archive_filename,
+                "relative_path": archive_filename,
+                "logical_file_count": len(list(manifest_payload.get("files") or [])),
+            }
+
+        payload_dir = bundle_root / "payload"
+        if not payload_dir.exists():
+            raise AssetBundleError(f"Bundle payload directory missing: {payload_dir}")
+        for record in manifest_payload.get("files", []):
+            source = bundle_root / str(record.get("payload_relative_path") or "")
+            if not source.exists():
+                raise AssetBundleError(f"Cannot archive missing payload file: {source}")
+
+        temp_archive_path = archive_path.with_name(f"{archive_path.name}.tmp")
+        if temp_archive_path.exists():
+            temp_archive_path.unlink()
+        self._write_bundle_archive(bundle_root=bundle_root, payload_dir=payload_dir, archive_path=temp_archive_path, archive_mode=archive_mode)
+        temp_archive_path.replace(archive_path)
+        return {
+            "enabled": True,
+            "format": archive_mode,
+            "filename": archive_filename,
+            "relative_path": archive_filename,
+            "size_bytes": archive_path.stat().st_size,
+            "sha256": _sha256(archive_path),
+            "logical_file_count": len(list(manifest_payload.get("files") or [])),
+            "created_at": _utc_now_iso(),
+        }
+
+    def _persist_bundle_archive_metadata(
+        self,
+        bundle_root: Path,
+        manifest_payload: dict[str, Any],
+        archive_entry: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        updated_payload = dict(manifest_payload)
+        if archive_entry:
+            updated_payload["archive"] = dict(archive_entry)
+        else:
+            updated_payload.pop("archive", None)
+        manifest_path = bundle_root / "bundle_manifest.json"
+        manifest_path.write_text(json.dumps(updated_payload, ensure_ascii=False, indent=2))
+        export_summary_path = bundle_root / "export_summary.json"
+        if export_summary_path.exists():
+            summary_payload = self._load_json_if_exists(export_summary_path, {})
+            if archive_entry:
+                summary_payload["archive"] = dict(archive_entry)
+            else:
+                summary_payload.pop("archive", None)
+            export_summary_path.write_text(json.dumps(summary_payload, ensure_ascii=False, indent=2))
+        return updated_payload
+
+    def _bundle_archive_matches(self, archive_entry: dict[str, Any], archive_path: Path, archive_mode: str) -> bool:
+        if not archive_path.exists() or not archive_path.is_file():
+            return False
+        if str(archive_entry.get("format") or "").strip().lower() != archive_mode:
+            return False
+        expected_size = int(archive_entry.get("size_bytes") or 0)
+        if expected_size > 0 and archive_path.stat().st_size != expected_size:
+            return False
+        expected_sha256 = str(archive_entry.get("sha256") or "").strip().lower()
+        if expected_sha256 and _sha256(archive_path).lower() != expected_sha256:
+            return False
+        return True
+
+    def _write_bundle_archive(
+        self,
+        *,
+        bundle_root: Path,
+        payload_dir: Path,
+        archive_path: Path,
+        archive_mode: str,
+    ) -> None:
+        archive_path.parent.mkdir(parents=True, exist_ok=True)
+
+        def _add_payload_files(tar_handle: tarfile.TarFile) -> None:
+            for source in sorted(path for path in payload_dir.rglob("*") if path.is_file()):
+                tar_handle.add(
+                    source,
+                    arcname=source.relative_to(bundle_root).as_posix(),
+                    recursive=False,
+                    filter=_normalize_tar_info,
+                )
+
+        if archive_mode == "tar.gz":
+            with archive_path.open("wb") as raw_handle:
+                with gzip.GzipFile(filename="", mode="wb", fileobj=raw_handle, mtime=0) as gzip_handle:
+                    with tarfile.open(fileobj=gzip_handle, mode="w") as tar_handle:
+                        _add_payload_files(tar_handle)
+            return
+        with tarfile.open(archive_path, mode="w") as tar_handle:
+            _add_payload_files(tar_handle)
+
+    def _ensure_bundle_payload_materialized(self, bundle_root: Path, manifest_payload: dict[str, Any]) -> dict[str, Any]:
+        archive_entry = dict(manifest_payload.get("archive") or {})
+        if not archive_entry:
+            return {"enabled": False, "status": "not_applicable"}
+        file_records = [dict(record) for record in list(manifest_payload.get("files") or [])]
+        if not file_records:
+            return {"enabled": True, "status": "empty_bundle", "archive": archive_entry}
+        missing_payloads = [
+            str(record.get("payload_relative_path") or "")
+            for record in file_records
+            if not (bundle_root / str(record.get("payload_relative_path") or "")).exists()
+        ]
+        if not missing_payloads:
+            return {"enabled": True, "status": "already_materialized", "archive": archive_entry}
+        archive_relative_path = str(archive_entry.get("relative_path") or archive_entry.get("filename") or "").strip()
+        if not archive_relative_path:
+            raise AssetBundleError("Bundle archive metadata missing relative_path")
+        archive_path = bundle_root / archive_relative_path
+        if not archive_path.exists():
+            raise AssetBundleError(
+                f"Bundle payload missing and archive not found: {archive_path} (missing {missing_payloads[0]})"
+            )
+        self._extract_bundle_archive(bundle_root=bundle_root, archive_path=archive_path)
+        return {
+            "enabled": True,
+            "status": "extracted",
+            "archive": archive_entry,
+            "archive_path": str(archive_path),
+            "missing_payload_count": len(missing_payloads),
+        }
+
+    def _extract_bundle_archive(self, *, bundle_root: Path, archive_path: Path) -> None:
+        suffixes = [suffix.lower() for suffix in archive_path.suffixes]
+        mode = "r:gz" if suffixes[-2:] == [".tar", ".gz"] else "r"
+        with tarfile.open(archive_path, mode=mode) as tar_handle:
+            members = tar_handle.getmembers()
+            for member in members:
+                target = (bundle_root / member.name).resolve()
+                bundle_root_resolved = bundle_root.resolve()
+                if bundle_root_resolved not in {target, *target.parents}:
+                    raise AssetBundleError(f"Archive member escapes bundle root: {member.name}")
+            tar_handle.extractall(bundle_root)
 
     def _export_bundle(
         self,
@@ -764,7 +1115,12 @@ class AssetBundleManager:
 
 
 def _content_type_for_path(path: Path) -> str:
+    name = path.name.lower()
     suffix = path.suffix.lower()
+    if name.endswith(".tar.gz"):
+        return "application/gzip"
+    if suffix == ".tar":
+        return "application/x-tar"
     if suffix == ".json":
         return "application/json"
     if suffix in {".txt", ".md"}:
@@ -837,3 +1193,12 @@ def _download_target_matches(destination: Path, record: dict[str, Any]) -> bool:
         except OSError:
             return False
     return True
+
+
+def _normalize_tar_info(info: tarfile.TarInfo) -> tarfile.TarInfo:
+    info.uid = 0
+    info.gid = 0
+    info.uname = ""
+    info.gname = ""
+    info.mtime = 0
+    return info

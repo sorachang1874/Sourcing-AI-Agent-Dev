@@ -1,5 +1,63 @@
 # Sourcing AI Agent Dev Progress
 
+## 2026-04-11
+
+### Hosted 默认路径文档化、前端禁区明确化与 GitHub 上传边界收束
+
+- 已把云端默认执行路径明确为 `serve + run-worker-daemon-service`：
+  - README 新增 hosted 默认运行章节
+  - operations playbook 新增云端最小启动组合与健康检查
+  - 强调“手工 execute-workflow 续跑”只用于排障，不作为常规运行方式
+- 已补前端边界，避免直接读 runtime 文件：
+  - `docs/FRONTEND_API_CONTRACT.md` 明确前端只消费 API contract
+  - 明确禁止把 `runtime/company_assets/*`、`runtime/jobs/*` 作为前端主数据源
+  - 阶段反馈统一以 `workflow_stage_summaries` 为准
+- 已新增集中指南：
+  - `docs/HOSTED_DEPLOYMENT_AND_GITHUB_SCOPE.md`
+  - 汇总云端启动、前端禁区、GitHub 上传范围、上线前检查
+- 已在文档索引与 README 文档地图挂载新入口：
+  - `docs/INDEX.md`
+  - `README.md`
+- 已补 GitHub 推送边界说明（降部署成本）：
+  - 建议提交 `src/tests/docs/contracts/configs-example/README/PROGRESS`
+  - 不提交 `runtime/**`、`secrets/**`、raw assets 与本机缓存
+  - 明确临时 live smoke 配置不应作为默认提交资产
+
+### 两阶段工作流阶段总结透传、真实 smoke test 收敛与前端契约补齐
+
+- 已把阶段性 workflow summary 固化为稳定返回结构：
+  - `workflow_stage_summaries`
+  - 同时出现在：
+    - `GET /api/jobs/{job_id}/progress`
+    - `GET /api/jobs/{job_id}/results`
+  - 当前固定阶段顺序：
+    - `linkedin_stage_1`
+    - `stage_1_preview`
+    - `public_web_stage_2`
+    - `stage_2_final`
+- snapshot 侧现也会同步落盘阶段总结文件：
+  - `runtime/company_assets/{company}/{snapshot_id}/workflow_stage_summaries/*.json`
+  - 这样前端不必直接读 snapshot 文件，但运维/离线调试仍可审计
+- 已修复一个关键回归点：
+  - 后台 harvest/search reconcile 之前会覆盖或丢失阶段 marker
+  - 现在 `linkedin_stage_1 / stage1_preview / public_web_stage_2 / analysis_stage_mode` 会在 reconcile 后保留
+- 已完成真实 live smoke test 验证：
+  - Humans& 任务已在“不手动 execute-workflow”的情况下端到端完成
+  - 最新稳定样例：
+    - `job_id=b752d176a669`
+    - `snapshot_id=20260411T145117`
+- 前端 contract/example 已同步更新：
+  - `contracts/frontend_api_contract.ts`
+  - `contracts/frontend_api_contract.schema.json`
+  - `contracts/frontend_api_adapter.ts`
+  - `contracts/frontend_react_hooks.example.tsx`
+  - 现在前端可直接拿 typed `workflow_stage_summaries`，并使用 stage helper 渲染阶段卡片
+- 定向回归测试已通过：
+  - `single_stage_workflow_still_publishes_stage_progress_markers`
+  - `background_harvest_prefetch_reconcile_preserves_stage_progress_markers`
+  - `two_stage_workflow_publishes_stage1_preview_and_continues_public_web_stage2_by_default`
+  - `http_api_smoke`
+
 ## 2026-04-10
 
 ### GitHub Dev 差异审阅、操作教程补齐与推送准备

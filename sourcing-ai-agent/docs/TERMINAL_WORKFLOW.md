@@ -235,6 +235,14 @@ PYTHONPATH=src python3 -m sourcing_agent.cli show-scheduler --job-id <job_id>
 - `progress.timing`
 - `progress.worker_summary`
 - `progress.counters`
+- `workflow_stage_summaries`
+
+当前 `workflow_stage_summaries` 的稳定阶段顺序是：
+
+- `linkedin_stage_1`
+- `stage_1_preview`
+- `public_web_stage_2`
+- `stage_2_final`
 
 当前 `show-progress` 仍主要负责“阶段状态”和“后台 worker 状态”，不重复塞入完整 `intent_rewrite`。
 
@@ -248,6 +256,8 @@ PYTHONPATH=src python3 -m sourcing_agent.cli show-scheduler --job-id <job_id>
 
 - `show-progress`
   - 看任务走到哪一步了
+- `workflow_stage_summaries`
+  - 看 LinkedIn Stage 1、Stage 1 Preview、Public Web Stage 2、Final Analysis 哪些已经完成
 - `intent_rewrite`
   - 看系统把用户原话解释成了什么
 - `show-job`
@@ -268,8 +278,10 @@ PYTHONPATH=src python3 -m sourcing_agent.cli show-trace --job-id <job_id>
 - `agent_runtime_session`
 - `agent_workers`
 - `intent_rewrite`
+- `workflow_stage_summaries`
 
 因此如果前端在 progress 页没缓存 `intent_rewrite`，结果页仍然可以从 `show-job` 补拿。
+如果前端要做阶段漏斗或阶段完成提示，应优先消费 `workflow_stage_summaries`，而不是直接读取 snapshot 文件。
 
 ## 3.1 前端友好的 summary 字段建议
 

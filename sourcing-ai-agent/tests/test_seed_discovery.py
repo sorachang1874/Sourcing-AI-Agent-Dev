@@ -873,7 +873,7 @@ class SeedDiscoveryTest(unittest.TestCase):
             self.assertEqual(len(provider.ready_calls), 1)
             self.assertEqual(len(provider.fetch_calls), 1)
 
-    def test_discover_blocks_paid_fallback_while_low_cost_queue_is_pending(self) -> None:
+    def test_discover_still_runs_paid_fallback_while_low_cost_queue_is_pending(self) -> None:
         class _PendingSearchProvider:
             provider_name = "dataforseo_google_organic"
 
@@ -991,8 +991,9 @@ class SeedDiscoveryTest(unittest.TestCase):
                 runtime_mode="workflow",
             )
             self.assertEqual(snapshot.stop_reason, "queued_background_search")
-            self.assertEqual(snapshot.entries, [])
-            self.assertEqual(harvest_connector.calls, 0)
+            self.assertEqual(len(snapshot.entries), 1)
+            self.assertEqual(snapshot.entries[0]["full_name"], "Queued Fallback Candidate")
+            self.assertGreaterEqual(harvest_connector.calls, 1)
             self.assertEqual(runtime.completed[0]["status"], "queued")
 
     def test_discover_does_not_repoll_ready_cached_entries(self) -> None:

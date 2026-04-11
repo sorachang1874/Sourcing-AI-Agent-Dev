@@ -83,6 +83,7 @@ class OutreachLayeringTests(unittest.TestCase):
             organization="Thinking Machines Lab",
             employment_status="current",
             role="Research Engineer",
+            education="Tsinghua University, Computer Science",
         )
         candidate_unsupported = Candidate(
             candidate_id="c_unsupported",
@@ -92,7 +93,7 @@ class OutreachLayeringTests(unittest.TestCase):
             organization="Thinking Machines Lab",
             employment_status="current",
             role="Research Engineer",
-            notes="Worked in Hong Kong and Singapore",
+            work_history="Research Engineer at Example Labs / Visiting researcher in Hong Kong and Singapore",
         )
         fake_model = _FakeModelClient({"c_supported"})
         result = build_outreach_layer_analysis(
@@ -107,6 +108,29 @@ class OutreachLayeringTests(unittest.TestCase):
         self.assertEqual(result["final_layer_distribution"]["layer_0"], 1)
         self.assertEqual(result["final_layer_distribution"]["layer_3"], 1)
         self.assertEqual(result["ai_verification"]["successful"], 2)
+
+    def test_zero_ai_budget_disables_model_verification(self) -> None:
+        candidate = Candidate(
+            candidate_id="c_zero_budget",
+            name_en="Zhang San",
+            display_name="Zhang San",
+            target_company="Thinking Machines Lab",
+            organization="Thinking Machines Lab",
+            employment_status="current",
+            role="Research Engineer",
+            education="Tsinghua University, Computer Science",
+        )
+        fake_model = _FakeModelClient({"c_zero_budget"})
+        result = build_outreach_layer_analysis(
+            candidates=[candidate],
+            query="找华人成员",
+            model_client=fake_model,
+            max_ai_verifications=0,
+        )
+        self.assertEqual(fake_model.calls, 0)
+        self.assertEqual(result["ai_verification"]["requested"], 0)
+        self.assertEqual(result["ai_verification"]["successful"], 0)
+        self.assertEqual(result["final_layer_distribution"]["layer_3"], 1)
 
     def test_profile_excerpt_and_notes_strip_roster_boilerplate(self) -> None:
         candidate = Candidate(

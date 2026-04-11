@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from html import unescape
@@ -32,7 +33,19 @@ _SHARED_LIBRARY_PACKAGE_HINTS = {
     "libnspr4.so": "libnspr4",
     "libnss3.so": "libnss3",
 }
-_DEFAULT_LANE_FETCH_COOLDOWN_SECONDS = 15
+def _env_int(name: str, default: int) -> int:
+    raw = str(os.getenv(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return default
+
+
+_DEFAULT_LANE_READY_COOLDOWN_SECONDS = max(1, _env_int("WEB_SEARCH_READY_COOLDOWN_SECONDS", 15))
+_DEFAULT_LANE_FETCH_COOLDOWN_SECONDS = max(1, _env_int("WEB_SEARCH_FETCH_COOLDOWN_SECONDS", 15))
+_DEFAULT_DATAFORSEO_TASK_GET_BATCH_WORKERS = max(1, _env_int("DATAFORSEO_TASK_GET_BATCH_WORKERS", 8))
 
 
 @dataclass(frozen=True, slots=True)
@@ -512,8 +525,22 @@ class DataForSeoGoogleOrganicSearchProvider(BaseSearchProvider):
 
         tasks: list[SearchBatchFetchTask] = []
         artifacts: list[SearchExecutionArtifact] = []
-        for index, spec in enumerate(normalized_specs, start=1):
+
+        def _fetch_task(index: int, spec: dict[str, Any]) -> tuple[int, dict[str, Any], dict[str, Any]]:
             payload = self.client.task_get_regular(str(spec["task_id"]))
+            return index, spec, payload
+
+        fetched_payloads: list[tuple[int, dict[str, Any], dict[str, Any]]] = []
+        max_workers = max(1, min(len(normalized_specs), _DEFAULT_DATAFORSEO_TASK_GET_BATCH_WORKERS))
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = {
+                pool.submit(_fetch_task, index, spec): index
+                for index, spec in enumerate(normalized_specs, start=1)
+            }
+            for future in as_completed(futures):
+                fetched_payloads.append(future.result())
+
+        for index, spec, payload in sorted(fetched_payloads, key=lambda item: item[0]):
             artifacts.append(
                 SearchExecutionArtifact(
                     label=f"task_get_batch_{index:02d}",
@@ -675,6 +702,39 @@ class DataForSeoGoogleOrganicSearchProvider(BaseSearchProvider):
                 ),
             )
 
+        ready_cooldown_seconds = max(
+            1,
+            int(existing.get("lane_ready_cooldown_seconds") or _DEFAULT_LANE_READY_COOLDOWN_SECONDS),
+        )
+        ready_poll_source = str(existing.get("ready_poll_source") or "").strip().lower()
+        if ready_poll_source == "lane_batch":
+            return SearchExecutionResult(
+                provider_name=self.provider_name,
+                query_text=query_text,
+                checkpoint={
+                    **self._overlay_ready_metadata(base_checkpoint, existing),
+                    "task_id": task_id,
+                    "status": "waiting_for_ready_cached",
+                    "lane_ready_cooldown_seconds": ready_cooldown_seconds,
+                },
+                pending=True,
+                message=f"Waiting for lane-level DataForSEO ready cache for task {task_id}.",
+            )
+        if _timestamp_within_seconds(str(existing.get("ready_attempted_at") or ""), ready_cooldown_seconds):
+            return SearchExecutionResult(
+                provider_name=self.provider_name,
+                query_text=query_text,
+                checkpoint={
+                    **self._overlay_ready_metadata(base_checkpoint, existing),
+                    "task_id": task_id,
+                    "status": "waiting_for_ready",
+                    "lane_ready_cooldown_seconds": ready_cooldown_seconds,
+                },
+                pending=True,
+                message=f"Waiting before next DataForSEO ready poll for task {task_id}.",
+            )
+
+        ready_attempted_at = datetime.now(timezone.utc).isoformat()
         ready_payload = self.client.tasks_ready()
         ready_ids = set(extract_google_organic_ready_task_ids(ready_payload))
         artifacts = [
@@ -692,6 +752,8 @@ class DataForSeoGoogleOrganicSearchProvider(BaseSearchProvider):
                     **base_checkpoint,
                     "task_id": task_id,
                     "status": "waiting_for_ready",
+                    "ready_attempted_at": ready_attempted_at,
+                    "lane_ready_cooldown_seconds": ready_cooldown_seconds,
                 },
                 pending=True,
                 message=f"Waiting for DataForSEO task {task_id} to become ready.",
