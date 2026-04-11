@@ -1,0 +1,696 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAAeoHjYB_MZdJnzdahHhff_qw559VjLYYCM",
+    "profile_url": "https://www.linkedin.com/in/ACwAAAeoHjYB_MZdJnzdahHhff_qw559VjLYYCM"
+  },
+  "item": {
+    "id": "ACoAAAeoHjYB_Lo5sUFlpZpz2L74oe9nEIKztQA",
+    "publicIdentifier": "jenya-l",
+    "linkedinUrl": "https://www.linkedin.com/in/jenya-l",
+    "firstName": "Jenya",
+    "lastName": "L.",
+    "emails": [
+      {
+        "email": "jenya@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Member of Technical Staff at Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco Bay Area",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "128458294",
+    "registeredAt": "2011-07-06T17:52:39.500Z",
+    "topSkills": null,
+    "connectionsCount": 2363,
+    "followerCount": 3202,
+    "verified": true,
+    "about": "I built the Llama 2/3/4/+ training stack at Meta. I make GPU fleets, network, and storage come together so frontier models hit production—fast.",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 11,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5603AQHOLIL30-Odaw/profile-displayphoto-crop_800_800/B56Zmw69j.G4AI-/0/1759609870904?e=1776902400&v=beta&t=BYHJYPFurNFuX8dHjB8GAq8HI1w1MtZsf6HqvEP_Kio",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQHOLIL30-Odaw/profile-displayphoto-crop_800_800/B56Zmw69j.G4AI-/0/1759609870904?e=1776902400&v=beta&t=BYHJYPFurNFuX8dHjB8GAq8HI1w1MtZsf6HqvEP_Kio",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQHOLIL30-Odaw/profile-displayphoto-scale_400_400/B56Zmw69j.G4Ag-/0/1759609870990?e=1776902400&v=beta&t=if9FZmSZ4skPSN9Elk3QjbnoOXaTR_wWK376CxYTVk0",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQHOLIL30-Odaw/profile-displayphoto-scale_200_200/B56Zmw69j.G4AY-/0/1759609870990?e=1776902400&v=beta&t=9k6Y3DB4PWzPSOmOWsOJJhk4G8FiyhKGDjQ1nR8Inf0",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQHOLIL30-Odaw/profile-displayphoto-scale_100_100/B56Zmw69j.G4Ac-/0/1759609870990?e=1776902400&v=beta&t=8lND3q0bO8yMSXVTrzHjHRAXWkZj02y_YuRCQrUK0HU",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5616AQHiInPxuRlywA/profile-displaybackgroundimage-shrink_350_1400/B56Zmw9MY5JwAY-/0/1759610456121?e=1776902400&v=beta&t=iYTPrS1uYoyvgG9kwUJ9NG0Py9jBWMR9b_5BMmkLexk",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5616AQHiInPxuRlywA/profile-displaybackgroundimage-shrink_350_1400/B56Zmw9MY5JwAY-/0/1759610456121?e=1776902400&v=beta&t=iYTPrS1uYoyvgG9kwUJ9NG0Py9jBWMR9b_5BMmkLexk",
+          "width": 1400,
+          "height": 350,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5616AQHiInPxuRlywA/profile-displaybackgroundimage-shrink_200_800/B56Zmw9MY5JwAU-/0/1759610456121?e=1776902400&v=beta&t=GsTenveL1wqA4BHwp6hvnq6hDtGCVO5LVfliyF2y8iM",
+          "width": 800,
+          "height": 200,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "photo": "https://media.licdn.com/dms/image/v2/D5603AQHOLIL30-Odaw/profile-displayphoto-crop_800_800/B56Zmw69j.G4AI-/0/1759609870904?e=1776902400&v=beta&t=BYHJYPFurNFuX8dHjB8GAq8HI1w1MtZsf6HqvEP_Kio",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Member of Technical Staff at Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco Bay Area",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "6 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Nov",
+          "year": 2025,
+          "text": "Nov 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "AI and ML Infrastructure Engineer / Production Engineer",
+        "location": "San Francisco Bay Area",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "6 yrs 1 mo",
+        "description": "At Meta, I developed large-scale training infrastructure to support high-volume ranking systems and LLM training - Llama 2 †, Llama 3 ‡, Llama 4 and more.\n\nMy work spanned the entire ML pipeline, from optimizing compute, network, and storage, to ensuring smooth loss curves and evals, getting research to production fast.\n\n† 🦙🦙 https://arxiv.org/abs/2307.09288\n‡ 🦙🦙🦙 https://arxiv.org/abs/2407.21783",
+        "skills": [
+          "Distributed Storage",
+          "LLM training",
+          "NCCL",
+          "Scheduling",
+          "FSDP",
+          "NVLink/NVSwitch",
+          "Distributed Training"
+        ],
+        "startDate": {
+          "month": "Nov",
+          "year": 2019,
+          "text": "Nov 2019"
+        },
+        "endDate": {
+          "month": "Nov",
+          "year": 2025,
+          "text": "Nov 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Sr. Software Engineer",
+        "location": "Moscow/San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": "On-site",
+        "companyName": "Mirantis",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/7793/",
+        "companyId": "7793",
+        "duration": "6 yrs 8 mos",
+        "description": "• Delivered enterprise‑grade automation to deploy and operate private clouds end‑to‑end: heterogeneous hardware discovery, bare‑metal imaging, automated disk partitioning, and network bring‑up for control plane and SDN (Open vSwitch/Neutron).\n• Shipped repeatable cluster deployments and day‑2 operations for OpenStack + Kubernetes: HA control plane, Ceph‑backed storage, upgrades, config‑drift remediation, and site‑wide telemetry/logging/monitoring.\n• Worked in a decentralized open‑source environment (Airship, Fuel): authored specs/CRs, led design reviews, and collaborated across global contributors and customers.",
+        "skills": [
+          "Linux",
+          "Python",
+          "Ruby",
+          "Ceph",
+          "OpenStack",
+          "Kubernetes",
+          "Hardware"
+        ],
+        "startDate": {
+          "month": "Apr",
+          "year": 2013,
+          "text": "Apr 2013"
+        },
+        "endDate": {
+          "month": "Nov",
+          "year": 2019,
+          "text": "Nov 2019"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFhHZ6JEPwNBQ/company-logo_400_400/company-logo_400_400/0/1724776781309/mirantis_logo?e=1776902400&v=beta&t=XMBsjItLpQe3kCqZ93BSPuoTxtZKTdr2uYSoOvLEJF4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFhHZ6JEPwNBQ/company-logo_400_400/company-logo_400_400/0/1724776781309/mirantis_logo?e=1776902400&v=beta&t=XMBsjItLpQe3kCqZ93BSPuoTxtZKTdr2uYSoOvLEJF4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFhHZ6JEPwNBQ/company-logo_200_200/company-logo_200_200/0/1724776781308/mirantis_logo?e=1776902400&v=beta&t=m7vf6s0xjWKm6qmVVPdYL9ljnH4RCDglUakZKtAk-OY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFhHZ6JEPwNBQ/company-logo_100_100/company-logo_100_100/0/1724776781309/mirantis_logo?e=1776902400&v=beta&t=2WZZK3eW0WR5VE56xnsv9_EBYqNJgJ4EmMH-3SFJQ1g",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Ruby",
+        "positions": [
+          "Sr. Software Engineer at Mirantis"
+        ],
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Git",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Linux",
+        "positions": [
+          "Sr. Software Engineer at Mirantis"
+        ],
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "C",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Python",
+        "positions": [
+          "Sr. Software Engineer at Mirantis"
+        ],
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Ansible",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Ubuntu",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Distributed Training",
+        "positions": [
+          "AI and ML Infrastructure Engineer / Production Engineer at Meta"
+        ]
+      },
+      {
+        "name": "Ceph",
+        "positions": [
+          "Sr. Software Engineer at Mirantis"
+        ],
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Hardware",
+        "positions": [
+          "Sr. Software Engineer at Mirantis"
+        ],
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Distributed Storage",
+        "positions": [
+          "AI and ML Infrastructure Engineer / Production Engineer at Meta"
+        ],
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Scheduling",
+        "positions": [
+          "AI and ML Infrastructure Engineer / Production Engineer at Meta"
+        ]
+      },
+      {
+        "name": "NVLink/NVSwitch",
+        "positions": [
+          "AI and ML Infrastructure Engineer / Production Engineer at Meta"
+        ]
+      },
+      {
+        "name": "NCCL",
+        "positions": [
+          "AI and ML Infrastructure Engineer / Production Engineer at Meta"
+        ]
+      },
+      {
+        "name": "FSDP",
+        "positions": [
+          "AI and ML Infrastructure Engineer / Production Engineer at Meta"
+        ]
+      },
+      {
+        "name": "LLM training",
+        "positions": [
+          "AI and ML Infrastructure Engineer / Production Engineer at Meta"
+        ]
+      },
+      {
+        "name": "Emacs"
+      },
+      {
+        "name": "Test Automation",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Testing",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "OpenStack",
+        "positions": [
+          "Sr. Software Engineer at Mirantis"
+        ],
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Kubernetes",
+        "positions": [
+          "Sr. Software Engineer at Mirantis"
+        ],
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "DevOps",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "SRE",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Puppet",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Software Development",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Software Engineers",
+        "endorsements": "1 endorsement"
+      }
+    ],
+    "publications": [
+      {
+        "title": "The Llama 3 Herd of Models",
+        "publishedAt": "arxiv · Jul 31, 2024",
+        "link": "https://arxiv.org/abs/2407.21783"
+      },
+      {
+        "title": "Llama 2: Open Foundation and Fine-Tuned Chat Models",
+        "publishedAt": "arXiv · Jul 18, 2023",
+        "link": "https://arxiv.org/abs/2307.09288"
+      }
+    ],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAATAFhsB-MSu8aXWUBacbi6fvU_SaAqdBH4",
+        "firstName": "Jeff",
+        "lastName": "Hanson",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "jshanson7",
+        "linkedinUrl": "https://www.linkedin.com/in/jshanson7"
+      },
+      {
+        "id": "ACoAAEZnBtoBb1Us7ZKgHfOXAYT764pKcDQy848",
+        "firstName": "Songlin",
+        "lastName": "Yang",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "songlin-yang-b8a69728b",
+        "linkedinUrl": "https://www.linkedin.com/in/songlin-yang-b8a69728b"
+      },
+      {
+        "id": "ACoAAAncnq0BajmeOrLikO5AAincnDzuRDUXFjw",
+        "firstName": "Soumith",
+        "lastName": "Chintala",
+        "publicIdentifier": "soumith",
+        "linkedinUrl": "https://www.linkedin.com/in/soumith"
+      },
+      {
+        "id": "ACoAABGaEy8Bu1ycKB5WUvyRc69OERCzymW7mxY",
+        "firstName": "Jamie",
+        "lastName": "Cahill",
+        "position": "Member of Technical Staff @ Thinking Machines, Ex-Meta",
+        "publicIdentifier": "james-cahill-093a9582",
+        "linkedinUrl": "https://www.linkedin.com/in/james-cahill-093a9582"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAABE9sVMBCH0i964WlvecDNyGKTviqyXKcTY",
+        "firstName": "Hannah",
+        "lastName": "T.",
+        "position": "recruiting @ thinking machines lab",
+        "publicIdentifier": "hannahnth",
+        "linkedinUrl": "https://www.linkedin.com/in/hannahnth"
+      },
+      {
+        "id": "ACoAAEAbBpQBT4luNj8gPYU6CgQ_GNJey3AJTiE",
+        "firstName": "Rajat",
+        "lastName": "Goel",
+        "position": "Member of Technical Staff",
+        "publicIdentifier": "rajatgoel2010",
+        "linkedinUrl": "https://www.linkedin.com/in/rajatgoel2010"
+      },
+      {
+        "id": "ACoAAACo1tYBGy9sT2OWZuEULOMe4K_b2Y22-F8",
+        "firstName": "Alex",
+        "lastName": "Gartrell",
+        "position": "Engineering @ Thinking Machines, Ex-Meta/Facebook",
+        "publicIdentifier": "alexgartrell",
+        "linkedinUrl": "https://www.linkedin.com/in/alexgartrell"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAACHG180BXiyeZ2qJgoggx27e4iM3ajxvp18",
+        "firstName": "Andy",
+        "lastName": "Hwang",
+        "position": "thinking machines",
+        "publicIdentifier": "andrewnhwang",
+        "linkedinUrl": "https://www.linkedin.com/in/andrewnhwang"
+      },
+      {
+        "id": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+        "firstName": "Saurabh",
+        "lastName": "Garg",
+        "position": "Thinking Machines Lab | Prev: Mistral AI, CMU, IIT-B",
+        "publicIdentifier": "saurabh-garg-b680b5b8",
+        "linkedinUrl": "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+      },
+      {
+        "id": "ACoAABoG0oUBl986ZaMrLUASG1NhDoJyVlav4Po",
+        "firstName": "Eric",
+        "lastName": "Zhang",
+        "position": "MTS, Thinking Machines",
+        "publicIdentifier": "ekzhang",
+        "linkedinUrl": "https://www.linkedin.com/in/ekzhang"
+      },
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "position": "Thinking about machines",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAAAd3c8cBXKnzqS80_HMaDIGNdqrXbaFbO5g",
+        "firstName": "James",
+        "lastName": "Sun",
+        "position": "Software Engineer",
+        "publicIdentifier": "james5un",
+        "linkedinUrl": "https://www.linkedin.com/in/james5un"
+      },
+      {
+        "id": "ACoAAAl87CYBWKLLyGNTbomy6oqIPv-5n34CXIY",
+        "firstName": "Andrew",
+        "lastName": "Tulloch",
+        "position": "AI Research @ Meta",
+        "publicIdentifier": "andrew-tulloch-17238745",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-tulloch-17238745"
+      },
+      {
+        "id": "ACoAAABUi1gBlzF6r2wNRBi6WhAbidOitdzQ2fc",
+        "firstName": "Sergey",
+        "lastName": "Edunov",
+        "publicIdentifier": "edunov",
+        "linkedinUrl": "https://www.linkedin.com/in/edunov"
+      },
+      {
+        "id": "ACoAAAhY-psBFcHXNbjunn6_QnPfV6Bo6w4yzug",
+        "firstName": "Kenny",
+        "lastName": "Yu",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "kenny-yu-aa3a9a3a",
+        "linkedinUrl": "https://www.linkedin.com/in/kenny-yu-aa3a9a3a"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "position": "Co-Founder and CEO at Thinking Machines Lab",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAACy2BxwB9fCrfCBI06w0X-gHyQTFLJIpJGc",
+        "firstName": "Guangxuan",
+        "lastName": "X.",
+        "publicIdentifier": "xgx",
+        "linkedinUrl": "https://www.linkedin.com/in/xgx"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAAEiHfkIB8Kj4Qxb4P9suqabQgi1u81kXIuo",
+        "firstName": "Ingo",
+        "lastName": "Reimann",
+        "position": "--",
+        "publicIdentifier": "ingo-reimann-45662529b",
+        "linkedinUrl": "https://www.linkedin.com/in/ingo-reimann-45662529b"
+      },
+      {
+        "id": "ACoAAFLPfWMBa-Hvtall4PbzmuOv6CNrHCmkKpc",
+        "firstName": "Frieda",
+        "lastName": "Riedel",
+        "position": "--",
+        "publicIdentifier": "frieda-riedel-34334a329",
+        "linkedinUrl": "https://www.linkedin.com/in/frieda-riedel-34334a329"
+      },
+      {
+        "id": "ACoAACBumFUBU1V2CgkMFyqjA41TDjHpsjuUIWc",
+        "firstName": "Jörg",
+        "lastName": "Figge",
+        "position": "--",
+        "publicIdentifier": "jörg-figge-731283132",
+        "linkedinUrl": "https://www.linkedin.com/in/jörg-figge-731283132"
+      },
+      {
+        "id": "ACoAABZCoa8BAL_sLjz8CLSc4TKiD4Vn6NnmWhY",
+        "firstName": "Tanja",
+        "lastName": "Salvemini",
+        "position": "--",
+        "publicIdentifier": "tanja-salvemini-a670a5a5",
+        "linkedinUrl": "https://www.linkedin.com/in/tanja-salvemini-a670a5a5"
+      },
+      {
+        "id": "ACoAAF_abMcBJmaGKZFTQrFkBNqT-PpiVYRoYj4",
+        "firstName": "Timo",
+        "lastName": "Langenkaemper",
+        "position": "--",
+        "publicIdentifier": "timo-langenkaemper-59b69638a",
+        "linkedinUrl": "https://www.linkedin.com/in/timo-langenkaemper-59b69638a"
+      },
+      {
+        "id": "ACoAAEH8L_YBH-TmPeyjSdwbR5DkOvlaXJypZd4",
+        "firstName": "Ulli",
+        "lastName": "Hallerbach",
+        "position": "--",
+        "publicIdentifier": "ulli-hallerbach-a1a8b726a",
+        "linkedinUrl": "https://www.linkedin.com/in/ulli-hallerbach-a1a8b726a"
+      },
+      {
+        "id": "ACoAACAJw0YB2x8TPt5dXimKP5yK-y78JoSJAvk",
+        "firstName": "Adelina",
+        "lastName": "Schauer",
+        "position": "--",
+        "publicIdentifier": "adelina-schauer-546017130",
+        "linkedinUrl": "https://www.linkedin.com/in/adelina-schauer-546017130"
+      },
+      {
+        "id": "ACoAAB9nvisBCeTuiOUilNe8iU0-nB6nMSgNW08",
+        "firstName": "Patrick",
+        "lastName": "Paulinsky",
+        "position": "--",
+        "publicIdentifier": "patrick-paulinsky-837556128",
+        "linkedinUrl": "https://www.linkedin.com/in/patrick-paulinsky-837556128"
+      },
+      {
+        "id": "ACoAAF4RtocB85YPDGj9t6zd5ylARv6qZ3I6ILg",
+        "firstName": "Stefanie ",
+        "lastName": "Hahn",
+        "position": "--",
+        "publicIdentifier": "stefanie-hahn-31b661380",
+        "linkedinUrl": "https://www.linkedin.com/in/stefanie-hahn-31b661380"
+      },
+      {
+        "id": "ACoAAFwydmABAMK0lVtYUL_MeYKYNxXH8GP8iuA",
+        "firstName": "Jaqueline",
+        "lastName": "Ha",
+        "position": "--",
+        "publicIdentifier": "jaqueline-ha-2a8035372",
+        "linkedinUrl": "https://www.linkedin.com/in/jaqueline-ha-2a8035372"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAAeoHjYB_MZdJnzdahHhff_qw559VjLYYCM"
+    }
+  }
+}

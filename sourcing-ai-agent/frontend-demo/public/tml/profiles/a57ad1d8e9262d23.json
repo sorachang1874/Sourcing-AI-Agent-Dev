@@ -1,0 +1,781 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAACxX5AEBw79bax9us90sEUpP_iskao48vKw",
+    "profile_url": "https://www.linkedin.com/in/ACwAACxX5AEBw79bax9us90sEUpP_iskao48vKw"
+  },
+  "item": {
+    "id": "ACoAACxX5AEBYonmfz9M8tQ8jO7Nx3jIXe_VSjw",
+    "publicIdentifier": "sophie-rose-shapiro",
+    "linkedinUrl": "https://www.linkedin.com/in/sophie-rose-shapiro",
+    "firstName": "Sophie Rose",
+    "lastName": "Shapiro",
+    "emails": [
+      {
+        "email": "sophie.shapiro@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Creative Operations",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "New York, New York, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "New York City, NY, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "New York",
+        "city": "New York City"
+      }
+    },
+    "objectUrn": "743957505",
+    "registeredAt": "2019-06-24T06:32:00.292Z",
+    "topSkills": null,
+    "connectionsCount": 22,
+    "followerCount": 23,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 11,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "17950",
+        "companyId": "2477",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2477/",
+        "schoolName": "University of California, Los Angeles"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4E03AQEQgMgPfaj0tg/profile-displayphoto-crop_800_800/B4EZwgVRG4HoAI-/0/1770068973857?e=1776902400&v=beta&t=dYEozSP8lw5ySbWj_IFgz5LKp6mP7nJ8WE-CHMTBiUU",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQEQgMgPfaj0tg/profile-displayphoto-crop_800_800/B4EZwgVRG4HoAI-/0/1770068973857?e=1776902400&v=beta&t=dYEozSP8lw5ySbWj_IFgz5LKp6mP7nJ8WE-CHMTBiUU",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQEQgMgPfaj0tg/profile-displayphoto-scale_400_400/B4EZwgVRG4HoAg-/0/1770068973955?e=1776902400&v=beta&t=QopdRG5MiJrgzvMizlAJQIyLRQT_DgKyK9gdxdHHJ94",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQEQgMgPfaj0tg/profile-displayphoto-scale_200_200/B4EZwgVRG4HoAY-/0/1770068973955?e=1776902400&v=beta&t=GrUBgkDSFqOW88gqmmXpfZX62pBrg5b_v89lLG0haPQ",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQEQgMgPfaj0tg/profile-displayphoto-scale_100_100/B4EZwgVRG4HoAc-/0/1770068973955?e=1776902400&v=beta&t=hXkWf5XTi7Lp4AZZMpHkF9pMtMtWT-j81KE1KAB1Nzg",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": {
+      "url": "https://media.licdn.com/dms/image/v2/C5616AQFTWlc7o38rnQ/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1658978938045?e=1776902400&v=beta&t=kShTjQgYbSl3eMkJJ20TJYlI1EZP42nqhVa4G5vAK1c",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5616AQFTWlc7o38rnQ/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1658978938045?e=1776902400&v=beta&t=kShTjQgYbSl3eMkJJ20TJYlI1EZP42nqhVa4G5vAK1c",
+          "width": 1332,
+          "height": 333,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5616AQFTWlc7o38rnQ/profile-displaybackgroundimage-shrink_200_800/profile-displaybackgroundimage-shrink_200_800/0/1658978938045?e=1776902400&v=beta&t=96Kxo0T3blGv_-a08ShUwxnVX2-CVztqu3b10KfanTI",
+          "width": 800,
+          "height": 200,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "photo": "https://media.licdn.com/dms/image/v2/D4E03AQEQgMgPfaj0tg/profile-displayphoto-crop_800_800/B4EZwgVRG4HoAI-/0/1770068973857?e=1776902400&v=beta&t=dYEozSP8lw5ySbWj_IFgz5LKp6mP7nJ8WE-CHMTBiUU",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Creative Operations",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Office Manager",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "6 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Nov",
+          "year": 2025,
+          "text": "Nov 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Special Events Associate",
+        "location": "New York, United States",
+        "employmentType": "Contract",
+        "workplaceType": null,
+        "companyName": "Center for Hearing and Communication",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1687101/",
+        "companyId": "1687101",
+        "duration": "5 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Aug",
+          "year": 2025,
+          "text": "Aug 2025"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2025,
+          "text": "Dec 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFb_6n5PdCApQ/company-logo_400_400/company-logo_400_400/0/1631337052558?e=1776902400&v=beta&t=xZlpENMhcvji3j171uvYC5OqoowUvz2RXQ5GK7Cr-vg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFb_6n5PdCApQ/company-logo_400_400/company-logo_400_400/0/1631337052558?e=1776902400&v=beta&t=xZlpENMhcvji3j171uvYC5OqoowUvz2RXQ5GK7Cr-vg",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFb_6n5PdCApQ/company-logo_200_200/company-logo_200_200/0/1631337052558?e=1776902400&v=beta&t=olrYjbg5hb66zPeZ9GlQRpCbd7CgAzF2mP79XORdMK4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFb_6n5PdCApQ/company-logo_100_100/company-logo_100_100/0/1631337052558?e=1776902400&v=beta&t=Tkt3RoOCgDLmCD3cHar_i8IxmmxZznoMsjClvlQSIvY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Communications & Operations Specialist",
+        "location": "Los Angeles, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Young Storytellers",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/332117/",
+        "companyId": "332117",
+        "duration": "3 yrs 1 mo",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jul",
+          "year": 2022,
+          "text": "Jul 2022"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2025,
+          "text": "Jul 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQG_PJ4wPqk94Q/company-logo_400_400/B56ZsksIzUGkAY-/0/1765847109124/young_storytellers_logo?e=1776902400&v=beta&t=pGbH2swkiV2mVctIsbWvK1JOfnANAGk0SZpnFSi-5pg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQG_PJ4wPqk94Q/company-logo_400_400/B56ZsksIzUGkAY-/0/1765847109124/young_storytellers_logo?e=1776902400&v=beta&t=pGbH2swkiV2mVctIsbWvK1JOfnANAGk0SZpnFSi-5pg",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQG_PJ4wPqk94Q/company-logo_200_200/B56ZsksIzUGkAI-/0/1765847109124/young_storytellers_logo?e=1776902400&v=beta&t=dV79isfX8d6dqPwLfXY_XNpImyB1kEgR-OaatvCi_BQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQG_PJ4wPqk94Q/company-logo_100_100/B56ZsksIzUGkAQ-/0/1765847109124/young_storytellers_logo?e=1776902400&v=beta&t=OPElZoeeONYn-VMsclrmGQCodQSbv5PLI52wQAvAtgQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Operations Intern",
+        "location": "Los Angeles, California, United States",
+        "employmentType": "Internship",
+        "workplaceType": null,
+        "companyName": "Young Storytellers",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/332117/",
+        "companyId": "332117",
+        "duration": "4 mos",
+        "description": "Supported the coordination and execution of monthly and quarterly team learning opportunities, retreats, and activities\nAssisted with outreach and recruitment for new YS team positions, including staff and interns\nSupported operations of the YS Office, including monitoring and reporting supplies and merchandise\nSupported the YS strategic planning process through coordination of materials and meetings\nWorked with YS staff to support the Board of Directors, including preparation for meetings and coordination of logistics\nSupported the implementation of YS’s DEIB and antiracism practices in all parts of organizational operations and community building.",
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2022,
+          "text": "Feb 2022"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2022,
+          "text": "May 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQG_PJ4wPqk94Q/company-logo_400_400/B56ZsksIzUGkAY-/0/1765847109124/young_storytellers_logo?e=1776902400&v=beta&t=pGbH2swkiV2mVctIsbWvK1JOfnANAGk0SZpnFSi-5pg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQG_PJ4wPqk94Q/company-logo_400_400/B56ZsksIzUGkAY-/0/1765847109124/young_storytellers_logo?e=1776902400&v=beta&t=pGbH2swkiV2mVctIsbWvK1JOfnANAGk0SZpnFSi-5pg",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQG_PJ4wPqk94Q/company-logo_200_200/B56ZsksIzUGkAI-/0/1765847109124/young_storytellers_logo?e=1776902400&v=beta&t=dV79isfX8d6dqPwLfXY_XNpImyB1kEgR-OaatvCi_BQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQG_PJ4wPqk94Q/company-logo_100_100/B56ZsksIzUGkAQ-/0/1765847109124/young_storytellers_logo?e=1776902400&v=beta&t=OPElZoeeONYn-VMsclrmGQCodQSbv5PLI52wQAvAtgQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Communications Associate",
+        "location": "Los Angeles Metropolitan Area",
+        "employmentType": "Part-time",
+        "workplaceType": null,
+        "companyName": "Heidi Duckler Dance",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1817455/",
+        "companyId": "1817455",
+        "duration": "8 mos",
+        "description": "Created and distributed weekly newsletter\nWrote content (narratives, announcements, updates, etc.) for website and grant applications\nWrote and distributed press releases and corresponded with press\nCommunicated with donors and patrons; i.e. writing thank you letters\nPublicized events through various online platforms and created graphics, flyers, and pitch decks\nCompleted administrative tasks (editing website, organizing archives, etc.)",
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2021,
+          "text": "Jan 2021"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2021,
+          "text": "Aug 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHdjd3-l91fUA/company-logo_400_400/company-logo_400_400/0/1631373755484/heidi_duckler_dance_theatre_logo?e=1776902400&v=beta&t=MfO0YHREwZZuZRSnxL3LKE_y4tUtcdddUYX1znSif8g",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHdjd3-l91fUA/company-logo_400_400/company-logo_400_400/0/1631373755484/heidi_duckler_dance_theatre_logo?e=1776902400&v=beta&t=MfO0YHREwZZuZRSnxL3LKE_y4tUtcdddUYX1znSif8g",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHdjd3-l91fUA/company-logo_200_200/company-logo_200_200/0/1631373755484/heidi_duckler_dance_theatre_logo?e=1776902400&v=beta&t=x-fijmT-fKHq7Kt3lcGlggeia3Ew3rBhP74zKSga_6U",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHdjd3-l91fUA/company-logo_100_100/company-logo_100_100/0/1631373755484/heidi_duckler_dance_theatre_logo?e=1776902400&v=beta&t=JLqXC5lBmSaRnsIMBvaG4Ot4d_qZwGPSOM1bkSB8rQ4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "UCLA Community Engagement and Social Change Partner",
+        "location": "Los Angeles Metropolitan Area",
+        "employmentType": "Internship",
+        "workplaceType": null,
+        "companyName": "LA Commons",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/57036918/",
+        "companyId": "57036918",
+        "duration": "3 mos",
+        "description": "Assisted and carried out event planning and marketing\nConducted outreach with LA businesses and artists\nPlanned and executed Found LA 2020 event",
+        "skills": null,
+        "startDate": {
+          "month": "Oct",
+          "year": 2020,
+          "text": "Oct 2020"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2020,
+          "text": "Dec 2020"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGYxWehgoli9w/company-logo_400_400/B56Z0q60ABGsAc-/0/1774541553997/la_commons_logo?e=1776902400&v=beta&t=Hy9Vr4N-RR5rmVAmPsxA0yQl-hShRoEVaAoVpst_RQA",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGYxWehgoli9w/company-logo_400_400/B56Z0q60ABGsAc-/0/1774541553997/la_commons_logo?e=1776902400&v=beta&t=Hy9Vr4N-RR5rmVAmPsxA0yQl-hShRoEVaAoVpst_RQA",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGYxWehgoli9w/company-logo_200_200/B56Z0q60ABGsAM-/0/1774541553997/la_commons_logo?e=1776902400&v=beta&t=wxUKVpec3sVjqJOfSZ8ERP9pnE-616_cd0aB7QBcPNc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGYxWehgoli9w/company-logo_100_100/B56Z0q60ABGsAU-/0/1774541553997/la_commons_logo?e=1776902400&v=beta&t=XnncCZUSGxxqr4Jr09qQmJFld7DOX7h75IBE8gpGfjQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Marketing & Operations Intern",
+        "location": "Los Angeles Metropolitan Area",
+        "employmentType": "Internship",
+        "workplaceType": null,
+        "companyName": "Heidi Duckler Dance",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1817455/",
+        "companyId": "1817455",
+        "duration": "4 mos",
+        "description": "Assisted and carried out event planning and marketing\nManaged social media and curated specific content/advertising (Instagram, Facebook, Twitter, LinkedIn)\nAssisted in grant writing and archival-based research",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2020,
+          "text": "Jun 2020"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2020,
+          "text": "Sep 2020"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHdjd3-l91fUA/company-logo_400_400/company-logo_400_400/0/1631373755484/heidi_duckler_dance_theatre_logo?e=1776902400&v=beta&t=MfO0YHREwZZuZRSnxL3LKE_y4tUtcdddUYX1znSif8g",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHdjd3-l91fUA/company-logo_400_400/company-logo_400_400/0/1631373755484/heidi_duckler_dance_theatre_logo?e=1776902400&v=beta&t=MfO0YHREwZZuZRSnxL3LKE_y4tUtcdddUYX1znSif8g",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHdjd3-l91fUA/company-logo_200_200/company-logo_200_200/0/1631373755484/heidi_duckler_dance_theatre_logo?e=1776902400&v=beta&t=x-fijmT-fKHq7Kt3lcGlggeia3Ew3rBhP74zKSga_6U",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHdjd3-l91fUA/company-logo_100_100/company-logo_100_100/0/1631373755484/heidi_duckler_dance_theatre_logo?e=1776902400&v=beta&t=JLqXC5lBmSaRnsIMBvaG4Ot4d_qZwGPSOM1bkSB8rQ4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "UCLA",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2477/",
+        "schoolId": "2477",
+        "degree": "Theater and Professional Writing",
+        "fieldOfStudy": null,
+        "skills": [],
+        "description": "Magna cum laude",
+        "startDate": {
+          "month": "Oct",
+          "year": 2018,
+          "text": "Oct 2018"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2022,
+          "text": "Jun 2022"
+        },
+        "period": "Oct 2018 - Jun 2022",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQEDHp-TpD9AYQ/company-logo_400_400/company-logo_400_400/0/1688403831517/ucla_logo?e=1776902400&v=beta&t=w-iceNVDAaFKmAsOYvYO9sTXHwebw76pe9R-GTgIw8g",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEDHp-TpD9AYQ/company-logo_400_400/company-logo_400_400/0/1688403831517/ucla_logo?e=1776902400&v=beta&t=w-iceNVDAaFKmAsOYvYO9sTXHwebw76pe9R-GTgIw8g",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEDHp-TpD9AYQ/company-logo_200_200/company-logo_200_200/0/1688403831517/ucla_logo?e=1776902400&v=beta&t=apSMiPq_D81dd0N2wkZxJfq0wTTdcD2B_0DaFeLIzRI",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEDHp-TpD9AYQ/company-logo_100_100/company-logo_100_100/0/1688403831517/ucla_logo?e=1776902400&v=beta&t=HbefwqYCfdhdsUd19CtD8n3y9tu6IbypfPK-rqgQiY8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [
+      {
+        "givenBy": "Anna Chang",
+        "givenByHeadline": "Co-Founder at Comedy Jamwich",
+        "givenAt": "December 31, 2021, Anna managed Sophie Rose directly",
+        "givenByLink": "https://www.linkedin.com/in/annakchang",
+        "description": "I had the pleasure of supervising Sophie during her Marketing and Operations internship at Heidi Duckler Dance. Sophie was an incredible asset - creative, detail oriented, and huge team player. She jumped right in and seamlessly collaborated across our small but mighty team. Sophie was essential in revamping our social media presence as well as our weekly newsletters. She also wore many hats and offered valuable assistance on a variety of projects and productions throughout her time at HDD. Her perspective as a dancer and Angelino combined with her positive attitude and ability to take initiative, made her a uniquely wonderful intern. Thank you Sophie, I hope to work with you again in the future!",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQG2AWVOChH1sA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1670973929596?e=1776902400&v=beta&t=ma3_X-9DlROXccvk5FLDWSG9PgWSBr4mJUSGNIvWwr8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQG2AWVOChH1sA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1670973929596?e=1776902400&v=beta&t=ma3_X-9DlROXccvk5FLDWSG9PgWSBr4mJUSGNIvWwr8",
+              "width": 800,
+              "height": 800,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQG2AWVOChH1sA/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1670973929596?e=1776902400&v=beta&t=EmAD_lNag6UW7P4qmkOgBvwRJPiy5kyKHT2dZ6Hyc9I",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQG2AWVOChH1sA/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1670973929596?e=1776902400&v=beta&t=Ptt88lKk6QO1UOesB3YaZFLVuU3lQOP3XFRzF5x5O_8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQG2AWVOChH1sA/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1670973929596?e=1776902400&v=beta&t=GK0oUdTqSgySpX4TWOlya1xVcGhqHwGu2ZuTyBhLW2w",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAAAncnq0BajmeOrLikO5AAincnDzuRDUXFjw",
+        "firstName": "Soumith",
+        "lastName": "Chintala",
+        "publicIdentifier": "soumith",
+        "linkedinUrl": "https://www.linkedin.com/in/soumith"
+      },
+      {
+        "id": "ACoAAACQBzQB5nk5kOpFWQRtK4pv3RaL5q2G-pA",
+        "firstName": "Jonathan",
+        "lastName": "Lachman",
+        "publicIdentifier": "jonathan-lachman-4981b23",
+        "linkedinUrl": "https://www.linkedin.com/in/jonathan-lachman-4981b23"
+      },
+      {
+        "id": "ACoAACHgqNcBO7G9QHjfnTyp5v6rVbPMJ19f1dc",
+        "firstName": "Claire",
+        "lastName": "Fu",
+        "publicIdentifier": "clairecfu",
+        "linkedinUrl": "https://www.linkedin.com/in/clairecfu"
+      },
+      {
+        "id": "ACoAABE9sVMBCH0i964WlvecDNyGKTviqyXKcTY",
+        "firstName": "Hannah",
+        "lastName": "T.",
+        "publicIdentifier": "hannahnth",
+        "linkedinUrl": "https://www.linkedin.com/in/hannahnth"
+      },
+      {
+        "id": "ACoAACHG180BXiyeZ2qJgoggx27e4iM3ajxvp18",
+        "firstName": "Andy",
+        "lastName": "Hwang",
+        "publicIdentifier": "andrewnhwang",
+        "linkedinUrl": "https://www.linkedin.com/in/andrewnhwang"
+      },
+      {
+        "id": "ACoAAAFeNNIBGA1Mtyi5_iGkRC19uDzKU2t5dVs",
+        "firstName": "Kunal",
+        "lastName": "Bhalla",
+        "publicIdentifier": "kunalbhalla",
+        "linkedinUrl": "https://www.linkedin.com/in/kunalbhalla"
+      },
+      {
+        "id": "ACoAADDB7DABJK3fhQa97pAxpbFcGbMtI2pA2Ek",
+        "firstName": "Ruila",
+        "lastName": "M.",
+        "publicIdentifier": "ruilama",
+        "linkedinUrl": "https://www.linkedin.com/in/ruilama"
+      },
+      {
+        "id": "ACoAAB3BApkB38H4Z__jKDDFBfF7jt7w16vD0Xs",
+        "firstName": "Rafael",
+        "lastName": "Rafailov",
+        "publicIdentifier": "rafael-rafailov-1b521611b",
+        "linkedinUrl": "https://www.linkedin.com/in/rafael-rafailov-1b521611b"
+      },
+      {
+        "id": "ACoAABoG0oUBl986ZaMrLUASG1NhDoJyVlav4Po",
+        "firstName": "Eric",
+        "lastName": "Zhang",
+        "publicIdentifier": "ekzhang",
+        "linkedinUrl": "https://www.linkedin.com/in/ekzhang"
+      },
+      {
+        "id": "ACoAAAmf5bQBE9zWTvtIZlqQPzW22G4Tss9cb0E",
+        "firstName": "Andrew",
+        "lastName": "Lee",
+        "publicIdentifier": "alhyunsoo",
+        "linkedinUrl": "https://www.linkedin.com/in/alhyunsoo"
+      },
+      {
+        "id": "ACoAABhKWCYBiuV3Zv9Hbt8t0j-xMRqxawBcSgw",
+        "firstName": "Kurt",
+        "lastName": "Shuster",
+        "publicIdentifier": "kurtshuster1",
+        "linkedinUrl": "https://www.linkedin.com/in/kurtshuster1"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAABPg53YBHdOvmp7pU72eDhcho-7cnwyxk1o",
+        "firstName": "Pia",
+        "lastName": "Santos",
+        "publicIdentifier": "piafsantos",
+        "linkedinUrl": "https://www.linkedin.com/in/piafsantos"
+      },
+      {
+        "id": "ACoAAAwf4lcBgfLcNvMLGYnAjvxGpzWMO50zhUw",
+        "firstName": "Deepak",
+        "lastName": "Gopinath",
+        "publicIdentifier": "deepakgopinath",
+        "linkedinUrl": "https://www.linkedin.com/in/deepakgopinath"
+      },
+      {
+        "id": "ACoAAAO-j_IBXcvIzhZtQ7QNkky6tlnQTcFl9qI",
+        "firstName": "Myle",
+        "lastName": "Ott",
+        "publicIdentifier": "myleott",
+        "linkedinUrl": "https://www.linkedin.com/in/myleott"
+      },
+      {
+        "id": "ACoAAB4qbUUBsc9H_NLZN2duLUOOyyFDm-k_ACo",
+        "firstName": "Riley",
+        "lastName": "Shanahan",
+        "publicIdentifier": "rileyshanny",
+        "linkedinUrl": "https://www.linkedin.com/in/rileyshanny"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAAAji1bkB1eLX4z2Jb9-N2nMhEGNLWptSnqU",
+        "firstName": "Clare",
+        "lastName": "Birch",
+        "publicIdentifier": "clarebirch42",
+        "linkedinUrl": "https://www.linkedin.com/in/clarebirch42"
+      },
+      {
+        "id": "ACoAAGQOr5cBOtwC9M5FjNh-Ft2QJkQuEtC4B30",
+        "firstName": "Lucille",
+        "lastName": "Lawyer",
+        "position": "Business Economics and Data Analysis Student at UCLA",
+        "publicIdentifier": "lucille-lawyer",
+        "linkedinUrl": "https://www.linkedin.com/in/lucille-lawyer"
+      },
+      {
+        "id": "ACoAAGTsBvEBwuuOyjFByMMqGxSzRmPCpgDOM-8",
+        "firstName": "Daisy",
+        "lastName": "Lee",
+        "position": "Student at UCLA",
+        "publicIdentifier": "daisy-lee-3010673b3",
+        "linkedinUrl": "https://www.linkedin.com/in/daisy-lee-3010673b3"
+      },
+      {
+        "id": "ACoAAGSPELwBajsqeAvDobM7Wt0y-9CaGlmaiaI",
+        "firstName": "Leah",
+        "lastName": "Green",
+        "position": "Student at UCLA",
+        "publicIdentifier": "leah-green-7100093b1",
+        "linkedinUrl": "https://www.linkedin.com/in/leah-green-7100093b1"
+      },
+      {
+        "id": "ACoAAGVGfH8B-Q17Lf_Ue447Gtj3ocJITmYBv5A",
+        "firstName": "Gregory",
+        "lastName": "Wilson",
+        "position": "Registered Investment Advisor at GL Trust, Inc",
+        "publicIdentifier": "gregory-wilson-bbb0453b5",
+        "linkedinUrl": "https://www.linkedin.com/in/gregory-wilson-bbb0453b5"
+      },
+      {
+        "id": "ACoAAGPjHhEBx84YlDU3Bl08r-Ztdp1yh4B0guk",
+        "firstName": "Monica",
+        "lastName": "Ortiz",
+        "position": "K-8 School Administrator | Equity-Centered Instructional Leader |  | Bilingual (English/Spanish)",
+        "publicIdentifier": "monica-ortiz-3812943a9",
+        "linkedinUrl": "https://www.linkedin.com/in/monica-ortiz-3812943a9"
+      },
+      {
+        "id": "ACoAAGVS3WIBnQVcGIaxIti9QQoP7eqADIcfDfg",
+        "firstName": "Ambrose ",
+        "lastName": "Wells",
+        "position": "--",
+        "publicIdentifier": "ambrose-wells-56a3773b5",
+        "linkedinUrl": "https://www.linkedin.com/in/ambrose-wells-56a3773b5"
+      },
+      {
+        "id": "ACoAAGVcOXQBPwcN9q6pJTZgpM9QU4Ojnyal9ug",
+        "firstName": "Tiffany",
+        "lastName": "Tsai",
+        "position": "德州儀器財會主管 ",
+        "publicIdentifier": "tsai-tiffany-5306123b5",
+        "linkedinUrl": "https://www.linkedin.com/in/tsai-tiffany-5306123b5"
+      },
+      {
+        "id": "ACoAAGVg_t0BsUSwlxdEHrJDJ0soDYLVsMxYniw",
+        "firstName": "Stanley",
+        "lastName": "Blount",
+        "position": "Student at UCLA",
+        "publicIdentifier": "stanley-blount-4797433b5",
+        "linkedinUrl": "https://www.linkedin.com/in/stanley-blount-4797433b5"
+      },
+      {
+        "id": "ACoAAGPmlLABVK6rMFpSZlmlmfxL_8uxj91i_Kg",
+        "firstName": "John",
+        "lastName": "Zero",
+        "position": "Student at UCLA",
+        "publicIdentifier": "john-zero-7a83833a9",
+        "linkedinUrl": "https://www.linkedin.com/in/john-zero-7a83833a9"
+      },
+      {
+        "id": "ACoAAGPEqaQBClrL9j2JYl9L93_QPx7TQ7f7duw",
+        "firstName": "Reece",
+        "lastName": "Campbell",
+        "position": "Student at UCLA",
+        "publicIdentifier": "reece-campbell-3446913a8",
+        "linkedinUrl": "https://www.linkedin.com/in/reece-campbell-3446913a8"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAACxX5AEBw79bax9us90sEUpP_iskao48vKw"
+    }
+  }
+}

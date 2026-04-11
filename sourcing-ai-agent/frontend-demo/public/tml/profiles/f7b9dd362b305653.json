@@ -1,0 +1,858 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAABhIg7YBMK4Xv-rniy-t_ml4ACNdd_tNO8g",
+    "profile_url": "https://www.linkedin.com/in/ACwAABhIg7YBMK4Xv-rniy-t_ml4ACNdd_tNO8g"
+  },
+  "item": {
+    "id": "ACoAABhIg7YBYN2NPIu8voYj5D7JQVZGxonqHvc",
+    "publicIdentifier": "ruiqi-zhong-09a533b4",
+    "linkedinUrl": "https://www.linkedin.com/in/ruiqi-zhong-09a533b4",
+    "firstName": "Ruiqi",
+    "lastName": "Zhong",
+    "emails": [
+      {
+        "email": "ruiqi.zhong@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "AI researcher. LLM + human collaboration.",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Berkeley, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "Berkeley, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "Berkeley"
+      }
+    },
+    "objectUrn": "407405494",
+    "registeredAt": "2015-03-14T10:07:28.860Z",
+    "topSkills": null,
+    "connectionsCount": 756,
+    "followerCount": 891,
+    "verified": true,
+    "about": "I want AGI to be aligned and collaborative with humans.",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 5,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "17939",
+        "companyId": "2517",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2517/",
+        "schoolName": "University of California, Berkeley"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": null,
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "CN",
+        "language": "zh"
+      }
+    ],
+    "primaryLocale": {
+      "country": "CN",
+      "language": "zh"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "AI researcher. LLM + human collaboration.",
+        "locale": "zh_CN"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "United States",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "1 yr",
+        "description": "Human + AI collaboration.",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2025,
+          "text": "May 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Assistant",
+        "location": "Berkeley, California",
+        "employmentType": null,
+        "workplaceType": "On-site",
+        "companyName": "University of California, Berkeley",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/uc-berkeley/",
+        "companyId": "2517",
+        "companyUniversalName": "uc-berkeley",
+        "duration": "5 yrs 11 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jul",
+          "year": 2019,
+          "text": "Jul 2019"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2025,
+          "text": "May 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_400_400/company-logo_400_400/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=ihsqGpnHzj0nlc8nr3zQwTYbq6GYQDs_WRmOHxXO6Cs",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_400_400/company-logo_400_400/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=ihsqGpnHzj0nlc8nr3zQwTYbq6GYQDs_WRmOHxXO6Cs",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_200_200/company-logo_200_200/0/1732135669730/uc_berkeley_logo?e=1776902400&v=beta&t=99cgQbgSotN9XiK7TbWS3PhqRVGT8S6VKfitEcMn0-E",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_100_100/company-logo_100_100/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=spLtug0cp3xqHCXq1OoZudTryqzyY85FoIZwfJ-_XzA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Member of Technical Staff",
+        "location": "United States",
+        "employmentType": "Part-time",
+        "workplaceType": "On-site",
+        "companyName": "Anthropic",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/74126343/",
+        "companyId": "74126343",
+        "duration": "8 mos",
+        "description": "CBRN safety of LLMs.",
+        "skills": null,
+        "startDate": {
+          "month": "Dec",
+          "year": 2023,
+          "text": "Dec 2023"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2024,
+          "text": "Jul 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_400_400/company-logo_400_400/0/1719256729905/anthropicresearch_logo?e=1776902400&v=beta&t=6sv-GagnF1G5d4B4rN1Yu3sq6fln2BP_9tb0s6bARoY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_400_400/company-logo_400_400/0/1719256729905/anthropicresearch_logo?e=1776902400&v=beta&t=6sv-GagnF1G5d4B4rN1Yu3sq6fln2BP_9tb0s6bARoY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_200_200/company-logo_200_200/0/1719256413073/anthropicresearch_logo?e=1776902400&v=beta&t=cPQIIISEsrdyXB00bI4BYAdxnK2Mx72yV0BDdzg3baM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_100_100/company-logo_100_100/0/1719256989269/anthropicresearch_logo?e=1776902400&v=beta&t=6343WBiudLAu8QSHWrlzIJOnlExxTT9uZZpuCs-AeLk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Intern",
+        "location": "United States",
+        "employmentType": "Internship",
+        "workplaceType": "Remote",
+        "companyName": "Microsoft",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1035/",
+        "companyId": "1035",
+        "duration": "5 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2022,
+          "text": "May 2022"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2022,
+          "text": "Sep 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_400_400/B56ZYQ0mrGGoAc-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=47BifJmZk2QcSo7UM_a7lFIk5vBFq49cOHVWx8Pu2dE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_400_400/B56ZYQ0mrGGoAc-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=47BifJmZk2QcSo7UM_a7lFIk5vBFq49cOHVWx8Pu2dE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_200_200/B56ZYQ0mrGGoAM-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=z3mTaKdLV9rmnHGq4MakEXZj6vY7Y9TWAjx0_U7y0X0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_100_100/B56ZYQ0mrGGoAU-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=tKqX5UTArC3FajWCGY-yk-mpPeeR1obx-D3VehmNycQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Teaching Assistant",
+        "location": "Greater New York City Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Columbia University in the City of New York",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/2624/",
+        "companyId": "2624",
+        "duration": "4 mos",
+        "description": "Fall 2017 Discrete Mathematics\nSpring 2019 Intro Networks & Crowds",
+        "skills": null,
+        "experienceGroupId": "976b26acb17250694b515d7cbb55ec07624aea93",
+        "startDate": {
+          "month": "Feb",
+          "year": 2019,
+          "text": "Feb 2019"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2019,
+          "text": "May 2019"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFxn78nvVaTDA/company-logo_400_400/company-logo_400_400/0/1630638452046/columbia_university_logo?e=1776902400&v=beta&t=JkmxmOhsBAWDrCf5mdYcSjvXU2HBE5jKVBgQSckdJKM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFxn78nvVaTDA/company-logo_400_400/company-logo_400_400/0/1630638452046/columbia_university_logo?e=1776902400&v=beta&t=JkmxmOhsBAWDrCf5mdYcSjvXU2HBE5jKVBgQSckdJKM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFxn78nvVaTDA/company-logo_200_200/company-logo_200_200/0/1630638452046/columbia_university_logo?e=1776902400&v=beta&t=nk8Cv_I6qqSdtPhts5a0Vj6sF0o7yofCfiFFMuRaWdQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFxn78nvVaTDA/company-logo_100_100/company-logo_100_100/0/1630638452046/columbia_university_logo?e=1776902400&v=beta&t=ljvvCJzXCYuRTofhy5JPzUGiroLNN19ALhBfrTRicc8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Assistant",
+        "location": "Greater New York City Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Columbia University in the City of New York",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/2624/",
+        "companyId": "2624",
+        "duration": "2 yrs 9 mos",
+        "description": "See details and corresponding publications on my Google Scholar. \n\nColumbia NLP Group, sentiment relation extraction, gang intervention, advised by Prof. Kathleen McKeown. \nColumbia Lab of Computational Biology, Intestinal Microbiota, advised by Prof. Itsik Pe'er.\nColumbia Theory of Computing Group, sketching, advised by Prof. Alexandr Andoni.\nFair Machine Group, media articles on fair machine learning (in preparation), advised by Prof. Augustin Chaintreau.",
+        "skills": null,
+        "experienceGroupId": "976b26acb17250694b515d7cbb55ec07624aea93",
+        "startDate": {
+          "month": "Sep",
+          "year": 2016,
+          "text": "Sep 2016"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2019,
+          "text": "May 2019"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFxn78nvVaTDA/company-logo_400_400/company-logo_400_400/0/1630638452046/columbia_university_logo?e=1776902400&v=beta&t=JkmxmOhsBAWDrCf5mdYcSjvXU2HBE5jKVBgQSckdJKM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFxn78nvVaTDA/company-logo_400_400/company-logo_400_400/0/1630638452046/columbia_university_logo?e=1776902400&v=beta&t=JkmxmOhsBAWDrCf5mdYcSjvXU2HBE5jKVBgQSckdJKM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFxn78nvVaTDA/company-logo_200_200/company-logo_200_200/0/1630638452046/columbia_university_logo?e=1776902400&v=beta&t=nk8Cv_I6qqSdtPhts5a0Vj6sF0o7yofCfiFFMuRaWdQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFxn78nvVaTDA/company-logo_100_100/company-logo_100_100/0/1630638452046/columbia_university_logo?e=1776902400&v=beta&t=ljvvCJzXCYuRTofhy5JPzUGiroLNN19ALhBfrTRicc8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "University of California, Berkeley",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2517/",
+        "schoolId": "2517",
+        "degree": "Doctor of Philosophy - PhD",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "description": "Working on Scalable Oversight & Explainability.",
+        "startDate": {
+          "year": 2019,
+          "text": "2019"
+        },
+        "endDate": {
+          "year": 2025,
+          "text": "2025"
+        },
+        "period": "2019 - 2025",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_400_400/company-logo_400_400/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=ihsqGpnHzj0nlc8nr3zQwTYbq6GYQDs_WRmOHxXO6Cs",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_400_400/company-logo_400_400/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=ihsqGpnHzj0nlc8nr3zQwTYbq6GYQDs_WRmOHxXO6Cs",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_200_200/company-logo_200_200/0/1732135669730/uc_berkeley_logo?e=1776902400&v=beta&t=99cgQbgSotN9XiK7TbWS3PhqRVGT8S6VKfitEcMn0-E",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_100_100/company-logo_100_100/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=spLtug0cp3xqHCXq1OoZudTryqzyY85FoIZwfJ-_XzA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Columbia University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2624/",
+        "schoolId": "2624",
+        "degree": "Bachelor's degree",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "insights": "Grade: 4.00\nActivities and societies: magna cum laude\nTheodore R. Bashkow Prize (research), Academic Excellence Award (gpa 10%)\nTau Beta Pi Academic Development Chair",
+        "startDate": {
+          "year": 2016,
+          "text": "2016"
+        },
+        "endDate": {
+          "year": 2019,
+          "text": "2019"
+        },
+        "period": "2016 - 2019",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFxn78nvVaTDA/company-logo_400_400/company-logo_400_400/0/1630638452046/columbia_university_logo?e=1776902400&v=beta&t=JkmxmOhsBAWDrCf5mdYcSjvXU2HBE5jKVBgQSckdJKM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFxn78nvVaTDA/company-logo_400_400/company-logo_400_400/0/1630638452046/columbia_university_logo?e=1776902400&v=beta&t=JkmxmOhsBAWDrCf5mdYcSjvXU2HBE5jKVBgQSckdJKM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFxn78nvVaTDA/company-logo_200_200/company-logo_200_200/0/1630638452046/columbia_university_logo?e=1776902400&v=beta&t=nk8Cv_I6qqSdtPhts5a0Vj6sF0o7yofCfiFFMuRaWdQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFxn78nvVaTDA/company-logo_100_100/company-logo_100_100/0/1630638452046/columbia_university_logo?e=1776902400&v=beta&t=ljvvCJzXCYuRTofhy5JPzUGiroLNN19ALhBfrTRicc8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Georgia Institute of Technology",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3558/",
+        "schoolId": "3558",
+        "degree": "Transferred",
+        "fieldOfStudy": "Credits Towards Computer Science",
+        "skills": [],
+        "description": "Honors Program",
+        "insights": "Grade: 4.0/4.0\nActivities and societies: Chinese Friendship Association - Outreach Department Member\nGeorgia Tech Putnam Math Competition Team\nTable Tennis Club",
+        "startDate": {
+          "year": 2015,
+          "text": "2015"
+        },
+        "endDate": {
+          "year": 2016,
+          "text": "2016"
+        },
+        "period": "2015 - 2016",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFuhLQoh5_7yA/company-logo_400_400/company-logo_400_400/0/1640110532212/georgia_institute_of_technology_logo?e=1776902400&v=beta&t=A3nLu-fD9kr-oBIibW14IwUalRdZEqZCFA-wMJthzYM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFuhLQoh5_7yA/company-logo_400_400/company-logo_400_400/0/1640110532212/georgia_institute_of_technology_logo?e=1776902400&v=beta&t=A3nLu-fD9kr-oBIibW14IwUalRdZEqZCFA-wMJthzYM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFuhLQoh5_7yA/company-logo_200_200/company-logo_200_200/0/1640110532212/georgia_institute_of_technology_logo?e=1776902400&v=beta&t=GVMnO4bxq2_sIppgOz19jaUSWVYoHUPt1hvLYmrLtVk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFuhLQoh5_7yA/company-logo_100_100/company-logo_100_100/0/1640110532212/georgia_institute_of_technology_logo?e=1776902400&v=beta&t=eziLkxSosTombxeIytwef2LDgnTAic4jcEiF5pGQDRk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Numerical Linear Algebra",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Natural Language Processing"
+      },
+      {
+        "name": "Computational Social Science"
+      },
+      {
+        "name": "Machine Learning",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Python",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Computational Genomics",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "tensorflow"
+      },
+      {
+        "name": "Keras"
+      },
+      {
+        "name": "Approximation Algorithms"
+      },
+      {
+        "name": "Probabilistic Models"
+      },
+      {
+        "name": "Deep Learning"
+      },
+      {
+        "name": "Reinforcement Learning"
+      }
+    ],
+    "publications": [
+      {
+        "title": "Debiasing NLP: Man is to Computer Programmer as Woman is to Homemaker? (Reading Guide on Two Papers, in Chinese)",
+        "publishedAt": "Synced · Jan 27, 2019",
+        "description": "We wrote a Chinese reading guide on two classical NLP paper on Fairness.\n1. Man is to Computer Programmer as Woman is to Homemaker? Debiasing Word Embeddings.\n2. Men also Like Shopping: Reducing Gender Bias Amplification using Corpus-level Constraint.",
+        "link": "https://www.jiqizhixin.com/articles/2019-01-19-3"
+      },
+      {
+        "title": "An Reading Guide of ICML2018 Fairness ML Best Papers (Chinese version) ",
+        "publishedAt": "机器之心微信公众号(Synced) · Jul 6, 2018",
+        "description": "We wrote a Chines reading guide on two ICML best (or runner-up) papers on fair machine learning:\n1. Delayed Impact of Fair Machine Learning.\n2. Fairness Without Demographics in Repeated Loss Minimization.",
+        "link": "https://zhuanlan.zhihu.com/p/39197413"
+      }
+    ],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [
+      {
+        "title": "Theodore R. Bashkow Award",
+        "issuedBy": "Columbia University Computer Science Department",
+        "issuedAt": "Apr 2019",
+        "description": "Presented to a CS Senior who has excelled in independent projects. 4 students awarded on 2019.",
+        "associatedWith": "Associated with Columbia University in the City of New York",
+        "associatedWithLink": "https://www.linkedin.com/company/2624/"
+      },
+      {
+        "title": "William Lowell Putnam Math Competition top 5% * 3",
+        "issuedBy": "The Mathematical Association of America",
+        "issuedAt": "Feb 2019",
+        "description": "Top 5% in 2015, 2016, 2018. I was on the Georgia Tech (and Columbia after transfer) Putnam Math Competition Team (one of the 3 team members).",
+        "associatedWith": "Associated with Georgia Institute of Technology",
+        "associatedWithLink": "https://www.linkedin.com/company/3558/"
+      },
+      {
+        "title": "CRA Outstanding Undergraduate Research Award - Honorable Mention * 2",
+        "issuedBy": "Computing Research Association",
+        "issuedAt": "Dec 2018",
+        "description": "I won this award in both 2018 (nominated by Prof. Itsik Pe'er) and 2019 (by Prof. Kathleen McKeown). ",
+        "associatedWith": "Associated with Columbia University in the City of New York",
+        "associatedWithLink": "https://www.linkedin.com/company/2624/"
+      },
+      {
+        "title": "Tau Beta Pi Academic Development Chair",
+        "issuedBy": "Tau Beta Pi",
+        "issuedAt": "Nov 2017",
+        "description": "Tau Beta Pi is the honor society of the Columbia Engineering School.",
+        "associatedWith": "Associated with Columbia University in the City of New York",
+        "associatedWithLink": "https://www.linkedin.com/company/2624/"
+      },
+      {
+        "title": "Columbia SURF Fellowship",
+        "issuedBy": "Columbia Biology Department",
+        "issuedAt": "Feb 2017",
+        "description": "Sponsored my summer research at Columbia in 2017 in Lab of Computational Biology.",
+        "associatedWith": "Associated with Columbia University in the City of New York",
+        "associatedWithLink": null
+      },
+      {
+        "title": "ACM ICPC 2016 Regional Finalist",
+        "issuedBy": "ACM",
+        "issuedAt": "Nov 2016",
+        "description": "Our team ranked 5/49 in Greater New York Region.",
+        "associatedWith": "Associated with Columbia University in the City of New York",
+        "associatedWithLink": "https://www.linkedin.com/company/2624/"
+      }
+    ],
+    "languages": [
+      {
+        "name": "Chinese",
+        "proficiency": "Native or bilingual proficiency"
+      },
+      {
+        "name": "English",
+        "proficiency": "Full professional proficiency"
+      }
+    ],
+    "causes": [
+      "Poverty Alleviation",
+      "Politics",
+      "Education",
+      "Social Services",
+      "Science and Technology",
+      "Economic Empowerment"
+    ],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAABEmYXYB5f-3ZmFG8dI-n9XAlqySBqO-2PA",
+        "firstName": "Luke",
+        "lastName": "Carlson",
+        "publicIdentifier": "jlukecarlson",
+        "linkedinUrl": "https://www.linkedin.com/in/jlukecarlson"
+      },
+      {
+        "id": "ACoAAAQ4Q7kByw3YKf2rFlmWzRMF7P8Gw4S9PIU",
+        "firstName": "Yinghai",
+        "lastName": "L.",
+        "publicIdentifier": "yinghai83",
+        "linkedinUrl": "https://www.linkedin.com/in/yinghai83"
+      },
+      {
+        "id": "ACoAABQ5lJUBry2byQYf_TtxDF9Rha9l-RqYsaM",
+        "firstName": "Guang-He",
+        "lastName": "Lee",
+        "publicIdentifier": "guang-he-lee-64577895",
+        "linkedinUrl": "https://www.linkedin.com/in/guang-he-lee-64577895"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABgwxtcBfqsJJUHPwsSPuBE4K9oKyRqUp5o",
+        "firstName": "Lia",
+        "lastName": "Guy",
+        "publicIdentifier": "aureliaguy",
+        "linkedinUrl": "https://www.linkedin.com/in/aureliaguy"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAACaOARIBRO2EEH12QWQO29L__oI3N2K4u14",
+        "firstName": "Mingjie",
+        "lastName": "Sun",
+        "publicIdentifier": "mingjie-sun-06a761160",
+        "linkedinUrl": "https://www.linkedin.com/in/mingjie-sun-06a761160"
+      },
+      {
+        "id": "ACoAAAJzsfoBp0MxssQYMgmy0ZNO2U3sA58ugwc",
+        "firstName": "Joshua",
+        "lastName": "Gross",
+        "publicIdentifier": "joshgross",
+        "linkedinUrl": "https://www.linkedin.com/in/joshgross"
+      },
+      {
+        "id": "ACoAABYs4-IB5mHx5eVfOHzu1e8xlO3q_kb38IM",
+        "firstName": "Brydon",
+        "lastName": "Eastman",
+        "publicIdentifier": "brydon-eastman-396719a4",
+        "linkedinUrl": "https://www.linkedin.com/in/brydon-eastman-396719a4"
+      },
+      {
+        "id": "ACoAAACo1tYBGy9sT2OWZuEULOMe4K_b2Y22-F8",
+        "firstName": "Alex",
+        "lastName": "Gartrell",
+        "publicIdentifier": "alexgartrell",
+        "linkedinUrl": "https://www.linkedin.com/in/alexgartrell"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAABA0sF8BJqwmfoms3veu9TE72tj8JMUQEFA",
+        "firstName": "Sam",
+        "lastName": "Shleifer",
+        "publicIdentifier": "sam-shleifer-a5307a77",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-shleifer-a5307a77"
+      },
+      {
+        "id": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+        "firstName": "Saurabh",
+        "lastName": "Garg",
+        "publicIdentifier": "saurabh-garg-b680b5b8",
+        "linkedinUrl": "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+      },
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAAAl87CYBWKLLyGNTbomy6oqIPv-5n34CXIY",
+        "firstName": "Andrew",
+        "lastName": "Tulloch",
+        "publicIdentifier": "andrew-tulloch-17238745",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-tulloch-17238745"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAAA4HVN4BOZg5espOvMVoO3OY04NZmuqvMCo",
+        "firstName": "Shaojie",
+        "lastName": "Bai",
+        "publicIdentifier": "shaojie-bai",
+        "linkedinUrl": "https://www.linkedin.com/in/shaojie-bai"
+      },
+      {
+        "id": "ACoAAAO-j_IBXcvIzhZtQ7QNkky6tlnQTcFl9qI",
+        "firstName": "Myle",
+        "lastName": "Ott",
+        "publicIdentifier": "myleott",
+        "linkedinUrl": "https://www.linkedin.com/in/myleott"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAAGTkA6EBCTnUKatrHO6U4iGmF-C-WD7R2_U",
+        "firstName": "Lielle",
+        "lastName": "Abramov",
+        "position": "Media Law & Policy and Sociology @ UC Berkeley",
+        "publicIdentifier": "lielle-abramov-429a533b2",
+        "linkedinUrl": "https://www.linkedin.com/in/lielle-abramov-429a533b2"
+      },
+      {
+        "id": "ACoAAGV3K08BGF5si3ZL6eX2dcKljoLatVqzAhU",
+        "firstName": "Jesse ",
+        "lastName": "Martinez ",
+        "position": "Student at University of California, Berkeley",
+        "publicIdentifier": "jesse-martinez-4131243b6",
+        "linkedinUrl": "https://www.linkedin.com/in/jesse-martinez-4131243b6"
+      },
+      {
+        "id": "ACoAAGVBnEMBPvGobKOHWkCzFCeAepLQWD-xB5Y",
+        "firstName": "Nicole",
+        "lastName": "Garcia Delgado",
+        "position": "Student at University of California, Berkeley",
+        "publicIdentifier": "nicole-garcia-delgado-0abb113b4",
+        "linkedinUrl": "https://www.linkedin.com/in/nicole-garcia-delgado-0abb113b4"
+      },
+      {
+        "id": "ACoAAGXthogBm3elDYl7eWaMJ18uIPqzDkJL44s",
+        "firstName": "Nur Alom",
+        "lastName": "Islam",
+        "position": "Student at University of California, Berkeley",
+        "publicIdentifier": "nur-alom-islam-1488453b8",
+        "linkedinUrl": "https://www.linkedin.com/in/nur-alom-islam-1488453b8"
+      },
+      {
+        "id": "ACoAAGUqA5oBi3HA0lQAvCGTxUMlwm2OxsBF5u4",
+        "firstName": "Fares",
+        "lastName": "Khaled",
+        "position": "Higher Institute for Administrative Sciences",
+        "publicIdentifier": "fares-khaled-1b64a63b4",
+        "linkedinUrl": "https://www.linkedin.com/in/fares-khaled-1b64a63b4"
+      },
+      {
+        "id": "ACoAAGSNB5IBRFwExCKjiAbg2d0utK7rJXDNI30",
+        "firstName": "Shulin (Forest)",
+        "lastName": "Chen",
+        "position": "MSBA Candidate @ UCLA Anderson｜CUHK(SZ) 26’ Global Business Study｜Exchange @ UC Berkeley 23’",
+        "publicIdentifier": "shulin-forest-chen-46ab643b0",
+        "linkedinUrl": "https://www.linkedin.com/in/shulin-forest-chen-46ab643b0"
+      },
+      {
+        "id": "ACoAAGXv-gABvmRACynOHfQSlCeDaSbUaPk-daI",
+        "firstName": "Nicholus",
+        "lastName": "Mwenda",
+        "position": "Mechanical Engineering Student at University of California, Berkeley // Mechanical Design & Advanced Manufacturing",
+        "publicIdentifier": "nicholus-mwenda-0a89023b8",
+        "linkedinUrl": "https://www.linkedin.com/in/nicholus-mwenda-0a89023b8"
+      },
+      {
+        "id": "ACoAAGVJJsMBNClP84Kj6Rs9XjvZhsjt0Du9fZc",
+        "firstName": "Alondra",
+        "lastName": "Herrera Perez",
+        "position": "Student at University of California, Berkeley",
+        "publicIdentifier": "alondra-herrera-perez-0ab10b3b5",
+        "linkedinUrl": "https://www.linkedin.com/in/alondra-herrera-perez-0ab10b3b5"
+      },
+      {
+        "id": "ACoAAGWjDSoByfLhqGAoeQ8UTP6DskbEV00ZBwk",
+        "firstName": "Savannah ",
+        "lastName": "Carter",
+        "position": "Civil Rights Data Intern at Fiverr",
+        "publicIdentifier": "savannah-carter-74a0903b7",
+        "linkedinUrl": "https://www.linkedin.com/in/savannah-carter-74a0903b7"
+      },
+      {
+        "id": "ACoAAGUyFCIBavOKvYVlmvAYCkUWanVuITAFH0g",
+        "firstName": "Seth",
+        "lastName": "Rogers",
+        "position": "Freelance Creative Type",
+        "publicIdentifier": "seth-rogers-02a7003b4",
+        "linkedinUrl": "https://www.linkedin.com/in/seth-rogers-02a7003b4"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAABhIg7YBMK4Xv-rniy-t_ml4ACNdd_tNO8g"
+    }
+  }
+}

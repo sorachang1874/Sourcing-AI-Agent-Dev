@@ -1,0 +1,331 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAGQAS5gBZFELDRoH2iGeA_NOwPZV_rIvWxg",
+    "profile_url": "https://www.linkedin.com/in/ACwAAGQAS5gBZFELDRoH2iGeA_NOwPZV_rIvWxg"
+  },
+  "item": {
+    "id": "ACoAAGQAS5gB7czjKt2_ixWVG1rbgMjhyk7inx4",
+    "publicIdentifier": "nate-lahey-aa0a563a9",
+    "linkedinUrl": "https://www.linkedin.com/in/nate-lahey-aa0a563a9",
+    "firstName": "Nate",
+    "lastName": "Lahey",
+    "emails": [
+      {
+        "email": "nate@microsoft.com",
+        "deliverable": true,
+        "catchAllDomain": false,
+        "validEmailServer": true,
+        "free": false,
+        "status": "valid",
+        "qualityScore": 80
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://news.microsoft.com/",
+        "domain": "microsoft.com",
+        "validEmailServer": true
+      },
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai"
+      }
+    ],
+    "headline": "Air Specialist at Microsoft",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Manila, National Capital Region, Philippines",
+      "countryCode": "PH",
+      "parsed": {
+        "text": "Manila, Philippines",
+        "countryCode": "PH",
+        "regionCode": null,
+        "country": "Philippines",
+        "countryFull": "Philippines",
+        "state": "Metro Manila",
+        "city": "Manila"
+      }
+    },
+    "objectUrn": "1677740952",
+    "registeredAt": "2026-02-01T14:56:14.617Z",
+    "topSkills": null,
+    "connectionsCount": 0,
+    "followerCount": 0,
+    "verified": false,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "1035",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1035/",
+        "companyName": "Microsoft",
+        "dateRange": {
+          "start": null,
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4E03AQG-OtrPzdu-7A/profile-displayphoto-shrink_100_100/B4EZwZtFXiGwAY-/0/1769957775146?e=1776902400&v=beta&t=ZQwhAKQWJgHZ51uqGlxA9IKJK9GrLdZK2ebl6wR3QL8",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQG-OtrPzdu-7A/profile-displayphoto-shrink_100_100/B4EZwZtFXiGwAY-/0/1769957775146?e=1776902400&v=beta&t=ZQwhAKQWJgHZ51uqGlxA9IKJK9GrLdZK2ebl6wR3QL8",
+          "width": 96,
+          "height": 96,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQG-OtrPzdu-7A/profile-displayphoto-shrink_800_800/B4EZwZtFXiGwAg-/0/1769957775146?e=1776902400&v=beta&t=TnXv7MZJH2GAlJieKinRp1ViAzTtIaVA_ZOzxOzlo8A",
+          "width": 96,
+          "height": 96,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQG-OtrPzdu-7A/profile-displayphoto-shrink_200_200/B4EZwZtFXiGwAc-/0/1769957775146?e=1776902400&v=beta&t=qDIUs0mQHXJVmEFPgwcFNcfXritES1LTmu_mnji_5pA",
+          "width": 96,
+          "height": 96,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQG-OtrPzdu-7A/profile-displayphoto-shrink_400_400/B4EZwZtFXiGwAk-/0/1769957775148?e=1776902400&v=beta&t=kD3kcG_TMhu9ismQatMRvJ6W4Isb-KbMDz1KxojiKM0",
+          "width": 96,
+          "height": 96,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D4E03AQG-OtrPzdu-7A/profile-displayphoto-shrink_100_100/B4EZwZtFXiGwAY-/0/1769957775146?e=1776902400&v=beta&t=ZQwhAKQWJgHZ51uqGlxA9IKJK9GrLdZK2ebl6wR3QL8",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Air Specialist at Microsoft",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Air Specialist",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Microsoft",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/microsoft/",
+        "companyId": "1035",
+        "companyUniversalName": "microsoft",
+        "duration": null,
+        "description": null,
+        "skills": null,
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_400_400/B56ZYQ0mrGGoAc-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=47BifJmZk2QcSo7UM_a7lFIk5vBFq49cOHVWx8Pu2dE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_400_400/B56ZYQ0mrGGoAc-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=47BifJmZk2QcSo7UM_a7lFIk5vBFq49cOHVWx8Pu2dE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_200_200/B56ZYQ0mrGGoAM-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=z3mTaKdLV9rmnHGq4MakEXZj6vY7Y9TWAjx0_U7y0X0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_100_100/B56ZYQ0mrGGoAU-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=tKqX5UTArC3FajWCGY-yk-mpPeeR1obx-D3VehmNycQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "AI Researcher",
+        "location": null,
+        "employmentType": "Freelance",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyId": "105913171",
+        "duration": "1 yr 3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2025,
+          "text": "Feb 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAAA1LMMBEP7rZg7_ENQ7-PfAaychwocIJj0",
+        "firstName": "Ted",
+        "lastName": "Cui",
+        "publicIdentifier": "tedcui",
+        "linkedinUrl": "https://www.linkedin.com/in/tedcui"
+      },
+      {
+        "id": "ACoAAAEzmtkBvct1c2Cp5CYUBZI8HsJke1DuG9U",
+        "firstName": "Dhruv",
+        "lastName": "Choudhary",
+        "publicIdentifier": "dhruvchoudhary",
+        "linkedinUrl": "https://www.linkedin.com/in/dhruvchoudhary"
+      },
+      {
+        "id": "ACoAAB8WsN0BETHK7pkeybNu_wgBBMAWllBrNBE",
+        "firstName": "Kyle",
+        "lastName": "Q.",
+        "publicIdentifier": "kyle-qian",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-qian"
+      },
+      {
+        "id": "ACoAAF-wKU0B0ntoadXt7VUjWK9yj5o52dHzVKA",
+        "firstName": "Kaif",
+        "lastName": "Rehman",
+        "publicIdentifier": "kaif-rehman-72577b389",
+        "linkedinUrl": "https://www.linkedin.com/in/kaif-rehman-72577b389"
+      },
+      {
+        "id": "ACoAAF4KIEEBvfH85qY6xD3jCEyGN7XBMBxGe-A",
+        "firstName": "محمد ذیشان ",
+        "lastName": "سعید ",
+        "position": "Muhammad Zeeshan is based in Gujranwala City and has a background in matric-level education. He currently works as a computer operator and has developed l skills in data analysis",
+        "publicIdentifier": "محمد-ذیشان-سعید-629461380",
+        "linkedinUrl": "https://www.linkedin.com/in/محمد-ذیشان-سعید-629461380"
+      },
+      {
+        "id": "ACoAAFZ5KSIBraBGtjV_n_g0_hxXlUI-BlHcAA8",
+        "firstName": "Mark",
+        "lastName": "Nguyen",
+        "position": "Senior Technical Engineer Leader",
+        "publicIdentifier": "mark-nguyen-396a44345",
+        "linkedinUrl": "https://www.linkedin.com/in/mark-nguyen-396a44345"
+      },
+      {
+        "id": "ACoAAFlegLQBj0h-vNJQGI9TOIcNW65aKArAuZs",
+        "firstName": "Toàn (Munda)",
+        "lastName": "Trần",
+        "position": "Technical Support Specialist @ Microsoft",
+        "publicIdentifier": "mundatran205",
+        "linkedinUrl": "https://www.linkedin.com/in/mundatran205"
+      },
+      {
+        "id": "ACoAAF4PaMgBWoNiDdEaFU9iSfPN2-HH6Q7bFCA",
+        "firstName": "tuoi",
+        "lastName": "lam",
+        "position": "--",
+        "publicIdentifier": "tuoi-lam-a885a9380",
+        "linkedinUrl": "https://www.linkedin.com/in/tuoi-lam-a885a9380"
+      },
+      {
+        "id": "ACoAAGOLfZABiO2e_g1nlwhv1jMQMOhEj1uzOBA",
+        "firstName": "Huzaifa",
+        "lastName": "Abbas",
+        "position": "Office Assistant | Data Entry | Social Media Marketing",
+        "publicIdentifier": "huzaifa-abbas-b803843a7",
+        "linkedinUrl": "https://www.linkedin.com/in/huzaifa-abbas-b803843a7"
+      },
+      {
+        "id": "ACoAAFk0WQkB-aHKNVLHE4W5dXDB-yVtgBv1zkw",
+        "firstName": "Saqib",
+        "lastName": "Ishaq",
+        "position": "Health Safety Environment Officer | Maaden Approved | NEOM Approved| Aramco Approved| Saudi Electrical company| Microsoft |ISO 45001 |ISO 14001",
+        "publicIdentifier": "saqib-ishaq-775261359",
+        "linkedinUrl": "https://www.linkedin.com/in/saqib-ishaq-775261359"
+      },
+      {
+        "id": "ACoAAGJTtMMBlwWK-iSRSKp6MPZ6M0LsHqXBCgE",
+        "firstName": "Moataz",
+        "lastName": "Ewais",
+        "position": "Microsoft Specialist at LHH",
+        "publicIdentifier": "moataz-ewais-3175703a0",
+        "linkedinUrl": "https://www.linkedin.com/in/moataz-ewais-3175703a0"
+      },
+      {
+        "id": "ACoAAFxY2IYBuRF4_H5M842j91xeFW2256pAQss",
+        "firstName": "Kiên",
+        "lastName": "Nguyễn",
+        "position": "Technical Support Engineer tại Microsoft",
+        "publicIdentifier": "kiên-nguyễn-b72a48372",
+        "linkedinUrl": "https://www.linkedin.com/in/kiên-nguyễn-b72a48372"
+      },
+      {
+        "id": "ACoAAFXX7jUBHLdSFb8hZTonzijXHu2Qo0iUMlw",
+        "firstName": "Salma",
+        "lastName": "Atia",
+        "position": "German customer service Representative",
+        "publicIdentifier": "salma-atia-6193a9342",
+        "linkedinUrl": "https://www.linkedin.com/in/salma-atia-6193a9342"
+      },
+      {
+        "id": "ACoAAGPAkHYBZwaLKHOjrVGvnK4knkWkeS3TpUI",
+        "firstName": "Amara",
+        "lastName": "Judith",
+        "position": "Project Manager/Virtual assistant/Administrative Assistant/email &call assistant",
+        "publicIdentifier": "amara-judith-a1a5813a8",
+        "linkedinUrl": "https://www.linkedin.com/in/amara-judith-a1a5813a8"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAGQAS5gBZFELDRoH2iGeA_NOwPZV_rIvWxg"
+    }
+  }
+}

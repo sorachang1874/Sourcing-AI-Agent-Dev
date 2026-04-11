@@ -1,0 +1,1214 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAAwf4lcBy-RmgYK8rx4S1dUUoeUivX4aF_4",
+    "profile_url": "https://www.linkedin.com/in/ACwAAAwf4lcBy-RmgYK8rx4S1dUUoeUivX4aF_4"
+  },
+  "item": {
+    "id": "ACoAAAwf4lcBgfLcNvMLGYnAjvxGpzWMO50zhUw",
+    "publicIdentifier": "deepakgopinath",
+    "linkedinUrl": "https://www.linkedin.com/in/deepakgopinath",
+    "firstName": "Deepak",
+    "lastName": "Gopinath",
+    "emails": [
+      {
+        "email": "deepak.gopinath@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      },
+      {
+        "url": "http://www.apple.com/careers",
+        "domain": "apple.com"
+      }
+    ],
+    "headline": "Thinking Machines Lab | Ex Apple Foundation Models, Facebook AI Research | LTI @ CMU",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "New York, New York, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "New York City, NY, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "New York",
+        "city": "New York City"
+      }
+    },
+    "objectUrn": "203416151",
+    "registeredAt": "2012-09-10T14:09:17.774Z",
+    "topSkills": null,
+    "connectionsCount": 1309,
+    "followerCount": 1495,
+    "verified": true,
+    "about": "I'm a Member of Technical Staff at Thinking Machines Lab.\n\nPreviously, Machine Learning Researcher in the Foundation Models team at Apple, the core team building Large Language Models that power Apple Intelligence and other AI products across the company. I lead several efforts in pretraining, post-training, and evaluation of LLMs focused on model training recipes, data research, and multilinguality.\n\nI have a decade of AI research experience. Previously, I was a Machine Learning Researcher at Apple Foundation Models, leading several efforts in pretraining (data quality, multilinguality) and evaluation of LLMs. Before that, I was a research engineer at Facebook AI Research (Meta AI/FAIR), working on AI for Creativity, and previously on Neural Machine Translation to power translations on Facebook and Instagram.\n\nIn the past, I’ve worked as a software engineer at LinkedIn, and as an intern at Facebook AI, Microsoft Research, and Amazon.\n\nCheck out my website! https://dpacgopinath.github.io",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 10,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "19232",
+        "companyId": "3147",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3147/",
+        "schoolName": "Carnegie Mellon University"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/C4D03AQFawtYrL0PieA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1598567372577?e=1776902400&v=beta&t=StOf-aeV9bY78y_csysySxTRNEtrL8Q6rnEf9V7dgm0",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4D03AQFawtYrL0PieA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1598567372577?e=1776902400&v=beta&t=StOf-aeV9bY78y_csysySxTRNEtrL8Q6rnEf9V7dgm0",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4D03AQFawtYrL0PieA/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1598567372577?e=1776902400&v=beta&t=LMX1GIRoXwcl8ZYoHCodurb3o6bTv01ApHWXfMCLV0o",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4D03AQFawtYrL0PieA/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1598567372577?e=1776902400&v=beta&t=R-2p8e4oVabr2s3x4RVm-udyhRLbfLuTXcoWYAre_i8",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4D03AQFawtYrL0PieA/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1598567372577?e=1776902400&v=beta&t=trWcncbTej2stkg1L80t1f6Tz700Y9bKPOaAlER2fUM",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": {
+      "url": "https://media.licdn.com/dms/image/v2/C4D16AQHpWiqMsE6KRg/profile-displaybackgroundimage-shrink_200_800/profile-displaybackgroundimage-shrink_200_800/0/1655855629052?e=1776902400&v=beta&t=dnHxvYYAwcufNg33l09QX-h681x-RU_QwhX7vtvtzXw",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4D16AQHpWiqMsE6KRg/profile-displaybackgroundimage-shrink_200_800/profile-displaybackgroundimage-shrink_200_800/0/1655855629052?e=1776902400&v=beta&t=dnHxvYYAwcufNg33l09QX-h681x-RU_QwhX7vtvtzXw",
+          "width": 800,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4D16AQHpWiqMsE6KRg/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1655855629052?e=1776902400&v=beta&t=R-3zjTSXOSqtwnVmFzXRr5iuZdMyR6wRpBijvUkVpwI",
+          "width": 800,
+          "height": 200,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "photo": "https://media.licdn.com/dms/image/v2/C4D03AQFawtYrL0PieA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1598567372577?e=1776902400&v=beta&t=StOf-aeV9bY78y_csysySxTRNEtrL8Q6rnEf9V7dgm0",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Thinking Machines Lab | Ex Apple Foundation Models, Facebook AI Research | LTI @ CMU",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "New York, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "7 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Oct",
+          "year": 2025,
+          "text": "Oct 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Machine Learning Researcher",
+        "location": "New York, New York, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Apple",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/162479/",
+        "companyId": "162479",
+        "duration": "3 yrs 2 mos",
+        "description": "The Foundation Models team at Apple is the core team building Large Language Models that power Apple Intelligence and other AI products across the company. I lead several efforts in pretraining, post-training, and evaluation of LLMs focused on model training recipes, data research, and multilinguality.",
+        "skills": [
+          "JAX",
+          "Google Cloud Dataflow",
+          "Python (Programming Language)",
+          "Artificial Intelligence (AI)"
+        ],
+        "startDate": {
+          "month": "Mar",
+          "year": 2023,
+          "text": "Mar 2023"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_400_400/company-logo_400_400/0/1630637844948/apple_logo?e=1776902400&v=beta&t=KteXM40NNLQ3nz21Do-neoy-f7lbDDA7kJmtS5wwrL4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_400_400/company-logo_400_400/0/1630637844948/apple_logo?e=1776902400&v=beta&t=KteXM40NNLQ3nz21Do-neoy-f7lbDDA7kJmtS5wwrL4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_200_200/company-logo_200_200/0/1630637844948/apple_logo?e=1776902400&v=beta&t=I8RMorsmHMk3gA9b3fT4m2HDgfVtfdB6se4bEZcMHb8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_100_100/company-logo_100_100/0/1630637844948/apple_logo?e=1776902400&v=beta&t=8c3EpxT43tZMihGirOM7eBnDzFHAGiYV-OxaRj_xfjo",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Engineer",
+        "location": "Pittsburgh, Pennsylvania, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Facebook AI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/76987811/",
+        "companyId": "76987811",
+        "duration": "3 yrs 9 mos",
+        "description": "AI for Creativity\n- Exploratory research in the area of Computer Vision and Graphics, in modeling human motion and\nanimating human characters in physical simulation. Presented papers at 3 consecutive ACM SIGGRAPH conferences, and submitted 2 papers at NeuRIPS and SIGGRAPH Asia\n- Lead developer of fairmotion, an open source library to facilitate character animation and human motion research\n- Applied character animation research to virtual reality (Horizon Worlds), embodied AI platform (Habitat) and internet videos",
+        "skills": [
+          "Reinforcement Learning",
+          "Blender",
+          "Deep Learning",
+          "Python (Programming Language)",
+          "Computer Vision",
+          "PyTorch",
+          "Machine Learning"
+        ],
+        "experienceGroupId": "a4a484c593ceab6274493f37d22e0da3a6952ad6",
+        "startDate": {
+          "month": "Jul",
+          "year": 2019,
+          "text": "Jul 2019"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2023,
+          "text": "Mar 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_200_200/company-logo_200_200/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=CL3OcEUIyBJFm9Wkw4iT9gJoWpsvGBIAhhNM0DjZx_A",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_100_100/company-logo_100_100/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=sZq9Sard1kGYVIprgBkNhUvJRTI7tf3pXOCP1bQBfpM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Engineer",
+        "location": "Menlo Park, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Facebook AI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/76987811/",
+        "companyId": "76987811",
+        "duration": "2 yrs 7 mos",
+        "description": "Language and Translation Technologies\n- Introduced the first production neural systems to power translations on Facebook. Implemented various components of seq2seq translation models on Caffe2 and PyTorch. Built multilingual MT training system to translate many languages with a single model. Developed workflows for end to end training, evaluation and productionization of translation models.\n- Low resource NMT: leveraging monolingual data for language pairs with lack of parallel data. This\ninitiative helped enable translations in low resource languages.",
+        "skills": [
+          "Python (Programming Language)",
+          "Natural Language Processing (NLP)",
+          "Neural Machine Translation (NMT)",
+          "Hive",
+          "C++"
+        ],
+        "experienceGroupId": "a4a484c593ceab6274493f37d22e0da3a6952ad6",
+        "startDate": {
+          "month": "Jan",
+          "year": 2017,
+          "text": "Jan 2017"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2019,
+          "text": "Jul 2019"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_200_200/company-logo_200_200/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=CL3OcEUIyBJFm9Wkw4iT9gJoWpsvGBIAhhNM0DjZx_A",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_100_100/company-logo_100_100/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=sZq9Sard1kGYVIprgBkNhUvJRTI7tf3pXOCP1bQBfpM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer Intern",
+        "location": "Menlo Park, California, United States",
+        "employmentType": "Internship",
+        "workplaceType": null,
+        "companyName": "Facebook",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/76987811/",
+        "companyId": "76987811",
+        "duration": "4 mos",
+        "description": "Language Technologies | Applied Machine Learning\n- Worked on developing neural network based language models on the open source deep learning framework Caffe2.0\n- Wrote components from scratch and assembled multiple pipelines for training DNN and LSTM based models on large datasets.",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2016,
+          "text": "May 2016"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2016,
+          "text": "Aug 2016"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_200_200/company-logo_200_200/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=CL3OcEUIyBJFm9Wkw4iT9gJoWpsvGBIAhhNM0DjZx_A",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_100_100/company-logo_100_100/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=sZq9Sard1kGYVIprgBkNhUvJRTI7tf3pXOCP1bQBfpM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer",
+        "location": "Bengaluru, Karnataka, India",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "LinkedIn",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1337/",
+        "companyId": "1337",
+        "duration": "1 yr 2 mos",
+        "description": "LinkedIn Search team\n- Improving typeahead search on LinkedIn by developing the prefix query tagger library which returned the most probable autocompletions and tags for an incomplete query\n- Worked on the development of federated search, Schools, Posts and Slideshare search verticals\n- Developed an internal diagnostic web application to debug and evaluate perf and relevance of the Galene search infrastructure",
+        "skills": [
+          "Play Framework",
+          "JavaScript",
+          "Java",
+          "Node.js",
+          "Hadoop",
+          "Bootstrap",
+          "Lucene"
+        ],
+        "startDate": {
+          "month": "Jul",
+          "year": 2014,
+          "text": "Jul 2014"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2015,
+          "text": "Aug 2015"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHaVYd13rRz3A/company-logo_400_400/company-logo_400_400/0/1638831590218/linkedin_logo?e=1776902400&v=beta&t=b7YR38u9HV_S3GAfCQNvCQREdlcOHn9w0mu-6Dsmv4I",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHaVYd13rRz3A/company-logo_400_400/company-logo_400_400/0/1638831590218/linkedin_logo?e=1776902400&v=beta&t=b7YR38u9HV_S3GAfCQNvCQREdlcOHn9w0mu-6Dsmv4I",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHaVYd13rRz3A/company-logo_200_200/company-logo_200_200/0/1638831590218/linkedin_logo?e=1776902400&v=beta&t=hl957cJmKcAOkgn87vrMywDodVh9Tc-6lyU13d6b1oM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHaVYd13rRz3A/company-logo_100_100/company-logo_100_100/0/1638831590218/linkedin_logo?e=1776902400&v=beta&t=Id0Lit6gNdp2DmvF9HsrpV53CnzLgnYDfCMrcmp36cQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Developer Intern",
+        "location": "Bengaluru, Karnataka, India",
+        "employmentType": "Internship",
+        "workplaceType": null,
+        "companyName": "Microsoft Research India",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Microsoft+Research+India",
+        "duration": "6 mos",
+        "description": "- Fraud Detection in Windows Azure: Classification of fraudulent customers based on compute and storage usage patterns, subscriber details, cluster details and other available information.\n- Indian Elections Game: Prediction market in the form of an interactive webapp which enabled the crowd to make predictions about the 2014 Indian Elections. The game had around 4500 users who used points to place 'bets'. Players could buy and sell their predictions and compete with each other for top places on the leaderboard.",
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2014,
+          "text": "Jan 2014"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2014,
+          "text": "Jun 2014"
+        }
+      },
+      {
+        "position": "Machine Learning Intern",
+        "location": "Bengaluru, Karnataka, India",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Amazon",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1586/",
+        "companyId": "1586",
+        "duration": "3 mos",
+        "description": "- Adult Content Policing for Amazon Android Appstore. Led to 30% reduction of load on manual review team\n- Predictive help system for Amazon sellers. Labelling text data using Latent Dirichlet Allocation. Clustered sets of similar FAQs and then mapped questions asked by customers to them using supervised methods like clustering, gradient descent classifiers and supervised LDA",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2013,
+          "text": "May 2013"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2013,
+          "text": "Jul 2013"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGDLy4STCnHbg/company-logo_400_400/B56ZnZxDipI0AY-/0/1760295142304/amazon_logo?e=1776902400&v=beta&t=lYPAbzBmg2YQhgQFeMnV-wHyKGvMPrvdCpcjHf_aGWc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGDLy4STCnHbg/company-logo_400_400/B56ZnZxDipI0AY-/0/1760295142304/amazon_logo?e=1776902400&v=beta&t=lYPAbzBmg2YQhgQFeMnV-wHyKGvMPrvdCpcjHf_aGWc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGDLy4STCnHbg/company-logo_200_200/B56ZnZxDipI0AI-/0/1760295142304/amazon_logo?e=1776902400&v=beta&t=Pkt-34tlkuFgo_d6O--s7BFOke10xwNIu23VHSfAC1Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGDLy4STCnHbg/company-logo_100_100/B56ZnZxDipI0AQ-/0/1760295142304/amazon_logo?e=1776902400&v=beta&t=Glfc3A2Yqstx_u6NdGLKHNNMcZSYljXNIHa7f-Ob1fA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Carnegie Mellon University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3147/",
+        "schoolId": "3147",
+        "degree": "Master’s Degree",
+        "fieldOfStudy": "Computational Data Science",
+        "skills": [],
+        "description": "10807 Topics in Deep Learning\n10605 Machine Learning for Large Datasets\n10701 Advanced Machine Learning\n11777 Advanced Multimodal Machine Learning\n10705 Intermediate Statistics\n11641 Machine Learning for Text Mining\n11642 Search Engines\n11611 Natural Language Processing",
+        "startDate": {
+          "year": 2015,
+          "text": "2015"
+        },
+        "endDate": {
+          "year": 2016,
+          "text": "2016"
+        },
+        "period": "2015 - 2016",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_200_200/company-logo_200_200/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Cr9dcgM6gBeNici6XTUDQUKQfYAc8US2OXBC0P5yB-Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_100_100/company-logo_100_100/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=iJiUJ2BhQORJLlvMYFhw22Mq44Z-z45Fza4_dNRwHSs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Birla Institute of Technology and Science, Pilani",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/739903/",
+        "schoolId": "739903",
+        "degree": "Bachelor of Engineering (BEng)",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "startDate": {
+          "year": 2010,
+          "text": "2010"
+        },
+        "endDate": {
+          "year": 2014,
+          "text": "2014"
+        },
+        "period": "2010 - 2014",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4D0BAQHJcHjUCqWVbA/company-logo_400_400/company-logo_400_400/0/1695033146996/birla_institute_of_technology_and_science_pilani_logo?e=1776902400&v=beta&t=JNc1e2HXKX0wfhQ-6Q1vYAIiMOQZZ1lVfz65306N8P4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQHJcHjUCqWVbA/company-logo_400_400/company-logo_400_400/0/1695033146996/birla_institute_of_technology_and_science_pilani_logo?e=1776902400&v=beta&t=JNc1e2HXKX0wfhQ-6Q1vYAIiMOQZZ1lVfz65306N8P4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQHJcHjUCqWVbA/company-logo_200_200/company-logo_200_200/0/1695033146996/birla_institute_of_technology_and_science_pilani_logo?e=1776902400&v=beta&t=-2hqD8PCQ27MXzexrvQE-2smTRXlIMxGJRw-xGpBZfQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQHJcHjUCqWVbA/company-logo_100_100/company-logo_100_100/0/1695033146996/birla_institute_of_technology_and_science_pilani_logo?e=1776902400&v=beta&t=d0yREbWMFCuV7mQtA5sJ6IEe557VMA0YByMOMEJcp1U",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [
+      {
+        "title": "Caption based Scene Discovery in Videos",
+        "duration": "Feb 2016 - Dec 2016",
+        "startDate": {
+          "month": "Feb",
+          "year": 2016,
+          "text": "Feb 2016"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2016,
+          "text": "Dec 2016"
+        },
+        "associatedWith": "Associated with Carnegie Mellon University",
+        "associatedWithLink": "https://www.linkedin.com/company/3147/",
+        "description": "This project aims at bridging the semantic gap between video, audio and text modalities. By learning a robust multimodal embedding, we want to discover scenes in a movie, or in a repository of movies, which are relevant to a given description."
+      },
+      {
+        "title": "Multimodal Personality Prediction from Online Videos",
+        "duration": "Feb 2016 - May 2016",
+        "startDate": {
+          "month": "Feb",
+          "year": 2016,
+          "text": "Feb 2016"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2016,
+          "text": "May 2016"
+        },
+        "associatedWith": "Associated with Carnegie Mellon University",
+        "associatedWithLink": "https://www.linkedin.com/company/3147/",
+        "description": "Building multimodal deep learning classifiers to predict persuasiveness from online review videos because it is a key trait combining several high level personality attributes. Our approach is two pronged:\n    CNN's and RNN's: We built two unimodal classifiers and fused them through early/late fusion. We fine-tuned a pretrained VGGNet CNN on video frames and used Gated Recurrent Units (GRU) on video transcripts.\nMulti Layer Perceptron (MLP): We used statistically significant features from visual, acoustic and text modalities to train MLPs. We chose the best parameters through cross validation."
+      },
+      {
+        "title": "Language Agnostic Part of Speech Projection",
+        "duration": "Oct 2015 - Dec 2015",
+        "startDate": {
+          "month": "Oct",
+          "year": 2015,
+          "text": "Oct 2015"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2015,
+          "text": "Dec 2015"
+        },
+        "associatedWith": "Associated with Carnegie Mellon University",
+        "associatedWithLink": "https://www.linkedin.com/company/3147/",
+        "description": "Generative model, which assumes source-target alignments, built using a Hidden Markov Model where\ntransitions probabilities reconcile source aligned POS distributions given the alignment emission probabilities are directly estimated with log linear model\nWe evaluated the system against POS taggers optimized for individual language-pairs. We also showed that addition of source languages and diverse sets of languages help in the task of POS projection."
+      },
+      {
+        "title": "Project Acyut",
+        "duration": "Aug 2010 - Jul 2012",
+        "startDate": {
+          "month": "Aug",
+          "year": 2010,
+          "text": "Aug 2010"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2012,
+          "text": "Jul 2012"
+        },
+        "associatedWith": "Associated with Birla Institute of Technology and Science",
+        "associatedWithLink": "https://www.linkedin.com/company/739903/",
+        "description": "AcYut which means \"the Imperishable\" is India's first indigenously developed humanoid robot and also India's first autonomous humanoid robot.\n\nAcYut IV won 3rd Prize at RoboCup 2011 in Teen Size Humanoid Autonomous Soccer, Istanbul, Turkey.\n\nAcYut was India’s only entry to RoboGames 2011, at San Francisco, USA, and won 2 Silver Medals at RoboGames 2011. (RoboGames is the world’s biggest open robotics competition).\n\nDemonstrated AcYut at BARC, Mumbai, Robotics Symposium 2011, R&DE Pune, Dept. Of Information Technology, Govt. of India, NIT Calicut, IIT Kanpur, BITS-Dubai and RoboCup Iran through 2010-2012.",
+        "link": "https://www.facebook.com/TeamAcYut"
+      }
+    ],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Artificial Intelligence (AI)",
+        "positions": [
+          "Machine Learning Researcher at Apple"
+        ]
+      },
+      {
+        "name": "Lucene",
+        "positions": [
+          "Software Engineer at LinkedIn"
+        ]
+      },
+      {
+        "name": "Natural Language Processing (NLP)",
+        "positions": [
+          "Research Engineer at Facebook"
+        ]
+      },
+      {
+        "name": "Neural Machine Translation (NMT)",
+        "positions": [
+          "Research Engineer at Facebook"
+        ]
+      },
+      {
+        "name": "Hive",
+        "positions": [
+          "Research Engineer at Facebook"
+        ]
+      },
+      {
+        "name": "Reinforcement Learning",
+        "positions": [
+          "Research Engineer at Facebook AI"
+        ]
+      },
+      {
+        "name": "Deep Learning",
+        "positions": [
+          "Research Engineer at Facebook AI"
+        ]
+      },
+      {
+        "name": "Blender",
+        "positions": [
+          "Research Engineer at Facebook AI"
+        ]
+      },
+      {
+        "name": "Computer Vision",
+        "positions": [
+          "Research Engineer at Facebook AI"
+        ]
+      },
+      {
+        "name": "Programming",
+        "endorsements": "18 endorsements"
+      },
+      {
+        "name": "Machine Learning",
+        "positions": [
+          "Research Engineer at Facebook AI"
+        ],
+        "endorsements": "16 endorsements"
+      },
+      {
+        "name": "Algorithms",
+        "endorsements": "8 endorsements"
+      },
+      {
+        "name": "Play Framework",
+        "positions": [
+          "Software Engineer at LinkedIn"
+        ],
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Information Retrieval",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Image Processing",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Google Cloud Dataflow",
+        "positions": [
+          "Machine Learning Researcher at Apple"
+        ]
+      },
+      {
+        "name": "Hadoop",
+        "positions": [
+          "Software Engineer at LinkedIn"
+        ]
+      },
+      {
+        "name": "Bootstrap",
+        "positions": [
+          "Software Engineer at LinkedIn"
+        ]
+      },
+      {
+        "name": "PyTorch",
+        "positions": [
+          "Research Engineer at Facebook AI"
+        ]
+      },
+      {
+        "name": "Python (Programming Language)",
+        "positions": [
+          "3 experiences across Apple and 2 other companies"
+        ]
+      },
+      {
+        "name": "C++",
+        "positions": [
+          "Research Engineer at Facebook"
+        ],
+        "endorsements": "22 endorsements"
+      },
+      {
+        "name": "C",
+        "endorsements": "20 endorsements"
+      },
+      {
+        "name": "MySQL",
+        "endorsements": "11 endorsements"
+      },
+      {
+        "name": "SQL",
+        "endorsements": "7 endorsements"
+      },
+      {
+        "name": "C#",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Java",
+        "positions": [
+          "Software Engineer at LinkedIn"
+        ],
+        "endorsements": "9 endorsements"
+      },
+      {
+        "name": "JavaScript",
+        "positions": [
+          "Software Engineer at LinkedIn"
+        ],
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Node.js",
+        "positions": [
+          "Software Engineer at LinkedIn"
+        ],
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "PHP",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "JAX",
+        "positions": [
+          "Machine Learning Researcher at Apple"
+        ]
+      }
+    ],
+    "publications": [
+      {
+        "title": "Physics-based Character Controllers Using Conditional VAEs",
+        "publishedAt": "ACM SIGGRAPH 2022 · Jun 13, 2022",
+        "description": "As more publicly available high-quality mocap datasets become available, kinematics-based controllers that can generate plausible and diverse human motions in a task-agnostic manner have been demonstrated. In this paper, we present parallels for physically simulated characters having many degrees of freedom. Our physics-based controllers are learned by using conditional VAEs, which can perform random behaviors that are similar to motions in the training dataset. The controllers are robust enough to generate more than a few minutes of motion, by which many complex downstream tasks can be solved efficiently. To show the effectiveness of our method, we demonstrate controllers learned with various mocap database and several downstream tasks that are challenging to solve from scratch."
+      },
+      {
+        "title": "Transformer Inertial Poser: Attention-based Real-time Human Motion Reconstruction from Sparse IMUs",
+        "publishedAt": "Mar 29, 2022",
+        "description": "Real-time human motion reconstruction from a sparse set of wearable IMUs provides an non-intrusive and economic approach to motion capture. Without the ability to acquire absolute position information using IMUs, many prior works took data-driven approaches that utilize large human motion datasets to tackle the under-determined nature of the problem. Still, challenges such as temporal consistency, global translation estimation, and diverse coverage of motion or terrain types remain. Inspired by recent success of Transformer models in sequence modeling, we propose an attention-based deep learning method to reconstruct full-body motion from six IMU sensors in real-time. Together with a physics-based learning objective to predict \"stationary body points\", our method achieves new state-of-the-art results both quantitatively and qualitatively, while being simple to implement and smaller in size. We evaluate our method extensively on synthesized and real IMU data, and with real-time live demos.",
+        "link": "https://arxiv.org/abs/2203.15720"
+      },
+      {
+        "title": "Control Strategies for Physically Simulated Characters Performing Two-player Competitive Sports",
+        "publishedAt": "ACM SIGGRAPH 2021 · Aug 1, 2021",
+        "description": "In two-player competitive sports, such as boxing and fencing, athletes often demonstrate efficient and tactical movements during a competition. In this paper, we develop a learning framework that generates control policies for physically simulated athletes who have many degrees-of-freedom. Our framework uses a two step-approach, learning basic skills and learning bout-level strategies, with deep reinforcement learning, which is inspired by the way that people how to learn competitive sports. We develop a policy model based on an encoder-decoder structure that incorporates an autoregressive latent variable, and a mixture-of-experts decoder. To show the effectiveness of our framework, we implemented two competitive sports, boxing and fencing, and demonstrate control policies learned by our framework that can generate both tactical and natural-looking behaviors. We also evaluate the control policies with comparisons to other learning configurations and with ablation studies.",
+        "link": "https://dl.acm.org/doi/pdf/10.1145/3450626.3459761"
+      },
+      {
+        "title": "A Scalable Approach to Control Diverse Behaviors for Physically Simulated Characters",
+        "publishedAt": "ACM SIGGRAPH 2020 · Jul 19, 2020",
+        "description": "Human characters with a broad range of natural looking and physically realistic behaviors will enable the construction of compelling interactive experiences. In this paper, we develop a technique for learning controllers for a large set of heterogeneous behaviors. By dividing a reference library of motion into clusters of like motions, we are able to construct experts, learned controllers that can reproduce a simulated version of the motions in that cluster. These experts are then combined via a second learning phase, into a general controller with the capability to reproduce any motion in the reference library. We demonstrate the power of this approach by learning the motions produced by a motion graph constructed from eight hours of motion capture data and containing a diverse set of behaviors such as dancing (ballroom and breakdancing), Karate moves, gesturing, walking, and running.",
+        "link": "https://research.fb.com/publications/a-scalable-approach-to-control-diverse-behaviors-for-physically-simulated-characters/"
+      },
+      {
+        "title": "Harnessing Indirect Training Data for End-to-End Automatic Speech Translation: Tricks of the Trade",
+        "publishedAt": "Proceedings of the 16th International Conference on Spoken Language Translation 2019 · Nov 2, 2019",
+        "description": "For automatic speech translation (AST), end-to-end approaches are outperformed by cascaded models that transcribe with automatic speech recognition (ASR), then translate with machine translation (MT). A major cause of the performance gap is that, while existing AST corpora are small, massive datasets exist for both the ASR and MT subsystems. In this work, we evaluate several data augmentation and pretraining approaches for AST, by comparing all on the same datasets. Simple data augmentation by translating ASR transcripts proves most effective on the English–French augmented LibriSpeech dataset, closing the performance gap from 8.2 to 1.4 BLEU, compared to a very strong cascade that could directly utilize copious ASR and MT data. The same end-to-end approach plus fine-tuning closes the gap on the English–Romanian MuST-C dataset from 6.7 to 3.7 BLEU. In addition to these results, we present practical recommendations for augmentation and pretraining approaches. Finally, we decrease the performance gap to 0.01 BLEU using a Transformer-based architecture.",
+        "link": "https://aclanthology.org/2019.iwslt-1.18/"
+      },
+      {
+        "title": "Deep Multimodal Fusion for Persuasiveness Prediction",
+        "publishedAt": "ACM International Conference on Multimodal Interfaces 2016, Tokyo, Japan · Oct 12, 2016",
+        "description": "Persuasiveness is a high-level personality trait that quantifies the influence a speaker has on the beliefs, attitudes, intentions , motivations, and behavior of the audience. With social multimedia becoming an important channel in propagating ideas and opinions, analyzing persuasiveness is very important. In this work, we use the publicly available Persuasive Opinion Multimedia (POM) dataset to study persuasion. One of the challenges associated with this problem is the limited amount of annotated data. To tackle this challenge, we present a deep multimodal fusion architecture which is able to leverage complementary information from individual modalities for predicting persuasiveness. Our methods show significant improvement in performance over previous approaches.",
+        "link": "https://www.researchgate.net/profile/Behnaz_Nojavanasghari/publication/308407947_Deep_Multimodal_Fusion_for_Persuasiveness_Prediction/links/57e32e8808ae0e3158a6bb12.pdf?origin=publication_detail"
+      }
+    ],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [
+      {
+        "title": "Winner of LinkedIn Bangalore Hackday",
+        "issuedBy": "LinkedIn",
+        "issuedAt": "Feb 2015",
+        "description": "Winner of the 2015 LinkedIn Bangalore Hackday for building ViewingNow, a system which registers data and displays statistics related to the information of current viewers of a webpage.",
+        "associatedWith": "Associated with LinkedIn",
+        "associatedWithLink": null
+      },
+      {
+        "title": "4th place in ACM ICPC, Asia regionals, Kharagpur site",
+        "issuedBy": "ACM ICPC",
+        "issuedAt": "Dec 2013",
+        "description": "ACM International Collegiate Programming Contest is an annual multi-tiered competitive programming competition among the universities of the world. Our team from BITS Pilani was placed 4th in the Asia regional competition held at Kharagpur.",
+        "associatedWith": "Associated with Birla Institute of Technology and Science",
+        "associatedWithLink": "https://www.linkedin.com/company/739903/"
+      },
+      {
+        "title": "Second Place in Amazon's Machine Learning Hackend 2013 : Precision track",
+        "issuedBy": "Amazon, Bangalore",
+        "issuedAt": "Jun 2013",
+        "description": "Came 2nd in Amazon’s Machine Learning Hackend for employees worldwide in the Kindle X-ray summary relevancy challenge. Designed ensemble classification model to predict whether given text summary is relevant to corresponding keywords, and our model performance was very close to the top team's model (0.0004 F1-Score difference).",
+        "associatedWith": "Associated with Amazon",
+        "associatedWithLink": null
+      }
+    ],
+    "languages": [
+      {
+        "name": "English"
+      },
+      {
+        "name": "Hindi"
+      },
+      {
+        "name": "Kannada"
+      }
+    ],
+    "causes": [],
+    "featured": {
+      "images": [
+        "https://media.licdn.com/dms/image/v2/D4D22AQFoci4QxNRgfQ/feedshare-shrink_1280/B4DZpa11q2JMAs-/0/1762460656845?e=1776902400&v=beta&t=M7Cgq8q6YkVRglNBnYqJWM1jVD1HkJFPzWYF7tzMpnE"
+      ],
+      "link": "https://www.linkedin.com/feed/update/urn:li:activity:7392295787642228736?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A7392295787642228736%29",
+      "slides": [
+        {
+          "title": null,
+          "subtitle": null,
+          "description": null,
+          "url": "https://www.linkedin.com/feed/update/urn:li:activity:7392295787642228736?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A7392295787642228736%29",
+          "image": {
+            "url": "https://media.licdn.com/dms/image/v2/D4D22AQFoci4QxNRgfQ/feedshare-shrink_1280/B4DZpa11q2JMAs-/0/1762460656845?e=1776902400&v=beta&t=M7Cgq8q6YkVRglNBnYqJWM1jVD1HkJFPzWYF7tzMpnE"
+          }
+        },
+        {
+          "title": null,
+          "subtitle": null,
+          "description": null,
+          "url": "https://www.linkedin.com/feed/update/urn:li:activity:7351813228017909760?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A7351813228017909760%29",
+          "image": {
+            "url": "https://media.licdn.com/dms/image/v2/D4E22AQEtrBchZoH-JQ/feedshare-shrink_2048_1536/B4EZgZdoIQGoAo-/0/1752773855213?e=1776902400&v=beta&t=9eRzD20u08tSnFrZNRV8A5aFHUYMAehpI3vX6Zr3WsM"
+          }
+        },
+        {
+          "title": "Meta AI on Twitter announces the release of fairmotion",
+          "subtitle": "X (formerly Twitter)",
+          "description": "I was the lead developer of fairmotion, an open source library that enables AI research in graphics and robotics by providing motion capture tools and task implementations",
+          "url": "https://www.linkedin.com/in/deepakgopinath/overlay/1635494878344/single-media-viewer?type=LINK&profileId=ACoAAAwf4lcBgfLcNvMLGYnAjvxGpzWMO50zhUw",
+          "image": {
+            "url": "https://media.licdn.com/dms/image/v2/C4D2DAQFDpa5sHngFnQ/profile-treasury-image-shrink_800_800/profile-treasury-image-shrink_800_800/0/1656045233619?e=1776160800&v=beta&t=3K9pg7ec7UOGOh3HkWnDqsTn_7X5YeW4bmsJ-jAeNM8"
+          }
+        },
+        {
+          "title": "Facebook’s translations are now powered completely by AI",
+          "subtitle": "The Verge",
+          "description": "The applied research work on building robust neural network powered machine translation models and productionizing them for Facebook traffic was featured in the news and on the Facebook Newsroom",
+          "url": "https://www.linkedin.com/in/deepakgopinath/overlay/1635493820241/single-media-viewer?type=LINK&profileId=ACoAAAwf4lcBgfLcNvMLGYnAjvxGpzWMO50zhUw",
+          "image": {
+            "url": "https://media.licdn.com/dms/image/sync/v2/D4D27AQEiWAe_asSjKg/articleshare-shrink_1280_800/articleshare-shrink_1280_800/0/1764918903802?e=1776160800&v=beta&t=bruboWgt1RKHRIT9AcQ6pZVo6u9ZSf3J1uUqwpgzrp4"
+          }
+        },
+        {
+          "title": "This AI Learned Boxing…With Serious Knockout Power! 🥊",
+          "subtitle": "YouTube",
+          "description": "Two Minute Papers Youtube video featuring our SIGGRAPH 2021 paper (with 2.3 million+ views)!",
+          "url": "https://www.linkedin.com/in/deepakgopinath/overlay/1635493822031/single-media-viewer?type=LINK&profileId=ACoAAAwf4lcBgfLcNvMLGYnAjvxGpzWMO50zhUw",
+          "image": {
+            "url": "https://media.licdn.com/dms/image/sync/v2/D4E27AQEQU4IyzAPtdQ/articleshare-shrink_1280_800/articleshare-shrink_1280_800/0/1711206070581?e=1776160800&v=beta&t=KlVjepneBo7svJPzP-2-3qaDLhJS-CAwfH4KoGg3YRo"
+          }
+        }
+      ]
+    },
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "position": "AI Researcher, Co-founder @ Thinking Machines Lab",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAACJ_xxMBjmsF1pcZjTnA1nfLltrdiUNSbFE",
+        "firstName": "Sam",
+        "lastName": "Wiseman",
+        "position": "Reflection AI",
+        "publicIdentifier": "sam-wiseman-417a09141",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-wiseman-417a09141"
+      },
+      {
+        "id": "ACoAABczTHcB_jGmoU-xHak7UG7vtydSYrdun74",
+        "firstName": "Tom",
+        "lastName": "Gunter",
+        "position": "AI Research Scientist",
+        "publicIdentifier": "tom-gunter-49b431aa",
+        "linkedinUrl": "https://www.linkedin.com/in/tom-gunter-49b431aa"
+      },
+      {
+        "id": "ACoAAAncnq0BajmeOrLikO5AAincnDzuRDUXFjw",
+        "firstName": "Soumith",
+        "lastName": "Chintala",
+        "publicIdentifier": "soumith",
+        "linkedinUrl": "https://www.linkedin.com/in/soumith"
+      },
+      {
+        "id": "ACoAAAeC2m0B82mTbPeBQ5HbfrW0vr8kFo6k4ww",
+        "firstName": "Shruti",
+        "lastName": "Rijhwani",
+        "position": "Research Scientist at Google DeepMind | PhD from Carnegie Mellon University | Forbes 30 under 30 in Science",
+        "publicIdentifier": "shrutirijhwani",
+        "linkedinUrl": "https://www.linkedin.com/in/shrutirijhwani"
+      },
+      {
+        "id": "ACoAAAco3dUB_wcThCTD9UwkOQN0DpxZjdUjD-A",
+        "firstName": "Xianzhi",
+        "lastName": "Du",
+        "position": "Research Scientist, Apple AI/ML",
+        "publicIdentifier": "xianzhi-du-1b128934",
+        "linkedinUrl": "https://www.linkedin.com/in/xianzhi-du-1b128934"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAAATRE9EBzZKJ00oabcob9T8uE1UdZ-z3840",
+        "firstName": "M. Zaid",
+        "lastName": "Ahmed",
+        "position": "Engineering Product & Program Leader at Apple, Building Large Language Models",
+        "publicIdentifier": "cmab81",
+        "linkedinUrl": "https://www.linkedin.com/in/cmab81"
+      },
+      {
+        "id": "ACoAAAPvmX8BY0Vzm00sa7joKK42E173UASrkHM",
+        "firstName": "Chang",
+        "lastName": "Lan",
+        "position": "Member of Technical Staff @ Anthropic. Prev: Apple | GDM",
+        "publicIdentifier": "changlan",
+        "linkedinUrl": "https://www.linkedin.com/in/changlan"
+      },
+      {
+        "id": "ACoAAAFWmc4BGW71-Wr25b1bU1UqmmAK6_6E8sM",
+        "firstName": "Nan",
+        "lastName": "Du",
+        "position": "AI Researcher | One Expert in a Mixture",
+        "publicIdentifier": "dunangatech",
+        "linkedinUrl": "https://www.linkedin.com/in/dunangatech"
+      },
+      {
+        "id": "ACoAADTP5IsBUp9-nT6nqKCBoSd-5zljFikJ0Qw",
+        "firstName": "Xiang",
+        "lastName": "Kong",
+        "position": "Machine Learning Researcher at Apple",
+        "publicIdentifier": "xiang-kong-54b896208",
+        "linkedinUrl": "https://www.linkedin.com/in/xiang-kong-54b896208"
+      },
+      {
+        "id": "ACoAABgKKyUB36-gmj--MNJXFgID2IVVLNPDccQ",
+        "firstName": "Mark",
+        "lastName": "Lee",
+        "position": "Research Scientist",
+        "publicIdentifier": "markblee",
+        "linkedinUrl": "https://www.linkedin.com/in/markblee"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "position": "Co-Founder and CEO at Thinking Machines Lab",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAADirLMwB4GcqSPRbqk60Olz_VXQg8c5X5rU",
+        "firstName": "Zhaoyang",
+        "lastName": "Xu",
+        "position": "Researcher @Apple Foundation Model",
+        "publicIdentifier": "zetaqubit",
+        "linkedinUrl": "https://www.linkedin.com/in/zetaqubit"
+      },
+      {
+        "id": "ACoAAAAd5nsBVZFosCv5X6A0U8YaAQGWBUVgA9s",
+        "firstName": "Ruoming",
+        "lastName": "P.",
+        "position": "AI Researcher",
+        "publicIdentifier": "ruoming-pang",
+        "linkedinUrl": "https://www.linkedin.com/in/ruoming-pang"
+      },
+      {
+        "id": "ACoAABPuF4kBdHuIlBSjIOrXoM20E7wj3NKj5as",
+        "firstName": "Jianyu",
+        "lastName": "Wang",
+        "position": "Research Scientist @ Apple Foundation Models",
+        "publicIdentifier": "jianyu-wang-689b9193",
+        "linkedinUrl": "https://www.linkedin.com/in/jianyu-wang-689b9193"
+      },
+      {
+        "id": "ACoAAALYySYBIWjAoNAVB3sjsk_Q9tTfx-movCM",
+        "firstName": "Vivek",
+        "lastName": "Rathod",
+        "position": "Research Scientist, Foundation models",
+        "publicIdentifier": "vivekmrathod",
+        "linkedinUrl": "https://www.linkedin.com/in/vivekmrathod"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAACaUm68Bv5nEv5BA11sAvkVJjy9QnIzseoI",
+        "firstName": "Floris",
+        "lastName": "Weers",
+        "position": "Ex Apple’s Foundation Model team | Enthusiastic builder",
+        "publicIdentifier": "floris-weers-61392b160",
+        "linkedinUrl": "https://www.linkedin.com/in/floris-weers-61392b160"
+      },
+      {
+        "id": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+        "firstName": "Saurabh",
+        "lastName": "Garg",
+        "position": "Thinking Machines Lab | Prev: Mistral AI, CMU, IIT-B",
+        "publicIdentifier": "saurabh-garg-b680b5b8",
+        "linkedinUrl": "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+      },
+      {
+        "id": "ACoAAA-jTwsBBM25BU7GXVhR_grTcC7LUUIfn-A",
+        "firstName": "Dominika",
+        "lastName": "Jaromin",
+        "position": "Regionalmanagerin Zurich Euskirchen, Aachen & Moers",
+        "publicIdentifier": "dominika-jaromin-237a4573",
+        "linkedinUrl": "https://www.linkedin.com/in/dominika-jaromin-237a4573"
+      },
+      {
+        "id": "ACoAAAXnvvgBPOD1xR2VmezHHCgLg_-KKKp5aMM",
+        "firstName": "Annika",
+        "lastName": "Fischer",
+        "position": "CFO | Start-/ Scale Up Advisor | Start Up Founder | Venture Partner | New Mobility | SportsTech | Finance & Risk | Mathematician | Data & AI",
+        "publicIdentifier": "annikafischer",
+        "linkedinUrl": "https://www.linkedin.com/in/annikafischer"
+      },
+      {
+        "id": "ACoAAAAWxYsBQf5jWsBjadPHUhrqV3BQM1PYQys",
+        "firstName": "Beat",
+        "lastName": "Guettinger",
+        "position": "Financial Controller at NZZ Mediengrupp",
+        "publicIdentifier": "beat-guettinger-7775bb",
+        "linkedinUrl": "https://www.linkedin.com/in/beat-guettinger-7775bb"
+      },
+      {
+        "id": "ACoAADpNp1cBgevLoU7epNioRqO7pA8f6TX06UM",
+        "firstName": "Sofiya",
+        "lastName": "Stepanyuk",
+        "position": "Finance Accounting and Reporting Specialist ",
+        "publicIdentifier": "sofiya-stepanyuk-29b705233",
+        "linkedinUrl": "https://www.linkedin.com/in/sofiya-stepanyuk-29b705233"
+      },
+      {
+        "id": "ACoAAA_28kQBDvRjxeDxKXQr80WzkRQdUxSM4UQ",
+        "firstName": "Bruno",
+        "lastName": "Monteleone",
+        "position": "/ Head of Credit Analysis Credit Lines Zurich Group Germany",
+        "publicIdentifier": "bruno-monteleone-28484975",
+        "linkedinUrl": "https://www.linkedin.com/in/bruno-monteleone-28484975"
+      },
+      {
+        "id": "ACoAAABxHCYBGrdruv8mDst3mmqINuo1zOfq2bM",
+        "firstName": "Adelio",
+        "lastName": "Feroldi",
+        "position": "Reinsurance Business Partner @ Zurich Insurance | Financial Risk Management",
+        "publicIdentifier": "adelioferoldi",
+        "linkedinUrl": "https://www.linkedin.com/in/adelioferoldi"
+      },
+      {
+        "id": "ACoAADUDaYkBR-eTZuOGzqVlaRwG8L_jZ4a4Xfs",
+        "firstName": "Dominika",
+        "lastName": "D.",
+        "position": "Psychologin mit Fokus auf Customer Intelligence @ Zurich",
+        "publicIdentifier": "dominika-dudek1",
+        "linkedinUrl": "https://www.linkedin.com/in/dominika-dudek1"
+      },
+      {
+        "id": "ACoAACb6lVABv52nkS2qiLoN0ISIn926ajqT5CU",
+        "firstName": "Thomas",
+        "lastName": "Kolberg",
+        "position": "Head of Department Aircraft bei Euler Hermes AG",
+        "publicIdentifier": "thomas-kolberg-014013163",
+        "linkedinUrl": "https://www.linkedin.com/in/thomas-kolberg-014013163"
+      },
+      {
+        "id": "ACoAABZ7gq0Bi9vSq2JguhAwbx1jAycftUY6AbE",
+        "firstName": "Michael",
+        "lastName": "Hortig",
+        "position": "Kfz.-Sachverständiger bei Zurich Versicherungen",
+        "publicIdentifier": "michael-hortig-0913a3a6",
+        "linkedinUrl": "https://www.linkedin.com/in/michael-hortig-0913a3a6"
+      },
+      {
+        "id": "ACoAAAsEmEMBBV-vQFpEe8vUOdnIr-Eb-Pa3KzI",
+        "firstName": "Luca",
+        "lastName": "Primavera",
+        "position": "Finance Support Specialist at DeepL SE.",
+        "publicIdentifier": "luca-primavera-803aa551",
+        "linkedinUrl": "https://www.linkedin.com/in/luca-primavera-803aa551"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAAwf4lcBy-RmgYK8rx4S1dUUoeUivX4aF_4"
+    }
+  }
+}

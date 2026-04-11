@@ -1,0 +1,1615 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAACzw60BdCS3BZpduwM_QyzB7os8sJvWzbE",
+    "profile_url": "https://www.linkedin.com/in/ACwAAACzw60BdCS3BZpduwM_QyzB7os8sJvWzbE"
+  },
+  "item": {
+    "id": "ACoAAACzw60BUBcf9q40tAUpQs0mHqSqAsuPFc8",
+    "publicIdentifier": "sangeen-zeb-891b413",
+    "linkedinUrl": "https://www.linkedin.com/in/sangeen-zeb-891b413",
+    "firstName": "Sangeen",
+    "lastName": "Zeb",
+    "emails": [
+      {
+        "email": "zebsangeen@gv.com",
+        "deliverable": true,
+        "catchAllDomain": false,
+        "validEmailServer": true,
+        "free": false,
+        "status": "valid",
+        "qualityScore": 90
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://www.gv.com/",
+        "domain": "gv.com",
+        "validEmailServer": true
+      },
+      {
+        "url": "https://www.openevidence.com/about",
+        "domain": "openevidence.com"
+      },
+      {
+        "url": "http://harvey.ai",
+        "domain": "harvey.ai"
+      },
+      {
+        "url": "https://vercel.com",
+        "domain": "vercel.com"
+      }
+    ],
+    "headline": "General Partner at GV (Google Ventures)",
+    "openToWork": false,
+    "hiring": false,
+    "premium": true,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America"
+      }
+    },
+    "objectUrn": "11781037",
+    "registeredAt": "2007-05-01T19:47:48.000Z",
+    "topSkills": null,
+    "connectionsCount": 15227,
+    "followerCount": 17120,
+    "verified": true,
+    "about": "General Partner at GV (Google Ventures)",
+    "currentPosition": [
+      {
+        "companyId": "2365165",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/2365165/",
+        "companyName": "GV (Google Ventures)",
+        "dateRange": {
+          "start": {
+            "month": 7,
+            "year": 2021,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "19329",
+        "companyId": "5290",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/5290/",
+        "schoolName": "University of Pennsylvania - The Wharton School"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5603AQEFLDlyEkwfQA/profile-displayphoto-crop_800_800/B56ZouAGbhJoAI-/0/1761708370523?e=1776902400&v=beta&t=niVN73xGO1Qq8m5iLVKJ77A3-dJlsTH4pknzAHXbRn4",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQEFLDlyEkwfQA/profile-displayphoto-crop_800_800/B56ZouAGbhJoAI-/0/1761708370523?e=1776902400&v=beta&t=niVN73xGO1Qq8m5iLVKJ77A3-dJlsTH4pknzAHXbRn4",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQEFLDlyEkwfQA/profile-displayphoto-scale_400_400/B56ZouAGbhJoAg-/0/1761708370613?e=1776902400&v=beta&t=9p9LZGiRI11imRRD-hgcCc902VM-h0AtN17Zfos4uvs",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQEFLDlyEkwfQA/profile-displayphoto-scale_200_200/B56ZouAGbhJoAY-/0/1761708370613?e=1776902400&v=beta&t=oQqL_nb-aizm1zFW5NH7B0Zjz7ufNv92-H_JYzRQvS0",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQEFLDlyEkwfQA/profile-displayphoto-scale_100_100/B56ZouAGbhJoAc-/0/1761708370613?e=1776902400&v=beta&t=kSfExDgd7b5J7R_47uop0Y1uBLOdyTesId2eb42tdEk",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5616AQFR3xcHpmksjw/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1679347307888?e=1776902400&v=beta&t=YdobYPNwM4eF-AK2hJrA_S-rGl8GvKAkf4w_mPa1No8",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5616AQFR3xcHpmksjw/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1679347307888?e=1776902400&v=beta&t=YdobYPNwM4eF-AK2hJrA_S-rGl8GvKAkf4w_mPa1No8",
+          "width": 1302,
+          "height": 325,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5616AQFR3xcHpmksjw/profile-displaybackgroundimage-shrink_200_800/profile-displaybackgroundimage-shrink_200_800/0/1679347307888?e=1776902400&v=beta&t=SV7g_O0_l54B4hMAbXdji2fDawhPAA3YM1TjA7KELbE",
+          "width": 800,
+          "height": 199,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "photo": "https://media.licdn.com/dms/image/v2/D5603AQEFLDlyEkwfQA/profile-displayphoto-crop_800_800/B56ZouAGbhJoAI-/0/1761708370523?e=1776902400&v=beta&t=niVN73xGO1Qq8m5iLVKJ77A3-dJlsTH4pknzAHXbRn4",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "General Partner at GV (Google Ventures)",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "General Partner",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "GV (Google Ventures)",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/googleventures/",
+        "companyId": "2365165",
+        "companyUniversalName": "googleventures",
+        "duration": "4 yrs 10 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jul",
+          "year": 2021,
+          "text": "Jul 2021"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGbcj15_VHVbw/company-logo_400_400/company-logo_400_400/0/1719849591419/googleventures_logo?e=1776902400&v=beta&t=k9s1w9pr5jvhywiADsX_G7b5dDmCVlwL7wk_M7aRbC4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGbcj15_VHVbw/company-logo_400_400/company-logo_400_400/0/1719849591419/googleventures_logo?e=1776902400&v=beta&t=k9s1w9pr5jvhywiADsX_G7b5dDmCVlwL7wk_M7aRbC4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGbcj15_VHVbw/company-logo_200_200/company-logo_200_200/0/1719849591419/googleventures_logo?e=1776902400&v=beta&t=fbiUBkSMVQpe5dr1aIl9LEiDnRB8l0eq0kH45Okox8s",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGbcj15_VHVbw/company-logo_100_100/company-logo_100_100/0/1719849591419/googleventures_logo?e=1776902400&v=beta&t=OKBQdNXdt-JILJHuEHL9wSGzfuaM95eHCrIGVTs6P-c",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Board Member - Series B & C Lead ",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "OpenEvidence",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/81917876/",
+        "companyId": "81917876",
+        "duration": "1 yr",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2025,
+          "text": "May 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQH4YBXXilGGBg/company-logo_400_400/company-logo_400_400/0/1703898433189/openevidence_logo?e=1776902400&v=beta&t=LupexuhaPLUNO2awy1Ov0ckTwyCxu7Xra7IKf3HRQNo",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQH4YBXXilGGBg/company-logo_400_400/company-logo_400_400/0/1703898433189/openevidence_logo?e=1776902400&v=beta&t=LupexuhaPLUNO2awy1Ov0ckTwyCxu7Xra7IKf3HRQNo",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQH4YBXXilGGBg/company-logo_200_200/company-logo_200_200/0/1703898433189/openevidence_logo?e=1776902400&v=beta&t=t6BPySDcp9JCYOOdhYrPRTzK59O48U96QtLQ8CturEw",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQH4YBXXilGGBg/company-logo_100_100/company-logo_100_100/0/1703898433189/openevidence_logo?e=1776902400&v=beta&t=rpxVHtVJdI5LHZNzLE2z7FyQ8bAhu7k2H2KYbUe0xHM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Series C Lead & Board Observer ",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Harvey",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/89566597/",
+        "companyId": "89566597",
+        "duration": "1 yr 9 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Aug",
+          "year": 2024,
+          "text": "Aug 2024"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEkyRHeFI9sdA/company-logo_400_400/company-logo_400_400/0/1727880962073/harvey_ai_logo?e=1776902400&v=beta&t=LM82Wi1MnWIRj_2x4vFBKQqRsd3cGMUQR3yxXfPPUso",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEkyRHeFI9sdA/company-logo_400_400/company-logo_400_400/0/1727880962073/harvey_ai_logo?e=1776902400&v=beta&t=LM82Wi1MnWIRj_2x4vFBKQqRsd3cGMUQR3yxXfPPUso",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEkyRHeFI9sdA/company-logo_200_200/company-logo_200_200/0/1727880962073/harvey_ai_logo?e=1776902400&v=beta&t=DUJdeSNUOeRVMP9UB9TlP3N6wwqi3loCBhz7uWMIbk4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEkyRHeFI9sdA/company-logo_100_100/company-logo_100_100/0/1727880962073/harvey_ai_logo?e=1776902400&v=beta&t=gHAsGoG119-wyZVgVheYK7y02I7UB5Iql2KW4Yv3PwI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Board Member & Investor",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Vercel",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/16181286/",
+        "companyId": "16181286",
+        "duration": "4 yrs 3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2022,
+          "text": "Feb 2022"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHsF1EIN5BnIw/company-logo_400_400/company-logo_400_400/0/1682947073470/vercel_logo?e=1776902400&v=beta&t=a4sDQLBbRkJAQ5NlH86MLcTRtOjjRHadUzKFZvUVaMU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHsF1EIN5BnIw/company-logo_400_400/company-logo_400_400/0/1682947073470/vercel_logo?e=1776902400&v=beta&t=a4sDQLBbRkJAQ5NlH86MLcTRtOjjRHadUzKFZvUVaMU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHsF1EIN5BnIw/company-logo_200_200/company-logo_200_200/0/1682947073470/vercel_logo?e=1776902400&v=beta&t=wirbpWMxHdWogOjreowMxW_l9s0g7Kof4sEH7RXbAPE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHsF1EIN5BnIw/company-logo_100_100/company-logo_100_100/0/1682947073470/vercel_logo?e=1776902400&v=beta&t=kjYVVtzDcvZl6Djym_yqEN9iOjv1-bZXk1SledvLRwQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyId": "105913171",
+        "duration": "10 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jul",
+          "year": 2025,
+          "text": "Jul 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "SSI",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=SSI",
+        "duration": "1 yr 2 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2025,
+          "text": "Mar 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        }
+      },
+      {
+        "position": "Series B Investor",
+        "location": "New York, United States",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Hebbia",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/67960470/",
+        "companyId": "67960470",
+        "duration": "2 yrs",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2024,
+          "text": "May 2024"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHVsBMwP9piEw/company-logo_400_400/company-logo_400_400/0/1720296022505/hebbia_logo?e=1776902400&v=beta&t=-rjtwdkE_4c1BtPrslfSLlemksy-Jkxnt1LNtZtV9X8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHVsBMwP9piEw/company-logo_400_400/company-logo_400_400/0/1720296022505/hebbia_logo?e=1776902400&v=beta&t=-rjtwdkE_4c1BtPrslfSLlemksy-Jkxnt1LNtZtV9X8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHVsBMwP9piEw/company-logo_200_200/company-logo_200_200/0/1720296022505/hebbia_logo?e=1776902400&v=beta&t=5v6ORAz9v57Yz0-m-sznJjmQudYZUV1upX0gQVXwtTM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHVsBMwP9piEw/company-logo_100_100/company-logo_100_100/0/1720296022505/hebbia_logo?e=1776902400&v=beta&t=6wCNQW700ESOufYO2AYnKfabW24-Gn2_Zb4x3CBlw1E",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Series Seed co-Lead",
+        "location": "New York, New York, United States",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Fabric",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/82860525/",
+        "companyId": "82860525",
+        "duration": "3 yrs 1 mo",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Apr",
+          "year": 2023,
+          "text": "Apr 2023"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGA_He0UBV3aQ/company-logo_400_400/company-logo_400_400/0/1719846264675/fabric_hlth_logo?e=1776902400&v=beta&t=k0zHFcFgiYXSflbCrvfvLudnCYIKeZjmYwZsZL0DLgw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGA_He0UBV3aQ/company-logo_400_400/company-logo_400_400/0/1719846264675/fabric_hlth_logo?e=1776902400&v=beta&t=k0zHFcFgiYXSflbCrvfvLudnCYIKeZjmYwZsZL0DLgw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGA_He0UBV3aQ/company-logo_200_200/company-logo_200_200/0/1719846264675/fabric_hlth_logo?e=1776902400&v=beta&t=QjEwI_BKdNRSVEieDAqgRff2jlKczKuDk6H6X7CdCPo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGA_He0UBV3aQ/company-logo_100_100/company-logo_100_100/0/1719846264675/fabric_hlth_logo?e=1776902400&v=beta&t=WqvYmgs-41xVYfPeQ99sG3IMA99C1-flWc1hBtENzTk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Series A Lead",
+        "location": "Mountain View, California, United States",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "dope.security",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/85822902/",
+        "companyId": "85822902",
+        "duration": "3 yrs 2 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2023,
+          "text": "Mar 2023"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGfdbTtGbHB_w/company-logo_400_400/company-logo_400_400/0/1651247795058?e=1776902400&v=beta&t=W1Ndy-c3cirnLHBMRsZpTxV2wk4WuGZgJxqZZwqIH08",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGfdbTtGbHB_w/company-logo_400_400/company-logo_400_400/0/1651247795058?e=1776902400&v=beta&t=W1Ndy-c3cirnLHBMRsZpTxV2wk4WuGZgJxqZZwqIH08",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGfdbTtGbHB_w/company-logo_200_200/company-logo_200_200/0/1651247795058?e=1776902400&v=beta&t=3VZum6yLqNtku8zqZX24_WchMHKwXqWrceWAZwf6-fo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGfdbTtGbHB_w/company-logo_100_100/company-logo_100_100/0/1651247795058?e=1776902400&v=beta&t=2XHD9mZtQBvwkuVQU7I6WqCi-hVZY3xk6rlN8q0jZYw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Series C co-Lead",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Medallion",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/74304634/",
+        "companyId": "74304634",
+        "duration": "3 yrs 11 mos",
+        "description": "Introduced management to CFO and VP of Sales ",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2022,
+          "text": "Jun 2022"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGTHjTRqfN3Vg/company-logo_400_400/B56Zia4YcTG0Ac-/0/1754945128511/medallion_credentials_logo?e=1776902400&v=beta&t=TAeO9EyMtqRTvhzzXE0Z8WVFqAUmk3v-1WJDi61hoCc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGTHjTRqfN3Vg/company-logo_400_400/B56Zia4YcTG0Ac-/0/1754945128511/medallion_credentials_logo?e=1776902400&v=beta&t=TAeO9EyMtqRTvhzzXE0Z8WVFqAUmk3v-1WJDi61hoCc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGTHjTRqfN3Vg/company-logo_200_200/B56Zia4YcTG0AM-/0/1754945128511/medallion_credentials_logo?e=1776902400&v=beta&t=j8J-BdB8r6esYxRTXXgfKtnh6b97h1eHXRhYktXVi_s",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGTHjTRqfN3Vg/company-logo_100_100/B56Zia4YcTG0AU-/0/1754945128511/medallion_credentials_logo?e=1776902400&v=beta&t=1iWnlEDwWH41KxNmdmzYP9dnAA5rsdvilgwBrFtXJjs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Series C Investor",
+        "location": "Seattle, Washington, United States",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Chronosphere",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/40654174/",
+        "companyId": "40654174",
+        "duration": "3 yrs 3 mos",
+        "description": "Introduced management to CRO, VP Finance, Head of Customer Success and VP NA Sales \n\nAcquired by Palo Alto Networks for $3.4B ",
+        "skills": null,
+        "startDate": {
+          "month": "Nov",
+          "year": 2022,
+          "text": "Nov 2022"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2026,
+          "text": "Jan 2026"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGHpDDwGxJGJA/company-logo_400_400/B56ZwKWSKmHwAY-/0/1769700139974/chronosphereio_logo?e=1776902400&v=beta&t=aMu8R_Ccjq1hboI-GiZ7AYU-o34cgOtvu8_XxnCzEdE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGHpDDwGxJGJA/company-logo_400_400/B56ZwKWSKmHwAY-/0/1769700139974/chronosphereio_logo?e=1776902400&v=beta&t=aMu8R_Ccjq1hboI-GiZ7AYU-o34cgOtvu8_XxnCzEdE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGHpDDwGxJGJA/company-logo_200_200/B56ZwKWSKmHwAI-/0/1769700139974/chronosphereio_logo?e=1776902400&v=beta&t=Gv775NlKZXPBqPk3NuOUYEcWCAR1L-90Vs7ij1zOlPw",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGHpDDwGxJGJA/company-logo_100_100/B56ZwKWSKmHwAQ-/0/1769700139974/chronosphereio_logo?e=1776902400&v=beta&t=xuFDddlpUPuCvjkThy-zXtt7cJAKZjwvSjozXjq5GCc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Partner",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Founders Circle Capital",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3361664/",
+        "companyId": "3361664",
+        "duration": "2 yrs 5 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2019,
+          "text": "Feb 2019"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2021,
+          "text": "Jun 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF1PHrFR33cCQ/company-logo_400_400/company-logo_400_400/0/1630637108320/founders_circle_capital_logo?e=1776902400&v=beta&t=paTUPeZtzZ3x-2rWYAfzsnRRDooIGv41JwAmwU7Atak",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF1PHrFR33cCQ/company-logo_400_400/company-logo_400_400/0/1630637108320/founders_circle_capital_logo?e=1776902400&v=beta&t=paTUPeZtzZ3x-2rWYAfzsnRRDooIGv41JwAmwU7Atak",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF1PHrFR33cCQ/company-logo_200_200/company-logo_200_200/0/1630637108320/founders_circle_capital_logo?e=1776902400&v=beta&t=USMhmMMrgeuYCIr3bB8532en8EiuB92ksokoYZ2QWi0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF1PHrFR33cCQ/company-logo_100_100/company-logo_100_100/0/1630637108320/founders_circle_capital_logo?e=1776902400&v=beta&t=7juIiDEODaUXmx_norRUZsduvw5eWaHjf5XcNvEwCF4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Databricks",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3477522/",
+        "companyId": "3477522",
+        "duration": "4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2021,
+          "text": "Feb 2021"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2021,
+          "text": "May 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQFPIRKiPVETuw/company-logo_400_400/company-logo_400_400/0/1697215766274?e=1776902400&v=beta&t=937xTBFk9G4hCEey_5P49zOos1qYptTkfoeULwSkCH0",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFPIRKiPVETuw/company-logo_400_400/company-logo_400_400/0/1697215766274?e=1776902400&v=beta&t=937xTBFk9G4hCEey_5P49zOos1qYptTkfoeULwSkCH0",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFPIRKiPVETuw/company-logo_200_200/company-logo_200_200/0/1697215766274?e=1776902400&v=beta&t=Ze_PdVyzmScuAU-Twqse-8GFNk-1K8cx1bOWwCFdEhg",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFPIRKiPVETuw/company-logo_100_100/company-logo_100_100/0/1697215766274?e=1776902400&v=beta&t=0dJY3SW-iPdDLUsLTGM_EnQ2H567N5SpK7uuDBYk4wQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Robinhood",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3254263/",
+        "companyId": "3254263",
+        "duration": "11 mos",
+        "description": "IPO (NASDAQ: HOOD) August 2021",
+        "skills": null,
+        "startDate": {
+          "month": "Jul",
+          "year": 2020,
+          "text": "Jul 2020"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2021,
+          "text": "May 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQESwNiGp2qYlA/company-logo_400_400/company-logo_400_400/0/1728574763254/robinhood_logo?e=1776902400&v=beta&t=XxgklfwQpWazRIU5Ix54C2HwVNFZqjEs4JfC3FraPvM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQESwNiGp2qYlA/company-logo_400_400/company-logo_400_400/0/1728574763254/robinhood_logo?e=1776902400&v=beta&t=XxgklfwQpWazRIU5Ix54C2HwVNFZqjEs4JfC3FraPvM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQESwNiGp2qYlA/company-logo_200_200/company-logo_200_200/0/1728574763254/robinhood_logo?e=1776902400&v=beta&t=_LpCbbZlcNj122Sbo8jhKQ9m42l518oLJbRWOQxvd0g",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQESwNiGp2qYlA/company-logo_100_100/company-logo_100_100/0/1728574763254/robinhood_logo?e=1776902400&v=beta&t=L33T9HgBV7-wYnGA-Av7meHWWfNpykPR45Jw-dXU-Bk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Confluent",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/88873/",
+        "companyId": "88873",
+        "duration": "1 yr 2 mos",
+        "description": "IPO (NASDAQ: CFLT) June 2021",
+        "skills": null,
+        "startDate": {
+          "month": "Apr",
+          "year": 2020,
+          "text": "Apr 2020"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2021,
+          "text": "May 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQH5-OYbTze-EA/company-logo_400_400/B4EZbt9pRdHkAc-/0/1747749082914/confluent_logo?e=1776902400&v=beta&t=ajj29_8knJDuyGm_DN5GV1CJptawQ4MOzLnG3eFJ7QA",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQH5-OYbTze-EA/company-logo_400_400/B4EZbt9pRdHkAc-/0/1747749082914/confluent_logo?e=1776902400&v=beta&t=ajj29_8knJDuyGm_DN5GV1CJptawQ4MOzLnG3eFJ7QA",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQH5-OYbTze-EA/company-logo_200_200/B4EZbt9pRdHkAM-/0/1747749082914/confluent_logo?e=1776902400&v=beta&t=uuB-rmtxuBOa3xb8LcQ0yFSLgj_P0-GvbrC1ViOjl1s",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQH5-OYbTze-EA/company-logo_100_100/B4EZbt9pRdHkAU-/0/1747749082914/confluent_logo?e=1776902400&v=beta&t=-TS9DggW5D8DmvUtEmNiUHMZi_5C9honEYqnmifCp-w",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": "New York City Metropolitan Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Attentive",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/27249903/",
+        "companyId": "27249903",
+        "duration": "1 yr 2 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Apr",
+          "year": 2020,
+          "text": "Apr 2020"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2021,
+          "text": "May 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGZ8RxZjm3w9A/company-logo_400_400/company-logo_400_400/0/1630495812214/attentivemobile_logo?e=1776902400&v=beta&t=r2HqVeuTm-6z1WncGx80pd3mivgnVbX5uSlE0bTR-UM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGZ8RxZjm3w9A/company-logo_400_400/company-logo_400_400/0/1630495812214/attentivemobile_logo?e=1776902400&v=beta&t=r2HqVeuTm-6z1WncGx80pd3mivgnVbX5uSlE0bTR-UM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGZ8RxZjm3w9A/company-logo_200_200/company-logo_200_200/0/1630495812214/attentivemobile_logo?e=1776902400&v=beta&t=5ThBmFqrKAxsvSrDjJ5hMlBpQ9hRbftXRR9i3qmImRY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGZ8RxZjm3w9A/company-logo_100_100/company-logo_100_100/0/1630495812214/attentivemobile_logo?e=1776902400&v=beta&t=ugG4JnSznROqAqYAiPvrRRJH7Q7jQNzx4UYCmN1FvLw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": "Greater Paris Metropolitan Region",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Algolia",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/2728700/",
+        "companyId": "2728700",
+        "duration": "1 yr 8 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Oct",
+          "year": 2019,
+          "text": "Oct 2019"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2021,
+          "text": "May 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFV5mHomr7jyQ/company-logo_400_400/B4EZ1GKkQUHQAY-/0/1774998668785/algolia_logo?e=1776902400&v=beta&t=NKVAmxrZq72eWnhROsjuCWye_pGmejKk62DhrbXv57Y",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFV5mHomr7jyQ/company-logo_400_400/B4EZ1GKkQUHQAY-/0/1774998668785/algolia_logo?e=1776902400&v=beta&t=NKVAmxrZq72eWnhROsjuCWye_pGmejKk62DhrbXv57Y",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFV5mHomr7jyQ/company-logo_200_200/B4EZ1GKkQUHQAI-/0/1774998668785/algolia_logo?e=1776902400&v=beta&t=98R07N5W3TL6Oil63MIDbaYHJI9zkGUTHS6pWkV2AW0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFV5mHomr7jyQ/company-logo_100_100/B4EZ1GKkQUHQAQ-/0/1774998668785/algolia_logo?e=1776902400&v=beta&t=m3ObrnYNPxoSvmY_V7Hyg-OCSEpkx_z78MZSOtgoJuc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": "Bucharest Metropolitan Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "UiPath",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1523656/",
+        "companyId": "1523656",
+        "duration": "2 yrs 1 mo",
+        "description": "IPO (NYSE: PATH) April 2021",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2019,
+          "text": "May 2019"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2021,
+          "text": "May 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEoLEGmmZUTsg/company-logo_400_400/B4DZfP43PmHMAc-/0/1751539479900/uipath_logo?e=1776902400&v=beta&t=MkTC1xEdJhoYkqN7ZlR3y6vLGXvzAuX2zqmLJHzH9cI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEoLEGmmZUTsg/company-logo_400_400/B4DZfP43PmHMAc-/0/1751539479900/uipath_logo?e=1776902400&v=beta&t=MkTC1xEdJhoYkqN7ZlR3y6vLGXvzAuX2zqmLJHzH9cI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEoLEGmmZUTsg/company-logo_200_200/B4DZfP43PmHMAM-/0/1751539479900/uipath_logo?e=1776902400&v=beta&t=8ihuJbh_l66nuEwzg31_YsBCiBffI9kbF_i26tUPTsM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEoLEGmmZUTsg/company-logo_100_100/B4DZfP43PmHMAU-/0/1751539479900/uipath_logo?e=1776902400&v=beta&t=5vRQ3Q8xz-ycQs-jYP-XZU3--QNohDb-GU6RW2nqf_M",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Segment",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/400528/",
+        "companyId": "400528",
+        "duration": "2 yrs 3 mos",
+        "description": "Acquired by Twilio for $3.2Bn",
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2019,
+          "text": "Mar 2019"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2021,
+          "text": "May 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQEmISp-ciExQw/company-logo_400_400/B56ZYyhH7TGoAc-/0/1744604267044/twilio_inc__logo?e=1776902400&v=beta&t=wda69EZVs4yHxpctOwT-qbHOxR37FrAYczjXwV4MJ7w",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEmISp-ciExQw/company-logo_400_400/B56ZYyhH7TGoAc-/0/1744604267044/twilio_inc__logo?e=1776902400&v=beta&t=wda69EZVs4yHxpctOwT-qbHOxR37FrAYczjXwV4MJ7w",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEmISp-ciExQw/company-logo_200_200/B56ZYyhH7TGoAM-/0/1744604267044/twilio_inc__logo?e=1776902400&v=beta&t=hIF0TbY2uuI89mzjP1-4iVItchjKhZSUUgOasvJobvQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEmISp-ciExQw/company-logo_100_100/B56ZYyhH7TGoAU-/0/1744604267044/twilio_inc__logo?e=1776902400&v=beta&t=bqa2JXCN4ZFERWJtDZinsGB2GzwRdHq9WK58nEvmweY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Cohesity",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3750699/",
+        "companyId": "3750699",
+        "duration": "2 yrs 4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2019,
+          "text": "Feb 2019"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2021,
+          "text": "May 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQFXZ2Hda_puGA/company-logo_400_400/B56ZXZqwVUHEAg-/0/1743113619242/cohesity_logo?e=1776902400&v=beta&t=b3t4xamKhq4LL3x-gCUy7HLyb89-uvR8TYjwohDAnzM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFXZ2Hda_puGA/company-logo_400_400/B56ZXZqwVUHEAg-/0/1743113619242/cohesity_logo?e=1776902400&v=beta&t=b3t4xamKhq4LL3x-gCUy7HLyb89-uvR8TYjwohDAnzM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFXZ2Hda_puGA/company-logo_200_200/B56ZXZqwVUHEAQ-/0/1743113619242/cohesity_logo?e=1776902400&v=beta&t=FYUWzTlU_FSK5fl-1Nl9sxPv1rQ2lubZXs5eetMY9bw",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFXZ2Hda_puGA/company-logo_100_100/B56ZXZqwVUHEAY-/0/1743113619242/cohesity_logo?e=1776902400&v=beta&t=1EmC8Rx7nFvYuFp-d9VRkgQpEYJ8Um2m77nDFiX53h8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Advisor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Zoom",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/2532259/",
+        "companyId": "2532259",
+        "duration": "2 yrs 3 mos",
+        "description": "Introduced management to eventual Series D lead in 2014",
+        "skills": null,
+        "startDate": {
+          "month": "Dec",
+          "year": 2016,
+          "text": "Dec 2016"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2019,
+          "text": "Feb 2019"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHdFe3fnAvRmg/company-logo_400_400/company-logo_400_400/0/1711361750580/zoom_video_communications_logo?e=1776902400&v=beta&t=1hU1slnYvyCdycK5de8apoeUejls3xXzCHew9utBQHQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHdFe3fnAvRmg/company-logo_400_400/company-logo_400_400/0/1711361750580/zoom_video_communications_logo?e=1776902400&v=beta&t=1hU1slnYvyCdycK5de8apoeUejls3xXzCHew9utBQHQ",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHdFe3fnAvRmg/company-logo_200_200/company-logo_200_200/0/1711361750580/zoom_video_communications_logo?e=1776902400&v=beta&t=exuIjy3yJCQ4KqMseJa-jZtmbAruqNuxAbzyTsrFKAI",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHdFe3fnAvRmg/company-logo_100_100/company-logo_100_100/0/1711361750580/zoom_video_communications_logo?e=1776902400&v=beta&t=bWew08aAF_FLimKIReISBG4tl9zo1NtIcKxraqMcVdI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Principal",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Centerview Capital Technology",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Centerview+Capital+Technology",
+        "duration": "3 yrs 2 mos",
+        "description": "Centerview Capital is an enterprise focused late stage VC. Joining the team since inception, I focused on SaaS, Security, DevOps and Infrastructure.  \n",
+        "skills": null,
+        "experienceGroupId": "dd08889ff28e1f3416185c7343c83a9a575adb42",
+        "startDate": {
+          "month": "Jan",
+          "year": 2016,
+          "text": "Jan 2016"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2019,
+          "text": "Feb 2019"
+        }
+      },
+      {
+        "position": "Senior Associate",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Centerview Capital Technology",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Centerview+Capital+Technology",
+        "duration": "2 yrs 4 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "dd08889ff28e1f3416185c7343c83a9a575adb42",
+        "startDate": {
+          "month": "Sep",
+          "year": 2013,
+          "text": "Sep 2013"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2015,
+          "text": "Dec 2015"
+        }
+      },
+      {
+        "position": "Series D Lead Investor",
+        "location": "Greater Boston",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Affirmed Networks",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1161691/",
+        "companyId": "1161691",
+        "duration": "1 mo",
+        "description": "Sourced and executed $38 million investment round led by Centerview. Sold to Microsoft for $1.35 billion (March 2020).",
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2019,
+          "text": "Jan 2019"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2019,
+          "text": "Jan 2019"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFAzET7-UM-eg/company-logo_400_400/company-logo_400_400/0/1630565070330/affirmed_networks_logo?e=1776902400&v=beta&t=elNGDe9m5Eb6-QopwvdDRbA7rKYDl1tbDPoBQAdla40",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFAzET7-UM-eg/company-logo_400_400/company-logo_400_400/0/1630565070330/affirmed_networks_logo?e=1776902400&v=beta&t=elNGDe9m5Eb6-QopwvdDRbA7rKYDl1tbDPoBQAdla40",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFAzET7-UM-eg/company-logo_200_200/company-logo_200_200/0/1630565070329/affirmed_networks_logo?e=1776902400&v=beta&t=cQzjAR7z_ZrRnkp_ogzY_uLtIryW_V32Eowzgm3nzp4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFAzET7-UM-eg/company-logo_100_100/company-logo_100_100/0/1630565070330/affirmed_networks_logo?e=1776902400&v=beta&t=SyfMtY7tWbCNkYZRF2cF0uXkaFcoRzBJubLAHmL1ZJs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Series C Lead & Board Observer",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Sauce Labs",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/891955/",
+        "companyId": "891955",
+        "duration": "2 yrs 3 mos",
+        "description": "Sourced and executed $70 million investment round led by Centerview with participation from IVP and Adams Street. Exited in June 2022 to TPG. ",
+        "skills": null,
+        "startDate": {
+          "month": "Nov",
+          "year": 2016,
+          "text": "Nov 2016"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2019,
+          "text": "Jan 2019"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHlYp4UWQp0RA/company-logo_400_400/company-logo_400_400/0/1677015370794/sauce_labs_logo?e=1776902400&v=beta&t=LYJ_7ybvADjHJag2xydAszFX5g3xD8NumeS8BDyPg2w",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHlYp4UWQp0RA/company-logo_400_400/company-logo_400_400/0/1677015370794/sauce_labs_logo?e=1776902400&v=beta&t=LYJ_7ybvADjHJag2xydAszFX5g3xD8NumeS8BDyPg2w",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHlYp4UWQp0RA/company-logo_200_200/company-logo_200_200/0/1677015370794/sauce_labs_logo?e=1776902400&v=beta&t=xOhLCdcKdoZUoi25d_ImjZ3AQWyoooH6oUwqBRhECA0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHlYp4UWQp0RA/company-logo_100_100/company-logo_100_100/0/1677015370794/sauce_labs_logo?e=1776902400&v=beta&t=B6nppxuPkML61zFEYZ_hJzGRW-wYlzd4ElmEfhBFVZU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "The Wharton School",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/5290/",
+        "schoolId": "5290",
+        "degree": "MBA",
+        "fieldOfStudy": null,
+        "skills": [],
+        "insights": "Activities and societies: Wharton Wildmen Captain (Ice Hockey), Advanced Corporate Finance TA",
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFQu7wZniptpA/company-logo_400_400/company-logo_400_400/0/1677690194092/the_wharton_school_logo?e=1776902400&v=beta&t=sW5cCSPXksuCk-FjvPkBXsGeBlrbSgaqWfpUx_DcxFw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFQu7wZniptpA/company-logo_400_400/company-logo_400_400/0/1677690194092/the_wharton_school_logo?e=1776902400&v=beta&t=sW5cCSPXksuCk-FjvPkBXsGeBlrbSgaqWfpUx_DcxFw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFQu7wZniptpA/company-logo_200_200/company-logo_200_200/0/1677690194092/the_wharton_school_logo?e=1776902400&v=beta&t=j74WhcKPlFREFO4X23rKsVHfGvXXQsyXNJhTkdHaGqE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFQu7wZniptpA/company-logo_100_100/company-logo_100_100/0/1677690194092/the_wharton_school_logo?e=1776902400&v=beta&t=bHfDk-ac5Tt9sw__wS3OQ5eZdoU8BisWE1tABfwhEzw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "The Wharton School",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/5290/",
+        "schoolId": "5290",
+        "degree": "BS Economics",
+        "fieldOfStudy": null,
+        "skills": [],
+        "insights": "Activities and societies: Sigma Chi, Lantern Society, Corp Finance Research Assistant",
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFQu7wZniptpA/company-logo_400_400/company-logo_400_400/0/1677690194092/the_wharton_school_logo?e=1776902400&v=beta&t=sW5cCSPXksuCk-FjvPkBXsGeBlrbSgaqWfpUx_DcxFw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFQu7wZniptpA/company-logo_400_400/company-logo_400_400/0/1677690194092/the_wharton_school_logo?e=1776902400&v=beta&t=sW5cCSPXksuCk-FjvPkBXsGeBlrbSgaqWfpUx_DcxFw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFQu7wZniptpA/company-logo_200_200/company-logo_200_200/0/1677690194092/the_wharton_school_logo?e=1776902400&v=beta&t=j74WhcKPlFREFO4X23rKsVHfGvXXQsyXNJhTkdHaGqE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFQu7wZniptpA/company-logo_100_100/company-logo_100_100/0/1677690194092/the_wharton_school_logo?e=1776902400&v=beta&t=bHfDk-ac5Tt9sw__wS3OQ5eZdoU8BisWE1tABfwhEzw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Westside High School",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/7239794/",
+        "schoolId": "7239794",
+        "degree": "Omaha",
+        "fieldOfStudy": "NE",
+        "skills": [],
+        "insights": "Activities and societies: Class President, Homecoming King, Intern for Secretary of Defense Chuck Hagel, Husker fan",
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGXQdyD_QpBNg/company-logo_400_400/company-logo_400_400/0/1684967313186/westside_high_school_logo?e=1776902400&v=beta&t=O0I9HLrg1dH2mgjq9ZXTIYpNy2kZl3abrMawExcRkdE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGXQdyD_QpBNg/company-logo_400_400/company-logo_400_400/0/1684967313186/westside_high_school_logo?e=1776902400&v=beta&t=O0I9HLrg1dH2mgjq9ZXTIYpNy2kZl3abrMawExcRkdE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGXQdyD_QpBNg/company-logo_200_200/company-logo_200_200/0/1684967313186/westside_high_school_logo?e=1776902400&v=beta&t=QraksnKNK9OtNzzoltJkTVeodkrSaDy5i-0ya9oK_nc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGXQdyD_QpBNg/company-logo_100_100/company-logo_100_100/0/1684967313186/westside_high_school_logo?e=1776902400&v=beta&t=htcBZiMinUoUFlT7FGj7zo5WKyHqtSE-d4xxdzd0V5g",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Venture Capital",
+        "endorsements": "99+ endorsements"
+      },
+      {
+        "name": "Private Equity",
+        "endorsements": "90 endorsements"
+      },
+      {
+        "name": "Financial Modeling",
+        "endorsements": "76 endorsements"
+      },
+      {
+        "name": "Valuation",
+        "endorsements": "40 endorsements"
+      },
+      {
+        "name": "Investment Banking",
+        "endorsements": "35 endorsements"
+      },
+      {
+        "name": "Capital Markets",
+        "endorsements": "8 endorsements"
+      },
+      {
+        "name": "Corporate Finance",
+        "endorsements": "18 endorsements"
+      },
+      {
+        "name": "Business Strategy",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "Corporate Development",
+        "endorsements": "23 endorsements"
+      },
+      {
+        "name": "Asset Management",
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "Bloomberg",
+        "endorsements": "9 endorsements"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": {
+      "images": [
+        "https://media.licdn.com/dms/image/v2/D4E22AQFL2wkg15SVtg/feedshare-shrink_2048_1536/B4EZwAso8fJkAk-/0/1769538229121?e=1776902400&v=beta&t=FTaL_vGKFb9L9dgkQWgRHqFjEyUN8PD6--PrkyhaHg8"
+      ],
+      "link": "https://www.linkedin.com/feed/update/urn:li:activity:7421999615450787840?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A7421999615450787840%29",
+      "slides": [
+        {
+          "title": null,
+          "subtitle": null,
+          "description": null,
+          "url": "https://www.linkedin.com/feed/update/urn:li:activity:7421999615450787840?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A7421999615450787840%29",
+          "image": {
+            "url": "https://media.licdn.com/dms/image/v2/D4E22AQFL2wkg15SVtg/feedshare-shrink_2048_1536/B4EZwAso8fJkAk-/0/1769538229121?e=1776902400&v=beta&t=FTaL_vGKFb9L9dgkQWgRHqFjEyUN8PD6--PrkyhaHg8"
+          }
+        }
+      ]
+    },
+    "composeOptionType": "PREMIUM_INMAIL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAA9-JJ0BFaxoK95eqwzLStWKa80kS34VHz0",
+        "firstName": "Taha",
+        "lastName": "Ziaee",
+        "position": "BOND Capital",
+        "publicIdentifier": "tahaziaee",
+        "linkedinUrl": "https://www.linkedin.com/in/tahaziaee"
+      },
+      {
+        "id": "ACoAAAncnq0BajmeOrLikO5AAincnDzuRDUXFjw",
+        "firstName": "Soumith",
+        "lastName": "Chintala",
+        "publicIdentifier": "soumith",
+        "linkedinUrl": "https://www.linkedin.com/in/soumith"
+      },
+      {
+        "id": "ACoAABVoCPwBxg70DrhQRdmGzmMYByRhNKT2JHc",
+        "firstName": "Sherry",
+        "lastName": "Chao",
+        "position": "Partner at GV",
+        "publicIdentifier": "chaosherry",
+        "linkedinUrl": "https://www.linkedin.com/in/chaosherry"
+      },
+      {
+        "id": "ACoAAAFHmHABKX0sz1pNqFMXSBWPNShpd4kZEbU",
+        "firstName": "Paige",
+        "lastName": "Bailey",
+        "publicIdentifier": "dynamicwebpaige",
+        "linkedinUrl": "https://www.linkedin.com/in/dynamicwebpaige"
+      },
+      {
+        "id": "ACoAAAAQU1kBlWmevcEFZ3wSbZvpEAVB4_2q7lg",
+        "firstName": "Mamoon",
+        "lastName": "Hamid",
+        "position": "Kleiner Perkins",
+        "publicIdentifier": "mamoonha",
+        "linkedinUrl": "https://www.linkedin.com/in/mamoonha"
+      },
+      {
+        "id": "ACoAAAHpr10BRWqMv92qCHv2tBY30GUtRU7L9R4",
+        "firstName": "Scott",
+        "lastName": "Biller",
+        "position": "Executive Venture Partner at GV",
+        "publicIdentifier": "scott-biller-9118b7a",
+        "linkedinUrl": "https://www.linkedin.com/in/scott-biller-9118b7a"
+      },
+      {
+        "id": "ACoAACDET2sBK41hdDFtLmg2Hn8A5tlLxsFk32w",
+        "firstName": "Rishi",
+        "lastName": "Modi",
+        "position": "Investor at GV (Google Ventures)",
+        "publicIdentifier": "rishi-modi",
+        "linkedinUrl": "https://www.linkedin.com/in/rishi-modi"
+      },
+      {
+        "id": "ACoAAAABK5kBly8tWAFREwrEqnt-Z5H0fkICKis",
+        "firstName": "Karim",
+        "lastName": "Faris",
+        "publicIdentifier": "karimfaris",
+        "linkedinUrl": "https://www.linkedin.com/in/karimfaris"
+      },
+      {
+        "id": "ACoAAAB9dnQBWfMsfsDhYkUCLioAFQRnTlvRHhA",
+        "firstName": "Shardul",
+        "lastName": "Shah",
+        "publicIdentifier": "shardul-shah-3589062",
+        "linkedinUrl": "https://www.linkedin.com/in/shardul-shah-3589062"
+      },
+      {
+        "id": "ACoAAAAGjK0BwOQrKvR7p5y-jp_mCV9p019LinM",
+        "firstName": "Michael",
+        "lastName": "McBride",
+        "position": "General Partner at GV (Google Ventures) | Former CRO at GitLab",
+        "publicIdentifier": "mikemcb",
+        "linkedinUrl": "https://www.linkedin.com/in/mikemcb"
+      },
+      {
+        "id": "ACoAAAF15fwBnMNuXntWeOqfpLmnKG0E4nnFPNI",
+        "firstName": "Sarah",
+        "lastName": "Guo",
+        "publicIdentifier": "sarahxguo",
+        "linkedinUrl": "https://www.linkedin.com/in/sarahxguo"
+      },
+      {
+        "id": "ACoAAABu8U4BOBwfqcmLfAaw_gtNc95WuJqheVI",
+        "firstName": "Erik",
+        "lastName": "Nordlander",
+        "position": "General Partner @ GV | Enterprise & Frontier Investor",
+        "publicIdentifier": "eriknordlander",
+        "linkedinUrl": "https://www.linkedin.com/in/eriknordlander"
+      },
+      {
+        "id": "ACoAAA-Ad2ABZu5RaUsxF-bMQHulsnv_63pE_is",
+        "firstName": "KJ",
+        "lastName": "Sidberry",
+        "position": "Consumer @ GV",
+        "publicIdentifier": "kjsid",
+        "linkedinUrl": "https://www.linkedin.com/in/kjsid"
+      },
+      {
+        "id": "ACoAAAAASTQBi9O76eznU6rahpWHH7QvGIAm_xw",
+        "firstName": "Lo",
+        "lastName": "Toney",
+        "publicIdentifier": "ltoney",
+        "linkedinUrl": "https://www.linkedin.com/in/ltoney"
+      },
+      {
+        "id": "ACoAAAEbBG4BdpxD2aVJEaiyh2c-7rV7Z9LQ_JQ",
+        "firstName": "Anthony",
+        "lastName": "Philippakis",
+        "position": "General Partner at GV",
+        "publicIdentifier": "anthony-philippakis-83a2656",
+        "linkedinUrl": "https://www.linkedin.com/in/anthony-philippakis-83a2656"
+      },
+      {
+        "id": "ACoAAAAI0msBTMUhyEv_TfdJInAgA2HJlBH2wPw",
+        "firstName": "Sridhar",
+        "lastName": "Ramaswamy, MD",
+        "position": "Google Ventures",
+        "publicIdentifier": "sridhar-ramaswamy-md-6b723a",
+        "linkedinUrl": "https://www.linkedin.com/in/sridhar-ramaswamy-md-6b723a"
+      },
+      {
+        "id": "ACoAAAAA4r4BYSHEVqLyybGpGoT0lR8v5jaJcHo",
+        "firstName": "David",
+        "lastName": "Krane",
+        "position": "CEO & Managing Partner at GV",
+        "publicIdentifier": "davidkrane",
+        "linkedinUrl": "https://www.linkedin.com/in/davidkrane"
+      },
+      {
+        "id": "ACoAAAAAbEYB3fYNnwDBIhZvSaa2isN4-WtYux8",
+        "firstName": "Frederique",
+        "lastName": "Dame",
+        "publicIdentifier": "frederiquedame",
+        "linkedinUrl": "https://www.linkedin.com/in/frederiquedame"
+      },
+      {
+        "id": "ACoAAADlL_gBoa3oBiQR6GmqhQgWIE8tTGmS8jI",
+        "firstName": "Mike",
+        "lastName": "Volpi",
+        "publicIdentifier": "mavolpi",
+        "linkedinUrl": "https://www.linkedin.com/in/mavolpi"
+      },
+      {
+        "id": "ACoAAALiK_wBkkoDOHtjbJroS6G4vxUa-LrZ4P0",
+        "firstName": "Crystal",
+        "lastName": "Huang",
+        "position": "General Partner at GV (Google Ventures)",
+        "publicIdentifier": "crystalhuang89",
+        "linkedinUrl": "https://www.linkedin.com/in/crystalhuang89"
+      },
+      {
+        "id": "ACoAAC5EZ1sB7entADhH65lgJ0vHqD3L71sVtXk",
+        "firstName": "Jack",
+        "lastName": "Nightingale",
+        "position": "Athlete Manager | TGI Sport",
+        "publicIdentifier": "jacknightingale13",
+        "linkedinUrl": "https://www.linkedin.com/in/jacknightingale13"
+      },
+      {
+        "id": "ACoAAFQ1KusBVZ0P-l93WfcgGLjlScUmmRaSJZs",
+        "firstName": "Lawrence",
+        "lastName": "Cornwall-Baptiste",
+        "position": "Professional Athlete, graduate master’s student at University of the West of England - Environmental Managment",
+        "publicIdentifier": "lawrence-cornwall-baptiste-663173335",
+        "linkedinUrl": "https://www.linkedin.com/in/lawrence-cornwall-baptiste-663173335"
+      },
+      {
+        "id": "ACoAAAqXuxQBwjtu5shYpFWLyhbvqv34zPuP_lw",
+        "firstName": "Sarah",
+        "lastName": "Benson",
+        "position": "England Athletics Talent & Performance Director",
+        "publicIdentifier": "saraheabenson",
+        "linkedinUrl": "https://www.linkedin.com/in/saraheabenson"
+      },
+      {
+        "id": "ACoAABXyRaYBrMYLHKeBykChFzMhsqlGsh1tQh4",
+        "firstName": "Glen",
+        "lastName": "Toonga",
+        "position": "Professional American Football Player | S&C Coach",
+        "publicIdentifier": "glentoonga",
+        "linkedinUrl": "https://www.linkedin.com/in/glentoonga"
+      },
+      {
+        "id": "ACoAADMOMWwBi0YqpuhnRajsmfcvROyII9OexDo",
+        "firstName": "George",
+        "lastName": "Davis",
+        "position": "Retired Professional Rugby Player for London Irish RFC",
+        "publicIdentifier": "george-davis-210a431ba",
+        "linkedinUrl": "https://www.linkedin.com/in/george-davis-210a431ba"
+      },
+      {
+        "id": "ACoAACuq8zsBMDt82AQoXf85ZcYB9ceREgmXo78",
+        "firstName": "Will",
+        "lastName": "Homer",
+        "position": "Professional rugby player - GB & England 7's | Legal Headhunter",
+        "publicIdentifier": "will-homer",
+        "linkedinUrl": "https://www.linkedin.com/in/will-homer"
+      },
+      {
+        "id": "ACoAAB5DvF0B6726XhQyEL8-CNYvmoK5DeD4I-s",
+        "firstName": "Darien",
+        "lastName": "Nelson-Henry",
+        "position": "Ex-Pro Athlete → Sports Business Leader | Ticketing, Sales & Revenue Growth at London Lions",
+        "publicIdentifier": "darien-nelson-henry",
+        "linkedinUrl": "https://www.linkedin.com/in/darien-nelson-henry"
+      },
+      {
+        "id": "ACoAACCBWvsBNhM4CJlTEGHvTtdJvr_NADguJK8",
+        "firstName": "Matt",
+        "lastName": "B.",
+        "position": "American football Scout and Digital Marketing ",
+        "publicIdentifier": "matt-b-137777132",
+        "linkedinUrl": "https://www.linkedin.com/in/matt-b-137777132"
+      },
+      {
+        "id": "ACoAABPMg-UBKtQll1YK88WERIdu7O3ATsVXZUs",
+        "firstName": "Matt",
+        "lastName": "Perry",
+        "position": "Director of Education at International Tennis Integrity Agency",
+        "publicIdentifier": "matt-perry-1712b093",
+        "linkedinUrl": "https://www.linkedin.com/in/matt-perry-1712b093"
+      },
+      {
+        "id": "ACoAAAf_3v4B67c4GKQlB2uwnL_i70rFoXelV9c",
+        "firstName": "Liam",
+        "lastName": "Burnett",
+        "position": "Professional Rugby Team Manager at Richmond Rugby & Senior Account Manager at Tacklebag.",
+        "publicIdentifier": "liam-burnett-4a6b4338",
+        "linkedinUrl": "https://www.linkedin.com/in/liam-burnett-4a6b4338"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAACzw60BdCS3BZpduwM_QyzB7os8sJvWzbE"
+    }
+  }
+}

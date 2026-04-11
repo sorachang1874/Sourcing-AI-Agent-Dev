@@ -1,0 +1,670 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAFUBvsYBQiSUGj7KguWgRc62m6rU2eWeLnc",
+    "profile_url": "https://www.linkedin.com/in/ACwAAFUBvsYBQiSUGj7KguWgRc62m6rU2eWeLnc"
+  },
+  "item": {
+    "id": "ACoAAFUBvsYBMskyWP5r-Lf7ZUccZSuFy2nCqkA",
+    "publicIdentifier": "ankit-baghel-40675a339",
+    "linkedinUrl": "https://www.linkedin.com/in/ankit-baghel-40675a339",
+    "firstName": "Ankit",
+    "lastName": "Baghel",
+    "emails": [
+      {
+        "email": "ankit.baghel@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "--DMLT lab technician\nb.sc chemistry chemical industry lab",
+    "openToWork": true,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Prayagraj, Uttar Pradesh, India",
+      "countryCode": "IN",
+      "parsed": {
+        "text": "Prayagraj, India",
+        "countryCode": "IN",
+        "regionCode": null,
+        "country": "India",
+        "countryFull": "India",
+        "state": "Uttar Pradesh",
+        "city": "Prayagraj"
+      }
+    },
+    "objectUrn": "1426177734",
+    "registeredAt": "2024-11-21T07:26:09.427Z",
+    "topSkills": null,
+    "connectionsCount": 28,
+    "followerCount": 28,
+    "verified": false,
+    "about": "B.sc chemical industry chemistry lab and 1 month experience utl solar energy com. and full experience press conference media, \nand kibi charger com. experience",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 11,
+            "year": 2019,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "221588",
+        "companyId": "15125586",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/15125586/",
+        "schoolName": "Prof. Rajendra Singh (Rajju Bhaiya) University (PRSU), Prayagraj"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4E03AQFU2ZiRgmHK7A/profile-displayphoto-crop_800_800/B4EZpXDb4SKYAI-/0/1762397111547?e=1776902400&v=beta&t=JuygLr9oEFZtsGJCoOlticLaCkaZARh43Wc8PeZAPAM",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQFU2ZiRgmHK7A/profile-displayphoto-crop_800_800/B4EZpXDb4SKYAI-/0/1762397111547?e=1776902400&v=beta&t=JuygLr9oEFZtsGJCoOlticLaCkaZARh43Wc8PeZAPAM",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQFU2ZiRgmHK7A/profile-displayphoto-scale_400_400/B4EZpXDb4SKYAg-/0/1762397111633?e=1776902400&v=beta&t=a4d8aprCn3k9DpgCMPAbK9kk0YoyImnSH_uPpb1WBOE",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQFU2ZiRgmHK7A/profile-displayphoto-scale_200_200/B4EZpXDb4SKYAY-/0/1762397111633?e=1776902400&v=beta&t=3w8HgsnfWWEwQgUUQMQrVSWtNjqDZa8JLp_I9T53NFc",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQFU2ZiRgmHK7A/profile-displayphoto-scale_100_100/B4EZpXDb4SKYAc-/0/1762397111633?e=1776902400&v=beta&t=Z46Ifa_5t5TnvTt04HnuscMEbSaSzdx8urOAacG0T10",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D4E03AQFU2ZiRgmHK7A/profile-displayphoto-crop_800_800/B4EZpXDb4SKYAI-/0/1762397111547?e=1776902400&v=beta&t=JuygLr9oEFZtsGJCoOlticLaCkaZARh43Wc8PeZAPAM",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "--DMLT lab technician\nb.sc chemistry chemical industry lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Medical Laboratory Technician",
+        "location": "Uttar Pradesh, India",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "6 yrs 6 mos",
+        "description": null,
+        "skills": [
+          "Lab Testing",
+          "Medical Technology",
+          "ELISA",
+          "LabTech",
+          "Laboratory Equipment"
+        ],
+        "startDate": {
+          "month": "Nov",
+          "year": 2019,
+          "text": "Nov 2019"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Prof. Rajendra Singh (Rajju Bhaiya) University (PRSU), Prayagraj",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/15125586/",
+        "schoolId": "15125586",
+        "degree": "B.Sc",
+        "fieldOfStudy": "Chemical industry chemisty lab",
+        "skills": [
+          "1 years press conference media",
+          "1 years writing press"
+        ],
+        "insights": "Grade: A",
+        "startDate": {
+          "month": "Apr",
+          "year": 2021,
+          "text": "Apr 2021"
+        },
+        "endDate": {
+          "month": "Apr",
+          "year": 2024,
+          "text": "Apr 2024"
+        },
+        "period": "Apr 2021 - Apr 2024",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4D0BAQH9VhIucpWVfA/company-logo_400_400/company-logo_400_400/0/1687112027605?e=1776902400&v=beta&t=vM_UV7Us3qROBcdceVzklBP240vuAR32U621MZ5Z16o",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQH9VhIucpWVfA/company-logo_400_400/company-logo_400_400/0/1687112027605?e=1776902400&v=beta&t=vM_UV7Us3qROBcdceVzklBP240vuAR32U621MZ5Z16o",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQH9VhIucpWVfA/company-logo_200_200/company-logo_200_200/0/1687112027605?e=1776902400&v=beta&t=wQu3H-Zmpj0erUEK0BsoHjWOjztxqwIbJL9pjSDIjjw",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQH9VhIucpWVfA/company-logo_100_100/company-logo_100_100/0/1687112027605?e=1776902400&v=beta&t=RNIu_w0x8KMS37mwNwTKeefXnqD1D6y_Z4k-wO4ArR0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Amaltas College of Education",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/10313623/",
+        "schoolId": "10313623",
+        "degree": "Diploma DMLT",
+        "fieldOfStudy": "Biology Technician/Biotechnology Laboratory Technician",
+        "skills": [],
+        "insights": "Grade: B",
+        "startDate": {
+          "month": "Mar",
+          "year": 2019,
+          "text": "Mar 2019"
+        },
+        "endDate": {
+          "month": "Nov",
+          "year": 2021,
+          "text": "Nov 2021"
+        },
+        "period": "Mar 2019 - Nov 2021",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF5D4z5CY_hsg/company-logo_400_400/company-logo_400_400/0/1631304390636?e=1776902400&v=beta&t=Tz4IG7WhDll7Y_RH54Q79WK4sVBvD-pdk5S5lVaTBiQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF5D4z5CY_hsg/company-logo_400_400/company-logo_400_400/0/1631304390636?e=1776902400&v=beta&t=Tz4IG7WhDll7Y_RH54Q79WK4sVBvD-pdk5S5lVaTBiQ",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF5D4z5CY_hsg/company-logo_200_200/company-logo_200_200/0/1631304390636?e=1776902400&v=beta&t=3viD_KoH2L35bZa85632lPywOFqefK5ECCUvVTs_CXo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF5D4z5CY_hsg/company-logo_100_100/company-logo_100_100/0/1631304390636?e=1776902400&v=beta&t=V0UZRDj-_vWUTjQyRzbmht7T8QoB7MZhHksP8zDVJOQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "G Bhaiya G",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/34106522/",
+        "schoolId": "34106522",
+        "degree": "B.sc(Math)",
+        "fieldOfStudy": null,
+        "skills": [],
+        "description": "Score: 68%",
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": null
+      },
+      {
+        "schoolName": "Praxie",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/16255697/",
+        "schoolId": "16255697",
+        "degree": "10th",
+        "fieldOfStudy": null,
+        "skills": [],
+        "description": "Score: 66%",
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQEgvEqFqNCLfQ/company-logo_400_400/company-logo_400_400/0/1630655186600/upboard_logo?e=1776902400&v=beta&t=_6b23eOgBM0R8Kyc_lZKC9kiaoOUqWxhyeCzPWOc1RM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEgvEqFqNCLfQ/company-logo_400_400/company-logo_400_400/0/1630655186600/upboard_logo?e=1776902400&v=beta&t=_6b23eOgBM0R8Kyc_lZKC9kiaoOUqWxhyeCzPWOc1RM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEgvEqFqNCLfQ/company-logo_200_200/company-logo_200_200/0/1630655186600/upboard_logo?e=1776902400&v=beta&t=ApUR7KDkPeEBoxPB_S0Pp0IgCLli4sDFgUQkfAL80Ic",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEgvEqFqNCLfQ/company-logo_100_100/company-logo_100_100/0/1630655186600/upboard_logo?e=1776902400&v=beta&t=PjSpNN-iTQnrVAPYjLvonZGY82aEBSbTIzzTMGJKTZ8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Praxie",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/16255697/",
+        "schoolId": "16255697",
+        "degree": "12th",
+        "fieldOfStudy": null,
+        "skills": [],
+        "description": "Score: 71%",
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQEgvEqFqNCLfQ/company-logo_400_400/company-logo_400_400/0/1630655186600/upboard_logo?e=1776902400&v=beta&t=_6b23eOgBM0R8Kyc_lZKC9kiaoOUqWxhyeCzPWOc1RM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEgvEqFqNCLfQ/company-logo_400_400/company-logo_400_400/0/1630655186600/upboard_logo?e=1776902400&v=beta&t=_6b23eOgBM0R8Kyc_lZKC9kiaoOUqWxhyeCzPWOc1RM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEgvEqFqNCLfQ/company-logo_200_200/company-logo_200_200/0/1630655186600/upboard_logo?e=1776902400&v=beta&t=ApUR7KDkPeEBoxPB_S0Pp0IgCLli4sDFgUQkfAL80Ic",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEgvEqFqNCLfQ/company-logo_100_100/company-logo_100_100/0/1630655186600/upboard_logo?e=1776902400&v=beta&t=PjSpNN-iTQnrVAPYjLvonZGY82aEBSbTIzzTMGJKTZ8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Teamwork"
+      },
+      {
+        "name": "Employee Loyalty"
+      },
+      {
+        "name": "Communication"
+      },
+      {
+        "name": "Decision-Making"
+      },
+      {
+        "name": "Creativity and Innovation"
+      },
+      {
+        "name": "Creativity Skills"
+      },
+      {
+        "name": "BSC"
+      },
+      {
+        "name": "Ultrasonic Testing"
+      },
+      {
+        "name": "Solar Energy"
+      },
+      {
+        "name": "1 years press conference media ",
+        "positions": [
+          "Prof. Rajendra Singh (Rajju Bhaiya) University (PRSU), Prayagraj"
+        ]
+      },
+      {
+        "name": "1 years writing press ",
+        "positions": [
+          "Prof. Rajendra Singh (Rajju Bhaiya) University (PRSU), Prayagraj"
+        ]
+      },
+      {
+        "name": "Lab Testing",
+        "positions": [
+          "Medical Laboratory Technician at Thinking Machines Lab"
+        ]
+      },
+      {
+        "name": "Laboratory Equipment",
+        "positions": [
+          "Medical Laboratory Technician at Thinking Machines Lab"
+        ]
+      },
+      {
+        "name": "LabTech",
+        "positions": [
+          "Medical Laboratory Technician at Thinking Machines Lab"
+        ]
+      },
+      {
+        "name": "Medical Technology",
+        "positions": [
+          "Medical Laboratory Technician at Thinking Machines Lab"
+        ]
+      },
+      {
+        "name": "Laboratory Medicine"
+      },
+      {
+        "name": "ELISA",
+        "positions": [
+          "Medical Laboratory Technician at Thinking Machines Lab"
+        ]
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAAEZnBtoBb1Us7ZKgHfOXAYT764pKcDQy848",
+        "firstName": "Songlin",
+        "lastName": "Yang",
+        "publicIdentifier": "songlin-yang-b8a69728b",
+        "linkedinUrl": "https://www.linkedin.com/in/songlin-yang-b8a69728b"
+      },
+      {
+        "id": "ACoAACE2EIwB3vNVX9rm6ce5juOGovFUzVvIsCc",
+        "firstName": "Kevin",
+        "lastName": "Lu",
+        "publicIdentifier": "kzl",
+        "linkedinUrl": "https://www.linkedin.com/in/kzl"
+      },
+      {
+        "id": "ACoAAAncnq0BajmeOrLikO5AAincnDzuRDUXFjw",
+        "firstName": "Soumith",
+        "lastName": "Chintala",
+        "publicIdentifier": "soumith",
+        "linkedinUrl": "https://www.linkedin.com/in/soumith"
+      },
+      {
+        "id": "ACoAABGaEy8Bu1ycKB5WUvyRc69OERCzymW7mxY",
+        "firstName": "Jamie",
+        "lastName": "Cahill",
+        "publicIdentifier": "james-cahill-093a9582",
+        "linkedinUrl": "https://www.linkedin.com/in/james-cahill-093a9582"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAABE9sVMBCH0i964WlvecDNyGKTviqyXKcTY",
+        "firstName": "Hannah",
+        "lastName": "T.",
+        "publicIdentifier": "hannahnth",
+        "linkedinUrl": "https://www.linkedin.com/in/hannahnth"
+      },
+      {
+        "id": "ACoAAEAbBpQBT4luNj8gPYU6CgQ_GNJey3AJTiE",
+        "firstName": "Rajat",
+        "lastName": "Goel",
+        "publicIdentifier": "rajatgoel2010",
+        "linkedinUrl": "https://www.linkedin.com/in/rajatgoel2010"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAAF3SWDYB6aZAqtjbw1-LDNZ4qxxHLFKTL0g",
+        "firstName": "Md",
+        "lastName": "Mdamaz",
+        "publicIdentifier": "md-mdamaz-b5a19937b",
+        "linkedinUrl": "https://www.linkedin.com/in/md-mdamaz-b5a19937b"
+      },
+      {
+        "id": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+        "firstName": "Saurabh",
+        "lastName": "Garg",
+        "publicIdentifier": "saurabh-garg-b680b5b8",
+        "linkedinUrl": "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+      },
+      {
+        "id": "ACoAACEKIcoBlH0R5ZT_TKQuJ4i3ZD4WlI1-rME",
+        "firstName": "Jacob",
+        "lastName": "Menick",
+        "position": "Thinking Machines, Founding Team",
+        "publicIdentifier": "jacob-menick-5a277a135",
+        "linkedinUrl": "https://www.linkedin.com/in/jacob-menick-5a277a135"
+      },
+      {
+        "id": "ACoAABoG0oUBl986ZaMrLUASG1NhDoJyVlav4Po",
+        "firstName": "Eric",
+        "lastName": "Zhang",
+        "publicIdentifier": "ekzhang",
+        "linkedinUrl": "https://www.linkedin.com/in/ekzhang"
+      },
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAAB25W_cBJvis01d0hMgt6XtRg-rXuYtwxKA",
+        "firstName": "Alexis",
+        "lastName": "Dunn",
+        "publicIdentifier": "alexis-aleyza-dunn",
+        "linkedinUrl": "https://www.linkedin.com/in/alexis-aleyza-dunn"
+      },
+      {
+        "id": "ACoAABJF4mQBVJYIx7g-ASuPnmo5mH2mDuWdwQg",
+        "firstName": "Erika",
+        "lastName": "Byun",
+        "publicIdentifier": "erika-nakamatsu-byun",
+        "linkedinUrl": "https://www.linkedin.com/in/erika-nakamatsu-byun"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAAAwf4lcBgfLcNvMLGYnAjvxGpzWMO50zhUw",
+        "firstName": "Deepak",
+        "lastName": "Gopinath",
+        "publicIdentifier": "deepakgopinath",
+        "linkedinUrl": "https://www.linkedin.com/in/deepakgopinath"
+      },
+      {
+        "id": "ACoAAAO-j_IBXcvIzhZtQ7QNkky6tlnQTcFl9qI",
+        "firstName": "Myle",
+        "lastName": "Ott",
+        "publicIdentifier": "myleott",
+        "linkedinUrl": "https://www.linkedin.com/in/myleott"
+      },
+      {
+        "id": "ACoAAAAdzCEB9t8wLSGcpoQ71RdetK75KW7RgS4",
+        "firstName": "Mark",
+        "lastName": "Jen",
+        "publicIdentifier": "markjen",
+        "linkedinUrl": "https://www.linkedin.com/in/markjen"
+      },
+      {
+        "id": "ACoAAAvyzgsBc08WYBWHyYtFgXK70ZdeA7eg9Y0",
+        "firstName": "Grazyna",
+        "lastName": "Kopcinska",
+        "position": "number 1",
+        "publicIdentifier": "grazyna-kopcinska-00b17457",
+        "linkedinUrl": "https://www.linkedin.com/in/grazyna-kopcinska-00b17457"
+      },
+      {
+        "id": "ACoAACvaCgcB_B8qeYg1ajuWkRzj8qv0Wxj46fQ",
+        "firstName": "Łukasz",
+        "lastName": "Bargiel",
+        "position": "Senior IT Systems Maintenance Manager Specialist",
+        "publicIdentifier": "łukasz-bargiel-b1b479186",
+        "linkedinUrl": "https://www.linkedin.com/in/łukasz-bargiel-b1b479186"
+      },
+      {
+        "id": "ACoAAAHdQBsByscSBet4fupKgIzxazkwshtkjRE",
+        "firstName": "Andrzej",
+        "lastName": "Parecki",
+        "position": "sworn translator PL-CS 🇨🇿🇵🇱| tłumacz przysięgły języka czeskiego | soudní překladatel PL \nsimultaneous and consecutive interpreter CS-PL 🎤🇨🇿🇵🇱| tłumacz ustny języka czeskiego | tlumočník PL",
+        "publicIdentifier": "andrzej-parecki-1b7584a",
+        "linkedinUrl": "https://www.linkedin.com/in/andrzej-parecki-1b7584a"
+      },
+      {
+        "id": "ACoAACrnsQoBoXlVXVlCYkYqy59p9bWg2uGXVSs",
+        "firstName": "Iza",
+        "lastName": "Dębska",
+        "position": "Consulting, Strategy & Marketing",
+        "publicIdentifier": "iza-debska",
+        "linkedinUrl": "https://www.linkedin.com/in/iza-debska"
+      },
+      {
+        "id": "ACoAAALdCiABqHH9Ck9TjXUB-0-iLsXWeU3OTEE",
+        "firstName": "Marcin",
+        "lastName": "Badynski",
+        "position": "Specjalista ds. digital marketingu",
+        "publicIdentifier": "marcinbadynski",
+        "linkedinUrl": "https://www.linkedin.com/in/marcinbadynski"
+      },
+      {
+        "id": "ACoAAC5NNd4B9a6PjAfKe6p1btmX8Srzdrs5YwM",
+        "firstName": "Sylwia",
+        "lastName": "Witaszek",
+        "position": "Nauka jazdy BAKFIS | Manager Sprzedaży | Szkoleniowiec | Pomagam ludziom odzyskać pewność siebie i zmienić swoje życie zawodowe",
+        "publicIdentifier": "sylwia-witaszek-b9219b198",
+        "linkedinUrl": "https://www.linkedin.com/in/sylwia-witaszek-b9219b198"
+      },
+      {
+        "id": "ACoAAEw-lh8BKwsg4rwsPjg863rr33m2BZQoYTE",
+        "firstName": "Izabella",
+        "lastName": "Jończyk",
+        "position": "Specjalistka ds. zakupów",
+        "publicIdentifier": "izabella-jończyk-5674842b8",
+        "linkedinUrl": "https://www.linkedin.com/in/izabella-jończyk-5674842b8"
+      },
+      {
+        "id": "ACoAAEPi4zIBPmPjzaQ5khwi1bLFlusooOyf_dE",
+        "firstName": "Aled",
+        "lastName": "Smith",
+        "position": "PhD | Sound artist, technologist & futurist. Co-founder @ Virtual Sound Media. Writer, educator & specialist in creativity + emerging tech.",
+        "publicIdentifier": "aledsmith",
+        "linkedinUrl": "https://www.linkedin.com/in/aledsmith"
+      },
+      {
+        "id": "ACoAADgZwNsBaulB8Pqi1GdxwRjOTnK61AMSO7s",
+        "firstName": "Yana",
+        "lastName": "Goga",
+        "position": "Senior Spine animator | Character animation | Slot games | 2D Artist",
+        "publicIdentifier": "yanagoga",
+        "linkedinUrl": "https://www.linkedin.com/in/yanagoga"
+      },
+      {
+        "id": "ACoAAEokBVoByB6sa-Dr48zzpOx91YKh8aGtX2U",
+        "firstName": "Urszula Zofia",
+        "lastName": "Kuśnierz",
+        "position": "Founder at ./ Event / Sport / Kultura Cyfrowa i Fizyczna/",
+        "publicIdentifier": "urszula-zofia-kuśnierz-a4a6a22a8",
+        "linkedinUrl": "https://www.linkedin.com/in/urszula-zofia-kuśnierz-a4a6a22a8"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAFUBvsYBQiSUGj7KguWgRc62m6rU2eWeLnc"
+    }
+  }
+}

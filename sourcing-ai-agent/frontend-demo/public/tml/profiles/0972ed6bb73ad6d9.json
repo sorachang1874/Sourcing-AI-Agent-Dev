@@ -1,0 +1,529 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAFTCRWsBSNl5F6QrxIfaaX-F-SOml1Bieu8",
+    "profile_url": "https://www.linkedin.com/in/ACwAAFTCRWsBSNl5F6QrxIfaaX-F-SOml1Bieu8"
+  },
+  "item": {
+    "id": "ACoAAFTCRWsBY5ah-n3GLXQ4YQ3O9GBwwXx0Adw",
+    "publicIdentifier": "yong-lin-037293338",
+    "linkedinUrl": "https://www.linkedin.com/in/yong-lin-037293338",
+    "firstName": "Yong",
+    "lastName": "Lin",
+    "emails": [
+      {
+        "email": "yong.lin@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "TML, MoTS",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Princeton, New Jersey, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "Princeton, NJ, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "New Jersey",
+        "city": "Princeton"
+      }
+    },
+    "objectUrn": "1422017899",
+    "registeredAt": "2024-11-10T19:05:49.019Z",
+    "topSkills": null,
+    "connectionsCount": 0,
+    "followerCount": 1,
+    "verified": false,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 11,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "12879",
+        "companyId": "11966",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/11966/",
+        "schoolName": "香港科技大学"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4D03AQE_xvobG-Ogmg/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1731265549565?e=1776902400&v=beta&t=GGsbxrp7Z5VX5PLxm4haR1C-U1EPMP9qHcKYI03JZeE",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4D03AQE_xvobG-Ogmg/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1731265549565?e=1776902400&v=beta&t=GGsbxrp7Z5VX5PLxm4haR1C-U1EPMP9qHcKYI03JZeE",
+          "width": 96,
+          "height": 96,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4D03AQE_xvobG-Ogmg/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1731265549565?e=1776902400&v=beta&t=HXJAY-2B_ks5T_Ny9UMqI0AVzoF8hs3EuDuhJg6OIQE",
+          "width": 96,
+          "height": 96,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4D03AQE_xvobG-Ogmg/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1731265549565?e=1776902400&v=beta&t=wJVS1hyRc74BJ8EJXEYIo6gLngRDn1d1GaaR2nBrw60",
+          "width": 96,
+          "height": 96,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4D03AQE_xvobG-Ogmg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1731265549573?e=1776902400&v=beta&t=X7MY0SddribR1Fja9xxHos5sFtUeyCpsYITRDXkQXt0",
+          "width": 96,
+          "height": 96,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D4D03AQE_xvobG-Ogmg/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1731265549565?e=1776902400&v=beta&t=GGsbxrp7Z5VX5PLxm4haR1C-U1EPMP9qHcKYI03JZeE",
+    "profileLocales": [
+      {
+        "country": "CN",
+        "language": "zh"
+      }
+    ],
+    "primaryLocale": {
+      "country": "CN",
+      "language": "zh"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "TML, MoTS",
+        "locale": "zh_CN"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "旧金山湾区",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "6 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Nov",
+          "year": 2025,
+          "text": "Nov 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "博士后研究员",
+        "location": "普林斯顿, NJ",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "美国普林斯顿大学",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/157313/",
+        "companyId": "157313",
+        "duration": "1 yr 4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Aug",
+          "year": 2024,
+          "text": "Aug 2024"
+        },
+        "endDate": {
+          "month": "Nov",
+          "year": 2025,
+          "text": "Nov 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQE4zTC5PJAKSA/company-logo_400_400/company-logo_400_400/0/1630648147093/princeton_university_logo?e=1776902400&v=beta&t=-ejT6CJtb1WJH1ltf1aXlgVpSicKPKcnMorTjVwhDiw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQE4zTC5PJAKSA/company-logo_400_400/company-logo_400_400/0/1630648147093/princeton_university_logo?e=1776902400&v=beta&t=-ejT6CJtb1WJH1ltf1aXlgVpSicKPKcnMorTjVwhDiw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQE4zTC5PJAKSA/company-logo_200_200/company-logo_200_200/0/1630648147093/princeton_university_logo?e=1776902400&v=beta&t=ggPm_li0hUErI1U6HnsMryjmaT7fSfuTYqw3Iwn3nJ0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQE4zTC5PJAKSA/company-logo_100_100/company-logo_100_100/0/1630648147093/princeton_university_logo?e=1776902400&v=beta&t=05S5Q38mlOytDLLUfnx7oLpzf9y5HraXODpL-bUd0mc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "The Hong Kong University of Science and Technology",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/11966/",
+        "schoolId": "11966",
+        "degree": "PhD",
+        "fieldOfStudy": "Computer Science and Technology",
+        "skills": [],
+        "startDate": {
+          "month": "Sep",
+          "year": 2020,
+          "text": "Sep 2020"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2023,
+          "text": "Dec 2023"
+        },
+        "period": "Sep 2020 - Dec 2023",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGQKg98EcfHTw/company-logo_400_400/B56ZrxjxGdL8AY-/0/1764989277143/hkust_logo?e=1776902400&v=beta&t=FdchI-bwl1boHpK7qcVmD-K_RyoFtYugGuqV5GaYMss",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGQKg98EcfHTw/company-logo_400_400/B56ZrxjxGdL8AY-/0/1764989277143/hkust_logo?e=1776902400&v=beta&t=FdchI-bwl1boHpK7qcVmD-K_RyoFtYugGuqV5GaYMss",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGQKg98EcfHTw/company-logo_200_200/B56ZrxjxGdL8AI-/0/1764989277143/hkust_logo?e=1776902400&v=beta&t=7KxtgjycP_FEcRGwNhGojt9K0yBD-IMeAVbEVcdem1A",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGQKg98EcfHTw/company-logo_100_100/B56ZrxjxGdL8AQ-/0/1764989277143/hkust_logo?e=1776902400&v=beta&t=2dE0TEhDFry6CVBK5HKFZsu0VzuLC-fC2YRzky2zdJI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "RL"
+      },
+      {
+        "name": "LLM Post-Training"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAET8kJUBw1UyzcDIuJE4QLZP6k_-3ACJBVE",
+        "firstName": "Mårten",
+        "lastName": "Söderblom Saarela",
+        "position": "Ricci Institute Special Collections Librarian, Boston College",
+        "publicIdentifier": "mårten-söderblom-saarela-331741283",
+        "linkedinUrl": "https://www.linkedin.com/in/mårten-söderblom-saarela-331741283"
+      },
+      {
+        "id": "ACoAADrfKdsBgqRkfcT5aS4-dGABJxU3tYluT8w",
+        "firstName": "Fenna",
+        "lastName": "Krienen",
+        "position": "Assistant Professor at Princeton University | we're hiring! | krienenlab.org",
+        "publicIdentifier": "fenna-krienen",
+        "linkedinUrl": "https://www.linkedin.com/in/fenna-krienen"
+      },
+      {
+        "id": "ACoAAER93GcBKsFuZ0Kq8A0Fuqj-I8NgvCaUYl4",
+        "firstName": "Kayla",
+        "lastName": "Barnes",
+        "position": "Culture and Politics Student at Georgetown University School of Foreign Service",
+        "publicIdentifier": "kaylabarnes1",
+        "linkedinUrl": "https://www.linkedin.com/in/kaylabarnes1"
+      },
+      {
+        "id": "ACoAAEE3KQEBr5nYsDvsCLbdBZtpK7UECn9EDTU",
+        "firstName": "Bryan",
+        "lastName": "LaPointe",
+        "position": "Historian, Researcher, Writer",
+        "publicIdentifier": "bryan-lapointe-4a950b266",
+        "linkedinUrl": "https://www.linkedin.com/in/bryan-lapointe-4a950b266"
+      },
+      {
+        "id": "ACoAAELDzckBCwcD7fsjFD7s7wTIMFdki6y0utg",
+        "firstName": "Yibo",
+        "lastName": "Zhao",
+        "position": "Research Affiliate at MIT Media Lab | Grad Student at Johns Hopkins University | Former Software Engineer at Microsoft",
+        "publicIdentifier": "yibo-zhao-5a1166273",
+        "linkedinUrl": "https://www.linkedin.com/in/yibo-zhao-5a1166273"
+      },
+      {
+        "id": "ACoAAACGab0BBmGaNh6vTwhv-szctO8PFvIAAEU",
+        "firstName": "Alexander",
+        "lastName": "Alexeev",
+        "position": "Professor at Georgia Tech, co-founder CellFE",
+        "publicIdentifier": "alexander-alexeev-8a5b492",
+        "linkedinUrl": "https://www.linkedin.com/in/alexander-alexeev-8a5b492"
+      },
+      {
+        "id": "ACoAADVMzcIBM75J57JPJcBbnGYtOJ572tHePuM",
+        "firstName": "Hannah",
+        "lastName": "Grunow",
+        "position": "Princeton University French Department",
+        "publicIdentifier": "hannah-grunow-99658320b",
+        "linkedinUrl": "https://www.linkedin.com/in/hannah-grunow-99658320b"
+      },
+      {
+        "id": "ACoAAFOpubUB6G5_aF5HArPCUH--aMOw8ZWiALA",
+        "firstName": "Eden",
+        "lastName": "Hall",
+        "position": "Architecture Student at Princeton University",
+        "publicIdentifier": "eden-hall-0990a7332",
+        "linkedinUrl": "https://www.linkedin.com/in/eden-hall-0990a7332"
+      },
+      {
+        "id": "ACoAAFP1XfYBHKheEG8Pb5fB8YfWPbNCQgnQIZk",
+        "firstName": "Robert",
+        "lastName": "Karl",
+        "position": "Professor of Arts & Humanities at Minerva University",
+        "publicIdentifier": "robert-karl-a1a897333",
+        "linkedinUrl": "https://www.linkedin.com/in/robert-karl-a1a897333"
+      },
+      {
+        "id": "ACoAAAkrj4IBF1NtxtaINNpzCwe1xBi7mtUqslM",
+        "firstName": "Bobby",
+        "lastName": "Chajson",
+        "position": "Senior Director, AI Business Development & Strategy",
+        "publicIdentifier": "bobby-chajson-4aa63543",
+        "linkedinUrl": "https://www.linkedin.com/in/bobby-chajson-4aa63543"
+      },
+      {
+        "id": "ACoAADrueL8BwtB-aZt7-RL6038WLBu6FW_cHxs",
+        "firstName": "Cecilia",
+        "lastName": "Sommerfeld",
+        "position": "PhD Student at University of Pennsylvania| Department of Chemistry",
+        "publicIdentifier": "cecilia-sommerfeld-4a7148237",
+        "linkedinUrl": "https://www.linkedin.com/in/cecilia-sommerfeld-4a7148237"
+      },
+      {
+        "id": "ACoAAAzaTj0BK-CuxZ93d-SuHVNzUfL2ff-PkdA",
+        "firstName": "Ariel",
+        "lastName": "Sibert",
+        "position": "Dramaturg & Critic",
+        "publicIdentifier": "arielsibert",
+        "linkedinUrl": "https://www.linkedin.com/in/arielsibert"
+      },
+      {
+        "id": "ACoAADZf2QUBqavPU3pAHKI3MypBMhLgKZuymIA",
+        "firstName": "Yifan",
+        "lastName": "Qiao",
+        "position": "Efficient Information Retrieval System, Software Engineering",
+        "publicIdentifier": "yifan-qiao-145617215",
+        "linkedinUrl": "https://www.linkedin.com/in/yifan-qiao-145617215"
+      },
+      {
+        "id": "ACoAAAVF95UBJGzK49i8waa21D7wazeHM4h4UGY",
+        "firstName": "John",
+        "lastName": "O'Leary",
+        "position": "Researcher & Analyst | Chinese–English Specialist Translator | Princeton MA, Columbia BA | Early China, Intellectual History, Textual Analysis",
+        "publicIdentifier": "johnchengoleary",
+        "linkedinUrl": "https://www.linkedin.com/in/johnchengoleary"
+      },
+      {
+        "id": "ACoAABLaKE0BMXcyIQHcjGhoa8UV2mg540IBjcU",
+        "firstName": "Yijun",
+        "lastName": "Bian",
+        "position": "ML researcher & engineer, Copenhagen",
+        "publicIdentifier": "yijunbian",
+        "linkedinUrl": "https://www.linkedin.com/in/yijunbian"
+      },
+      {
+        "id": "ACoAADGCaxUB02SjNYNM0mHViBucZ8LaGTK7v4g",
+        "firstName": "Anisa",
+        "lastName": "Uddin",
+        "position": "Mechanical and Aerospace Engineering ’29 @ Princeton | Novogratz Bridge Year Indonesia",
+        "publicIdentifier": "anisa-uddin",
+        "linkedinUrl": "https://www.linkedin.com/in/anisa-uddin"
+      },
+      {
+        "id": "ACoAADH25gYBbyWhUzVKI8NrlAGEwcXvexuGMgs",
+        "firstName": "Aaron",
+        "lastName": "Serianni",
+        "position": "PhD Student @ MIT EECS",
+        "publicIdentifier": "aaronserianni",
+        "linkedinUrl": "https://www.linkedin.com/in/aaronserianni"
+      },
+      {
+        "id": "ACoAAAwhNfgBV45gp1oFr6pjFtmUqZY72B8sy2I",
+        "firstName": "Niloo",
+        "lastName": "H.",
+        "position": "UX Design Lead · GenAI Creation · Google · YouTube · AI Artist",
+        "publicIdentifier": "niloohosseini",
+        "linkedinUrl": "https://www.linkedin.com/in/niloohosseini"
+      },
+      {
+        "id": "ACoAABMXxB0BOd_4Ncwpch-sXF0HpBHH-Orluo8",
+        "firstName": "Julia",
+        "lastName": "Payne",
+        "position": "Executive Director at Out of Eden Walk",
+        "publicIdentifier": "julia-payne-0793398b",
+        "linkedinUrl": "https://www.linkedin.com/in/julia-payne-0793398b"
+      },
+      {
+        "id": "ACoAACEQeqUBpWZ7yhQ76WVJbiWbQ2XU9SiUW6s",
+        "firstName": "Ling L.",
+        "lastName": "Dong",
+        "position": "computational neuroscience PhD at MIT",
+        "publicIdentifier": "loading-lld",
+        "linkedinUrl": "https://www.linkedin.com/in/loading-lld"
+      },
+      {
+        "id": "ACoAAF9dJJsB_zfQNpBHMiS0sD92n6GFaAB7-sU",
+        "firstName": "Yinnn",
+        "lastName": "Yannn",
+        "position": "IT Recruiter | Talent Acquisition Specialist | Human Resources | Account Manager",
+        "publicIdentifier": "yinnn-yannn-077997387",
+        "linkedinUrl": "https://www.linkedin.com/in/yinnn-yannn-077997387"
+      },
+      {
+        "id": "ACoAAGD6hyYBEU0ewiX1JAJb3Kn2Sv0Ww3VVkw0",
+        "firstName": "泽平",
+        "lastName": "周",
+        "position": "香港宝帝来控股集团有限公司",
+        "publicIdentifier": "泽平-周-086a81394",
+        "linkedinUrl": "https://www.linkedin.com/in/泽平-周-086a81394"
+      },
+      {
+        "id": "ACoAAGRR5VgBHg9VYKUNRHcE1eoYJvt2QkCsdh4",
+        "firstName": "Ragib",
+        "lastName": "Ishrak",
+        "position": "Student at The Hong Kong University of Science and Technology",
+        "publicIdentifier": "ragib-ishrak-8207b53ab",
+        "linkedinUrl": "https://www.linkedin.com/in/ragib-ishrak-8207b53ab"
+      },
+      {
+        "id": "ACoAAGCZZQoBydto1GNjqahfBNtsLYwVae3ksWc",
+        "firstName": "Alban",
+        "lastName": "ABLOU",
+        "position": "KYC & AML Manager | Compliance | Financial Crime | Risk Management | Due Diligence",
+        "publicIdentifier": "alban-ablou-236911392",
+        "linkedinUrl": "https://www.linkedin.com/in/alban-ablou-236911392"
+      },
+      {
+        "id": "ACoAAGMkszUBpdyspYoCUeWizlgwTL0xc7u8PB8",
+        "firstName": "Chun Nam",
+        "lastName": "Lui",
+        "position": "Year 3 Electronic Engineering at HKUST",
+        "publicIdentifier": "chun-nam-lui-6710763a5",
+        "linkedinUrl": "https://www.linkedin.com/in/chun-nam-lui-6710763a5"
+      },
+      {
+        "id": "ACoAAGVaJqcBwmWPTJZmycY6JFHYq7Tc4pewxJo",
+        "firstName": "Jiawei",
+        "lastName": "LI",
+        "position": "Public Relations and Advertising",
+        "publicIdentifier": "jiawei-li-9735673b5",
+        "linkedinUrl": "https://www.linkedin.com/in/jiawei-li-9735673b5"
+      },
+      {
+        "id": "ACoAAGUPAO8BSf64aouo1GrzOqlB78oZNn1L3Yw",
+        "firstName": "Amanda",
+        "lastName": "Jackson",
+        "position": "Masters Graduate in Gender Violence and Conflict Seeking Visa-Sponsored Role in UK",
+        "publicIdentifier": "amanda-jackson-9279913b3",
+        "linkedinUrl": "https://www.linkedin.com/in/amanda-jackson-9279913b3"
+      },
+      {
+        "id": "ACoAAGL-OKkBn2cXWM8RqvSxpt-xF-0sJTIBdrw",
+        "firstName": "Chun Lun",
+        "lastName": "Ng",
+        "position": "Student at The Hong Kong University of Science and Technology",
+        "publicIdentifier": "chun-lun-ng-26125b3a4",
+        "linkedinUrl": "https://www.linkedin.com/in/chun-lun-ng-26125b3a4"
+      },
+      {
+        "id": "ACoAAF7gSFsBkOe_CDEZdueydS3Hwrsbj9a254E",
+        "firstName": "Wai Lam ",
+        "lastName": "HON",
+        "position": "Student at The Hong Kong University of Science and Technology",
+        "publicIdentifier": "wai-lam-hon-7370ab385",
+        "linkedinUrl": "https://www.linkedin.com/in/wai-lam-hon-7370ab385"
+      },
+      {
+        "id": "ACoAAGNF4ocBPWuf9bxgcuMOARaBa6qAMXmDl5Q",
+        "firstName": "Elf",
+        "lastName": "Leung",
+        "position": "Student at The Hong Kong University of Science and Technology",
+        "publicIdentifier": "elf-leung-1479453a5",
+        "linkedinUrl": "https://www.linkedin.com/in/elf-leung-1479453a5"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAFTCRWsBSNl5F6QrxIfaaX-F-SOml1Bieu8"
+    }
+  }
+}

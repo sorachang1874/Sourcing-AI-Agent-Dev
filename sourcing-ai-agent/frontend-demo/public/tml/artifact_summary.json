@@ -1,0 +1,22 @@
+{
+  "target_company": "Thinking Machines Lab",
+  "company_key": "thinkingmachineslab",
+  "snapshot_id": "20260407T181912",
+  "candidate_count": 189,
+  "evidence_count": 404,
+  "status_counts": {
+    "current": 140,
+    "former": 47,
+    "non_member": 2
+  },
+  "profile_detail_count": 182,
+  "explicit_profile_capture_count": 182,
+  "manual_review_confirmed_count": 6,
+  "missing_linkedin_count": 7,
+  "manual_review_backlog_count": 4,
+  "profile_completion_backlog_count": 3,
+  "source_snapshot_count": 19,
+  "sqlite_candidate_count": 189,
+  "sqlite_evidence_count": 386,
+  "created_at": "2026-04-07T19:20:43.639538+00:00"
+}

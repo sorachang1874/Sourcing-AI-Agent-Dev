@@ -1,0 +1,1129 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAABGzJXcBvHGfUQeysDeBvSjVlsSF94lTDek",
+    "profile_url": "https://www.linkedin.com/in/ACwAABGzJXcBvHGfUQeysDeBvSjVlsSF94lTDek"
+  },
+  "item": {
+    "id": "ACoAABGzJXcBFaJqVFgqgYNbhaPVKRkP3iG33dA",
+    "publicIdentifier": "nshpak",
+    "linkedinUrl": "https://www.linkedin.com/in/nshpak",
+    "firstName": "Noah",
+    "lastName": "Shpak",
+    "emails": [
+      {
+        "email": "noah.shpak@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Thinking Machines",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "New York City Metropolitan Area",
+      "countryCode": "US",
+      "parsed": {
+        "text": "New York City, NY, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "New York",
+        "city": "New York City"
+      }
+    },
+    "objectUrn": "296953207",
+    "registeredAt": "2013-10-15T20:25:43.978Z",
+    "topSkills": null,
+    "connectionsCount": 1279,
+    "followerCount": 1480,
+    "verified": false,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 1,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "19328",
+        "companyId": "3165",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3165/",
+        "schoolName": "University of Pennsylvania"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": {
+      "url": "https://media.licdn.com/dms/image/v2/C4E16AQHEYgVXP2r1eA/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1516892364190?e=1776902400&v=beta&t=emjCFiC1DCZBJteDRA_1IKRMCGd912F0CB3kETHnKYg",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4E16AQHEYgVXP2r1eA/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1516892364190?e=1776902400&v=beta&t=emjCFiC1DCZBJteDRA_1IKRMCGd912F0CB3kETHnKYg",
+          "width": 1280,
+          "height": 320,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4E16AQHEYgVXP2r1eA/profile-displaybackgroundimage-shrink_200_800/profile-displaybackgroundimage-shrink_200_800/0/1516892366395?e=1776902400&v=beta&t=wclVwPieYxLEB5f_DDPYUOy5lmNpGmAoJYH0VwnYGTI",
+          "width": 800,
+          "height": 200,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Thinking Machines",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "1 yr 4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2025,
+          "text": "Jan 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Character.AI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/89486558/",
+        "companyId": "89486558",
+        "duration": "1 yr 10 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2023,
+          "text": "May 2023"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2025,
+          "text": "Feb 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGNjbHSXwgRxA/company-logo_400_400/B56ZkQoTyrG0AY-/0/1756920626627/character_ai_logo?e=1776902400&v=beta&t=iIjQFZ2p-mxKhZ5rdC-PmhG_N1FxyZZ-zhCc61gsMt4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGNjbHSXwgRxA/company-logo_400_400/B56ZkQoTyrG0AY-/0/1756920626627/character_ai_logo?e=1776902400&v=beta&t=iIjQFZ2p-mxKhZ5rdC-PmhG_N1FxyZZ-zhCc61gsMt4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGNjbHSXwgRxA/company-logo_200_200/B56ZkQoTyrG0AI-/0/1756920626627/character_ai_logo?e=1776902400&v=beta&t=ktdgZyhXyFclt7dry6ukj1GvX5WbOFbqWa9ONRs2dlE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGNjbHSXwgRxA/company-logo_100_100/B56ZkQoTyrG0AQ-/0/1756920626627/character_ai_logo?e=1776902400&v=beta&t=S7cBW5d-I9ubNwlka8z5Abge45lXx9yYBgRdE6pgd0M",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior Machine Learning Engineer",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Twitter",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/96622/",
+        "companyId": "96622",
+        "duration": "10 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "33f353a820cfddb3fd0030d5667d3d01f481bb64",
+        "startDate": {
+          "month": "Aug",
+          "year": 2022,
+          "text": "Aug 2022"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2023,
+          "text": "May 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQEJZABhJ-eE0g/company-logo_400_400/company-logo_400_400/0/1690242317195/twitter_logo?e=1776902400&v=beta&t=v1UiJouIeHZOwxTZcNZBqVwnhDB8_OXyoGWyqdW3DLQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEJZABhJ-eE0g/company-logo_400_400/company-logo_400_400/0/1690242317195/twitter_logo?e=1776902400&v=beta&t=v1UiJouIeHZOwxTZcNZBqVwnhDB8_OXyoGWyqdW3DLQ",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEJZABhJ-eE0g/company-logo_200_200/company-logo_200_200/0/1690242317195/twitter_logo?e=1776902400&v=beta&t=21hE24egqGYy3F-4IPD7RfkIhjO-WBeDsOAAaL72H5w",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEJZABhJ-eE0g/company-logo_100_100/company-logo_100_100/0/1690242317195/twitter_logo?e=1776902400&v=beta&t=4siCHaqQwjJ3_CILzf6sxKVHLUizNvZRdaC1XT2Egrs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Machine Learning Engineer",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Twitter",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/96622/",
+        "companyId": "96622",
+        "duration": "6 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "33f353a820cfddb3fd0030d5667d3d01f481bb64",
+        "startDate": {
+          "month": "Mar",
+          "year": 2022,
+          "text": "Mar 2022"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2022,
+          "text": "Aug 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQEJZABhJ-eE0g/company-logo_400_400/company-logo_400_400/0/1690242317195/twitter_logo?e=1776902400&v=beta&t=v1UiJouIeHZOwxTZcNZBqVwnhDB8_OXyoGWyqdW3DLQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEJZABhJ-eE0g/company-logo_400_400/company-logo_400_400/0/1690242317195/twitter_logo?e=1776902400&v=beta&t=v1UiJouIeHZOwxTZcNZBqVwnhDB8_OXyoGWyqdW3DLQ",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEJZABhJ-eE0g/company-logo_200_200/company-logo_200_200/0/1690242317195/twitter_logo?e=1776902400&v=beta&t=21hE24egqGYy3F-4IPD7RfkIhjO-WBeDsOAAaL72H5w",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEJZABhJ-eE0g/company-logo_100_100/company-logo_100_100/0/1690242317195/twitter_logo?e=1776902400&v=beta&t=4siCHaqQwjJ3_CILzf6sxKVHLUizNvZRdaC1XT2Egrs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Machine Learning Engineer",
+        "location": "New York, New York, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Bowery Farming",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/11039768/",
+        "companyId": "11039768",
+        "duration": "1 yr 10 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2020,
+          "text": "Jun 2020"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2022,
+          "text": "Mar 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFoZibgGxAe-w/company-logo_400_400/company-logo_400_400/0/1678107857142/bowery_farming_logo?e=1776902400&v=beta&t=9ZgdNOiCce_goxbEFK7obNwpU5AWFpM81yw7Z2yqwUg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFoZibgGxAe-w/company-logo_400_400/company-logo_400_400/0/1678107857142/bowery_farming_logo?e=1776902400&v=beta&t=9ZgdNOiCce_goxbEFK7obNwpU5AWFpM81yw7Z2yqwUg",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFoZibgGxAe-w/company-logo_200_200/company-logo_200_200/0/1678107857141/bowery_farming_logo?e=1776902400&v=beta&t=ZLSBFN7ReX1EDv1jeH-fZGbuJFSIQWtzBNDqIBV2rWc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFoZibgGxAe-w/company-logo_100_100/company-logo_100_100/0/1678107857142/bowery_farming_logo?e=1776902400&v=beta&t=C3N4Sck45OPgffrP-pUqU_hlqQSnXHAhjeutPlE4jcs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Machine Learning Engineer ",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "RedRoute",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10627926/",
+        "companyId": "10627926",
+        "duration": "1 yr 2 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2019,
+          "text": "May 2019"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2020,
+          "text": "Jun 2020"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQFukaxYo548xg/company-logo_400_400/B56ZtRivaQHgAY-/0/1766599620811/flipcx_logo?e=1776902400&v=beta&t=X_Khz3Kr-KQGSo56UTxrhj6IU3uNsEn4AA8lfaToszA",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFukaxYo548xg/company-logo_400_400/B56ZtRivaQHgAY-/0/1766599620811/flipcx_logo?e=1776902400&v=beta&t=X_Khz3Kr-KQGSo56UTxrhj6IU3uNsEn4AA8lfaToszA",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFukaxYo548xg/company-logo_200_200/B56ZtRivaQHgAI-/0/1766599620811/flipcx_logo?e=1776902400&v=beta&t=WEU_0Hbw_opP9iJAOJ1N5yxiN5iqIRBO0Fp9pkF_q9M",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFukaxYo548xg/company-logo_100_100/B56ZtRivaQHgAQ-/0/1766599620811/flipcx_logo?e=1776902400&v=beta&t=Ndr1kp1shRnwcCWTCBAK-4RJa3w1jXsJDrWw_bGUuuU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Head of Data",
+        "location": "New York, New York",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Datalogue",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Datalogue",
+        "duration": "10 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "6c5bdacb242baa146b026ebb7e687e40b349ca7f",
+        "startDate": {
+          "month": "Jul",
+          "year": 2018,
+          "text": "Jul 2018"
+        },
+        "endDate": {
+          "month": "Apr",
+          "year": 2019,
+          "text": "Apr 2019"
+        }
+      },
+      {
+        "position": "Machine Learning Engineer",
+        "location": "New York, NY",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Datalogue",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Datalogue",
+        "duration": "6 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "6c5bdacb242baa146b026ebb7e687e40b349ca7f",
+        "startDate": {
+          "month": "Feb",
+          "year": 2018,
+          "text": "Feb 2018"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2018,
+          "text": "Jul 2018"
+        }
+      },
+      {
+        "position": "Product Manager",
+        "location": "Philadelphia, PA",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Enclave",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/18214960/",
+        "companyId": "18214960",
+        "duration": "3 yrs 7 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Aug",
+          "year": 2014,
+          "text": "Aug 2014"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2018,
+          "text": "Feb 2018"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGGvhe3lnQRIQ/company-logo_400_400/company-logo_400_400/0/1631350226976?e=1776902400&v=beta&t=1hzc5aL0b2GRc8K_3VG6dEQW8ISt6qBsj_BUpaJ5fUg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGGvhe3lnQRIQ/company-logo_400_400/company-logo_400_400/0/1631350226976?e=1776902400&v=beta&t=1hzc5aL0b2GRc8K_3VG6dEQW8ISt6qBsj_BUpaJ5fUg",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGGvhe3lnQRIQ/company-logo_200_200/company-logo_200_200/0/1631350226975?e=1776902400&v=beta&t=mCG3AcOg6x-cGLC-usNrdLS1rbv3EWPfgbsu50uwOdY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGGvhe3lnQRIQ/company-logo_100_100/company-logo_100_100/0/1631350226976?e=1776902400&v=beta&t=fD-K4xQewVrjbZGPYDNBAgS5_noUQHDJGiX-3WHHzKY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Intern",
+        "location": "Fremont, CA",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Tesla",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/15564/",
+        "companyId": "15564",
+        "duration": "8 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2016,
+          "text": "Mar 2016"
+        },
+        "endDate": {
+          "month": "Oct",
+          "year": 2016,
+          "text": "Oct 2016"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQHUcu98SZ2TVw/company-logo_400_400/company-logo_400_400/0/1630576446368/tesla_motors_logo?e=1776902400&v=beta&t=o2aM3BOsXGOokcr2lHziQZDhypcwzCrU9j8OGYFtoDs",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQHUcu98SZ2TVw/company-logo_400_400/company-logo_400_400/0/1630576446368/tesla_motors_logo?e=1776902400&v=beta&t=o2aM3BOsXGOokcr2lHziQZDhypcwzCrU9j8OGYFtoDs",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQHUcu98SZ2TVw/company-logo_200_200/company-logo_200_200/0/1630576446368/tesla_motors_logo?e=1776902400&v=beta&t=7K7LtVEoK0miVi0ZDKPCYYp3dth9PBQRzFxL4X0O8G0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQHUcu98SZ2TVw/company-logo_100_100/company-logo_100_100/0/1630576446368/tesla_motors_logo?e=1776902400&v=beta&t=lXA7Rm2TXGjBWkaDmYS5yFO_Q4MIGOW8aOaSRqLd5WA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Writer",
+        "location": "Greater Philadelphia Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "The Daily Pennsylvanian",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/41289/",
+        "companyId": "41289",
+        "duration": "1 yr 1 mo",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Aug",
+          "year": 2013,
+          "text": "Aug 2013"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2014,
+          "text": "Aug 2014"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHUHNgAm5BcBA/company-logo_400_400/B4EZmg38WEKwAc-/0/1759340644063/the_daily_pennsylvanian_logo?e=1776902400&v=beta&t=q2gpN-9h1z-k143xRslMZqBWjueptKKocSJIHwwCjeY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHUHNgAm5BcBA/company-logo_400_400/B4EZmg38WEKwAc-/0/1759340644063/the_daily_pennsylvanian_logo?e=1776902400&v=beta&t=q2gpN-9h1z-k143xRslMZqBWjueptKKocSJIHwwCjeY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHUHNgAm5BcBA/company-logo_200_200/B4EZmg38WEKwAM-/0/1759340644063/the_daily_pennsylvanian_logo?e=1776902400&v=beta&t=nWjcIQR7X5K17Y681BRITkKRNKW2Z3_uJwc3Eh3dTbo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHUHNgAm5BcBA/company-logo_100_100/B4EZmg38WEKwAU-/0/1759340644063/the_daily_pennsylvanian_logo?e=1776902400&v=beta&t=XgM7RM_NnFgxQFURlJalERLK54SS9cpTyFvOFDrDgEI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Intern",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Lawrence Berkeley National Laboratory",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/164691/",
+        "companyId": "164691",
+        "duration": "3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2012,
+          "text": "Jun 2012"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2012,
+          "text": "Aug 2012"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFfc1NOEp9DgA/company-logo_400_400/company-logo_400_400/0/1640018826417/lawrence_berkeley_national_laboratory_logo?e=1776902400&v=beta&t=isbNIk-1kEhZGB4mKljUL9NYItEPRU1sejPvGpsx5vE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFfc1NOEp9DgA/company-logo_400_400/company-logo_400_400/0/1640018826417/lawrence_berkeley_national_laboratory_logo?e=1776902400&v=beta&t=isbNIk-1kEhZGB4mKljUL9NYItEPRU1sejPvGpsx5vE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFfc1NOEp9DgA/company-logo_200_200/company-logo_200_200/0/1640018826417/lawrence_berkeley_national_laboratory_logo?e=1776902400&v=beta&t=2-bSDJvh1xQc9BGpwecqtRt0DZxNfBoLhB7vzyO7t90",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFfc1NOEp9DgA/company-logo_100_100/company-logo_100_100/0/1640018826417/lawrence_berkeley_national_laboratory_logo?e=1776902400&v=beta&t=XWCd06G7qJQqUbFr9rlcDMEjSRdIKOoYYamvcF2Xnko",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "University of Pennsylvania",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3165/",
+        "schoolId": "3165",
+        "degree": "Bachelor of Applied Science (BASc)",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "description": "Minor in English",
+        "startDate": {
+          "year": 2013,
+          "text": "2013"
+        },
+        "endDate": {
+          "year": 2017,
+          "text": "2017"
+        },
+        "period": "2013 - 2017",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFJvX-Ed9d2gA/company-logo_400_400/B4EZxITZrAGwAY-/0/1770739574173/university_of_pennsylvania_logo?e=1776902400&v=beta&t=NqApUTsFuJ55rlTdjX27Ne_VczdX5akkwt7i8ufO8wM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFJvX-Ed9d2gA/company-logo_400_400/B4EZxITZrAGwAY-/0/1770739574173/university_of_pennsylvania_logo?e=1776902400&v=beta&t=NqApUTsFuJ55rlTdjX27Ne_VczdX5akkwt7i8ufO8wM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFJvX-Ed9d2gA/company-logo_200_200/B4EZxITZrAGwAI-/0/1770739574173/university_of_pennsylvania_logo?e=1776902400&v=beta&t=cg3-mPp1m-LJhlqJ0b_m8O0x6IBh1SgOmBTdRI_1Eew",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFJvX-Ed9d2gA/company-logo_100_100/B4EZxITZrAGwAQ-/0/1770739574173/university_of_pennsylvania_logo?e=1776902400&v=beta&t=1q0sGBWa1tFpUxWwOGq0XSkwJW96PO4xDVsuPChtplw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Northgate High School",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/5749831/",
+        "schoolId": "5749831",
+        "degree": null,
+        "fieldOfStudy": null,
+        "skills": [],
+        "insights": "Activities and societies: Jazz Band, Improv Team, Competitive Scrabble",
+        "startDate": {
+          "year": 2009,
+          "text": "2009"
+        },
+        "endDate": {
+          "year": 2013,
+          "text": "2013"
+        },
+        "period": "2009 - 2013",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQED6djHxu2Z4g/company-logo_400_400/company-logo_400_400/0/1630661100618/northgate_high_school_logo?e=1776902400&v=beta&t=rW9QvG65odpDpsO-hsgSkI0uFVd_7UHU9odYUssP6Uo",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQED6djHxu2Z4g/company-logo_400_400/company-logo_400_400/0/1630661100618/northgate_high_school_logo?e=1776902400&v=beta&t=rW9QvG65odpDpsO-hsgSkI0uFVd_7UHU9odYUssP6Uo",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQED6djHxu2Z4g/company-logo_200_200/company-logo_200_200/0/1630661100617/northgate_high_school_logo?e=1776902400&v=beta&t=xNfLV-CJeTPRJ1XKulba4qYXMBuZN4QCyVlynGdT7g8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQED6djHxu2Z4g/company-logo_100_100/company-logo_100_100/0/1630661100618/northgate_high_school_logo?e=1776902400&v=beta&t=n_Z0stcesEotVTIWlGktcbxhEvAe_QqsqeGHnydrdrM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [
+      {
+        "title": "Game of Votes",
+        "description": "We believe the 2016 presidential election has reached a Game of Thrones level of absurdity. So, we created Game of Votes, a chrome extension that modifies web pages by substituting names, images, quotes, and keywords related to the election to Game of Thrones references.",
+        "duration": "Sep 2015 - Present",
+        "startDate": {
+          "month": "Sep",
+          "year": 2015,
+          "text": "Sep 2015"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "associatedWith": "Associated with University of Pennsylvania",
+        "associatedWithLink": "https://www.linkedin.com/company/3165/",
+        "contributors": [
+          {
+            "linkedinUrl": "https://www.linkedin.com/in/ACoAABFxwCoBJYBcCZw2qaiRJZrTz-wwk0TUOko"
+          },
+          {
+            "linkedinUrl": "https://www.linkedin.com/in/ACoAAAr70bgB-2hvDb19TUXHEGJ4NU_eOO9bPo4"
+          },
+          {
+            "linkedinUrl": "https://www.linkedin.com/in/ACoAABEmYXYB5f-3ZmFG8dI-n9XAlqySBqO-2PA"
+          }
+        ],
+        "link": "http://bit.ly/GameOfVotesExtension"
+      },
+      {
+        "title": "PreTweet",
+        "description": "PreTweet is a web application that uses crowdsourcing to determine how audiences will respond to a potential tweet. We realized that companies and celebrities frequently publish tweets that do not resonate with their fans for a number of reasons. In the worst cases, these tweets can be very costly for the user. For this reason, we saw a business opportunity to screen the tweets before they are ever released to the public. The application was written in Python and uses the CrowdFlower API to poll users across the world to find out how appropriate, humorous, and grammatically correct a specific tweet is.",
+        "duration": "Oct 2014 - Present",
+        "startDate": {
+          "month": "Oct",
+          "year": 2014,
+          "text": "Oct 2014"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "associatedWith": "Associated with University of Pennsylvania",
+        "associatedWithLink": "https://www.linkedin.com/company/3165/",
+        "contributors": [
+          {
+            "linkedinUrl": "https://www.linkedin.com/in/ACoAABFxwCoBJYBcCZw2qaiRJZrTz-wwk0TUOko"
+          },
+          {
+            "linkedinUrl": "https://www.linkedin.com/in/ACoAABEmYXYB5f-3ZmFG8dI-n9XAlqySBqO-2PA"
+          },
+          {
+            "linkedinUrl": "https://www.linkedin.com/in/ACoAAAqaSKMBDUBRC3TkcxC-LcG33b06eD4wGkU"
+          }
+        ],
+        "link": "http://bit.ly/PreTweet"
+      }
+    ],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Guitar",
+        "endorsements": "15 endorsements"
+      },
+      {
+        "name": "Networking",
+        "endorsements": "12 endorsements"
+      },
+      {
+        "name": "CAD",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "OCaml",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Autodesk Software",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Social Media",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "Data Analysis",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Event Planning",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Research",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "PowerPoint",
+        "endorsements": "20 endorsements"
+      },
+      {
+        "name": "Public Speaking",
+        "endorsements": "17 endorsements"
+      },
+      {
+        "name": "Java",
+        "endorsements": "10 endorsements"
+      },
+      {
+        "name": "HTML",
+        "endorsements": "11 endorsements"
+      },
+      {
+        "name": "C",
+        "endorsements": "8 endorsements"
+      },
+      {
+        "name": "Python",
+        "endorsements": "8 endorsements"
+      },
+      {
+        "name": "AutoCAD",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Ruby",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Ruby on Rails",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Microsoft Office",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "Microsoft Excel",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Teamwork",
+        "endorsements": "7 endorsements"
+      },
+      {
+        "name": "Management",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Leadership",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "Keras"
+      },
+      {
+        "name": "Pandas (Software)",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Scala"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [
+      {
+        "title": "CMEA Command Performance  |  2010, 2011, 2012, 2013",
+        "description": "CMEA hosts an annual classical music competition.  Command is the highest possible award that Noah won playing classical guitar. ",
+        "associatedWith": null,
+        "associatedWithLink": null
+      },
+      {
+        "title": "Chevron Design Challenge Winner",
+        "description": "Project Lead The Way (PLTW) is a not-for-profit organization partnering with schools, organizations in the private sectors, and higher education institutions to increase the number and quality of engineers graduating from our educational system.  They host a design challenge that included over one hundred teams.  ",
+        "associatedWith": "Associated with Northgate High School",
+        "associatedWithLink": "https://www.linkedin.com/company/5749831/"
+      },
+      {
+        "title": "National Merit Commendation",
+        "issuedBy": "NMSP",
+        "description": "Students receive Letters of Commendation in recognition of their outstanding academic promise. Commended Students are named on the basis of a nationally applied Selection Index score that may vary from year to year and is typically below the level required for participants to be named Semifinalists in their respective states.",
+        "associatedWith": "Associated with Northgate High School",
+        "associatedWithLink": "https://www.linkedin.com/company/5749831/"
+      },
+      {
+        "title": "Philanthropy Chair",
+        "issuedBy": "Phi Gamma Delta",
+        "associatedWith": null,
+        "associatedWithLink": null
+      }
+    ],
+    "languages": [],
+    "causes": [
+      "Arts and Culture",
+      "Children",
+      "Economic Empowerment",
+      "Education",
+      "Environment",
+      "Health",
+      "Human Rights",
+      "Science and Technology"
+    ],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAABEmYXYB5f-3ZmFG8dI-n9XAlqySBqO-2PA",
+        "firstName": "Luke",
+        "lastName": "Carlson",
+        "publicIdentifier": "jlukecarlson",
+        "linkedinUrl": "https://www.linkedin.com/in/jlukecarlson"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABgwxtcBfqsJJUHPwsSPuBE4K9oKyRqUp5o",
+        "firstName": "Lia",
+        "lastName": "Guy",
+        "publicIdentifier": "aureliaguy",
+        "linkedinUrl": "https://www.linkedin.com/in/aureliaguy"
+      },
+      {
+        "id": "ACoAAACQBzQB5nk5kOpFWQRtK4pv3RaL5q2G-pA",
+        "firstName": "Jonathan",
+        "lastName": "Lachman",
+        "publicIdentifier": "jonathan-lachman-4981b23",
+        "linkedinUrl": "https://www.linkedin.com/in/jonathan-lachman-4981b23"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAAAJzsfoBp0MxssQYMgmy0ZNO2U3sA58ugwc",
+        "firstName": "Joshua",
+        "lastName": "Gross",
+        "publicIdentifier": "joshgross",
+        "linkedinUrl": "https://www.linkedin.com/in/joshgross"
+      },
+      {
+        "id": "ACoAABYs4-IB5mHx5eVfOHzu1e8xlO3q_kb38IM",
+        "firstName": "Brydon",
+        "lastName": "Eastman",
+        "publicIdentifier": "brydon-eastman-396719a4",
+        "linkedinUrl": "https://www.linkedin.com/in/brydon-eastman-396719a4"
+      },
+      {
+        "id": "ACoAAACo1tYBGy9sT2OWZuEULOMe4K_b2Y22-F8",
+        "firstName": "Alex",
+        "lastName": "Gartrell",
+        "publicIdentifier": "alexgartrell",
+        "linkedinUrl": "https://www.linkedin.com/in/alexgartrell"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAABA0sF8BJqwmfoms3veu9TE72tj8JMUQEFA",
+        "firstName": "Sam",
+        "lastName": "Shleifer",
+        "publicIdentifier": "sam-shleifer-a5307a77",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-shleifer-a5307a77"
+      },
+      {
+        "id": "ACoAABhKWCYBiuV3Zv9Hbt8t0j-xMRqxawBcSgw",
+        "firstName": "Kurt",
+        "lastName": "Shuster",
+        "publicIdentifier": "kurtshuster1",
+        "linkedinUrl": "https://www.linkedin.com/in/kurtshuster1"
+      },
+      {
+        "id": "ACoAAAl87CYBWKLLyGNTbomy6oqIPv-5n34CXIY",
+        "firstName": "Andrew",
+        "lastName": "Tulloch",
+        "publicIdentifier": "andrew-tulloch-17238745",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-tulloch-17238745"
+      },
+      {
+        "id": "ACoAABV61Q0BF3ER-196Zc9GK5TviMrbbIlVGqg",
+        "firstName": "Samuel",
+        "lastName": "Schoenholz",
+        "publicIdentifier": "samuel-schoenholz-379830a0",
+        "linkedinUrl": "https://www.linkedin.com/in/samuel-schoenholz-379830a0"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAABPg53YBHdOvmp7pU72eDhcho-7cnwyxk1o",
+        "firstName": "Pia",
+        "lastName": "Santos",
+        "publicIdentifier": "piafsantos",
+        "linkedinUrl": "https://www.linkedin.com/in/piafsantos"
+      },
+      {
+        "id": "ACoAAAf7ZWcB3BGw5pTmcsFw0vXm4A_CQn6EkFo",
+        "firstName": "Christian",
+        "lastName": "G.",
+        "publicIdentifier": "christianjgibson",
+        "linkedinUrl": "https://www.linkedin.com/in/christianjgibson"
+      },
+      {
+        "id": "ACoAAAO-j_IBXcvIzhZtQ7QNkky6tlnQTcFl9qI",
+        "firstName": "Myle",
+        "lastName": "Ott",
+        "publicIdentifier": "myleott",
+        "linkedinUrl": "https://www.linkedin.com/in/myleott"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAACHkUNgBogKk7Q3xekxMdWLMSikZY2zgQsU",
+        "firstName": "Stephen",
+        "lastName": "Roller",
+        "publicIdentifier": "stephen-roller-38851513a",
+        "linkedinUrl": "https://www.linkedin.com/in/stephen-roller-38851513a"
+      },
+      {
+        "id": "ACoAAGEBSDcBYJ98lfj8tIL5-RW35-4mtJHJCD0",
+        "firstName": "Qundi",
+        "lastName": "Limited",
+        "position": "--",
+        "publicIdentifier": "qundi-limited-273055395",
+        "linkedinUrl": "https://www.linkedin.com/in/qundi-limited-273055395"
+      },
+      {
+        "id": "ACoAAGSp_FQB8OoeFTa_w0vdRZ68GHImKYAiNvI",
+        "firstName": "EDINA",
+        "lastName": "ERNEST",
+        "position": "Personal Secretary at SIMIYU RURAL WATER SUPPLY AND SANITATION AGENCY",
+        "publicIdentifier": "edina-ernest-69871a3b1",
+        "linkedinUrl": "https://www.linkedin.com/in/edina-ernest-69871a3b1"
+      },
+      {
+        "id": "ACoAAGHZp4ABpzbs-2Yhj17UZCxz6_m5LYq9E9U",
+        "firstName": "Zhila",
+        "lastName": "Azimi",
+        "position": "Nursing |Vaccination| Nutrition|",
+        "publicIdentifier": "zhila-azimi-400953399",
+        "linkedinUrl": "https://www.linkedin.com/in/zhila-azimi-400953399"
+      },
+      {
+        "id": "ACoAAGTU_WYBzaqPta98H6VrctyhOeJzs9UK5OI",
+        "firstName": "Agnes kingwa",
+        "lastName": "undefined",
+        "position": "Student at University of Pennsylvania",
+        "publicIdentifier": "agnes-kingwa-undefined-65a6593b2",
+        "linkedinUrl": "https://www.linkedin.com/in/agnes-kingwa-undefined-65a6593b2"
+      },
+      {
+        "id": "ACoAAGOyURcBjvCxlpndmm66ipUmtwx7WfzEPKo",
+        "firstName": "Alvin",
+        "lastName": "Lloris",
+        "position": "Unemployed at Lakeside Software",
+        "publicIdentifier": "alvin-lloris-5b31b13a8",
+        "linkedinUrl": "https://www.linkedin.com/in/alvin-lloris-5b31b13a8"
+      },
+      {
+        "id": "ACoAAGVzR5UBaKyOiWq03ZTI9U-liXnCdSIa9lE",
+        "firstName": "Emmanuel",
+        "lastName": "Kibe",
+        "position": "Student at University of Pennsylvania",
+        "publicIdentifier": "emmanuel-kibe-9b10203b6",
+        "linkedinUrl": "https://www.linkedin.com/in/emmanuel-kibe-9b10203b6"
+      },
+      {
+        "id": "ACoAAGXpCsMBexYbEHXIPIJwXApREszsPKUxm_Y",
+        "firstName": "Jocelyn ",
+        "lastName": "Ellis",
+        "position": "Applied Research Data Intern at PeoplePerHour",
+        "publicIdentifier": "jocelyn-ellis-0ab7233b8",
+        "linkedinUrl": "https://www.linkedin.com/in/jocelyn-ellis-0ab7233b8"
+      },
+      {
+        "id": "ACoAAGXyxHcBbaMDzeoUSGk0gWu7ggOSrjHmGYE",
+        "firstName": "Kamrul",
+        "lastName": "Islam",
+        "position": "Student at University of Pennsylvania",
+        "publicIdentifier": "kamrul-islam-b0798b3b8",
+        "linkedinUrl": "https://www.linkedin.com/in/kamrul-islam-b0798b3b8"
+      },
+      {
+        "id": "ACoAAGXLiccBr1181uxL5yqWwPvwjBx0rNhP2IA",
+        "firstName": "K",
+        "lastName": "Lee",
+        "position": "Student at University of Pennsylvania",
+        "publicIdentifier": "k-lee-147b503b7",
+        "linkedinUrl": "https://www.linkedin.com/in/k-lee-147b503b7"
+      },
+      {
+        "id": "ACoAAGPLNEQBTP3-Pzh3kP4NbTDRdU-V2tFJjuc",
+        "firstName": "Peter",
+        "lastName": "Leiyan",
+        "position": "Student at University of Pennsylvania",
+        "publicIdentifier": "peter-leiyan-4588593a8",
+        "linkedinUrl": "https://www.linkedin.com/in/peter-leiyan-4588593a8"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAABGzJXcBvHGfUQeysDeBvSjVlsSF94lTDek"
+    }
+  }
+}

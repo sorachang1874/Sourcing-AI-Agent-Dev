@@ -1,0 +1,912 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAACr4cWgBGeY9VW-NORNIdmN8Lx4fEahVSX0",
+    "profile_url": "https://www.linkedin.com/in/ACwAACr4cWgBGeY9VW-NORNIdmN8Lx4fEahVSX0"
+  },
+  "item": {
+    "id": "ACoAACr4cWgBKbXpi4wxKJ9yET48_MNGQ2kgVtE",
+    "publicIdentifier": "liliang-ren-ba0529181",
+    "linkedinUrl": "https://www.linkedin.com/in/liliang-ren-ba0529181",
+    "firstName": "Liliang ",
+    "lastName": "Ren",
+    "emails": [
+      {
+        "email": "liliang.ren@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      },
+      {
+        "url": "https://news.microsoft.com/",
+        "domain": "microsoft.com"
+      }
+    ],
+    "headline": "Member of Technical Staff at Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Urbana, Illinois, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "Urbana, IL, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "Illinois",
+        "city": "Urbana"
+      }
+    },
+    "objectUrn": "720925032",
+    "registeredAt": "2019-03-08T21:06:39.196Z",
+    "topSkills": null,
+    "connectionsCount": 983,
+    "followerCount": 2176,
+    "verified": true,
+    "about": "Please checkout my homepage (https://renll.github.io/) for more information.",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 3,
+            "year": 2026,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "18321",
+        "companyId": "2650",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2650/",
+        "schoolName": "University of Illinois Urbana-Champaign"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4D03AQEnnCdOUvIQKQ/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1697072464930?e=1776902400&v=beta&t=peHUJBHTOsJDyJFL7HJEOeUo5wjuimb5gdxYHBcw59M",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4D03AQEnnCdOUvIQKQ/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1697072464930?e=1776902400&v=beta&t=peHUJBHTOsJDyJFL7HJEOeUo5wjuimb5gdxYHBcw59M",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4D03AQEnnCdOUvIQKQ/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1697072464930?e=1776902400&v=beta&t=92uDV3mzT8NZMX29dVAmjrw1ygMeipv1Q4jB5oJg8f8",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4D03AQEnnCdOUvIQKQ/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1697072464930?e=1776902400&v=beta&t=sHRWN7vIElws5Z7w3fHGfglFPgBKkf0iBKrei1GCB7M",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4D03AQEnnCdOUvIQKQ/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1697072464930?e=1776902400&v=beta&t=rNQ-lGZYyRb99kFL5yi-bIf5S4eDNm615XNM9ePB-BI",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D4D03AQEnnCdOUvIQKQ/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1697072464930?e=1776902400&v=beta&t=peHUJBHTOsJDyJFL7HJEOeUo5wjuimb5gdxYHBcw59M",
+    "profileLocales": [
+      {
+        "country": "CN",
+        "language": "zh"
+      }
+    ],
+    "primaryLocale": {
+      "country": "CN",
+      "language": "zh"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Member of Technical Staff at Thinking Machines Lab",
+        "locale": "zh_CN"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "旧金山湾区",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "2 mos",
+        "description": "Pretraining",
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2026,
+          "text": "Mar 2026"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Member of Technical Staff",
+        "location": "雷德蒙德, WA",
+        "employmentType": "Full-time",
+        "workplaceType": "Hybrid",
+        "companyName": "Microsoft",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1035/",
+        "companyId": "1035",
+        "duration": "7 mos",
+        "description": "Microsoft AI Superintelligence Team. Pre-training OpenAI models for code.",
+        "skills": null,
+        "experienceGroupId": "7256d71cc3b1759a1959aae34c0d3576d762d61d",
+        "startDate": {
+          "month": "Oct",
+          "year": 2025,
+          "text": "Oct 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_400_400/B56ZYQ0mrGGoAc-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=47BifJmZk2QcSo7UM_a7lFIk5vBFq49cOHVWx8Pu2dE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_400_400/B56ZYQ0mrGGoAc-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=47BifJmZk2QcSo7UM_a7lFIk5vBFq49cOHVWx8Pu2dE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_200_200/B56ZYQ0mrGGoAM-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=z3mTaKdLV9rmnHGq4MakEXZj6vY7Y9TWAjx0_U7y0X0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_100_100/B56ZYQ0mrGGoAU-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=tKqX5UTArC3FajWCGY-yk-mpPeeR1obx-D3VehmNycQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior Researcher",
+        "location": "Redmond, Washington, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Microsoft",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1035/",
+        "companyId": "1035",
+        "duration": "1 yr 5 mos",
+        "description": "Microsoft CoreAI. Pretraining, Hybrid Architectures, Sequence Models. Working with Yelong Shen and Weizhu Chen.",
+        "skills": null,
+        "experienceGroupId": "7256d71cc3b1759a1959aae34c0d3576d762d61d",
+        "startDate": {
+          "month": "Jun",
+          "year": 2024,
+          "text": "Jun 2024"
+        },
+        "endDate": {
+          "month": "Oct",
+          "year": 2025,
+          "text": "Oct 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_400_400/B56ZYQ0mrGGoAc-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=47BifJmZk2QcSo7UM_a7lFIk5vBFq49cOHVWx8Pu2dE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_400_400/B56ZYQ0mrGGoAc-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=47BifJmZk2QcSo7UM_a7lFIk5vBFq49cOHVWx8Pu2dE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_200_200/B56ZYQ0mrGGoAM-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=z3mTaKdLV9rmnHGq4MakEXZj6vY7Y9TWAjx0_U7y0X0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_100_100/B56ZYQ0mrGGoAU-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=tKqX5UTArC3FajWCGY-yk-mpPeeR1obx-D3VehmNycQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Intern",
+        "location": "Redmond, Washington, United States",
+        "employmentType": "Part-time",
+        "workplaceType": null,
+        "companyName": "Microsoft",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1035/",
+        "companyId": "1035",
+        "duration": "10 mos",
+        "description": "Microsoft Azure AI. Mentor: Yang Liu, Manager: Weizhu Chen.\nResearch on Efficient Long Context Modeling.",
+        "skills": null,
+        "experienceGroupId": "7256d71cc3b1759a1959aae34c0d3576d762d61d",
+        "startDate": {
+          "month": "Sep",
+          "year": 2023,
+          "text": "Sep 2023"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2024,
+          "text": "Jun 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_400_400/B56ZYQ0mrGGoAc-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=47BifJmZk2QcSo7UM_a7lFIk5vBFq49cOHVWx8Pu2dE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_400_400/B56ZYQ0mrGGoAc-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=47BifJmZk2QcSo7UM_a7lFIk5vBFq49cOHVWx8Pu2dE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_200_200/B56ZYQ0mrGGoAM-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=z3mTaKdLV9rmnHGq4MakEXZj6vY7Y9TWAjx0_U7y0X0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_100_100/B56ZYQ0mrGGoAU-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=tKqX5UTArC3FajWCGY-yk-mpPeeR1obx-D3VehmNycQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Applied Scientist Intern",
+        "location": "Seattle, Washington, United States",
+        "employmentType": "Internship",
+        "workplaceType": "On-site",
+        "companyName": "Amazon",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1586/",
+        "companyId": "1586",
+        "duration": "4 mos",
+        "description": "Confidential project on Large Language Model. Instruction Tuning.",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2023,
+          "text": "May 2023"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2023,
+          "text": "Aug 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGDLy4STCnHbg/company-logo_400_400/B56ZnZxDipI0AY-/0/1760295142304/amazon_logo?e=1776902400&v=beta&t=lYPAbzBmg2YQhgQFeMnV-wHyKGvMPrvdCpcjHf_aGWc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGDLy4STCnHbg/company-logo_400_400/B56ZnZxDipI0AY-/0/1760295142304/amazon_logo?e=1776902400&v=beta&t=lYPAbzBmg2YQhgQFeMnV-wHyKGvMPrvdCpcjHf_aGWc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGDLy4STCnHbg/company-logo_200_200/B56ZnZxDipI0AI-/0/1760295142304/amazon_logo?e=1776902400&v=beta&t=Pkt-34tlkuFgo_d6O--s7BFOke10xwNIu23VHSfAC1Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGDLy4STCnHbg/company-logo_100_100/B56ZnZxDipI0AQ-/0/1760295142304/amazon_logo?e=1776902400&v=beta&t=Glfc3A2Yqstx_u6NdGLKHNNMcZSYljXNIHa7f-Ob1fA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Intern",
+        "location": "Redmond, Washington, United States",
+        "employmentType": "Internship",
+        "workplaceType": null,
+        "companyName": "Microsoft",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1035/",
+        "companyId": "1035",
+        "duration": "5 mos",
+        "description": "Knowledge and Language Team, Cognitive Service Research Group. Mentor: Yang Liu. Manager: Chenguang Zhu.\nResearch on efficient long sequence modeling.",
+        "skills": null,
+        "startDate": {
+          "month": "Apr",
+          "year": 2022,
+          "text": "Apr 2022"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2022,
+          "text": "Aug 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_400_400/B56ZYQ0mrGGoAc-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=47BifJmZk2QcSo7UM_a7lFIk5vBFq49cOHVWx8Pu2dE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_400_400/B56ZYQ0mrGGoAc-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=47BifJmZk2QcSo7UM_a7lFIk5vBFq49cOHVWx8Pu2dE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_200_200/B56ZYQ0mrGGoAM-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=z3mTaKdLV9rmnHGq4MakEXZj6vY7Y9TWAjx0_U7y0X0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_100_100/B56ZYQ0mrGGoAU-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=tKqX5UTArC3FajWCGY-yk-mpPeeR1obx-D3VehmNycQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "University of Illinois Urbana-Champaign",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2650/",
+        "schoolId": "2650",
+        "degree": "PhD",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "startDate": {
+          "year": 2020,
+          "text": "2020"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2024,
+          "text": "Jun 2024"
+        },
+        "period": "2020 - Jun 2024",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGFFDl_Z9pIAA/company-logo_400_400/company-logo_400_400/0/1630611684443/university_of_illinois_at_urbana_champaign_logo?e=1776902400&v=beta&t=1--Z9zB14SnN_KSEEz3x-H2Uy7aJs5OXT38VWWEsQEo",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGFFDl_Z9pIAA/company-logo_400_400/company-logo_400_400/0/1630611684443/university_of_illinois_at_urbana_champaign_logo?e=1776902400&v=beta&t=1--Z9zB14SnN_KSEEz3x-H2Uy7aJs5OXT38VWWEsQEo",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGFFDl_Z9pIAA/company-logo_200_200/company-logo_200_200/0/1630611684443/university_of_illinois_at_urbana_champaign_logo?e=1776902400&v=beta&t=nFuRnwx0uMs09egU9-21TjWewArRDux06lp-r6wcprY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGFFDl_Z9pIAA/company-logo_100_100/company-logo_100_100/0/1630611684443/university_of_illinois_at_urbana_champaign_logo?e=1776902400&v=beta&t=YdPWblWwq_--WXVROnRQ5WEjcYM16NA0RvPcrTcOWgk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "UC San Diego",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3382/",
+        "schoolId": "3382",
+        "degree": "Master's degree",
+        "fieldOfStudy": "ECE",
+        "skills": [],
+        "startDate": {
+          "year": 2018,
+          "text": "2018"
+        },
+        "endDate": {
+          "year": 2020,
+          "text": "2020"
+        },
+        "period": "2018 - 2020",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHQYa-3EY_aaQ/company-logo_400_400/company-logo_400_400/0/1630633790917/university_of_california_at_san_diego_logo?e=1776902400&v=beta&t=zzWA-TuQfiXWHBhi1PPEXHdO5_RZARRUGUWuxz9vrDU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHQYa-3EY_aaQ/company-logo_400_400/company-logo_400_400/0/1630633790917/university_of_california_at_san_diego_logo?e=1776902400&v=beta&t=zzWA-TuQfiXWHBhi1PPEXHdO5_RZARRUGUWuxz9vrDU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHQYa-3EY_aaQ/company-logo_200_200/company-logo_200_200/0/1630633790917/university_of_california_at_san_diego_logo?e=1776902400&v=beta&t=tdjQQUwb1beHiMf8xczEGKXBBcIoW5CJ5L948yULvXY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHQYa-3EY_aaQ/company-logo_100_100/company-logo_100_100/0/1630633790917/university_of_california_at_san_diego_logo?e=1776902400&v=beta&t=PrWXY-mSMle4TuAhTdS-qm2T_ltzqM45VeIxYC0c5u0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Shanghai Jiao Tong University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/27413/",
+        "schoolId": "27413",
+        "degree": "Bachelor's degree",
+        "fieldOfStudy": "Electrical and Computer Engineering",
+        "skills": [],
+        "startDate": {
+          "month": "Sep",
+          "year": 2014,
+          "text": "Sep 2014"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2018,
+          "text": "Jul 2018"
+        },
+        "period": "Sep 2014 - Jul 2018",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFkNUM4pr0xcg/company-logo_400_400/company-logo_400_400/0/1631314417560?e=1776902400&v=beta&t=_9V7x73QmUeI3ljuiRcsifjAUZDbQNuOqoZkwuoQJko",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFkNUM4pr0xcg/company-logo_400_400/company-logo_400_400/0/1631314417560?e=1776902400&v=beta&t=_9V7x73QmUeI3ljuiRcsifjAUZDbQNuOqoZkwuoQJko",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFkNUM4pr0xcg/company-logo_200_200/company-logo_200_200/0/1631314417560?e=1776902400&v=beta&t=X5SOqffA_pEUEorPnJmluYlL9nNzyw11jrreiO1bmXU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFkNUM4pr0xcg/company-logo_100_100/company-logo_100_100/0/1631314417560?e=1776902400&v=beta&t=XyswkGMcyz0iGJ0WekHkes-aM8ohdDmFzYmf_hiXdvk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "UM-SJTU Joint Institute, Shanghai Jiao Tong University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/15130925/",
+        "schoolId": "15130925",
+        "degree": "Bachelor's degree",
+        "fieldOfStudy": "Electrical and Computer Engineering",
+        "skills": [],
+        "startDate": {
+          "year": 2014,
+          "text": "2014"
+        },
+        "endDate": {
+          "year": 2018,
+          "text": "2018"
+        },
+        "period": "2014 - 2018",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGtRlsu-GO1hQ/company-logo_400_400/B56ZvZW3LkIYAY-/0/1768878208376/um_sjtu_joint_institute_shanghai_jiao_tong_university_logo?e=1776902400&v=beta&t=pZq2vePvYgMm8EJ3o4KkgpdHE2hOSqHxpy9Ah_xX2PM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGtRlsu-GO1hQ/company-logo_400_400/B56ZvZW3LkIYAY-/0/1768878208376/um_sjtu_joint_institute_shanghai_jiao_tong_university_logo?e=1776902400&v=beta&t=pZq2vePvYgMm8EJ3o4KkgpdHE2hOSqHxpy9Ah_xX2PM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGtRlsu-GO1hQ/company-logo_200_200/B56ZvZW3LkIYAI-/0/1768878208376/um_sjtu_joint_institute_shanghai_jiao_tong_university_logo?e=1776902400&v=beta&t=Xr5cqGIg_zoRtQFjqVCgr1_OlUt1KQg2_Hol9r422Uc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGtRlsu-GO1hQ/company-logo_100_100/B56ZvZW3LkIYAQ-/0/1768878208376/um_sjtu_joint_institute_shanghai_jiao_tong_university_logo?e=1776902400&v=beta&t=T3vwuVhp-zpQHyapwSsApV95thplfwV6garcP-1mkgI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Ningbo Xiaoshi High School",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/35689052/",
+        "schoolId": "35689052",
+        "degree": "High School Diploma",
+        "fieldOfStudy": null,
+        "skills": [],
+        "startDate": {
+          "month": "Sep",
+          "year": 2011,
+          "text": "Sep 2011"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2014,
+          "text": "Jul 2014"
+        },
+        "period": "Sep 2011 - Jul 2014",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF25Ie9XDVEpw/company-logo_400_400/company-logo_400_400/0/1630574818029?e=1776902400&v=beta&t=LCje7N5cDFnHr5kFV0kOfIMdaYbiD0l1eYBo3TqEK34",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF25Ie9XDVEpw/company-logo_400_400/company-logo_400_400/0/1630574818029?e=1776902400&v=beta&t=LCje7N5cDFnHr5kFV0kOfIMdaYbiD0l1eYBo3TqEK34",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF25Ie9XDVEpw/company-logo_200_200/company-logo_200_200/0/1630574818029?e=1776902400&v=beta&t=4ORshsuRpN2M_IZmm-Vv9QpDnE-tbTkmumNr5cpClS4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF25Ie9XDVEpw/company-logo_100_100/company-logo_100_100/0/1630574818029?e=1776902400&v=beta&t=SZhW2z_LlwTVyIBJRfSms4M8k3tD4cd6W1HntjVT5T4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Python (Programming Language)"
+      },
+      {
+        "name": "English"
+      },
+      {
+        "name": "Problem Solving"
+      },
+      {
+        "name": "Leadership"
+      },
+      {
+        "name": "Analytical Skills"
+      },
+      {
+        "name": "Natural Language Processing (NLP)"
+      },
+      {
+        "name": "Language Modeling"
+      },
+      {
+        "name": "Knowledge Graphs"
+      },
+      {
+        "name": "Machine Learning"
+      },
+      {
+        "name": "Research"
+      }
+    ],
+    "publications": [
+      {
+        "title": "HySPA: Hybrid Span Generation for Scalable Text-to-Graph Extraction",
+        "publishedAt": "ACL 2021",
+        "description": null,
+        "link": "https://aclanthology.org/2021.findings-acl.356/"
+      },
+      {
+        "title": "Language Model Pretraining with Sparse Latent Typing",
+        "publishedAt": "EMNLP 2022",
+        "description": null,
+        "link": "https://arxiv.org/abs/2210.12582"
+      },
+      {
+        "title": "Scalable and Accurate Dialogue State Tracking via Hierarchical Sequence Generation",
+        "publishedAt": "EMNLP 2019",
+        "description": null,
+        "link": "https://aclanthology.org/D19-1196/"
+      },
+      {
+        "title": "Sparse Modular Activation for Efficient Sequence Modeling",
+        "publishedAt": "NeurIPS 2023",
+        "description": null,
+        "link": "https://arxiv.org/abs/2306.11197"
+      },
+      {
+        "title": "Towards universal dialogue state tracking",
+        "publishedAt": "EMNLP 2018",
+        "description": null,
+        "link": "https://aclanthology.org/D18-1299/"
+      }
+    ],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAEZnBtoBb1Us7ZKgHfOXAYT764pKcDQy848",
+        "firstName": "Songlin",
+        "lastName": "Yang",
+        "publicIdentifier": "songlin-yang-b8a69728b",
+        "linkedinUrl": "https://www.linkedin.com/in/songlin-yang-b8a69728b"
+      },
+      {
+        "id": "ACoAACWacuoBOPPwYQhara5tXp42iykuPEhRN2o",
+        "firstName": "Ray",
+        "lastName": "X.",
+        "publicIdentifier": "ruixupu",
+        "linkedinUrl": "https://www.linkedin.com/in/ruixupu"
+      },
+      {
+        "id": "ACoAABmsYasBhsFwXKca6Ooio5i6nRfTRvN4d2Y",
+        "firstName": "Liyuan",
+        "lastName": "Liu",
+        "publicIdentifier": "liyuanlucasliu",
+        "linkedinUrl": "https://www.linkedin.com/in/liyuanlucasliu"
+      },
+      {
+        "id": "ACoAAB_LJ5UBV3KwVUFkvob4p1tAIYQtcsaBqh8",
+        "firstName": "Amit",
+        "lastName": "Garg",
+        "publicIdentifier": "garg-amit",
+        "linkedinUrl": "https://www.linkedin.com/in/garg-amit"
+      },
+      {
+        "id": "ACoAAAeFJNwB_GnZl7QSL2426ukJbjRHXTrrAsI",
+        "firstName": "Lu",
+        "lastName": "Wang",
+        "publicIdentifier": "lu-wang-a5030436",
+        "linkedinUrl": "https://www.linkedin.com/in/lu-wang-a5030436"
+      },
+      {
+        "id": "ACoAAAxWCP0BsNhUB_QUAPacJnAC_enjnul2LTA",
+        "firstName": "Dávid",
+        "lastName": "Majerčák",
+        "publicIdentifier": "dmajercak",
+        "linkedinUrl": "https://www.linkedin.com/in/dmajercak"
+      },
+      {
+        "id": "ACoAABYpUcIBmJQhu4AvVusa1Rb6zFU_tzDEAVM",
+        "firstName": "Chen",
+        "lastName": "Liang",
+        "publicIdentifier": "chen-liang-a82625a4",
+        "linkedinUrl": "https://www.linkedin.com/in/chen-liang-a82625a4"
+      },
+      {
+        "id": "ACoAACKNVUMBztbhQ3RUYQ-Mg89xUJ39N-XJpM4",
+        "firstName": "Long",
+        "lastName": "Lian",
+        "publicIdentifier": "longlian",
+        "linkedinUrl": "https://www.linkedin.com/in/longlian"
+      },
+      {
+        "id": "ACoAAAD-hTABHsUcZMNYC-D_hAv_HSbY1IIDv3Y",
+        "firstName": "Opher",
+        "lastName": "Lieber",
+        "publicIdentifier": "opherlieber",
+        "linkedinUrl": "https://www.linkedin.com/in/opherlieber"
+      },
+      {
+        "id": "ACoAACHG180BXiyeZ2qJgoggx27e4iM3ajxvp18",
+        "firstName": "Andy",
+        "lastName": "Hwang",
+        "publicIdentifier": "andrewnhwang",
+        "linkedinUrl": "https://www.linkedin.com/in/andrewnhwang"
+      },
+      {
+        "id": "ACoAABDOkWkB8SccBmzIbNMS1JY-fK0mWsoTyI0",
+        "firstName": "Yu",
+        "lastName": "Pei",
+        "publicIdentifier": "yupei",
+        "linkedinUrl": "https://www.linkedin.com/in/yupei"
+      },
+      {
+        "id": "ACoAADCkfncB4P7VWZ-S1Ojv9-aHq_bFsA6LBQY",
+        "firstName": "Ziqiao",
+        "lastName": "Ma",
+        "publicIdentifier": "ziqiao-ma",
+        "linkedinUrl": "https://www.linkedin.com/in/ziqiao-ma"
+      },
+      {
+        "id": "ACoAABqwO_4BnBuU-jFRXmcXh6VCQAdO5u4JlIw",
+        "firstName": "Zhengyuan",
+        "lastName": "Yang",
+        "publicIdentifier": "zhengyuan-yang-992b52105",
+        "linkedinUrl": "https://www.linkedin.com/in/zhengyuan-yang-992b52105"
+      },
+      {
+        "id": "ACoAAC67vwABnI3x2bQ-xFJW4rjYE7DQhrgg3wM",
+        "firstName": "Arjun",
+        "lastName": "Nair",
+        "publicIdentifier": "arjunvnair",
+        "linkedinUrl": "https://www.linkedin.com/in/arjunvnair"
+      },
+      {
+        "id": "ACoAABndRmcBpm4Yye7FXowpjFeEUUMBs2FZM3g",
+        "firstName": "Dylan",
+        "lastName": "H.",
+        "publicIdentifier": "dphuang2",
+        "linkedinUrl": "https://www.linkedin.com/in/dphuang2"
+      },
+      {
+        "id": "ACoAACfT2TUB0wVKGwTdYTxMWr2cCAAgwGHl4bc",
+        "firstName": "Nick",
+        "lastName": "Mecklenburg",
+        "publicIdentifier": "nmck",
+        "linkedinUrl": "https://www.linkedin.com/in/nmck"
+      },
+      {
+        "id": "ACoAABMFzdQBSnO6cNeosB0mxpDr0FN2WwHLfZs",
+        "firstName": "Young Jin",
+        "lastName": "Kim",
+        "publicIdentifier": "ykim362",
+        "linkedinUrl": "https://www.linkedin.com/in/ykim362"
+      },
+      {
+        "id": "ACoAAB4enQAB-W6vGzxnG4_Sm357UmBBqADGEmg",
+        "firstName": "Weijian",
+        "lastName": "Xu",
+        "publicIdentifier": "xwjabc",
+        "linkedinUrl": "https://www.linkedin.com/in/xwjabc"
+      },
+      {
+        "id": "ACoAAA05sxABFu8Dsrp3m1hjuXxvydFeenWW9_I",
+        "firstName": "Yi",
+        "lastName": "Mao",
+        "publicIdentifier": "maoyi",
+        "linkedinUrl": "https://www.linkedin.com/in/maoyi"
+      },
+      {
+        "id": "ACoAAAW2gc4BhV-4ppBFx1RwiPAgcBkbUU7TJu0",
+        "firstName": "Xuemei (Mei)",
+        "lastName": "Gao",
+        "publicIdentifier": "xuemei-mei-gao-b2612228",
+        "linkedinUrl": "https://www.linkedin.com/in/xuemei-mei-gao-b2612228"
+      },
+      {
+        "id": "ACoAAF8a-tgBsWqvtTuM92mboyLWNKtBoUa9tIU",
+        "firstName": "Liyan",
+        "lastName": "Chen",
+        "position": "--",
+        "publicIdentifier": "liyan-chen-908445386",
+        "linkedinUrl": "https://www.linkedin.com/in/liyan-chen-908445386"
+      },
+      {
+        "id": "ACoAACaOARIBRO2EEH12QWQO29L__oI3N2K4u14",
+        "firstName": "Mingjie",
+        "lastName": "Sun",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "mingjie-sun-06a761160",
+        "linkedinUrl": "https://www.linkedin.com/in/mingjie-sun-06a761160"
+      },
+      {
+        "id": "ACoAAA6pVIcB_iFqE_N7wQhmisZ7W_7tGpS_VQ8",
+        "firstName": "Tessa",
+        "lastName": "Barton",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "theresacbarton",
+        "linkedinUrl": "https://www.linkedin.com/in/theresacbarton"
+      },
+      {
+        "id": "ACoAAAENQhgBH8wIeS6hMrUoWlbKk5L9GWNNQCE",
+        "firstName": "Andrii",
+        "lastName": "Grynenko",
+        "position": "Software Engineer",
+        "publicIdentifier": "andrii-grynenko-a48aab5",
+        "linkedinUrl": "https://www.linkedin.com/in/andrii-grynenko-a48aab5"
+      },
+      {
+        "id": "ACoAAF1g88AB-G-z-kA00gmZAGbH1CebbGsdmjQ",
+        "firstName": "Jason",
+        "lastName": "Morales",
+        "position": "Certified Phlebotomist at Thinking Machines Lab",
+        "publicIdentifier": "jason-morales-5407b5378",
+        "linkedinUrl": "https://www.linkedin.com/in/jason-morales-5407b5378"
+      },
+      {
+        "id": "ACoAAGEsn5kBB9DyTbYUN3URhyPX7aRsWlfpupg",
+        "firstName": "Hanane",
+        "lastName": "Abboud",
+        "position": "‏منشئ محتوى رقمي‏ في ‏Thinking Machines Lab‏",
+        "publicIdentifier": "hanane-abboud-b89ba4395",
+        "linkedinUrl": "https://www.linkedin.com/in/hanane-abboud-b89ba4395"
+      },
+      {
+        "id": "ACoAACA8zv0BTVWLSUHsPJrWsUI10jzn0F57pHo",
+        "firstName": "Damir",
+        "lastName": "Sartayev",
+        "position": "AI CTO & Founder | MY project LNN+LLM+QML=AGI | Quantum, Neuro-symbolic AI | Liquid Neural Networks | RWKV | Mamba(SSM)  | Pharmacy AI, Minerals AI | Full‑Stack AI (LLMs, Agents, Fine‑Tuning, RAG, Vision) | Q-Day Q-ark",
+        "publicIdentifier": "damir-q-day-q-ark",
+        "linkedinUrl": "https://www.linkedin.com/in/damir-q-day-q-ark"
+      },
+      {
+        "id": "ACoAADopuTsBh9lDxOJzJsV8jI_KfOrsc6Tu7aQ",
+        "firstName": "Aashitosh",
+        "lastName": "Swami",
+        "position": "Lab assistant",
+        "publicIdentifier": "aashitosh-swami-67796a232",
+        "linkedinUrl": "https://www.linkedin.com/in/aashitosh-swami-67796a232"
+      },
+      {
+        "id": "ACoAADwrCKUB0FU7B3O7AIg9j_wieI-QOvJrtEE",
+        "firstName": "Katy",
+        "lastName": "Liemandt",
+        "position": "TML | San Francisco",
+        "publicIdentifier": "katy-liemandt-399092242",
+        "linkedinUrl": "https://www.linkedin.com/in/katy-liemandt-399092242"
+      },
+      {
+        "id": "ACoAAEWISqkBsSmXKPSyJai6rQwhRBUoHgtqFBA",
+        "firstName": "Feng",
+        "lastName": "Yao",
+        "position": "PhD student at UCSD.",
+        "publicIdentifier": "feng-yao-661818286",
+        "linkedinUrl": "https://www.linkedin.com/in/feng-yao-661818286"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAACr4cWgBGeY9VW-NORNIdmN8Lx4fEahVSX0"
+    }
+  }
+}

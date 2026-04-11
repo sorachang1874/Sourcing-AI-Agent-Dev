@@ -1,0 +1,281 @@
+{
+  "headline": "thinking machines",
+  "message": "For high volume usage and custom pricing, visit https://app.enrichgraph.io or contact us at support@enrichgraph.io",
+  "languages": {},
+  "profile_url": "https://www.linkedin.com/in/andrewnhwang",
+  "profile_photo_url": "https://media.licdn.com/dms/image/v2/C4D03AQF_9mTJmSEqVw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1640071900286?e=1776902400&v=beta&t=kwtt9EH1vKMboR3oeCyJ_g7gM837Qh2wi5Z-0oZltJI",
+  "test_scores": {},
+  "summary": "-",
+  "websites": [
+    "https://www.linkedin.com/in/andrewnhwang"
+  ],
+  "projects": {},
+  "experience": [
+    {
+      "workplace_type": null,
+      "company_url": "https://www.linkedin.com/company/thinkingmachinesai/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+      "positions": [
+        {
+          "workplace_type": null,
+          "company_url": "https://www.linkedin.com/company/thinkingmachinesai/",
+          "location_name": "San Francisco Bay Area",
+          "title": "Member of Technical Staff",
+          "date_range": {
+            "start": {
+              "iso": "2025-08",
+              "year": 2025,
+              "month": 8,
+              "day": null
+            },
+            "end": null
+          },
+          "employment_type": "Full-time",
+          "description": null,
+          "company_name": "Thinking Machines Lab",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "company_employee_count_range": {
+            "start": 11,
+            "end": 50
+          },
+          "company_industry": "Computer Software",
+          "company_id": "105913171"
+        }
+      ],
+      "company_name": "Thinking Machines Lab",
+      "company_id": "105913171",
+      "company_employee_count_range": {
+        "start": 11,
+        "end": 50
+      },
+      "company_industry": "Computer Software",
+      "date_range": {
+        "start": {
+          "iso": "2025-08",
+          "year": 2025,
+          "month": 8,
+          "day": null
+        },
+        "end": null
+      }
+    },
+    {
+      "workplace_type": null,
+      "company_url": "https://www.linkedin.com/company/openai/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+      "positions": [
+        {
+          "workplace_type": null,
+          "company_url": "https://www.linkedin.com/company/openai/",
+          "location_name": "San Francisco Bay Area",
+          "title": "Member of Technical Staff",
+          "date_range": {
+            "start": {
+              "iso": "2025-01",
+              "year": 2025,
+              "month": 1,
+              "day": null
+            },
+            "end": {
+              "iso": "2025-08",
+              "year": 2025,
+              "month": 8,
+              "day": null
+            }
+          },
+          "employment_type": "Full-time",
+          "description": "Foundations - Synthetic Data + RL",
+          "company_name": "OpenAI",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "company_employee_count_range": {
+            "start": 1001,
+            "end": 5000
+          },
+          "company_industry": "Research",
+          "company_id": "11130470"
+        }
+      ],
+      "company_name": "OpenAI",
+      "company_id": "11130470",
+      "company_employee_count_range": {
+        "start": 1001,
+        "end": 5000
+      },
+      "company_industry": "Research",
+      "date_range": {
+        "start": {
+          "iso": "2025-01",
+          "year": 2025,
+          "month": 1,
+          "day": null
+        },
+        "end": {
+          "iso": "2025-08",
+          "year": 2025,
+          "month": 8,
+          "day": null
+        }
+      }
+    },
+    {
+      "workplace_type": null,
+      "company_url": "https://www.linkedin.com/company/hudson-river-trading/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQGcMW6YcQuZjA/company-logo_400_400/B4EZmmfVQWGcAc-/0/1759434856079/hudson_river_trading_logo?e=1776902400&v=beta&t=mZ6Hqb0j4kmTxl-hmfy_4I2krC4GAK64XpGFwbjjHUM",
+      "positions": [
+        {
+          "workplace_type": null,
+          "company_url": "https://www.linkedin.com/company/hudson-river-trading/",
+          "location_name": "New York, New York, United States",
+          "title": "Algorithm Developer",
+          "date_range": {
+            "start": {
+              "iso": "2021-05",
+              "year": 2021,
+              "month": 5,
+              "day": null
+            },
+            "end": {
+              "iso": "2024-07",
+              "year": 2024,
+              "month": 7,
+              "day": null
+            }
+          },
+          "employment_type": "Full-time",
+          "description": "HAIL - HRT AI Labs",
+          "company_name": "Hudson River Trading",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQGcMW6YcQuZjA/company-logo_400_400/B4EZmmfVQWGcAc-/0/1759434856079/hudson_river_trading_logo?e=1776902400&v=beta&t=mZ6Hqb0j4kmTxl-hmfy_4I2krC4GAK64XpGFwbjjHUM",
+          "company_employee_count_range": {
+            "start": 1001,
+            "end": 5000
+          },
+          "company_industry": "Financial Services",
+          "company_id": "730004"
+        }
+      ],
+      "company_name": "Hudson River Trading",
+      "company_id": "730004",
+      "company_employee_count_range": {
+        "start": 1001,
+        "end": 5000
+      },
+      "company_industry": "Financial Services",
+      "date_range": {
+        "start": {
+          "iso": "2021-05",
+          "year": 2021,
+          "month": 5,
+          "day": null
+        },
+        "end": {
+          "iso": "2024-07",
+          "year": 2024,
+          "month": 7,
+          "day": null
+        }
+      }
+    }
+  ],
+  "publications": {},
+  "honors": {},
+  "certifications": {},
+  "skills": [
+    "Research",
+    "Machine Learning",
+    "Mathematical Modeling",
+    "C/C++",
+    "Python (Programming Language)",
+    "Leadership",
+    "Rust (Programming Language)"
+  ],
+  "verifications": {
+    "joined_date": null,
+    "sections": null,
+    "is_verified": false
+  },
+  "badges": {
+    "premium": true,
+    "creator": false,
+    "influencer": false,
+    "top_voice": false,
+    "open_to_work": false,
+    "is_hiring": false
+  },
+  "courses": {},
+  "contact_info": null,
+  "volunteer_experiences": [
+    {
+      "image_url": null,
+      "description": "Introductory Computer Science course section leader - aimed to provide accessible educational resources during the COVID-19 pandemic.",
+      "title": "Section Leader",
+      "url": null,
+      "position_held": null,
+      "company": {
+        "url": "https://www.linkedin.com/school/stanford-code-in-place/",
+        "industry": null,
+        "employee_count_range": null,
+        "company_id": "53411238",
+        "name": "Code in Place",
+        "logo_url": "https://media.licdn.com/dms/image/v2/C4D0BAQFOi4Y2x5aRXw/company-logo_400_400/company-logo_400_400/0/1678737966476/stanford_code_in_place_logo?e=1776902400&v=beta&t=rxKggxPtCKjb02WkeKZ-26i2-8W5QREJnBvjacVFGrE"
+      },
+      "name": "Code in Place",
+      "company_id": "53411238",
+      "date_range": {
+        "start": {
+          "iso": "2020-04",
+          "year": 2020,
+          "month": 4,
+          "day": null
+        },
+        "end": {
+          "iso": "2020-05",
+          "year": 2020,
+          "month": 5,
+          "day": null
+        }
+      }
+    }
+  ],
+  "patents": {},
+  "organizations": {},
+  "member_urn": "566679501",
+  "last_name": "Hwang",
+  "education": [
+    {
+      "degree": "Bachelor's degree",
+      "description": null,
+      "activities": null,
+      "grade": null,
+      "school_name": "Stanford University",
+      "school_id": "17926",
+      "field_of_study": "Computer Science (Concentration in Systems), Minor in Mathematics",
+      "school_url": "https://www.linkedin.com/school/stanford-university/",
+      "date_range": null,
+      "school_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_400_400/company-logo_400_400/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=zzE-1MKqCLrmkqb1p2hJqhVuV2hbdZzC0j_ok6Kyhk8"
+    },
+    {
+      "degree": "Master's degree",
+      "description": null,
+      "activities": null,
+      "grade": null,
+      "school_name": "Stanford University",
+      "school_id": "17926",
+      "field_of_study": "Statistics",
+      "school_url": "https://www.linkedin.com/school/stanford-university/",
+      "date_range": null,
+      "school_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_400_400/company-logo_400_400/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=zzE-1MKqCLrmkqb1p2hJqhVuV2hbdZzC0j_ok6Kyhk8"
+    }
+  ],
+  "entity_urn": "ACoAACHG180BXiyeZ2qJgoggx27e4iM3ajxvp18",
+  "public_identifier": "andrewnhwang",
+  "location": {
+    "city": null,
+    "country_code": "US",
+    "name": "New York, New York, United States",
+    "country": "United States"
+  },
+  "first_name": "Andy",
+  "background_photo_url": null,
+  "industry": "Capital Markets",
+  "network_info": null
+}

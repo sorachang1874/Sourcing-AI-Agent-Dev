@@ -1,0 +1,531 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAF4HCY8Bgk20g8rgcsn1n1Zf51WPbkCs3Ac",
+    "profile_url": "https://www.linkedin.com/in/ACwAAF4HCY8Bgk20g8rgcsn1n1Zf51WPbkCs3Ac"
+  },
+  "item": {
+    "id": "ACoAAF4HCY8B7iE1JdthSvfrQbyrMxFZgUNs0tw",
+    "publicIdentifier": "sam-banjo-467384380",
+    "linkedinUrl": "https://www.linkedin.com/in/sam-banjo-467384380",
+    "firstName": "Sam",
+    "lastName": "Banjo",
+    "emails": [
+      {
+        "email": "sam.banjo@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "freelancer resume writer|CV, cover letter & LinkedIn optimization| Helping job seekers stand out & Get Hired| Ads manager",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Lagos, Lagos State, Nigeria",
+      "countryCode": "NG",
+      "parsed": {
+        "text": "Lagos, Nigeria",
+        "countryCode": "NG",
+        "regionCode": null,
+        "country": "Nigeria",
+        "countryFull": "Nigeria",
+        "state": "Lagos",
+        "city": "Lagos"
+      }
+    },
+    "objectUrn": "1577519503",
+    "registeredAt": "2025-08-22T17:17:19.403Z",
+    "topSkills": null,
+    "connectionsCount": 92,
+    "followerCount": 93,
+    "verified": false,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": null,
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "564115",
+        "companyId": "76978719",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/76978719/",
+        "schoolName": "Babcock University, Ilishan-Remo, Nigeria"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4D03AQEVOctAr9a8xg/profile-displayphoto-crop_800_800/B4DZjS2nzhH4AM-/0/1755884193769?e=1776902400&v=beta&t=6SeYMHRoJyEbJkhEbhCiloSQgEr71QxC3G1DPyNufM8",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4D03AQEVOctAr9a8xg/profile-displayphoto-crop_800_800/B4DZjS2nzhH4AM-/0/1755884193769?e=1776902400&v=beta&t=6SeYMHRoJyEbJkhEbhCiloSQgEr71QxC3G1DPyNufM8",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4D03AQEVOctAr9a8xg/profile-displayphoto-scale_400_400/B4DZjS2nzhH4Ak-/0/1755884193875?e=1776902400&v=beta&t=-1Rbi67Zi_pynUzQfnTuPywu7UyM4DLak4VEuVqN8go",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4D03AQEVOctAr9a8xg/profile-displayphoto-scale_200_200/B4DZjS2nzhH4Ac-/0/1755884193875?e=1776902400&v=beta&t=sTMOJvqDLtoRpz4PHS1RQT9ZCc78-ghMBEG2o8hFPeA",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4D03AQEVOctAr9a8xg/profile-displayphoto-scale_100_100/B4DZjS2nzhH4Ag-/0/1755884193875?e=1776902400&v=beta&t=DAs8GUqDWhMObGvmpgxJmwaNX5_DIia2MOiSvtbCi68",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D4D03AQEVOctAr9a8xg/profile-displayphoto-crop_800_800/B4DZjS2nzhH4AM-/0/1755884193769?e=1776902400&v=beta&t=6SeYMHRoJyEbJkhEbhCiloSQgEr71QxC3G1DPyNufM8",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "freelancer resume writer|CV, cover letter & LinkedIn optimization| Helping job seekers stand out & Get Hired| Ads manager",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Resume writer ",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": null,
+        "description": null,
+        "skills": [
+          "Proofreading",
+          "Editing",
+          "Resume Writing",
+          "Facebook Ads",
+          "Cover Letters"
+        ],
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Resume writer ",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Self-employed",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Self-employed",
+        "duration": "4 yrs 4 mos",
+        "description": "Craft professional, ATS-optimized resumes and cover letters tailored for various industries, ensuring clients pass applicant tracking systems and stand out to recruiters.\n\nProvide LinkedIn profile optimization, keyword integration, and branding strategies to improve visibility and recruiter engagement.\n\nCollaborate with clients through virtual consultations, gathering career history and achievements to build impactful, results-driven documents.\n\nUse modern resume trends, including AI-driven keyword analysis and visually appealing formats, to improve client interview rates by up to 60%.\n\nDeliver personal branding guidance, helping clients showcase leadership, achievements, and value propositions effectively.\n\nAssist with career coaching, job search strategies, and interview preparation for professionals and executives.",
+        "skills": [
+          "Copywriting",
+          "Digital Marketing",
+          "Facebook Ads",
+          "Instagram Marketing",
+          "Resume writers",
+          "Proofreading"
+        ],
+        "startDate": {
+          "month": "Jan",
+          "year": 2022,
+          "text": "Jan 2022"
+        },
+        "endDate": {
+          "text": "Present"
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Babcock University, Ilishan-Remo, Nigeria",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/76978719/",
+        "schoolId": "76978719",
+        "degree": "Bachelor of Business Administration - BBA",
+        "fieldOfStudy": "Business Administration and Management",
+        "skills": [],
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFD9GnW8bjfHQ/company-logo_400_400/company-logo_400_400/0/1635719862173?e=1776902400&v=beta&t=irLw3HSjBlFZlg4eh9oN4M_n_P8_7GG9OyYgi3zKbg4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFD9GnW8bjfHQ/company-logo_400_400/company-logo_400_400/0/1635719862173?e=1776902400&v=beta&t=irLw3HSjBlFZlg4eh9oN4M_n_P8_7GG9OyYgi3zKbg4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFD9GnW8bjfHQ/company-logo_200_200/company-logo_200_200/0/1635719862173?e=1776902400&v=beta&t=lj5vnVeMkb46Nz4fAOlhWAT--1vWME_p-tJ5E-ZRy-0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFD9GnW8bjfHQ/company-logo_100_100/company-logo_100_100/0/1635719862173?e=1776902400&v=beta&t=_yeif2lPp4PvzDbwDntcmdJxxwLrTwzV_9S1FLMYf8M",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Editing",
+        "positions": [
+          "Resume writer at Thinking Machines Lab"
+        ]
+      },
+      {
+        "name": "Resume Writing",
+        "positions": [
+          "Resume writer at Thinking Machines Lab"
+        ]
+      },
+      {
+        "name": "Cover Letters",
+        "positions": [
+          "Resume writer at Thinking Machines Lab"
+        ]
+      },
+      {
+        "name": "Instagram Marketing"
+      },
+      {
+        "name": "Digital Marketing"
+      },
+      {
+        "name": "Proofreading",
+        "positions": [
+          "2 experiences across Thinking Machines Lab and 1 other company"
+        ]
+      },
+      {
+        "name": "Copywriting"
+      },
+      {
+        "name": "Facebook Ads",
+        "positions": [
+          "2 experiences across Thinking Machines Lab and 1 other company"
+        ]
+      },
+      {
+        "name": "Resume writers"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "position": "AI Researcher, Co-founder @ Thinking Machines Lab",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAAAmf5bQBE9zWTvtIZlqQPzW22G4Tss9cb0E",
+        "firstName": "Andrew",
+        "lastName": "Lee",
+        "position": "Design at Thinking Machines Lab",
+        "publicIdentifier": "alhyunsoo",
+        "linkedinUrl": "https://www.linkedin.com/in/alhyunsoo"
+      },
+      {
+        "id": "ACoAABhKWCYBiuV3Zv9Hbt8t0j-xMRqxawBcSgw",
+        "firstName": "Kurt",
+        "lastName": "Shuster",
+        "position": "AI Research Engineer",
+        "publicIdentifier": "kurtshuster1",
+        "linkedinUrl": "https://www.linkedin.com/in/kurtshuster1"
+      },
+      {
+        "id": "ACoAAEZnBtoBb1Us7ZKgHfOXAYT764pKcDQy848",
+        "firstName": "Songlin",
+        "lastName": "Yang",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "songlin-yang-b8a69728b",
+        "linkedinUrl": "https://www.linkedin.com/in/songlin-yang-b8a69728b"
+      },
+      {
+        "id": "ACoAAABnAccB9h1LTKUrBFif76qxLwe9k7nyE_s",
+        "firstName": "Ian",
+        "lastName": "O'Connell",
+        "position": "Software engineer",
+        "publicIdentifier": "ianoc",
+        "linkedinUrl": "https://www.linkedin.com/in/ianoc"
+      },
+      {
+        "id": "ACoAAAl87CYBWKLLyGNTbomy6oqIPv-5n34CXIY",
+        "firstName": "Andrew",
+        "lastName": "Tulloch",
+        "position": "AI Research @ Meta",
+        "publicIdentifier": "andrew-tulloch-17238745",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-tulloch-17238745"
+      },
+      {
+        "id": "ACoAACE2EIwB3vNVX9rm6ce5juOGovFUzVvIsCc",
+        "firstName": "Kevin",
+        "lastName": "Lu",
+        "position": "thinking machines",
+        "publicIdentifier": "kzl",
+        "linkedinUrl": "https://www.linkedin.com/in/kzl"
+      },
+      {
+        "id": "ACoAABJF4mQBVJYIx7g-ASuPnmo5mH2mDuWdwQg",
+        "firstName": "Erika",
+        "lastName": "Byun",
+        "position": "Thinking Machines Lab",
+        "publicIdentifier": "erika-nakamatsu-byun",
+        "linkedinUrl": "https://www.linkedin.com/in/erika-nakamatsu-byun"
+      },
+      {
+        "id": "ACoAAAoDkzgBOjd_V9dYcTipq4XPeXJ9HOPji90",
+        "firstName": "Lisa",
+        "lastName": "Han",
+        "position": "Partner at Lightspeed Venture Partners",
+        "publicIdentifier": "lisabethhan",
+        "linkedinUrl": "https://www.linkedin.com/in/lisabethhan"
+      },
+      {
+        "id": "ACoAABgwxtcBfqsJJUHPwsSPuBE4K9oKyRqUp5o",
+        "firstName": "Lia",
+        "lastName": "Guy",
+        "position": "Research @ OpenAI",
+        "publicIdentifier": "aureliaguy",
+        "linkedinUrl": "https://www.linkedin.com/in/aureliaguy"
+      },
+      {
+        "id": "ACoAAACQBzQB5nk5kOpFWQRtK4pv3RaL5q2G-pA",
+        "firstName": "Jonathan",
+        "lastName": "Lachman",
+        "position": "Founding Head of Operations at Thinking Machines Lab",
+        "publicIdentifier": "jonathan-lachman-4981b23",
+        "linkedinUrl": "https://www.linkedin.com/in/jonathan-lachman-4981b23"
+      },
+      {
+        "id": "ACoAACwmkpgBC5m59cTZpcPCmE7sNiklfIA7PrY",
+        "firstName": "Phuong Nga",
+        "lastName": "Nguyen",
+        "publicIdentifier": "phuong-nga-nguyen-648098188",
+        "linkedinUrl": "https://www.linkedin.com/in/phuong-nga-nguyen-648098188"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAABE9sVMBCH0i964WlvecDNyGKTviqyXKcTY",
+        "firstName": "Hannah",
+        "lastName": "T.",
+        "position": "recruiting @ thinking machines lab",
+        "publicIdentifier": "hannahnth",
+        "linkedinUrl": "https://www.linkedin.com/in/hannahnth"
+      },
+      {
+        "id": "ACoAAAJzsfoBp0MxssQYMgmy0ZNO2U3sA58ugwc",
+        "firstName": "Joshua",
+        "lastName": "Gross",
+        "position": "Engineering Leadership, Meta Superintelligence Lab",
+        "publicIdentifier": "joshgross",
+        "linkedinUrl": "https://www.linkedin.com/in/joshgross"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "position": "Co-Founder and CEO at Thinking Machines Lab",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAAAF57BEBytoBtj0_Jv-zJMa602g97u58ZqY",
+        "firstName": "Matthias",
+        "lastName": "Hendrichs",
+        "position": "Global Tech Executive & AI Advisor and Investor (ex Apple WW Leadership / ex Unicorn Founder)",
+        "publicIdentifier": "matthiashendrichs",
+        "linkedinUrl": "https://www.linkedin.com/in/matthiashendrichs"
+      },
+      {
+        "id": "ACoAABPg53YBHdOvmp7pU72eDhcho-7cnwyxk1o",
+        "firstName": "Pia",
+        "lastName": "Santos",
+        "position": "Founding Team at Thinking Machines Lab",
+        "publicIdentifier": "piafsantos",
+        "linkedinUrl": "https://www.linkedin.com/in/piafsantos"
+      },
+      {
+        "id": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+        "firstName": "Saurabh",
+        "lastName": "Garg",
+        "position": "Thinking Machines Lab | Prev: Mistral AI, CMU, IIT-B",
+        "publicIdentifier": "saurabh-garg-b680b5b8",
+        "linkedinUrl": "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+      },
+      {
+        "id": "ACoAAAPH3hkBD4YvYU1lCbTlnKlqFvJCZxL3KlQ",
+        "firstName": "Weiheng",
+        "lastName": "Zhang",
+        "position": "Founding Head of Finance at Thinking Machines Lab",
+        "publicIdentifier": "weiheng-zhang",
+        "linkedinUrl": "https://www.linkedin.com/in/weiheng-zhang"
+      },
+      {
+        "id": "ACoAAAe_r9YBFUf6rspJoaXdgueWY-tT9u7seco",
+        "firstName": "Tina",
+        "lastName": "Van Riet",
+        "position": "lesgever in de basiseducatie: scholenproject/alfa/NT2 (Nederlands als 2de taal)/ICT",
+        "publicIdentifier": "tina-van-riet-1b265537",
+        "linkedinUrl": "https://www.linkedin.com/in/tina-van-riet-1b265537"
+      },
+      {
+        "id": "ACoAAA3X2SYBqVsoeCEbwdkRjd6KtOFYZ3dzHMI",
+        "firstName": "Letitia Yu-Hsuan",
+        "lastName": "Lin",
+        "position": "Copywriter, news editor",
+        "publicIdentifier": "letitialin",
+        "linkedinUrl": "https://www.linkedin.com/in/letitialin"
+      },
+      {
+        "id": "ACoAAClILVoBieBrBf2OeMZb6GOqpabFTNqKm0s",
+        "firstName": "Arnaud",
+        "lastName": "Voet",
+        "position": "Copywriter @TUI",
+        "publicIdentifier": "arnaud-voet-aa2b47173",
+        "linkedinUrl": "https://www.linkedin.com/in/arnaud-voet-aa2b47173"
+      },
+      {
+        "id": "ACoAAESo0rkBOJz014zYWNzxZ0wihLzvC9_dN_c",
+        "firstName": "Vanessa",
+        "lastName": "Coste",
+        "position": "Copywriter - AdSim - Digital Marketing",
+        "publicIdentifier": "vanessa-coste-361935281",
+        "linkedinUrl": "https://www.linkedin.com/in/vanessa-coste-361935281"
+      },
+      {
+        "id": "ACoAAC3pB-kBaKb9hfGHeJVmNjF_vox2bP9Twt8",
+        "firstName": "Pauline",
+        "lastName": "Chaudat",
+        "position": "Autrice & Copywriter",
+        "publicIdentifier": "pauline-chaudat",
+        "linkedinUrl": "https://www.linkedin.com/in/pauline-chaudat"
+      },
+      {
+        "id": "ACoAACKc1IsBemHOdYt7bd5G7Z21sBLMCbDzgjY",
+        "firstName": "Robin",
+        "lastName": "Van de Ryck",
+        "position": "Concept Creative & Copywriter",
+        "publicIdentifier": "robin-van-de-ryck-237587142",
+        "linkedinUrl": "https://www.linkedin.com/in/robin-van-de-ryck-237587142"
+      },
+      {
+        "id": "ACoAABe8RJUBTEhJa3f19faPCdzfmgfGQlYFpQs",
+        "firstName": "Clara",
+        "lastName": "Bougon",
+        "position": "Freelance copywriter",
+        "publicIdentifier": "clara-bougon-105440b1",
+        "linkedinUrl": "https://www.linkedin.com/in/clara-bougon-105440b1"
+      },
+      {
+        "id": "ACoAACxLligBOhk2DRoH4D2HVv2aP4rrDUC4K4I",
+        "firstName": "Nicolas",
+        "lastName": "D'Exelle",
+        "position": "Freelance copywriter",
+        "publicIdentifier": "nicolas-d-exelle-3a0a68188",
+        "linkedinUrl": "https://www.linkedin.com/in/nicolas-d-exelle-3a0a68188"
+      },
+      {
+        "id": "ACoAAFibE60B_sAEQ9C6gHPv9UcMmue_6T5816Y",
+        "firstName": "Rani",
+        "lastName": "T'kindt",
+        "position": "Copywriter bij Gewoon Mezelf",
+        "publicIdentifier": "rani-t-kindt-839a18355",
+        "linkedinUrl": "https://www.linkedin.com/in/rani-t-kindt-839a18355"
+      },
+      {
+        "id": "ACoAAGZBR1QBxBGqQsItCNkWuUx6NivMFyzdx-k",
+        "firstName": "Leman",
+        "lastName": "Salmanzade",
+        "position": "Student aan Hogeschool Odisee",
+        "publicIdentifier": "leman-salmanzade-6446513ba",
+        "linkedinUrl": "https://www.linkedin.com/in/leman-salmanzade-6446513ba"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAF4HCY8Bgk20g8rgcsn1n1Zf51WPbkCs3Ac"
+    }
+  }
+}

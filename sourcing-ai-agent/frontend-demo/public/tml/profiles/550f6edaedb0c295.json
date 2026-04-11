@@ -1,0 +1,647 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAAQ1QI4B4OmP4oMdg4TwlMU1VKPIMHaS1O0",
+    "profile_url": "https://www.linkedin.com/in/ACwAAAQ1QI4B4OmP4oMdg4TwlMU1VKPIMHaS1O0"
+  },
+  "item": {
+    "id": "ACoAAAQ1QI4Bex6mqv5SgvahWcZuzAuWiTKciBo",
+    "publicIdentifier": "bi-xue-9527871b",
+    "linkedinUrl": "https://www.linkedin.com/in/bi-xue-9527871b",
+    "firstName": "Bi",
+    "lastName": "Xue",
+    "emails": [
+      {
+        "email": "bi.xue@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco Bay Area",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "70598798",
+    "registeredAt": "2010-03-19T20:57:21.466Z",
+    "topSkills": null,
+    "connectionsCount": 7022,
+    "followerCount": 7025,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 12,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "11319",
+        "companyId": "27413",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/27413/",
+        "schoolName": null
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": null,
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "5 mos",
+        "description": "RL, inference",
+        "skills": null,
+        "startDate": {
+          "month": "Dec",
+          "year": 2025,
+          "text": "Dec 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Engineering Director",
+        "location": "Menlo Park, California",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "9 yrs 7 mos",
+        "description": "Engineering Director, Recommendation\n• In charge of whole recommendation AI and ML stacks powering Instagram and Facebook recommendations (Reels, in feeds recommendation, etc), ranging from retrieval model, ranking model, ML Infra, large scale GPU training and inference, cuda/triton Kernel optimization.\n• Leading recommendation innovation, and a rare person who deeply knows about both modeling, GPU and ML infra, a person who could do both deep hands-on IC work and org leader work (a 200 people team including both research scientist and engineers).\n▸ [Model/GPU Kernel] Generative recommender\n▸ [Model/GPU Kernel] Sequence modeling based on transformer arch\n▸ GPU based retrieval, RAG system\n▸ [Sharder/comm/dist training] thousands cards large scale GPU training\n▸ [GPU cuda kernel] GPU cuda kernel for index search, similarity vector search and learnable index\n▸ [Agentic] Innovation on agentic recommender based on LLM\n▸ [Multi-modal] Multi-modal content understanding based on LLM\n\n\n05/2016-11/2021\nDirector of Engineering, Head of Engineering, Facebook Search\n• Search Infra & Platform (Search Indexing; Index Serving (a.k.a Unicorn); ML Infra; Retrieval Platform for Meta; Embedding retrieval).\n• Search NLP — query understanding and content understanding by leveraging different NLP tech, improved FB Search quality by x%.\n• Search relevance (NLP, Computer vision, query understanding, document understanding, user understanding, ML ranking, whole page ranking, typeahead ranking).\n• Search product (client side, middle tier, product infra, foundation, search nullstate, speed, capacity, reliability, middle tier, etc).",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2016,
+          "text": "Jun 2016"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2025,
+          "text": "Dec 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Principal Software Engineer",
+        "location": "Greater Seattle Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Microsoft",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1035/",
+        "companyId": "1035",
+        "duration": "9 yrs 2 mos",
+        "description": "Work on Bing Search Index Serving, deep learning, DSSM, k-d tree, etc. (Bing web search, multimedia search, Onedrive search, Skype User Profile Search, Conversation Search, Personal search, Cloud search), Author of multiple core Bing backend components to scale Bing to support large corpus size, huge QPS and realtimeliness:\n* Real-time tracing system\n* High throughput Cache Manager\n* Gossip-protocol based machine management system.\n* Leave node: Novel indexing system to support dynamic size, which enables Skype profile and conversation search.\n* Aggregator : scaling fan-out and aggregation of user query.\n* Deep learning platform : similarity vector search, scaling model serving.\n* NLP/CV:  text and image modeling.",
+        "skills": null,
+        "startDate": {
+          "month": "Apr",
+          "year": 2007,
+          "text": "Apr 2007"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2016,
+          "text": "May 2016"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_400_400/B56ZYQ0mrGGoAc-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=47BifJmZk2QcSo7UM_a7lFIk5vBFq49cOHVWx8Pu2dE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_400_400/B56ZYQ0mrGGoAc-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=47BifJmZk2QcSo7UM_a7lFIk5vBFq49cOHVWx8Pu2dE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_200_200/B56ZYQ0mrGGoAM-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=z3mTaKdLV9rmnHGq4MakEXZj6vY7Y9TWAjx0_U7y0X0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_100_100/B56ZYQ0mrGGoAU-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=tKqX5UTArC3FajWCGY-yk-mpPeeR1obx-D3VehmNycQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Shanghai Jiao Tong University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/27413/",
+        "schoolId": "27413",
+        "degree": "Master",
+        "fieldOfStudy": "Control Theory and Control Engineering",
+        "skills": [],
+        "startDate": {
+          "year": 2004,
+          "text": "2004"
+        },
+        "endDate": {
+          "year": 2007,
+          "text": "2007"
+        },
+        "period": "2004 - 2007",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFkNUM4pr0xcg/company-logo_400_400/company-logo_400_400/0/1631314417560?e=1776902400&v=beta&t=_9V7x73QmUeI3ljuiRcsifjAUZDbQNuOqoZkwuoQJko",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFkNUM4pr0xcg/company-logo_400_400/company-logo_400_400/0/1631314417560?e=1776902400&v=beta&t=_9V7x73QmUeI3ljuiRcsifjAUZDbQNuOqoZkwuoQJko",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFkNUM4pr0xcg/company-logo_200_200/company-logo_200_200/0/1631314417560?e=1776902400&v=beta&t=X5SOqffA_pEUEorPnJmluYlL9nNzyw11jrreiO1bmXU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFkNUM4pr0xcg/company-logo_100_100/company-logo_100_100/0/1631314417560?e=1776902400&v=beta&t=XyswkGMcyz0iGJ0WekHkes-aM8ohdDmFzYmf_hiXdvk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Zhejiang University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/24531/",
+        "schoolId": "24531",
+        "degree": "Bachelor",
+        "fieldOfStudy": "Automation",
+        "skills": [],
+        "startDate": {
+          "year": 2000,
+          "text": "2000"
+        },
+        "endDate": {
+          "year": 2004,
+          "text": "2004"
+        },
+        "period": "2000 - 2004",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C510BAQFqHuGrMlNcfg/company-logo_400_400/company-logo_400_400/0/1631311270979?e=1776902400&v=beta&t=uboOfy8ys01nOFIoCCVt5ndC6vHT5eHVFBy9cX9gjQg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQFqHuGrMlNcfg/company-logo_400_400/company-logo_400_400/0/1631311270979?e=1776902400&v=beta&t=uboOfy8ys01nOFIoCCVt5ndC6vHT5eHVFBy9cX9gjQg",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQFqHuGrMlNcfg/company-logo_200_200/company-logo_200_200/0/1631311270979?e=1776902400&v=beta&t=bmDl_wPJjEA_uU8Tl280ds1RX4bAp7afCi9WsAHuN08",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQFqHuGrMlNcfg/company-logo_100_100/company-logo_100_100/0/1631311270979?e=1776902400&v=beta&t=nUj2wHhsxoTo7Jj9Vy8fourw1NfgTeNmrKnB2wAksxY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Scalability",
+        "positions": [
+          "Endorsed by 3 colleagues at Meta"
+        ],
+        "endorsements": "42 endorsements"
+      },
+      {
+        "name": "Software Engineering",
+        "positions": [
+          "Endorsed by 3 colleagues at Meta"
+        ],
+        "endorsements": "26 endorsements"
+      },
+      {
+        "name": "Algorithms",
+        "positions": [
+          "Endorsed by 2 colleagues at Meta"
+        ],
+        "endorsements": "39 endorsements"
+      },
+      {
+        "name": "Distributed Systems",
+        "endorsements": "56 endorsements"
+      },
+      {
+        "name": "Machine Learning",
+        "endorsements": "7 endorsements"
+      },
+      {
+        "name": "Big Data",
+        "endorsements": "9 endorsements"
+      },
+      {
+        "name": "Software Design",
+        "endorsements": "14 endorsements"
+      },
+      {
+        "name": "Object Oriented Design",
+        "endorsements": "7 endorsements"
+      },
+      {
+        "name": "Win32 API",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Cloud Computing",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Software Development",
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "Agile Methodologies",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Hadoop",
+        "endorsements": "9 endorsements"
+      },
+      {
+        "name": "MapReduce",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Windows Azure",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "C  "
+      },
+      {
+        "name": "C",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "C#",
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "C++",
+        "endorsements": "14 endorsements"
+      },
+      {
+        "name": "Java",
+        "endorsements": "1 endorsement"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAATAFhsB-MSu8aXWUBacbi6fvU_SaAqdBH4",
+        "firstName": "Jeff",
+        "lastName": "Hanson",
+        "publicIdentifier": "jshanson7",
+        "linkedinUrl": "https://www.linkedin.com/in/jshanson7"
+      },
+      {
+        "id": "ACoAAEZnBtoBb1Us7ZKgHfOXAYT764pKcDQy848",
+        "firstName": "Songlin",
+        "lastName": "Yang",
+        "publicIdentifier": "songlin-yang-b8a69728b",
+        "linkedinUrl": "https://www.linkedin.com/in/songlin-yang-b8a69728b"
+      },
+      {
+        "id": "ACoAAAQ4Q7kByw3YKf2rFlmWzRMF7P8Gw4S9PIU",
+        "firstName": "Yinghai",
+        "lastName": "L.",
+        "publicIdentifier": "yinghai83",
+        "linkedinUrl": "https://www.linkedin.com/in/yinghai83"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABMugyUBsZ9MwIVIzmOSzlvmO6TOFL-mfAU",
+        "firstName": "Chih-Kuan (Jason)",
+        "lastName": "Yeh",
+        "publicIdentifier": "chih-kuan-jason-yeh-8859378b",
+        "linkedinUrl": "https://www.linkedin.com/in/chih-kuan-jason-yeh-8859378b"
+      },
+      {
+        "id": "ACoAABqSHaUBgoPu_j2NSmNfYyGkrcUvLn5mbbo",
+        "firstName": "Jacob",
+        "lastName": "van Gogh",
+        "publicIdentifier": "jacobvangogh",
+        "linkedinUrl": "https://www.linkedin.com/in/jacobvangogh"
+      },
+      {
+        "id": "ACoAACaOARIBRO2EEH12QWQO29L__oI3N2K4u14",
+        "firstName": "Mingjie",
+        "lastName": "Sun",
+        "publicIdentifier": "mingjie-sun-06a761160",
+        "linkedinUrl": "https://www.linkedin.com/in/mingjie-sun-06a761160"
+      },
+      {
+        "id": "ACoAACA1ZlYBhPNODsf7Z3UNo1tLYMShFQ7OQJw",
+        "firstName": "Yujia",
+        "lastName": "Bao",
+        "publicIdentifier": "yujia-bao-506b76130",
+        "linkedinUrl": "https://www.linkedin.com/in/yujia-bao-506b76130"
+      },
+      {
+        "id": "ACoAAAENQhgBH8wIeS6hMrUoWlbKk5L9GWNNQCE",
+        "firstName": "Andrii",
+        "lastName": "Grynenko",
+        "publicIdentifier": "andrii-grynenko-a48aab5",
+        "linkedinUrl": "https://www.linkedin.com/in/andrii-grynenko-a48aab5"
+      },
+      {
+        "id": "ACoAACKNVUMBztbhQ3RUYQ-Mg89xUJ39N-XJpM4",
+        "firstName": "Long",
+        "lastName": "Lian",
+        "publicIdentifier": "longlian",
+        "linkedinUrl": "https://www.linkedin.com/in/longlian"
+      },
+      {
+        "id": "ACoAAACo1tYBGy9sT2OWZuEULOMe4K_b2Y22-F8",
+        "firstName": "Alex",
+        "lastName": "Gartrell",
+        "publicIdentifier": "alexgartrell",
+        "linkedinUrl": "https://www.linkedin.com/in/alexgartrell"
+      },
+      {
+        "id": "ACoAAAD-hTABHsUcZMNYC-D_hAv_HSbY1IIDv3Y",
+        "firstName": "Opher",
+        "lastName": "Lieber",
+        "publicIdentifier": "opherlieber",
+        "linkedinUrl": "https://www.linkedin.com/in/opherlieber"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAAB3BApkB38H4Z__jKDDFBfF7jt7w16vD0Xs",
+        "firstName": "Rafael",
+        "lastName": "Rafailov",
+        "publicIdentifier": "rafael-rafailov-1b521611b",
+        "linkedinUrl": "https://www.linkedin.com/in/rafael-rafailov-1b521611b"
+      },
+      {
+        "id": "ACoAACEKIcoBlH0R5ZT_TKQuJ4i3ZD4WlI1-rME",
+        "firstName": "Jacob",
+        "lastName": "Menick",
+        "position": "Thinking Machines, Founding Team",
+        "publicIdentifier": "jacob-menick-5a277a135",
+        "linkedinUrl": "https://www.linkedin.com/in/jacob-menick-5a277a135"
+      },
+      {
+        "id": "ACoAABhIg7YBYN2NPIu8voYj5D7JQVZGxonqHvc",
+        "firstName": "Ruiqi",
+        "lastName": "Zhong",
+        "publicIdentifier": "ruiqi-zhong-09a533b4",
+        "linkedinUrl": "https://www.linkedin.com/in/ruiqi-zhong-09a533b4"
+      },
+      {
+        "id": "ACoAAAhY-psBFcHXNbjunn6_QnPfV6Bo6w4yzug",
+        "firstName": "Kenny",
+        "lastName": "Yu",
+        "publicIdentifier": "kenny-yu-aa3a9a3a",
+        "linkedinUrl": "https://www.linkedin.com/in/kenny-yu-aa3a9a3a"
+      },
+      {
+        "id": "ACoAAB4qbUUBsc9H_NLZN2duLUOOyyFDm-k_ACo",
+        "firstName": "Riley",
+        "lastName": "Shanahan",
+        "publicIdentifier": "rileyshanny",
+        "linkedinUrl": "https://www.linkedin.com/in/rileyshanny"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAAAeoHjYB_Lo5sUFlpZpz2L74oe9nEIKztQA",
+        "firstName": "Jenya",
+        "lastName": "L.",
+        "publicIdentifier": "jenya-l",
+        "linkedinUrl": "https://www.linkedin.com/in/jenya-l"
+      },
+      {
+        "id": "ACoAAF0PXMcBkA2JZus_UFE_brLLafSizTT-B4w",
+        "firstName": "AnLi",
+        "lastName": "He",
+        "position": "Driving AI/ML Innovation at Scale | Head of AI/ML at Amazon Web Services (AWS) | Leader in Cloud AI Solutions and Generative AI Development",
+        "publicIdentifier": "anli-he-0b3a57376",
+        "linkedinUrl": "https://www.linkedin.com/in/anli-he-0b3a57376"
+      },
+      {
+        "id": "ACoAAGBXMFUBt4teiDt6Z42iK8gCytVPYxOqPYg",
+        "firstName": "Jin",
+        "lastName": "Xiao",
+        "position": "Web3 Talent Acquisition at Gate | Crypto Recruitment",
+        "publicIdentifier": "jin-xiao-33137a391",
+        "linkedinUrl": "https://www.linkedin.com/in/jin-xiao-33137a391"
+      },
+      {
+        "id": "ACoAAGH4ssYBWSWjb7_rC91fIE0HpeWAiPlp3sI",
+        "firstName": "Luciano",
+        "lastName": "Ito Perillo",
+        "position": "--",
+        "publicIdentifier": "luciano-ito-perillo-85a57439a",
+        "linkedinUrl": "https://www.linkedin.com/in/luciano-ito-perillo-85a57439a"
+      },
+      {
+        "id": "ACoAAF9esZ4BK2oY_J6hB3ktgLIYc09n9DGZrmk",
+        "firstName": "Abdulmajeed",
+        "lastName": "Hawshan",
+        "position": "Student at Imam Mohammad Ibn Saud Islamic University (IMSIU)",
+        "publicIdentifier": "abdulmajeed-hawshan-a52a25387",
+        "linkedinUrl": "https://www.linkedin.com/in/abdulmajeed-hawshan-a52a25387"
+      },
+      {
+        "id": "ACoAAF4BRk8BThP53uu1WuMJ3BMZEY2cr6z_2XQ",
+        "firstName": "M",
+        "lastName": "Imran",
+        "position": "Director at AKS Prime Group",
+        "publicIdentifier": "m-imran-9a7221380",
+        "linkedinUrl": "https://www.linkedin.com/in/m-imran-9a7221380"
+      },
+      {
+        "id": "ACoAAGC9hcYByThO2UOTRThiOAFqw3LhDHGjdj4",
+        "firstName": "Sumbal",
+        "lastName": "Khalid",
+        "position": "Sales and Marketing Specialist",
+        "publicIdentifier": "sumbal-khalid-45a673393",
+        "linkedinUrl": "https://www.linkedin.com/in/sumbal-khalid-45a673393"
+      },
+      {
+        "id": "ACoAAGJ5viMBYj7dZqJPas7rwqoMsaFd0ZIH260",
+        "firstName": "Musa",
+        "lastName": "Zaman",
+        "position": "Doctor of Pharmacy | Medical Representative | Aspiring Product Manager | Cardio-Metabolic Portfolio  | Pharmaceutical Marketing | Pharm-D ",
+        "publicIdentifier": "musa-zaman-a033723a1",
+        "linkedinUrl": "https://www.linkedin.com/in/musa-zaman-a033723a1"
+      },
+      {
+        "id": "ACoAAFty5vwBVdGNB7nsMbUaEDeXdIe9w35Yhtg",
+        "firstName": "Maria Angelika ",
+        "lastName": "Colmo",
+        "position": "Results-Driven Cold Caller | Lead Generation & Customer Service Pro",
+        "publicIdentifier": "maria-angelika-colmo-1909a0369",
+        "linkedinUrl": "https://www.linkedin.com/in/maria-angelika-colmo-1909a0369"
+      },
+      {
+        "id": "ACoAAFx-aVUBTnTTgGX7WyTwh_dNDLX1MXBXHD0",
+        "firstName": "Zain",
+        "lastName": "Wang",
+        "position": "Dentist | Dental Treatment and Patient Care Specialist",
+        "publicIdentifier": "zain-wang-819835373",
+        "linkedinUrl": "https://www.linkedin.com/in/zain-wang-819835373"
+      },
+      {
+        "id": "ACoAAFq2xmgBTVtU8XzjPjOQkp_adYeZXqIundw",
+        "firstName": "Leader",
+        "lastName": "Sports",
+        "position": "--",
+        "publicIdentifier": "leader-sports-2b4835365",
+        "linkedinUrl": "https://www.linkedin.com/in/leader-sports-2b4835365"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAAQ1QI4B4OmP4oMdg4TwlMU1VKPIMHaS1O0"
+    }
+  }
+}

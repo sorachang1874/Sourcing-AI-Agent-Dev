@@ -1,0 +1,849 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAABGaEy8BjpAY66LCNQNl4uVSCoY_1HgHouA",
+    "profile_url": "https://www.linkedin.com/in/ACwAABGaEy8BjpAY66LCNQNl4uVSCoY_1HgHouA"
+  },
+  "item": {
+    "id": "ACoAABGaEy8Bu1ycKB5WUvyRc69OERCzymW7mxY",
+    "publicIdentifier": "james-cahill-093a9582",
+    "linkedinUrl": "https://www.linkedin.com/in/james-cahill-093a9582",
+    "firstName": "Jamie",
+    "lastName": "Cahill",
+    "emails": [
+      {
+        "email": "jamie.cahill@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Member of Technical Staff @ Thinking Machines, Ex-Meta",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "New York, New York, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "New York City, NY, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "New York",
+        "city": "New York City"
+      }
+    },
+    "objectUrn": "295310127",
+    "registeredAt": "2013-10-09T17:16:40.281Z",
+    "topSkills": null,
+    "connectionsCount": 75,
+    "followerCount": 91,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 12,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "19276",
+        "companyId": "164707",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/164707/",
+        "schoolName": "Lehigh University"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": null,
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Member of Technical Staff @ Thinking Machines, Ex-Meta",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "New York, New York, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "5 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Dec",
+          "year": 2025,
+          "text": "Dec 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer",
+        "location": "New York, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "2 yrs 1 mo",
+        "description": "2024 - 2025 : Leading developer on Meta's virtual machine based code execution platform for untrusted and LLM generated code supporting use cases like model training, tool calling, data generation, etc.\n\n2021 - 2024: SWE working on Tupperware (externally known as Twine) Meta's cluster management system. I primarily worked on Tupperware Agent the per node agent responsible for starting and managing the lifecycle of containers. Some things I worked on:\n- wrote the sidecar infra allowing Tupperware containers to load custom BPF sched-ext CPU schedulers as part of the container lifecycle\n- added support for disk quota limits for containers\n- rewrote Tupperware Agent's tls certificate provisioning feature\n- improved nested container support within Tupperware making it easier for users to setup resource limits and isolation for nested workloads",
+        "skills": null,
+        "startDate": {
+          "month": "Nov",
+          "year": 2023,
+          "text": "Nov 2023"
+        },
+        "endDate": {
+          "month": "Nov",
+          "year": 2025,
+          "text": "Nov 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Production Engineer",
+        "location": "New York, New York, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Facebook",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/76987811/",
+        "companyId": "76987811",
+        "duration": "2 yrs 5 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jul",
+          "year": 2021,
+          "text": "Jul 2021"
+        },
+        "endDate": {
+          "month": "Nov",
+          "year": 2023,
+          "text": "Nov 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_200_200/company-logo_200_200/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=CL3OcEUIyBJFm9Wkw4iT9gJoWpsvGBIAhhNM0DjZx_A",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_100_100/company-logo_100_100/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=sZq9Sard1kGYVIprgBkNhUvJRTI7tf3pXOCP1bQBfpM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Lead Software Engineer",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "The Johns Hopkins University Applied Physics Laboratory",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/7251/",
+        "companyId": "7251",
+        "duration": "3 yrs 10 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "506de8c7db700a7bc4eb441b8b0507f7784c6ec9",
+        "startDate": {
+          "month": "Oct",
+          "year": 2017,
+          "text": "Oct 2017"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2021,
+          "text": "Jul 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFVygtQGU-lIA/company-logo_400_400/company-logo_400_400/0/1630600188706/johns_hopkins_university_applied_physics_laboratory_logo?e=1776902400&v=beta&t=8bfJrj_NWcau0m9vWJWMMrxhHpN3Po00WvcrIuvvNR0",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFVygtQGU-lIA/company-logo_400_400/company-logo_400_400/0/1630600188706/johns_hopkins_university_applied_physics_laboratory_logo?e=1776902400&v=beta&t=8bfJrj_NWcau0m9vWJWMMrxhHpN3Po00WvcrIuvvNR0",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFVygtQGU-lIA/company-logo_200_200/company-logo_200_200/0/1630600188706/johns_hopkins_university_applied_physics_laboratory_logo?e=1776902400&v=beta&t=I2ta5sOriEVHQE3F-stoxtjFtOeJAhoRKF9bjsFqqSE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFVygtQGU-lIA/company-logo_100_100/company-logo_100_100/0/1630600188706/johns_hopkins_university_applied_physics_laboratory_logo?e=1776902400&v=beta&t=2KPc7lQ77O4NfXutvP0Qad-8O2DW2qcMG9ax_rL1s4M",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer",
+        "location": "Columbia, Maryland",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "The Johns Hopkins University Applied Physics Laboratory",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/7251/",
+        "companyId": "7251",
+        "duration": "1 yr 4 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "506de8c7db700a7bc4eb441b8b0507f7784c6ec9",
+        "startDate": {
+          "month": "Jul",
+          "year": 2016,
+          "text": "Jul 2016"
+        },
+        "endDate": {
+          "month": "Oct",
+          "year": 2017,
+          "text": "Oct 2017"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFVygtQGU-lIA/company-logo_400_400/company-logo_400_400/0/1630600188706/johns_hopkins_university_applied_physics_laboratory_logo?e=1776902400&v=beta&t=8bfJrj_NWcau0m9vWJWMMrxhHpN3Po00WvcrIuvvNR0",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFVygtQGU-lIA/company-logo_400_400/company-logo_400_400/0/1630600188706/johns_hopkins_university_applied_physics_laboratory_logo?e=1776902400&v=beta&t=8bfJrj_NWcau0m9vWJWMMrxhHpN3Po00WvcrIuvvNR0",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFVygtQGU-lIA/company-logo_200_200/company-logo_200_200/0/1630600188706/johns_hopkins_university_applied_physics_laboratory_logo?e=1776902400&v=beta&t=I2ta5sOriEVHQE3F-stoxtjFtOeJAhoRKF9bjsFqqSE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFVygtQGU-lIA/company-logo_100_100/company-logo_100_100/0/1630600188706/johns_hopkins_university_applied_physics_laboratory_logo?e=1776902400&v=beta&t=2KPc7lQ77O4NfXutvP0Qad-8O2DW2qcMG9ax_rL1s4M",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Lehigh University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/164707/",
+        "schoolId": "164707",
+        "degree": "Bachelor of Science (BS)",
+        "fieldOfStudy": "Computer Engineering",
+        "skills": [],
+        "description": "Minor in Economics",
+        "insights": "Activities and societies: IEEE, Eta Kappa Nu, Running Club",
+        "startDate": {
+          "year": 2012,
+          "text": "2012"
+        },
+        "endDate": {
+          "year": 2016,
+          "text": "2016"
+        },
+        "period": "2012 - 2016",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHmhyMQACBQTQ/company-logo_400_400/company-logo_400_400/0/1691769642538/lehigh_university_logo?e=1776902400&v=beta&t=l0ZC2swzMGNSIf-W3GnJhThXgMlh_RZ2UYKBSGlgwi0",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHmhyMQACBQTQ/company-logo_400_400/company-logo_400_400/0/1691769642538/lehigh_university_logo?e=1776902400&v=beta&t=l0ZC2swzMGNSIf-W3GnJhThXgMlh_RZ2UYKBSGlgwi0",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHmhyMQACBQTQ/company-logo_200_200/company-logo_200_200/0/1691769642538/lehigh_university_logo?e=1776902400&v=beta&t=HqqPtzWdOcA6mrpIAgPJv2kaDqfp5pD9mTWpGR3e3E8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHmhyMQACBQTQ/company-logo_100_100/company-logo_100_100/0/1691769642538/lehigh_university_logo?e=1776902400&v=beta&t=yBCRwX2c1EGm2QhvDHL8JjYW9ghoFtGIuq0e3qfa8v8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Johns Hopkins Whiting School of Engineering",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/522339/",
+        "schoolId": "522339",
+        "degree": "Master's degree",
+        "fieldOfStudy": "Computational and Applied Mathematics",
+        "skills": [],
+        "startDate": {
+          "year": 2016,
+          "text": "2016"
+        },
+        "endDate": {
+          "year": 2019,
+          "text": "2019"
+        },
+        "period": "2016 - 2019",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHHBw550ZGOBw/company-logo_400_400-alternative/company-logo_400_400-alternative/0/1630640516415/johns_hopkins_whiting_school_of_engineering_logo?e=1776902400&v=beta&t=MEH6OlzmYrjEELmBZQrUZwcOXwZhijqVI0xChkByph4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHHBw550ZGOBw/company-logo_400_400-alternative/company-logo_400_400-alternative/0/1630640516415/johns_hopkins_whiting_school_of_engineering_logo?e=1776902400&v=beta&t=MEH6OlzmYrjEELmBZQrUZwcOXwZhijqVI0xChkByph4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHHBw550ZGOBw/company-logo_400_400/company-logo_400_400/0/1630640516427/johns_hopkins_whiting_school_of_engineering_logo?e=1776902400&v=beta&t=WKo51vZFVzuEwlkUbt2E9sx7bBTgXola4egrg3DJtso",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHHBw550ZGOBw/company-logo_200_200/company-logo_200_200/0/1630640516427/johns_hopkins_whiting_school_of_engineering_logo?e=1776902400&v=beta&t=4T6VRPKG0RqlOnl3pzKm_QgWorIcUj02EchKCBhJ8OA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHHBw550ZGOBw/company-logo_200_200-alternative/company-logo_200_200-alternative/0/1630640516415/johns_hopkins_whiting_school_of_engineering_logo?e=1776902400&v=beta&t=z_UeOPCiZMTZ_btXpEA_pO9Rtk_-uNgVEg2DQI8d274",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHHBw550ZGOBw/company-logo_100_100-alternative/company-logo_100_100-alternative/0/1630640516415/johns_hopkins_whiting_school_of_engineering_logo?e=1776902400&v=beta&t=99oH3Xm6WgekeFW7y0dOCTzOuYu9R4-2MlrUHVm97bk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHHBw550ZGOBw/company-logo_100_100/company-logo_100_100/0/1630640516427/johns_hopkins_whiting_school_of_engineering_logo?e=1776902400&v=beta&t=u9EIHZRqD57HAT36MOZgNXAfB079bLNYAJ37gP3kArY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [
+      {
+        "title": "Brown Autonomous Robotics Competition",
+        "description": "Worked on a team of five to create an autonomous robot capable of navigating a maze. I worked with two other team members to write the maze solving algorithm that was employed by the robot. I also wrote some of the lower level code used by the robot to read in sensor values, control the motors, etc.  ",
+        "duration": "Jan 2014 - Apr 2014",
+        "startDate": {
+          "month": "Jan",
+          "year": 2014,
+          "text": "Jan 2014"
+        },
+        "endDate": {
+          "month": "Apr",
+          "year": 2014,
+          "text": "Apr 2014"
+        },
+        "associatedWith": "Associated with Lehigh University",
+        "associatedWithLink": "https://www.linkedin.com/company/164707/"
+      }
+    ],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Python",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "C++",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Unix"
+      },
+      {
+        "name": "Java"
+      },
+      {
+        "name": "C"
+      },
+      {
+        "name": "Matlab"
+      },
+      {
+        "name": "VueJs"
+      },
+      {
+        "name": "Git"
+      },
+      {
+        "name": "SQL"
+      },
+      {
+        "name": "MongoDB"
+      },
+      {
+        "name": "Julia"
+      },
+      {
+        "name": "Docker"
+      },
+      {
+        "name": "TypeScript"
+      }
+    ],
+    "publications": [],
+    "courses": [
+      {
+        "title": "Applied Microeconomic Analysis",
+        "number": "ECO 146",
+        "associatedWith": "Associated with Lehigh University",
+        "associatedWithLink": "https://www.linkedin.com/company/164707/"
+      },
+      {
+        "title": "Computer Architecture",
+        "number": "ECE 201",
+        "associatedWith": "Associated with Lehigh University",
+        "associatedWithLink": "https://www.linkedin.com/company/164707/"
+      },
+      {
+        "title": "Digital Signal Processing",
+        "number": "EN.525.427",
+        "associatedWith": "Associated with Johns Hopkins Whiting School of Engineering",
+        "associatedWithLink": "https://www.linkedin.com/company/522339/"
+      },
+      {
+        "title": "Electronic Circuits",
+        "number": "ECE 121",
+        "associatedWith": "Associated with Lehigh University",
+        "associatedWithLink": "https://www.linkedin.com/company/164707/"
+      },
+      {
+        "title": "Intro to Pattern Recognition",
+        "number": "EN.525.724",
+        "associatedWith": "Associated with Johns Hopkins Whiting School of Engineering",
+        "associatedWithLink": "https://www.linkedin.com/company/522339/"
+      },
+      {
+        "title": "Intro to Stochastic Differential Equations",
+        "number": "EN.625.714",
+        "associatedWith": "Associated with Johns Hopkins Whiting School of Engineering",
+        "associatedWithLink": "https://www.linkedin.com/company/522339/"
+      },
+      {
+        "title": "Introduction to Mobile Robotics",
+        "number": "CSE 360",
+        "associatedWith": "Associated with Lehigh University",
+        "associatedWithLink": "https://www.linkedin.com/company/164707/"
+      },
+      {
+        "title": "Matrix Theory",
+        "number": "EN,625.609",
+        "associatedWith": "Associated with Johns Hopkins Whiting School of Engineering",
+        "associatedWithLink": "https://www.linkedin.com/company/522339/"
+      },
+      {
+        "title": "Mechatronics Lab",
+        "number": "ME 374",
+        "associatedWith": "Associated with Lehigh University",
+        "associatedWithLink": "https://www.linkedin.com/company/164707/"
+      },
+      {
+        "title": "Money, Banking & Financial Markets",
+        "number": "ECO 029",
+        "associatedWith": "Associated with Lehigh University",
+        "associatedWithLink": "https://www.linkedin.com/company/164707/"
+      },
+      {
+        "title": "Number Theory",
+        "number": "EN.625.744",
+        "associatedWith": "Associated with Johns Hopkins Whiting School of Engineering",
+        "associatedWithLink": "https://www.linkedin.com/company/522339/"
+      },
+      {
+        "title": "Programming and Data Structures",
+        "number": "CSE 017",
+        "associatedWith": "Associated with Lehigh University",
+        "associatedWithLink": "https://www.linkedin.com/company/164707/"
+      },
+      {
+        "title": "Real Analysis",
+        "number": "EN.625.401",
+        "associatedWith": "Associated with Johns Hopkins Whiting School of Engineering",
+        "associatedWithLink": "https://www.linkedin.com/company/522339/"
+      },
+      {
+        "title": "Signals and Systems",
+        "number": "ECE 108",
+        "associatedWith": "Associated with Lehigh University",
+        "associatedWithLink": "https://www.linkedin.com/company/164707/"
+      },
+      {
+        "title": "Simulation and Monte Carlo Methods",
+        "number": "EN.625.744",
+        "associatedWith": "Associated with Johns Hopkins Whiting School of Engineering",
+        "associatedWithLink": "https://www.linkedin.com/company/522339/"
+      },
+      {
+        "title": "Theory of Statistics I",
+        "number": "EN.625.725",
+        "associatedWith": "Associated with Johns Hopkins Whiting School of Engineering",
+        "associatedWithLink": "https://www.linkedin.com/company/522339/"
+      },
+      {
+        "title": "Theory of Statistics II",
+        "number": "EN.625.726",
+        "associatedWith": "Associated with Johns Hopkins Whiting School of Engineering",
+        "associatedWithLink": "https://www.linkedin.com/company/522339/"
+      }
+    ],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "position": "Thinking about machines",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAABEmYXYB5f-3ZmFG8dI-n9XAlqySBqO-2PA",
+        "firstName": "Luke",
+        "lastName": "Carlson",
+        "position": "Thinking Machines | Member of Technical Staff",
+        "publicIdentifier": "jlukecarlson",
+        "linkedinUrl": "https://www.linkedin.com/in/jlukecarlson"
+      },
+      {
+        "id": "ACoAABhKWCYBiuV3Zv9Hbt8t0j-xMRqxawBcSgw",
+        "firstName": "Kurt",
+        "lastName": "Shuster",
+        "position": "AI Research Engineer",
+        "publicIdentifier": "kurtshuster1",
+        "linkedinUrl": "https://www.linkedin.com/in/kurtshuster1"
+      },
+      {
+        "id": "ACoAAAd3c8cBXKnzqS80_HMaDIGNdqrXbaFbO5g",
+        "firstName": "James",
+        "lastName": "Sun",
+        "position": "Software Engineer",
+        "publicIdentifier": "james5un",
+        "linkedinUrl": "https://www.linkedin.com/in/james5un"
+      },
+      {
+        "id": "ACoAABQ5lJUBry2byQYf_TtxDF9Rha9l-RqYsaM",
+        "firstName": "Guang-He",
+        "lastName": "Lee",
+        "position": "Thinking Machines Lab | Prev: Anthropic, Citadel, MIT",
+        "publicIdentifier": "guang-he-lee-64577895",
+        "linkedinUrl": "https://www.linkedin.com/in/guang-he-lee-64577895"
+      },
+      {
+        "id": "ACoAACE2EIwB3vNVX9rm6ce5juOGovFUzVvIsCc",
+        "firstName": "Kevin",
+        "lastName": "Lu",
+        "position": "thinking machines",
+        "publicIdentifier": "kzl",
+        "linkedinUrl": "https://www.linkedin.com/in/kzl"
+      },
+      {
+        "id": "ACoAAAncnq0BajmeOrLikO5AAincnDzuRDUXFjw",
+        "firstName": "Soumith",
+        "lastName": "Chintala",
+        "publicIdentifier": "soumith",
+        "linkedinUrl": "https://www.linkedin.com/in/soumith"
+      },
+      {
+        "id": "ACoAAAQ1QI4Bex6mqv5SgvahWcZuzAuWiTKciBo",
+        "firstName": "Bi",
+        "lastName": "Xue",
+        "position": "Thinking Machines Lab",
+        "publicIdentifier": "bi-xue-9527871b",
+        "linkedinUrl": "https://www.linkedin.com/in/bi-xue-9527871b"
+      },
+      {
+        "id": "ACoAACHgqNcBO7G9QHjfnTyp5v6rVbPMJ19f1dc",
+        "firstName": "Claire",
+        "lastName": "Fu",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "clairecfu",
+        "linkedinUrl": "https://www.linkedin.com/in/clairecfu"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAAAgB78IBFrSRvjrM16CT0N8_P9uNs_xP3cw",
+        "firstName": "Aurick",
+        "lastName": "Qiao",
+        "position": "AI/ML Systems",
+        "publicIdentifier": "aurickq",
+        "linkedinUrl": "https://www.linkedin.com/in/aurickq"
+      },
+      {
+        "id": "ACoAABE9sVMBCH0i964WlvecDNyGKTviqyXKcTY",
+        "firstName": "Hannah",
+        "lastName": "T.",
+        "position": "recruiting @ thinking machines lab",
+        "publicIdentifier": "hannahnth",
+        "linkedinUrl": "https://www.linkedin.com/in/hannahnth"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "position": "Co-Founder and CEO at Thinking Machines Lab",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAAACo1tYBGy9sT2OWZuEULOMe4K_b2Y22-F8",
+        "firstName": "Alex",
+        "lastName": "Gartrell",
+        "position": "Engineering @ Thinking Machines, Ex-Meta/Facebook",
+        "publicIdentifier": "alexgartrell",
+        "linkedinUrl": "https://www.linkedin.com/in/alexgartrell"
+      },
+      {
+        "id": "ACoAACHG180BXiyeZ2qJgoggx27e4iM3ajxvp18",
+        "firstName": "Andy",
+        "lastName": "Hwang",
+        "position": "thinking machines",
+        "publicIdentifier": "andrewnhwang",
+        "linkedinUrl": "https://www.linkedin.com/in/andrewnhwang"
+      },
+      {
+        "id": "ACoAACy2BxwB9fCrfCBI06w0X-gHyQTFLJIpJGc",
+        "firstName": "Guangxuan",
+        "lastName": "X.",
+        "publicIdentifier": "xgx",
+        "linkedinUrl": "https://www.linkedin.com/in/xgx"
+      },
+      {
+        "id": "ACoAAAO-j_IBXcvIzhZtQ7QNkky6tlnQTcFl9qI",
+        "firstName": "Myle",
+        "lastName": "Ott",
+        "position": "ML infra at Thinking Machines",
+        "publicIdentifier": "myleott",
+        "linkedinUrl": "https://www.linkedin.com/in/myleott"
+      },
+      {
+        "id": "ACoAAB4qbUUBsc9H_NLZN2duLUOOyyFDm-k_ACo",
+        "firstName": "Riley",
+        "lastName": "Shanahan",
+        "position": "Eng at Thinking Machines ",
+        "publicIdentifier": "rileyshanny",
+        "linkedinUrl": "https://www.linkedin.com/in/rileyshanny"
+      },
+      {
+        "id": "ACoAAAeoHjYB_Lo5sUFlpZpz2L74oe9nEIKztQA",
+        "firstName": "Jenya",
+        "lastName": "L.",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "jenya-l",
+        "linkedinUrl": "https://www.linkedin.com/in/jenya-l"
+      },
+      {
+        "id": "ACoAABoG0oUBl986ZaMrLUASG1NhDoJyVlav4Po",
+        "firstName": "Eric",
+        "lastName": "Zhang",
+        "position": "MTS, Thinking Machines",
+        "publicIdentifier": "ekzhang",
+        "linkedinUrl": "https://www.linkedin.com/in/ekzhang"
+      },
+      {
+        "id": "ACoAADNH1zsBiXkHFMaVR35GjyFoZSZ_mgsqFgM",
+        "firstName": "Ayshan",
+        "lastName": "Mammadzada",
+        "position": "Founder and CEO of Yonca Support & Development Center",
+        "publicIdentifier": "ayshan-mammadzada-623165200",
+        "linkedinUrl": "https://www.linkedin.com/in/ayshan-mammadzada-623165200"
+      },
+      {
+        "id": "ACoAAD_OZzwBExD4gjJxaNsUwVeqPdmL0AGA_O4",
+        "firstName": "Elmir",
+        "lastName": "Tahirov",
+        "position": "Environmental Health Safety",
+        "publicIdentifier": "elmir-tahirov-45060925a",
+        "linkedinUrl": "https://www.linkedin.com/in/elmir-tahirov-45060925a"
+      },
+      {
+        "id": "ACoAAANPN2IBaa0VAsuPOBnW2CrOVQJjMJTWpXU",
+        "firstName": "Tamerlan",
+        "lastName": "Rajabov",
+        "position": "Program Management | Planning, Monitoring & Evaluation Specialist | Data Analysis & Research Expert with 15+ years of experience",
+        "publicIdentifier": "tamerlan",
+        "linkedinUrl": "https://www.linkedin.com/in/tamerlan"
+      },
+      {
+        "id": "ACoAAC2N3DoBPkS8P7VOSw2fzuuVaffS2VjKKUM",
+        "firstName": "Mehriban",
+        "lastName": "Shamsadinskaya",
+        "position": "Artist, Art therapist - Mental health center",
+        "publicIdentifier": "mehriban-shamsadinskaya-a22b52193",
+        "linkedinUrl": "https://www.linkedin.com/in/mehriban-shamsadinskaya-a22b52193"
+      },
+      {
+        "id": "ACoAACVRjO4BSC0UzU3KMxTHwCwatzsdH-Ryy8w",
+        "firstName": "Rəsul",
+        "lastName": "Rzayev",
+        "position": "Sağlık Güvenlik Çevre Mühendisi | Acil Durum Yönetimi Yüksek Lisansı",
+        "publicIdentifier": "rəsul-rzayev-2ba81b155",
+        "linkedinUrl": "https://www.linkedin.com/in/rəsul-rzayev-2ba81b155"
+      },
+      {
+        "id": "ACoAAC7FkfUBkbSiJpL6_undEaaA15lxjfcHJX0",
+        "firstName": "Shamil",
+        "lastName": "Mammadov",
+        "position": "HSE Engineer",
+        "publicIdentifier": "shamil-mammadov-89996419a",
+        "linkedinUrl": "https://www.linkedin.com/in/shamil-mammadov-89996419a"
+      },
+      {
+        "id": "ACoAABhWSvgBReZWHVXU27lgzqCbCyZsCFyMISs",
+        "firstName": "Afida",
+        "lastName": "Abdullayeva",
+        "position": "BestSafety MMC",
+        "publicIdentifier": "afida-abdullayeva-7608a9b4",
+        "linkedinUrl": "https://www.linkedin.com/in/afida-abdullayeva-7608a9b4"
+      },
+      {
+        "id": "ACoAAAsbPk4B5EWI7MLtaoPmN1jnLTg-MUhLUjk",
+        "firstName": "Rashid",
+        "lastName": "Vezirov, PhD",
+        "position": "Director General at Respublika Diaqnostika Mərkəzi",
+        "publicIdentifier": "rashid-vazirov-phd",
+        "linkedinUrl": "https://www.linkedin.com/in/rashid-vazirov-phd"
+      },
+      {
+        "id": "ACoAAENDpfIBTabANz1oew1vAfYTnrm4joWax5Q",
+        "firstName": "Rena",
+        "lastName": "Emirova",
+        "position": "HSE Specialist  | IOSH Certified ",
+        "publicIdentifier": "rena-emirova-12ab27275",
+        "linkedinUrl": "https://www.linkedin.com/in/rena-emirova-12ab27275"
+      },
+      {
+        "id": "ACoAAEhEDMQBUWMYx52UX-nFYISq37z9hf2YkNc",
+        "firstName": "Surxay",
+        "lastName": "Kazımov",
+        "position": "HSE specialist",
+        "publicIdentifier": "surxay-kazımov-63005329a",
+        "linkedinUrl": "https://www.linkedin.com/in/surxay-kazımov-63005329a"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAABGaEy8BjpAY66LCNQNl4uVSCoY_1HgHouA"
+    }
+  }
+}

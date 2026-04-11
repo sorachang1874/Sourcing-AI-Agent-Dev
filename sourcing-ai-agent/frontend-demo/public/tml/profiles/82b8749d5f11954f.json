@@ -1,0 +1,715 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAAENQhgBOqYuC3E8TQU0mEuPLi1VTOtlSLM",
+    "profile_url": "https://www.linkedin.com/in/ACwAAAENQhgBOqYuC3E8TQU0mEuPLi1VTOtlSLM"
+  },
+  "item": {
+    "id": "ACoAAAENQhgBH8wIeS6hMrUoWlbKk5L9GWNNQCE",
+    "publicIdentifier": "andrii-grynenko-a48aab5",
+    "linkedinUrl": "https://www.linkedin.com/in/andrii-grynenko-a48aab5",
+    "firstName": "Andrii",
+    "lastName": "Grynenko",
+    "emails": [
+      {
+        "email": "andrii.grynenko@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Software Engineer",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Menlo Park, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "Menlo Park, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "Menlo Park"
+      }
+    },
+    "objectUrn": "17646104",
+    "registeredAt": "2007-11-02T17:17:32.000Z",
+    "topSkills": null,
+    "connectionsCount": 657,
+    "followerCount": 650,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 6,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "17588",
+        "companyId": "364340",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/364340/",
+        "schoolName": null
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": null,
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Software Engineer",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "11 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2025,
+          "text": "Jun 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "13 yrs 6 mos",
+        "description": "Over years I worked across many teams within Facebook Infrastructure org. I generally act as a hands-on TL.\n\nSome highlights:\n* Led re-architecture of data reading and pre-processing infrastructure used primarily for RecSys training.  Focusing on making the infra \"invisible\" while meeting growing scale and efficiency demands.\n* Worked towards unifying all in-datacenter RPC workloads on Thrift. This was achieved through adding new capabilities (e.g. streaming), 10x performance improvements in the Thrift transport and replacing network protocol with RSocket (https://rsocket.io/).\n* Drove upgrade of Facebook's C++ codebase to use C++ coroutines making Facebook one of the largest (or maybe even the largest ¯\\_(ツ)_/¯ ) C++ coroutines users in the world. Designed libraries and process to enable mostly organic adoption.\n* Either author or key contributor of many core C++ libraries used at Facebook: folly::coro, folly::fibers, folly::futures, folly::observer, folly::Singleton and more. See https://github.com/facebook/folly\n* Led the migration of all Instagram graph metadata (likes, posts etc.) from PostgreSQL to Facebook's graph database (TAO).",
+        "skills": [
+          "C++",
+          "Distributed Systems"
+        ],
+        "startDate": {
+          "month": "Dec",
+          "year": 2011,
+          "text": "Dec 2011"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2025,
+          "text": "May 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Algorithm Researcher",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Materialise",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/4463/",
+        "companyId": "4463",
+        "duration": "1 yr 5 mos",
+        "description": "Worked on designing and developing algorithms used in various Materialise products.\n\nSome highlights:\n* Re-designed and then re-implemented the 3D nesting module. Delivered 10x performance win as well as a number of new features. See https://www.youtube.com/watch?v=laPiw3LHlKE for a cool demo :)",
+        "skills": null,
+        "startDate": {
+          "month": "Jul",
+          "year": 2010,
+          "text": "Jul 2010"
+        },
+        "endDate": {
+          "month": "Nov",
+          "year": 2011,
+          "text": "Nov 2011"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFGGT0-a-t2vA/company-logo_400_400/company-logo_400_400/0/1630541469443/materialise_logo?e=1776902400&v=beta&t=9F0sdX5XBBM5V59jBiNaP_NxD6h_ognnGmwm01kpvYA",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFGGT0-a-t2vA/company-logo_400_400/company-logo_400_400/0/1630541469443/materialise_logo?e=1776902400&v=beta&t=9F0sdX5XBBM5V59jBiNaP_NxD6h_ognnGmwm01kpvYA",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFGGT0-a-t2vA/company-logo_200_200/company-logo_200_200/0/1630541469442/materialise_logo?e=1776902400&v=beta&t=af2vM8Dhmbbv2kZSRYcXL3qZTdxDDbjByGQWK6Do8ro",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFGGT0-a-t2vA/company-logo_100_100/company-logo_100_100/0/1630541469443/materialise_logo?e=1776902400&v=beta&t=cmiVu9lfoGzS4kF2EU11REabUF40M5TZyjkx_Jwyb_A",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineering Intern",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Facebook",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/76987811/",
+        "companyId": "76987811",
+        "duration": "4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2010,
+          "text": "Jan 2010"
+        },
+        "endDate": {
+          "month": "Apr",
+          "year": 2010,
+          "text": "Apr 2010"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_200_200/company-logo_200_200/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=CL3OcEUIyBJFm9Wkw4iT9gJoWpsvGBIAhhNM0DjZx_A",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_100_100/company-logo_100_100/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=sZq9Sard1kGYVIprgBkNhUvJRTI7tf3pXOCP1bQBfpM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Java Software Developer",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Vimas Technologies",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Vimas+Technologies",
+        "duration": "5 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2009,
+          "text": "Mar 2009"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2009,
+          "text": "Jul 2009"
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Taras Shevchenko National University of Kyiv",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/364340/",
+        "schoolId": "364340",
+        "degree": "MS",
+        "fieldOfStudy": "Applied Math",
+        "skills": [],
+        "startDate": {
+          "year": 2005,
+          "text": "2005"
+        },
+        "endDate": {
+          "year": 2011,
+          "text": "2011"
+        },
+        "period": "2005 - 2011",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQG0dwdA1TfNhQ/company-logo_400_400/company-logo_400_400/0/1631374969564/taras_shevchenko_national_university_of_kyiv_logo?e=1776902400&v=beta&t=XzQhwtaRDRNWz2qAQQBtqO_AvDdPrqK293KRjcue_4s",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQG0dwdA1TfNhQ/company-logo_400_400/company-logo_400_400/0/1631374969564/taras_shevchenko_national_university_of_kyiv_logo?e=1776902400&v=beta&t=XzQhwtaRDRNWz2qAQQBtqO_AvDdPrqK293KRjcue_4s",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQG0dwdA1TfNhQ/company-logo_200_200/company-logo_200_200/0/1631374969564/taras_shevchenko_national_university_of_kyiv_logo?e=1776902400&v=beta&t=dDZg0udbnAKUGGz4I1bF-genTlkfPwtXMBltDPh4cFk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQG0dwdA1TfNhQ/company-logo_100_100/company-logo_100_100/0/1631374969564/taras_shevchenko_national_university_of_kyiv_logo?e=1776902400&v=beta&t=mv0Otq1EXrpihoNbyQpZsd8kr7S2wt5PCdnQwmKrAYs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [
+      {
+        "givenBy": "Volodymyr Kozatchenko",
+        "givenByHeadline": "Segment Architect at Materialise",
+        "givenAt": "January 4, 2012, Volodymyr was senior to Andrii but didn't manage Andrii directly",
+        "givenByLink": "https://www.linkedin.com/in/vladimir-kozatchenko",
+        "description": "Andrii is a brilliant algorithmic and math developer who can show results in solving complex computational tasks. He does complete set of responsibilities: from task definition, to main idea, to implementation, to coding&documenting, and finishing with presentation of the project to non-research people. \r\n\r\nBesides that, everybody enjoyed his strive for quality, team spirit and sense of humor.\r\n\r\nVladimir",
+        "givenByPicture": {
+          "url": null,
+          "sizes": []
+        }
+      }
+    ],
+    "skills": [
+      {
+        "name": "Algorithms",
+        "positions": [
+          "Endorsed by 8 colleagues at Meta"
+        ],
+        "endorsements": "58 endorsements"
+      },
+      {
+        "name": "Distributed Systems",
+        "positions": [
+          "Software Engineer at Meta",
+          "Endorsed by 3 colleagues at Meta"
+        ],
+        "endorsements": "11 endorsements"
+      },
+      {
+        "name": "RPC"
+      },
+      {
+        "name": "C++",
+        "positions": [
+          "Software Engineer at Meta",
+          "Endorsed by 4 colleagues at Meta"
+        ]
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [
+      {
+        "title": "International Collegiate Programming Contest 2010 Gold Medal",
+        "issuedBy": "Feb 2010",
+        "associatedWith": null,
+        "associatedWithLink": null
+      },
+      {
+        "title": "International Collegiate Programming Contest 2006 Finalist",
+        "issuedBy": "Jan 2006",
+        "associatedWith": null,
+        "associatedWithLink": null
+      },
+      {
+        "title": "International Olympiad in Informatics 2005 Gold Medal",
+        "issuedBy": "Aug 2005",
+        "associatedWith": null,
+        "associatedWithLink": null
+      },
+      {
+        "title": "International Olympiad in Informatics 2004 Bronze Medal",
+        "issuedBy": "Sep 2004",
+        "associatedWith": null,
+        "associatedWithLink": null
+      }
+    ],
+    "languages": [
+      {
+        "name": "English",
+        "proficiency": "Full professional proficiency"
+      },
+      {
+        "name": "German",
+        "proficiency": "Elementary proficiency"
+      },
+      {
+        "name": "Russian",
+        "proficiency": "Native or bilingual proficiency"
+      },
+      {
+        "name": "Ukrainian",
+        "proficiency": "Native or bilingual proficiency"
+      }
+    ],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAAQ4Q7kByw3YKf2rFlmWzRMF7P8Gw4S9PIU",
+        "firstName": "Yinghai",
+        "lastName": "L.",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "yinghai83",
+        "linkedinUrl": "https://www.linkedin.com/in/yinghai83"
+      },
+      {
+        "id": "ACoAABQ5lJUBry2byQYf_TtxDF9Rha9l-RqYsaM",
+        "firstName": "Guang-He",
+        "lastName": "Lee",
+        "position": "Thinking Machines Lab | Prev: Anthropic, Citadel, MIT",
+        "publicIdentifier": "guang-he-lee-64577895",
+        "linkedinUrl": "https://www.linkedin.com/in/guang-he-lee-64577895"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABgwxtcBfqsJJUHPwsSPuBE4K9oKyRqUp5o",
+        "firstName": "Lia",
+        "lastName": "Guy",
+        "position": "Research @ OpenAI",
+        "publicIdentifier": "aureliaguy",
+        "linkedinUrl": "https://www.linkedin.com/in/aureliaguy"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAAAJzsfoBp0MxssQYMgmy0ZNO2U3sA58ugwc",
+        "firstName": "Joshua",
+        "lastName": "Gross",
+        "position": "Engineering Leadership, Meta Superintelligence Lab",
+        "publicIdentifier": "joshgross",
+        "linkedinUrl": "https://www.linkedin.com/in/joshgross"
+      },
+      {
+        "id": "ACoAABYs4-IB5mHx5eVfOHzu1e8xlO3q_kb38IM",
+        "firstName": "Brydon",
+        "lastName": "Eastman",
+        "position": "Nerd @ Thinking Machines Labs | Formerly Member of Technical Staff @ OpenAI | PhD in Mathematical Oncology",
+        "publicIdentifier": "brydon-eastman-396719a4",
+        "linkedinUrl": "https://www.linkedin.com/in/brydon-eastman-396719a4"
+      },
+      {
+        "id": "ACoAAACo1tYBGy9sT2OWZuEULOMe4K_b2Y22-F8",
+        "firstName": "Alex",
+        "lastName": "Gartrell",
+        "position": "Engineering @ Thinking Machines, Ex-Meta/Facebook",
+        "publicIdentifier": "alexgartrell",
+        "linkedinUrl": "https://www.linkedin.com/in/alexgartrell"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAABLLpuMBU7a9WPW-GubLTIkDjAF6hz7Ujkc",
+        "firstName": "Daniel",
+        "lastName": "Xu",
+        "position": "Low level systems",
+        "publicIdentifier": "daniel-xu-42b73289",
+        "linkedinUrl": "https://www.linkedin.com/in/daniel-xu-42b73289"
+      },
+      {
+        "id": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+        "firstName": "Saurabh",
+        "lastName": "Garg",
+        "position": "Thinking Machines Lab | Prev: Mistral AI, CMU, IIT-B",
+        "publicIdentifier": "saurabh-garg-b680b5b8",
+        "linkedinUrl": "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+      },
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "position": "Thinking about machines",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAAABnAccB9h1LTKUrBFif76qxLwe9k7nyE_s",
+        "firstName": "Ian",
+        "lastName": "O'Connell",
+        "position": "Software engineer",
+        "publicIdentifier": "ianoc",
+        "linkedinUrl": "https://www.linkedin.com/in/ianoc"
+      },
+      {
+        "id": "ACoAAAl87CYBWKLLyGNTbomy6oqIPv-5n34CXIY",
+        "firstName": "Andrew",
+        "lastName": "Tulloch",
+        "position": "AI Research @ Meta",
+        "publicIdentifier": "andrew-tulloch-17238745",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-tulloch-17238745"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "position": "Co-Founder and CEO at Thinking Machines Lab",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAAAf7ZWcB3BGw5pTmcsFw0vXm4A_CQn6EkFo",
+        "firstName": "Christian",
+        "lastName": "G.",
+        "publicIdentifier": "christianjgibson",
+        "linkedinUrl": "https://www.linkedin.com/in/christianjgibson"
+      },
+      {
+        "id": "ACoAAA4HVN4BOZg5espOvMVoO3OY04NZmuqvMCo",
+        "firstName": "Shaojie",
+        "lastName": "Bai",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "shaojie-bai",
+        "linkedinUrl": "https://www.linkedin.com/in/shaojie-bai"
+      },
+      {
+        "id": "ACoAAAO-j_IBXcvIzhZtQ7QNkky6tlnQTcFl9qI",
+        "firstName": "Myle",
+        "lastName": "Ott",
+        "position": "ML infra at Thinking Machines",
+        "publicIdentifier": "myleott",
+        "linkedinUrl": "https://www.linkedin.com/in/myleott"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAAAAdzCEB9t8wLSGcpoQ71RdetK75KW7RgS4",
+        "firstName": "Mark",
+        "lastName": "Jen",
+        "position": "Engineer",
+        "publicIdentifier": "markjen",
+        "linkedinUrl": "https://www.linkedin.com/in/markjen"
+      },
+      {
+        "id": "ACoAAGXPhd0BAARejX8qWHnebmEQ9A8Gx1GvFHc",
+        "firstName": "Paul",
+        "lastName": "Devonshire",
+        "position": "--",
+        "publicIdentifier": "paul-devonshire-2a50573b8",
+        "linkedinUrl": "https://www.linkedin.com/in/paul-devonshire-2a50573b8"
+      },
+      {
+        "id": "ACoAAGWOhQoBUaIAjH6Rppz1otu1OszYUjwZMfk",
+        "firstName": "Tracey",
+        "lastName": "Morgan",
+        "position": "--",
+        "publicIdentifier": "tracey-morgan-b227413b6",
+        "linkedinUrl": "https://www.linkedin.com/in/tracey-morgan-b227413b6"
+      },
+      {
+        "id": "ACoAAGYKz9IBvqfzqka_5OGORSV_Joc2j_hqzbg",
+        "firstName": "Kyann",
+        "lastName": "Cicconie",
+        "position": "--",
+        "publicIdentifier": "kyann-cicconie-9aa40b3b9",
+        "linkedinUrl": "https://www.linkedin.com/in/kyann-cicconie-9aa40b3b9"
+      },
+      {
+        "id": "ACoAACNshuEBYAn9V-q9TF7M16xRbSz5BtkGQNU",
+        "firstName": "Natally",
+        "lastName": "G",
+        "position": "Lawyer ",
+        "publicIdentifier": "natally-g-341050147",
+        "linkedinUrl": "https://www.linkedin.com/in/natally-g-341050147"
+      },
+      {
+        "id": "ACoAAGWxUTcBnIR98Cns9mhXuRsa0ufiVttpHGY",
+        "firstName": "Amy",
+        "lastName": "Colebrook",
+        "position": "--",
+        "publicIdentifier": "amy-colebrook-7b34613b7",
+        "linkedinUrl": "https://www.linkedin.com/in/amy-colebrook-7b34613b7"
+      },
+      {
+        "id": "ACoAAGWbvxsBV0bMdG4C4t01IoV_Wk6lQGDt4ns",
+        "firstName": "Sally",
+        "lastName": "crabb",
+        "position": "--",
+        "publicIdentifier": "sally-crabb-6a3a9b3b6",
+        "linkedinUrl": "https://www.linkedin.com/in/sally-crabb-6a3a9b3b6"
+      },
+      {
+        "id": "ACoAAGXgq6AB3WbRSnfK5QqfsFwbzLZH-lEZ4G8",
+        "firstName": "Jack",
+        "lastName": "Hillier",
+        "position": "--",
+        "publicIdentifier": "jack-hillier-6a84b93b8",
+        "linkedinUrl": "https://www.linkedin.com/in/jack-hillier-6a84b93b8"
+      },
+      {
+        "id": "ACoAAGXqaLkBTWxl1QjrIvb-dHIwIs0uiuK-9bQ",
+        "firstName": "Gregory",
+        "lastName": "Pratley",
+        "position": "--",
+        "publicIdentifier": "gregory-pratley-b097663b8",
+        "linkedinUrl": "https://www.linkedin.com/in/gregory-pratley-b097663b8"
+      },
+      {
+        "id": "ACoAAGWe-2AB4QHlzERFubULFhULaQB9KObiR6Q",
+        "firstName": "Chelsea",
+        "lastName": "Skinner",
+        "position": "--",
+        "publicIdentifier": "chelsea-skinner-340b823b6",
+        "linkedinUrl": "https://www.linkedin.com/in/chelsea-skinner-340b823b6"
+      },
+      {
+        "id": "ACoAAGEiODoB7YSPWiYPQnc2mDcR0Kn9GbIyY1I",
+        "firstName": "Jai",
+        "lastName": "Dalal",
+        "position": "Student at The Henley College",
+        "publicIdentifier": "jai-dalal-4a2916395",
+        "linkedinUrl": "https://www.linkedin.com/in/jai-dalal-4a2916395"
+      },
+      {
+        "id": "ACoAAF-elyUBabsVTLZbaZeVw8EdMoOnLYEfVoc",
+        "firstName": "Mobeen",
+        "lastName": "Khawaja",
+        "position": "--",
+        "publicIdentifier": "mobeen-khawaja-259305389",
+        "linkedinUrl": "https://www.linkedin.com/in/mobeen-khawaja-259305389"
+      },
+      {
+        "id": "ACoAAGV9eUIB9_nTYTB8mIdDOUcOv2yB0jTb9ps",
+        "firstName": "Sioned",
+        "lastName": "Davies",
+        "position": "--",
+        "publicIdentifier": "sioned-davies-5422a33b6",
+        "linkedinUrl": "https://www.linkedin.com/in/sioned-davies-5422a33b6"
+      },
+      {
+        "id": "ACoAAGYlFUgBvYk6-f1-hOu1ILJNrazDcynvcZM",
+        "firstName": "Ryan",
+        "lastName": "Davies",
+        "position": "--",
+        "publicIdentifier": "ryan-davies-234b003b9",
+        "linkedinUrl": "https://www.linkedin.com/in/ryan-davies-234b003b9"
+      },
+      {
+        "id": "ACoAAGQFz04BUWTxMe3puigLyYe3iCVtQOe19Ww",
+        "firstName": "Gagandeep",
+        "lastName": "Kaur",
+        "position": "Student at University of Lancashire",
+        "publicIdentifier": "gagandeep-kaur-066bb03a9",
+        "linkedinUrl": "https://www.linkedin.com/in/gagandeep-kaur-066bb03a9"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAAENQhgBOqYuC3E8TQU0mEuPLi1VTOtlSLM"
+    }
+  }
+}

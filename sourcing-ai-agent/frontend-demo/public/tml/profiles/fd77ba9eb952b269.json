@@ -1,0 +1,934 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAABMugyUBw1oEYLWxg8mWNGr3MkJFo9aWxac",
+    "profile_url": "https://www.linkedin.com/in/ACwAABMugyUBw1oEYLWxg8mWNGr3MkJFo9aWxac"
+  },
+  "item": {
+    "id": "ACoAABMugyUBsZ9MwIVIzmOSzlvmO6TOFL-mfAU",
+    "publicIdentifier": "chih-kuan-jason-yeh-8859378b",
+    "linkedinUrl": "https://www.linkedin.com/in/chih-kuan-jason-yeh-8859378b",
+    "firstName": "Chih-Kuan (Jason)",
+    "lastName": "Yeh",
+    "emails": [
+      {
+        "email": "chihkuan.yeh@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "building LLMs",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Mountain View, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "Mountain View, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "Mountain View"
+      }
+    },
+    "objectUrn": "321815333",
+    "registeredAt": "2014-02-06T15:35:51.924Z",
+    "topSkills": null,
+    "connectionsCount": 503,
+    "followerCount": 623,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 2,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "19232",
+        "companyId": "3147",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3147/",
+        "schoolName": "Carnegie Mellon University"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/C4E03AQH9kvwe8_xOrg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1517371741317?e=1776902400&v=beta&t=_FT1P7_g_vwc9lotDPXoAp3dF0ZoGx_Xm4Uku5Xmo3Y",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4E03AQH9kvwe8_xOrg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1517371741317?e=1776902400&v=beta&t=_FT1P7_g_vwc9lotDPXoAp3dF0ZoGx_Xm4Uku5Xmo3Y",
+          "width": 450,
+          "height": 450,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4E03AQH9kvwe8_xOrg/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1517371741388?e=1776902400&v=beta&t=mxrYVnth8Wvr_0QJhbJDYQ8UmajuiqZrEFBVihOlrCM",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4E03AQH9kvwe8_xOrg/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1517371741344?e=1776902400&v=beta&t=bhpZG2MTI-XfTep3fGTMrJPB0kQi74ApkmywYaGiu4Y",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4E03AQH9kvwe8_xOrg/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1517371741306?e=1776902400&v=beta&t=0gnY4co9wsUI2rx0WmR5EF14e_38e94Rl38MPiGtmnk",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/C4E03AQH9kvwe8_xOrg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1517371741317?e=1776902400&v=beta&t=_FT1P7_g_vwc9lotDPXoAp3dF0ZoGx_Xm4Uku5Xmo3Y",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "building LLMs",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "1 yr 3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2025,
+          "text": "Feb 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "AI Scientist",
+        "location": "North America",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Mistral AI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/94273421/",
+        "companyId": "94273421",
+        "duration": "5 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Oct",
+          "year": 2024,
+          "text": "Oct 2024"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2025,
+          "text": "Feb 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHEMPM6gZY2kQ/company-logo_400_400/B4EZqSkjBRKsAc-/0/1763395645877/mistralai_logo?e=1776902400&v=beta&t=bRmR_hAosRPx2QnINzjsq9be9L1olRwlDPWQQDFfu6M",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHEMPM6gZY2kQ/company-logo_400_400/B4EZqSkjBRKsAc-/0/1763395645877/mistralai_logo?e=1776902400&v=beta&t=bRmR_hAosRPx2QnINzjsq9be9L1olRwlDPWQQDFfu6M",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHEMPM6gZY2kQ/company-logo_200_200/B4EZqSkjBRKsAM-/0/1763395645877/mistralai_logo?e=1776902400&v=beta&t=ct70MlwzA97OSeM9iYXWi-WyDvzGSbntIst93HpfS1A",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHEMPM6gZY2kQ/company-logo_100_100/B4EZqSkjBRKsAU-/0/1763395645877/mistralai_logo?e=1776902400&v=beta&t=Iwbqsgy2PYVa7WB_J8e6gbWQgy1e29bUIn3eElmLhsY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Scientist",
+        "location": "Mountain View, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Google DeepMind",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1594050/",
+        "companyId": "1594050",
+        "duration": "2 yrs 2 mos",
+        "description": "Gemini data.",
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2022,
+          "text": "Sep 2022"
+        },
+        "endDate": {
+          "month": "Oct",
+          "year": 2024,
+          "text": "Oct 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_400_400/company-logo_400_400/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=r_t5nQiM8A2L0aUP5m-PXCGPiKrvOklfisLwUFyoqwc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_400_400/company-logo_400_400/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=r_t5nQiM8A2L0aUP5m-PXCGPiKrvOklfisLwUFyoqwc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_200_200/company-logo_200_200/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=2BilPPrSvxkF02b9uz-N6ccku99E3v2Y8bAOBExGcFA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_100_100/company-logo_100_100/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=TS688J1rsD8hLhjNZfNOSDSKLf9q38j5d5Qgo7HUC_0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "PHD Student",
+        "location": "Greater Pittsburgh Area",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Carnegie Mellon University",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/carnegie-mellon-university/",
+        "companyId": "3147",
+        "companyUniversalName": "carnegie-mellon-university",
+        "duration": "5 yrs 2 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Aug",
+          "year": 2017,
+          "text": "Aug 2017"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2022,
+          "text": "Sep 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_200_200/company-logo_200_200/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Cr9dcgM6gBeNici6XTUDQUKQfYAc8US2OXBC0P5yB-Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_100_100/company-logo_100_100/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=iJiUJ2BhQORJLlvMYFhw22Mq44Z-z45Fza4_dNRwHSs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Intern",
+        "location": null,
+        "employmentType": "Internship",
+        "workplaceType": "remote",
+        "companyName": "Google",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1441/",
+        "companyId": "1441",
+        "duration": "7 mos",
+        "description": "Worked on scalable training data influence to fix mistakes of a NLP model.",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2021,
+          "text": "May 2021"
+        },
+        "endDate": {
+          "month": "Nov",
+          "year": 2021,
+          "text": "Nov 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_200_200/B4EZmhegXHGcAM-/0/1759350753990/google_logo?e=1776902400&v=beta&t=CTzyZ9kqXiycW6UU0lJPQmCNKxu5QeAaPL_y9ftsJX0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_100_100/B4EZmhegXHGcAU-/0/1759350753990/google_logo?e=1776902400&v=beta&t=LRCYpUl9rmgdri4awRP4FVlvccNARAtgcfqxtRHdedI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Intern",
+        "location": "Sunnyvale, California, United States",
+        "employmentType": "Internship",
+        "workplaceType": null,
+        "companyName": "Google",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1441/",
+        "companyId": "1441",
+        "duration": "6 mos",
+        "description": "Worked on formulizing \"completeness\" for concept-based explanations, paper at NeurIPS 2020.",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2019,
+          "text": "May 2019"
+        },
+        "endDate": {
+          "month": "Oct",
+          "year": 2019,
+          "text": "Oct 2019"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_200_200/B4EZmhegXHGcAM-/0/1759350753990/google_logo?e=1776902400&v=beta&t=CTzyZ9kqXiycW6UU0lJPQmCNKxu5QeAaPL_y9ftsJX0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_100_100/B4EZmhegXHGcAU-/0/1759350753990/google_logo?e=1776902400&v=beta&t=LRCYpUl9rmgdri4awRP4FVlvccNARAtgcfqxtRHdedI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Assistant",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Academic Sinica",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Academic+Sinica",
+        "duration": "1 yr 2 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jul",
+          "year": 2016,
+          "text": "Jul 2016"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2017,
+          "text": "Aug 2017"
+        }
+      },
+      {
+        "position": "Student",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "National Taiwan University",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/554182/",
+        "companyId": "554182",
+        "duration": "3 yrs 10 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2012,
+          "text": "Sep 2012"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2016,
+          "text": "Jun 2016"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQGAh08jkWo23Q/company-logo_400_400/company-logo_400_400/0/1679904708552/national_taiwan_university_logo?e=1776902400&v=beta&t=ARPaJG8obVhqinZ_oQo3ZX4OoAcbTdUSKpqqOymba-w",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGAh08jkWo23Q/company-logo_400_400/company-logo_400_400/0/1679904708552/national_taiwan_university_logo?e=1776902400&v=beta&t=ARPaJG8obVhqinZ_oQo3ZX4OoAcbTdUSKpqqOymba-w",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGAh08jkWo23Q/company-logo_200_200/company-logo_200_200/0/1679904708552/national_taiwan_university_logo?e=1776902400&v=beta&t=t9yHaXMl6LU68TYropjSyZqI7_eLeIu_msFKlH-Ryu4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGAh08jkWo23Q/company-logo_100_100/company-logo_100_100/0/1679904708552/national_taiwan_university_logo?e=1776902400&v=beta&t=Lq68VZSRhpyyAcYd74Z9FpfJyq6z8-uaDiotMHbq7hU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Carnegie Mellon University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3147/",
+        "schoolId": "3147",
+        "degree": "Doctor of Philosophy - PhD",
+        "fieldOfStudy": "Machine learning",
+        "skills": [],
+        "insights": "Grade: 5 year",
+        "startDate": {
+          "month": "Sep",
+          "year": 2017,
+          "text": "Sep 2017"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2022,
+          "text": "Aug 2022"
+        },
+        "period": "Sep 2017 - Aug 2022",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_200_200/company-logo_200_200/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Cr9dcgM6gBeNici6XTUDQUKQfYAc8US2OXBC0P5yB-Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_100_100/company-logo_100_100/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=iJiUJ2BhQORJLlvMYFhw22Mq44Z-z45Fza4_dNRwHSs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Carnegie Mellon University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3147/",
+        "schoolId": "3147",
+        "degree": "Doctor of Philosophy - PhD",
+        "fieldOfStudy": "machine learning ",
+        "skills": [],
+        "startDate": {
+          "year": 2017,
+          "text": "2017"
+        },
+        "endDate": {
+          "year": 2022,
+          "text": "2022"
+        },
+        "period": "2017 - 2022",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_200_200/company-logo_200_200/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Cr9dcgM6gBeNici6XTUDQUKQfYAc8US2OXBC0P5yB-Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_100_100/company-logo_100_100/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=iJiUJ2BhQORJLlvMYFhw22Mq44Z-z45Fza4_dNRwHSs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "National Taiwan University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/554182/",
+        "schoolId": "554182",
+        "degree": "Bachelor’s Degree",
+        "fieldOfStudy": "Electrical Engineering",
+        "skills": [],
+        "startDate": {
+          "year": 2012,
+          "text": "2012"
+        },
+        "endDate": {
+          "year": 2016,
+          "text": "2016"
+        },
+        "period": "2012 - 2016",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQGAh08jkWo23Q/company-logo_400_400/company-logo_400_400/0/1679904708552/national_taiwan_university_logo?e=1776902400&v=beta&t=ARPaJG8obVhqinZ_oQo3ZX4OoAcbTdUSKpqqOymba-w",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGAh08jkWo23Q/company-logo_400_400/company-logo_400_400/0/1679904708552/national_taiwan_university_logo?e=1776902400&v=beta&t=ARPaJG8obVhqinZ_oQo3ZX4OoAcbTdUSKpqqOymba-w",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGAh08jkWo23Q/company-logo_200_200/company-logo_200_200/0/1679904708552/national_taiwan_university_logo?e=1776902400&v=beta&t=t9yHaXMl6LU68TYropjSyZqI7_eLeIu_msFKlH-Ryu4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGAh08jkWo23Q/company-logo_100_100/company-logo_100_100/0/1679904708552/national_taiwan_university_logo?e=1776902400&v=beta&t=Lq68VZSRhpyyAcYd74Z9FpfJyq6z8-uaDiotMHbq7hU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Matlab",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "C++",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "LaTeX",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Python",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Machine Learning",
+        "positions": [
+          "Endorsed by 2 colleagues at Google"
+        ],
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Deep Learning",
+        "positions": [
+          "Endorsed by 2 colleagues at Google"
+        ],
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "Artificial Intelligence",
+        "positions": [
+          "Endorsed by 2 colleagues at Google"
+        ],
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "Computer Vision",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Computer Science",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Algorithms",
+        "endorsements": "3 endorsements"
+      }
+    ],
+    "publications": [
+      {
+        "title": "Threading the needle for off-manifold and on-manifold value functions for Shapley Value",
+        "publishedAt": "AISTATS · Feb 26, 2022",
+        "description": "New value functions for Shapley explanations with axiomatic guarantees.",
+        "link": "https://arxiv.org/pdf/2202.11919.pdf"
+      },
+      {
+        "title": "Human-Centered Concept Explanations for Neural Networks",
+        "publishedAt": "Book Chapter In Neuro-Symbolic Artificial Intelligence– The State of the Art · Feb 1, 2022",
+        "description": "A survey on recent advances in concept explanations.",
+        "link": "http://www.cs.cmu.edu/~pradeepr/paperz/human-concept.pdf"
+      },
+      {
+        "title": "Objective criteria for explanations of machine learning models",
+        "publishedAt": "In Applied AI letters 2021 · Nov 1, 2021",
+        "description": "A survey on some advances on objective criteria for explanable AI.",
+        "link": "https://onlinelibrary.wiley.com/doi/epdf/10.1002/ail2.57"
+      },
+      {
+        "title": "Evaluations and Methods for Explanation through Robustness Analysis",
+        "publishedAt": "ICLR · Apr 1, 2021",
+        "description": "Using robustness analysis to identify the important feature set for feature interpretation.",
+        "link": "https://arxiv.org/pdf/2006.00442.pdf"
+      },
+      {
+        "title": "On Completeness-Aware Concept-Based Explanations in Deep Neural Networks",
+        "publishedAt": "NeurIPS 2020 · Dec 14, 2020",
+        "description": "Define completeness of concepts for concept-explanations, and its application on concept discoveries.",
+        "link": "https://arxiv.org/pdf/1910.07969.pdf"
+      },
+      {
+        "title": "On the (In)fidelity and Sensitivity of Explanations",
+        "publishedAt": "NeurIPS 2019 · Dec 14, 2019",
+        "description": "Provides metrics for saliency methods with a unified viewpoint. Implemented in Captum (a Pytorch XAI framework).",
+        "link": "https://arxiv.org/pdf/1901.09392.pdf"
+      },
+      {
+        "title": "Unsupervised Speech Recognition via Segmental Empirical Output Distribution Matching",
+        "publishedAt": "ICLR 2019 · Apr 30, 2019",
+        "description": "An initial attempt on unsupervised speech classification.",
+        "link": "https://arxiv.org/pdf/1812.09323.pdf"
+      },
+      {
+        "title": "Representer Point Selection for Explaining Deep Neural Networks",
+        "publishedAt": "NeurIPS 2018 · Dec 14, 2018",
+        "description": "Decomposing the test point prediction by training point contributions, providing instance-based explanatinos.",
+        "link": "https://arxiv.org/pdf/1811.09720.pdf"
+      }
+    ],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [
+      {
+        "name": "English",
+        "proficiency": "Professional working proficiency"
+      }
+    ],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAAAQ4Q7kByw3YKf2rFlmWzRMF7P8Gw4S9PIU",
+        "firstName": "Yinghai",
+        "lastName": "L.",
+        "publicIdentifier": "yinghai83",
+        "linkedinUrl": "https://www.linkedin.com/in/yinghai83"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABgwxtcBfqsJJUHPwsSPuBE4K9oKyRqUp5o",
+        "firstName": "Lia",
+        "lastName": "Guy",
+        "publicIdentifier": "aureliaguy",
+        "linkedinUrl": "https://www.linkedin.com/in/aureliaguy"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAACaOARIBRO2EEH12QWQO29L__oI3N2K4u14",
+        "firstName": "Mingjie",
+        "lastName": "Sun",
+        "publicIdentifier": "mingjie-sun-06a761160",
+        "linkedinUrl": "https://www.linkedin.com/in/mingjie-sun-06a761160"
+      },
+      {
+        "id": "ACoAAAJzsfoBp0MxssQYMgmy0ZNO2U3sA58ugwc",
+        "firstName": "Joshua",
+        "lastName": "Gross",
+        "publicIdentifier": "joshgross",
+        "linkedinUrl": "https://www.linkedin.com/in/joshgross"
+      },
+      {
+        "id": "ACoAABYs4-IB5mHx5eVfOHzu1e8xlO3q_kb38IM",
+        "firstName": "Brydon",
+        "lastName": "Eastman",
+        "publicIdentifier": "brydon-eastman-396719a4",
+        "linkedinUrl": "https://www.linkedin.com/in/brydon-eastman-396719a4"
+      },
+      {
+        "id": "ACoAAACo1tYBGy9sT2OWZuEULOMe4K_b2Y22-F8",
+        "firstName": "Alex",
+        "lastName": "Gartrell",
+        "publicIdentifier": "alexgartrell",
+        "linkedinUrl": "https://www.linkedin.com/in/alexgartrell"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAABA0sF8BJqwmfoms3veu9TE72tj8JMUQEFA",
+        "firstName": "Sam",
+        "lastName": "Shleifer",
+        "publicIdentifier": "sam-shleifer-a5307a77",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-shleifer-a5307a77"
+      },
+      {
+        "id": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+        "firstName": "Saurabh",
+        "lastName": "Garg",
+        "publicIdentifier": "saurabh-garg-b680b5b8",
+        "linkedinUrl": "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+      },
+      {
+        "id": "ACoAABhKWCYBiuV3Zv9Hbt8t0j-xMRqxawBcSgw",
+        "firstName": "Kurt",
+        "lastName": "Shuster",
+        "publicIdentifier": "kurtshuster1",
+        "linkedinUrl": "https://www.linkedin.com/in/kurtshuster1"
+      },
+      {
+        "id": "ACoAAAl87CYBWKLLyGNTbomy6oqIPv-5n34CXIY",
+        "firstName": "Andrew",
+        "lastName": "Tulloch",
+        "publicIdentifier": "andrew-tulloch-17238745",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-tulloch-17238745"
+      },
+      {
+        "id": "ACoAABV61Q0BF3ER-196Zc9GK5TviMrbbIlVGqg",
+        "firstName": "Samuel",
+        "lastName": "Schoenholz",
+        "publicIdentifier": "samuel-schoenholz-379830a0",
+        "linkedinUrl": "https://www.linkedin.com/in/samuel-schoenholz-379830a0"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAAA4HVN4BOZg5espOvMVoO3OY04NZmuqvMCo",
+        "firstName": "Shaojie",
+        "lastName": "Bai",
+        "publicIdentifier": "shaojie-bai",
+        "linkedinUrl": "https://www.linkedin.com/in/shaojie-bai"
+      },
+      {
+        "id": "ACoAAAO-j_IBXcvIzhZtQ7QNkky6tlnQTcFl9qI",
+        "firstName": "Myle",
+        "lastName": "Ott",
+        "publicIdentifier": "myleott",
+        "linkedinUrl": "https://www.linkedin.com/in/myleott"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAAAAdzCEB9t8wLSGcpoQ71RdetK75KW7RgS4",
+        "firstName": "Mark",
+        "lastName": "Jen",
+        "publicIdentifier": "markjen",
+        "linkedinUrl": "https://www.linkedin.com/in/markjen"
+      },
+      {
+        "id": "ACoAABNX88EBnluxUnzhKovoPW7ROJPamag_HH0",
+        "firstName": "Anastasiya",
+        "lastName": "Dashuk",
+        "position": "Technical Writer | Content Designer",
+        "publicIdentifier": "anastasiya-dashuk",
+        "linkedinUrl": "https://www.linkedin.com/in/anastasiya-dashuk"
+      },
+      {
+        "id": "ACoAABTdtTcBlpYfkyqX3nXRX_4FOuniGv13_Dg",
+        "firstName": "Matheus",
+        "lastName": "Cals Gissoni",
+        "position": "Videographer & Creative Producer | Transforming Ideas into Captivating Visual Stories with Impactful Engagement",
+        "publicIdentifier": "matheusgissoni",
+        "linkedinUrl": "https://www.linkedin.com/in/matheusgissoni"
+      },
+      {
+        "id": "ACoAAAIDcxMBIo9ukudA7cR0NFlFsIHNgNdRZCY",
+        "firstName": "Grigori",
+        "lastName": "Borta",
+        "position": "Engineering Manager | Tech Enthusiast",
+        "publicIdentifier": "bortian",
+        "linkedinUrl": "https://www.linkedin.com/in/bortian"
+      },
+      {
+        "id": "ACoAABzVzfkBu2ouHLa_7roSly7XWLErk3J-tGs",
+        "firstName": "Fawzi",
+        "lastName": "Mourad",
+        "position": "Motion Designer at SAP LeanIX",
+        "publicIdentifier": "fawzimourad",
+        "linkedinUrl": "https://www.linkedin.com/in/fawzimourad"
+      },
+      {
+        "id": "ACoAABLngGwBPjTV9_aqRnViPebm8O0Sk_wg8BI",
+        "firstName": "Inna",
+        "lastName": "D.",
+        "position": "FP&A Business Partner I FP&A Manager I Business Controller",
+        "publicIdentifier": "dumanskainna",
+        "linkedinUrl": "https://www.linkedin.com/in/dumanskainna"
+      },
+      {
+        "id": "ACoAADVcDfIBX-NwcsuMbi5k3BSGbwKCxVhIICA",
+        "firstName": "Adrian",
+        "lastName": "Szwast",
+        "position": "Senior Customer Success Engineer | SAP LeanIX",
+        "publicIdentifier": "adrian-szwast",
+        "linkedinUrl": "https://www.linkedin.com/in/adrian-szwast"
+      },
+      {
+        "id": "ACoAAApWPqIBC1T_VnF1IDQYUY8b5_edWTB4abM",
+        "firstName": "Madeline",
+        "lastName": "Fauser",
+        "position": "UX writer | Technical writer",
+        "publicIdentifier": "madeline-fauser",
+        "linkedinUrl": "https://www.linkedin.com/in/madeline-fauser"
+      },
+      {
+        "id": "ACoAABmQf9wB2otDPG6c9U4kdUAO7qNtUC9lSeA",
+        "firstName": "Cristian",
+        "lastName": "Toth, CPA Auditor",
+        "position": "Senior Manager FP&A @ SAP LeanIX",
+        "publicIdentifier": "cristian-toth-cpa-auditor-25077abb",
+        "linkedinUrl": "https://www.linkedin.com/in/cristian-toth-cpa-auditor-25077abb"
+      },
+      {
+        "id": "ACoAACLTv2ABIXHPUUDp-8-fCchtWavnLc2FRqU",
+        "firstName": "Joanne",
+        "lastName": "Rhode",
+        "position": "Product Learning Associate | eLearning, Instructional Design, L&D",
+        "publicIdentifier": "joanne-rhode-b94821143",
+        "linkedinUrl": "https://www.linkedin.com/in/joanne-rhode-b94821143"
+      },
+      {
+        "id": "ACoAACMrZtEBAfz70rv6JxOZ8lVfAqbvde5ryPU",
+        "firstName": "Gustav",
+        "lastName": "Wehrenpfennig",
+        "position": "Customer Success Manager @ SAP LeanIX",
+        "publicIdentifier": "gustav-wehrenpfennig",
+        "linkedinUrl": "https://www.linkedin.com/in/gustav-wehrenpfennig"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAABMugyUBw1oEYLWxg8mWNGr3MkJFo9aWxac"
+    }
+  }
+}

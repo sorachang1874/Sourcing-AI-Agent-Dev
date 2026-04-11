@@ -1,0 +1,914 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAADF01hQBZcWmB5Gtq1ZS5KTYcsZ7pcDg1DI",
+    "profile_url": "https://www.linkedin.com/in/ACwAADF01hQBZcWmB5Gtq1ZS5KTYcsZ7pcDg1DI"
+  },
+  "item": {
+    "id": "ACoAADF01hQBAdnnY3e-d5DabF4JQAaK7hIXY80",
+    "publicIdentifier": "tianleli",
+    "linkedinUrl": "https://www.linkedin.com/in/tianleli",
+    "firstName": "Tianle",
+    "lastName": "Li",
+    "emails": [
+      {
+        "email": "tianle.li@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Member of Technical Staff @ Thinking Machines | prev. RL @ xAI",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Berkeley, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "Berkeley, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "Berkeley"
+      }
+    },
+    "objectUrn": "829740564",
+    "registeredAt": "2020-07-04T20:13:38.273Z",
+    "topSkills": null,
+    "connectionsCount": 2144,
+    "followerCount": 2219,
+    "verified": true,
+    "about": "I work on the toughest problems standing between us and machines with superintelligence. I like training models and  make them cracked. I have worked on / contributed to almost all of the model training stacks: science for new RL paradigms, RL recipes &amp; mixtures &amp; infra, large production training runs for Grok 4.1 and Grok 4 Fast, post-training RL, co-led large production distillation, improve reasoning efficiency via RL, model tool use, production evals, improve model presentation / styles, training reward models, human data, AI tutors babysitting, synthetic data, wrote system prompt for Grok 4, and more.",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 3,
+            "year": 2026,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "17939",
+        "companyId": "2517",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2517/",
+        "schoolName": "University of California, Berkeley"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5603AQGfLSHqjfm3Kw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1693371578667?e=1776902400&v=beta&t=3D4Adi4AQu5Xg1PTNJO2qbakgRYvQ649zodbECS_G6k",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQGfLSHqjfm3Kw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1693371578667?e=1776902400&v=beta&t=3D4Adi4AQu5Xg1PTNJO2qbakgRYvQ649zodbECS_G6k",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQGfLSHqjfm3Kw/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1693371578667?e=1776902400&v=beta&t=5KW3aeRgbYI1MJYDEt9FjsJYs8_28gMwXkc05cvn_RY",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQGfLSHqjfm3Kw/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1693371578667?e=1776902400&v=beta&t=LcrYz2emvOKNojP3k2hzstEFyjJqhLenRGDPE5QieEo",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQGfLSHqjfm3Kw/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1693371578667?e=1776902400&v=beta&t=1e7qpcZh2H-GJIWLWBGNtGN-va2-xXldg7O4771a2GI",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5616AQExbONwlGi-bw/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1712202627672?e=1776902400&v=beta&t=9BFeB-owjjvxYiQpgtAmxUuL5nqseVt9VySKMXex2Cg",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5616AQExbONwlGi-bw/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1712202627672?e=1776902400&v=beta&t=9BFeB-owjjvxYiQpgtAmxUuL5nqseVt9VySKMXex2Cg",
+          "width": 1400,
+          "height": 349,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5616AQExbONwlGi-bw/profile-displaybackgroundimage-shrink_200_800/profile-displaybackgroundimage-shrink_200_800/0/1712202627672?e=1776902400&v=beta&t=z1FPTUnwvUnIobjGrG8q1uWLxeBgfPsT64KpEfAQyT4",
+          "width": 800,
+          "height": 199,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "photo": "https://media.licdn.com/dms/image/v2/D5603AQGfLSHqjfm3Kw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1693371578667?e=1776902400&v=beta&t=3D4Adi4AQu5Xg1PTNJO2qbakgRYvQ649zodbECS_G6k",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Member of Technical Staff @ Thinking Machines | prev. RL @ xAI",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco Bay Area",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "2 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2026,
+          "text": "Mar 2026"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Member of Technical Staff",
+        "location": "Palo Alto, CA",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "xAI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/96151950/",
+        "companyId": "96151950",
+        "duration": "11 mos",
+        "description": "RL Science & Scaling Team.\n- Grok 4.2 (Co-creator; model merging lead)\n- Grok 4.1 (Co-creator; post-training RL lead)\n- Grok 4.1 Fast (Co-creator; post-training RL lead)\n- Grok 4 Fast (Co-creator; post-training RL lead; distillation co-lead)\n- Grok 4 (Core contributor)",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2025,
+          "text": "May 2025"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2026,
+          "text": "Mar 2026"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQFGK5Kkd1nUlg/company-logo_400_400/company-logo_400_400/0/1738099065875/xai_logo?e=1776902400&v=beta&t=D9_BxwFh9s6Xs2Cj7r80cNvoc3yl7tyg6f8ZvrbXv64",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFGK5Kkd1nUlg/company-logo_400_400/company-logo_400_400/0/1738099065875/xai_logo?e=1776902400&v=beta&t=D9_BxwFh9s6Xs2Cj7r80cNvoc3yl7tyg6f8ZvrbXv64",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFGK5Kkd1nUlg/company-logo_200_200/company-logo_200_200/0/1738099065875/xai_logo?e=1776902400&v=beta&t=HEoRgaX2hRkDsEbWqIdB85Qph6PAPQDMvqQqOoxhzHc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFGK5Kkd1nUlg/company-logo_100_100/company-logo_100_100/0/1738099065875/xai_logo?e=1776902400&v=beta&t=fPyP5ijKRIbwP3cYP1d0JhCSK_zHRQZxBvUsdDb3vPk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Student Researcher",
+        "location": null,
+        "employmentType": "Part-time",
+        "workplaceType": null,
+        "companyName": "Google",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1441/",
+        "companyId": "1441",
+        "duration": "4 mos",
+        "description": "LLM Reasoning",
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2025,
+          "text": "Feb 2025"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2025,
+          "text": "May 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_200_200/B4EZmhegXHGcAM-/0/1759350753990/google_logo?e=1776902400&v=beta&t=CTzyZ9kqXiycW6UU0lJPQmCNKxu5QeAaPL_y9ftsJX0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_100_100/B4EZmhegXHGcAU-/0/1759350753990/google_logo?e=1776902400&v=beta&t=LRCYpUl9rmgdri4awRP4FVlvccNARAtgcfqxtRHdedI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Machine Learning Engineer",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Nexusflow",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Nexusflow",
+        "duration": "1 yr 1 mo",
+        "description": "LLM Post-training; Acquired by Nividia",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2024,
+          "text": "May 2024"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2025,
+          "text": "May 2025"
+        }
+      },
+      {
+        "position": "Undergraduate Researcher",
+        "location": "Berkeley, California, United States",
+        "employmentType": "Part-time",
+        "workplaceType": null,
+        "companyName": "Berkeley Sky Computing Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Berkeley+Sky+Computing+Lab",
+        "duration": "2 yrs",
+        "description": "Building Chatbot Arena, the largest community platform for evaluating LLMs.\nAdvisors: Ion Stoica.",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2023,
+          "text": "Jun 2023"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2025,
+          "text": "May 2025"
+        }
+      },
+      {
+        "position": "EECS127 Teaching Assistant",
+        "location": null,
+        "employmentType": "Part-time",
+        "workplaceType": null,
+        "companyName": "UC Berkeley Electrical Engineering & Computer Sciences (EECS)",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/18422873/",
+        "companyId": "18422873",
+        "duration": "10 mos",
+        "description": "EECS127/227A Convex Optimization for Machine Learning",
+        "skills": null,
+        "startDate": {
+          "month": "Aug",
+          "year": 2023,
+          "text": "Aug 2023"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2024,
+          "text": "May 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQET4WuLdTzDPQ/company-logo_400_400/company-logo_400_400/0/1731605469670/uc_berkeley_eecs_logo?e=1776902400&v=beta&t=NijwD-HkIBTqEaBL_WxNmkWcNYMgXYpvI9pQEBCyJao",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQET4WuLdTzDPQ/company-logo_400_400/company-logo_400_400/0/1731605469670/uc_berkeley_eecs_logo?e=1776902400&v=beta&t=NijwD-HkIBTqEaBL_WxNmkWcNYMgXYpvI9pQEBCyJao",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQET4WuLdTzDPQ/company-logo_200_200/company-logo_200_200/0/1731605469670/uc_berkeley_eecs_logo?e=1776902400&v=beta&t=eF6_2ltJ-UCHxzOE02JxPgJ9Eifu_L4_7uX23eBsx2E",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQET4WuLdTzDPQ/company-logo_100_100/company-logo_100_100/0/1731605469670/uc_berkeley_eecs_logo?e=1776902400&v=beta&t=SZ8_1EB3mEQDX4k4A08eBRPEMaW2D2lY88DjAOTxRnk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Development Intern",
+        "location": null,
+        "employmentType": "Internship",
+        "workplaceType": null,
+        "companyName": "AMD",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1497/",
+        "companyId": "1497",
+        "duration": "4 mos",
+        "description": "AMD Vitis AI\nVitis Model Composer: AI powered DSP library tool optimized with AMD Deep Learning Processor Unit.",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2023,
+          "text": "May 2023"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2023,
+          "text": "Aug 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQFCdxxVA_xhqQ/company-logo_400_400/B56ZnuIjafHUAc-/0/1760636844195/amd_logo?e=1776902400&v=beta&t=HvZ_R030aH2rjXQb_aeDt9ixR7kg5-DHRp2BgtdkgYs",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFCdxxVA_xhqQ/company-logo_400_400/B56ZnuIjafHUAc-/0/1760636844195/amd_logo?e=1776902400&v=beta&t=HvZ_R030aH2rjXQb_aeDt9ixR7kg5-DHRp2BgtdkgYs",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFCdxxVA_xhqQ/company-logo_200_200/B56ZnuIjafHUAM-/0/1760636844195/amd_logo?e=1776902400&v=beta&t=pFnMBVdr8DdGQG_mJNnwxq-aXacyLHTMXG84YeUSF68",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFCdxxVA_xhqQ/company-logo_100_100/B56ZnuIjafHUAU-/0/1760636844195/amd_logo?e=1776902400&v=beta&t=w3c56UuC8pM7kI0JEvvzXOO5WuV9q5lKT7E9eK_jHl8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer Intern",
+        "location": "Irvine, California, United States",
+        "employmentType": "Internship",
+        "workplaceType": "On-site",
+        "companyName": "Ingram Micro",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/2576/",
+        "companyId": "2576",
+        "duration": "3 mos",
+        "description": "Enterprise Architecture and API Governance/Development",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2022,
+          "text": "Jun 2022"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2022,
+          "text": "Aug 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHIMBG6vd-Hzg/company-logo_400_400/company-logo_400_400/0/1656514592564/ingram_micro_logo?e=1776902400&v=beta&t=K1_OgW0SQbUkKY9NbwCUBkWwLT5cEj-gX-DY6f8lnk8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHIMBG6vd-Hzg/company-logo_400_400/company-logo_400_400/0/1656514592564/ingram_micro_logo?e=1776902400&v=beta&t=K1_OgW0SQbUkKY9NbwCUBkWwLT5cEj-gX-DY6f8lnk8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHIMBG6vd-Hzg/company-logo_200_200/company-logo_200_200/0/1656514592564/ingram_micro_logo?e=1776902400&v=beta&t=AIoPmd-ba8j9-T4afk7NfdFxN0TDSNkUydiwbMGrpO8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHIMBG6vd-Hzg/company-logo_100_100/company-logo_100_100/0/1656514592564/ingram_micro_logo?e=1776902400&v=beta&t=E2HBq1MT3UWaAvCutR2D9l-qmnB10fO1nVkK4lZurZ0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Content Creator",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "YouTube",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/16140/",
+        "companyId": "16140",
+        "duration": "10 mos",
+        "description": "Make Java, Python, and Game Development tutorials",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2020,
+          "text": "Jun 2020"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2021,
+          "text": "Mar 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGyUKaYgsO3cg/company-logo_400_400/B4EZb.zwGgGQAY-/0/1748031701722/youtube_logo?e=1776902400&v=beta&t=TyDSoFm0XH66IcwuT5tWT2lJB60OrDID8iFm6olNMEI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGyUKaYgsO3cg/company-logo_400_400/B4EZb.zwGgGQAY-/0/1748031701722/youtube_logo?e=1776902400&v=beta&t=TyDSoFm0XH66IcwuT5tWT2lJB60OrDID8iFm6olNMEI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGyUKaYgsO3cg/company-logo_200_200/B4EZb.zwGgGQAI-/0/1748031701722/youtube_logo?e=1776902400&v=beta&t=vWG5ELoo0O5KNPrXAd8rmsMBfj0LMXjosIL-kN3VtrU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGyUKaYgsO3cg/company-logo_100_100/B4EZb.zwGgGQAQ-/0/1748031701722/youtube_logo?e=1776902400&v=beta&t=Q4A58aVoKPupthIg9CIccuVlH6XQnwgJvhU3eJBgVtM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "University of California, Berkeley",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2517/",
+        "schoolId": "2517",
+        "degree": "Bachelor of Science - BS",
+        "fieldOfStudy": "Electrical Engineering and Computer Science",
+        "skills": [],
+        "description": "Completed Courseworks:\nCS 189 - Machine Learning\nCS 182 - Deep Neural Networks\nCS 285 - Deep Reinforcement Learning (Graduate Course)\nEECS 106A - Intro to Robotics\nEECS 127 - Optimization Models\nEECS 126 - Probability Theory and Random Process\nEE 120 - Signals and System\nCS 61A - Intro to CS\nCS 61B - Data Structure\nCS 61C - Computer Architecture\nCS 70 - Discrete Math and Probability\nEECS 16 A&B Devices and System Design",
+        "insights": "Activities and societies: -\nOfficer @ CSUA (Computer Science Undergraduate Association)\nOfficer @ CSA (Chinese Student Association)",
+        "startDate": {
+          "year": 2021,
+          "text": "2021"
+        },
+        "endDate": {
+          "year": 2025,
+          "text": "2025"
+        },
+        "period": "2021 - 2025",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_400_400/company-logo_400_400/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=ihsqGpnHzj0nlc8nr3zQwTYbq6GYQDs_WRmOHxXO6Cs",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_400_400/company-logo_400_400/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=ihsqGpnHzj0nlc8nr3zQwTYbq6GYQDs_WRmOHxXO6Cs",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_200_200/company-logo_200_200/0/1732135669730/uc_berkeley_logo?e=1776902400&v=beta&t=99cgQbgSotN9XiK7TbWS3PhqRVGT8S6VKfitEcMn0-E",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_100_100/company-logo_100_100/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=spLtug0cp3xqHCXq1OoZudTryqzyY85FoIZwfJ-_XzA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Esperanza High School",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/5684904/",
+        "schoolId": null,
+        "degree": "High School Diploma",
+        "fieldOfStudy": null,
+        "skills": [],
+        "startDate": {
+          "year": 2017,
+          "text": "2017"
+        },
+        "endDate": {
+          "year": 2021,
+          "text": "2021"
+        },
+        "period": "2017 - 2021",
+        "schoolLogo": null
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Deep Learning",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Large Language Models (LLM)",
+        "endorsements": "1 endorsement"
+      }
+    ],
+    "publications": [
+      {
+        "title": "How to Evaluate Reward Models for RLHF",
+        "publishedAt": "ICLR 2025 · Oct 18, 2024",
+        "description": "We introduce a new benchmark for reward models that quantifies their ability to produce strong language models through RLHF (Reinforcement Learning from Human Feedback). The gold-standard approach is to run a full RLHF training pipeline and directly probe downstream LLM performance. However, this process is prohibitively expensive. To address this, we build a predictive model of downstream LLM performance by evaluating the reward model on proxy tasks. These proxy tasks consist of a large-scale human preference and a verifiable correctness preference dataset, in which we measure 12 metrics across 12 domains. To investigate which reward model metrics are most correlated to gold-standard RLHF outcomes, we launch an end-to-end RLHF experiment on a large-scale crowdsourced human preference platform to view real reward model downstream performance as ground truth. Ultimately, we compile our data and findings into Preference Proxy Evaluations (PPE), the first reward model benchmark explicitly linked to post-RLHF real-world human preference performance, which we open-source for public use and further development.",
+        "link": "https://arxiv.org/abs/2410.14872"
+      },
+      {
+        "title": "From Crowdsourced Data to High-Quality Benchmarks: Arena-Hard and BenchBuilder Pipeline",
+        "publishedAt": "ICML 2025 · Jun 17, 2024",
+        "description": "The rapid evolution of Large Language Models (LLMs) has outpaced the development of model evaluation, highlighting the need for continuous curation of new, challenging benchmarks. However, manual curation of high-quality, human-aligned benchmarks is expensive and time-consuming. To address this, we introduce BenchBuilder, an automated pipeline that leverages LLMs to curate high-quality, open-ended prompts from large, crowd-sourced datasets, enabling continuous benchmark updates without human in the loop. We apply BenchBuilder to datasets such as Chatbot Arena and WildChat-1M, extracting challenging prompts and utilizing LLM-as-a-Judge for automatic model evaluation. To validate benchmark quality, we propose new metrics to measure a benchmark's alignment with human preferences and ability to separate models. We release Arena-Hard-Auto, a benchmark consisting 500 challenging prompts curated by BenchBuilder. Arena-Hard-Auto provides 3x higher separation of model performances compared to MT-Bench and achieves 98.6% correlation with human preference rankings, all at a cost of $20. Our work sets a new framework for the scalable curation of automated benchmarks from extensive data.",
+        "link": "https://arxiv.org/abs/2406.11939"
+      },
+      {
+        "title": "Chatbot Arena: An Open Platform for Evaluating LLMs by Human Preference",
+        "publishedAt": "ICML 2024 · Mar 7, 2024",
+        "description": "Large Language Models (LLMs) have unlocked new capabilities and applications; however, evaluating the alignment with human preferences still poses significant challenges. To address this issue, we introduce Chatbot Arena, an open platform for evaluating LLMs based on human preferences. Our methodology employs a pairwise comparison approach and leverages input from a diverse user base through crowdsourcing. The platform has been operational for several months, amassing over 240K votes. This paper describes the platform, analyzes the data we have collected so far, and explains the tried-and-true statistical methods we are using for efficient and accurate evaluation and ranking of models. We confirm that the crowdsourced questions are sufficiently diverse and discriminating and that the crowdsourced human votes are in good agreement with those of expert raters. These analyses collectively establish a robust foundation for the credibility of Chatbot Arena. Because of its unique value and openness, Chatbot Arena has emerged as one of the most referenced LLM leaderboards, widely cited by leading LLM developers and companies.",
+        "link": "https://arxiv.org/abs/2403.04132"
+      },
+      {
+        "title": "LMSYS-Chat-1M: A Large-Scale Real-World LLM Conversation Dataset",
+        "publishedAt": "ICLR 2024 (Spotlight) · Sep 20, 2023",
+        "description": "Studying how people interact with large language models (LLMs) in real-world scenarios is increasingly important due to their widespread use in various applications. In this paper, we introduce LMSYS-Chat-1M, a large-scale dataset containing one million real-world conversations with 25 state-of-the-art LLMs. This dataset is collected from 210K unique IP addresses in the wild on our Vicuna demo and Chatbot Arena website. We offer an overview of the dataset's content, including its curation process, basic statistics, and topic distribution, highlighting its diversity, originality, and scale. We demonstrate its versatility through four use cases: developing content moderation models that perform similarly to GPT-4, building a safety benchmark, training instruction-following models that perform similarly to Vicuna, and creating challenging benchmark questions. We believe that this dataset will serve as a valuable resource for understanding and advancing LLM capabilities.",
+        "link": "https://openreview.net/pdf?id=BOfDKxfwt0"
+      }
+    ],
+    "courses": [
+      {
+        "title": "Deep Neural Networks",
+        "number": "CS182",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Deep Reinforcement Learning (Graduate-level)",
+        "number": "CS285",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Machine Learning",
+        "number": "CS189",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      }
+    ],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [
+      {
+        "name": "Chinese",
+        "proficiency": "Native or bilingual proficiency"
+      },
+      {
+        "name": "English",
+        "proficiency": "Native or bilingual proficiency"
+      },
+      {
+        "name": "Japanese",
+        "proficiency": "Limited working proficiency"
+      }
+    ],
+    "causes": [],
+    "featured": {
+      "images": [
+        "https://media.licdn.com/dms/image/sync/v2/D5627AQE59ipfIpeRXg/articleshare-shrink_1280_800/B56ZlkQEzbKwAQ-/0/1758323559987?e=1776160800&v=beta&t=qA-_dVM7a93Mdh6jwifgzA349-eN-JdzZ3RvKAE_738"
+      ],
+      "link": "https://www.linkedin.com/feed/update/urn:li:activity:7375364581558427648?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A7375364581558427648%29",
+      "title": "Grok 4 Fast | xAI",
+      "subtitle": "x.ai",
+      "slides": [
+        {
+          "title": "Grok 4 Fast | xAI",
+          "subtitle": "x.ai",
+          "description": null,
+          "url": "https://www.linkedin.com/feed/update/urn:li:activity:7375364581558427648?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A7375364581558427648%29",
+          "image": {
+            "url": "https://media.licdn.com/dms/image/sync/v2/D5627AQE59ipfIpeRXg/articleshare-shrink_1280_800/B56ZlkQEzbKwAQ-/0/1758323559987?e=1776160800&v=beta&t=qA-_dVM7a93Mdh6jwifgzA349-eN-JdzZ3RvKAE_738"
+          }
+        },
+        {
+          "title": null,
+          "subtitle": null,
+          "description": null,
+          "url": "https://www.linkedin.com/feed/update/urn:li:activity:7349212210801385472?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A7349212210801385472%29",
+          "image": {
+            "url": "https://media.licdn.com/dms/image/v2/D5622AQE_lzCmWEBhkg/feedshare-shrink_2048_1536/B56ZfzUsDvGoAo-/0/1752133977454?e=1776902400&v=beta&t=ZRKEEAuhPdDNIAXaTFAf6bP_FTKKRyC2A5aHR5bCNiE"
+          }
+        },
+        {
+          "title": "Arena-Hard-Auto and BenchBuilder",
+          "subtitle": null,
+          "description": null,
+          "url": "https://www.linkedin.com/feed/update/urn:li:activity:7214096538199838722?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A7214096538199838722%29",
+          "image": {
+            "url": null
+          }
+        },
+        {
+          "title": "ICLR 2024 Spotlight Paper",
+          "subtitle": null,
+          "description": null,
+          "url": "https://www.linkedin.com/feed/update/urn:li:activity:7111290873161678848?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A7111290873161678848%29",
+          "image": {
+            "url": null
+          }
+        }
+      ]
+    },
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAACxCc2YBLzZ6cxuBj0Rv4-i6fyDSWo9VQUs",
+        "firstName": "Bryan",
+        "lastName": "Chehanske",
+        "publicIdentifier": "bryan-chehanske-a06819188",
+        "linkedinUrl": "https://www.linkedin.com/in/bryan-chehanske-a06819188"
+      },
+      {
+        "id": "ACoAABdmLFIBynpe7Fupctbe3BuDAewJ_t7wcv8",
+        "firstName": "Ethan",
+        "lastName": "He",
+        "publicIdentifier": "ethanhe42",
+        "linkedinUrl": "https://www.linkedin.com/in/ethanhe42"
+      },
+      {
+        "id": "ACoAAClvfaUBhwTTPokiVI5lsrUwRyDAUCM8_8Y",
+        "firstName": "Sheng",
+        "lastName": "S.",
+        "publicIdentifier": "sheng-s-ab198a174",
+        "linkedinUrl": "https://www.linkedin.com/in/sheng-s-ab198a174"
+      },
+      {
+        "id": "ACoAAB4PWY8BLcrkcQ4Rp0m9LJi9HtxUCQe13Pc",
+        "firstName": "Kaylee",
+        "lastName": "George",
+        "publicIdentifier": "kayleegeorge8",
+        "linkedinUrl": "https://www.linkedin.com/in/kayleegeorge8"
+      },
+      {
+        "id": "ACoAACoA9JsBKOoO0B594t3d8gXLs8YlH377fMc",
+        "firstName": "Aditya",
+        "lastName": "Prerepa",
+        "publicIdentifier": "adiprerepa",
+        "linkedinUrl": "https://www.linkedin.com/in/adiprerepa"
+      },
+      {
+        "id": "ACoAABkLAPMBBdgaJ7pjLsRXfCvXCNMNYkF5zbw",
+        "firstName": "Zhibei",
+        "lastName": "Ma",
+        "publicIdentifier": "zhibei-ma-30385bb8",
+        "linkedinUrl": "https://www.linkedin.com/in/zhibei-ma-30385bb8"
+      },
+      {
+        "id": "ACoAACUTTm4B2Vql-_onu92X2TTKP_HmGr80UEw",
+        "firstName": "Mihir",
+        "lastName": "A.",
+        "publicIdentifier": "mihiranan",
+        "linkedinUrl": "https://www.linkedin.com/in/mihiranan"
+      },
+      {
+        "id": "ACoAACz8hd4BZIPrh8pkm_9PafLxO75mohs8Bf4",
+        "firstName": "GS",
+        "lastName": "Oh",
+        "publicIdentifier": "gs-oh-96691a190",
+        "linkedinUrl": "https://www.linkedin.com/in/gs-oh-96691a190"
+      },
+      {
+        "id": "ACoAACjzR9UBjT3o1QvApk5W5xWcyYcgzNOUNU0",
+        "firstName": "Sahil",
+        "lastName": "Jain",
+        "publicIdentifier": "sahil-jain-159104172",
+        "linkedinUrl": "https://www.linkedin.com/in/sahil-jain-159104172"
+      },
+      {
+        "id": "ACoAAAtt0_MBbuwpPXQbKNZBn0v3La5-jQ82JpI",
+        "firstName": "Arshdeep",
+        "lastName": "Singh",
+        "publicIdentifier": "iamarshdeepsingh",
+        "linkedinUrl": "https://www.linkedin.com/in/iamarshdeepsingh"
+      },
+      {
+        "id": "ACoAAB5nO1IBf_pM3PjaNW2lm25igrol3Sc3Mm4",
+        "firstName": "James",
+        "lastName": "C.",
+        "publicIdentifier": "james-f-cohen",
+        "linkedinUrl": "https://www.linkedin.com/in/james-f-cohen"
+      },
+      {
+        "id": "ACoAABDnapIBbmN_T_KEvGOMH0-gGW9Azx_N5B0",
+        "firstName": "Fei",
+        "lastName": "H.",
+        "publicIdentifier": "fei-hu",
+        "linkedinUrl": "https://www.linkedin.com/in/fei-hu"
+      },
+      {
+        "id": "ACoAACH5P-YBFyyLjp0MxGzUfzEMeKrDI8gmQuI",
+        "firstName": "Araav",
+        "lastName": "Patel",
+        "publicIdentifier": "araavpatel",
+        "linkedinUrl": "https://www.linkedin.com/in/araavpatel"
+      },
+      {
+        "id": "ACoAAAQb5WABaT3_mDJpEve67N46Z4rh8R8fYZY",
+        "firstName": "Yunlong",
+        "lastName": "Liu",
+        "publicIdentifier": "davisyunlongliu",
+        "linkedinUrl": "https://www.linkedin.com/in/davisyunlongliu"
+      },
+      {
+        "id": "ACoAAB9lBGkBAgLvr7BJ0GN11FghFMUmk0alNX8",
+        "firstName": "Seongsik",
+        "lastName": "Kim",
+        "publicIdentifier": "seongsik-kim-3a148b128",
+        "linkedinUrl": "https://www.linkedin.com/in/seongsik-kim-3a148b128"
+      },
+      {
+        "id": "ACoAABckFlABvUKEq21LZkeptA_2M4h3f04qOgo",
+        "firstName": "Jeffrey",
+        "lastName": "Zhang",
+        "publicIdentifier": "jeffrey-zhang-5a8030aa",
+        "linkedinUrl": "https://www.linkedin.com/in/jeffrey-zhang-5a8030aa"
+      },
+      {
+        "id": "ACoAABg0GasBFqDI-qcLfoBBvEyHVtuRtvYJfLs",
+        "firstName": "Jinyi",
+        "lastName": "Lu",
+        "publicIdentifier": "jinyi-lu-a0bba8b3",
+        "linkedinUrl": "https://www.linkedin.com/in/jinyi-lu-a0bba8b3"
+      },
+      {
+        "id": "ACoAADWRD_IB5GuJF02n706LEgzCNjztlpDygZE",
+        "firstName": "Ray",
+        "lastName": "Hotate",
+        "publicIdentifier": "ray-hotate",
+        "linkedinUrl": "https://www.linkedin.com/in/ray-hotate"
+      },
+      {
+        "id": "ACoAABwv_tABUuP7JaGT-H3-b86wDeODJfFeuzc",
+        "firstName": "Pranjal",
+        "lastName": "Shankhdhar",
+        "publicIdentifier": "pranjal-shankhdhar-380461112",
+        "linkedinUrl": "https://www.linkedin.com/in/pranjal-shankhdhar-380461112"
+      },
+      {
+        "id": "ACoAABfbQOIBQKY1UKggCA3BQ4b7H62XoBIpNJ4",
+        "firstName": "Zicheng",
+        "lastName": "Zhou",
+        "publicIdentifier": "zicheng-zhou",
+        "linkedinUrl": "https://www.linkedin.com/in/zicheng-zhou"
+      },
+      {
+        "id": "ACoAAET-D8ABCV_BTZ6hxlWw3CODhH7y8_b9px8",
+        "firstName": "Melissa Jocelyn",
+        "lastName": "Saucedo Hernández",
+        "position": "Programador de sistemas en Radar Holding",
+        "publicIdentifier": "melissa-jocelyn-saucedo-hernández-05478a283",
+        "linkedinUrl": "https://www.linkedin.com/in/melissa-jocelyn-saucedo-hernández-05478a283"
+      },
+      {
+        "id": "ACoAAFayEaIBv5zO-VtepkVIsSZSiqXAMzC7_Ps",
+        "firstName": "Celeste",
+        "lastName": "de la Cruz",
+        "position": "Project Manager | Supply Chain & Food Operations",
+        "publicIdentifier": "celeste-de-la-cruz-742142347",
+        "linkedinUrl": "https://www.linkedin.com/in/celeste-de-la-cruz-742142347"
+      },
+      {
+        "id": "ACoAAAWoLI4B9oNmawkfyNxDHrJOw7OgI_6ZaLM",
+        "firstName": "Marco Antonio",
+        "lastName": "Sordo Azpiazu",
+        "position": "Subdirector de Compras de Ropa en Grupo Chedraui",
+        "publicIdentifier": "marco-antonio-sordo-azpiazu-41294b27",
+        "linkedinUrl": "https://www.linkedin.com/in/marco-antonio-sordo-azpiazu-41294b27"
+      },
+      {
+        "id": "ACoAACfEYowBZrCc7K-e-CJrjNKuyoTTvvGZ_Dc",
+        "firstName": "Luis Alberto",
+        "lastName": "Guerrero Flores",
+        "position": "Expansión de Bienes Raíces en Grupo Chedraui",
+        "publicIdentifier": "luis-alberto-guerrero-flores-638530167",
+        "linkedinUrl": "https://www.linkedin.com/in/luis-alberto-guerrero-flores-638530167"
+      },
+      {
+        "id": "ACoAAARYESwBXduIOamgzLtgjc35X28Gw7_M0Ss",
+        "firstName": "Humberto",
+        "lastName": "Tafolla",
+        "position": "Deputy General Manager at Grupo Chedraui",
+        "publicIdentifier": "humberto-tafolla-2104a820",
+        "linkedinUrl": "https://www.linkedin.com/in/humberto-tafolla-2104a820"
+      },
+      {
+        "id": "ACoAAB8Fe8ABpwIXthbvkQ6bwCxsxFVl5B6YpAc",
+        "firstName": "Yovani",
+        "lastName": "Rojas",
+        "position": "HRBP | Labor Relations | Head of HR | Manager HR",
+        "publicIdentifier": "jyovani-rojas-garcia",
+        "linkedinUrl": "https://www.linkedin.com/in/jyovani-rojas-garcia"
+      },
+      {
+        "id": "ACoAAESXm98BQc5B1WVUE2pl5i90vP7Mhrc4WJY",
+        "firstName": "Gabriela ",
+        "lastName": "Hernández Aragón",
+        "position": "Coordinadora en Finanzas de Expansión| Grupo Chedraui",
+        "publicIdentifier": "gabriela-hernández-aragón-513490281",
+        "linkedinUrl": "https://www.linkedin.com/in/gabriela-hernández-aragón-513490281"
+      },
+      {
+        "id": "ACoAAE3iKjEBoA1YQxabCNOOt7micpwp2y3V8s4",
+        "firstName": "Bernardo",
+        "lastName": "Salgado Perea",
+        "position": "Líder Reclutamiento Region Metropolitana ",
+        "publicIdentifier": "bernardo-salgado-perea-441725305",
+        "linkedinUrl": "https://www.linkedin.com/in/bernardo-salgado-perea-441725305"
+      },
+      {
+        "id": "ACoAACLAETUBm6VoeCTvP--lVXbb2FVSPd2fSAY",
+        "firstName": "Joseph",
+        "lastName": "Galvez Rodriguez",
+        "position": "Comprador Sr Deportes ",
+        "publicIdentifier": "joseph-galvez-rodriguez-7052bb143",
+        "linkedinUrl": "https://www.linkedin.com/in/joseph-galvez-rodriguez-7052bb143"
+      },
+      {
+        "id": "ACoAAANOqv8B-X-MXg05LY4-GJIvXvXtAxISgus",
+        "firstName": "Emmanuel",
+        "lastName": "Mancilla Moreno",
+        "position": "Gerente de compras retail /mercancías generales, textil / Chedraui, Soriana, Elektra, La Comer",
+        "publicIdentifier": "emmanuel-mancilla-moreno-7bb6ba16",
+        "linkedinUrl": "https://www.linkedin.com/in/emmanuel-mancilla-moreno-7bb6ba16"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAADF01hQBZcWmB5Gtq1ZS5KTYcsZ7pcDg1DI"
+    }
+  }
+}

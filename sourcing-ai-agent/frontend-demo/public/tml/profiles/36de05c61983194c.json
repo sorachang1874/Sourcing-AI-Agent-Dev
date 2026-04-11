@@ -1,0 +1,331 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAGJ0lGsBEyM7RPYOEZAKjH-OIjscAe5_kWY",
+    "profile_url": "https://www.linkedin.com/in/ACwAAGJ0lGsBEyM7RPYOEZAKjH-OIjscAe5_kWY"
+  },
+  "item": {
+    "id": "ACoAAGJ0lGsBmSI6-Mph3dGcRrFG4i1dF8dIfH8",
+    "publicIdentifier": "ahmed-ahmed-03722b3a1",
+    "linkedinUrl": "https://www.linkedin.com/in/ahmed-ahmed-03722b3a1",
+    "firstName": "Ahmed",
+    "lastName": "Ahmed",
+    "emails": [
+      {
+        "email": "ahmed.ahmed@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "--",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Cairo, Cairo, Egypt",
+      "countryCode": "EG",
+      "parsed": {
+        "text": "Cairo, Egypt",
+        "countryCode": "EG",
+        "regionCode": null,
+        "country": "Egypt",
+        "countryFull": "Egypt",
+        "state": "Cairo",
+        "city": "Cairo"
+      }
+    },
+    "objectUrn": "1651807339",
+    "registeredAt": "2025-12-25T18:12:20.384Z",
+    "topSkills": null,
+    "connectionsCount": 27,
+    "followerCount": 27,
+    "verified": false,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": null,
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4D03AQGQDEe0eGX5jg/profile-displayphoto-crop_800_800/B4DZ1M44hVH4AI-/0/1775111476640?e=1776902400&v=beta&t=fET3BJWYD0gW68_q_YdGA8UC9PTQB9iH2xh_AONuqBM",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4D03AQGQDEe0eGX5jg/profile-displayphoto-crop_800_800/B4DZ1M44hVH4AI-/0/1775111476640?e=1776902400&v=beta&t=fET3BJWYD0gW68_q_YdGA8UC9PTQB9iH2xh_AONuqBM",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4D03AQGQDEe0eGX5jg/profile-displayphoto-scale_400_400/B4DZ1M44hVH4Ag-/0/1775111476746?e=1776902400&v=beta&t=AjVBkoRxvEt4SB7VfZdWh9nFkwvrG8eTjacoLj_xp9s",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4D03AQGQDEe0eGX5jg/profile-displayphoto-scale_200_200/B4DZ1M44hVH4AY-/0/1775111476746?e=1776902400&v=beta&t=T5wuzpZuBgnF6XncgF9l53bDMixP7eRCeHWeeDZvvMU",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4D03AQGQDEe0eGX5jg/profile-displayphoto-scale_100_100/B4DZ1M44hVH4Ac-/0/1775111476746?e=1776902400&v=beta&t=t7K4APdDZDkl-9V0cfTHUNmGBgGjPPC73CAp-sZDR8w",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D4D03AQGQDEe0eGX5jg/profile-displayphoto-crop_800_800/B4DZ1M44hVH4AI-/0/1775111476640?e=1776902400&v=beta&t=fET3BJWYD0gW68_q_YdGA8UC9PTQB9iH2xh_AONuqBM",
+    "profileLocales": [
+      {
+        "country": "AE",
+        "language": "ar"
+      }
+    ],
+    "primaryLocale": {
+      "country": "AE",
+      "language": "ar"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "--",
+        "locale": "ar_AE"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "“أسهّل العمل عن بُعد وأضمن التواصل المثالي بين الفرق.”",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": null,
+        "description": null,
+        "skills": null,
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "moreProfiles": [
+      {
+        "id": "ACoAAAL-4j8B-homxAneucfdf5sFadipR73ju4U",
+        "firstName": "Nouf",
+        "lastName": "AlShethry",
+        "publicIdentifier": "nalshathry",
+        "linkedinUrl": "https://www.linkedin.com/in/nalshathry"
+      },
+      {
+        "id": "ACoAAC96m6EBAMYDX9OOGWtUDqXF4jgfLKX1anE",
+        "firstName": "SOKINAH",
+        "lastName": "BUHLAL",
+        "publicIdentifier": "sokainh-buhlal《shrm-cp-》-9159261a2",
+        "linkedinUrl": "https://www.linkedin.com/in/sokainh-buhlal《shrm-cp-》-9159261a2"
+      },
+      {
+        "id": "ACoAABE_RAgBjA3UtU0mPL_Qc90F5Y3ZsWETHpk",
+        "firstName": "Salah Elmekki",
+        "lastName": "Omri",
+        "publicIdentifier": "salah-elmekki-omri-060aa580",
+        "linkedinUrl": "https://www.linkedin.com/in/salah-elmekki-omri-060aa580"
+      },
+      {
+        "id": "ACoAADdBZTgBWfunStJ_ZW_hqC-qz4rX6qAm574",
+        "firstName": "Abdullah",
+        "lastName": "Aljohani",
+        "publicIdentifier": "abdullah-aljohani-27456521a",
+        "linkedinUrl": "https://www.linkedin.com/in/abdullah-aljohani-27456521a"
+      },
+      {
+        "id": "ACoAAAJKXF8BaUfYXFE6XTEMt6opWViwXqwIWMw",
+        "firstName": "Dr. Mujahid Azeez",
+        "lastName": "Ahmed ",
+        "publicIdentifier": "dr-mujahid-azeez-ahmed-33ba5210",
+        "linkedinUrl": "https://www.linkedin.com/in/dr-mujahid-azeez-ahmed-33ba5210"
+      },
+      {
+        "id": "ACoAAEfftI4BK4iCGz_32e5QOvTHHjSyP2tVHK8",
+        "firstName": "Amira",
+        "lastName": "Maryam",
+        "publicIdentifier": "amira-maryam-a3aa01297",
+        "linkedinUrl": "https://www.linkedin.com/in/amira-maryam-a3aa01297"
+      },
+      {
+        "id": "ACoAAEfj9wYBNF1ivaorvvKS5Zp5Q8r_pnJbyRg",
+        "firstName": "Gazal",
+        "lastName": "Saleem",
+        "publicIdentifier": "gazal-saleem-4b2b17297",
+        "linkedinUrl": "https://www.linkedin.com/in/gazal-saleem-4b2b17297"
+      },
+      {
+        "id": "ACoAAAfI64gBsemlTevegB3C_7Y1vD24T8NvCdg",
+        "firstName": "Maher",
+        "lastName": "K.",
+        "publicIdentifier": "maher-k-4088a737",
+        "linkedinUrl": "https://www.linkedin.com/in/maher-k-4088a737"
+      },
+      {
+        "id": "ACoAAB95PYwBxurDOEyLCHkUmIlEoxjZdhHiIJw",
+        "firstName": "Huda",
+        "lastName": "Alshehri",
+        "publicIdentifier": "huda-alshehri-378a0a128",
+        "linkedinUrl": "https://www.linkedin.com/in/huda-alshehri-378a0a128"
+      },
+      {
+        "id": "ACoAADaW5BcBp5_Bh12OWV3qSaQZQkmZAmxvEzM",
+        "firstName": "Rana",
+        "lastName": "alhabib",
+        "publicIdentifier": "rana-alhabib-81b876216",
+        "linkedinUrl": "https://www.linkedin.com/in/rana-alhabib-81b876216"
+      },
+      {
+        "id": "ACoAACmsjWQBwEpzHXVGXHMgsehEwwphaOWrP3A",
+        "firstName": "Muhammad",
+        "lastName": "Jalal  khan",
+        "publicIdentifier": "muhammad-jalal-khan-88419a176",
+        "linkedinUrl": "https://www.linkedin.com/in/muhammad-jalal-khan-88419a176"
+      },
+      {
+        "id": "ACoAAF8a-tgBsWqvtTuM92mboyLWNKtBoUa9tIU",
+        "firstName": "Liyan",
+        "lastName": "Chen",
+        "position": "--",
+        "publicIdentifier": "liyan-chen-908445386",
+        "linkedinUrl": "https://www.linkedin.com/in/liyan-chen-908445386"
+      },
+      {
+        "id": "ACoAAGKDsJgBWsokuuSZfKWRPVa7hBXeQTfrA0Q",
+        "firstName": "Nourhan",
+        "lastName": "Hany",
+        "position": "‏Freelance Graphic Designer‏ في ‏Freelancer.com‏",
+        "publicIdentifier": "nourhan-hany-1086283a1",
+        "linkedinUrl": "https://www.linkedin.com/in/nourhan-hany-1086283a1"
+      },
+      {
+        "id": "ACoAAA8JdrgBK-ShYTbFkZL80wSafgw-uaGsb9Q",
+        "firstName": "Kevin",
+        "lastName": "B.",
+        "position": "Security at Thinking Machines Lab",
+        "publicIdentifier": "kevin-b-5885a270",
+        "linkedinUrl": "https://www.linkedin.com/in/kevin-b-5885a270"
+      },
+      {
+        "id": "ACoAAB3BApkB38H4Z__jKDDFBfF7jt7w16vD0Xs",
+        "firstName": "Rafael",
+        "lastName": "Rafailov",
+        "position": "Member Of Technical Staff - Thinking Machines Lab",
+        "publicIdentifier": "rafael-rafailov-1b521611b",
+        "linkedinUrl": "https://www.linkedin.com/in/rafael-rafailov-1b521611b"
+      },
+      {
+        "id": "ACoAADopuTsBh9lDxOJzJsV8jI_KfOrsc6Tu7aQ",
+        "firstName": "Aashitosh",
+        "lastName": "Swami",
+        "position": "Lab assistant",
+        "publicIdentifier": "aashitosh-swami-67796a232",
+        "linkedinUrl": "https://www.linkedin.com/in/aashitosh-swami-67796a232"
+      },
+      {
+        "id": "ACoAACA8zv0BTVWLSUHsPJrWsUI10jzn0F57pHo",
+        "firstName": "Damir",
+        "lastName": "Sartayev",
+        "position": "AI CTO & Founder | MY project LNN+LLM+QML=AGI | Quantum, Neuro-symbolic AI | Liquid Neural Networks | RWKV | Mamba(SSM)  | Pharmacy AI, Minerals AI | Full‑Stack AI (LLMs, Agents, Fine‑Tuning, RAG, Vision) | Q-Day Q-ark",
+        "publicIdentifier": "damir-q-day-q-ark",
+        "linkedinUrl": "https://www.linkedin.com/in/damir-q-day-q-ark"
+      },
+      {
+        "id": "ACoAADwrCKUB0FU7B3O7AIg9j_wieI-QOvJrtEE",
+        "firstName": "Katy",
+        "lastName": "Liemandt",
+        "position": "TML | San Francisco",
+        "publicIdentifier": "katy-liemandt-399092242",
+        "linkedinUrl": "https://www.linkedin.com/in/katy-liemandt-399092242"
+      },
+      {
+        "id": "ACoAADYMzQABdXTSxolT2YjHmNBBSeT6YrGSQmQ",
+        "firstName": "Tarushii",
+        "lastName": "Goel",
+        "position": "Member of Technical Staff @ Thinking Machines",
+        "publicIdentifier": "tarushii-goel",
+        "linkedinUrl": "https://www.linkedin.com/in/tarushii-goel"
+      },
+      {
+        "id": "ACoAAFUBvsYBMskyWP5r-Lf7ZUccZSuFy2nCqkA",
+        "firstName": "Ankit",
+        "lastName": "Baghel",
+        "position": "--DMLT lab technician\nb.sc chemistry chemical industry lab",
+        "publicIdentifier": "ankit-baghel-40675a339",
+        "linkedinUrl": "https://www.linkedin.com/in/ankit-baghel-40675a339"
+      },
+      {
+        "id": "ACoAAFrO2hYBQn9I3leFzBjeUmgehOiK_AGSCr8",
+        "firstName": "Muhammad",
+        "lastName": "Adam Usman",
+        "position": "Electrician at Thinking Machines Lab",
+        "publicIdentifier": "muhammad-adam-usman-472276366",
+        "linkedinUrl": "https://www.linkedin.com/in/muhammad-adam-usman-472276366"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAGJ0lGsBEyM7RPYOEZAKjH-OIjscAe5_kWY"
+    }
+  }
+}

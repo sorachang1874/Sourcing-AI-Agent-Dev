@@ -1,0 +1,1556 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAAAI9MIBbC1tdebIPVt2xZFc7mOIMK2lkyw",
+    "profile_url": "https://www.linkedin.com/in/ACwAAAAI9MIBbC1tdebIPVt2xZFc7mOIMK2lkyw"
+  },
+  "item": {
+    "id": "ACoAAAAI9MIBcHY8TH1pIlWlqVlaRGt_claG5SY",
+    "publicIdentifier": "paulbassat",
+    "linkedinUrl": "https://www.linkedin.com/in/paulbassat",
+    "firstName": "Paul",
+    "lastName": "Bassat",
+    "emails": [],
+    "companyWebsites": [
+      {
+        "url": "https://amplifyaus.org/",
+        "domain": "amplifyaus.org",
+        "validEmailServer": true
+      },
+      {
+        "url": "https://squarepeg.vc",
+        "domain": "squarepeg.vc"
+      },
+      {
+        "url": "https://sumble.com",
+        "domain": "sumble.com"
+      },
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai"
+      }
+    ],
+    "headline": "Co founder at Square Peg and Founder of AMPLIFY ",
+    "openToWork": false,
+    "hiring": false,
+    "premium": true,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Greater Melbourne Area",
+      "countryCode": "AU",
+      "parsed": {
+        "text": "Melbourne, Australia",
+        "countryCode": "AU",
+        "regionCode": null,
+        "country": "Australia",
+        "countryFull": "Australia",
+        "state": "Victoria",
+        "city": "Melbourne"
+      }
+    },
+    "objectUrn": "586946",
+    "registeredAt": "2004-05-11T19:16:36.000Z",
+    "topSkills": null,
+    "connectionsCount": 2485,
+    "followerCount": 9292,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "99084388",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/99084388/",
+        "companyName": "AMPLIFY",
+        "dateRange": {
+          "start": {
+            "month": 10,
+            "year": 2023,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "10242",
+        "companyId": "5677",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/5677/",
+        "schoolName": "University of Melbourne"
+      }
+    ],
+    "profileActions": [
+      {
+        "label": "Visit my website",
+        "url": "http://www.amplifyaus.org",
+        "openExternally": true
+      }
+    ],
+    "profilePicture": null,
+    "coverPicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5616AQFmKGN2DMt0sg/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1724987283154?e=1776902400&v=beta&t=Fus_bEt4nIDZ-iakeyeaNx2j7PvFYdGfaaNM96DtQfQ",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5616AQFmKGN2DMt0sg/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1724987283154?e=1776902400&v=beta&t=Fus_bEt4nIDZ-iakeyeaNx2j7PvFYdGfaaNM96DtQfQ",
+          "width": 1242,
+          "height": 311,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5616AQFmKGN2DMt0sg/profile-displaybackgroundimage-shrink_200_800/profile-displaybackgroundimage-shrink_200_800/0/1724987283154?e=1776902400&v=beta&t=bpLogfe36VQFjS7BUg-bxyVGKKpYQqvy3mZ_iZdjHdQ",
+          "width": 798,
+          "height": 200,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Co founder at Square Peg and Founder of AMPLIFY ",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Founder and Non Executive Chairman",
+        "location": "Melbourne, Victoria, Australia",
+        "employmentType": "Part-time",
+        "workplaceType": null,
+        "companyName": "AMPLIFY",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/theamplifycommunity/",
+        "companyId": "99084388",
+        "companyUniversalName": "theamplifycommunity",
+        "duration": "2 yrs 7 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Oct",
+          "year": 2023,
+          "text": "Oct 2023"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQEyg5-Wy-9htA/company-logo_400_400/company-logo_400_400/0/1724636505956/theamplifycommunity_logo?e=1776902400&v=beta&t=a90Gys64ZXpxLciS8sjFP_qYirm_V2-f1T-QWH4k5iM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEyg5-Wy-9htA/company-logo_400_400/company-logo_400_400/0/1724636505956/theamplifycommunity_logo?e=1776902400&v=beta&t=a90Gys64ZXpxLciS8sjFP_qYirm_V2-f1T-QWH4k5iM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEyg5-Wy-9htA/company-logo_200_200/company-logo_200_200/0/1724636505956/theamplifycommunity_logo?e=1776902400&v=beta&t=jYXzdbRp_Jv2XBRtaMP1o9mk1-qTbhmxkJvXpm8qJrI",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEyg5-Wy-9htA/company-logo_100_100/company-logo_100_100/0/1724636505956/theamplifycommunity_logo?e=1776902400&v=beta&t=JTX0UsVBBgyQn3ghuSX_NbiLHQ53gzvSC5uDitHZi3c",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Co founder",
+        "location": "Melbourne, Australia",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Square Peg",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3183252/",
+        "companyId": "3183252",
+        "duration": "14 yrs 1 mo",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Apr",
+          "year": 2012,
+          "text": "Apr 2012"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGDmy6V0Nnypg/company-logo_400_400/company-logo_400_400/0/1726371590734/square_peg_capital_logo?e=1776902400&v=beta&t=LxtX0PLdIV35tlYOxsS0s1zcCkUs84d-41Bozyh6LfE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGDmy6V0Nnypg/company-logo_400_400/company-logo_400_400/0/1726371590734/square_peg_capital_logo?e=1776902400&v=beta&t=LxtX0PLdIV35tlYOxsS0s1zcCkUs84d-41Bozyh6LfE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGDmy6V0Nnypg/company-logo_200_200/company-logo_200_200/0/1726371590734/square_peg_capital_logo?e=1776902400&v=beta&t=rjTTZ7p8iyTc-tKsQT76p1UZkv_6XS80RYVvzITKQhU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGDmy6V0Nnypg/company-logo_100_100/company-logo_100_100/0/1726371590734/square_peg_capital_logo?e=1776902400&v=beta&t=TW4A4qzNjievkZISk2CP0Em2AYCP-ixlmoEh6dVl_dE",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Board Member",
+        "location": null,
+        "employmentType": "Part-time",
+        "workplaceType": null,
+        "companyName": "Sumble",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/82144130/",
+        "companyId": "82144130",
+        "duration": "8 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2025,
+          "text": "Sep 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQH9xvxCV8rb9g/company-logo_400_400/B56ZaEAJXwHsAY-/0/1745971353331/sumble_logo?e=1776902400&v=beta&t=fGpXbMrTPBjl5u5GZ7b08AAV-DjVh8M86uzNGa6xtDY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH9xvxCV8rb9g/company-logo_400_400/B56ZaEAJXwHsAY-/0/1745971353331/sumble_logo?e=1776902400&v=beta&t=fGpXbMrTPBjl5u5GZ7b08AAV-DjVh8M86uzNGa6xtDY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH9xvxCV8rb9g/company-logo_200_200/B56ZaEAJXwHsAI-/0/1745971353331/sumble_logo?e=1776902400&v=beta&t=ktvdsVANoFrA9Fn1Kts_WtoV3cdNmZeSLKO14gS1u_M",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH9xvxCV8rb9g/company-logo_100_100/B56ZaEAJXwHsAQ-/0/1745971353331/sumble_logo?e=1776902400&v=beta&t=D2ezraDqb0JaOHSIW9oldC7KMDrmh6ASxK0qnfhbyNs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": null,
+        "employmentType": "Part-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyId": "105913171",
+        "duration": "10 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jul",
+          "year": 2025,
+          "text": "Jul 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": null,
+        "employmentType": "Part-time",
+        "workplaceType": null,
+        "companyName": "Source",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/103872841/",
+        "companyId": "103872841",
+        "duration": "11 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2025,
+          "text": "Jun 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQFvBeRLsK9l1w/company-logo_400_400/B56Zx3wfBpKAAc-/0/1771535724934/ai_source_logo?e=1776902400&v=beta&t=cSGkDbJQKfim82xf0wQ6laj6gzsXSaA3WJzx3fNxYUY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFvBeRLsK9l1w/company-logo_400_400/B56Zx3wfBpKAAc-/0/1771535724934/ai_source_logo?e=1776902400&v=beta&t=cSGkDbJQKfim82xf0wQ6laj6gzsXSaA3WJzx3fNxYUY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFvBeRLsK9l1w/company-logo_200_200/B56Zx3wfBpKAAM-/0/1771535724934/ai_source_logo?e=1776902400&v=beta&t=nbDm9V2ZOa-6ptTbYe3WONGYrQtAJ2-ZhBn2zFUYQ1w",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFvBeRLsK9l1w/company-logo_100_100/B56Zx3wfBpKAAU-/0/1771535724934/ai_source_logo?e=1776902400&v=beta&t=lRotsZ4G3qGrNIM5ZtLuQ_ARjZTdIELi_6yC1vuKwTg",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Board Member",
+        "location": "Melbourne, Victoria, Australia",
+        "employmentType": "Part-time",
+        "workplaceType": null,
+        "companyName": "Airwallex",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/7572649/",
+        "companyId": "7572649",
+        "duration": "1 yr",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "50ae14a4234a7a39649e6b1172ea8606f3e63e79",
+        "startDate": {
+          "month": "May",
+          "year": 2025,
+          "text": "May 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQE0x1xIVWaQgw/company-logo_400_400/company-logo_400_400/0/1630593999400/airwallex_logo?e=1776902400&v=beta&t=c3-33Gn0tkRbgEKR2w8EMFDdjkZ3CUsTI0vx95Dbtq0",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQE0x1xIVWaQgw/company-logo_400_400/company-logo_400_400/0/1630593999400/airwallex_logo?e=1776902400&v=beta&t=c3-33Gn0tkRbgEKR2w8EMFDdjkZ3CUsTI0vx95Dbtq0",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQE0x1xIVWaQgw/company-logo_200_200/company-logo_200_200/0/1630593999399/airwallex_logo?e=1776902400&v=beta&t=T4p4aoFEpc7t6TGBFhgvWRLDDUB5N2InHdqVT_6AOPI",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQE0x1xIVWaQgw/company-logo_100_100/company-logo_100_100/0/1630593999400/airwallex_logo?e=1776902400&v=beta&t=9pB9tegmEoe1FwT-XqwZaAZ-fN-JsjxC_l4ANqbfaL0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Board Observer",
+        "location": "Melbourne, Victoria, Australia",
+        "employmentType": "Part-time",
+        "workplaceType": null,
+        "companyName": "Airwallex",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/7572649/",
+        "companyId": "7572649",
+        "duration": "7 yrs 6 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "50ae14a4234a7a39649e6b1172ea8606f3e63e79",
+        "startDate": {
+          "month": "Dec",
+          "year": 2017,
+          "text": "Dec 2017"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2025,
+          "text": "May 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQE0x1xIVWaQgw/company-logo_400_400/company-logo_400_400/0/1630593999400/airwallex_logo?e=1776902400&v=beta&t=c3-33Gn0tkRbgEKR2w8EMFDdjkZ3CUsTI0vx95Dbtq0",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQE0x1xIVWaQgw/company-logo_400_400/company-logo_400_400/0/1630593999400/airwallex_logo?e=1776902400&v=beta&t=c3-33Gn0tkRbgEKR2w8EMFDdjkZ3CUsTI0vx95Dbtq0",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQE0x1xIVWaQgw/company-logo_200_200/company-logo_200_200/0/1630593999399/airwallex_logo?e=1776902400&v=beta&t=T4p4aoFEpc7t6TGBFhgvWRLDDUB5N2InHdqVT_6AOPI",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQE0x1xIVWaQgw/company-logo_100_100/company-logo_100_100/0/1630593999400/airwallex_logo?e=1776902400&v=beta&t=9pB9tegmEoe1FwT-XqwZaAZ-fN-JsjxC_l4ANqbfaL0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Commissioner",
+        "location": "Melbourne, Australia",
+        "employmentType": "Part-time",
+        "workplaceType": null,
+        "companyName": "Australian Football League",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1336660/",
+        "companyId": "1336660",
+        "duration": "14 yrs 3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2012,
+          "text": "Feb 2012"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQFERO-dCZ4_7Q/company-logo_400_400/company-logo_400_400/0/1675817296190/australian_football_league_logo?e=1776902400&v=beta&t=OFUogpBym2EAuKW4ovT0N2euWYYfyuUNtRhpF_skvZc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFERO-dCZ4_7Q/company-logo_400_400/company-logo_400_400/0/1675817296190/australian_football_league_logo?e=1776902400&v=beta&t=OFUogpBym2EAuKW4ovT0N2euWYYfyuUNtRhpF_skvZc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFERO-dCZ4_7Q/company-logo_200_200/company-logo_200_200/0/1675817296190/australian_football_league_logo?e=1776902400&v=beta&t=Hb2VzMlL_15S6zX3u9sCe4PMJRLxh0_fcvGQV0MnT9c",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFERO-dCZ4_7Q/company-logo_100_100/company-logo_100_100/0/1675817296190/australian_football_league_logo?e=1776902400&v=beta&t=V_I2FkVbI2tNW9NjTzkFvWJ_ms81Pf1OYJdCGDkyVx4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Board Member",
+        "location": null,
+        "employmentType": "Part-time",
+        "workplaceType": null,
+        "companyName": "Cuttable",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/80734408/",
+        "companyId": "80734408",
+        "duration": "1 yr 8 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2024,
+          "text": "Sep 2024"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQFnyNkk8GdVkQ/company-logo_400_400/B56Zl2ZWL_HMAY-/0/1758627980453/cuttable_logo?e=1776902400&v=beta&t=70XEgANvHeEH1xGNnDU-djYC2AzVb38P_yEgfZkm8zU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFnyNkk8GdVkQ/company-logo_400_400/B56Zl2ZWL_HMAY-/0/1758627980453/cuttable_logo?e=1776902400&v=beta&t=70XEgANvHeEH1xGNnDU-djYC2AzVb38P_yEgfZkm8zU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFnyNkk8GdVkQ/company-logo_200_200/B56Zl2ZWL_HMAI-/0/1758627980453/cuttable_logo?e=1776902400&v=beta&t=rEK8qe5QuwoSOATNFK6THXRlVs4ihmIMgoCf5AEWRpw",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFnyNkk8GdVkQ/company-logo_100_100/B56Zl2ZWL_HMAQ-/0/1758627980453/cuttable_logo?e=1776902400&v=beta&t=vd6q-KqhdIuJkSMsewG6P9isCkekbJMDI9ncXzZ6szU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Board Member",
+        "location": "New York, United States",
+        "employmentType": "Part-time",
+        "workplaceType": null,
+        "companyName": "Rokt",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1977526/",
+        "companyId": "1977526",
+        "duration": "6 yrs 1 mo",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Apr",
+          "year": 2020,
+          "text": "Apr 2020"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQE7AmEYtqhs9g/company-logo_400_400/company-logo_400_400/0/1706546290680/rokt_logo?e=1776902400&v=beta&t=kuzWnal9LZUizIF36R7WR2lhtV7BYmeHlvqejw_ej6Q",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQE7AmEYtqhs9g/company-logo_400_400/company-logo_400_400/0/1706546290680/rokt_logo?e=1776902400&v=beta&t=kuzWnal9LZUizIF36R7WR2lhtV7BYmeHlvqejw_ej6Q",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQE7AmEYtqhs9g/company-logo_200_200/company-logo_200_200/0/1706546290679/rokt_logo?e=1776902400&v=beta&t=sRZaDpkMO7IylW1DlMMn7bEI0yXi0zGuwAp0NWlgyZE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQE7AmEYtqhs9g/company-logo_100_100/company-logo_100_100/0/1706546290679/rokt_logo?e=1776902400&v=beta&t=Gnpz6dyPuCxw2f1EpSb6ZW0QkBlgkkwaIqt0wzjMnmc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Board Member",
+        "location": "Australia",
+        "employmentType": "Part-time",
+        "workplaceType": null,
+        "companyName": "Constantinople",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/78795108/",
+        "companyId": "78795108",
+        "duration": "4 yrs 1 mo",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Apr",
+          "year": 2022,
+          "text": "Apr 2022"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQEIbFG-uw0CEA/company-logo_400_400/B56Zk7x1JfJ8AY-/0/1757644543186/cxnplio_logo?e=1776902400&v=beta&t=uGDMs6BLk9c7VL1n0D5RRmQEqZW6lUfzdaoMqbnGCg4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEIbFG-uw0CEA/company-logo_400_400/B56Zk7x1JfJ8AY-/0/1757644543186/cxnplio_logo?e=1776902400&v=beta&t=uGDMs6BLk9c7VL1n0D5RRmQEqZW6lUfzdaoMqbnGCg4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEIbFG-uw0CEA/company-logo_200_200/B56Zk7x1JfJ8AI-/0/1757644543186/cxnplio_logo?e=1776902400&v=beta&t=tYHavUPUMDkMqW0vmgTgx8fEsBRMJPbDn3v8uy_5ay8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEIbFG-uw0CEA/company-logo_100_100/B56Zk7x1JfJ8AQ-/0/1757644543186/cxnplio_logo?e=1776902400&v=beta&t=GAYQtk97uQjD-dc2Sc00O5sP1vUfycF5tNhYui6mvSw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Board Member",
+        "location": "Sydney, New South Wales, Australia",
+        "employmentType": "Part-time",
+        "workplaceType": null,
+        "companyName": "Athena Home Loans",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/11206391/",
+        "companyId": "11206391",
+        "duration": "8 yrs 1 mo",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Apr",
+          "year": 2018,
+          "text": "Apr 2018"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHqX3557n2JpQ/company-logo_400_400/company-logo_400_400/0/1630609984363/athenahomeloans_logo?e=1776902400&v=beta&t=h7_ZkZmFXpYvpGeU0MzcXWs1DF53tqwewP71yUaHVoI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHqX3557n2JpQ/company-logo_400_400/company-logo_400_400/0/1630609984363/athenahomeloans_logo?e=1776902400&v=beta&t=h7_ZkZmFXpYvpGeU0MzcXWs1DF53tqwewP71yUaHVoI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHqX3557n2JpQ/company-logo_200_200/company-logo_200_200/0/1630609984363/athenahomeloans_logo?e=1776902400&v=beta&t=0rYjzMoU5ByyV4Zn5Ic5CvNO9qsFnkNu7eUUVnKaUxc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHqX3557n2JpQ/company-logo_100_100/company-logo_100_100/0/1630609984363/athenahomeloans_logo?e=1776902400&v=beta&t=JITFEyafPnGgWeHr4fUtnEI5lNqiFGYmK-en7hv2BsY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": "Sydney, New South Wales, Australia",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Deputy",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/2451628/",
+        "companyId": "2451628",
+        "duration": "7 yrs 5 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Dec",
+          "year": 2018,
+          "text": "Dec 2018"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQEcLng7pJK8Ow/company-logo_400_400/company-logo_400_400/0/1686767983786/deputyapp_logo?e=1776902400&v=beta&t=_T9HPawoH6-eA3-ob0pd2Z8GxNGPHPRfkotiE2dn0p8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEcLng7pJK8Ow/company-logo_400_400/company-logo_400_400/0/1686767983786/deputyapp_logo?e=1776902400&v=beta&t=_T9HPawoH6-eA3-ob0pd2Z8GxNGPHPRfkotiE2dn0p8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEcLng7pJK8Ow/company-logo_200_200/company-logo_200_200/0/1686767983785/deputyapp_logo?e=1776902400&v=beta&t=ETO5-YOCkprN25DJxNHC6FcwVUSeYnFqZ9wWkT9lfrU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEcLng7pJK8Ow/company-logo_100_100/company-logo_100_100/0/1686767983785/deputyapp_logo?e=1776902400&v=beta&t=cS2ujlZMJudqdqmoXWIMcLE2RFc7uUy_oIVWPJ0g8EE",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "HealthMatch",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/18044607/",
+        "companyId": "18044607",
+        "duration": "6 yrs 8 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2019,
+          "text": "Sep 2019"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEOADdcb2_gTA/company-logo_400_400/company-logo_400_400/0/1630639192884/healthmatchptyltd_logo?e=1776902400&v=beta&t=41cI2EATpGWLk5EykJBM67pyb2YhRC9jgn6ZSiOfh9Y",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEOADdcb2_gTA/company-logo_400_400/company-logo_400_400/0/1630639192884/healthmatchptyltd_logo?e=1776902400&v=beta&t=41cI2EATpGWLk5EykJBM67pyb2YhRC9jgn6ZSiOfh9Y",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEOADdcb2_gTA/company-logo_200_200/company-logo_200_200/0/1630639192884/healthmatchptyltd_logo?e=1776902400&v=beta&t=bTRlpEMaaX3m9YVb6u71LKgD1yJ668Bel2jYxI58dKI",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEOADdcb2_gTA/company-logo_100_100/company-logo_100_100/0/1630639192884/healthmatchptyltd_logo?e=1776902400&v=beta&t=4gP471GI-qiYENQr4qDMkrefm51BFdaKwqoqpRoB5CM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": "Palo Alto, California, United States",
+        "employmentType": "Part-time",
+        "workplaceType": null,
+        "companyName": "UpGuard",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/7579497/",
+        "companyId": "7579497",
+        "duration": "13 yrs 11 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2012,
+          "text": "Jun 2012"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFFdG8fM9XUzA/company-logo_400_400/B4EZi_xoZUGUAc-/0/1755564116433/upguard_logo?e=1776902400&v=beta&t=_nGkI8LunLJGJ8YseZr_7zj3mOIs_XmVzREFvOKQy3g",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFFdG8fM9XUzA/company-logo_400_400/B4EZi_xoZUGUAc-/0/1755564116433/upguard_logo?e=1776902400&v=beta&t=_nGkI8LunLJGJ8YseZr_7zj3mOIs_XmVzREFvOKQy3g",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFFdG8fM9XUzA/company-logo_200_200/B4EZi_xoZUGUAM-/0/1755564116433/upguard_logo?e=1776902400&v=beta&t=ozOOfEotGe4uwj0ViK9bFQW8AJwWhn23fKx49Xh3tU0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFFdG8fM9XUzA/company-logo_100_100/B4EZi_xoZUGUAU-/0/1755564116433/upguard_logo?e=1776902400&v=beta&t=XPTC7NKClJzbqoZC-fYUO0GsNqbU_l9izVv-Bb-r7kQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Board Member",
+        "location": "Melbourne, Victoria, Australia",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Zeller",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/12687202/",
+        "companyId": "12687202",
+        "duration": "6 yrs 1 mo",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Apr",
+          "year": 2020,
+          "text": "Apr 2020"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQFGo_6Gum-rfg/company-logo_400_400/company-logo_400_400/0/1630660711718/zeller_logo?e=1776902400&v=beta&t=D3Er691BhYHCic-xaBDgEEBA1uMsx8H_TOxJ8gfW6p4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFGo_6Gum-rfg/company-logo_400_400/company-logo_400_400/0/1630660711718/zeller_logo?e=1776902400&v=beta&t=D3Er691BhYHCic-xaBDgEEBA1uMsx8H_TOxJ8gfW6p4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFGo_6Gum-rfg/company-logo_200_200/company-logo_200_200/0/1630660711718/zeller_logo?e=1776902400&v=beta&t=J1DZQK-OylesXlIHA3yKmdrNGbYjEJCQh_Mq6xityfk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFGo_6Gum-rfg/company-logo_100_100/company-logo_100_100/0/1630660711718/zeller_logo?e=1776902400&v=beta&t=2Jub0ourwIFQiSwzCwgraU_yD2pftKHnmG4i29pd-30",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Board Member",
+        "location": "Singapore",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "PropertyGuru Group",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/623046/",
+        "companyId": "623046",
+        "duration": "4 yrs 9 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2015,
+          "text": "Jun 2015"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2020,
+          "text": "Feb 2020"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQFvNe-b6NmZeQ/company-logo_400_400/company-logo_400_400/0/1683266249630/propertyguru_logo?e=1776902400&v=beta&t=GEibi_28LdGYe3OkOBRRSHCmuzUVEwpEKxUQGH9A6Wk",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFvNe-b6NmZeQ/company-logo_400_400/company-logo_400_400/0/1683266249630/propertyguru_logo?e=1776902400&v=beta&t=GEibi_28LdGYe3OkOBRRSHCmuzUVEwpEKxUQGH9A6Wk",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFvNe-b6NmZeQ/company-logo_200_200/company-logo_200_200/0/1683266249630/propertyguru_logo?e=1776902400&v=beta&t=1Hu2vPUm3zLZsmefN0oPOzZnWXeJLHrM8OUAGULlGVw",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFvNe-b6NmZeQ/company-logo_100_100/company-logo_100_100/0/1683266249630/propertyguru_logo?e=1776902400&v=beta&t=0wJuACB4qqn6r1KXEdFwJ45KLnKeni7y8s5uvFDX9oU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Non Executive Director",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Wesfarmers",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/38198/",
+        "companyId": "38198",
+        "duration": "6 yrs 1 mo",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Nov",
+          "year": 2012,
+          "text": "Nov 2012"
+        },
+        "endDate": {
+          "month": "Nov",
+          "year": 2018,
+          "text": "Nov 2018"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQEru3hAx9DZpA/company-logo_400_400/company-logo_400_400/0/1631322279957?e=1776902400&v=beta&t=86MCIl35jEmDrvwMlaLXmxryoddbmLhkofdtOwWBMRQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEru3hAx9DZpA/company-logo_400_400/company-logo_400_400/0/1631322279957?e=1776902400&v=beta&t=86MCIl35jEmDrvwMlaLXmxryoddbmLhkofdtOwWBMRQ",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEru3hAx9DZpA/company-logo_200_200/company-logo_200_200/0/1631322279957?e=1776902400&v=beta&t=237YzFRK0x-58-9d8LK8gvLo877okgM74G3TPQtaGSg",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEru3hAx9DZpA/company-logo_100_100/company-logo_100_100/0/1631322279957?e=1776902400&v=beta&t=-Xxj1I_CMsOZKvxPVNnt2rGhYH41XSMJqWfI3cDqRrA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Board Member",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Zhaopin.com",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/78784/",
+        "companyId": "78784",
+        "duration": "4 yrs 10 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2006,
+          "text": "Sep 2006"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2011,
+          "text": "Jun 2011"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEqy7_fHaMfSw/company-logo_400_400/company-logo_400_400/0/1631314355821?e=1776902400&v=beta&t=qqAr1I8MNp20IlI6X8uDv3M3jw_NQo5TfrXkii8xn64",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEqy7_fHaMfSw/company-logo_400_400/company-logo_400_400/0/1631314355821?e=1776902400&v=beta&t=qqAr1I8MNp20IlI6X8uDv3M3jw_NQo5TfrXkii8xn64",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEqy7_fHaMfSw/company-logo_200_200/company-logo_200_200/0/1631314355821?e=1776902400&v=beta&t=zD-HPpm8cHjEdPwhq1eBg8FYzKgQok479VPZC7MrgYU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEqy7_fHaMfSw/company-logo_100_100/company-logo_100_100/0/1631314355821?e=1776902400&v=beta&t=VelFctuoIIcUnW_1mjUxzn0kQg1c5wikU59VSEwCDY0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Co founder and Joint CEO",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "SEEK",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/8985/",
+        "companyId": "8985",
+        "duration": "13 yrs 8 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Nov",
+          "year": 1997,
+          "text": "Nov 1997"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2011,
+          "text": "Jun 2011"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQFGixkrB-vxvQ/company-logo_400_400/company-logo_400_400/0/1631308964609?e=1776902400&v=beta&t=DmsIETde8SJxU0zlVnnETxyRQ5MMrrN8DNj6DyziqCo",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFGixkrB-vxvQ/company-logo_400_400/company-logo_400_400/0/1631308964609?e=1776902400&v=beta&t=DmsIETde8SJxU0zlVnnETxyRQ5MMrrN8DNj6DyziqCo",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFGixkrB-vxvQ/company-logo_200_200/company-logo_200_200/0/1631308964609?e=1776902400&v=beta&t=F0A-Cijua32U74u1_P5IE-qfz_n9NQTC0dBQrmOIoZ8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFGixkrB-vxvQ/company-logo_100_100/company-logo_100_100/0/1631308964609?e=1776902400&v=beta&t=nq6cV81ZTQ309YOfyOO0w-Fikvk6A-IR2e8EiAXT8Lo",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior Associate",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Arnold Bloch Leibler",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/13983/",
+        "companyId": "13983",
+        "duration": "6 yrs 9 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 1991,
+          "text": "Mar 1991"
+        },
+        "endDate": {
+          "month": "Nov",
+          "year": 1997,
+          "text": "Nov 1997"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQHHuPeDnqjewA/company-logo_400_400/company-logo_400_400/0/1631312781518?e=1776902400&v=beta&t=U0xWgvsiG1P0kQyaQzKeVHERxwJwijFHbkeahTzXgWE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQHHuPeDnqjewA/company-logo_400_400/company-logo_400_400/0/1631312781518?e=1776902400&v=beta&t=U0xWgvsiG1P0kQyaQzKeVHERxwJwijFHbkeahTzXgWE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQHHuPeDnqjewA/company-logo_200_200/company-logo_200_200/0/1631312781518?e=1776902400&v=beta&t=mJ4T99Wv7F9NlGFinNwPke1DTgN4p4RTPt9CM_6Y-mY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQHHuPeDnqjewA/company-logo_100_100/company-logo_100_100/0/1631312781518?e=1776902400&v=beta&t=qMmUzeI9-txofLIge7VI3TUm1oIylqJAKxC4z2OaOgk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "University of Melbourne",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/5677/",
+        "schoolId": "5677",
+        "degree": "Bachelor of Laws (LL.B.)",
+        "fieldOfStudy": null,
+        "skills": [],
+        "startDate": {
+          "year": 1986,
+          "text": "1986"
+        },
+        "endDate": {
+          "year": 1990,
+          "text": "1990"
+        },
+        "period": "1986 - 1990",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQEACkXGOAWOFg/company-logo_400_400/company-logo_400_400/0/1691363410465?e=1776902400&v=beta&t=cOSRarcpZhHGbxeR2Lx8GKsGban846N6Kx2Cqvn5Q1Y",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEACkXGOAWOFg/company-logo_400_400/company-logo_400_400/0/1691363410465?e=1776902400&v=beta&t=cOSRarcpZhHGbxeR2Lx8GKsGban846N6Kx2Cqvn5Q1Y",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEACkXGOAWOFg/company-logo_200_200/company-logo_200_200/0/1691363410465?e=1776902400&v=beta&t=Auml5vvk35nipru4whwDXW2R26-h6pPNSOe6w-FgxTM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEACkXGOAWOFg/company-logo_100_100/company-logo_100_100/0/1691363410465?e=1776902400&v=beta&t=j7WR20T_5wi9q-Q0z07pcvWQaFN8V3IPZioWeuW3uy4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "University of Melbourne",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/5677/",
+        "schoolId": "5677",
+        "degree": "Bachelor of Commerce (B.Com.)",
+        "fieldOfStudy": null,
+        "skills": [],
+        "startDate": {
+          "year": 1986,
+          "text": "1986"
+        },
+        "endDate": {
+          "year": 1988,
+          "text": "1988"
+        },
+        "period": "1986 - 1988",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQEACkXGOAWOFg/company-logo_400_400/company-logo_400_400/0/1691363410465?e=1776902400&v=beta&t=cOSRarcpZhHGbxeR2Lx8GKsGban846N6Kx2Cqvn5Q1Y",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEACkXGOAWOFg/company-logo_400_400/company-logo_400_400/0/1691363410465?e=1776902400&v=beta&t=cOSRarcpZhHGbxeR2Lx8GKsGban846N6Kx2Cqvn5Q1Y",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEACkXGOAWOFg/company-logo_200_200/company-logo_200_200/0/1691363410465?e=1776902400&v=beta&t=Auml5vvk35nipru4whwDXW2R26-h6pPNSOe6w-FgxTM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEACkXGOAWOFg/company-logo_100_100/company-logo_100_100/0/1691363410465?e=1776902400&v=beta&t=j7WR20T_5wi9q-Q0z07pcvWQaFN8V3IPZioWeuW3uy4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Online Advertising",
+        "positions": [
+          "Endorsed by 6 colleagues at SEEK"
+        ],
+        "endorsements": "26 endorsements"
+      },
+      {
+        "name": "Digital Marketing",
+        "positions": [
+          "Endorsed by 3 colleagues at SEEK"
+        ],
+        "endorsements": "17 endorsements"
+      },
+      {
+        "name": "Digital Strategy",
+        "positions": [
+          "Endorsed by 9 colleagues at SEEK"
+        ],
+        "endorsements": "57 endorsements"
+      },
+      {
+        "name": "E-commerce",
+        "endorsements": "26 endorsements"
+      },
+      {
+        "name": "Start-ups",
+        "endorsements": "99+ endorsements"
+      },
+      {
+        "name": "Venture Capital",
+        "endorsements": "11 endorsements"
+      },
+      {
+        "name": "Private Equity",
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "Entrepreneurship",
+        "endorsements": "68 endorsements"
+      },
+      {
+        "name": "Digital Media",
+        "endorsements": "21 endorsements"
+      },
+      {
+        "name": "Business Strategy",
+        "endorsements": "57 endorsements"
+      },
+      {
+        "name": "Online Marketing",
+        "endorsements": "24 endorsements"
+      },
+      {
+        "name": "Lead Generation",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Mobile Applications",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Brand Development",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Business Planning",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Email Marketing",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "User Experience",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Social Media Marketing",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "New Business Development",
+        "endorsements": "20 endorsements"
+      },
+      {
+        "name": "Mobile Devices",
+        "endorsements": "9 endorsements"
+      },
+      {
+        "name": "Strategy",
+        "endorsements": "52 endorsements"
+      },
+      {
+        "name": "Leadership",
+        "endorsements": "21 endorsements"
+      },
+      {
+        "name": "Strategic Planning",
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "Management",
+        "endorsements": "13 endorsements"
+      },
+      {
+        "name": "Corporate Development",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Direct Marketing",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Social Networking",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Affiliate Marketing",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Marketing Management",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Web Analytics",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "CRM",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "SEO",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "Executive Management",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Business Development",
+        "endorsements": "9 endorsements"
+      },
+      {
+        "name": "Social Media",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Management Consulting",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Marketing Communications",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Product Management",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "New Media",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Integrated Marketing",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Product Development",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Mobile Marketing",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Marketing Strategy",
+        "endorsements": "22 endorsements"
+      },
+      {
+        "name": "Strategic Partnerships",
+        "endorsements": "7 endorsements"
+      },
+      {
+        "name": "Marketing",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "SEM",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Advertising",
+        "endorsements": "2 endorsements"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAAAcg-4oB1iyfzznCWXljOtT7qx1EAlPg_Gw",
+        "firstName": "Ben",
+        "lastName": "Hensman",
+        "publicIdentifier": "ben-hensman-1a207a34",
+        "linkedinUrl": "https://www.linkedin.com/in/ben-hensman-1a207a34"
+      },
+      {
+        "id": "ACoAAET4nPUBObVuBZWddbkymHwiqM-DkeG1qWY",
+        "firstName": "Liam",
+        "lastName": "Fuller",
+        "publicIdentifier": "liam-fuller-499637283",
+        "linkedinUrl": "https://www.linkedin.com/in/liam-fuller-499637283"
+      },
+      {
+        "id": "ACoAAACQBzQB5nk5kOpFWQRtK4pv3RaL5q2G-pA",
+        "firstName": "Jonathan",
+        "lastName": "Lachman",
+        "publicIdentifier": "jonathan-lachman-4981b23",
+        "linkedinUrl": "https://www.linkedin.com/in/jonathan-lachman-4981b23"
+      },
+      {
+        "id": "ACoAAACjjuUBLhRV1df5Y7Ie-yq2uieKPYc01lU",
+        "firstName": "Georgina",
+        "lastName": "Harrisson",
+        "publicIdentifier": "georginaharrisson",
+        "linkedinUrl": "https://www.linkedin.com/in/georginaharrisson"
+      },
+      {
+        "id": "ACoAABImku0BavI1zQ2gGlnMh3DVl-7ufC7GSmI",
+        "firstName": "Jethro",
+        "lastName": "Cohen",
+        "publicIdentifier": "jethrocohen",
+        "linkedinUrl": "https://www.linkedin.com/in/jethrocohen"
+      },
+      {
+        "id": "ACoAAApPRboBS9DOSPPYr00d70JQMJgy1KuYhz0",
+        "firstName": "Lucy",
+        "lastName": "Tan",
+        "publicIdentifier": "lucy-tan-a22b1449",
+        "linkedinUrl": "https://www.linkedin.com/in/lucy-tan-a22b1449"
+      },
+      {
+        "id": "ACoAAABc6BwB54y2QXKnHh_K1M8kzeH6nfvwDZA",
+        "firstName": "Justin",
+        "lastName": "Liberman",
+        "publicIdentifier": "justin-liberman-6a40572",
+        "linkedinUrl": "https://www.linkedin.com/in/justin-liberman-6a40572"
+      },
+      {
+        "id": "ACoAAANjKKABCIOBvYyc12g-cP6Ud_P5d1cYxyM",
+        "firstName": "Dan",
+        "lastName": "Krasnostein",
+        "publicIdentifier": "dankrasnostein",
+        "linkedinUrl": "https://www.linkedin.com/in/dankrasnostein"
+      },
+      {
+        "id": "ACoAACcT6fAB0_SkyfnmqIUJDSMQ7JDO77Dt0v0",
+        "firstName": "Grace",
+        "lastName": "Dalla-Bona",
+        "publicIdentifier": "grace-dalla-bona-840693163",
+        "linkedinUrl": "https://www.linkedin.com/in/grace-dalla-bona-840693163"
+      },
+      {
+        "id": "ACoAAAl87CYBWKLLyGNTbomy6oqIPv-5n34CXIY",
+        "firstName": "Andrew",
+        "lastName": "Tulloch",
+        "publicIdentifier": "andrew-tulloch-17238745",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-tulloch-17238745"
+      },
+      {
+        "id": "ACoAAACbnm0BW9-csrZh4v2k_gkTH2ycucmxRMo",
+        "firstName": "James",
+        "lastName": "Tynan",
+        "publicIdentifier": "james-tynan-ba54b93",
+        "linkedinUrl": "https://www.linkedin.com/in/james-tynan-ba54b93"
+      },
+      {
+        "id": "ACoAAAdqUy4B_ZOv6oO380kdMWOHPpqA0KOqEGo",
+        "firstName": "Lucy Yueting",
+        "lastName": "Liu",
+        "publicIdentifier": "awxlucy",
+        "linkedinUrl": "https://www.linkedin.com/in/awxlucy"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAABPg53YBHdOvmp7pU72eDhcho-7cnwyxk1o",
+        "firstName": "Pia",
+        "lastName": "Santos",
+        "publicIdentifier": "piafsantos",
+        "linkedinUrl": "https://www.linkedin.com/in/piafsantos"
+      },
+      {
+        "id": "ACoAABi9NgsByVWafiYYnAXyAsdyJ-wnRSEgjq4",
+        "firstName": "Yoan",
+        "lastName": "Gabison",
+        "publicIdentifier": "yoangabison",
+        "linkedinUrl": "https://www.linkedin.com/in/yoangabison"
+      },
+      {
+        "id": "ACoAAASgrb4BBxPVcZzOGzkyGJEgwwHJv1PTxnc",
+        "firstName": "Jack",
+        "lastName": "Zhang",
+        "publicIdentifier": "jack-zhang-05200222",
+        "linkedinUrl": "https://www.linkedin.com/in/jack-zhang-05200222"
+      },
+      {
+        "id": "ACoAAAwXd-IBxDHUr1lnLXUWn3UR-qUMh0vSYrI",
+        "firstName": "Ed",
+        "lastName": "Barker",
+        "publicIdentifier": "ed-barker",
+        "linkedinUrl": "https://www.linkedin.com/in/ed-barker"
+      },
+      {
+        "id": "ACoAAAji1bkB1eLX4z2Jb9-N2nMhEGNLWptSnqU",
+        "firstName": "Clare",
+        "lastName": "Birch",
+        "publicIdentifier": "clarebirch42",
+        "linkedinUrl": "https://www.linkedin.com/in/clarebirch42"
+      },
+      {
+        "id": "ACoAAAlCSsEB-O9_osacvB1vAcSSnIJmcypumHE",
+        "firstName": "Tony",
+        "lastName": "Holt",
+        "publicIdentifier": "tony-holt-62903344",
+        "linkedinUrl": "https://www.linkedin.com/in/tony-holt-62903344"
+      },
+      {
+        "id": "ACoAAB1oSQEB4_dEiMcwjqFAmle-8n25R7BdbJA",
+        "firstName": "Georgia",
+        "lastName": "C.",
+        "position": "Public affairs | Storytelling for change at AMPLIFY",
+        "publicIdentifier": "georgia-clarke99",
+        "linkedinUrl": "https://www.linkedin.com/in/georgia-clarke99"
+      },
+      {
+        "id": "ACoAAALfM3gBclA7MTJO7dEksRv-BfmfhBkhFk4",
+        "firstName": "Chelsea",
+        "lastName": "Hampel",
+        "position": "Chief Operating Officer, AMPLIFY",
+        "publicIdentifier": "chelsea-hampel-22017714",
+        "linkedinUrl": "https://www.linkedin.com/in/chelsea-hampel-22017714"
+      },
+      {
+        "id": "ACoAAAjuEKwB2vepZP91UVVLKPNg1mLhu7uNeXA",
+        "firstName": "Georgina",
+        "lastName": "Lewis",
+        "position": "Relationship Management | Philanthropy | Board Member | Speaker",
+        "publicIdentifier": "georginallewis",
+        "linkedinUrl": "https://www.linkedin.com/in/georginallewis"
+      },
+      {
+        "id": "ACoAAA9BbPIBbEoVNo3GIw7dLnfbNdh-9-r7K5w",
+        "firstName": "Stephen",
+        "lastName": "Beverley",
+        "position": "Policy Director at AMPLIFY Australia",
+        "publicIdentifier": "stephenbeverley",
+        "linkedinUrl": "https://www.linkedin.com/in/stephenbeverley"
+      },
+      {
+        "id": "ACoAAAgt5u4BpBdIx7iVs8tOjdR83brtYDI9J3A",
+        "firstName": "Jess",
+        "lastName": "LeWatt",
+        "position": "strategy | delivery | participation & change",
+        "publicIdentifier": "jessicalewatt",
+        "linkedinUrl": "https://www.linkedin.com/in/jessicalewatt"
+      },
+      {
+        "id": "ACoAACvEWzABx4OkaeSoY8PSyNiyDKqBH0S79UI",
+        "firstName": "Enya",
+        "lastName": "Broadley",
+        "position": "Communications | Campaigns | Policy",
+        "publicIdentifier": "enya-broadley",
+        "linkedinUrl": "https://www.linkedin.com/in/enya-broadley"
+      },
+      {
+        "id": "ACoAACl8OZcBGffDxNheEM-siKglGuRdzK44tQk",
+        "firstName": "Joel",
+        "lastName": "Bassat",
+        "position": "Finding the uncommon ground at Amplify",
+        "publicIdentifier": "joel-bassat-a47111175",
+        "linkedinUrl": "https://www.linkedin.com/in/joel-bassat-a47111175"
+      },
+      {
+        "id": "ACoAADUCPVEBoGHW4__AyFASTcnEloJK5nr3xrc",
+        "firstName": "Amita",
+        "lastName": "Singh",
+        "position": "AMPLIFY | Policy Associate | ",
+        "publicIdentifier": "amita-singh-a95a07209",
+        "linkedinUrl": "https://www.linkedin.com/in/amita-singh-a95a07209"
+      },
+      {
+        "id": "ACoAAC2wtXQBo2vrpr-3uQ76XFouarsW3Zvbbjs",
+        "firstName": "Rory",
+        "lastName": "Gallagher",
+        "position": "People-Powered Policy",
+        "publicIdentifier": "rory-gallagher-618874194",
+        "linkedinUrl": "https://www.linkedin.com/in/rory-gallagher-618874194"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAAAI9MIBbC1tdebIPVt2xZFc7mOIMK2lkyw"
+    }
+  }
+}

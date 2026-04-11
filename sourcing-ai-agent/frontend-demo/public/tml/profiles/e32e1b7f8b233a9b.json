@@ -1,0 +1,724 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAAPxMTsBNE41HkdyQjPn9Iuru-YV5mWUSbg",
+    "profile_url": "https://www.linkedin.com/in/ACwAAAPxMTsBNE41HkdyQjPn9Iuru-YV5mWUSbg"
+  },
+  "item": {
+    "id": "ACoAAAPxMTsB6AbW45NodBVmmA7QtDdYCGnuR7A",
+    "publicIdentifier": "lili-yu-6771961a",
+    "linkedinUrl": "https://www.linkedin.com/in/lili-yu-6771961a",
+    "firstName": "Lili",
+    "lastName": "Yu",
+    "emails": [
+      {
+        "email": "lili.yu@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Member of Technical Staff at Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Greater Seattle Area",
+      "countryCode": "US",
+      "parsed": {
+        "text": "Seattle, WA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "Washington",
+        "city": "Seattle"
+      }
+    },
+    "objectUrn": "66138427",
+    "registeredAt": "2010-02-05T04:29:37.000Z",
+    "topSkills": null,
+    "connectionsCount": 835,
+    "followerCount": 1351,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 10,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "18494",
+        "companyId": "1503",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1503/",
+        "schoolName": "Massachusetts Institute of Technology"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": null,
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Member of Technical Staff at Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "7 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Oct",
+          "year": 2025,
+          "text": "Oct 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Physical Intelligence",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/100923057/",
+        "companyId": "100923057",
+        "duration": "8 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2025,
+          "text": "Feb 2025"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2025,
+          "text": "Sep 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEGqAx36rsRVw/company-logo_400_400/company-logo_400_400/0/1725844021095/physical_intelligence_logo?e=1776902400&v=beta&t=X_sl8aqgP0ab4bv9izk1UC0sfnVZZOzf28tMMekfLas",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEGqAx36rsRVw/company-logo_400_400/company-logo_400_400/0/1725844021095/physical_intelligence_logo?e=1776902400&v=beta&t=X_sl8aqgP0ab4bv9izk1UC0sfnVZZOzf28tMMekfLas",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEGqAx36rsRVw/company-logo_200_200/company-logo_200_200/0/1725844021095/physical_intelligence_logo?e=1776902400&v=beta&t=s1EWrn450SDKNYHlcf124u9V8tyEaozzssakKryRqgM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEGqAx36rsRVw/company-logo_100_100/company-logo_100_100/0/1725844021095/physical_intelligence_logo?e=1776902400&v=beta&t=XezUalI2DKXgMI_w6m1r1dztCK1-uzTTelnOx3Gxllw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "AI Research Scientist",
+        "location": "Seattle, Washington, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Facebook AI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/76987811/",
+        "companyId": "76987811",
+        "duration": "3 yrs 11 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Apr",
+          "year": 2021,
+          "text": "Apr 2021"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2025,
+          "text": "Feb 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_200_200/company-logo_200_200/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=CL3OcEUIyBJFm9Wkw4iT9gJoWpsvGBIAhhNM0DjZx_A",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_100_100/company-logo_100_100/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=sZq9Sard1kGYVIprgBkNhUvJRTI7tf3pXOCP1bQBfpM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Natural Language Processing Research Scientist",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "ASAPP, Inc",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10095599/",
+        "companyId": "10095599",
+        "duration": "4 yrs 2 mos",
+        "description": "- Tech lead of real-world AI products that create better customer experiences\n- Original research on dialogue system, learning from feedback, interpretability and text summarization",
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2017,
+          "text": "Feb 2017"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2021,
+          "text": "Mar 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFhQkIvuYv-Cw/company-logo_400_400/company-logo_400_400/0/1734964722804/asappco_logo?e=1776902400&v=beta&t=R4a1d5-9dlaNpDkFtcS6o6bKQBadSKUSXldGIRI8GeY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFhQkIvuYv-Cw/company-logo_400_400/company-logo_400_400/0/1734964722804/asappco_logo?e=1776902400&v=beta&t=R4a1d5-9dlaNpDkFtcS6o6bKQBadSKUSXldGIRI8GeY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFhQkIvuYv-Cw/company-logo_200_200/company-logo_200_200/0/1734964722804/asappco_logo?e=1776902400&v=beta&t=cx06tC6-1PRRLdTCb94M0GbetIGSvZNJ2sq_bnuONRc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFhQkIvuYv-Cw/company-logo_100_100/company-logo_100_100/0/1734964722804/asappco_logo?e=1776902400&v=beta&t=tKgLMFMGvj6L00OQLljDug-vEEFq5JFemaE2wCH_Ey4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Massachusetts Institute of Technology",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1503/",
+        "schoolId": "1503",
+        "degree": "Doctor of Philosophy (PhD)",
+        "fieldOfStudy": "Electrical Engineering and Computer Science",
+        "skills": [],
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_400_400/company-logo_400_400/0/1689799729035/mit_logo?e=1776902400&v=beta&t=u1PKvlsURdjuQj6vGwgPDc-3muz7cCQ6oGJISjoWshw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_400_400/company-logo_400_400/0/1689799729035/mit_logo?e=1776902400&v=beta&t=u1PKvlsURdjuQj6vGwgPDc-3muz7cCQ6oGJISjoWshw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_200_200/company-logo_200_200/0/1689799729035/mit_logo?e=1776902400&v=beta&t=AB2cY7dhuIbLPIWAjqEjazLVeMiSD5C3JNuYh9NjBw4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_100_100/company-logo_100_100/0/1689799729035/mit_logo?e=1776902400&v=beta&t=IuM-xZiymxMvWzGrHXnXupiD9lk70R68nAJaX2-9P8Y",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Peking University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/20289/",
+        "schoolId": "20289",
+        "degree": "BS",
+        "fieldOfStudy": "Physics",
+        "skills": [],
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQFNJ0xtCpaTmA/company-logo_400_400/company-logo_400_400/0/1630659985593/peking_university_logo?e=1776902400&v=beta&t=tzWsCJkzrFTjS8-XTrasS49bBUqZTxxm9qz4Y-W-UEI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFNJ0xtCpaTmA/company-logo_400_400/company-logo_400_400/0/1630659985593/peking_university_logo?e=1776902400&v=beta&t=tzWsCJkzrFTjS8-XTrasS49bBUqZTxxm9qz4Y-W-UEI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFNJ0xtCpaTmA/company-logo_200_200/company-logo_200_200/0/1630659985593/peking_university_logo?e=1776902400&v=beta&t=GGCchHN0MhDF69ugXCZ_57G9SYP0XpXZfHVxS90uIdg",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFNJ0xtCpaTmA/company-logo_100_100/company-logo_100_100/0/1630659985593/peking_university_logo?e=1776902400&v=beta&t=6Epw2UUmAPAeqOOrlKudHnFnsFVCE8IuE-eKVpCxg2I",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Physics",
+        "endorsements": "13 endorsements"
+      },
+      {
+        "name": "Machine Learning",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Nature Language Processing",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Microfabrication",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "Matlab",
+        "endorsements": "13 endorsements"
+      },
+      {
+        "name": "Simulations",
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "LaTeX",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Nanofabrication",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "Thin Films",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Python",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "C++",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "C",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Linux",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Materials Science",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Nanotechnology",
+        "endorsements": "10 endorsements"
+      },
+      {
+        "name": "Mathematica",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Cadence"
+      },
+      {
+        "name": "Data Analysis"
+      },
+      {
+        "name": "Research"
+      },
+      {
+        "name": "Statistics"
+      },
+      {
+        "name": "Algorithms"
+      },
+      {
+        "name": "Natual language processing"
+      }
+    ],
+    "publications": [
+      {
+        "title": "Interactive Classification by Asking Informative Questions.",
+        "publishedAt": "ACL2020 · Jan 1, 2020",
+        "description": null
+      },
+      {
+        "title": "Nutri-bullets: Summarizing Health Studies by Composing Segments",
+        "publishedAt": "AAAI2021 · Jan 1, 2020",
+        "description": null
+      },
+      {
+        "title": "Rationalizing Text Matching: Learning Sparse Alignments via Optimal Transport",
+        "publishedAt": "ACL2020 · Jan 1, 2020",
+        "description": null
+      },
+      {
+        "title": "Building a Production Model for Retrieval-Based Chatbots",
+        "publishedAt": "ACL2019 conversation AI workshop · Jan 1, 2019",
+        "description": null
+      },
+      {
+        "title": "Interpretable Text Matching by Learning a Constrained Alignment",
+        "publishedAt": "NeurIPS'19 OTML · Jan 1, 2019",
+        "description": null
+      },
+      {
+        "title": "High-risk breast lesions: a machine learning model to predict pathologic upgrade and reduce unnecessary surgical excision",
+        "publishedAt": "Radiology · Jan 1, 2018",
+        "description": null
+      }
+    ],
+    "courses": [],
+    "patents": [
+      {
+        "title": "Clarification of natural language requests using neural networks",
+        "number": "US 16/582,700"
+      },
+      {
+        "title": "Electronics including graphene-based hybrid structures",
+        "number": "US 15/034,051"
+      }
+    ],
+    "honorsAndAwards": [],
+    "languages": [
+      {
+        "name": "Chinese",
+        "proficiency": "Native or bilingual proficiency"
+      },
+      {
+        "name": "English",
+        "proficiency": "Full professional proficiency"
+      }
+    ],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAABQ5lJUBry2byQYf_TtxDF9Rha9l-RqYsaM",
+        "firstName": "Guang-He",
+        "lastName": "Lee",
+        "publicIdentifier": "guang-he-lee-64577895",
+        "linkedinUrl": "https://www.linkedin.com/in/guang-he-lee-64577895"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABmsYasBhsFwXKca6Ooio5i6nRfTRvN4d2Y",
+        "firstName": "Liyuan",
+        "lastName": "Liu",
+        "publicIdentifier": "liyuanlucasliu",
+        "linkedinUrl": "https://www.linkedin.com/in/liyuanlucasliu"
+      },
+      {
+        "id": "ACoAAAgB78IBFrSRvjrM16CT0N8_P9uNs_xP3cw",
+        "firstName": "Aurick",
+        "lastName": "Qiao",
+        "publicIdentifier": "aurickq",
+        "linkedinUrl": "https://www.linkedin.com/in/aurickq"
+      },
+      {
+        "id": "ACoAACaOARIBRO2EEH12QWQO29L__oI3N2K4u14",
+        "firstName": "Mingjie",
+        "lastName": "Sun",
+        "publicIdentifier": "mingjie-sun-06a761160",
+        "linkedinUrl": "https://www.linkedin.com/in/mingjie-sun-06a761160"
+      },
+      {
+        "id": "ACoAABGzJXcBFaJqVFgqgYNbhaPVKRkP3iG33dA",
+        "firstName": "Noah",
+        "lastName": "Shpak",
+        "publicIdentifier": "nshpak",
+        "linkedinUrl": "https://www.linkedin.com/in/nshpak"
+      },
+      {
+        "id": "ACoAAEAbBpQBT4luNj8gPYU6CgQ_GNJey3AJTiE",
+        "firstName": "Rajat",
+        "lastName": "Goel",
+        "publicIdentifier": "rajatgoel2010",
+        "linkedinUrl": "https://www.linkedin.com/in/rajatgoel2010"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAAAFeNNIBGA1Mtyi5_iGkRC19uDzKU2t5dVs",
+        "firstName": "Kunal",
+        "lastName": "Bhalla",
+        "publicIdentifier": "kunalbhalla",
+        "linkedinUrl": "https://www.linkedin.com/in/kunalbhalla"
+      },
+      {
+        "id": "ACoAABA0sF8BJqwmfoms3veu9TE72tj8JMUQEFA",
+        "firstName": "Sam",
+        "lastName": "Shleifer",
+        "publicIdentifier": "sam-shleifer-a5307a77",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-shleifer-a5307a77"
+      },
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAABhKWCYBiuV3Zv9Hbt8t0j-xMRqxawBcSgw",
+        "firstName": "Kurt",
+        "lastName": "Shuster",
+        "publicIdentifier": "kurtshuster1",
+        "linkedinUrl": "https://www.linkedin.com/in/kurtshuster1"
+      },
+      {
+        "id": "ACoAABhIg7YBYN2NPIu8voYj5D7JQVZGxonqHvc",
+        "firstName": "Ruiqi",
+        "lastName": "Zhong",
+        "publicIdentifier": "ruiqi-zhong-09a533b4",
+        "linkedinUrl": "https://www.linkedin.com/in/ruiqi-zhong-09a533b4"
+      },
+      {
+        "id": "ACoAADYMzQABdXTSxolT2YjHmNBBSeT6YrGSQmQ",
+        "firstName": "Tarushii",
+        "lastName": "Goel",
+        "publicIdentifier": "tarushii-goel",
+        "linkedinUrl": "https://www.linkedin.com/in/tarushii-goel"
+      },
+      {
+        "id": "ACoAABqU8psBncgwN-WH-D8F1Jq9i7OsFmcPDt4",
+        "firstName": "Jeffrey",
+        "lastName": "Tao",
+        "publicIdentifier": "jeffrey-tao",
+        "linkedinUrl": "https://www.linkedin.com/in/jeffrey-tao"
+      },
+      {
+        "id": "ACoAAC9rfpYB9euIDgF4Yyk3m40DRa2_3dEv1gM",
+        "firstName": "Wade",
+        "lastName": "Hickey",
+        "publicIdentifier": "wade-hickey-69a5291a2",
+        "linkedinUrl": "https://www.linkedin.com/in/wade-hickey-69a5291a2"
+      },
+      {
+        "id": "ACoAACy2BxwB9fCrfCBI06w0X-gHyQTFLJIpJGc",
+        "firstName": "Guangxuan",
+        "lastName": "X.",
+        "publicIdentifier": "xgx",
+        "linkedinUrl": "https://www.linkedin.com/in/xgx"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAAAeoHjYB_Lo5sUFlpZpz2L74oe9nEIKztQA",
+        "firstName": "Jenya",
+        "lastName": "L.",
+        "publicIdentifier": "jenya-l",
+        "linkedinUrl": "https://www.linkedin.com/in/jenya-l"
+      },
+      {
+        "id": "ACoAACHkUNgBogKk7Q3xekxMdWLMSikZY2zgQsU",
+        "firstName": "Stephen",
+        "lastName": "Roller",
+        "publicIdentifier": "stephen-roller-38851513a",
+        "linkedinUrl": "https://www.linkedin.com/in/stephen-roller-38851513a"
+      },
+      {
+        "id": "ACoAADvVE0kB6UCCeadbM_I1C70gnggY5OEFAMQ",
+        "firstName": "Klara",
+        "lastName": "Halau",
+        "position": "Draftswoman at TORMAX",
+        "publicIdentifier": "klara-halau-321216240",
+        "linkedinUrl": "https://www.linkedin.com/in/klara-halau-321216240"
+      },
+      {
+        "id": "ACoAABqNUW8BwhcYcV1XsDxtECw8zahbUGoYQ-Y",
+        "firstName": "Kim",
+        "lastName": "Stewart",
+        "position": "National Sales & Marketing Support at TORMAX Canada Inc.",
+        "publicIdentifier": "kim-stewart-6bb22a105",
+        "linkedinUrl": "https://www.linkedin.com/in/kim-stewart-6bb22a105"
+      },
+      {
+        "id": "ACoAAGEZJ6IBRHBJtp1qet2Yv6khpo8RXonB9cI",
+        "firstName": "Ayden",
+        "lastName": "Brown",
+        "position": "Technical Lead at TORMAX Canada Inc.",
+        "publicIdentifier": "ayden-brown-74268a395",
+        "linkedinUrl": "https://www.linkedin.com/in/ayden-brown-74268a395"
+      },
+      {
+        "id": "ACoAACu_8r0BkqskULA2IzAjCyiPFu1JADfEF8A",
+        "firstName": "Barb",
+        "lastName": "Crawford",
+        "position": "Project Manager at Sentinel Facades",
+        "publicIdentifier": "barb-crawford-4a5994185",
+        "linkedinUrl": "https://www.linkedin.com/in/barb-crawford-4a5994185"
+      },
+      {
+        "id": "ACoAAC-YkJMBVxqZB8XcEvTc-wQ2fTNzfR2D9sw",
+        "firstName": "Hailey",
+        "lastName": "Varney",
+        "position": "National Service Coordinator at Tormax Canada",
+        "publicIdentifier": "hailey-varney-a975121a3",
+        "linkedinUrl": "https://www.linkedin.com/in/hailey-varney-a975121a3"
+      },
+      {
+        "id": "ACoAAB3siR4BXcYVMZVnQ5jGh-kYXkOH6zQgGmE",
+        "firstName": "Arvin",
+        "lastName": "Raja",
+        "position": "Product Engineer",
+        "publicIdentifier": "arvinraj-raja",
+        "linkedinUrl": "https://www.linkedin.com/in/arvinraj-raja"
+      },
+      {
+        "id": "ACoAAEK16owBZZnvCSXlBQJTeDsvrUsRLlExJeQ",
+        "firstName": "Justin",
+        "lastName": "Varney",
+        "position": "Operations Team Leader at TORMAX Canada Inc.",
+        "publicIdentifier": "justin-varney-9509a7272",
+        "linkedinUrl": "https://www.linkedin.com/in/justin-varney-9509a7272"
+      },
+      {
+        "id": "ACoAAAtFDFcB91rhEmBjXg5EjhdYeMY7reGpvA4",
+        "firstName": "Yan",
+        "lastName": "Fillion",
+        "position": "Accès Solution Inc",
+        "publicIdentifier": "yan-fillion-15b3a253",
+        "linkedinUrl": "https://www.linkedin.com/in/yan-fillion-15b3a253"
+      },
+      {
+        "id": "ACoAAEvN8lwBPWYtJeqpmMsS-Oy8U8N02rzphLE",
+        "firstName": "Gurnoor",
+        "lastName": "Singh",
+        "position": "Manufacturing Associate at Tomax. Actively Growing in Production & Operations",
+        "publicIdentifier": "gurnoor-singh-5b8b042b5",
+        "linkedinUrl": "https://www.linkedin.com/in/gurnoor-singh-5b8b042b5"
+      },
+      {
+        "id": "ACoAAEqDekIBJrGGjvNo2OJKH8gSPWvN019IAZo",
+        "firstName": "Justin",
+        "lastName": "Ewles",
+        "position": "Team Leader Montage at Tormax Canada",
+        "publicIdentifier": "justin-ewles-1967bb2aa",
+        "linkedinUrl": "https://www.linkedin.com/in/justin-ewles-1967bb2aa"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAAPxMTsBNE41HkdyQjPn9Iuru-YV5mWUSbg"
+    }
+  }
+}

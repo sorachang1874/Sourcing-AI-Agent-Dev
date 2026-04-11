@@ -1,0 +1,953 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAABV61Q0BHkM2hTJCcVpL0eUSjiClvdwTGUk",
+    "profile_url": "https://www.linkedin.com/in/ACwAABV61Q0BHkM2hTJCcVpL0eUSjiClvdwTGUk"
+  },
+  "item": {
+    "id": "ACoAABV61Q0BF3ER-196Zc9GK5TviMrbbIlVGqg",
+    "publicIdentifier": "samuel-schoenholz-379830a0",
+    "linkedinUrl": "https://www.linkedin.com/in/samuel-schoenholz-379830a0",
+    "firstName": "Samuel",
+    "lastName": "Schoenholz",
+    "emails": [
+      {
+        "email": "samuel.schoenholz@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Thinking Machines Lab | Ex: OpenAI, Google Brain",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Mountain View, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "Mountain View, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "Mountain View"
+      }
+    },
+    "objectUrn": "360371469",
+    "registeredAt": "2014-08-04T23:53:30.730Z",
+    "topSkills": null,
+    "connectionsCount": 315,
+    "followerCount": 832,
+    "verified": false,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 1,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "19328",
+        "companyId": "3165",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3165/",
+        "schoolName": "University of Pennsylvania"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": null,
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Thinking Machines Lab | Ex: OpenAI, Google Brain",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Founding Team",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "1 yr 4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2025,
+          "text": "Jan 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "OpenAI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/11130470/",
+        "companyId": "11130470",
+        "duration": "2 yrs 2 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Dec",
+          "year": 2022,
+          "text": "Dec 2022"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2025,
+          "text": "Jan 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_200_200/B56ZT8EYB8HsAI-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=O6RSWlpQ5W4zNCOCTu621qCyTijLuXFJS4pz2_hBQfo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_100_100/B56ZT8EYB8HsAQ-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=y7RA89V9q8GlAjQ1oRU-jf_-n5zlSXRCnykXBIkgHfM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior Research Scientist",
+        "location": "San Francisco ",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Google",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1441/",
+        "companyId": "1441",
+        "duration": "3 yrs 8 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "01ed0951e37b8045556fff64ae217597993f2b70",
+        "startDate": {
+          "month": "May",
+          "year": 2019,
+          "text": "May 2019"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2022,
+          "text": "Dec 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_200_200/B4EZmhegXHGcAM-/0/1759350753990/google_logo?e=1776902400&v=beta&t=CTzyZ9kqXiycW6UU0lJPQmCNKxu5QeAaPL_y9ftsJX0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_100_100/B4EZmhegXHGcAU-/0/1759350753990/google_logo?e=1776902400&v=beta&t=LRCYpUl9rmgdri4awRP4FVlvccNARAtgcfqxtRHdedI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Scientist",
+        "location": "Mountain View",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Google",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1441/",
+        "companyId": "1441",
+        "duration": "2 yrs 1 mo",
+        "description": "Using statistical physics to understand machine learning. Using machine learning to do science.",
+        "skills": null,
+        "experienceGroupId": "01ed0951e37b8045556fff64ae217597993f2b70",
+        "startDate": {
+          "month": "May",
+          "year": 2017,
+          "text": "May 2017"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2019,
+          "text": "May 2019"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_200_200/B4EZmhegXHGcAM-/0/1759350753990/google_logo?e=1776902400&v=beta&t=CTzyZ9kqXiycW6UU0lJPQmCNKxu5QeAaPL_y9ftsJX0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_100_100/B4EZmhegXHGcAU-/0/1759350753990/google_logo?e=1776902400&v=beta&t=LRCYpUl9rmgdri4awRP4FVlvccNARAtgcfqxtRHdedI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Brain Resident",
+        "location": "Mountain View",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Google",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1441/",
+        "companyId": "1441",
+        "duration": "1 yr",
+        "description": "Using statistical physics to understand machine learning. Using machine learning to do science.",
+        "skills": null,
+        "experienceGroupId": "01ed0951e37b8045556fff64ae217597993f2b70",
+        "startDate": {
+          "month": "Jun",
+          "year": 2016,
+          "text": "Jun 2016"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2017,
+          "text": "May 2017"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_200_200/B4EZmhegXHGcAM-/0/1759350753990/google_logo?e=1776902400&v=beta&t=CTzyZ9kqXiycW6UU0lJPQmCNKxu5QeAaPL_y9ftsJX0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_100_100/B4EZmhegXHGcAU-/0/1759350753990/google_logo?e=1776902400&v=beta&t=LRCYpUl9rmgdri4awRP4FVlvccNARAtgcfqxtRHdedI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Postdoctoral Researcher",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Harvard University",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1646/",
+        "companyId": "1646",
+        "duration": "9 mos",
+        "description": "Continuing work on disordered and glassy systems.",
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2015,
+          "text": "Sep 2015"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2016,
+          "text": "May 2016"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF5t62bcL0e9g/company-logo_400_400/company-logo_400_400/0/1631318058235?e=1776902400&v=beta&t=RkTNKHKBHCNAI5CNo-HAGQ7uOxrr8GBSdP6Mhal50gg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF5t62bcL0e9g/company-logo_400_400/company-logo_400_400/0/1631318058235?e=1776902400&v=beta&t=RkTNKHKBHCNAI5CNo-HAGQ7uOxrr8GBSdP6Mhal50gg",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF5t62bcL0e9g/company-logo_200_200/company-logo_200_200/0/1631318058235?e=1776902400&v=beta&t=y8dfVnr4duhkYkxwxXb0xTfyu2DFsZFXt5hsz507GaM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF5t62bcL0e9g/company-logo_100_100/company-logo_100_100/0/1631318058235?e=1776902400&v=beta&t=LVLwVc7yBweIB3_TixXGZZEymyF01yoePCCl9P-3kb0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Graduate Researcher",
+        "location": "Philadelphia",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "University of Pennsylvania",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/university-of-pennsylvania/",
+        "companyId": "3165",
+        "companyUniversalName": "university-of-pennsylvania",
+        "duration": "5 yrs 2 mos",
+        "description": "Among other things, worked to understand disordered and glassy materials from local structure. We used machine learning (support vector machines) to identify defects hidden in the complex arrangements of atoms in these systems. This description helped motivate a powerful description of glasses in terms of local structure.",
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2010,
+          "text": "Sep 2010"
+        },
+        "endDate": {
+          "month": "Oct",
+          "year": 2015,
+          "text": "Oct 2015"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFJvX-Ed9d2gA/company-logo_400_400/B4EZxITZrAGwAY-/0/1770739574173/university_of_pennsylvania_logo?e=1776902400&v=beta&t=NqApUTsFuJ55rlTdjX27Ne_VczdX5akkwt7i8ufO8wM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFJvX-Ed9d2gA/company-logo_400_400/B4EZxITZrAGwAY-/0/1770739574173/university_of_pennsylvania_logo?e=1776902400&v=beta&t=NqApUTsFuJ55rlTdjX27Ne_VczdX5akkwt7i8ufO8wM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFJvX-Ed9d2gA/company-logo_200_200/B4EZxITZrAGwAI-/0/1770739574173/university_of_pennsylvania_logo?e=1776902400&v=beta&t=cg3-mPp1m-LJhlqJ0b_m8O0x6IBh1SgOmBTdRI_1Eew",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFJvX-Ed9d2gA/company-logo_100_100/B4EZxITZrAGwAQ-/0/1770739574173/university_of_pennsylvania_logo?e=1776902400&v=beta&t=1q0sGBWa1tFpUxWwOGq0XSkwJW96PO4xDVsuPChtplw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Assistant",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "University of Pennsylvania",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/university-of-pennsylvania/",
+        "companyId": "3165",
+        "companyUniversalName": "university-of-pennsylvania",
+        "duration": "4 mos",
+        "description": "Considered a class of correlated percolation models collectively called jamming percolation. These models are distinguished by a phase transition reminiscent of the jamming transition: for occupancies less than a critical occupancy the lattice is vacant while for larger occupancies a spanning cluster spontaneously emerges, furthermore above the critical occupancy there is a length scale that diverges faster than exponentially. We attempted to show universality across several jamming percolation models.",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2009,
+          "text": "May 2009"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2009,
+          "text": "Aug 2009"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFJvX-Ed9d2gA/company-logo_400_400/B4EZxITZrAGwAY-/0/1770739574173/university_of_pennsylvania_logo?e=1776902400&v=beta&t=NqApUTsFuJ55rlTdjX27Ne_VczdX5akkwt7i8ufO8wM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFJvX-Ed9d2gA/company-logo_400_400/B4EZxITZrAGwAY-/0/1770739574173/university_of_pennsylvania_logo?e=1776902400&v=beta&t=NqApUTsFuJ55rlTdjX27Ne_VczdX5akkwt7i8ufO8wM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFJvX-Ed9d2gA/company-logo_200_200/B4EZxITZrAGwAI-/0/1770739574173/university_of_pennsylvania_logo?e=1776902400&v=beta&t=cg3-mPp1m-LJhlqJ0b_m8O0x6IBh1SgOmBTdRI_1Eew",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFJvX-Ed9d2gA/company-logo_100_100/B4EZxITZrAGwAQ-/0/1770739574173/university_of_pennsylvania_logo?e=1776902400&v=beta&t=1q0sGBWa1tFpUxWwOGq0XSkwJW96PO4xDVsuPChtplw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Assistant",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Caltech",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/4992/",
+        "companyId": "4992",
+        "duration": "4 mos",
+        "description": "Worked on the detection of unmodeled gravitational waves. Antony Searle, Patrick Sutton, and Massimo Tinto had shown that unmodeled gravitational wave bursts could be reliably detected using a Bayesian inference framework. We extended this model to account for glitches in the detectors that manifest as incoherent excess power.",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2008,
+          "text": "May 2008"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2008,
+          "text": "Aug 2008"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C510BAQFCGqEmSwrc4w/company-logo_400_400/company-logo_400_400/0/1631338994369?e=1776902400&v=beta&t=PJ97dtjx-Tbcys1bF8WzMZ9K8G7PR3OYYox11K40LKU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQFCGqEmSwrc4w/company-logo_400_400/company-logo_400_400/0/1631338994369?e=1776902400&v=beta&t=PJ97dtjx-Tbcys1bF8WzMZ9K8G7PR3OYYox11K40LKU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQFCGqEmSwrc4w/company-logo_200_200/company-logo_200_200/0/1631338994369?e=1776902400&v=beta&t=pVJ4zOhIyWRMWwbRuYgdMkkxAoGZ9IyZCYbwlHkaCzw",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQFCGqEmSwrc4w/company-logo_100_100/company-logo_100_100/0/1631338994369?e=1776902400&v=beta&t=RlafUhrg4HABzQu7N8nLvsufA85c5jd3fwUEdhjGRGY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "University of Pennsylvania",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3165/",
+        "schoolId": "3165",
+        "degree": "Doctor of Philosophy (PhD)",
+        "fieldOfStudy": "Physics",
+        "skills": [],
+        "insights": "Activities and societies: Hector Tyndale Fellow",
+        "startDate": {
+          "year": 2010,
+          "text": "2010"
+        },
+        "endDate": {
+          "year": 2015,
+          "text": "2015"
+        },
+        "period": "2010 - 2015",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFJvX-Ed9d2gA/company-logo_400_400/B4EZxITZrAGwAY-/0/1770739574173/university_of_pennsylvania_logo?e=1776902400&v=beta&t=NqApUTsFuJ55rlTdjX27Ne_VczdX5akkwt7i8ufO8wM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFJvX-Ed9d2gA/company-logo_400_400/B4EZxITZrAGwAY-/0/1770739574173/university_of_pennsylvania_logo?e=1776902400&v=beta&t=NqApUTsFuJ55rlTdjX27Ne_VczdX5akkwt7i8ufO8wM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFJvX-Ed9d2gA/company-logo_200_200/B4EZxITZrAGwAI-/0/1770739574173/university_of_pennsylvania_logo?e=1776902400&v=beta&t=cg3-mPp1m-LJhlqJ0b_m8O0x6IBh1SgOmBTdRI_1Eew",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFJvX-Ed9d2gA/company-logo_100_100/B4EZxITZrAGwAQ-/0/1770739574173/university_of_pennsylvania_logo?e=1776902400&v=beta&t=1q0sGBWa1tFpUxWwOGq0XSkwJW96PO4xDVsuPChtplw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Swarthmore College",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/16443/",
+        "schoolId": "16443",
+        "degree": "Bachelor of Arts (B.A.)",
+        "fieldOfStudy": "Physics",
+        "skills": [],
+        "insights": "Activities and societies: Phi Beta Kappa, High Honors, Intramural Soccer, ACM Programming Contest",
+        "startDate": {
+          "year": 2006,
+          "text": "2006"
+        },
+        "endDate": {
+          "year": 2010,
+          "text": "2010"
+        },
+        "period": "2006 - 2010",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQGkMo8SKTa1NQ/company-logo_400_400/company-logo_400_400/0/1631310092831?e=1776902400&v=beta&t=RggBqHoyzZRyLfW8GKYR_f0NfG9zJY-1cDgJ7WhwJRU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGkMo8SKTa1NQ/company-logo_400_400/company-logo_400_400/0/1631310092831?e=1776902400&v=beta&t=RggBqHoyzZRyLfW8GKYR_f0NfG9zJY-1cDgJ7WhwJRU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGkMo8SKTa1NQ/company-logo_200_200/company-logo_200_200/0/1631310092831?e=1776902400&v=beta&t=r-fLWMrK50GVXEjHZE0PvqwJnKlVyrpxxBPiyuvHDMU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGkMo8SKTa1NQ/company-logo_100_100/company-logo_100_100/0/1631310092831?e=1776902400&v=beta&t=rcsqR6OCoqSKLdkvwf0ZBgdKouUzOgzsrYA2uNx3e7g",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "International School of Geneva - La Chataigneraie",
+        "schoolLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=International+School+of+Geneva+-+La+Chataigneraie",
+        "schoolId": null,
+        "degree": "High School",
+        "fieldOfStudy": null,
+        "skills": [],
+        "insights": "Activities and societies: International Baccalaureate (IB)",
+        "startDate": {
+          "year": 2002,
+          "text": "2002"
+        },
+        "endDate": {
+          "year": 2006,
+          "text": "2006"
+        },
+        "period": "2002 - 2006",
+        "schoolLogo": null
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "GPU",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Mathematics",
+        "endorsements": "9 endorsements"
+      },
+      {
+        "name": "Physics",
+        "endorsements": "13 endorsements"
+      },
+      {
+        "name": "Computational Physics",
+        "endorsements": "11 endorsements"
+      },
+      {
+        "name": "Theoretical Physics",
+        "endorsements": "12 endorsements"
+      },
+      {
+        "name": "Supercomputing",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Machine Learning",
+        "endorsements": "8 endorsements"
+      },
+      {
+        "name": "Scientific Computing",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Mathematical Modeling",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Data Analysis",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Research",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Statistics",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "C++",
+        "positions": [
+          "Endorsed by 3 colleagues at University of Pennsylvania"
+        ],
+        "endorsements": "9 endorsements"
+      },
+      {
+        "name": "Objective-C",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Mathematica",
+        "endorsements": "11 endorsements"
+      },
+      {
+        "name": "LaTeX",
+        "endorsements": "12 endorsements"
+      },
+      {
+        "name": "Python",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Matlab",
+        "endorsements": "2 endorsements"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [
+      {
+        "name": "English",
+        "proficiency": "Native or bilingual proficiency"
+      },
+      {
+        "name": "French",
+        "proficiency": "Limited working proficiency"
+      }
+    ],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "position": "AI Researcher, Co-founder @ Thinking Machines Lab",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAABEmYXYB5f-3ZmFG8dI-n9XAlqySBqO-2PA",
+        "firstName": "Luke",
+        "lastName": "Carlson",
+        "position": "Thinking Machines | Member of Technical Staff",
+        "publicIdentifier": "jlukecarlson",
+        "linkedinUrl": "https://www.linkedin.com/in/jlukecarlson"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAAAncnq0BajmeOrLikO5AAincnDzuRDUXFjw",
+        "firstName": "Soumith",
+        "lastName": "Chintala",
+        "publicIdentifier": "soumith",
+        "linkedinUrl": "https://www.linkedin.com/in/soumith"
+      },
+      {
+        "id": "ACoAABgwxtcBfqsJJUHPwsSPuBE4K9oKyRqUp5o",
+        "firstName": "Lia",
+        "lastName": "Guy",
+        "position": "Research @ OpenAI",
+        "publicIdentifier": "aureliaguy",
+        "linkedinUrl": "https://www.linkedin.com/in/aureliaguy"
+      },
+      {
+        "id": "ACoAAACQBzQB5nk5kOpFWQRtK4pv3RaL5q2G-pA",
+        "firstName": "Jonathan",
+        "lastName": "Lachman",
+        "position": "Founding Head of Operations at Thinking Machines Lab",
+        "publicIdentifier": "jonathan-lachman-4981b23",
+        "linkedinUrl": "https://www.linkedin.com/in/jonathan-lachman-4981b23"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAAAJzsfoBp0MxssQYMgmy0ZNO2U3sA58ugwc",
+        "firstName": "Joshua",
+        "lastName": "Gross",
+        "position": "Engineering Leadership, Meta Superintelligence Lab",
+        "publicIdentifier": "joshgross",
+        "linkedinUrl": "https://www.linkedin.com/in/joshgross"
+      },
+      {
+        "id": "ACoAABYs4-IB5mHx5eVfOHzu1e8xlO3q_kb38IM",
+        "firstName": "Brydon",
+        "lastName": "Eastman",
+        "position": "Nerd @ Thinking Machines Labs | Formerly Member of Technical Staff @ OpenAI | PhD in Mathematical Oncology",
+        "publicIdentifier": "brydon-eastman-396719a4",
+        "linkedinUrl": "https://www.linkedin.com/in/brydon-eastman-396719a4"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+        "firstName": "Saurabh",
+        "lastName": "Garg",
+        "position": "Thinking Machines Lab | Prev: Mistral AI, CMU, IIT-B",
+        "publicIdentifier": "saurabh-garg-b680b5b8",
+        "linkedinUrl": "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+      },
+      {
+        "id": "ACoAAAB8lBoBGK02YIOwhD3QqcrNVRKD4Ot6hwc",
+        "firstName": "Fidji",
+        "lastName": "Simo",
+        "publicIdentifier": "fidjisimo",
+        "linkedinUrl": "https://www.linkedin.com/in/fidjisimo"
+      },
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "position": "Thinking about machines",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAAAl87CYBWKLLyGNTbomy6oqIPv-5n34CXIY",
+        "firstName": "Andrew",
+        "lastName": "Tulloch",
+        "position": "AI Research @ Meta",
+        "publicIdentifier": "andrew-tulloch-17238745",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-tulloch-17238745"
+      },
+      {
+        "id": "ACoAAA6jodABB4FFTQD3NzZ7B0vo91j5zOLQQn4",
+        "firstName": "luke",
+        "lastName": "metz",
+        "position": "AI Research + Product",
+        "publicIdentifier": "luke-metz-5003046a",
+        "linkedinUrl": "https://www.linkedin.com/in/luke-metz-5003046a"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "position": "Co-Founder and CEO at Thinking Machines Lab",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAABPg53YBHdOvmp7pU72eDhcho-7cnwyxk1o",
+        "firstName": "Pia",
+        "lastName": "Santos",
+        "position": "Founding Team at Thinking Machines Lab",
+        "publicIdentifier": "piafsantos",
+        "linkedinUrl": "https://www.linkedin.com/in/piafsantos"
+      },
+      {
+        "id": "ACoAAAO-j_IBXcvIzhZtQ7QNkky6tlnQTcFl9qI",
+        "firstName": "Myle",
+        "lastName": "Ott",
+        "position": "ML infra at Thinking Machines",
+        "publicIdentifier": "myleott",
+        "linkedinUrl": "https://www.linkedin.com/in/myleott"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAAAji1bkB1eLX4z2Jb9-N2nMhEGNLWptSnqU",
+        "firstName": "Clare",
+        "lastName": "Birch",
+        "publicIdentifier": "clarebirch42",
+        "linkedinUrl": "https://www.linkedin.com/in/clarebirch42"
+      },
+      {
+        "id": "ACoAAGJWFNcBbUl3OMRfcc_WMmNavlxyaM2vPj4",
+        "firstName": "SOLOMON",
+        "lastName": "KOFI FERKA",
+        "position": "Founder & CEO @ FERKA$ LLC | Scaling Startups with Remote Engineering & Digital Solutions | Guaranteed Delivery, No Delays",
+        "publicIdentifier": "solomon-kofi-ferka-41b6263a0",
+        "linkedinUrl": "https://www.linkedin.com/in/solomon-kofi-ferka-41b6263a0"
+      },
+      {
+        "id": "ACoAAGPmMD4B4jXr_pU_B2FKjn9_ZX10UKcKxqs",
+        "firstName": "Faina",
+        "lastName": "Okshtein",
+        "position": "In-House Counsel | Commercial & Content Transactions",
+        "publicIdentifier": "faina-okshtein-93a3703a9",
+        "linkedinUrl": "https://www.linkedin.com/in/faina-okshtein-93a3703a9"
+      },
+      {
+        "id": "ACoAAF-xTowBsWqv6EnTrqUW-1K5sqr5hnOD3ps",
+        "firstName": "Victoria",
+        "lastName": "Ifetike",
+        "position": "Law Graduate || LLB",
+        "publicIdentifier": "victoria-ifetike",
+        "linkedinUrl": "https://www.linkedin.com/in/victoria-ifetike"
+      },
+      {
+        "id": "ACoAAGYltlIBtb7to7W2zSbPIQLI98QYmqsXCRA",
+        "firstName": "Morgan",
+        "lastName": "Pitts",
+        "position": "Student at New Canaan High School, Rising Freshman at the University of Pennsylvania",
+        "publicIdentifier": "morgan-pitts-06ab203b9",
+        "linkedinUrl": "https://www.linkedin.com/in/morgan-pitts-06ab203b9"
+      },
+      {
+        "id": "ACoAAGRzOYkBak0DSIxE28NULzWIEKXElQm46ug",
+        "firstName": "Jamie",
+        "lastName": "Garman",
+        "position": "Counsel at Garman Turner Gordon",
+        "publicIdentifier": "jamie-garman-8614893b0",
+        "linkedinUrl": "https://www.linkedin.com/in/jamie-garman-8614893b0"
+      },
+      {
+        "id": "ACoAAGPmVUMBg25jt9cdoNR1vS-eA_J9l0Q7eL8",
+        "firstName": "Alex",
+        "lastName": "Tarpinian",
+        "position": "International and corporate law at PaxLex",
+        "publicIdentifier": "alex-tarpinian-3173763a9",
+        "linkedinUrl": "https://www.linkedin.com/in/alex-tarpinian-3173763a9"
+      },
+      {
+        "id": "ACoAAGAhKL0BaoEfSPoOtVPGeNXbClnTG_f3jUk",
+        "firstName": "Stefan",
+        "lastName": "Presman",
+        "position": "Founder at Presman Interactive",
+        "publicIdentifier": "stefanpresman",
+        "linkedinUrl": "https://www.linkedin.com/in/stefanpresman"
+      },
+      {
+        "id": "ACoAAF_PfsoBSsCESXBBcuZq_5YxgE0sF72jPdo",
+        "firstName": "Alishba",
+        "lastName": "Noor ",
+        "position": "Chief Marketing Officer | Driving Revenue Growth, Brand Strategy & Market Leadership",
+        "publicIdentifier": "alishba-noor-b763ab38a",
+        "linkedinUrl": "https://www.linkedin.com/in/alishba-noor-b763ab38a"
+      },
+      {
+        "id": "ACoAAGRWeoUBdgUYGPI_TlBWWo4yCMnrRPR8M3w",
+        "firstName": "Alina",
+        "lastName": "Radchuk",
+        "position": "AI Coordinator | Strategic Analytics & Intelligence ",
+        "publicIdentifier": "alina-radchuk-59991b3ab",
+        "linkedinUrl": "https://www.linkedin.com/in/alina-radchuk-59991b3ab"
+      },
+      {
+        "id": "ACoAAGIFpNoBzB8qwSlfIElgCly4phA0sVPfsTc",
+        "firstName": "Alexander",
+        "lastName": "Bick",
+        "position": "Senior Economic Policy Advisor at Federal Reserve Bank of St. Louis",
+        "publicIdentifier": "alexander-bick-82290339a",
+        "linkedinUrl": "https://www.linkedin.com/in/alexander-bick-82290339a"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAABV61Q0BHkM2hTJCcVpL0eUSjiClvdwTGUk"
+    }
+  }
+}

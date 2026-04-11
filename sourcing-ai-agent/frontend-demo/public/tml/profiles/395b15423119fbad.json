@@ -1,0 +1,772 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAC9rfpYBu9i6nFQZldXh444ZiiIJy7LuG9M",
+    "profile_url": "https://www.linkedin.com/in/ACwAAC9rfpYBu9i6nFQZldXh444ZiiIJy7LuG9M"
+  },
+  "item": {
+    "id": "ACoAAC9rfpYB9euIDgF4Yyk3m40DRa2_3dEv1gM",
+    "publicIdentifier": "wade-hickey-69a5291a2",
+    "linkedinUrl": "https://www.linkedin.com/in/wade-hickey-69a5291a2",
+    "firstName": "Wade",
+    "lastName": "Hickey",
+    "emails": [
+      {
+        "email": "wade.hickey@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Security Engineer",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America"
+      }
+    },
+    "objectUrn": "795573910",
+    "registeredAt": "2020-02-11T04:51:24.274Z",
+    "topSkills": null,
+    "connectionsCount": 297,
+    "followerCount": 330,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 9,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": null,
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Security Engineer",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "8 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2025,
+          "text": "Sep 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Anthropic",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/74126343/",
+        "companyId": "74126343",
+        "duration": "1 yr 6 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Apr",
+          "year": 2024,
+          "text": "Apr 2024"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2025,
+          "text": "Sep 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_400_400/company-logo_400_400/0/1719256729905/anthropicresearch_logo?e=1776902400&v=beta&t=6sv-GagnF1G5d4B4rN1Yu3sq6fln2BP_9tb0s6bARoY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_400_400/company-logo_400_400/0/1719256729905/anthropicresearch_logo?e=1776902400&v=beta&t=6sv-GagnF1G5d4B4rN1Yu3sq6fln2BP_9tb0s6bARoY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_200_200/company-logo_200_200/0/1719256413073/anthropicresearch_logo?e=1776902400&v=beta&t=cPQIIISEsrdyXB00bI4BYAdxnK2Mx72yV0BDdzg3baM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_100_100/company-logo_100_100/0/1719256989269/anthropicresearch_logo?e=1776902400&v=beta&t=6343WBiudLAu8QSHWrlzIJOnlExxTT9uZZpuCs-AeLk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "OpenAI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/11130470/",
+        "companyId": "11130470",
+        "duration": "1 yr 3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2022,
+          "text": "May 2022"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2023,
+          "text": "Jul 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_200_200/B56ZT8EYB8HsAI-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=O6RSWlpQ5W4zNCOCTu621qCyTijLuXFJS4pz2_hBQfo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_100_100/B56ZT8EYB8HsAQ-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=y7RA89V9q8GlAjQ1oRU-jf_-n5zlSXRCnykXBIkgHfM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Threat Hunter",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "CrowdStrike",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/2497653/",
+        "companyId": "2497653",
+        "duration": "1 yr 2 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2021,
+          "text": "Mar 2021"
+        },
+        "endDate": {
+          "month": "Apr",
+          "year": 2022,
+          "text": "Apr 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQFxQkzeHZxIYg/company-logo_400_400/company-logo_400_400/0/1633985771178/crowdstrike_logo?e=1776902400&v=beta&t=HgOeOp5A14B4dWgx4ef1m9ZzdRpbYRCYSRF-bxPLvEA",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFxQkzeHZxIYg/company-logo_400_400/company-logo_400_400/0/1633985771178/crowdstrike_logo?e=1776902400&v=beta&t=HgOeOp5A14B4dWgx4ef1m9ZzdRpbYRCYSRF-bxPLvEA",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFxQkzeHZxIYg/company-logo_200_200/company-logo_200_200/0/1633985771177/crowdstrike_logo?e=1776902400&v=beta&t=XmF-2Ag0IHXGetvJTiiQBzQvef6HLjZlljdlUerYVJw",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFxQkzeHZxIYg/company-logo_100_100/company-logo_100_100/0/1633985771178/crowdstrike_logo?e=1776902400&v=beta&t=k7fEcnklK4xiL-6gUHRp66Ld0ORrq8Jey4ushA4rlQY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior Malware Analyst",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Rapid7",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/39624/",
+        "companyId": "39624",
+        "duration": "2 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "2ada2219ae345e4b9419bc857856196364c0196a",
+        "startDate": {
+          "month": "Feb",
+          "year": 2021,
+          "text": "Feb 2021"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2021,
+          "text": "Mar 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEvLxvLFXAk6A/company-logo_400_400/B4DZbPgFH5GUAc-/0/1747238018082/rapid7_logo?e=1776902400&v=beta&t=SAqeAJNa-4M0sV5rMrI1o5lbwSeZWB8mypPATYGMrLw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEvLxvLFXAk6A/company-logo_400_400/B4DZbPgFH5GUAc-/0/1747238018082/rapid7_logo?e=1776902400&v=beta&t=SAqeAJNa-4M0sV5rMrI1o5lbwSeZWB8mypPATYGMrLw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEvLxvLFXAk6A/company-logo_200_200/B4DZbPgFH5GUAI-/0/1747238018082/rapid7_logo?e=1776902400&v=beta&t=2RNzkQutjGdj_6zTgjB1rMa-kt1naJm5otUYjQtJWZ4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEvLxvLFXAk6A/company-logo_100_100/B4DZbPgFH5GUAQ-/0/1747238018082/rapid7_logo?e=1776902400&v=beta&t=ok6lOczbr3-jPFa2d6SCv1yfesU9cnHIhO_6QZuvnNc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Malware Analyst",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Rapid7",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/39624/",
+        "companyId": "39624",
+        "duration": "1 yr 1 mo",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "2ada2219ae345e4b9419bc857856196364c0196a",
+        "startDate": {
+          "month": "Feb",
+          "year": 2020,
+          "text": "Feb 2020"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2021,
+          "text": "Feb 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEvLxvLFXAk6A/company-logo_400_400/B4DZbPgFH5GUAc-/0/1747238018082/rapid7_logo?e=1776902400&v=beta&t=SAqeAJNa-4M0sV5rMrI1o5lbwSeZWB8mypPATYGMrLw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEvLxvLFXAk6A/company-logo_400_400/B4DZbPgFH5GUAc-/0/1747238018082/rapid7_logo?e=1776902400&v=beta&t=SAqeAJNa-4M0sV5rMrI1o5lbwSeZWB8mypPATYGMrLw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEvLxvLFXAk6A/company-logo_200_200/B4DZbPgFH5GUAI-/0/1747238018082/rapid7_logo?e=1776902400&v=beta&t=2RNzkQutjGdj_6zTgjB1rMa-kt1naJm5otUYjQtJWZ4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEvLxvLFXAk6A/company-logo_100_100/B4DZbPgFH5GUAQ-/0/1747238018082/rapid7_logo?e=1776902400&v=beta&t=ok6lOczbr3-jPFa2d6SCv1yfesU9cnHIhO_6QZuvnNc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "MDR Analyst",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Rapid7",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/39624/",
+        "companyId": "39624",
+        "duration": "1 yr 5 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "2ada2219ae345e4b9419bc857856196364c0196a",
+        "startDate": {
+          "month": "Oct",
+          "year": 2018,
+          "text": "Oct 2018"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2020,
+          "text": "Feb 2020"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEvLxvLFXAk6A/company-logo_400_400/B4DZbPgFH5GUAc-/0/1747238018082/rapid7_logo?e=1776902400&v=beta&t=SAqeAJNa-4M0sV5rMrI1o5lbwSeZWB8mypPATYGMrLw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEvLxvLFXAk6A/company-logo_400_400/B4DZbPgFH5GUAc-/0/1747238018082/rapid7_logo?e=1776902400&v=beta&t=SAqeAJNa-4M0sV5rMrI1o5lbwSeZWB8mypPATYGMrLw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEvLxvLFXAk6A/company-logo_200_200/B4DZbPgFH5GUAI-/0/1747238018082/rapid7_logo?e=1776902400&v=beta&t=2RNzkQutjGdj_6zTgjB1rMa-kt1naJm5otUYjQtJWZ4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEvLxvLFXAk6A/company-logo_100_100/B4DZbPgFH5GUAQ-/0/1747238018082/rapid7_logo?e=1776902400&v=beta&t=ok6lOczbr3-jPFa2d6SCv1yfesU9cnHIhO_6QZuvnNc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Associate MDR Analyst",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Rapid7",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/39624/",
+        "companyId": "39624",
+        "duration": "1 yr 2 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "2ada2219ae345e4b9419bc857856196364c0196a",
+        "startDate": {
+          "month": "Sep",
+          "year": 2017,
+          "text": "Sep 2017"
+        },
+        "endDate": {
+          "month": "Oct",
+          "year": 2018,
+          "text": "Oct 2018"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEvLxvLFXAk6A/company-logo_400_400/B4DZbPgFH5GUAc-/0/1747238018082/rapid7_logo?e=1776902400&v=beta&t=SAqeAJNa-4M0sV5rMrI1o5lbwSeZWB8mypPATYGMrLw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEvLxvLFXAk6A/company-logo_400_400/B4DZbPgFH5GUAc-/0/1747238018082/rapid7_logo?e=1776902400&v=beta&t=SAqeAJNa-4M0sV5rMrI1o5lbwSeZWB8mypPATYGMrLw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEvLxvLFXAk6A/company-logo_200_200/B4DZbPgFH5GUAI-/0/1747238018082/rapid7_logo?e=1776902400&v=beta&t=2RNzkQutjGdj_6zTgjB1rMa-kt1naJm5otUYjQtJWZ4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEvLxvLFXAk6A/company-logo_100_100/B4DZbPgFH5GUAQ-/0/1747238018082/rapid7_logo?e=1776902400&v=beta&t=ok6lOczbr3-jPFa2d6SCv1yfesU9cnHIhO_6QZuvnNc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [],
+    "certifications": [
+      {
+        "title": "Offensive Security Certified Expert",
+        "issuedAt": "Issued Dec 2020",
+        "issuedBy": "OffSec",
+        "issuedByLink": "https://www.linkedin.com/company/5384047/",
+        "issuedByLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHaN2i1_8U4rw/company-logo_400_400/company-logo_400_400/0/1677689983147/offensive_security_logo?e=1776902400&v=beta&t=NZAMtjwkMrVhoGv0yQC84uNmfotvWQWXqQlLhSUVGGM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHaN2i1_8U4rw/company-logo_400_400/company-logo_400_400/0/1677689983147/offensive_security_logo?e=1776902400&v=beta&t=NZAMtjwkMrVhoGv0yQC84uNmfotvWQWXqQlLhSUVGGM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHaN2i1_8U4rw/company-logo_200_200/company-logo_200_200/0/1677689983147/offensive_security_logo?e=1776902400&v=beta&t=QI94kd2at9qaphfc6PMLNTMe6b5QS6VWKZyWnOPfBco",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHaN2i1_8U4rw/company-logo_100_100/company-logo_100_100/0/1677689983147/offensive_security_logo?e=1776902400&v=beta&t=zmLoAhYrUvWvbJ6pnjOAnk2uOKDk-JncXeIuVsm0I7A",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "title": "Offensive Security Certified Professional",
+        "issuedAt": "Issued Jun 2017",
+        "issuedBy": "OffSec",
+        "issuedByLink": "https://www.linkedin.com/company/5384047/",
+        "issuedByLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHaN2i1_8U4rw/company-logo_400_400/company-logo_400_400/0/1677689983147/offensive_security_logo?e=1776902400&v=beta&t=NZAMtjwkMrVhoGv0yQC84uNmfotvWQWXqQlLhSUVGGM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHaN2i1_8U4rw/company-logo_400_400/company-logo_400_400/0/1677689983147/offensive_security_logo?e=1776902400&v=beta&t=NZAMtjwkMrVhoGv0yQC84uNmfotvWQWXqQlLhSUVGGM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHaN2i1_8U4rw/company-logo_200_200/company-logo_200_200/0/1677689983147/offensive_security_logo?e=1776902400&v=beta&t=QI94kd2at9qaphfc6PMLNTMe6b5QS6VWKZyWnOPfBco",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHaN2i1_8U4rw/company-logo_100_100/company-logo_100_100/0/1677689983147/offensive_security_logo?e=1776902400&v=beta&t=zmLoAhYrUvWvbJ6pnjOAnk2uOKDk-JncXeIuVsm0I7A",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "position": "AI Researcher, Co-founder @ Thinking Machines Lab",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "position": "Thinking about machines",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAAABbJeIBUCjQgxHK47izrgsSMdXYb8KR2co",
+        "firstName": "Jolene",
+        "lastName": "P.",
+        "position": "everything bagel sous-chef",
+        "publicIdentifier": "joleneparish",
+        "linkedinUrl": "https://www.linkedin.com/in/joleneparish"
+      },
+      {
+        "id": "ACoAABhKWCYBiuV3Zv9Hbt8t0j-xMRqxawBcSgw",
+        "firstName": "Kurt",
+        "lastName": "Shuster",
+        "position": "AI Research Engineer",
+        "publicIdentifier": "kurtshuster1",
+        "linkedinUrl": "https://www.linkedin.com/in/kurtshuster1"
+      },
+      {
+        "id": "ACoAABQ5lJUBry2byQYf_TtxDF9Rha9l-RqYsaM",
+        "firstName": "Guang-He",
+        "lastName": "Lee",
+        "position": "Thinking Machines Lab | Prev: Anthropic, Citadel, MIT",
+        "publicIdentifier": "guang-he-lee-64577895",
+        "linkedinUrl": "https://www.linkedin.com/in/guang-he-lee-64577895"
+      },
+      {
+        "id": "ACoAABgwxtcBfqsJJUHPwsSPuBE4K9oKyRqUp5o",
+        "firstName": "Lia",
+        "lastName": "Guy",
+        "position": "Research @ OpenAI",
+        "publicIdentifier": "aureliaguy",
+        "linkedinUrl": "https://www.linkedin.com/in/aureliaguy"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAAAbBBJsBnpIQdOsJB5IMpR7ePIGOlRam73w",
+        "firstName": "Mario",
+        "lastName": "Saltarelli",
+        "position": "IT",
+        "publicIdentifier": "msaltarelli",
+        "linkedinUrl": "https://www.linkedin.com/in/msaltarelli"
+      },
+      {
+        "id": "ACoAABDE9GEBFNiq8QAyQ78EYNgZWmUZP-B_MtY",
+        "firstName": "Charlie",
+        "lastName": "Franks",
+        "position": "Security Engineer (Detection & Response) at Anthropic",
+        "publicIdentifier": "charlie-franks-34127a7a",
+        "linkedinUrl": "https://www.linkedin.com/in/charlie-franks-34127a7a"
+      },
+      {
+        "id": "ACoAABocE5MB5wC9JvOhOg__l1kBLNctZbUfw0o",
+        "firstName": "David",
+        "lastName": "Dworken",
+        "position": "Security @ Anthropic",
+        "publicIdentifier": "ddworken",
+        "linkedinUrl": "https://www.linkedin.com/in/ddworken"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "position": "Co-Founder and CEO at Thinking Machines Lab",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAAACo1tYBGy9sT2OWZuEULOMe4K_b2Y22-F8",
+        "firstName": "Alex",
+        "lastName": "Gartrell",
+        "position": "Engineering @ Thinking Machines, Ex-Meta/Facebook",
+        "publicIdentifier": "alexgartrell",
+        "linkedinUrl": "https://www.linkedin.com/in/alexgartrell"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAACHG180BXiyeZ2qJgoggx27e4iM3ajxvp18",
+        "firstName": "Andy",
+        "lastName": "Hwang",
+        "position": "thinking machines",
+        "publicIdentifier": "andrewnhwang",
+        "linkedinUrl": "https://www.linkedin.com/in/andrewnhwang"
+      },
+      {
+        "id": "ACoAABPg53YBHdOvmp7pU72eDhcho-7cnwyxk1o",
+        "firstName": "Pia",
+        "lastName": "Santos",
+        "position": "Founding Team at Thinking Machines Lab",
+        "publicIdentifier": "piafsantos",
+        "linkedinUrl": "https://www.linkedin.com/in/piafsantos"
+      },
+      {
+        "id": "ACoAAA8JdrgBK-ShYTbFkZL80wSafgw-uaGsb9Q",
+        "firstName": "Kevin",
+        "lastName": "B.",
+        "position": "Security at Thinking Machines Lab",
+        "publicIdentifier": "kevin-b-5885a270",
+        "linkedinUrl": "https://www.linkedin.com/in/kevin-b-5885a270"
+      },
+      {
+        "id": "ACoAAAf7ZWcB3BGw5pTmcsFw0vXm4A_CQn6EkFo",
+        "firstName": "Christian",
+        "lastName": "G.",
+        "publicIdentifier": "christianjgibson",
+        "linkedinUrl": "https://www.linkedin.com/in/christianjgibson"
+      },
+      {
+        "id": "ACoAAAji1bkB1eLX4z2Jb9-N2nMhEGNLWptSnqU",
+        "firstName": "Clare",
+        "lastName": "Birch",
+        "publicIdentifier": "clarebirch42",
+        "linkedinUrl": "https://www.linkedin.com/in/clarebirch42"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAABLLpuMBU7a9WPW-GubLTIkDjAF6hz7Ujkc",
+        "firstName": "Daniel",
+        "lastName": "Xu",
+        "position": "Low level systems",
+        "publicIdentifier": "daniel-xu-42b73289",
+        "linkedinUrl": "https://www.linkedin.com/in/daniel-xu-42b73289"
+      },
+      {
+        "id": "ACoAABEmYXYB5f-3ZmFG8dI-n9XAlqySBqO-2PA",
+        "firstName": "Luke",
+        "lastName": "Carlson",
+        "position": "Thinking Machines | Member of Technical Staff",
+        "publicIdentifier": "jlukecarlson",
+        "linkedinUrl": "https://www.linkedin.com/in/jlukecarlson"
+      },
+      {
+        "id": "ACoAAAFeNNIBGA1Mtyi5_iGkRC19uDzKU2t5dVs",
+        "firstName": "Kunal",
+        "lastName": "Bhalla",
+        "position": "knlb.dev",
+        "publicIdentifier": "kunalbhalla",
+        "linkedinUrl": "https://www.linkedin.com/in/kunalbhalla"
+      },
+      {
+        "id": "ACoAACA8zv0BTVWLSUHsPJrWsUI10jzn0F57pHo",
+        "firstName": "Damir",
+        "lastName": "Sartayev",
+        "position": "AI CTO & Founder | MY project LNN+LLM+QML=AGI | Quantum, Neuro-symbolic AI | Liquid Neural Networks | RWKV | Mamba(SSM)  | Pharmacy AI, Minerals AI | Full‑Stack AI (LLMs, Agents, Fine‑Tuning, RAG, Vision) | Q-Day Q-ark",
+        "publicIdentifier": "damir-q-day-q-ark",
+        "linkedinUrl": "https://www.linkedin.com/in/damir-q-day-q-ark"
+      },
+      {
+        "id": "ACoAABJF4mQBVJYIx7g-ASuPnmo5mH2mDuWdwQg",
+        "firstName": "Erika",
+        "lastName": "Byun",
+        "position": "Thinking Machines Lab",
+        "publicIdentifier": "erika-nakamatsu-byun",
+        "linkedinUrl": "https://www.linkedin.com/in/erika-nakamatsu-byun"
+      },
+      {
+        "id": "ACoAAAF70jABH9DSpgp0gn2kmhMF2O2_dXo363Y",
+        "firstName": "Lauren Escher",
+        "lastName": "Lennon",
+        "position": "Legal @ Thinking Machines Lab",
+        "publicIdentifier": "lauren-escher-lennon-0944058",
+        "linkedinUrl": "https://www.linkedin.com/in/lauren-escher-lennon-0944058"
+      },
+      {
+        "id": "ACoAAAM07-gB20Vg4hTVwpax2eyLJhzmkVGgucg",
+        "firstName": "Katie",
+        "lastName": "Slattery",
+        "position": "Accounting @ Thinking Machines Lab",
+        "publicIdentifier": "katieslattery",
+        "linkedinUrl": "https://www.linkedin.com/in/katieslattery"
+      },
+      {
+        "id": "ACoAACxX5AEBYonmfz9M8tQ8jO7Nx3jIXe_VSjw",
+        "firstName": "Sophie Rose",
+        "lastName": "Shapiro",
+        "position": "Creative Operations",
+        "publicIdentifier": "sophie-rose-shapiro",
+        "linkedinUrl": "https://www.linkedin.com/in/sophie-rose-shapiro"
+      },
+      {
+        "id": "ACoAAAopC6EBpAPHUFIC1hIpFdklBB-aiMcC0z0",
+        "firstName": "Alexander",
+        "lastName": "Kirillov",
+        "position": "Multimodality at Thinking Machines",
+        "publicIdentifier": "alexander-kirillov-08110749",
+        "linkedinUrl": "https://www.linkedin.com/in/alexander-kirillov-08110749"
+      },
+      {
+        "id": "ACoAAFUBvsYBMskyWP5r-Lf7ZUccZSuFy2nCqkA",
+        "firstName": "Ankit",
+        "lastName": "Baghel",
+        "position": "--DMLT lab technician\nb.sc chemistry chemical industry lab",
+        "publicIdentifier": "ankit-baghel-40675a339",
+        "linkedinUrl": "https://www.linkedin.com/in/ankit-baghel-40675a339"
+      },
+      {
+        "id": "ACoAAAeoHjYB_Lo5sUFlpZpz2L74oe9nEIKztQA",
+        "firstName": "Jenya",
+        "lastName": "L.",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "jenya-l",
+        "linkedinUrl": "https://www.linkedin.com/in/jenya-l"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAC9rfpYBu9i6nFQZldXh444ZiiIJy7LuG9M"
+    }
+  }
+}

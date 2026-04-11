@@ -1,0 +1,926 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAAF70jABk5vnzZx3uv-XSKmt0W0c4V449TU",
+    "profile_url": "https://www.linkedin.com/in/ACwAAAF70jABk5vnzZx3uv-XSKmt0W0c4V449TU"
+  },
+  "item": {
+    "id": "ACoAAAF70jABH9DSpgp0gn2kmhMF2O2_dXo363Y",
+    "publicIdentifier": "lauren-escher-lennon-0944058",
+    "linkedinUrl": "https://www.linkedin.com/in/lauren-escher-lennon-0944058",
+    "firstName": "Lauren Escher",
+    "lastName": "Lennon",
+    "emails": [
+      {
+        "email": "lauren.lennon@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Legal @ Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": true,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco Bay Area",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "24891952",
+    "registeredAt": "2008-05-12T09:33:22.000Z",
+    "topSkills": null,
+    "connectionsCount": 1986,
+    "followerCount": 2934,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 1,
+            "year": 2026,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "17941",
+        "companyId": "15100253",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/15100253/",
+        "schoolName": "University of California, Berkeley - School of Law"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5603AQF7rQLkDv8UPA/profile-displayphoto-crop_800_800/B56Z0yRj8fKwAM-/0/1774664961491?e=1776902400&v=beta&t=GrminZ5V_8cxoXlMPDowrfI2kViC3pgJBhuZIxcO1-Y",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQF7rQLkDv8UPA/profile-displayphoto-crop_800_800/B56Z0yRj8fKwAM-/0/1774664961491?e=1776902400&v=beta&t=GrminZ5V_8cxoXlMPDowrfI2kViC3pgJBhuZIxcO1-Y",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQF7rQLkDv8UPA/profile-displayphoto-scale_400_400/B56Z0yRj8fKwAk-/0/1774664961590?e=1776902400&v=beta&t=pmuveDgoZO-ark9-pGQYhKyU3Dce7cQQVJaFxfdk_QA",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQF7rQLkDv8UPA/profile-displayphoto-scale_200_200/B56Z0yRj8fKwAc-/0/1774664961590?e=1776902400&v=beta&t=UT7MRDaerLMuRkno85QyRdQiOsx0ORNCR2pE5Nx26VA",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQF7rQLkDv8UPA/profile-displayphoto-scale_100_100/B56Z0yRj8fKwAg-/0/1774664961590?e=1776902400&v=beta&t=Vn8vUc8UunlcMuivTmRSQgnScqZUYVqvieY87JNcJ_Y",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5616AQGwm619Rz2uaA/profile-displaybackgroundimage-shrink_350_1400/B56ZwpmFpRJQAY-/0/1770224376795?e=1776902400&v=beta&t=NnBMdQBfVYEjE3WG9PY5zBVPF_yru5ty-a_kaC_T5wI",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5616AQGwm619Rz2uaA/profile-displaybackgroundimage-shrink_350_1400/B56ZwpmFpRJQAY-/0/1770224376795?e=1776902400&v=beta&t=NnBMdQBfVYEjE3WG9PY5zBVPF_yru5ty-a_kaC_T5wI",
+          "width": 1400,
+          "height": 350,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5616AQGwm619Rz2uaA/profile-displaybackgroundimage-shrink_200_800/B56ZwpmFpRJQAU-/0/1770224376795?e=1776902400&v=beta&t=d3rPYuMlJCl1FvQ4xxF-C3Y84ZcEhd80o0zx3qHCgvw",
+          "width": 800,
+          "height": 200,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "photo": "https://media.licdn.com/dms/image/v2/D5603AQF7rQLkDv8UPA/profile-displayphoto-crop_800_800/B56Z0yRj8fKwAM-/0/1774664961491?e=1776902400&v=beta&t=GrminZ5V_8cxoXlMPDowrfI2kViC3pgJBhuZIxcO1-Y",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Legal @ Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Legal & Corporate Secretary",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2026,
+          "text": "Jan 2026"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "General Counsel & Corporate Secretary",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Scale AI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/17998520/",
+        "companyId": "17998520",
+        "duration": "3 yrs",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "4e1e7d79bb90502fd47889b5c639da41a41f797c",
+        "startDate": {
+          "month": "Feb",
+          "year": 2023,
+          "text": "Feb 2023"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2026,
+          "text": "Jan 2026"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQFLIeQFxapL7Q/company-logo_400_400/B56Za2650hGgAY-/0/1746825617004/scaleai_logo?e=1776902400&v=beta&t=WuKxDBJye0l-qkA7vVw7m9unrdiqtkS97oJzAPEJS7k",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFLIeQFxapL7Q/company-logo_400_400/B56Za2650hGgAY-/0/1746825617004/scaleai_logo?e=1776902400&v=beta&t=WuKxDBJye0l-qkA7vVw7m9unrdiqtkS97oJzAPEJS7k",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFLIeQFxapL7Q/company-logo_200_200/B56Za2650hGgAI-/0/1746825617004/scaleai_logo?e=1776902400&v=beta&t=QMe8EBOWi2WVWrdjmUWfRXFiMfjK8IkUQAwbhFCy1UU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFLIeQFxapL7Q/company-logo_100_100/B56Za2650hGgAQ-/0/1746825617004/scaleai_logo?e=1776902400&v=beta&t=8okUByQi9Cb1RZxj6fSTmOFAAva87FUQbByCIt3_0DU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Director & AGC, Head of Product, Privacy, and Litigation",
+        "location": "San Francisco, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Scale AI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/17998520/",
+        "companyId": "17998520",
+        "duration": "1 yr 2 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "4e1e7d79bb90502fd47889b5c639da41a41f797c",
+        "startDate": {
+          "month": "Jan",
+          "year": 2022,
+          "text": "Jan 2022"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2023,
+          "text": "Feb 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQFLIeQFxapL7Q/company-logo_400_400/B56Za2650hGgAY-/0/1746825617004/scaleai_logo?e=1776902400&v=beta&t=WuKxDBJye0l-qkA7vVw7m9unrdiqtkS97oJzAPEJS7k",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFLIeQFxapL7Q/company-logo_400_400/B56Za2650hGgAY-/0/1746825617004/scaleai_logo?e=1776902400&v=beta&t=WuKxDBJye0l-qkA7vVw7m9unrdiqtkS97oJzAPEJS7k",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFLIeQFxapL7Q/company-logo_200_200/B56Za2650hGgAI-/0/1746825617004/scaleai_logo?e=1776902400&v=beta&t=QMe8EBOWi2WVWrdjmUWfRXFiMfjK8IkUQAwbhFCy1UU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFLIeQFxapL7Q/company-logo_100_100/B56Za2650hGgAQ-/0/1746825617004/scaleai_logo?e=1776902400&v=beta&t=8okUByQi9Cb1RZxj6fSTmOFAAva87FUQbByCIt3_0DU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Associate General Counsel",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Instagram",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/2289109/",
+        "companyId": "2289109",
+        "duration": "11 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "ee49134e3f94d0dc62cf9865d31e9285a485c5bd",
+        "startDate": {
+          "month": "Mar",
+          "year": 2021,
+          "text": "Mar 2021"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2022,
+          "text": "Jan 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFt6KqGwvGCzg/company-logo_400_400/company-logo_400_400/0/1652805738201/instagram_logo?e=1776902400&v=beta&t=G6D6gNbeS3Ui2S4P45fRIWFbAJ5V4UMPM6AOC6aUSdc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFt6KqGwvGCzg/company-logo_400_400/company-logo_400_400/0/1652805738201/instagram_logo?e=1776902400&v=beta&t=G6D6gNbeS3Ui2S4P45fRIWFbAJ5V4UMPM6AOC6aUSdc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFt6KqGwvGCzg/company-logo_200_200/company-logo_200_200/0/1652805738201/instagram_logo?e=1776902400&v=beta&t=LCaf9C-wwTSw9fNJS4YsI40Shp_2ecPeGEPmXXHJiXA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFt6KqGwvGCzg/company-logo_100_100/company-logo_100_100/0/1652805738201/instagram_logo?e=1776902400&v=beta&t=RITCzXX9_tHWTVnHdi6PIuTkDulr2ClApyLKVhwZmEo",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Lead Product Counsel",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Instagram",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/2289109/",
+        "companyId": "2289109",
+        "duration": "1 yr 9 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "ee49134e3f94d0dc62cf9865d31e9285a485c5bd",
+        "startDate": {
+          "month": "Jul",
+          "year": 2019,
+          "text": "Jul 2019"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2021,
+          "text": "Mar 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFt6KqGwvGCzg/company-logo_400_400/company-logo_400_400/0/1652805738201/instagram_logo?e=1776902400&v=beta&t=G6D6gNbeS3Ui2S4P45fRIWFbAJ5V4UMPM6AOC6aUSdc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFt6KqGwvGCzg/company-logo_400_400/company-logo_400_400/0/1652805738201/instagram_logo?e=1776902400&v=beta&t=G6D6gNbeS3Ui2S4P45fRIWFbAJ5V4UMPM6AOC6aUSdc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFt6KqGwvGCzg/company-logo_200_200/company-logo_200_200/0/1652805738201/instagram_logo?e=1776902400&v=beta&t=LCaf9C-wwTSw9fNJS4YsI40Shp_2ecPeGEPmXXHJiXA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFt6KqGwvGCzg/company-logo_100_100/company-logo_100_100/0/1652805738201/instagram_logo?e=1776902400&v=beta&t=RITCzXX9_tHWTVnHdi6PIuTkDulr2ClApyLKVhwZmEo",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Product Counsel",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Instagram",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/2289109/",
+        "companyId": "2289109",
+        "duration": "1 yr 2 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "ee49134e3f94d0dc62cf9865d31e9285a485c5bd",
+        "startDate": {
+          "month": "Jun",
+          "year": 2018,
+          "text": "Jun 2018"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2019,
+          "text": "Jul 2019"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFt6KqGwvGCzg/company-logo_400_400/company-logo_400_400/0/1652805738201/instagram_logo?e=1776902400&v=beta&t=G6D6gNbeS3Ui2S4P45fRIWFbAJ5V4UMPM6AOC6aUSdc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFt6KqGwvGCzg/company-logo_400_400/company-logo_400_400/0/1652805738201/instagram_logo?e=1776902400&v=beta&t=G6D6gNbeS3Ui2S4P45fRIWFbAJ5V4UMPM6AOC6aUSdc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFt6KqGwvGCzg/company-logo_200_200/company-logo_200_200/0/1652805738201/instagram_logo?e=1776902400&v=beta&t=LCaf9C-wwTSw9fNJS4YsI40Shp_2ecPeGEPmXXHJiXA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFt6KqGwvGCzg/company-logo_100_100/company-logo_100_100/0/1652805738201/instagram_logo?e=1776902400&v=beta&t=RITCzXX9_tHWTVnHdi6PIuTkDulr2ClApyLKVhwZmEo",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Litigation",
+        "location": "San Francisco, CA",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Gibson, Dunn & Crutcher LLP",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/6627/",
+        "companyId": "6627",
+        "duration": "4 yrs 10 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2013,
+          "text": "Sep 2013"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2018,
+          "text": "Jun 2018"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQG9Zfzc1rz7uQ/company-logo_400_400/company-logo_400_400/0/1673273869537/gibson_dunn__crutcher_llp_logo?e=1776902400&v=beta&t=6JuXxB4PXTt6MWQUAvp2mcHEUfG4vV3oX1MuINQ6src",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQG9Zfzc1rz7uQ/company-logo_400_400/company-logo_400_400/0/1673273869537/gibson_dunn__crutcher_llp_logo?e=1776902400&v=beta&t=6JuXxB4PXTt6MWQUAvp2mcHEUfG4vV3oX1MuINQ6src",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQG9Zfzc1rz7uQ/company-logo_200_200/company-logo_200_200/0/1673273869537/gibson_dunn__crutcher_llp_logo?e=1776902400&v=beta&t=ZrwaUhbuffCn9iqmL_oK8utbycte1Y6VfAVBSkbs-uA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQG9Zfzc1rz7uQ/company-logo_100_100/company-logo_100_100/0/1673273869537/gibson_dunn__crutcher_llp_logo?e=1776902400&v=beta&t=L1b9xWwW5kIzlUN65xg9ApCXhKK51kyrHMSaQer9MP4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Summer Associate",
+        "location": "Greater Los Angeles Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Gibson, Dunn & Crutcher LLP",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/6627/",
+        "companyId": "6627",
+        "duration": "3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2012,
+          "text": "May 2012"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2012,
+          "text": "Jul 2012"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQG9Zfzc1rz7uQ/company-logo_400_400/company-logo_400_400/0/1673273869537/gibson_dunn__crutcher_llp_logo?e=1776902400&v=beta&t=6JuXxB4PXTt6MWQUAvp2mcHEUfG4vV3oX1MuINQ6src",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQG9Zfzc1rz7uQ/company-logo_400_400/company-logo_400_400/0/1673273869537/gibson_dunn__crutcher_llp_logo?e=1776902400&v=beta&t=6JuXxB4PXTt6MWQUAvp2mcHEUfG4vV3oX1MuINQ6src",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQG9Zfzc1rz7uQ/company-logo_200_200/company-logo_200_200/0/1673273869537/gibson_dunn__crutcher_llp_logo?e=1776902400&v=beta&t=ZrwaUhbuffCn9iqmL_oK8utbycte1Y6VfAVBSkbs-uA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQG9Zfzc1rz7uQ/company-logo_100_100/company-logo_100_100/0/1673273869537/gibson_dunn__crutcher_llp_logo?e=1776902400&v=beta&t=L1b9xWwW5kIzlUN65xg9ApCXhKK51kyrHMSaQer9MP4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Summer Law Clerk - Consumer Section",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "California Office of the Attorney General",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=California+Office+of+the+Attorney+General",
+        "duration": "3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2011,
+          "text": "May 2011"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2011,
+          "text": "Jul 2011"
+        }
+      },
+      {
+        "position": "Client Services Manager",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Mercury Public Affairs",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/93016/",
+        "companyId": "93016",
+        "duration": "9 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2009,
+          "text": "Jan 2009"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2009,
+          "text": "Sep 2009"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGm1SHJUw3o2w/company-logo_400_400/company-logo_400_400/0/1719798502593?e=1776902400&v=beta&t=Kgn735FfxndO_MTCmPw44RUGgf3Oq3RZZl8ehAJM9hs",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGm1SHJUw3o2w/company-logo_400_400/company-logo_400_400/0/1719798502593?e=1776902400&v=beta&t=Kgn735FfxndO_MTCmPw44RUGgf3Oq3RZZl8ehAJM9hs",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGm1SHJUw3o2w/company-logo_200_200/company-logo_200_200/0/1719798502593?e=1776902400&v=beta&t=O-OxyEQoZPQjzmKo5iWKX56sfeGCChiEmDWs5KWJ7_k",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGm1SHJUw3o2w/company-logo_100_100/company-logo_100_100/0/1719798502593?e=1776902400&v=beta&t=pC1QS1K0H7b9U4xIULauoMNujieZLKv7Pc-lXq2LWTw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Strategy",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "John McCain 2008",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/31165/",
+        "companyId": "31165",
+        "duration": "7 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2008,
+          "text": "May 2008"
+        },
+        "endDate": {
+          "month": "Nov",
+          "year": 2008,
+          "text": "Nov 2008"
+        },
+        "companyLogo": null
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "University of California, Berkeley - School of Law",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/15100253/",
+        "schoolId": "15100253",
+        "degree": "J.D.",
+        "fieldOfStudy": "Order of the Coif",
+        "skills": [],
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQEBXQeZZ8wJFg/company-logo_400_400/company-logo_400_400/0/1728075859471/berkeleylaw_logo?e=1776902400&v=beta&t=ME15mVKcsWf_Hg68Hij_bSpkwiOARj0ttgFycrLYOUg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEBXQeZZ8wJFg/company-logo_400_400/company-logo_400_400/0/1728075859471/berkeleylaw_logo?e=1776902400&v=beta&t=ME15mVKcsWf_Hg68Hij_bSpkwiOARj0ttgFycrLYOUg",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEBXQeZZ8wJFg/company-logo_200_200/company-logo_200_200/0/1728075859471/berkeleylaw_logo?e=1776902400&v=beta&t=5JLp_AnDQsVaxWmGGStdz9SF82VkbWzhBVpKSrylGYc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEBXQeZZ8wJFg/company-logo_100_100/company-logo_100_100/0/1728075859471/berkeleylaw_logo?e=1776902400&v=beta&t=6gD8BCZXD-vkkXyK0_xRtMW-h5TzL81bIW9adRCTGxU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Boston College",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/5396/",
+        "schoolId": "5396",
+        "degree": "B.A.",
+        "fieldOfStudy": "summa cum laude",
+        "skills": [],
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQHQq9GTK55wuA/company-logo_400_400/company-logo_400_400/0/1630580523474/boston_college_logo?e=1776902400&v=beta&t=bJ1GUwRc6IqqS0dp-ISduM5MdqWoAHf2wWwU8GAxpe8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQHQq9GTK55wuA/company-logo_400_400/company-logo_400_400/0/1630580523474/boston_college_logo?e=1776902400&v=beta&t=bJ1GUwRc6IqqS0dp-ISduM5MdqWoAHf2wWwU8GAxpe8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQHQq9GTK55wuA/company-logo_200_200/company-logo_200_200/0/1630580523474/boston_college_logo?e=1776902400&v=beta&t=1bAMnIcLOukYotSgLsTBho0YcGi5LPbDURlx5cvzlEQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQHQq9GTK55wuA/company-logo_100_100/company-logo_100_100/0/1630580523474/boston_college_logo?e=1776902400&v=beta&t=zLD26PRq1rdKR-jm8GapHgbluQOiu8mHz5r1DgwNZgg",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": {
+      "images": [],
+      "link": "https://www.linkedin.com/feed/update/urn:li:activity:7033937109157642240?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A7033937109157642240%29",
+      "title": "Associate General Counsel - Head of Product and Privacy | Careers | Scale AI",
+      "subtitle": "scale.com",
+      "slides": [
+        {
+          "title": "Associate General Counsel - Head of Product and Privacy | Careers | Scale AI",
+          "subtitle": "scale.com",
+          "description": null,
+          "url": "https://www.linkedin.com/feed/update/urn:li:activity:7033937109157642240?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A7033937109157642240%29",
+          "image": {
+            "url": null
+          }
+        }
+      ]
+    },
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAAINVwABdr9V-3kCSYguxNwgix6vnCvLL7U",
+        "firstName": "Rich",
+        "lastName": "Mullen",
+        "publicIdentifier": "rich-mullen-000644b",
+        "linkedinUrl": "https://www.linkedin.com/in/rich-mullen-000644b"
+      },
+      {
+        "id": "ACoAAACQBzQB5nk5kOpFWQRtK4pv3RaL5q2G-pA",
+        "firstName": "Jonathan",
+        "lastName": "Lachman",
+        "publicIdentifier": "jonathan-lachman-4981b23",
+        "linkedinUrl": "https://www.linkedin.com/in/jonathan-lachman-4981b23"
+      },
+      {
+        "id": "ACoAAAAuxW4BaX9pNPDZYQ1KlVtYX7qqBfcaJ6Y",
+        "firstName": "Marty",
+        "lastName": "Korman",
+        "publicIdentifier": "martykorman",
+        "linkedinUrl": "https://www.linkedin.com/in/martykorman"
+      },
+      {
+        "id": "ACoAAAITMRQB9-EJ0JPLZ7uVTLlHDIpJQazb2jo",
+        "firstName": "William",
+        "lastName": "Gamble",
+        "publicIdentifier": "wgamble",
+        "linkedinUrl": "https://www.linkedin.com/in/wgamble"
+      },
+      {
+        "id": "ACoAAABSHtcB0OcS0jLycra22TPKjdOI1f5pl08",
+        "firstName": "Cathleen",
+        "lastName": "H.",
+        "publicIdentifier": "cathleenh",
+        "linkedinUrl": "https://www.linkedin.com/in/cathleenh"
+      },
+      {
+        "id": "ACoAABHEMt4BxTDHkctr2LPo6m2rucOvFOrJlTQ",
+        "firstName": "Liz K.",
+        "lastName": "Do",
+        "publicIdentifier": "lizkdo",
+        "linkedinUrl": "https://www.linkedin.com/in/lizkdo"
+      },
+      {
+        "id": "ACoAAAAV0QwBuIKdoWwcz7mxPbmSEyaMKdcjBao",
+        "firstName": "Sarah",
+        "lastName": "Tierney Niyogi",
+        "publicIdentifier": "sarahniyogi",
+        "linkedinUrl": "https://www.linkedin.com/in/sarahniyogi"
+      },
+      {
+        "id": "ACoAAAIc2hIB17iB9bnR_IH5ukXc7KNxqDbmfRw",
+        "firstName": "Jonathan (Jon)",
+        "lastName": "Palmer",
+        "publicIdentifier": "jonathan-jon-palmer-382a54b",
+        "linkedinUrl": "https://www.linkedin.com/in/jonathan-jon-palmer-382a54b"
+      },
+      {
+        "id": "ACoAAAGSoGgBZFpckmPmfu15C5aYjeggG1flto4",
+        "firstName": "Che",
+        "lastName": "Chang",
+        "publicIdentifier": "chechang",
+        "linkedinUrl": "https://www.linkedin.com/in/chechang"
+      },
+      {
+        "id": "ACoAAAIErdcBIRUDYcXW4aUs0w1JQghDravdEL4",
+        "firstName": "Pete",
+        "lastName": "Cline",
+        "publicIdentifier": "pete-cline-64740bb",
+        "linkedinUrl": "https://www.linkedin.com/in/pete-cline-64740bb"
+      },
+      {
+        "id": "ACoAAASIwOQBJ7E0xRiDlqNZwrI7SY_wQ2tQQt0",
+        "firstName": "Michael",
+        "lastName": "Le",
+        "publicIdentifier": "michael-le-79858621",
+        "linkedinUrl": "https://www.linkedin.com/in/michael-le-79858621"
+      },
+      {
+        "id": "ACoAAAOc48MBddy9uBOXsbnidyceDuNWIIJtUEg",
+        "firstName": "Brian",
+        "lastName": "Israel",
+        "publicIdentifier": "brian-israel-36b37118",
+        "linkedinUrl": "https://www.linkedin.com/in/brian-israel-36b37118"
+      },
+      {
+        "id": "ACoAACPMEicBm2b3EqM7-00rJU14sTxCCcE50rI",
+        "firstName": "Ryan",
+        "lastName": "Cooper",
+        "publicIdentifier": "ryan-cooper5110",
+        "linkedinUrl": "https://www.linkedin.com/in/ryan-cooper5110"
+      },
+      {
+        "id": "ACoAAAomQQABAqr8kqRfdBdg64zXboW4wZh_eA4",
+        "firstName": "Jenny",
+        "lastName": "Jung",
+        "publicIdentifier": "jenny-jung-22803949",
+        "linkedinUrl": "https://www.linkedin.com/in/jenny-jung-22803949"
+      },
+      {
+        "id": "ACoAABswjqwB5W2FoOWYNE6DcsOem-z72GLdeQ8",
+        "firstName": "Rachel",
+        "lastName": "Perahia Gupte",
+        "publicIdentifier": "rachel-perahia-gupte",
+        "linkedinUrl": "https://www.linkedin.com/in/rachel-perahia-gupte"
+      },
+      {
+        "id": "ACoAABSdzpkBl-iN8VHaihR2VfCTJZuI9BIRpC8",
+        "firstName": "Alexandr",
+        "lastName": "Wang",
+        "publicIdentifier": "alexandrwang",
+        "linkedinUrl": "https://www.linkedin.com/in/alexandrwang"
+      },
+      {
+        "id": "ACoAAAABkXcB3rD2tbrwthOt31RV4xBh9NRT_UQ",
+        "firstName": "Jason",
+        "lastName": "Droege",
+        "publicIdentifier": "jasondroege",
+        "linkedinUrl": "https://www.linkedin.com/in/jasondroege"
+      },
+      {
+        "id": "ACoAAACc3HgBB4CWa6gR2PoVW1h7-rrYQkBI8RI",
+        "firstName": "Rezwan",
+        "lastName": "Pavri",
+        "publicIdentifier": "rezwanpavri",
+        "linkedinUrl": "https://www.linkedin.com/in/rezwanpavri"
+      },
+      {
+        "id": "ACoAAASyOncB9GAcw26g2k8D-rSlFMT3kLy7HqM",
+        "firstName": "Laura",
+        "lastName": "Pirri",
+        "publicIdentifier": "lpirri",
+        "linkedinUrl": "https://www.linkedin.com/in/lpirri"
+      },
+      {
+        "id": "ACoAAAPH3hkBD4YvYU1lCbTlnKlqFvJCZxL3KlQ",
+        "firstName": "Weiheng",
+        "lastName": "Zhang",
+        "publicIdentifier": "weiheng-zhang",
+        "linkedinUrl": "https://www.linkedin.com/in/weiheng-zhang"
+      },
+      {
+        "id": "ACoAAC5hTA4B8b0MqfmH18hHagunkuJi4AkPoF8",
+        "firstName": "Dr Manuela",
+        "lastName": "Doughan",
+        "position": "Counsel at Busse Disputes | Italian AA40 Co-Coordinator German Chapter",
+        "publicIdentifier": "dr-manuela-doughan-952715198",
+        "linkedinUrl": "https://www.linkedin.com/in/dr-manuela-doughan-952715198"
+      },
+      {
+        "id": "ACoAAC7IvawBNDV6GXCU8ehtMIgY4smJqxZaCpo",
+        "firstName": "Kosha",
+        "lastName": "Doshi",
+        "position": "Associate Attorney at Kelly, Trotter and Franzen || CA Bar Licensed || \nMasters of Law (LLM) at University of California, Berkeley ’25 || BA LLB (Hons.) at Symbiosis Law School ’24 || Stanford Summer ’23 & LSE Summer ’22",
+        "publicIdentifier": "kosha-doshi",
+        "linkedinUrl": "https://www.linkedin.com/in/kosha-doshi"
+      },
+      {
+        "id": "ACoAAC9ILooBMzLQbE7TO1ZpIIk8JrV6GTQCELk",
+        "firstName": "Akhila",
+        "lastName": "Achuthan",
+        "position": "LLM student at UC Berkeley, \nLLM student representative at the Student Association at Berkeley Law",
+        "publicIdentifier": "akhila-achuthan-3767b21a1",
+        "linkedinUrl": "https://www.linkedin.com/in/akhila-achuthan-3767b21a1"
+      },
+      {
+        "id": "ACoAACgJXSkBs0Rnds2FDzbhmIThYSpcJfJk1WM",
+        "firstName": "Hersh",
+        "lastName": "Gupta",
+        "position": "J.D. Candidate at Berkeley Law",
+        "publicIdentifier": "hersh-gupta-749b50168",
+        "linkedinUrl": "https://www.linkedin.com/in/hersh-gupta-749b50168"
+      },
+      {
+        "id": "ACoAACm2yckB_4_7zFfmi0hJQdAXkV3Hrd9bEZw",
+        "firstName": "Nilly",
+        "lastName": "Alshech Raviv",
+        "position": "Partner | Expert | Deal Maker ",
+        "publicIdentifier": "nilly-alshech-raviv",
+        "linkedinUrl": "https://www.linkedin.com/in/nilly-alshech-raviv"
+      },
+      {
+        "id": "ACoAACzq_MMBxRJSZ7n4OpqAk253ByLYc1vfCTo",
+        "firstName": "Tanisha",
+        "lastName": "Choudhary",
+        "position": "Master of Laws Graduate from the University of California, Berkeley, School of Law",
+        "publicIdentifier": "tanisha-choudhary-8ab465190",
+        "linkedinUrl": "https://www.linkedin.com/in/tanisha-choudhary-8ab465190"
+      },
+      {
+        "id": "ACoAACc5XRMBLtHc2dGSrtQ9rNGjCF3eX10BEpY",
+        "firstName": "Ahmed Reza",
+        "lastName": "Mirza",
+        "position": "Partner at ABS & Co. | LL.M. UC Berkeley",
+        "publicIdentifier": "ahmed-reza-mirza-017478164",
+        "linkedinUrl": "https://www.linkedin.com/in/ahmed-reza-mirza-017478164"
+      },
+      {
+        "id": "ACoAACo8WeoBWnbma-c4T8GmVuxQSAZwzAwCXl8",
+        "firstName": "Soumil",
+        "lastName": "Desai",
+        "position": "Corporate Attorney",
+        "publicIdentifier": "soumil-desai-522384179",
+        "linkedinUrl": "https://www.linkedin.com/in/soumil-desai-522384179"
+      },
+      {
+        "id": "ACoAACLyM3IBOaDXmY33IpA5pvTiOhVkd163Mz0",
+        "firstName": "Aditi",
+        "lastName": "Goel",
+        "position": "Advocate | UC Berkeley School of Law",
+        "publicIdentifier": "aditgoel12",
+        "linkedinUrl": "https://www.linkedin.com/in/aditgoel12"
+      },
+      {
+        "id": "ACoAAChaGykBEyiiDQCgHFWeqQTwFJ3uU51bt8I",
+        "firstName": "Gabriela",
+        "lastName": "Sabogal",
+        "position": "Corporate Lawyer ",
+        "publicIdentifier": "gabrielaramirezsabogal",
+        "linkedinUrl": "https://www.linkedin.com/in/gabrielaramirezsabogal"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAAF70jABk5vnzZx3uv-XSKmt0W0c4V449TU"
+    }
+  }
+}

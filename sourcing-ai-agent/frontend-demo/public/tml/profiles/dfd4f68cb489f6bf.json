@@ -1,0 +1,231 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAFoo3SkB2pNnJ8yobv7UHZFpJg60pDO6jpg",
+    "profile_url": "https://www.linkedin.com/in/ACwAAFoo3SkB2pNnJ8yobv7UHZFpJg60pDO6jpg"
+  },
+  "item": {
+    "id": "ACoAAFoo3SkB9zAoGim24RbnBXrESTy3A9bOhUk",
+    "publicIdentifier": "dhwani-mehta-1756ab362",
+    "linkedinUrl": "https://www.linkedin.com/in/dhwani-mehta-1756ab362",
+    "firstName": "Dhwani",
+    "lastName": "Mehta",
+    "emails": [
+      {
+        "email": "dhwani.mehta@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Thinkwithus",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Pune Division, Maharashtra, India",
+      "countryCode": "IN",
+      "parsed": {
+        "text": "Pune, India",
+        "countryCode": "IN",
+        "regionCode": null,
+        "country": "India",
+        "countryFull": "India",
+        "state": "Maharashtra",
+        "city": "Pune"
+      }
+    },
+    "objectUrn": "1512627497",
+    "registeredAt": "2025-04-27T08:36:36.725Z",
+    "topSkills": null,
+    "connectionsCount": 0,
+    "followerCount": 1,
+    "verified": false,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": null,
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4E03AQF0qOK2dSRixw/profile-displayphoto-shrink_800_800/B4EZZ2ZPVgHMAc-/0/1745743051370?e=1776902400&v=beta&t=gshR-3TQE-1ZOWJ_2R6i2ED16HP32CnENjFVdju7vgM",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQF0qOK2dSRixw/profile-displayphoto-shrink_800_800/B4EZZ2ZPVgHMAc-/0/1745743051370?e=1776902400&v=beta&t=gshR-3TQE-1ZOWJ_2R6i2ED16HP32CnENjFVdju7vgM",
+          "width": 250,
+          "height": 250,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQF0qOK2dSRixw/profile-displayphoto-shrink_400_400/B4EZZ2ZPVgHMAg-/0/1745743051370?e=1776902400&v=beta&t=2bbh902ep9qesyuvEVEer1MrRpjA-0eiJdQpfEeWS_0",
+          "width": 250,
+          "height": 250,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQF0qOK2dSRixw/profile-displayphoto-shrink_200_200/B4EZZ2ZPVgHMAY-/0/1745743051377?e=1776902400&v=beta&t=oQilg1bUvqxHf90j0t-KW9gvLtVPY012G3rUL18Xj1E",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQF0qOK2dSRixw/profile-displayphoto-shrink_100_100/B4EZZ2ZPVgHMAU-/0/1745743051370?e=1776902400&v=beta&t=z96ZM0vmgWVNXDI4faMoTcfedyFw3g3wCN8JDUTiCEc",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D4E03AQF0qOK2dSRixw/profile-displayphoto-shrink_800_800/B4EZZ2ZPVgHMAc-/0/1745743051370?e=1776902400&v=beta&t=gshR-3TQE-1ZOWJ_2R6i2ED16HP32CnENjFVdju7vgM",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Thinkwithus",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Associate",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": null,
+        "description": null,
+        "skills": null,
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAAuKENUBoTphhoTMUBawL91DzqY-3-3i08Q",
+        "firstName": "Charlotte",
+        "lastName": "Brys",
+        "position": "Vintage meisjes 📗 | Klinisch psycholoog | Gerontoloog | Integratief Psychotherapeut | Lichaamsgericht psychotherapeut | Spreker | Gastdocent bij Chartoloog",
+        "publicIdentifier": "charlotte-brys-819a0354",
+        "linkedinUrl": "https://www.linkedin.com/in/charlotte-brys-819a0354"
+      },
+      {
+        "id": "ACoAAAWurdEBoDolReXielJKOlgrJBihhqQN4Jw",
+        "firstName": "Carol",
+        "lastName": "Riské",
+        "position": "Owner Adinzo and senesvzw",
+        "publicIdentifier": "carol-riské-069b1627",
+        "linkedinUrl": "https://www.linkedin.com/in/carol-riské-069b1627"
+      },
+      {
+        "id": "ACoAABoNYaUB6xyRJHFPLPMvFWgILR8HhBOXUAE",
+        "firstName": "Veronique",
+        "lastName": "Van den Eede",
+        "position": "V. Nursing & Gerontology, BelRAI trainer, docent verpleegkunde",
+        "publicIdentifier": "veronique-van-den-eede-571466102",
+        "linkedinUrl": "https://www.linkedin.com/in/veronique-van-den-eede-571466102"
+      },
+      {
+        "id": "ACoAACuAOc0BdQ14pBnyMj3OI-fxbAJWgij3vZ8",
+        "firstName": "Marc",
+        "lastName": "Baszezynski",
+        "position": "Freelance - Directeur maison de repos et de soins - Infirmier - Coordinateur qualité ",
+        "publicIdentifier": "marc-baszezynski-8114bb184",
+        "linkedinUrl": "https://www.linkedin.com/in/marc-baszezynski-8114bb184"
+      },
+      {
+        "id": "ACoAABdm-QQBtZMlnAV41kmEyXg4TUIzbTRJbKY",
+        "firstName": "Cynthia",
+        "lastName": "Delpierre",
+        "position": "Gérontologie et Qualité",
+        "publicIdentifier": "cynthiadelpierre",
+        "linkedinUrl": "https://www.linkedin.com/in/cynthiadelpierre"
+      },
+      {
+        "id": "ACoAABRLqkQB8D_USl4GCf7EMKO16nYWfDzTGT4",
+        "firstName": "Jolien",
+        "lastName": "Allart",
+        "position": "Ergotherapeut • Docent • Gerontoloog • Onderzoeker",
+        "publicIdentifier": "jolienallart",
+        "linkedinUrl": "https://www.linkedin.com/in/jolienallart"
+      },
+      {
+        "id": "ACoAAAGch10B_rsAwyqkCKB-oJmaDoZc74KzGbM",
+        "firstName": "Lien",
+        "lastName": "Van Malderen",
+        "position": "Adviseur Strategisch Beleid Woonzorg, Strategic Policy Advisor on Long-term Care, PhD, Gerontologist",
+        "publicIdentifier": "lien-van-malderen-6510799",
+        "linkedinUrl": "https://www.linkedin.com/in/lien-van-malderen-6510799"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAFoo3SkB2pNnJ8yobv7UHZFpJg60pDO6jpg"
+    }
+  }
+}

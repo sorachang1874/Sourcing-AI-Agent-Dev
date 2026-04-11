@@ -1,0 +1,388 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAFrO2hYBcFFK-7A5qPH-ZDc4dv8zJ4uKmOA",
+    "profile_url": "https://www.linkedin.com/in/ACwAAFrO2hYBcFFK-7A5qPH-ZDc4dv8zJ4uKmOA"
+  },
+  "item": {
+    "id": "ACoAAFrO2hYBQn9I3leFzBjeUmgehOiK_AGSCr8",
+    "publicIdentifier": "muhammad-adam-usman-472276366",
+    "linkedinUrl": "https://www.linkedin.com/in/muhammad-adam-usman-472276366",
+    "firstName": "Muhammad",
+    "lastName": "Adam Usman",
+    "emails": [
+      {
+        "email": "muhammad.adam@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Electrician at Thinking Machines Lab",
+    "openToWork": true,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Abuja, Federal Capital Territory, Nigeria",
+      "countryCode": "NG",
+      "parsed": {
+        "text": "Abuja, Nigeria",
+        "countryCode": "NG",
+        "regionCode": null,
+        "country": "Nigeria",
+        "countryFull": "Nigeria",
+        "state": "Abuja Federal Capital Territory",
+        "city": "Abuja"
+      }
+    },
+    "objectUrn": "1523505686",
+    "registeredAt": "2025-05-17T20:06:27.464Z",
+    "topSkills": null,
+    "connectionsCount": 0,
+    "followerCount": 1,
+    "verified": false,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": null,
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5603AQHcEPbMQ5-gvw/profile-displayphoto-shrink_100_100/B56Zbf3BfyGoAU-/0/1747512468091?e=1776902400&v=beta&t=aib_zykWMYEcP0zJoOB-06Z1ZXC95srM_4f8N_ftIHU",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQHcEPbMQ5-gvw/profile-displayphoto-shrink_100_100/B56Zbf3BfyGoAU-/0/1747512468091?e=1776902400&v=beta&t=aib_zykWMYEcP0zJoOB-06Z1ZXC95srM_4f8N_ftIHU",
+          "width": 96,
+          "height": 96,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQHcEPbMQ5-gvw/profile-displayphoto-shrink_800_800/B56Zbf3BfyGoAc-/0/1747512468091?e=1776902400&v=beta&t=vZmJ_aMjXuPPGJrOKErHJqtEBFc4yyNsSClamHXMr6o",
+          "width": 96,
+          "height": 96,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQHcEPbMQ5-gvw/profile-displayphoto-shrink_200_200/B56Zbf3BfyGoAY-/0/1747512468091?e=1776902400&v=beta&t=DE_J7sx46DHD2lq1-AygYddzBx6gGFSjftDjvvCfzXs",
+          "width": 96,
+          "height": 96,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQHcEPbMQ5-gvw/profile-displayphoto-shrink_400_400/B56Zbf3BfyGoAg-/0/1747512468100?e=1776902400&v=beta&t=r2hqBePiTq7BwllPGF147hOrjQNrdo50L3NJiGdk5tE",
+          "width": 96,
+          "height": 96,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D5603AQHcEPbMQ5-gvw/profile-displayphoto-shrink_100_100/B56Zbf3BfyGoAU-/0/1747512468091?e=1776902400&v=beta&t=aib_zykWMYEcP0zJoOB-06Z1ZXC95srM_4f8N_ftIHU",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Electrician at Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Electrician",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": null,
+        "description": null,
+        "skills": null,
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAABQ5lJUBry2byQYf_TtxDF9Rha9l-RqYsaM",
+        "firstName": "Guang-He",
+        "lastName": "Lee",
+        "publicIdentifier": "guang-he-lee-64577895",
+        "linkedinUrl": "https://www.linkedin.com/in/guang-he-lee-64577895"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABGaEy8Bu1ycKB5WUvyRc69OERCzymW7mxY",
+        "firstName": "Jamie",
+        "lastName": "Cahill",
+        "publicIdentifier": "james-cahill-093a9582",
+        "linkedinUrl": "https://www.linkedin.com/in/james-cahill-093a9582"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAAEAbBpQBT4luNj8gPYU6CgQ_GNJey3AJTiE",
+        "firstName": "Rajat",
+        "lastName": "Goel",
+        "publicIdentifier": "rajatgoel2010",
+        "linkedinUrl": "https://www.linkedin.com/in/rajatgoel2010"
+      },
+      {
+        "id": "ACoAAB25W_cBJvis01d0hMgt6XtRg-rXuYtwxKA",
+        "firstName": "Alexis",
+        "lastName": "Dunn",
+        "publicIdentifier": "alexis-aleyza-dunn",
+        "linkedinUrl": "https://www.linkedin.com/in/alexis-aleyza-dunn"
+      },
+      {
+        "id": "ACoAABhKWCYBiuV3Zv9Hbt8t0j-xMRqxawBcSgw",
+        "firstName": "Kurt",
+        "lastName": "Shuster",
+        "publicIdentifier": "kurtshuster1",
+        "linkedinUrl": "https://www.linkedin.com/in/kurtshuster1"
+      },
+      {
+        "id": "ACoAADVjBEMBuDDg8o9GVKAOG0hsNyok9WiF908",
+        "firstName": "Fatimah",
+        "lastName": "Aqeel",
+        "publicIdentifier": "fatimah-aqeel-317b6620b",
+        "linkedinUrl": "https://www.linkedin.com/in/fatimah-aqeel-317b6620b"
+      },
+      {
+        "id": "ACoAAEIBF7ABlNe8YwK5Mk1pZI5kaGeyHxCmOKs",
+        "firstName": "Enes Ercan Enwar",
+        "lastName": "Hurmuzlu",
+        "publicIdentifier": "anaspythagorean",
+        "linkedinUrl": "https://www.linkedin.com/in/anaspythagorean"
+      },
+      {
+        "id": "ACoAAEMC5SABreGmDi5qO9_Kjznmaj7EE7UjiH0",
+        "firstName": "Samer",
+        "lastName": "Kareem",
+        "publicIdentifier": "samer-kareem-34061b274",
+        "linkedinUrl": "https://www.linkedin.com/in/samer-kareem-34061b274"
+      },
+      {
+        "id": "ACoAADHPdTABY7_fSPg-C9cyepb7KG7AvTOHHb4",
+        "firstName": "A. Rahman",
+        "lastName": "Shakoor",
+        "publicIdentifier": "rahmannshakoor",
+        "linkedinUrl": "https://www.linkedin.com/in/rahmannshakoor"
+      },
+      {
+        "id": "ACoAAFpCltABWsgsrhlYJzlC8hJ6VZhiQC0nmD0",
+        "firstName": "plio",
+        "lastName": "mil",
+        "publicIdentifier": "plio-mil-954182363",
+        "linkedinUrl": "https://www.linkedin.com/in/plio-mil-954182363"
+      },
+      {
+        "id": "ACoAAEOvidMBNDVA5LIy3Ok4PohigBZ5GCPsp6k",
+        "firstName": "Haroon",
+        "lastName": "Aziz",
+        "publicIdentifier": "haroon-aziz-b2b376278",
+        "linkedinUrl": "https://www.linkedin.com/in/haroon-aziz-b2b376278"
+      },
+      {
+        "id": "ACoAAF3ruboBAmt7ZSoBUxm9jDmvpb2dqw0DH2I",
+        "firstName": "Aiman",
+        "lastName": "Abdulraheem",
+        "publicIdentifier": "aiman-abdulraheem-67686037b",
+        "linkedinUrl": "https://www.linkedin.com/in/aiman-abdulraheem-67686037b"
+      },
+      {
+        "id": "ACoAAFIXFWIBrmS-OXxp3vVrU1pGibt4OuzrE4g",
+        "firstName": "Marwah",
+        "lastName": "AL-HELLI",
+        "publicIdentifier": "marwah-al-helli-6022a0325",
+        "linkedinUrl": "https://www.linkedin.com/in/marwah-al-helli-6022a0325"
+      },
+      {
+        "id": "ACoAAEP0r70Ble84uqoeciFHVQjR_IzczYbDYL0",
+        "firstName": "Aya",
+        "lastName": "Hayder",
+        "publicIdentifier": "aya-hayder",
+        "linkedinUrl": "https://www.linkedin.com/in/aya-hayder"
+      },
+      {
+        "id": "ACoAAC1AXYwBz15ui1C_kXWtlY5tSA5Rk-RacR8",
+        "firstName": "Rafeef",
+        "lastName": "D. Al-Shuwaykh",
+        "publicIdentifier": "rafeef-dawood",
+        "linkedinUrl": "https://www.linkedin.com/in/rafeef-dawood"
+      },
+      {
+        "id": "ACoAADs2qOYBWtZeVHb28mfKkKDFzGo8JFE3Ov0",
+        "firstName": "Aeham",
+        "lastName": "Hamid Nafea",
+        "publicIdentifier": "aehamhamid",
+        "linkedinUrl": "https://www.linkedin.com/in/aehamhamid"
+      },
+      {
+        "id": "ACoAAFHdDNoBiGBQUBuRGaaXfkFM4zQSzATdUSo",
+        "firstName": "Karrar ",
+        "lastName": "Mushtaq Talib",
+        "publicIdentifier": "karrar-mushtaq-talib-64ab67323",
+        "linkedinUrl": "https://www.linkedin.com/in/karrar-mushtaq-talib-64ab67323"
+      },
+      {
+        "id": "ACoAABHdf7IBYTUSr8-L9zhMUSJXIZ_gz-PiuPY",
+        "firstName": "Hüseyin Demir",
+        "lastName": "HAZIR",
+        "position": "Creative Director",
+        "publicIdentifier": "hüseyin-demir-hazir-21646684",
+        "linkedinUrl": "https://www.linkedin.com/in/hüseyin-demir-hazir-21646684"
+      },
+      {
+        "id": "ACoAAEcxXRwBV2hn150xwWBfaUilQNy9qrocyOk",
+        "firstName": "ARTEVO",
+        "lastName": "TASARIM HİZMETLERİ",
+        "position": "👩‍🎨 TASARIM UZMANI\nSanatın Evrimi",
+        "publicIdentifier": "artevo-tasarim-hizmetleri-964011294",
+        "linkedinUrl": "https://www.linkedin.com/in/artevo-tasarim-hizmetleri-964011294"
+      },
+      {
+        "id": "ACoAAAPg_f8B2Xq1s7xK02YvMVkaL7TdOhlTysc",
+        "firstName": "Volkan",
+        "lastName": "Atalay",
+        "position": "Creative Director | Producer",
+        "publicIdentifier": "volkanatalay",
+        "linkedinUrl": "https://www.linkedin.com/in/volkanatalay"
+      },
+      {
+        "id": "ACoAAF5NbzIBB9jy1JgMJc5tGWmgHbYwEZ1I7qo",
+        "firstName": "Kenan",
+        "lastName": "Çamurcu",
+        "position": "trucktatus şirketinde serbest yazar",
+        "publicIdentifier": "kenan-çamurcu-302a2a381",
+        "linkedinUrl": "https://www.linkedin.com/in/kenan-çamurcu-302a2a381"
+      },
+      {
+        "id": "ACoAAAqL4cQB6fJ2Lo_2b2t1aK6ijFP8FqkPhWs",
+        "firstName": "Esra",
+        "lastName": "Inal",
+        "position": "Creative Director",
+        "publicIdentifier": "esra-inal-63030b4b",
+        "linkedinUrl": "https://www.linkedin.com/in/esra-inal-63030b4b"
+      },
+      {
+        "id": "ACoAABd0tKcB_ui7sgV_XzuQFgfMLGZRSIm1xOo",
+        "firstName": "Gülgün",
+        "lastName": "Oktay Onuk",
+        "position": "Art Director • Visual Designer • Illustrator",
+        "publicIdentifier": "gulgun-onuk",
+        "linkedinUrl": "https://www.linkedin.com/in/gulgun-onuk"
+      },
+      {
+        "id": "ACoAAAimc7EBFw-oCpTlAukbuANXMX6xcqVh9ZA",
+        "firstName": "Gözde",
+        "lastName": "Ceylan",
+        "position": "Freelancer / Senior Graphic Designer & Corporate Brand Designer",
+        "publicIdentifier": "gozdeyogunali",
+        "linkedinUrl": "https://www.linkedin.com/in/gozdeyogunali"
+      },
+      {
+        "id": "ACoAAD71jUEBtdrCRYxASFeH-QESoK6_PECzVfM",
+        "firstName": "Hacer",
+        "lastName": "Matur",
+        "position": "Painter&Graphic Designer",
+        "publicIdentifier": "hacer-matur-0a98b5255",
+        "linkedinUrl": "https://www.linkedin.com/in/hacer-matur-0a98b5255"
+      },
+      {
+        "id": "ACoAAGUogXIBCUt0A9_XofWSp3dJrOn2rfQdG_Y",
+        "firstName": "FEVZİYE",
+        "lastName": "ŞENDOĞAN",
+        "position": "Serbest Çalışan şirketinde serbest yazar",
+        "publicIdentifier": "fevziye-şendoğan-b564583b4",
+        "linkedinUrl": "https://www.linkedin.com/in/fevziye-şendoğan-b564583b4"
+      },
+      {
+        "id": "ACoAAA0sU74BVvI83BEHu-45wuIo94OJ3iID8iI",
+        "firstName": "Barış",
+        "lastName": "Oktay",
+        "position": "Creative Director",
+        "publicIdentifier": "barış-oktay-76602262",
+        "linkedinUrl": "https://www.linkedin.com/in/barış-oktay-76602262"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAFrO2hYBcFFK-7A5qPH-ZDc4dv8zJ4uKmOA"
+    }
+  }
+}

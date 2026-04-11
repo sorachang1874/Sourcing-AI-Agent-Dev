@@ -1,0 +1,271 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAGEsn5kB6rzqbi3N5VSlutbzcFQNm6QnuFk",
+    "profile_url": "https://www.linkedin.com/in/ACwAAGEsn5kB6rzqbi3N5VSlutbzcFQNm6QnuFk"
+  },
+  "item": {
+    "id": "ACoAAGEsn5kBB9DyTbYUN3URhyPX7aRsWlfpupg",
+    "publicIdentifier": "hanane-abboud-b89ba4395",
+    "linkedinUrl": "https://www.linkedin.com/in/hanane-abboud-b89ba4395",
+    "firstName": "Hanane",
+    "lastName": "Abboud",
+    "emails": [
+      {
+        "email": "hanane.abboud@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "‏منشئ محتوى رقمي‏ في ‏Thinking Machines Lab‏",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Casablanca, Casablanca-Settat, Morocco",
+      "countryCode": "MA",
+      "parsed": {
+        "text": "Casablanca, Morocco",
+        "countryCode": "MA",
+        "regionCode": null,
+        "country": "Morocco",
+        "countryFull": "Morocco",
+        "state": "Casablanca-Settat",
+        "city": "Casablanca"
+      }
+    },
+    "objectUrn": "1630314393",
+    "registeredAt": "2025-11-08T20:33:12.540Z",
+    "topSkills": null,
+    "connectionsCount": 0,
+    "followerCount": 0,
+    "verified": false,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": null,
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4E03AQHbHmaEyxIeMw/profile-displayphoto-crop_800_800/B4EZqecLufKYAI-/0/1763594782213?e=1776902400&v=beta&t=8sghdjyLwjDPWgT8FhBxMvjc0DOxIYdlGlMw8ily3XQ",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQHbHmaEyxIeMw/profile-displayphoto-crop_800_800/B4EZqecLufKYAI-/0/1763594782213?e=1776902400&v=beta&t=8sghdjyLwjDPWgT8FhBxMvjc0DOxIYdlGlMw8ily3XQ",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQHbHmaEyxIeMw/profile-displayphoto-scale_400_400/B4EZqecLufKYAg-/0/1763594782307?e=1776902400&v=beta&t=2WNkn57c7JXPBKjZAXYTJZbOJ_I4MMF8AfPPNWWiv5M",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQHbHmaEyxIeMw/profile-displayphoto-scale_200_200/B4EZqecLufKYAY-/0/1763594782307?e=1776902400&v=beta&t=h-DTAQ-7RSSNRTkjwdQ5gjwIu0BhUEZ3YHhh6UV-790",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQHbHmaEyxIeMw/profile-displayphoto-scale_100_100/B4EZqecLufKYAc-/0/1763594782307?e=1776902400&v=beta&t=gkFS1Q6CbYRfPWPiJl0SrIZYlgTfYKQMjPh5vRm1lYU",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D4E03AQHbHmaEyxIeMw/profile-displayphoto-crop_800_800/B4EZqecLufKYAI-/0/1763594782213?e=1776902400&v=beta&t=8sghdjyLwjDPWgT8FhBxMvjc0DOxIYdlGlMw8ily3XQ",
+    "profileLocales": [
+      {
+        "country": "AE",
+        "language": "ar"
+      }
+    ],
+    "primaryLocale": {
+      "country": "AE",
+      "language": "ar"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "‏منشئ محتوى رقمي‏ في ‏Thinking Machines Lab‏",
+        "locale": "ar_AE"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "منشئ محتوى رقمي",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": null,
+        "description": null,
+        "skills": null,
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAABbHcTQBRmYNgQACb_4Nr02UPOTnAFuSTSU",
+        "firstName": "Frank",
+        "lastName": "Shyu",
+        "position": "Research EM@Meta | LLM Post Training/RL/Co-Design",
+        "publicIdentifier": "frank-shyu",
+        "linkedinUrl": "https://www.linkedin.com/in/frank-shyu"
+      },
+      {
+        "id": "ACoAAAbWDtkBGx2Ne2OGSeyZjv7BwsqvT1KSQZ4",
+        "firstName": "Haitong",
+        "lastName": "Tian",
+        "position": "Principal Scientist at Adobe",
+        "publicIdentifier": "haitong-tian-6a14b032",
+        "linkedinUrl": "https://www.linkedin.com/in/haitong-tian-6a14b032"
+      },
+      {
+        "id": "ACoAAF8a-tgBsWqvtTuM92mboyLWNKtBoUa9tIU",
+        "firstName": "Liyan",
+        "lastName": "Chen",
+        "position": "--",
+        "publicIdentifier": "liyan-chen-908445386",
+        "linkedinUrl": "https://www.linkedin.com/in/liyan-chen-908445386"
+      },
+      {
+        "id": "ACoAACA8zv0BTVWLSUHsPJrWsUI10jzn0F57pHo",
+        "firstName": "Damir",
+        "lastName": "Sartayev",
+        "position": "AI CTO & Founder | MY project LNN+LLM+QML=AGI | Quantum, Neuro-symbolic AI | Liquid Neural Networks | RWKV | Mamba(SSM)  | Pharmacy AI, Minerals AI | Full‑Stack AI (LLMs, Agents, Fine‑Tuning, RAG, Vision) | Q-Day Q-ark",
+        "publicIdentifier": "damir-q-day-q-ark",
+        "linkedinUrl": "https://www.linkedin.com/in/damir-q-day-q-ark"
+      },
+      {
+        "id": "ACoAADopuTsBh9lDxOJzJsV8jI_KfOrsc6Tu7aQ",
+        "firstName": "Aashitosh",
+        "lastName": "Swami",
+        "position": "Lab assistant",
+        "publicIdentifier": "aashitosh-swami-67796a232",
+        "linkedinUrl": "https://www.linkedin.com/in/aashitosh-swami-67796a232"
+      },
+      {
+        "id": "ACoAAGKDsJgBWsokuuSZfKWRPVa7hBXeQTfrA0Q",
+        "firstName": "Nourhan",
+        "lastName": "Hany",
+        "position": "‏Freelance Graphic Designer‏ في ‏Freelancer.com‏",
+        "publicIdentifier": "nourhan-hany-1086283a1",
+        "linkedinUrl": "https://www.linkedin.com/in/nourhan-hany-1086283a1"
+      },
+      {
+        "id": "ACoAAGQmJecBBj5BzIeaidgEvD9pNT8ekbyvAA8",
+        "firstName": "Micky",
+        "lastName": "Mnaree",
+        "position": "Engineer at Thinking Machines Lab",
+        "publicIdentifier": "micky-mnaree-6078523aa",
+        "linkedinUrl": "https://www.linkedin.com/in/micky-mnaree-6078523aa"
+      },
+      {
+        "id": "ACoAAFrO2hYBQn9I3leFzBjeUmgehOiK_AGSCr8",
+        "firstName": "Muhammad",
+        "lastName": "Adam Usman",
+        "position": "Electrician at Thinking Machines Lab",
+        "publicIdentifier": "muhammad-adam-usman-472276366",
+        "linkedinUrl": "https://www.linkedin.com/in/muhammad-adam-usman-472276366"
+      },
+      {
+        "id": "ACoAAAENQhgBH8wIeS6hMrUoWlbKk5L9GWNNQCE",
+        "firstName": "Andrii",
+        "lastName": "Grynenko",
+        "position": "Software Engineer",
+        "publicIdentifier": "andrii-grynenko-a48aab5",
+        "linkedinUrl": "https://www.linkedin.com/in/andrii-grynenko-a48aab5"
+      },
+      {
+        "id": "ACoAAGDWIksBlJBQ6yLB1D8aji0XfjRiW84siqc",
+        "firstName": "Akinbola",
+        "lastName": "Lateef",
+        "position": "Thinker  at Thinking Machines Lab",
+        "publicIdentifier": "akinbola-lateef-94b110394",
+        "linkedinUrl": "https://www.linkedin.com/in/akinbola-lateef-94b110394"
+      },
+      {
+        "id": "ACoAAF1g88AB-G-z-kA00gmZAGbH1CebbGsdmjQ",
+        "firstName": "Jason",
+        "lastName": "Morales",
+        "position": "Certified Phlebotomist at Thinking Machines Lab",
+        "publicIdentifier": "jason-morales-5407b5378",
+        "linkedinUrl": "https://www.linkedin.com/in/jason-morales-5407b5378"
+      },
+      {
+        "id": "ACoAAB3BApkB38H4Z__jKDDFBfF7jt7w16vD0Xs",
+        "firstName": "Rafael",
+        "lastName": "Rafailov",
+        "position": "Member Of Technical Staff - Thinking Machines Lab",
+        "publicIdentifier": "rafael-rafailov-1b521611b",
+        "linkedinUrl": "https://www.linkedin.com/in/rafael-rafailov-1b521611b"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAGEsn5kB6rzqbi3N5VSlutbzcFQNm6QnuFk"
+    }
+  }
+}

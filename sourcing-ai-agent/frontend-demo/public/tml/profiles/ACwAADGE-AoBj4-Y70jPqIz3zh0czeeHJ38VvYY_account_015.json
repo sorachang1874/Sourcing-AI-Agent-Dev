@@ -1,0 +1,1853 @@
+{
+  "profile_photo_url": "https://media.licdn.com/dms/image/v2/D4E03AQGOtw4om0kljw/profile-displayphoto-crop_800_800/B4EZqEdUhpKYAI-/0/1763158877417?e=1776902400&v=beta&t=Vmv26bE2rUiQ-ByY7wGAA--TquWoQw7vjpRNEvmErx4",
+  "background_photo_url": null,
+  "websites": [
+    "https://www.linkedin.com/in/giovanni-dantonio"
+  ],
+  "languages": [
+    {
+      "company": null,
+      "title": null,
+      "image_url": null,
+      "company_id": null,
+      "url": null,
+      "date_range": null,
+      "proficiency": "Full professional",
+      "position_held": null,
+      "description": null,
+      "name": "English"
+    },
+    {
+      "company": null,
+      "title": null,
+      "image_url": null,
+      "company_id": null,
+      "url": null,
+      "date_range": null,
+      "proficiency": "Native or bilingual",
+      "position_held": null,
+      "description": null,
+      "name": "Italian"
+    }
+  ],
+  "experience": [
+    {
+      "company_employee_count_range": {
+        "start": 11,
+        "end": 50
+      },
+      "company_industry": "Computer Software",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_employee_count_range": {
+            "start": 11,
+            "end": 50
+          },
+          "company_industry": "Computer Software",
+          "workplace_type": null,
+          "title": "Member of Technical Staff",
+          "location_name": "San Francisco, California, United States",
+          "company_name": "Thinking Machines Lab",
+          "description": "Making RL & Evals go brr brr; Making a very very cool product",
+          "date_range": {
+            "start": {
+              "day": null,
+              "iso": "2026-01",
+              "year": 2026,
+              "month": 1
+            },
+            "end": null
+          },
+          "company_url": "https://www.linkedin.com/company/thinkingmachinesai/",
+          "employment_type": "Full-time",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "company_id": "105913171"
+        }
+      ],
+      "company_id": "105913171",
+      "company_name": "Thinking Machines Lab",
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2026-01",
+          "year": 2026,
+          "month": 1
+        },
+        "end": null
+      },
+      "company_url": "https://www.linkedin.com/company/thinkingmachinesai/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U"
+    },
+    {
+      "company_employee_count_range": {
+        "start": 10001,
+        "end": null
+      },
+      "company_industry": "Higher Education",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_employee_count_range": {
+            "start": 10001,
+            "end": null
+          },
+          "company_industry": "Higher Education",
+          "workplace_type": null,
+          "title": "Teaching Fellow",
+          "location_name": "Cambridge, Massachusetts, United States",
+          "company_name": "Harvard University",
+          "description": "- Spring 25: ES 94 with Prof. Josh Lerner - Entrepreneurship and Innovation: Case Study Perspectives\n- Fall 25: ES 30 with Prof. Spencer Rascoff - Startups: From Idea to Exit",
+          "date_range": {
+            "start": {
+              "day": null,
+              "iso": "2025-01",
+              "year": 2025,
+              "month": 1
+            },
+            "end": {
+              "day": null,
+              "iso": "2026-01",
+              "year": 2026,
+              "month": 1
+            }
+          },
+          "company_url": "https://www.linkedin.com/school/harvard-university/",
+          "employment_type": "Part-time",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQF5t62bcL0e9g/company-logo_400_400/company-logo_400_400/0/1631318058235?e=1776902400&v=beta&t=RkTNKHKBHCNAI5CNo-HAGQ7uOxrr8GBSdP6Mhal50gg",
+          "company_id": "1646"
+        }
+      ],
+      "company_id": "1646",
+      "company_name": "Harvard University",
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2025-01",
+          "year": 2025,
+          "month": 1
+        },
+        "end": {
+          "day": null,
+          "iso": "2026-01",
+          "year": 2026,
+          "month": 1
+        }
+      },
+      "company_url": "https://www.linkedin.com/school/harvard-university/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQF5t62bcL0e9g/company-logo_400_400/company-logo_400_400/0/1631318058235?e=1776902400&v=beta&t=RkTNKHKBHCNAI5CNo-HAGQ7uOxrr8GBSdP6Mhal50gg"
+    },
+    {
+      "company_employee_count_range": {
+        "start": 11,
+        "end": 50
+      },
+      "company_industry": "Research",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_employee_count_range": {
+            "start": 11,
+            "end": 50
+          },
+          "company_industry": "Research",
+          "workplace_type": null,
+          "title": "Researcher",
+          "location_name": "Cambridge, Massachusetts, United States",
+          "company_name": "Kempner Institute at Harvard University",
+          "description": "From Quant Research to AI Research:\n- Spring 24 & Fall 24: Game Theory & Reinforcement Learning\n- Spring 25 & Fall 25: AI Evaluations & Benchmark Manipulation",
+          "date_range": {
+            "start": {
+              "day": null,
+              "iso": "2024-01",
+              "year": 2024,
+              "month": 1
+            },
+            "end": {
+              "day": null,
+              "iso": "2026-01",
+              "year": 2026,
+              "month": 1
+            }
+          },
+          "company_url": "https://www.linkedin.com/company/kempner-institute/",
+          "employment_type": "Part-time",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQHiTX3kAegz1Q/company-logo_400_400/company-logo_400_400/0/1694006963841/kempner_institute_logo?e=1776902400&v=beta&t=ic6jM5UUeiuz6jO4l6EUmK2pEhiA6WlH094_fngJXIM",
+          "company_id": "91577998"
+        }
+      ],
+      "company_id": "91577998",
+      "company_name": "Kempner Institute at Harvard University",
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2024-01",
+          "year": 2024,
+          "month": 1
+        },
+        "end": {
+          "day": null,
+          "iso": "2026-01",
+          "year": 2026,
+          "month": 1
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/kempner-institute/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQHiTX3kAegz1Q/company-logo_400_400/company-logo_400_400/0/1694006963841/kempner_institute_logo?e=1776902400&v=beta&t=ic6jM5UUeiuz6jO4l6EUmK2pEhiA6WlH094_fngJXIM"
+    },
+    {
+      "company_employee_count_range": {
+        "start": 501,
+        "end": 1000
+      },
+      "company_industry": "Research",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_employee_count_range": {
+            "start": 501,
+            "end": 1000
+          },
+          "company_industry": "Research",
+          "workplace_type": null,
+          "title": "Member of Technical Staff",
+          "location_name": "Mountain View, CA",
+          "company_name": "Google DeepMind",
+          "description": "Got a return offer.\nAPM; Gemini Model Team, Frontier Evals",
+          "date_range": {
+            "start": {
+              "day": null,
+              "iso": "2025-05",
+              "year": 2025,
+              "month": 5
+            },
+            "end": {
+              "day": null,
+              "iso": "2025-08",
+              "year": 2025,
+              "month": 8
+            }
+          },
+          "company_url": "https://www.linkedin.com/company/googledeepmind/",
+          "employment_type": "Internship",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_400_400/company-logo_400_400/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=r_t5nQiM8A2L0aUP5m-PXCGPiKrvOklfisLwUFyoqwc",
+          "company_id": "1594050"
+        }
+      ],
+      "company_id": "1594050",
+      "company_name": "Google DeepMind",
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2025-05",
+          "year": 2025,
+          "month": 5
+        },
+        "end": {
+          "day": null,
+          "iso": "2025-08",
+          "year": 2025,
+          "month": 8
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/googledeepmind/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_400_400/company-logo_400_400/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=r_t5nQiM8A2L0aUP5m-PXCGPiKrvOklfisLwUFyoqwc"
+    },
+    {
+      "company_employee_count_range": {
+        "start": 2,
+        "end": 10
+      },
+      "company_industry": "Computer Software",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_employee_count_range": {
+            "start": 2,
+            "end": 10
+          },
+          "company_industry": "Computer Software",
+          "workplace_type": null,
+          "title": "Learning about the Business Side of Startups",
+          "location_name": null,
+          "company_name": "Stealth",
+          "description": "My main goal is to learn from both failures and successes to build something people really care about. Met a lot of brilliant people. Been part of investment teams, product fellowships.\n- Bain Capital Ventures (BCV): Winterinternship & Labs Fellow (Jan '25 & Summer '25)\n- PearVC: Product Fellow (Fall '24)\n- Emergence Capital: Investment Team (Spring '25)\n- Human Capital: Investment Team (Fall '24)",
+          "date_range": {
+            "start": {
+              "day": null,
+              "iso": "2024-09",
+              "year": 2024,
+              "month": 9
+            },
+            "end": {
+              "day": null,
+              "iso": "2025-05",
+              "year": 2025,
+              "month": 5
+            }
+          },
+          "company_url": "https://www.linkedin.com/company/stealthstartupcareers/",
+          "employment_type": null,
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4D0BAQFneMZtXLjDEQ/img-crop_100/B4DZdi3qeXHAAQ-/0/1749710449410?e=1776902400&v=beta&t=6prlMBlUiDwRDUk-9If25cs1IcSNLZo351dV-Qxw_9s",
+          "company_id": "91313799"
+        }
+      ],
+      "company_id": "91313799",
+      "company_name": "Stealth",
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2024-09",
+          "year": 2024,
+          "month": 9
+        },
+        "end": {
+          "day": null,
+          "iso": "2025-05",
+          "year": 2025,
+          "month": 5
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/stealthstartupcareers/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D4D0BAQFneMZtXLjDEQ/img-crop_100/B4DZdi3qeXHAAQ-/0/1749710449410?e=1776902400&v=beta&t=6prlMBlUiDwRDUk-9If25cs1IcSNLZo351dV-Qxw_9s"
+    },
+    {
+      "company_employee_count_range": {
+        "start": 11,
+        "end": 50
+      },
+      "company_industry": "Computer Software",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_employee_count_range": {
+            "start": 11,
+            "end": 50
+          },
+          "company_industry": "Computer Software",
+          "workplace_type": null,
+          "title": "Engineering",
+          "location_name": "New York, New York, United States",
+          "company_name": "Stealth Startup",
+          "description": "Built a lot around AI Agents, Digital Twins, Cyberattacks, loved every moment of it, learned a ton.\nCheck out at https://www.giovannidantonio.com/coding",
+          "date_range": {
+            "start": {
+              "day": null,
+              "iso": "2024-06",
+              "year": 2024,
+              "month": 6
+            },
+            "end": {
+              "day": null,
+              "iso": "2024-12",
+              "year": 2024,
+              "month": 12
+            }
+          },
+          "company_url": "https://www.linkedin.com/company/stealth-startup-community/",
+          "employment_type": "Full-time",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4D0BAQGUKsfjHB8RNQ/company-logo_400_400/company-logo_400_400/0/1735368022724/stealth_startup_51_logo?e=1776902400&v=beta&t=sqGs0iw_vjuB-wRHCH_RrRLDlVWrVeiXmGF_H6sGZtc",
+          "company_id": "18583501"
+        }
+      ],
+      "company_id": "18583501",
+      "company_name": "Stealth Startup",
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2024-06",
+          "year": 2024,
+          "month": 6
+        },
+        "end": {
+          "day": null,
+          "iso": "2024-12",
+          "year": 2024,
+          "month": 12
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/stealth-startup-community/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D4D0BAQGUKsfjHB8RNQ/company-logo_400_400/company-logo_400_400/0/1735368022724/stealth_startup_51_logo?e=1776902400&v=beta&t=sqGs0iw_vjuB-wRHCH_RrRLDlVWrVeiXmGF_H6sGZtc"
+    },
+    {
+      "company_employee_count_range": {
+        "start": 11,
+        "end": 50
+      },
+      "company_industry": "E-learning",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_employee_count_range": {
+            "start": 11,
+            "end": 50
+          },
+          "company_industry": "E-learning",
+          "workplace_type": null,
+          "title": "Machine Learning Lecturer",
+          "location_name": "Cambridge, Massachusetts, United States",
+          "company_name": "Harvard Undergraduate Machine Intelligence Community",
+          "description": "Taught a full semester fellowship centered on Machine Learning to Harvard Students\n\nTopics Covered: Neural Networks\nCNNs + Computer Vision\nRAG + Prompt Engineering\nTransformers + Text Generation\nDiffusion + MultiModal Generation\nRL",
+          "date_range": {
+            "start": {
+              "day": null,
+              "iso": "2024-08",
+              "year": 2024,
+              "month": 8
+            },
+            "end": {
+              "day": null,
+              "iso": "2024-11",
+              "year": 2024,
+              "month": 11
+            }
+          },
+          "company_url": "https://www.linkedin.com/company/harvard-undergraduate-machine-intelligence-community/",
+          "employment_type": null,
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQH34SFOYgVidA/company-logo_400_400/company-logo_400_400/0/1644884931181/harvard_undergraduate_machine_intelligence_community_logo?e=1776902400&v=beta&t=gL2VyeKUh6QCDZ0SKwFYQlxX1cBEc98Cz-P44HRF2PY",
+          "company_id": "82690136"
+        }
+      ],
+      "company_id": "82690136",
+      "company_name": "Harvard Undergraduate Machine Intelligence Community",
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2024-08",
+          "year": 2024,
+          "month": 8
+        },
+        "end": {
+          "day": null,
+          "iso": "2024-11",
+          "year": 2024,
+          "month": 11
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/harvard-undergraduate-machine-intelligence-community/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQH34SFOYgVidA/company-logo_400_400/company-logo_400_400/0/1644884931181/harvard_undergraduate_machine_intelligence_community_logo?e=1776902400&v=beta&t=gL2VyeKUh6QCDZ0SKwFYQlxX1cBEc98Cz-P44HRF2PY"
+    },
+    {
+      "company_employee_count_range": {
+        "start": 1001,
+        "end": 5000
+      },
+      "company_industry": "Financial Services",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_employee_count_range": {
+            "start": 1001,
+            "end": 5000
+          },
+          "company_industry": "Financial Services",
+          "workplace_type": null,
+          "title": "Quant Invitational (Quant Research)",
+          "location_name": "Miami, Florida, Stati Uniti d'America",
+          "company_name": "Citadel Securities",
+          "description": "Amazing experience, met a lot of smart people, understood that finance + machine learning can be interesting.",
+          "date_range": {
+            "start": {
+              "day": null,
+              "iso": "2024-01",
+              "year": 2024,
+              "month": 1
+            },
+            "end": {
+              "day": null,
+              "iso": "2024-01",
+              "year": 2024,
+              "month": 1
+            }
+          },
+          "company_url": "https://www.linkedin.com/company/citadel-securities/",
+          "employment_type": "Full-time",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQGEXIzoPly7ug/company-logo_400_400/company-logo_400_400/0/1688579596328/citadel_securities_logo?e=1776902400&v=beta&t=wB1_3p79f5mGLqze4Licl93kqV7kg4CufYuMbH0gjaQ",
+          "company_id": "15259345"
+        }
+      ],
+      "company_id": "15259345",
+      "company_name": "Citadel Securities",
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2024-01",
+          "year": 2024,
+          "month": 1
+        },
+        "end": {
+          "day": null,
+          "iso": "2024-01",
+          "year": 2024,
+          "month": 1
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/citadel-securities/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQGEXIzoPly7ug/company-logo_400_400/company-logo_400_400/0/1688579596328/citadel_securities_logo?e=1776902400&v=beta&t=wB1_3p79f5mGLqze4Licl93kqV7kg4CufYuMbH0gjaQ"
+    },
+    {
+      "company_employee_count_range": {
+        "start": 51,
+        "end": 200
+      },
+      "company_industry": "Management Consulting",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_employee_count_range": {
+            "start": 51,
+            "end": 200
+          },
+          "company_industry": "Management Consulting",
+          "workplace_type": null,
+          "title": "Director of Sponsorships",
+          "location_name": "Cambridge, Massachusetts, Stati Uniti d'America",
+          "company_name": "Behavioral Strategy Group",
+          "description": null,
+          "date_range": {
+            "start": {
+              "day": null,
+              "iso": "2023-01",
+              "year": 2023,
+              "month": 1
+            },
+            "end": {
+              "day": null,
+              "iso": "2024-01",
+              "year": 2024,
+              "month": 1
+            }
+          },
+          "company_url": "https://www.linkedin.com/company/harvard-college-behavioral-strategy-group/",
+          "employment_type": null,
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQGTwMYPUce-tg/company-logo_400_400/company-logo_400_400/0/1655798576799/harvard_university_behavioral_strategy_group_logo?e=1776902400&v=beta&t=CCtS5Jedm3JzJScbt6pt6ct9M5iqI3Gy34Fd-UViPIE",
+          "company_id": "81936444"
+        },
+        {
+          "company_employee_count_range": {
+            "start": 51,
+            "end": 200
+          },
+          "company_industry": "Management Consulting",
+          "workplace_type": null,
+          "title": "Consultant and Researcher",
+          "location_name": "Cambridge, Massachusetts, Stati Uniti d'America",
+          "company_name": "Behavioral Strategy Group",
+          "description": "• Conducted research on consumer spending behaviors in different industries\n• Worked on the life-cycle model and its implications for long-term investing\n• Created a model to predict consumer spending in times of crisis \n• Helped companies better understand the consumer market for their products through deliverables",
+          "date_range": {
+            "start": {
+              "day": null,
+              "iso": "2022-08",
+              "year": 2022,
+              "month": 8
+            },
+            "end": {
+              "day": null,
+              "iso": "2023-01",
+              "year": 2023,
+              "month": 1
+            }
+          },
+          "company_url": "https://www.linkedin.com/company/harvard-college-behavioral-strategy-group/",
+          "employment_type": null,
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQGTwMYPUce-tg/company-logo_400_400/company-logo_400_400/0/1655798576799/harvard_university_behavioral_strategy_group_logo?e=1776902400&v=beta&t=CCtS5Jedm3JzJScbt6pt6ct9M5iqI3Gy34Fd-UViPIE",
+          "company_id": "81936444"
+        }
+      ],
+      "company_id": "81936444",
+      "company_name": "Behavioral Strategy Group",
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2022-08",
+          "year": 2022,
+          "month": 8
+        },
+        "end": {
+          "day": null,
+          "iso": "2024-01",
+          "year": 2024,
+          "month": 1
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/harvard-college-behavioral-strategy-group/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQGTwMYPUce-tg/company-logo_400_400/company-logo_400_400/0/1655798576799/harvard_university_behavioral_strategy_group_logo?e=1776902400&v=beta&t=CCtS5Jedm3JzJScbt6pt6ct9M5iqI3Gy34Fd-UViPIE"
+    },
+    {
+      "company_employee_count_range": {
+        "start": 501,
+        "end": 1000
+      },
+      "company_industry": "Financial Services",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_employee_count_range": {
+            "start": 501,
+            "end": 1000
+          },
+          "company_industry": "Financial Services",
+          "workplace_type": null,
+          "title": "Machine Learning Engineer Intern",
+          "location_name": "Milano, Lombardia, Italia",
+          "company_name": "Satispay",
+          "description": null,
+          "date_range": {
+            "start": {
+              "day": null,
+              "iso": "2023-06",
+              "year": 2023,
+              "month": 6
+            },
+            "end": {
+              "day": null,
+              "iso": "2023-08",
+              "year": 2023,
+              "month": 8
+            }
+          },
+          "company_url": "https://www.linkedin.com/company/satispay/",
+          "employment_type": "Internship",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQGu4VJSkHvrYA/company-logo_400_400/company-logo_400_400/0/1715070832359/satispay_logo?e=1776902400&v=beta&t=I26kCPz-FMeBOneWV3N-ZwfYdDWnZEoT0gT0QQgQVHA",
+          "company_id": "5039143"
+        }
+      ],
+      "company_id": "5039143",
+      "company_name": "Satispay",
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2023-06",
+          "year": 2023,
+          "month": 6
+        },
+        "end": {
+          "day": null,
+          "iso": "2023-08",
+          "year": 2023,
+          "month": 8
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/satispay/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQGu4VJSkHvrYA/company-logo_400_400/company-logo_400_400/0/1715070832359/satispay_logo?e=1776902400&v=beta&t=I26kCPz-FMeBOneWV3N-ZwfYdDWnZEoT0gT0QQgQVHA"
+    }
+  ],
+  "message": "For high volume usage and custom pricing, visit https://app.enrichgraph.io or contact us at support@enrichgraph.io",
+  "verifications": {
+    "sections": null,
+    "is_verified": false,
+    "joined_date": null
+  },
+  "education": [
+    {
+      "degree": "Master of Science - MS",
+      "field_of_study": "Computer Science",
+      "activities": null,
+      "grade": null,
+      "school_name": "Harvard John A. Paulson School of Engineering and Applied Sciences",
+      "school_id": "453275",
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2025-09",
+          "year": 2025,
+          "month": 9
+        },
+        "end": {
+          "day": null,
+          "iso": "2026-01",
+          "year": 2026,
+          "month": 1
+        }
+      },
+      "school_url": "https://www.linkedin.com/school/harvard-school-of-engineering-and-applied-sciences/",
+      "description": "Concurrent with my Bachelor, took more courses than expected because education is fun",
+      "school_logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQF26un2IGhsYg/company-logo_400_400/company-logo_400_400/0/1630609147706/harvard_school_of_engineering_and_applied_sciences_logo?e=1776902400&v=beta&t=ipdFzN6uuBBql5ZdhcT-wRdqQijfYf0Ugw-wDc6Y2w8"
+    },
+    {
+      "degree": "Bachelor of Arts - BA",
+      "field_of_study": "Computer Science || Honors Degree",
+      "activities": "Dunster House; Roberts Family Fellow\nTeaching Assistant: Entrepreneurship (I, II, and III)\nClubs: Undergraduate Italian Society (Co-President), Harvard Ventures (Startups and Venture Capital), Computer Society (Technology), Product Lab (Product Management), Innovation Labs (New Ventures), Powerlifting Club (Sports), Poker Club, HUMIC (AI and Machine Learning), Harvard Quantitative Traders (Finance), Behavioral Strategy Group (Behavioral Economics)",
+      "grade": null,
+      "school_name": "Harvard University",
+      "school_id": "18483",
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2022-08",
+          "year": 2022,
+          "month": 8
+        },
+        "end": {
+          "day": null,
+          "iso": "2026-01",
+          "year": 2026,
+          "month": 1
+        }
+      },
+      "school_url": "https://www.linkedin.com/school/harvard-university/",
+      "description": null,
+      "school_logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQF5t62bcL0e9g/company-logo_400_400/company-logo_400_400/0/1631318058235?e=1776902400&v=beta&t=RkTNKHKBHCNAI5CNo-HAGQ7uOxrr8GBSdP6Mhal50gg"
+    },
+    {
+      "degree": "Roberts Family Fellow: Cross Register",
+      "field_of_study": null,
+      "activities": null,
+      "grade": null,
+      "school_name": "Harvard Business School",
+      "school_id": "18484",
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2024-01",
+          "year": 2024,
+          "month": 1
+        },
+        "end": {
+          "day": null,
+          "iso": "2026-05",
+          "year": 2026,
+          "month": 5
+        }
+      },
+      "school_url": "https://www.linkedin.com/school/harvard-business-school/",
+      "description": "To address complex modern challenges, leaders need innovation, problem-solving, and interdisciplinary skills. The Harvard Undergraduate Technology Innovation Fellows (HUTIF) Program, a collaboration by FAS, SEAS, and HBS, develops this new generation of tech entrepreneurs. Funded by the Roberts Family Foundation, the program selects 10-15 students (Roberts Family Fellows) from any concentration, helping them build the knowledge, skills, and community to launch and lead innovative endeavors.",
+      "school_logo_url": "https://media.licdn.com/dms/image/v2/C4D0BAQF_DkXTlZVo1w/company-logo_400_400/company-logo_400_400/0/1639781479259/harvard_business_school_logo?e=1776902400&v=beta&t=ZYNQag9XVMpe3mZGU_kpEMbtKtO93O09BJPEXmoPv6g"
+    },
+    {
+      "degree": "Course 6: Cross Register ",
+      "field_of_study": null,
+      "activities": null,
+      "grade": null,
+      "school_name": "Massachusetts Institute of Technology",
+      "school_id": "18494",
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2022-09",
+          "year": 2022,
+          "month": 9
+        },
+        "end": {
+          "day": null,
+          "iso": "2026-05",
+          "year": 2026,
+          "month": 5
+        }
+      },
+      "school_url": "https://www.linkedin.com/school/mit/",
+      "description": null,
+      "school_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_400_400/company-logo_400_400/0/1689799729035/mit_logo?e=1776902400&v=beta&t=u1PKvlsURdjuQj6vGwgPDc-3muz7cCQ6oGJISjoWshw"
+    },
+    {
+      "degree": "Scuola Media Superiore",
+      "field_of_study": "STEM Curriculum, Somma Vesuviana (Naples, Italy)",
+      "activities": "1st place Philosophy Olympiads (2021)\n1st place Philosophy Olympiads (2022)\n4th place International Philosophy Olympiads (2021 & 2022)\nFounder \"Il Cactus Podcast\"\nGeneral Director \"Il Cactus Newspaper\"",
+      "grade": "100 cum laude out of 100",
+      "school_name": "Liceo Scientifico/Classico Evangelista Torricelli",
+      "school_id": null,
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2017-09",
+          "year": 2017,
+          "month": 9
+        },
+        "end": {
+          "day": null,
+          "iso": "2022-07",
+          "year": 2022,
+          "month": 7
+        }
+      },
+      "school_url": null,
+      "description": null,
+      "school_logo_url": null
+    }
+  ],
+  "contact_info": null,
+  "organizations": {},
+  "volunteer_experiences": [
+    {
+      "company": {
+        "logo_url": "https://media.licdn.com/dms/image/v2/D4D0BAQFW3rDW9wlfVw/company-logo_400_400/company-logo_400_400/0/1663176411786?e=1776902400&v=beta&t=WcnoAbRpd35AIplg_WuJep-aTT7dpZOVry4V3gkVcHA",
+        "employee_count_range": null,
+        "industry": null,
+        "company_id": "85620718",
+        "url": "https://www.linkedin.com/company/harvard-ai-safety-team/",
+        "name": "AI Safety Student Team"
+      },
+      "title": "Technical Team Member",
+      "image_url": null,
+      "company_id": "85620718",
+      "url": null,
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2024-08",
+          "year": 2024,
+          "month": 8
+        },
+        "end": {
+          "day": null,
+          "iso": "2025-12",
+          "year": 2025,
+          "month": 12
+        }
+      },
+      "position_held": null,
+      "description": "Our Mission\nThe mission of the AI Safety Student Team at Harvard is to reduce catastrophic risks from AI through research, education, and capacity building.\nMany experts believe that we will create AI systems as capable as humans in all domains within the next one or two decades. There are many reasons to believe this is true, such as the billions of dollars of investment into AI labs and the current effectiveness of scaling up AI training runs.\n\nThere could be catastrophic consequences if powerful AIs are developed without the appropriate safety measures. Bad actors could use AIs to design more potent chemical or biological weapons. Rampant automation and delegation of decisionmaking could result in our collective disempowerment and an inability to steer the course of history. An AI that develops internal goals during training that don’t align with human values could seek to defeat humanity on its own accord. The economic incentives and geopolitical dynamics surrounding the “AI race” only make it harder to coordinate responsible AI development.\n\nThus, we believe managing risks from advanced artificial intelligence is one of the most important problems of our time. We are a community of technical and policy researchers at Harvard aimed at reducing these risks and steering the trajectory of AI development for the better. In addition to doing our own research, we run reading groups, host workshops and speaker events, and engage the Harvard community with discussion about AI safety",
+      "name": "AI Safety Student Team"
+    },
+    {
+      "company": {
+        "logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQFckn4J8pboCw/company-logo_400_400/company-logo_400_400/0/1630566773837/rotary_international_logo?e=1776902400&v=beta&t=lVlrIdlj45LFdRwMlG-ffnxSHnzXO919VZjhzDE_QgM",
+        "employee_count_range": null,
+        "industry": null,
+        "company_id": "10422",
+        "url": "https://www.linkedin.com/company/rotary-international/",
+        "name": "Rotary International"
+      },
+      "title": "Project Manager",
+      "image_url": null,
+      "company_id": "10422",
+      "url": null,
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2019-03",
+          "year": 2019,
+          "month": 3
+        },
+        "end": {
+          "day": null,
+          "iso": "2022-03",
+          "year": 2022,
+          "month": 3
+        }
+      },
+      "position_held": null,
+      "description": null,
+      "name": "Rotary International"
+    },
+    {
+      "company": {
+        "logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQG2Az4sSx_0ng/company-logo_400_400/company-logo_400_400/0/1642067675945/nova_logo?e=1776902400&v=beta&t=c0hnDuXv6KmbdEKsVHW-RO6mYDp85ujOQf4o3b2fRgc",
+        "employee_count_range": null,
+        "industry": null,
+        "company_id": "9509",
+        "url": "https://www.linkedin.com/company/nova/",
+        "name": "Nova"
+      },
+      "title": "Nova 111 Student List - Top 10 Italian Students in Computer Science U25",
+      "image_url": null,
+      "company_id": "9509",
+      "url": null,
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2022-10",
+          "year": 2022,
+          "month": 10
+        },
+        "end": null
+      },
+      "position_held": null,
+      "description": "Selected to be in Nova, a merit-based access network where the top 3% of talent connect with each other, develop and accelerate their careers.",
+      "name": "Nova"
+    },
+    {
+      "company": {
+        "logo_url": "https://media.licdn.com/dms/image/v2/D560BAQG8XnN5Kjbgkg/company-logo_400_400/company-logo_400_400/0/1701283267979?e=1776902400&v=beta&t=VQDJcg2ZoH98pW3Y55kmAlx3N-zogI2J3gF4ZYek1KU",
+        "employee_count_range": null,
+        "industry": null,
+        "company_id": "9210481",
+        "url": "https://www.linkedin.com/company/harvard-ventures/",
+        "name": "Harvard Undergraduate Ventures"
+      },
+      "title": "Member",
+      "image_url": null,
+      "company_id": "9210481",
+      "url": null,
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2023-01",
+          "year": 2023,
+          "month": 1
+        },
+        "end": null
+      },
+      "position_held": null,
+      "description": null,
+      "name": "Harvard Ventures"
+    },
+    {
+      "company": {
+        "logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQFnGTLvlyPt3w/company-logo_400_400/company-logo_400_400/0/1696505715384/united_italian_societies_logo?e=1776902400&v=beta&t=Y3rSj68Nq9BzSCzMv_xqbrGQglE9SvB9nxpUe8_8z_c",
+        "employee_count_range": null,
+        "industry": null,
+        "company_id": "79011545",
+        "url": "https://www.linkedin.com/company/united-italian-societies/",
+        "name": "United Italian Societies"
+      },
+      "title": "Executive Board - USA",
+      "image_url": null,
+      "company_id": "79011545",
+      "url": null,
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2024-01",
+          "year": 2024,
+          "month": 1
+        },
+        "end": null
+      },
+      "position_held": null,
+      "description": null,
+      "name": "United Italian Societies"
+    },
+    {
+      "company": null,
+      "title": "Co-founder and Co-President",
+      "image_url": null,
+      "company_id": null,
+      "url": null,
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2022-08",
+          "year": 2022,
+          "month": 8
+        },
+        "end": null
+      },
+      "position_held": null,
+      "description": "Recreate the Harvard Undergraduate Italian Society (HUIS) to create a welcoming space for Italian students on campus",
+      "name": "Harvard Undergraduate Italian Society"
+    },
+    {
+      "company": {
+        "logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQHx3DFYBojQrQ/company-logo_400_400/company-logo_400_400/0/1730384238165/harvard_innovation_labs_logo?e=1776902400&v=beta&t=bKvdCfSIGIW3BNHA_DObFTSHe1ZkHXgvRZXQg7Su07U",
+        "employee_count_range": null,
+        "industry": null,
+        "company_id": "3290938",
+        "url": "https://www.linkedin.com/school/harvard-innovation-labs/",
+        "name": "Harvard Innovation Labs"
+      },
+      "title": "Member and \"Innovator\"",
+      "image_url": null,
+      "company_id": "3290938",
+      "url": null,
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2022-08",
+          "year": 2022,
+          "month": 8
+        },
+        "end": null
+      },
+      "position_held": null,
+      "description": null,
+      "name": "Harvard Innovation Labs"
+    },
+    {
+      "company": {
+        "logo_url": "https://media.licdn.com/dms/image/v2/C4D0BAQH-xHKaD_VO5g/company-logo_400_400/company-logo_400_400/0/1673133565781?e=1776902400&v=beta&t=MJSvocZJ8-YqQrL_c__CxC8OBpKnOc6KWFRsyMN102A",
+        "employee_count_range": null,
+        "industry": null,
+        "company_id": "18572119",
+        "url": "https://www.linkedin.com/company/leadthefuture/",
+        "name": "Lead The Future Mentorship"
+      },
+      "title": "Mentee and Mentor",
+      "image_url": null,
+      "company_id": "18572119",
+      "url": null,
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2022-08",
+          "year": 2022,
+          "month": 8
+        },
+        "end": null
+      },
+      "position_held": null,
+      "description": "Among the few Italian students selected to be mentees for LeadTheFuture, a leading mentorship non-profit organization for students in STEM, with acceptance rate below 20%. LeadTheFuture empowers top-performing students to achieve their goals and contribute to their communities by giving them one-on-one guidance from high-impact mentors coming from the world's leading STEM innovation hubs such as Silicon Valley and CERN.",
+      "name": "Lead The Future Mentorship"
+    },
+    {
+      "company": {
+        "logo_url": "https://media.licdn.com/dms/image/v2/C560BAQHdj7LdKbiBOQ/company-logo_400_400/company-logo_400_400/0/1630581513873/unshackled_logo?e=1776902400&v=beta&t=57j5j5hrwBLFlK9tMoL9F50uG43rvsPMqs2isbrHICA",
+        "employee_count_range": null,
+        "industry": null,
+        "company_id": "3678989",
+        "url": "https://www.linkedin.com/company/unshackled/",
+        "name": "Unshackled Ventures"
+      },
+      "title": "Member of the Immigreat Community",
+      "image_url": null,
+      "company_id": "3678989",
+      "url": null,
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2024-07",
+          "year": 2024,
+          "month": 7
+        },
+        "end": null
+      },
+      "position_held": null,
+      "description": null,
+      "name": "Unshackled Ventures"
+    },
+    {
+      "company": {
+        "logo_url": "https://media.licdn.com/dms/image/v2/D4D0BAQEq7FdceXb0tQ/company-logo_400_400/company-logo_400_400/0/1728577698624/silicon_valley_fellowship_logo?e=1776902400&v=beta&t=VsByKdqgGrTJB03J3dSTb98rL3SHrHqeDOTLKKB5MzI",
+        "employee_count_range": null,
+        "industry": null,
+        "company_id": "99847433",
+        "url": "https://www.linkedin.com/school/silicon-valley-fellowship/",
+        "name": "Silicon Valley Fellowship"
+      },
+      "title": "Member",
+      "image_url": null,
+      "company_id": "99847433",
+      "url": null,
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2023-12",
+          "year": 2023,
+          "month": 12
+        },
+        "end": null
+      },
+      "position_held": null,
+      "description": null,
+      "name": "Silicon Valley Fellowship"
+    },
+    {
+      "company": {
+        "logo_url": "https://media.licdn.com/dms/image/v2/C4D0BAQGY26GwXl0MVg/company-logo_400_400/company-logo_400_400/0/1631366126212?e=1776902400&v=beta&t=m1iygrJy8JvpdolUn0NGxmw3xCbcCAMv5P3sP6K74Uw",
+        "employee_count_range": null,
+        "industry": null,
+        "company_id": "3771244",
+        "url": "https://www.linkedin.com/company/mentors4u/",
+        "name": "Mentors4u"
+      },
+      "title": "Mentee and Mentor",
+      "image_url": null,
+      "company_id": "3771244",
+      "url": null,
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2023-06",
+          "year": 2023,
+          "month": 6
+        },
+        "end": null
+      },
+      "position_held": null,
+      "description": "Mentors4u è il programma di Mentoring indipendente, gratuito e no profit, più grande d’Europa con oltre 1500 Mentee provenienti da oltre 100 Università, 600 Mentor ed una crescita del 40% anno su anno.",
+      "name": "Mentors4u"
+    }
+  ],
+  "badges": {
+    "creator": true,
+    "influencer": false,
+    "top_voice": false,
+    "open_to_work": false,
+    "is_hiring": false,
+    "premium": true
+  },
+  "profile_url": "https://www.linkedin.com/in/giovanni-dantonio",
+  "industry": "Computer Software",
+  "summary": "Exploring intelligence while pursuing polymathy across the humanities and sciences. Investing in people and obsessing with them about their dreams.\n\nThinky Machines, former DeepMind, Harvard, and 2x Philosophy Gold Medalist. 2x Top 61 student in Italy.\n\nFrom a small village in Italy, adopted by Silicon Valley.",
+  "courses": [
+    {
+      "company": null,
+      "title": "Advanced Computer Networks (Graduate)",
+      "image_url": null,
+      "company_id": null,
+      "url": null,
+      "date_range": null,
+      "position_held": null,
+      "description": null,
+      "name": "Advanced Computer Networks (Graduate)"
+    },
+    {
+      "company": null,
+      "title": "Advanced Practical Data Science (Graduate)",
+      "image_url": null,
+      "company_id": null,
+      "url": null,
+      "date_range": null,
+      "position_held": null,
+      "description": null,
+      "name": "Advanced Practical Data Science (Graduate)"
+    },
+    {
+      "company": null,
+      "title": "Advanced Topics in Modern Machine Learning (Graduate)",
+      "image_url": null,
+      "company_id": null,
+      "url": null,
+      "date_range": null,
+      "position_held": null,
+      "description": null,
+      "name": "Advanced Topics in Modern Machine Learning (Graduate)"
+    },
+    {
+      "company": null,
+      "title": "Algorithms and Machine Learning (Graduate)",
+      "image_url": null,
+      "company_id": null,
+      "url": null,
+      "date_range": null,
+      "position_held": null,
+      "description": null,
+      "name": "Algorithms and Machine Learning (Graduate)"
+    },
+    {
+      "company": null,
+      "title": "Algorithms and Social Choice Theory (Graduate)",
+      "image_url": null,
+      "company_id": null,
+      "url": null,
+      "date_range": null,
+      "position_held": null,
+      "description": null,
+      "name": "Algorithms and Social Choice Theory (Graduate)"
+    },
+    {
+      "company": null,
+      "title": "Applied Linear Algebra and Big Data",
+      "image_url": null,
+      "company_id": null,
+      "url": null,
+      "date_range": null,
+      "position_held": null,
+      "description": null,
+      "name": "Applied Linear Algebra and Big Data"
+    },
+    {
+      "company": null,
+      "title": "Artificial Intelligence with Python",
+      "image_url": null,
+      "company_id": null,
+      "url": null,
+      "date_range": null,
+      "position_held": null,
+      "description": null,
+      "name": "Artificial Intelligence with Python"
+    },
+    {
+      "company": null,
+      "title": "Biological and Artificial Intelligence (Graduate)",
+      "image_url": null,
+      "company_id": null,
+      "url": null,
+      "date_range": null,
+      "position_held": null,
+      "description": null,
+      "name": "Biological and Artificial Intelligence (Graduate)"
+    },
+    {
+      "company": null,
+      "title": "Business Analytics",
+      "image_url": null,
+      "company_id": null,
+      "url": null,
+      "date_range": null,
+      "position_held": null,
+      "description": null,
+      "name": "Business Analytics"
+    },
+    {
+      "company": null,
+      "title": "Computational Properties in Interpretable Machine Learning (Graduate)",
+      "image_url": null,
+      "company_id": null,
+      "url": null,
+      "date_range": null,
+      "position_held": null,
+      "description": null,
+      "name": "Computational Properties in Interpretable Machine Learning (Graduate)"
+    },
+    {
+      "company": null,
+      "title": "Deep Learning for Computer Vision (Stanford)",
+      "image_url": null,
+      "company_id": null,
+      "url": null,
+      "date_range": null,
+      "position_held": null,
+      "description": null,
+      "name": "Deep Learning for Computer Vision (Stanford)"
+    },
+    {
+      "company": null,
+      "title": "Design of Useful and Usable Interactive Systems",
+      "image_url": null,
+      "company_id": null,
+      "url": null,
+      "date_range": null,
+      "position_held": null,
+      "description": null,
+      "name": "Design of Useful and Usable Interactive Systems"
+    },
+    {
+      "company": null,
+      "title": "Economics for Managers",
+      "image_url": null,
+      "company_id": null,
+      "url": null,
+      "date_range": null,
+      "position_held": null,
+      "description": null,
+      "name": "Economics for Managers"
+    },
+    {
+      "company": null,
+      "title": "Entrepreneurial Sales",
+      "image_url": null,
+      "company_id": null,
+      "url": null,
+      "date_range": null,
+      "position_held": null,
+      "description": null,
+      "name": "Entrepreneurial Sales"
+    },
+    {
+      "company": null,
+      "title": "Entrepreneurship and Innovation: Practical and Academic Insights",
+      "image_url": null,
+      "company_id": null,
+      "url": null,
+      "date_range": null,
+      "position_held": null,
+      "description": null,
+      "name": "Entrepreneurship and Innovation: Practical and Academic Insights"
+    },
+    {
+      "company": null,
+      "title": "Financial Accounting",
+      "image_url": null,
+      "company_id": null,
+      "url": null,
+      "date_range": null,
+      "position_held": null,
+      "description": null,
+      "name": "Financial Accounting"
+    },
+    {
+      "company": null,
+      "title": "Founder's Mindset",
+      "image_url": null,
+      "company_id": null,
+      "url": null,
+      "date_range": null,
+      "position_held": null,
+      "description": null,
+      "name": "Founder's Mindset"
+    },
+    {
+      "company": null,
+      "title": "Improvisational Comedy",
+      "image_url": null,
+      "company_id": null,
+      "url": null,
+      "date_range": null,
+      "position_held": null,
+      "description": null,
+      "name": "Improvisational Comedy"
+    },
+    {
+      "company": null,
+      "title": "Intermediate Microeconomics",
+      "image_url": null,
+      "company_id": null,
+      "url": null,
+      "date_range": null,
+      "position_held": null,
+      "description": null,
+      "name": "Intermediate Microeconomics"
+    },
+    {
+      "company": null,
+      "title": "Introduction to Distributed Computing (Graduate)",
+      "image_url": null,
+      "company_id": null,
+      "url": null,
+      "date_range": null,
+      "position_held": null,
+      "description": null,
+      "name": "Introduction to Distributed Computing (Graduate)"
+    }
+  ],
+  "skills": [
+    "API Development",
+    "Financial Accounting",
+    "Business Analytics",
+    "Economia",
+    "Management",
+    "LaTeX",
+    "C",
+    "HTML",
+    "CSS",
+    "Team leadership",
+    "Team building",
+    "Time management",
+    "MailChimp",
+    "Tecnologie dell’informazione",
+    "Pensiero critico",
+    "Python",
+    "Machine learning",
+    "Project Teams",
+    "Business",
+    "Lingua inglese"
+  ],
+  "certifications": [
+    {
+      "company": {
+        "logo_url": "https://media.licdn.com/dms/image/v2/D560BAQFGK5Kkd1nUlg/company-logo_400_400/company-logo_400_400/0/1738099065875/xai_logo?e=1776902400&v=beta&t=D9_BxwFh9s6Xs2Cj7r80cNvoc3yl7tyg6f8ZvrbXv64",
+        "employee_count_range": null,
+        "industry": null,
+        "company_id": "96151950",
+        "url": "https://www.linkedin.com/company/xai/",
+        "name": "xAI"
+      },
+      "title": "Second Place Hackathon Winner Fall 2024 ",
+      "image_url": null,
+      "company_id": "96151950",
+      "url": "https://x.com/xai/status/1846989686549696900",
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2024-10",
+          "year": 2024,
+          "month": 10
+        },
+        "end": null
+      },
+      "position_held": null,
+      "description": null,
+      "name": "Second Place Hackathon Winner Fall 2024 "
+    },
+    {
+      "company": {
+        "logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQEr0zQ5jE04zA/company-logo_400_400/company-logo_400_400/0/1688575029322/citadel_llc_logo?e=1776902400&v=beta&t=xKzCGiu2piYSb0UaSaDP2uBShnytT140mi0lqojUEfU",
+        "employee_count_range": null,
+        "industry": null,
+        "company_id": "163056",
+        "url": "https://www.linkedin.com/company/citadel-llc/",
+        "name": "Citadel"
+      },
+      "title": "Summer Invitational Datathon 2024 (3rd out of initial pool of ~7,000 applicants)",
+      "image_url": null,
+      "company_id": "163056",
+      "url": "https://www.credential.net/209d02ce-048b-4e3e-a093-ddd1982b8514",
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2024-08",
+          "year": 2024,
+          "month": 8
+        },
+        "end": null
+      },
+      "position_held": null,
+      "description": null,
+      "name": "Summer Invitational Datathon 2024 (3rd out of initial pool of ~7,000 applicants)"
+    },
+    {
+      "company": {
+        "logo_url": "https://media.licdn.com/dms/image/v2/C4D0BAQGSIL8O8qpfVw/company-logo_400_400/company-logo_400_400/0/1640264247543/onlinehbs_logo?e=1776902400&v=beta&t=N8Ouzx3WBikicu9jHSdfFsNpxwu3s8vh-NMOWBjahYs",
+        "employee_count_range": null,
+        "industry": null,
+        "company_id": "9220773",
+        "url": "https://www.linkedin.com/school/onlinehbs/",
+        "name": "Harvard Business School Online"
+      },
+      "title": "CORe",
+      "image_url": null,
+      "company_id": "9220773",
+      "url": null,
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2024-05",
+          "year": 2024,
+          "month": 5
+        },
+        "end": null
+      },
+      "position_held": null,
+      "description": null,
+      "name": "CORe"
+    },
+    {
+      "company": {
+        "logo_url": "https://media.licdn.com/dms/image/v2/D560BAQH-5I5gu8cYiQ/company-logo_400_400/company-logo_400_400/0/1698271191415/stanford_online_logo?e=1776902400&v=beta&t=Dah57VuEr5fG-QH4rJ5Hw4Hj1IpVYHDwyuF0siU37f0",
+        "employee_count_range": null,
+        "industry": null,
+        "company_id": "37792439",
+        "url": "https://www.linkedin.com/company/stanford-online/",
+        "name": "Stanford Online"
+      },
+      "title": "STATSX0001: Statistical Learning",
+      "image_url": null,
+      "company_id": "37792439",
+      "url": null,
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2023-08",
+          "year": 2023,
+          "month": 8
+        },
+        "end": null
+      },
+      "position_held": null,
+      "description": null,
+      "name": "STATSX0001: Statistical Learning"
+    },
+    {
+      "company": {
+        "logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQEr0zQ5jE04zA/company-logo_400_400/company-logo_400_400/0/1688575029322/citadel_llc_logo?e=1776902400&v=beta&t=xKzCGiu2piYSb0UaSaDP2uBShnytT140mi0lqojUEfU",
+        "employee_count_range": null,
+        "industry": null,
+        "company_id": "163056",
+        "url": "https://www.linkedin.com/company/citadel-llc/",
+        "name": "Citadel"
+      },
+      "title": "Summer Invitational Datathon 2023 ",
+      "image_url": null,
+      "company_id": "163056",
+      "url": "https://www.credential.net/8fb18453-184d-4c24-9be5-d56cc9006c8d",
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2023-07",
+          "year": 2023,
+          "month": 7
+        },
+        "end": null
+      },
+      "position_held": null,
+      "description": null,
+      "name": "Summer Invitational Datathon 2023 "
+    },
+    {
+      "company": {
+        "logo_url": "https://media.licdn.com/dms/image/v2/D4D0BAQFBqCkhgabhGw/company-logo_400_400/B4DZU8jA1.HkAY-/0/1740477566693/miurgov_logo?e=1776902400&v=beta&t=5mEjhd2Dikf3Ep7smy8KsHFvYG6oHJfGvbyHZxURzsc",
+        "employee_count_range": null,
+        "industry": null,
+        "company_id": "18337527",
+        "url": "https://www.linkedin.com/company/mim-governo/",
+        "name": "MIM"
+      },
+      "title": "Fuoriclasse della Scuola e Albo delle Eccellenze Accademiche 2021 e 2022",
+      "image_url": null,
+      "company_id": "18337527",
+      "url": "https://fuoriclassedellascuola.it/vincitori/",
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2022-05",
+          "year": 2022,
+          "month": 5
+        },
+        "end": null
+      },
+      "position_held": null,
+      "description": null,
+      "name": "Fuoriclasse della Scuola e Albo delle Eccellenze Accademiche 2021 e 2022"
+    },
+    {
+      "company": {
+        "logo_url": "https://media.licdn.com/dms/image/v2/D4D0BAQFBqCkhgabhGw/company-logo_400_400/B4DZU8jA1.HkAY-/0/1740477566693/miurgov_logo?e=1776902400&v=beta&t=5mEjhd2Dikf3Ep7smy8KsHFvYG6oHJfGvbyHZxURzsc",
+        "employee_count_range": null,
+        "industry": null,
+        "company_id": "18337527",
+        "url": "https://www.linkedin.com/company/mim-governo/",
+        "name": "MIM"
+      },
+      "title": "Gold Medal Italian Philosophy Olympiads 2020/2021 and 2021/2022",
+      "image_url": null,
+      "company_id": "18337527",
+      "url": "https://www.google.com/search?q=olimpiadi+di+filosofia+giovanni&rlz=1C1ASRM_enIT762IT762&oq=olimpiadi+di+filosofia+giovanni&aqs=chrome..69i57j33i160l3.4511j1j7&sourceid=chrome&ie=UTF-8&safe=active&ssui=on",
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2022-04",
+          "year": 2022,
+          "month": 4
+        },
+        "end": null
+      },
+      "position_held": null,
+      "description": null,
+      "name": "Gold Medal Italian Philosophy Olympiads 2020/2021 and 2021/2022"
+    },
+    {
+      "company": {
+        "logo_url": "https://media.licdn.com/dms/image/v2/C560BAQGTtouytri0_w/company-logo_400_400/company-logo_400_400/0/1631390834855?e=1776902400&v=beta&t=CRg0Cu8N7Hm0njEavnppRePTBMDHGLy_Gj91idKcB44",
+        "employee_count_range": null,
+        "industry": null,
+        "company_id": "166361",
+        "url": "https://www.linkedin.com/company/the-college-board/",
+        "name": "The College Board"
+      },
+      "title": "Sat Reasoning Exam - 1570 (800 Math - 770 EBRW) [Self-Learned English]",
+      "image_url": null,
+      "company_id": "166361",
+      "url": "https://drive.google.com/file/d/16qoCwAA8-tUiMgT7Xn12-B_QCzyi-_Ue/view?usp=sharing",
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2021-08",
+          "year": 2021,
+          "month": 8
+        },
+        "end": null
+      },
+      "position_held": null,
+      "description": null,
+      "name": "Sat Reasoning Exam - 1570 (800 Math - 770 EBRW) [Self-Learned English]"
+    },
+    {
+      "company": {
+        "logo_url": "https://media.licdn.com/dms/image/v2/C560BAQGTtouytri0_w/company-logo_400_400/company-logo_400_400/0/1631390834855?e=1776902400&v=beta&t=CRg0Cu8N7Hm0njEavnppRePTBMDHGLy_Gj91idKcB44",
+        "employee_count_range": null,
+        "industry": null,
+        "company_id": "166361",
+        "url": "https://www.linkedin.com/company/the-college-board/",
+        "name": "The College Board"
+      },
+      "title": "Sat Subject Test - Math II (800)",
+      "image_url": null,
+      "company_id": "166361",
+      "url": "https://drive.google.com/file/d/1TKPmVZXT7B5-5jgBCPx4ltPqfQvLQZeK/view?usp=sharing",
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2021-06",
+          "year": 2021,
+          "month": 6
+        },
+        "end": null
+      },
+      "position_held": null,
+      "description": null,
+      "name": "Sat Subject Test - Math II (800)"
+    },
+    {
+      "company": {
+        "logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQG2Az4sSx_0ng/company-logo_400_400/company-logo_400_400/0/1642067675945/nova_logo?e=1776902400&v=beta&t=c0hnDuXv6KmbdEKsVHW-RO6mYDp85ujOQf4o3b2fRgc",
+        "employee_count_range": null,
+        "industry": null,
+        "company_id": "9509",
+        "url": "https://www.linkedin.com/company/nova/",
+        "name": "Nova"
+      },
+      "title": "Nova Member",
+      "image_url": null,
+      "company_id": "9509",
+      "url": "https://digital-agent.novatalent.net/open/certificate/KNM64GRBD6PFSHMA4N3PGR24P",
+      "date_range": null,
+      "position_held": null,
+      "description": null,
+      "name": "Nova Member"
+    }
+  ],
+  "honors": [
+    {
+      "company": null,
+      "title": "Roberts Family Fellow",
+      "image_url": null,
+      "company_id": null,
+      "url": null,
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2024-05",
+          "year": 2024,
+          "month": 5
+        },
+        "end": null
+      },
+      "position_held": null,
+      "description": "As technical and societal challenges become increasingly complex and cross traditional boundaries, leaders who tackle such problems require more than technical skill – they require training in innovation and problem-solving techniques, and the ability to work on interdisciplinary teams.\n\nThe Harvard Undergraduate Technology Innovation Fellows (HUTIF) Program, a collaborative founder development program created by the Faculty of Arts & Sciences (FAS), the Harvard John A. Paulson School of Engineering and Applied Sciences (SEAS) and Harvard Business School (HBS), is designed to help develop this new generation of tech entrepreneurs.\n\nMade possible by a generous gift from the Roberts Family Foundation, the HUTIF program enables a group of 10-15 outstanding Harvard College students (from any College concentration) to build knowledge, skills, and a community that will put them on a path to launch and lead innovative endeavors. Selected students are known as the Roberts Family Fellows",
+      "name": "Roberts Family Fellow"
+    },
+    {
+      "company": null,
+      "title": "Paul Harris Fellow",
+      "image_url": null,
+      "company_id": null,
+      "url": null,
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2023-05",
+          "year": 2023,
+          "month": 5
+        },
+        "end": null
+      },
+      "position_held": null,
+      "description": "Many other notable figures have been named Paul Harris Fellows, including U.S. President Jimmy Carter, Russian President Boris Yeltsin, U.S. astronaut James Lovell, UN Secretary-General Javier Perez de Cuellar, and polio vaccine developer Jonas Salk.",
+      "name": "Paul Harris Fellow"
+    },
+    {
+      "company": null,
+      "title": "Gold medal winner of Philosophy Olympiads [IPO] (2021 & 2022)",
+      "image_url": null,
+      "company_id": null,
+      "url": null,
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2022-06",
+          "year": 2022,
+          "month": 6
+        },
+        "end": null
+      },
+      "position_held": null,
+      "description": null,
+      "name": "Gold medal winner of Philosophy Olympiads [IPO] (2021 & 2022)"
+    },
+    {
+      "company": null,
+      "title": "Premio Best Millenials (2022)",
+      "image_url": null,
+      "company_id": null,
+      "url": null,
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2022-05",
+          "year": 2022,
+          "month": 5
+        },
+        "end": null
+      },
+      "position_held": null,
+      "description": "Chosen, among 4700 participants, Under 30, as the best Italian millennial for social impact at the age of 18 years old. \n\nhttps://myllenniumaward.org/vincitori-2022/",
+      "name": "Premio Best Millenials (2022)"
+    },
+    {
+      "company": null,
+      "title": "Nova 111 Student List - Top 10 Italian Students in Computer Science U25",
+      "image_url": null,
+      "company_id": null,
+      "url": null,
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2022-04",
+          "year": 2022,
+          "month": 4
+        },
+        "end": null
+      },
+      "position_held": null,
+      "description": null,
+      "name": "Nova 111 Student List - Top 10 Italian Students in Computer Science U25"
+    }
+  ],
+  "member_urn": "830797834",
+  "patents": {},
+  "entity_urn": "ACoAADGE-AoBWopX8Yz0_gxbsPDk1rMk6Mx37ZE",
+  "location": {
+    "city": null,
+    "country": "United States",
+    "country_code": "US",
+    "name": "San Francisco Bay Area"
+  },
+  "public_identifier": "giovanni-dantonio",
+  "publications": {},
+  "first_name": "Giovanni",
+  "projects": [
+    {
+      "company": null,
+      "title": "eXpect (xAI Hackathon; F24 Second Place)",
+      "image_url": null,
+      "company_id": null,
+      "url": null,
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2024-10",
+          "year": 2024,
+          "month": 10
+        },
+        "end": {
+          "day": null,
+          "iso": "2025-01",
+          "year": 2025,
+          "month": 1
+        }
+      },
+      "position_held": null,
+      "description": "eXpect is the truth-seeking tool. It uses a multi-agent interface and large-scale simulation to predict human reactions to tweets, speeches, and any other input text. You can't do this with most AIs - they're censored and cannot always reflect the full spectrum of human opinion. Using Grok (unfiltered & diverse) and X (to crowdsource real human personas), we can now simulate entire communities' raw reactions to any topic (politics, consumer behavior, etc). eXpect will allow the world to more accurately identify the communal source of truth... to provide a crystal ball into the future. And, as a bonus, on X you can predict how many likes your tweet will get!\n\nCheck it out at tryexpect.com!",
+      "name": "eXpect (xAI Hackathon; F24 Second Place)"
+    },
+    {
+      "company": null,
+      "title": "Hierarchical Distributed Low-Communication (HeDiLoCo) Training",
+      "image_url": null,
+      "company_id": null,
+      "url": null,
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2024-09",
+          "year": 2024,
+          "month": 9
+        },
+        "end": {
+          "day": null,
+          "iso": "2024-12",
+          "year": 2024,
+          "month": 12
+        }
+      },
+      "position_held": null,
+      "description": "Frontier AI models are growing to multiple trillions of parameters, pushing companies to invest billions into new datacenter construction and accelerator purchases. As AI companies strive to keep up with current scaling trends, they are expected to push well past the capacity of any single datacenter. This trend forces developers to consider multi-datacenter training strategies. However, geographically distributed datacenters introduce high-latency, low-bandwidth interconnects that make traditional synchronous training—requiring global parameter aggregation at every step—prohibitively expensive.",
+      "name": "Hierarchical Distributed Low-Communication (HeDiLoCo) Training"
+    },
+    {
+      "company": null,
+      "title": "SENNs and Adversarial Robustness",
+      "image_url": null,
+      "company_id": null,
+      "url": null,
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2024-09",
+          "year": 2024,
+          "month": 9
+        },
+        "end": {
+          "day": null,
+          "iso": "2024-12",
+          "year": 2024,
+          "month": 12
+        }
+      },
+      "position_held": null,
+      "description": "Self-Explaining Neural Networks (SENNs) promise interpretable, intrinsically explainable modeling by decomposing predictive processes into understandable concepts and relevance weights. In this paper, we present a systematic investigation into the adversarial robustness of SENNs under the Fast Gradient Sign Method (FGSM). We find that while SENNs can withstand minor, unstructured noise with minimal performance degradation, more targeted “chunked” perturbations severely compromise the model’s accuracy. Our analyses reveal distinct vulnerability profiles: the aggregator exhibits non-monotonic accuracy patterns explained by its manipulation of dot products. In contrast, the conceptizer and parameterizer display more predictable yet ultimately devastating accuracy declines due to the aforementioned vulnerabilities to concept-based noise, which we term the viable alternative hypothesis. We conclude by outlining opportunities for future work, including exploring stronger attacks and more robust defenses, and checking if these results hold for nongradient-based adversarial attacks. Code for the paper can be found in the ‘report.ipynb’ file at https://anonymous.4open.science/r/2822-SENN-Project-9D0E",
+      "name": "SENNs and Adversarial Robustness"
+    },
+    {
+      "company": null,
+      "title": "A Statistical Analysis on Food Deserts",
+      "image_url": null,
+      "company_id": null,
+      "url": null,
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2024-07",
+          "year": 2024,
+          "month": 7
+        },
+        "end": {
+          "day": null,
+          "iso": "2024-07",
+          "year": 2024,
+          "month": 7
+        }
+      },
+      "position_held": null,
+      "description": "The United States is the modern land of abundance. Yet, a crisis festers within its grimy underbelly: Food deserts. Overimposition of National Average. Food deserts are regions with limited public transportation and few grocery stores, making their residents dependent on processed food as opposed to affordable fresh food. This is especially true for low-income households [1] and racial minorities such as Black, Hispanic, and Native American populations [2] [3], all of which are overrepresented in food deserts. [4] It is clear, and perhaps uninspiring, to conclude that processed foods lead to general negative health outcomes. More crucially, the unequal distribution of populations in food deserts mean that there are also strong racial and socioeconomic differences in these outcomes [5], such as an outsized risk factor for Type-2 Diabetes among the aforementioned population groups [6]. Food deserts also perpetuate a vicious cycle, where affected (racial) populations perceive healthy food as \"white people food\", leading to decreased demand for healthy food. [7] That is to say, the true cost of food insecurity is not only the aggregate impact it has on the health of US population, but also the focused damage it has on particular communities. Given that 5-10% of the country’s population can be said to live in food deserts [8],wewant to investigate not only the general country-wide costs of food insecurity, but also the disproportionate impacts in these areas, where processed foods are not a lifestyle choice, but a grim necessity.",
+      "name": "A Statistical Analysis on Food Deserts"
+    },
+    {
+      "company": null,
+      "title": "Incorporating Unspent Funds in Participatory Budgeting",
+      "image_url": null,
+      "company_id": null,
+      "url": null,
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2024-01",
+          "year": 2024,
+          "month": 1
+        },
+        "end": {
+          "day": null,
+          "iso": "2024-05",
+          "year": 2024,
+          "month": 5
+        }
+      },
+      "position_held": null,
+      "description": "We explore extensions to two commonly applied models of participatory budgeting, knapsack voting and the method of equal shares. In each model, we consider the possibility that voters can derive value from funds being allocated outside of a particular set of projects. Modifications are made to both the integral and partial knapsack models that allow voters to fully express their desired allocation of the budget, including the preference to save instead of spend. The extensions of both knapsack models preserve the equality and fairness properties of the standard counterparts, but increase the time and space complexity of methods to solve for optimal allocations. We further test out this method on real-world participatory budgeting data. Finally, we make similar extenstions to the Method of Equal Shares that allow for voters to earmark funding for any project, and show that the set of projects selected under the dominant strategy equilibrium is exactly that of the standard Method of Equal Shares.",
+      "name": "Incorporating Unspent Funds in Participatory Budgeting"
+    },
+    {
+      "company": null,
+      "title": "Studying Game Theory Optimal Solution through Reinforcement Learning",
+      "image_url": null,
+      "company_id": null,
+      "url": null,
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2024-01",
+          "year": 2024,
+          "month": 1
+        },
+        "end": {
+          "day": null,
+          "iso": "2024-05",
+          "year": 2024,
+          "month": 5
+        }
+      },
+      "position_held": null,
+      "description": "In this project, we explore how independent Q-learning agents learn in preset environments. More precisely, we define increasingly complex game theoretic systems to look at possible shortcomings and interactions these agents have in finding optimal solutions. We will start with some key definitions and past research, to then analyze behaviors in more and more complex games. The paper will explore the behavior of reinforcement learning agents in environments with clear optimal strategies, noticing how such agents do indeed find optimal solutions when those are clear, deterministic, and within a limited number of agents’ interactions. Then, we will explore more complex games where a clear solution is often difficult to find, is nondeterministic, and where the amount of agents’ interactions scales exponentially. It is in these setups that the biggest shortcomings are to be found; thus, suggesting, that the architecture of independent Q-Learning agents is incapable of dealing with games where optimal choices change constantly or when the number of agents is very high. On the other hand, the architecture proves to be a perfect fit, and faster to converge to optimal solutions than humans, in an environment where there is a limited number of agents’ interactions as well as an always static optimal strategy.",
+      "name": "Studying Game Theory Optimal Solution through Reinforcement Learning"
+    },
+    {
+      "company": null,
+      "title": "Modern Facial Recognition",
+      "image_url": null,
+      "company_id": null,
+      "url": null,
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2023-01",
+          "year": 2023,
+          "month": 1
+        },
+        "end": {
+          "day": null,
+          "iso": "2023-05",
+          "year": 2023,
+          "month": 5
+        }
+      },
+      "position_held": null,
+      "description": "In this paper, we will explore the connections between the material in Math 22b and the field of optimization through our main topic of gradient descent. This will be achieved by connecting it to one of its most common applications, use in Convolutional Neural Networks (CNNs) in order to best train them to recognize images as is now considered the state of the art given the relative computational simplicity of the algorithm as compared to other optimization methods Zhou [2018]. We also want to draw this back to our previous research in last semester’s project, our implementation of Turk and Pentland’s “eigenfaces” paper, using principal component analysis (a linear algebra-based technique to find efficient bases to represent data in) to recognize faces, given the natural connection between facial recognition and image processing Turk and Pentland [1991a] Turk and Pentland [1991b]. We will mainly investigate the roles multivariable calculus and other tools from analysis play in finding how to optimize functions through gradient descent, hoping to shed light on the mathematical foundations that support these powerful tools. Since gradient descent is an iterative method that gets better with every iteration, our main result will be a proof of guaranteed convergence within some 𝜀 ∈ ℝ+ of the function’s global optimum, along with a discussion of why it might not always be possible for it to converge with any function. We will also briefly touch upon convergence speed to prove the zig-zag theorem to show that some step sizes work better than others, before finally delving into applications of gradient descent to actually tuning CNNs through a technique known as “backpropagation” and ending off with a quick example including images of filters from Google Brain’s CNNs Olah et al. [2017].",
+      "name": "Modern Facial Recognition"
+    }
+  ],
+  "last_name": "D'Antonio",
+  "test_scores": {},
+  "headline": "MTS @ Thinking Machines || prev. AB/SM @ Harvard, DeepMind, 2x PhiO Gold",
+  "network_info": null
+}

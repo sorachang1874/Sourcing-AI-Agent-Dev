@@ -1,0 +1,1163 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAACA1ZlYBXlOe3SP4QbOsJDD9004QZ9fFGwY",
+    "profile_url": "https://www.linkedin.com/in/ACwAACA1ZlYBXlOe3SP4QbOsJDD9004QZ9fFGwY"
+  },
+  "item": {
+    "id": "ACoAACA1ZlYBhPNODsf7Z3UNo1tLYMShFQ7OQJw",
+    "publicIdentifier": "yujia-bao-506b76130",
+    "linkedinUrl": "https://www.linkedin.com/in/yujia-bao-506b76130",
+    "firstName": "Yujia",
+    "lastName": "Bao",
+    "emails": [
+      {
+        "email": "yujia.bao@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Member of Technical Staff at Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco Bay Area",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "540370518",
+    "registeredAt": "2016-11-19T20:53:33.654Z",
+    "topSkills": null,
+    "connectionsCount": 1324,
+    "followerCount": 1820,
+    "verified": true,
+    "about": "I am motivated by high-impact, meaningful problems in AI—particularly those that connect frontier research with real-world impact.\n\nI am currently a Member of Technical Staff at Thinking Machines Lab. Previously, I founded and led the engineering and research development of AI Refinery at Accenture, building the company’s first enterprise AI agent platform. I scaled the organization from 3 to 80 research scientists and engineers, defined its technical vision and standards, coached tech leads, built hiring pipelines, and drove research innovation. The platform has contributed hundreds of millions in sales since its release.\n\nI received my PhD in computer science from Massachusetts Institute of Technology, advised by Regina Barzilay. My research focused on transfer learning, interpretability, and fairness in machine learning, with an emphasis on building reliable and responsible AI systems.\n\nPersonal Website: https://www.yujia.io\nGoogle Scholar: https://scholar.google.com/citations?user=Ee4Peu4AAAAJ&hl=en",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 2,
+            "year": 2026,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "18494",
+        "companyId": "1503",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1503/",
+        "schoolName": "Massachusetts Institute of Technology"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4E03AQHJiPtBpYzR8Q/profile-displayphoto-shrink_800_800/B4EZYSjJ80HcAc-/0/1744067929748?e=1776902400&v=beta&t=sMNxj9vP4Tpzqs4WpG9MayrCc-RvIGzn8X2FCBqwAZY",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQHJiPtBpYzR8Q/profile-displayphoto-shrink_800_800/B4EZYSjJ80HcAc-/0/1744067929748?e=1776902400&v=beta&t=sMNxj9vP4Tpzqs4WpG9MayrCc-RvIGzn8X2FCBqwAZY",
+          "width": 799,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQHJiPtBpYzR8Q/profile-displayphoto-shrink_400_400/B4EZYSjJ80HcAg-/0/1744067929718?e=1776902400&v=beta&t=Buh5CDex8lkItFDp_bAX2vVZufEVi7kAerWsjtYrm5U",
+          "width": 399,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQHJiPtBpYzR8Q/profile-displayphoto-shrink_200_200/B4EZYSjJ80HcAY-/0/1744067929748?e=1776902400&v=beta&t=hQSv992aDL3x7lWRe5Z9nOhB1zZOUCQKVZvxvmvv9OE",
+          "width": 199,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQHJiPtBpYzR8Q/profile-displayphoto-shrink_100_100/B4EZYSjJ80HcAU-/0/1744067929748?e=1776902400&v=beta&t=J3VbZoQZ_xMVriE6PqNH5EnGQ8ddQtlkYvuSAghMmA8",
+          "width": 99,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D4E03AQHJiPtBpYzR8Q/profile-displayphoto-shrink_800_800/B4EZYSjJ80HcAc-/0/1744067929748?e=1776902400&v=beta&t=sMNxj9vP4Tpzqs4WpG9MayrCc-RvIGzn8X2FCBqwAZY",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Member of Technical Staff at Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2026,
+          "text": "Feb 2026"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "AI Refinery Core Platform Lead, Associate Director",
+        "location": "Mountain View, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Accenture",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1033/",
+        "companyId": "1033",
+        "duration": "1 yr 5 mos",
+        "description": "Pioneered Accenture’s AI Refinery platform, lead day‑to‑day engineering and research execution, managed a team of 80 engineers and researchers, drove enterprise sales and adoption. Personally contributed 150k+ lines of production code and merged 900+ pull requests.\n\nImpact: Hundreds of millions of sales to Fortune 500 clients. 10k+ active users, 3000+ projects worldwide within 1 year.\n\nBackground: In Aug 2024, I recognized a market opportunity for an agent-as-a service product. At the time, Accenture's global teams built agents in silos with various frameworks, making re-use and central governance impossible. I prototyped the first AI Refinery platform SDK, used to deliver a PoC within two weeks. Afterwards, Accenture elevated AI Refinery to a company-wide priority.\n\nTeam management:\n- Established 9 teams: infra, agent, testing, training, data, security, UI, experience, support\n- Set engineering standards: code maturity levels; design/PR review policies; release cycle that spans development, staging, pre‑prod, and prod\n\nHiring pipeline:\n- Designed interview processes and talent pipelines for research scientists/engineers. Directly hired ~40 external candidates.\n- Ran recruiting events at NeurIPS, ICLR and ICML\n- Organized recruitment events at top engineering schools.\n\nTechnical Details: Core design principles and contributions included:\n- Ease of use: Service‑side heavy lifting; intuitive client API; YAML‑based agent configuration\n- Extensibility: Pre‑built agents (e.g. deep research, analytics) + ability to fully customize and define new agents/tools for different industry solutions\n- Enterprise‑ready features: PII masking, RAI governance, built‑in integration with third‑party agents from 13 providers, including AWS, Google Cloud, etc.\n- Multi‑cloud agnosticism. Low‑level infrastructure abstracted from agent design; AI Refinery applicable to any cloud provider/on‑premises environment.\n- Outreach: 100+ AI Refinery SDK workshops for internal developers",
+        "skills": null,
+        "experienceGroupId": "0530b081e41bbdd1cb6c16baee08f6c7b844d51d",
+        "startDate": {
+          "month": "Sep",
+          "year": 2024,
+          "text": "Sep 2024"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2026,
+          "text": "Jan 2026"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEgtOEcxlXMog/company-logo_400_400/B4DZfqEQWkHAAg-/0/1751978673981/accenture_logo?e=1776902400&v=beta&t=T6rcg5IkvAm0-ODQHpNDMpRg4t_U-kdlBwQ7ZSMFeY8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEgtOEcxlXMog/company-logo_400_400/B4DZfqEQWkHAAg-/0/1751978673981/accenture_logo?e=1776902400&v=beta&t=T6rcg5IkvAm0-ODQHpNDMpRg4t_U-kdlBwQ7ZSMFeY8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEgtOEcxlXMog/company-logo_200_200/B4DZfqEQWkHAAQ-/0/1751978673981/accenture_logo?e=1776902400&v=beta&t=SzNqSeQcda_XTUpoWOKCAv-AjcTMb8jrIYbz3-IqONU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEgtOEcxlXMog/company-logo_100_100/B4DZfqEQWkHAAY-/0/1751978673981/accenture_logo?e=1776902400&v=beta&t=jH-W0l_8y4KwCuffrzfadQfb9CowfPVubyxGBlIpBU8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Uber Tech Lead, Multi-Agent Application",
+        "location": "Mountain View, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Accenture",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1033/",
+        "companyId": "1033",
+        "duration": "3 mos",
+        "description": "Developed multi-agent AI system to support Accenture’s internal marketing and campaign processes, which later became the foundation of AI Refinery. Product was delivered under a three‑month deadline, with a PoC demonstration to Accenture board members and Jensen Huang at 1.5 months. Since launch (Aug 2024), the solution has served the team daily, reducing manual steps for managing a marketing campaign by 55%. Managed a team of 28 engineers and researchers, and led four technical leads.\n\nCross‑functional collaboration:\n- Identified design objectives through week-long workshop with marketing experts and defined execution roadmap.\n- Mapped common tasks to AI agents, including information collection and data analysis.\n\nData foundation:\n- Leveraged over 50 data sources, including: digital assets (PDFs, PPTs, videos), SQL databases, and static storage (S3, Blob), etc.\n- Built fully-automated data cleaning pipelines, including de-duplication, quality filtering, and conflict resolution.\n\nAgent framework – Distiller:\n- Developed multi-agent framework composed of three agent types: orchestrator (routing and guardrails); utility agents (execute atomic tasks); super agent (decompose tasks; dynamic planning and pre-defined workflows)\n- Introduced a shared memory layer for standard chat history, agent‑specific storage, cross‑agent memory, and structured memories.\n\nApplication development:\n- Supervised the development of 14 marketing-focused agents, e.g. research agent (agentic RAG with multiple data sources); analytic agent (reasoning over relational database)\n- Integrated UI elements for user suggestions, and organized biweekly workshops to discuss performance and limitations before product launch.\n- Improved agent prompt coverage, security and responsible AI layers over time after the release.",
+        "skills": null,
+        "experienceGroupId": "0530b081e41bbdd1cb6c16baee08f6c7b844d51d",
+        "startDate": {
+          "month": "Jun",
+          "year": 2024,
+          "text": "Jun 2024"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2024,
+          "text": "Aug 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEgtOEcxlXMog/company-logo_400_400/B4DZfqEQWkHAAg-/0/1751978673981/accenture_logo?e=1776902400&v=beta&t=T6rcg5IkvAm0-ODQHpNDMpRg4t_U-kdlBwQ7ZSMFeY8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEgtOEcxlXMog/company-logo_400_400/B4DZfqEQWkHAAg-/0/1751978673981/accenture_logo?e=1776902400&v=beta&t=T6rcg5IkvAm0-ODQHpNDMpRg4t_U-kdlBwQ7ZSMFeY8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEgtOEcxlXMog/company-logo_200_200/B4DZfqEQWkHAAQ-/0/1751978673981/accenture_logo?e=1776902400&v=beta&t=SzNqSeQcda_XTUpoWOKCAv-AjcTMb8jrIYbz3-IqONU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEgtOEcxlXMog/company-logo_100_100/B4DZfqEQWkHAAY-/0/1751978673981/accenture_logo?e=1776902400&v=beta&t=jH-W0l_8y4KwCuffrzfadQfb9CowfPVubyxGBlIpBU8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Tech Lead, LLM Customization",
+        "location": "Mountain View, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Accenture",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1033/",
+        "companyId": "1033",
+        "duration": "6 mos",
+        "description": "Led Accenture’s first client project on LLM customization—Fortune Analytics. Product was delivered in May 2024 and won the iF Design Award. Managed a team of 14 researchers and engineers. Pretrained 7B model on 3T tokens; mid-training on in-domain data, context length extension 4k to 32k on 200k samples; SFT on 100k samples; DPO on 2000 samples over 3 rounds.\n\nInfrastructure:\n- Developed in‑house distributed training system on hundreds of nodes and inference pipeline.\n- Both pipelines have been actively used since Jan 2024.\n\nPre-training:\n- Built automated pipelines to download and prepare data from open sources such as Wikipedia, arXiv, and CommonCrawl.\n- Implemented multiple data‑taggers to filter low‑quality content for pre‑training.\n\nMid‑training:\n- Processed Fortune’s proprietary data across modalities (online articles, magazine text, videos, tables, and ranking lists).\n- Performed bias‑detection to eliminate political biases.\n\nSupervised fine‑tuning: Conducted 19 iterations of SFT on public and client data.\n- General SFT data mix: Curated open‑source data sets (FLAN, Tulu, ShareGPT, etc.), identified biases such as time and identity bias, and iteratively refined data mixture.\n- Fortune‑specific data mix: Generated Fortune‑specific instruction pairs. Examples include fact-checking, trends analysis over time, and code generation for data visualization.\n\nAlignment:\n- Conducted 3 cycles of training and evaluation, with human preference alignment through DPO.\n\nEvaluation:\n- Designed evaluation benchmarks for both verifiable and open‑ended questions.\n- Performed LLM judge and human evaluations, with comparisons to external state-of-the-art models.",
+        "skills": null,
+        "experienceGroupId": "0530b081e41bbdd1cb6c16baee08f6c7b844d51d",
+        "startDate": {
+          "month": "Dec",
+          "year": 2023,
+          "text": "Dec 2023"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2024,
+          "text": "May 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEgtOEcxlXMog/company-logo_400_400/B4DZfqEQWkHAAg-/0/1751978673981/accenture_logo?e=1776902400&v=beta&t=T6rcg5IkvAm0-ODQHpNDMpRg4t_U-kdlBwQ7ZSMFeY8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEgtOEcxlXMog/company-logo_400_400/B4DZfqEQWkHAAg-/0/1751978673981/accenture_logo?e=1776902400&v=beta&t=T6rcg5IkvAm0-ODQHpNDMpRg4t_U-kdlBwQ7ZSMFeY8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEgtOEcxlXMog/company-logo_200_200/B4DZfqEQWkHAAQ-/0/1751978673981/accenture_logo?e=1776902400&v=beta&t=SzNqSeQcda_XTUpoWOKCAv-AjcTMb8jrIYbz3-IqONU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEgtOEcxlXMog/company-logo_100_100/B4DZfqEQWkHAAY-/0/1751978673981/accenture_logo?e=1776902400&v=beta&t=jH-W0l_8y4KwCuffrzfadQfb9CowfPVubyxGBlIpBU8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Lead Machine Learning Scientist",
+        "location": "Cambridge, Massachusetts, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "Remote",
+        "companyName": "insitro",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/18597009/",
+        "companyId": "18597009",
+        "duration": "1 yr 2 mos",
+        "description": "At Insitro, Yujia led the research development of foundation models for cell imaging. He is the first author of two research papers:\n\n1. \"Contextual Vision Transformer for Robust Representation Learning\". This work incorporate additional context tokens to encapsulate group-specific information of the input images. These context tokens are modeled by a context inference network, enabling the model to generalize to unseen distributions at test time. This work has been presented at SCIS in ICML 2023.\n\n2. \"Channel Vision Transformer: An Image is Worth C x 16 x 16 Words\". This paper identifies and tackles two key challenges in multi-channel imaging: robustness amidst varying channel availabilities and cross-channel reasoning capabilities. This work has been presented at UniReps in NeurIPS 2023.\n\nIn addition to his research contributions, Yujia led the initiation and development of the self-supervised learning research toolkit at Insitro, which later transitioned into the production pipeline.",
+        "skills": [
+          "Research and Development (R&D)",
+          "Cloud Computing",
+          "Project Management",
+          "Machine Learning",
+          "Interdisciplinary Collaboration"
+        ],
+        "startDate": {
+          "month": "Nov",
+          "year": 2022,
+          "text": "Nov 2022"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2023,
+          "text": "Dec 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHV6TZbRCYHbA/company-logo_400_400/B56Z0kYdCBHkAc-/0/1774431884675/insitro_logo?e=1776902400&v=beta&t=DoOhh7fdZpN7wkTjWgKYjuxwJWw_I3h5eEgH3oDIIC4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHV6TZbRCYHbA/company-logo_400_400/B56Z0kYdCBHkAc-/0/1774431884675/insitro_logo?e=1776902400&v=beta&t=DoOhh7fdZpN7wkTjWgKYjuxwJWw_I3h5eEgH3oDIIC4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHV6TZbRCYHbA/company-logo_200_200/B56Z0kYdCBHkAM-/0/1774431884675/insitro_logo?e=1776902400&v=beta&t=uKV4B8Tc__8G2lM10UV6VyI5iCn8Vta0kzslj9YCClE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHV6TZbRCYHbA/company-logo_100_100/B56Z0kYdCBHkAU-/0/1774431884675/insitro_logo?e=1776902400&v=beta&t=RbzuCDP8n6o8BZsA6S4d8VBagrTkF0l7L070IxxSLBA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior machine learning scientist",
+        "location": "Cambridge, Massachusetts, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Emerald Innovations",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/12013338/",
+        "companyId": "12013338",
+        "duration": "6 mos",
+        "description": null,
+        "skills": [
+          "Machine Learning",
+          "Neural Networks",
+          "Computer Vision",
+          "Python (Programming Language)",
+          "Amazon Web Services (AWS)"
+        ],
+        "startDate": {
+          "month": "Jun",
+          "year": 2022,
+          "text": "Jun 2022"
+        },
+        "endDate": {
+          "month": "Nov",
+          "year": 2022,
+          "text": "Nov 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFhKKtshlc_jQ/company-logo_400_400/company-logo_400_400/0/1630600108679/emerald_innovations_logo?e=1776902400&v=beta&t=dpngVuIxb91PTsyzxeRmfkD52J6-XxrocT5_UTr1_g0",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFhKKtshlc_jQ/company-logo_400_400/company-logo_400_400/0/1630600108679/emerald_innovations_logo?e=1776902400&v=beta&t=dpngVuIxb91PTsyzxeRmfkD52J6-XxrocT5_UTr1_g0",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFhKKtshlc_jQ/company-logo_200_200/company-logo_200_200/0/1630600108679/emerald_innovations_logo?e=1776902400&v=beta&t=HZDNkblPfyE9Rkuaan3EaDITAJD92xpnbqOZM482wtw",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFhKKtshlc_jQ/company-logo_100_100/company-logo_100_100/0/1630600108679/emerald_innovations_logo?e=1776902400&v=beta&t=BFO_CD8rFXqytV3iIrYChfKuVXmREtz0jNlzsQBE39U",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Graduate Research Assistant",
+        "location": "Camridge, Massachusetts",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Massachusetts Institute of Technology",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/mit/",
+        "companyId": "1503",
+        "companyUniversalName": "mit",
+        "duration": "4 yrs 11 mos",
+        "description": "In the course of my PhD, I specialized in the development of algorithms for Natural Language Processing (NLP) and robust machine learning. My work focused on the following key areas:\n\n- I designed models to understand the interplay between human rationale and attention, enhancing data efficiency for text classification. This work was presented at the EMNLP 2018 conference.\n\n- At ICLR 2020, I introduced a meta-learning algorithm capable of transferring knowledge across diverse NLP tasks, promoting efficiency and adaptability.\n\n- My research at ICML 2021 centered on creating robust models that resist spurious correlations within datasets, ensuring more reliable outcomes.\n\n- I further explored the concept of bias in machine learning at ICML 2022, developing methods to transfer knowledge of biases across different tasks.\n\n- Currently, I am working on a method to automatically identify unknown biases by learning 'hard splits' directly from data. This work is in the preprint stage.",
+        "skills": [
+          "Deep Learning",
+          "PyTorch",
+          "Natural Language Processing",
+          "Machine Learning",
+          "Neural Networks",
+          "Python (Programming Language)"
+        ],
+        "experienceGroupId": "bacd4871beb4879720d4dd8562038caa5947a714",
+        "startDate": {
+          "month": "Jul",
+          "year": 2017,
+          "text": "Jul 2017"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2022,
+          "text": "May 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_400_400/company-logo_400_400/0/1689799729035/mit_logo?e=1776902400&v=beta&t=u1PKvlsURdjuQj6vGwgPDc-3muz7cCQ6oGJISjoWshw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_400_400/company-logo_400_400/0/1689799729035/mit_logo?e=1776902400&v=beta&t=u1PKvlsURdjuQj6vGwgPDc-3muz7cCQ6oGJISjoWshw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_200_200/company-logo_200_200/0/1689799729035/mit_logo?e=1776902400&v=beta&t=AB2cY7dhuIbLPIWAjqEjazLVeMiSD5C3JNuYh9NjBw4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_100_100/company-logo_100_100/0/1689799729035/mit_logo?e=1776902400&v=beta&t=IuM-xZiymxMvWzGrHXnXupiD9lk70R68nAJaX2-9P8Y",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Graduate Teaching Assistant",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Massachusetts Institute of Technology",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/mit/",
+        "companyId": "1503",
+        "companyUniversalName": "mit",
+        "duration": "5 mos",
+        "description": "- Served as a Teaching Assistant for the graduate-level Machine Learning course 6.867 at MIT EECS, instructed by Professors David Sontag, Suvrit Sra, and Devavrat Shah.\n\n- Conducted weekly recitations, providing in-depth discussions and clarifications on complex topics to enhance student understanding.\n\n- Collaborated with professors to develop one-third of the final exam.",
+        "skills": null,
+        "experienceGroupId": "bacd4871beb4879720d4dd8562038caa5947a714",
+        "startDate": {
+          "month": "Sep",
+          "year": 2018,
+          "text": "Sep 2018"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2019,
+          "text": "Jan 2019"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_400_400/company-logo_400_400/0/1689799729035/mit_logo?e=1776902400&v=beta&t=u1PKvlsURdjuQj6vGwgPDc-3muz7cCQ6oGJISjoWshw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_400_400/company-logo_400_400/0/1689799729035/mit_logo?e=1776902400&v=beta&t=u1PKvlsURdjuQj6vGwgPDc-3muz7cCQ6oGJISjoWshw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_200_200/company-logo_200_200/0/1689799729035/mit_logo?e=1776902400&v=beta&t=AB2cY7dhuIbLPIWAjqEjazLVeMiSD5C3JNuYh9NjBw4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_100_100/company-logo_100_100/0/1689799729035/mit_logo?e=1776902400&v=beta&t=IuM-xZiymxMvWzGrHXnXupiD9lk70R68nAJaX2-9P8Y",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Graduate Research Intern",
+        "location": "Cambridge, Massachusetts, United States",
+        "employmentType": "Internship",
+        "workplaceType": null,
+        "companyName": "Emerald Innovations",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/12013338/",
+        "companyId": "12013338",
+        "duration": "3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2020,
+          "text": "Jun 2020"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2020,
+          "text": "Aug 2020"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFhKKtshlc_jQ/company-logo_400_400/company-logo_400_400/0/1630600108679/emerald_innovations_logo?e=1776902400&v=beta&t=dpngVuIxb91PTsyzxeRmfkD52J6-XxrocT5_UTr1_g0",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFhKKtshlc_jQ/company-logo_400_400/company-logo_400_400/0/1630600108679/emerald_innovations_logo?e=1776902400&v=beta&t=dpngVuIxb91PTsyzxeRmfkD52J6-XxrocT5_UTr1_g0",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFhKKtshlc_jQ/company-logo_200_200/company-logo_200_200/0/1630600108679/emerald_innovations_logo?e=1776902400&v=beta&t=HZDNkblPfyE9Rkuaan3EaDITAJD92xpnbqOZM482wtw",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFhKKtshlc_jQ/company-logo_100_100/company-logo_100_100/0/1630600108679/emerald_innovations_logo?e=1776902400&v=beta&t=BFO_CD8rFXqytV3iIrYChfKuVXmREtz0jNlzsQBE39U",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Graduate Research Internship - Artificial Intelligence",
+        "location": "Cambridge, Massachusetts",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "IBM",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1009/",
+        "companyId": "1009",
+        "duration": "3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2018,
+          "text": "Jun 2018"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2018,
+          "text": "Aug 2018"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGiz5ecgpCtkA/company-logo_400_400/company-logo_400_400/0/1688684715866/ibm_logo?e=1776902400&v=beta&t=lvn_XgKnHL6D2RIsPvznl9bRtuFCCOW4XRo14QISjQY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGiz5ecgpCtkA/company-logo_400_400/company-logo_400_400/0/1688684715866/ibm_logo?e=1776902400&v=beta&t=lvn_XgKnHL6D2RIsPvznl9bRtuFCCOW4XRo14QISjQY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGiz5ecgpCtkA/company-logo_200_200/company-logo_200_200/0/1688684715866/ibm_logo?e=1776902400&v=beta&t=DdS_AmJzO8hVZJzkCH0A37Kd4MX4miZ-oSSRUJKGI-A",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGiz5ecgpCtkA/company-logo_100_100/company-logo_100_100/0/1688684715866/ibm_logo?e=1776902400&v=beta&t=nw_NDHrg6jEPysPyTTyDRMaPjW2xaXuMTVb6V65M_3E",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Graduate Research Assistant",
+        "location": "Greater Madison Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "University of Wisconsin-Madison",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/4099/",
+        "companyId": "4099",
+        "duration": "11 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jul",
+          "year": 2016,
+          "text": "Jul 2016"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2017,
+          "text": "May 2017"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQFyYW54n5mwAw/company-logo_400_400/company-logo_400_400/0/1630601304331/university_of_wisconsin_madison_logo?e=1776902400&v=beta&t=wvxiQBgUnjXdwAk0IObiT5Wj6TKUeAe0dsTc65a_B6I",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFyYW54n5mwAw/company-logo_400_400/company-logo_400_400/0/1630601304331/university_of_wisconsin_madison_logo?e=1776902400&v=beta&t=wvxiQBgUnjXdwAk0IObiT5Wj6TKUeAe0dsTc65a_B6I",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFyYW54n5mwAw/company-logo_200_200/company-logo_200_200/0/1630601304331/university_of_wisconsin_madison_logo?e=1776902400&v=beta&t=JIZjxIyPx28gvO2q5ssmaawR06ihMxZMP5fsoP6FPJk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFyYW54n5mwAw/company-logo_100_100/company-logo_100_100/0/1630601304331/university_of_wisconsin_madison_logo?e=1776902400&v=beta&t=WiXXgwWugZh6iAllcwcr5PFeMXeSBDbLjxMwfYnOlPM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Massachusetts Institute of Technology",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1503/",
+        "schoolId": "1503",
+        "degree": "Doctor of Philosophy - PhD",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "startDate": {
+          "year": 2019,
+          "text": "2019"
+        },
+        "endDate": {
+          "year": 2022,
+          "text": "2022"
+        },
+        "period": "2019 - 2022",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_400_400/company-logo_400_400/0/1689799729035/mit_logo?e=1776902400&v=beta&t=u1PKvlsURdjuQj6vGwgPDc-3muz7cCQ6oGJISjoWshw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_400_400/company-logo_400_400/0/1689799729035/mit_logo?e=1776902400&v=beta&t=u1PKvlsURdjuQj6vGwgPDc-3muz7cCQ6oGJISjoWshw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_200_200/company-logo_200_200/0/1689799729035/mit_logo?e=1776902400&v=beta&t=AB2cY7dhuIbLPIWAjqEjazLVeMiSD5C3JNuYh9NjBw4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_100_100/company-logo_100_100/0/1689799729035/mit_logo?e=1776902400&v=beta&t=IuM-xZiymxMvWzGrHXnXupiD9lk70R68nAJaX2-9P8Y",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Massachusetts Institute of Technology",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1503/",
+        "schoolId": "1503",
+        "degree": "Master of Science - MS",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "startDate": {
+          "year": 2017,
+          "text": "2017"
+        },
+        "endDate": {
+          "year": 2019,
+          "text": "2019"
+        },
+        "period": "2017 - 2019",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_400_400/company-logo_400_400/0/1689799729035/mit_logo?e=1776902400&v=beta&t=u1PKvlsURdjuQj6vGwgPDc-3muz7cCQ6oGJISjoWshw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_400_400/company-logo_400_400/0/1689799729035/mit_logo?e=1776902400&v=beta&t=u1PKvlsURdjuQj6vGwgPDc-3muz7cCQ6oGJISjoWshw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_200_200/company-logo_200_200/0/1689799729035/mit_logo?e=1776902400&v=beta&t=AB2cY7dhuIbLPIWAjqEjazLVeMiSD5C3JNuYh9NjBw4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_100_100/company-logo_100_100/0/1689799729035/mit_logo?e=1776902400&v=beta&t=IuM-xZiymxMvWzGrHXnXupiD9lk70R68nAJaX2-9P8Y",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "University of Wisconsin-Madison",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/4099/",
+        "schoolId": "4099",
+        "degree": "Master of Arts - MA",
+        "fieldOfStudy": "Mathematics",
+        "skills": [],
+        "insights": "Grade: 4.0/4.0",
+        "startDate": {
+          "year": 2015,
+          "text": "2015"
+        },
+        "endDate": {
+          "year": 2017,
+          "text": "2017"
+        },
+        "period": "2015 - 2017",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQFyYW54n5mwAw/company-logo_400_400/company-logo_400_400/0/1630601304331/university_of_wisconsin_madison_logo?e=1776902400&v=beta&t=wvxiQBgUnjXdwAk0IObiT5Wj6TKUeAe0dsTc65a_B6I",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFyYW54n5mwAw/company-logo_400_400/company-logo_400_400/0/1630601304331/university_of_wisconsin_madison_logo?e=1776902400&v=beta&t=wvxiQBgUnjXdwAk0IObiT5Wj6TKUeAe0dsTc65a_B6I",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFyYW54n5mwAw/company-logo_200_200/company-logo_200_200/0/1630601304331/university_of_wisconsin_madison_logo?e=1776902400&v=beta&t=JIZjxIyPx28gvO2q5ssmaawR06ihMxZMP5fsoP6FPJk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFyYW54n5mwAw/company-logo_100_100/company-logo_100_100/0/1630601304331/university_of_wisconsin_madison_logo?e=1776902400&v=beta&t=WiXXgwWugZh6iAllcwcr5PFeMXeSBDbLjxMwfYnOlPM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Shanghai Jiao Tong University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/27413/",
+        "schoolId": "27413",
+        "degree": "Bachelor of Science - BS",
+        "fieldOfStudy": "Mathematics and Applied Mathematics",
+        "skills": [],
+        "insights": "Grade: 3.7/4.0",
+        "startDate": {
+          "year": 2012,
+          "text": "2012"
+        },
+        "endDate": {
+          "year": 2016,
+          "text": "2016"
+        },
+        "period": "2012 - 2016",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFkNUM4pr0xcg/company-logo_400_400/company-logo_400_400/0/1631314417560?e=1776902400&v=beta&t=_9V7x73QmUeI3ljuiRcsifjAUZDbQNuOqoZkwuoQJko",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFkNUM4pr0xcg/company-logo_400_400/company-logo_400_400/0/1631314417560?e=1776902400&v=beta&t=_9V7x73QmUeI3ljuiRcsifjAUZDbQNuOqoZkwuoQJko",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFkNUM4pr0xcg/company-logo_200_200/company-logo_200_200/0/1631314417560?e=1776902400&v=beta&t=X5SOqffA_pEUEorPnJmluYlL9nNzyw11jrreiO1bmXU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFkNUM4pr0xcg/company-logo_100_100/company-logo_100_100/0/1631314417560?e=1776902400&v=beta&t=XyswkGMcyz0iGJ0WekHkes-aM8ohdDmFzYmf_hiXdvk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Cloud Computing",
+        "positions": [
+          "Lead Machine Learning Scientist at insitro"
+        ],
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Research and Development (R&D)",
+        "positions": [
+          "Lead Machine Learning Scientist at insitro"
+        ],
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Project Management",
+        "positions": [
+          "Lead Machine Learning Scientist at insitro"
+        ]
+      },
+      {
+        "name": "Interdisciplinary Collaboration",
+        "positions": [
+          "Lead Machine Learning Scientist at insitro"
+        ]
+      },
+      {
+        "name": "Statistical Modeling"
+      },
+      {
+        "name": "Linux Server"
+      },
+      {
+        "name": "Neural Networks",
+        "positions": [
+          "2 experiences across Emerald Innovations and 1 other company"
+        ]
+      },
+      {
+        "name": "Python (Programming Language)",
+        "positions": [
+          "2 experiences across Emerald Innovations and 1 other company"
+        ]
+      },
+      {
+        "name": "Amazon Web Services (AWS)",
+        "positions": [
+          "Senior machine learning scientist at Emerald Innovations"
+        ]
+      },
+      {
+        "name": "Computer Vision",
+        "positions": [
+          "Senior machine learning scientist at Emerald Innovations"
+        ]
+      },
+      {
+        "name": "Machine Learning",
+        "positions": [
+          "3 experiences across insitro and 2 other companies"
+        ]
+      },
+      {
+        "name": "Python"
+      },
+      {
+        "name": "PyTorch",
+        "positions": [
+          "Graduate Research Assistant at Massachusetts Institute of Technology"
+        ]
+      },
+      {
+        "name": "C++"
+      },
+      {
+        "name": "Java"
+      },
+      {
+        "name": "LaTex"
+      },
+      {
+        "name": "TensorFlow"
+      },
+      {
+        "name": "Matlab"
+      },
+      {
+        "name": "Deep Learning",
+        "positions": [
+          "Graduate Research Assistant at Massachusetts Institute of Technology"
+        ]
+      },
+      {
+        "name": "Natural Language Processing",
+        "positions": [
+          "Graduate Research Assistant at Massachusetts Institute of Technology"
+        ]
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [
+      {
+        "title": "Accenture FY26 Inventor Award",
+        "issuedBy": "Dec 2025",
+        "associatedWith": "Associated with Accenture",
+        "associatedWithLink": null
+      },
+      {
+        "title": " Exchange & Visiting International Student Academic Excellence Award",
+        "issuedBy": "Jan 2016",
+        "associatedWith": "Associated with University of Wisconsin-Madison",
+        "associatedWithLink": "https://www.linkedin.com/company/4099/"
+      },
+      {
+        "title": "Excellent Thesis Award",
+        "issuedBy": "Jan 2016",
+        "associatedWith": "Associated with Shanghai Jiao Tong University",
+        "associatedWithLink": "https://www.linkedin.com/company/27413/"
+      },
+      {
+        "title": "Scholarship for Academic Excellence",
+        "issuedBy": "Jan 2015",
+        "associatedWith": "Associated with Shanghai Jiao Tong University",
+        "associatedWithLink": "https://www.linkedin.com/company/27413/"
+      }
+    ],
+    "languages": [
+      {
+        "name": "English",
+        "proficiency": "Native or bilingual proficiency"
+      },
+      {
+        "name": "Mandarin",
+        "proficiency": "Native or bilingual proficiency"
+      }
+    ],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAATAFhsB-MSu8aXWUBacbi6fvU_SaAqdBH4",
+        "firstName": "Jeff",
+        "lastName": "Hanson",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "jshanson7",
+        "linkedinUrl": "https://www.linkedin.com/in/jshanson7"
+      },
+      {
+        "id": "ACoAAEZnBtoBb1Us7ZKgHfOXAYT764pKcDQy848",
+        "firstName": "Songlin",
+        "lastName": "Yang",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "songlin-yang-b8a69728b",
+        "linkedinUrl": "https://www.linkedin.com/in/songlin-yang-b8a69728b"
+      },
+      {
+        "id": "ACoAAAQ4Q7kByw3YKf2rFlmWzRMF7P8Gw4S9PIU",
+        "firstName": "Yinghai",
+        "lastName": "L.",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "yinghai83",
+        "linkedinUrl": "https://www.linkedin.com/in/yinghai83"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABJRjjUBRj9EXhEAO-4ZyhHgzD0ztjMvrlI",
+        "firstName": "Andrea",
+        "lastName": "Madotto",
+        "position": "Member of Technical Staff at TML",
+        "publicIdentifier": "andrea-madotto-899b1386",
+        "linkedinUrl": "https://www.linkedin.com/in/andrea-madotto-899b1386"
+      },
+      {
+        "id": "ACoAACaOARIBRO2EEH12QWQO29L__oI3N2K4u14",
+        "firstName": "Mingjie",
+        "lastName": "Sun",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "mingjie-sun-06a761160",
+        "linkedinUrl": "https://www.linkedin.com/in/mingjie-sun-06a761160"
+      },
+      {
+        "id": "ACoAABGzJXcBFaJqVFgqgYNbhaPVKRkP3iG33dA",
+        "firstName": "Noah",
+        "lastName": "Shpak",
+        "position": "Thinking Machines",
+        "publicIdentifier": "nshpak",
+        "linkedinUrl": "https://www.linkedin.com/in/nshpak"
+      },
+      {
+        "id": "ACoAACQq5HoBKvwLgBUlXiVziRWJDXBocy6aOE4",
+        "firstName": "Erik",
+        "lastName": "Wijmans",
+        "position": "AI Researcher",
+        "publicIdentifier": "erik-wijmans-0a226814b",
+        "linkedinUrl": "https://www.linkedin.com/in/erik-wijmans-0a226814b"
+      },
+      {
+        "id": "ACoAACKNVUMBztbhQ3RUYQ-Mg89xUJ39N-XJpM4",
+        "firstName": "Long",
+        "lastName": "Lian",
+        "position": "Member of Technical Staff at Thinking Machines Lab | Post-training Team | Large-scale RL | Multi-agent Systems | Real-time Multi-modal Models",
+        "publicIdentifier": "longlian",
+        "linkedinUrl": "https://www.linkedin.com/in/longlian"
+      },
+      {
+        "id": "ACoAAACo1tYBGy9sT2OWZuEULOMe4K_b2Y22-F8",
+        "firstName": "Alex",
+        "lastName": "Gartrell",
+        "position": "Engineering @ Thinking Machines, Ex-Meta/Facebook",
+        "publicIdentifier": "alexgartrell",
+        "linkedinUrl": "https://www.linkedin.com/in/alexgartrell"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAADgLvm4BAaa-N5zNQvfP5qFptuA8bvJs3nM",
+        "firstName": "Yifei",
+        "lastName": "Zhou",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "yifei-zhou-57aa9b222",
+        "linkedinUrl": "https://www.linkedin.com/in/yifei-zhou-57aa9b222"
+      },
+      {
+        "id": "ACoAAB3BApkB38H4Z__jKDDFBfF7jt7w16vD0Xs",
+        "firstName": "Rafael",
+        "lastName": "Rafailov",
+        "position": "Member Of Technical Staff - Thinking Machines Lab",
+        "publicIdentifier": "rafael-rafailov-1b521611b",
+        "linkedinUrl": "https://www.linkedin.com/in/rafael-rafailov-1b521611b"
+      },
+      {
+        "id": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+        "firstName": "Saurabh",
+        "lastName": "Garg",
+        "position": "Thinking Machines Lab | Prev: Mistral AI, CMU, IIT-B",
+        "publicIdentifier": "saurabh-garg-b680b5b8",
+        "linkedinUrl": "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+      },
+      {
+        "id": "ACoAADCkfncB4P7VWZ-S1Ojv9-aHq_bFsA6LBQY",
+        "firstName": "Ziqiao",
+        "lastName": "Ma",
+        "publicIdentifier": "ziqiao-ma",
+        "linkedinUrl": "https://www.linkedin.com/in/ziqiao-ma"
+      },
+      {
+        "id": "ACoAAA4HVN4BOZg5espOvMVoO3OY04NZmuqvMCo",
+        "firstName": "Shaojie",
+        "lastName": "Bai",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "shaojie-bai",
+        "linkedinUrl": "https://www.linkedin.com/in/shaojie-bai"
+      },
+      {
+        "id": "ACoAACy2BxwB9fCrfCBI06w0X-gHyQTFLJIpJGc",
+        "firstName": "Guangxuan",
+        "lastName": "X.",
+        "publicIdentifier": "xgx",
+        "linkedinUrl": "https://www.linkedin.com/in/xgx"
+      },
+      {
+        "id": "ACoAAB4qbUUBsc9H_NLZN2duLUOOyyFDm-k_ACo",
+        "firstName": "Riley",
+        "lastName": "Shanahan",
+        "position": "Eng at Thinking Machines ",
+        "publicIdentifier": "rileyshanny",
+        "linkedinUrl": "https://www.linkedin.com/in/rileyshanny"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAAAeoHjYB_Lo5sUFlpZpz2L74oe9nEIKztQA",
+        "firstName": "Jenya",
+        "lastName": "L.",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "jenya-l",
+        "linkedinUrl": "https://www.linkedin.com/in/jenya-l"
+      },
+      {
+        "id": "ACoAACOCLXEBiyOLAQxzReSr4x3mBSYX0ECPafA",
+        "firstName": "Andreas",
+        "lastName": "Weigelt",
+        "position": "Accountant I Accounts Receivable",
+        "publicIdentifier": "andreas-weigelt-495615147",
+        "linkedinUrl": "https://www.linkedin.com/in/andreas-weigelt-495615147"
+      },
+      {
+        "id": "ACoAAEHwbf0BDDeIAv_S5CAa5TyjfFHDtrcPfoY",
+        "firstName": "Melanie",
+        "lastName": "Budwilowitz",
+        "position": "Accountant",
+        "publicIdentifier": "melanie-budwilowitz-b115a526a",
+        "linkedinUrl": "https://www.linkedin.com/in/melanie-budwilowitz-b115a526a"
+      },
+      {
+        "id": "ACoAAC1VpCkB9wpSoLNcXQO1Cfs3fEU6YR3w8MI",
+        "firstName": "Taranpreet",
+        "lastName": "Singh l Vay l ex Dance ",
+        "position": "Accountant ",
+        "publicIdentifier": "taranpreet-singh-l-vay-l-ex-dance-835876192",
+        "linkedinUrl": "https://www.linkedin.com/in/taranpreet-singh-l-vay-l-ex-dance-835876192"
+      },
+      {
+        "id": "ACoAACSsmM4BY3iUgiuUcLkWflGw43OhxQHPev4",
+        "firstName": "Cristina",
+        "lastName": "Innocente",
+        "position": "Accountant",
+        "publicIdentifier": "cristina-innocente",
+        "linkedinUrl": "https://www.linkedin.com/in/cristina-innocente"
+      },
+      {
+        "id": "ACoAABieuvMB_yLXl7QaKaP5bc60usxgZWt2b8E",
+        "firstName": "Bintou",
+        "lastName": "Jobe",
+        "position": "Accountant  at CastLabs",
+        "publicIdentifier": "bintou-jobe",
+        "linkedinUrl": "https://www.linkedin.com/in/bintou-jobe"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAACA1ZlYBXlOe3SP4QbOsJDD9004QZ9fFGwY"
+    }
+  }
+}

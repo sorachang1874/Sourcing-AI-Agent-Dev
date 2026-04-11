@@ -1,0 +1,23 @@
+{
+  "company_identity": {
+    "requested_name": "Thinking Machines Lab",
+    "canonical_name": "Thinking Machines Lab",
+    "company_key": "thinkingmachineslab",
+    "linkedin_slug": "thinkingmachinesai",
+    "linkedin_company_url": "https://www.linkedin.com/company/thinkingmachinesai/",
+    "domain": "thinkingmachines.ai",
+    "aliases": [
+      "thinking machines",
+      "thinking machines ai",
+      "thinkingmachinesai",
+      "tml"
+    ],
+    "resolver": "builtin",
+    "confidence": "high",
+    "notes": "LinkedIn company slug was validated via live Harvest company-employees calls.",
+    "local_asset_available": false,
+    "metadata": {}
+  },
+  "snapshot_id": "20260407T181912",
+  "snapshot_dir": "/home/sorachang/projects/Sourcing AI Agent Dev/sourcing-ai-agent/runtime/company_assets/thinkingmachineslab/20260407T181912"
+}

@@ -1,0 +1,523 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAF8a-tgBRvOpmhNr_IHYHEYX8Grn2sJ1vCA",
+    "profile_url": "https://www.linkedin.com/in/ACwAAF8a-tgBRvOpmhNr_IHYHEYX8Grn2sJ1vCA"
+  },
+  "item": {
+    "id": "ACoAAF8a-tgBsWqvtTuM92mboyLWNKtBoUa9tIU",
+    "publicIdentifier": "liyan-chen-908445386",
+    "linkedinUrl": "https://www.linkedin.com/in/liyan-chen-908445386",
+    "firstName": "Liyan",
+    "lastName": "Chen",
+    "emails": [
+      {
+        "email": "liyan.chen@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "--",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Austin, Texas, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "Austin, TX, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "Texas",
+        "city": "Austin"
+      }
+    },
+    "objectUrn": "1595603672",
+    "registeredAt": "2025-09-23T21:13:35.301Z",
+    "topSkills": null,
+    "connectionsCount": 20,
+    "followerCount": 20,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 12,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "19518",
+        "companyId": "3162",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3162/",
+        "schoolName": "The University of Texas at Austin"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4E03AQE7JCcqU097_A/profile-displayphoto-shrink_400_400/B4EZl4bLo8KQAg-/0/1758662015743?e=1776902400&v=beta&t=5f6EEqbIM8ZOLer8nQo8NYJqKtFZCkb2-kZOvlSvh28",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQE7JCcqU097_A/profile-displayphoto-shrink_400_400/B4EZl4bLo8KQAg-/0/1758662015743?e=1776902400&v=beta&t=5f6EEqbIM8ZOLer8nQo8NYJqKtFZCkb2-kZOvlSvh28",
+          "width": 96,
+          "height": 96,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQE7JCcqU097_A/profile-displayphoto-shrink_200_200/B4EZl4bLo8KQAY-/0/1758662015743?e=1776902400&v=beta&t=dFRpTyaS9TnY8RTTAYSmPhkSAryyzBAskO8f-vfkuJE",
+          "width": 96,
+          "height": 96,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQE7JCcqU097_A/profile-displayphoto-shrink_800_800/B4EZl4bLo8KQAc-/0/1758662015743?e=1776902400&v=beta&t=sL5a10li1rw9s56Xy4by3lmSIDhLhwaQixr0gbhnCCE",
+          "width": 96,
+          "height": 96,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQE7JCcqU097_A/profile-displayphoto-shrink_100_100/B4EZl4bLo8KQAU-/0/1758662015750?e=1776902400&v=beta&t=ZqizWpe-cF2BaWtQXcqFIFqABvRW1wUTl1A-CQPVUB4",
+          "width": 96,
+          "height": 96,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D4E03AQE7JCcqU097_A/profile-displayphoto-shrink_400_400/B4EZl4bLo8KQAg-/0/1758662015743?e=1776902400&v=beta&t=5f6EEqbIM8ZOLer8nQo8NYJqKtFZCkb2-kZOvlSvh28",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "--",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "5 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Dec",
+          "year": 2025,
+          "text": "Dec 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Intern",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Cruise",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/6577635/",
+        "companyId": "6577635",
+        "duration": "10 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2024,
+          "text": "Jun 2024"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2025,
+          "text": "Mar 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQEeMRk0ZPGOMg/company-logo_400_400/company-logo_400_400/0/1630605924177/cruise_automation_inc__logo?e=1776902400&v=beta&t=dstA5oeYDvGP9RnMyJ2AhQ6wnlQkjiVt2kfSuKlvqEQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEeMRk0ZPGOMg/company-logo_400_400/company-logo_400_400/0/1630605924177/cruise_automation_inc__logo?e=1776902400&v=beta&t=dstA5oeYDvGP9RnMyJ2AhQ6wnlQkjiVt2kfSuKlvqEQ",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEeMRk0ZPGOMg/company-logo_200_200/company-logo_200_200/0/1630605924177/cruise_automation_inc__logo?e=1776902400&v=beta&t=REqjyE222M-TFCFb7URqvvjD4TdDLeTd2Q4nfeKEQrs",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEeMRk0ZPGOMg/company-logo_100_100/company-logo_100_100/0/1630605924177/cruise_automation_inc__logo?e=1776902400&v=beta&t=osImG4YNQTgb_zcpWMuSMOCOiVd7TQEujJbt0dwEOAM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "The University of Texas at Austin",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3162/",
+        "schoolId": "3162",
+        "degree": "Doctor of Philosophy - PhD",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQEREeDg1PACXA/company-logo_400_400/company-logo_400_400/0/1630670868977/theuniversityoftexasataustin__logo?e=1776902400&v=beta&t=F8avbgGb79wpuxdFupNqVhGZ33P-eI6eq_AKNdI3r_M",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEREeDg1PACXA/company-logo_400_400/company-logo_400_400/0/1630670868977/theuniversityoftexasataustin__logo?e=1776902400&v=beta&t=F8avbgGb79wpuxdFupNqVhGZ33P-eI6eq_AKNdI3r_M",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEREeDg1PACXA/company-logo_200_200/company-logo_200_200/0/1630670868977/theuniversityoftexasataustin__logo?e=1776902400&v=beta&t=Qv8SlRmp0VATJa1eMNxlVyW_QkJ-WuL6dxKihx5r2l0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEREeDg1PACXA/company-logo_100_100/company-logo_100_100/0/1630670868977/theuniversityoftexasataustin__logo?e=1776902400&v=beta&t=_kdDyxLv4iUPhm25zcSLpll7QZGrMEPuhzvhG7KbGIU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAATAFhsB-MSu8aXWUBacbi6fvU_SaAqdBH4",
+        "firstName": "Jeff",
+        "lastName": "Hanson",
+        "publicIdentifier": "jshanson7",
+        "linkedinUrl": "https://www.linkedin.com/in/jshanson7"
+      },
+      {
+        "id": "ACoAAAPxMTsB6AbW45NodBVmmA7QtDdYCGnuR7A",
+        "firstName": "Lili",
+        "lastName": "Yu",
+        "publicIdentifier": "lili-yu-6771961a",
+        "linkedinUrl": "https://www.linkedin.com/in/lili-yu-6771961a"
+      },
+      {
+        "id": "ACoAABmsYasBhsFwXKca6Ooio5i6nRfTRvN4d2Y",
+        "firstName": "Liyuan",
+        "lastName": "Liu",
+        "publicIdentifier": "liyuanlucasliu",
+        "linkedinUrl": "https://www.linkedin.com/in/liyuanlucasliu"
+      },
+      {
+        "id": "ACoAACaOARIBRO2EEH12QWQO29L__oI3N2K4u14",
+        "firstName": "Mingjie",
+        "lastName": "Sun",
+        "publicIdentifier": "mingjie-sun-06a761160",
+        "linkedinUrl": "https://www.linkedin.com/in/mingjie-sun-06a761160"
+      },
+      {
+        "id": "ACoAAC66rE4BA1J19n2WFXntDP0CA8Uw4NElYBs",
+        "firstName": "Yangjun",
+        "lastName": "Ruan",
+        "publicIdentifier": "yangjun-ruan-55267b19a",
+        "linkedinUrl": "https://www.linkedin.com/in/yangjun-ruan-55267b19a"
+      },
+      {
+        "id": "ACoAACA1ZlYBhPNODsf7Z3UNo1tLYMShFQ7OQJw",
+        "firstName": "Yujia",
+        "lastName": "Bao",
+        "publicIdentifier": "yujia-bao-506b76130",
+        "linkedinUrl": "https://www.linkedin.com/in/yujia-bao-506b76130"
+      },
+      {
+        "id": "ACoAACKNVUMBztbhQ3RUYQ-Mg89xUJ39N-XJpM4",
+        "firstName": "Long",
+        "lastName": "Lian",
+        "publicIdentifier": "longlian",
+        "linkedinUrl": "https://www.linkedin.com/in/longlian"
+      },
+      {
+        "id": "ACoAABYs4-IB5mHx5eVfOHzu1e8xlO3q_kb38IM",
+        "firstName": "Brydon",
+        "lastName": "Eastman",
+        "publicIdentifier": "brydon-eastman-396719a4",
+        "linkedinUrl": "https://www.linkedin.com/in/brydon-eastman-396719a4"
+      },
+      {
+        "id": "ACoAAAFeNNIBGA1Mtyi5_iGkRC19uDzKU2t5dVs",
+        "firstName": "Kunal",
+        "lastName": "Bhalla",
+        "publicIdentifier": "kunalbhalla",
+        "linkedinUrl": "https://www.linkedin.com/in/kunalbhalla"
+      },
+      {
+        "id": "ACoAABoG0oUBl986ZaMrLUASG1NhDoJyVlav4Po",
+        "firstName": "Eric",
+        "lastName": "Zhang",
+        "publicIdentifier": "ekzhang",
+        "linkedinUrl": "https://www.linkedin.com/in/ekzhang"
+      },
+      {
+        "id": "ACoAADCkfncB4P7VWZ-S1Ojv9-aHq_bFsA6LBQY",
+        "firstName": "Ziqiao",
+        "lastName": "Ma",
+        "publicIdentifier": "ziqiao-ma",
+        "linkedinUrl": "https://www.linkedin.com/in/ziqiao-ma"
+      },
+      {
+        "id": "ACoAACGyiT0Bj1s8AlZSk6Y3CJ5pfCuIqpLgJkw",
+        "firstName": "Eric",
+        "lastName": "Peterson",
+        "publicIdentifier": "petersonec",
+        "linkedinUrl": "https://www.linkedin.com/in/petersonec"
+      },
+      {
+        "id": "ACoAABndRmcBpm4Yye7FXowpjFeEUUMBs2FZM3g",
+        "firstName": "Dylan",
+        "lastName": "H.",
+        "publicIdentifier": "dphuang2",
+        "linkedinUrl": "https://www.linkedin.com/in/dphuang2"
+      },
+      {
+        "id": "ACoAABqU8psBncgwN-WH-D8F1Jq9i7OsFmcPDt4",
+        "firstName": "Jeffrey",
+        "lastName": "Tao",
+        "publicIdentifier": "jeffrey-tao",
+        "linkedinUrl": "https://www.linkedin.com/in/jeffrey-tao"
+      },
+      {
+        "id": "ACoAABxxSOoBxMid0wd8m2NDb9w5zTY2lQbrNz4",
+        "firstName": "Leon",
+        "lastName": "G.",
+        "publicIdentifier": "yazhi-gao",
+        "linkedinUrl": "https://www.linkedin.com/in/yazhi-gao"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAACHkUNgBogKk7Q3xekxMdWLMSikZY2zgQsU",
+        "firstName": "Stephen",
+        "lastName": "Roller",
+        "publicIdentifier": "stephen-roller-38851513a",
+        "linkedinUrl": "https://www.linkedin.com/in/stephen-roller-38851513a"
+      },
+      {
+        "id": "ACoAAAeoHjYB_Lo5sUFlpZpz2L74oe9nEIKztQA",
+        "firstName": "Jenya",
+        "lastName": "L.",
+        "publicIdentifier": "jenya-l",
+        "linkedinUrl": "https://www.linkedin.com/in/jenya-l"
+      },
+      {
+        "id": "ACoAABnE_dkBPfQogtTkFfFibUpr_bZ0N0wUbkI",
+        "firstName": "Ewen",
+        "lastName": "W.",
+        "publicIdentifier": "ewenw",
+        "linkedinUrl": "https://www.linkedin.com/in/ewenw"
+      },
+      {
+        "id": "ACoAABVAP64BY4RszeJt11vohsLM-gj1PiARl2o",
+        "firstName": "Jiaming",
+        "lastName": "Cui",
+        "publicIdentifier": "jiaming-cui-57a49a9b",
+        "linkedinUrl": "https://www.linkedin.com/in/jiaming-cui-57a49a9b"
+      },
+      {
+        "id": "ACoAADgZNi4BK_kHjpmm4TbH_VuecCba5pf_yCA",
+        "firstName": "Joëlle",
+        "lastName": "Uwase",
+        "publicIdentifier": "joëlleuwase",
+        "linkedinUrl": "https://www.linkedin.com/in/joëlleuwase"
+      },
+      {
+        "id": "ACoAAEQUQj4BvjSuI-PJmcl9bf9FNrXyLmeMALA",
+        "firstName": "Nico",
+        "lastName": "Koch",
+        "position": "Netzmeister bei Energie 360° AG",
+        "publicIdentifier": "nico-koch-a2661a27a",
+        "linkedinUrl": "https://www.linkedin.com/in/nico-koch-a2661a27a"
+      },
+      {
+        "id": "ACoAAAjoRBUBc9WTB69WtAvlQaWq_rdyTmb-rKI",
+        "firstName": "Simon",
+        "lastName": "Hess",
+        "position": "Bauphysiker mit Leidenschaft für Holzbau und regeneratives Bauen | Leiter Bauphysik & Mitglied Standortleitung Zürich bei Timbatec | Engagiert im Vorstand des SIA Zürich",
+        "publicIdentifier": "simon-hess-24506942",
+        "linkedinUrl": "https://www.linkedin.com/in/simon-hess-24506942"
+      },
+      {
+        "id": "ACoAACFM2IQBZ5-y82iKUDbByXIs1XJja1yPaJc",
+        "firstName": "Stefan",
+        "lastName": "Kollischan",
+        "position": "Leiter Fachbereich Zentrale Versorgung bei ETH Zurich",
+        "publicIdentifier": "stefan-kollischan-804128137",
+        "linkedinUrl": "https://www.linkedin.com/in/stefan-kollischan-804128137"
+      },
+      {
+        "id": "ACoAADRDIqEBWZbZmmq8Qtf_BSuPm4_xIT2Ymok",
+        "firstName": "Benjamin",
+        "lastName": "Huber",
+        "position": "Bauingenieur bei Ribi + Blum AG",
+        "publicIdentifier": "benjamin-huber-115788205",
+        "linkedinUrl": "https://www.linkedin.com/in/benjamin-huber-115788205"
+      },
+      {
+        "id": "ACoAAGW_kEUBSGt5WdTghnvMmd6nXhDndCFw5Ck",
+        "firstName": "Mathis",
+        "lastName": "Kälin",
+        "publicIdentifier": "mathis-kälin-b718313b7",
+        "linkedinUrl": "https://www.linkedin.com/in/mathis-kälin-b718313b7"
+      },
+      {
+        "id": "ACoAAGWogdgBzQkfm9EeFGhxREfdXSY6YAKxVPY",
+        "firstName": "Lumasa",
+        "lastName": "Recrutement",
+        "publicIdentifier": "lumasa-recrutement",
+        "linkedinUrl": "https://www.linkedin.com/in/lumasa-recrutement"
+      },
+      {
+        "id": "ACoAABRU0RQB-oZmtvCN1-m_rJ82rTHCN14L17E",
+        "firstName": "Alba",
+        "lastName": "Franco",
+        "publicIdentifier": "alba-franco-5brty299",
+        "linkedinUrl": "https://www.linkedin.com/in/alba-franco-5brty299"
+      },
+      {
+        "id": "ACoAADV8C_gB9CMBNfUWOXviUSXpzSDCRbVchxk",
+        "firstName": "Simon",
+        "lastName": "Beers",
+        "position": "Dipl. Holzbauingenieur BSc FH & Zimmermann EFZ",
+        "publicIdentifier": "simon-beers-674617210",
+        "linkedinUrl": "https://www.linkedin.com/in/simon-beers-674617210"
+      },
+      {
+        "id": "ACoAADOICwQBp4WEKS7KLTjfm1aKnrBhPNQAjUc",
+        "firstName": "Lukas",
+        "lastName": "Bayer",
+        "position": "Projektleiter Holzbau ERNE AG Holzbau - B.Eng. Holzbau und Ausbau",
+        "publicIdentifier": "lukas-bayer-544654201",
+        "linkedinUrl": "https://www.linkedin.com/in/lukas-bayer-544654201"
+      },
+      {
+        "id": "ACoAAE5YtN0Bk7CYoUe0TcdKLF47ZxSTqcnrTng",
+        "firstName": "Dave",
+        "lastName": "Kuster",
+        "position": "Abteilungsleiter Holzbau bei Knecht AG, Berufsschullehrer",
+        "publicIdentifier": "dave-kuster-1b9251308",
+        "linkedinUrl": "https://www.linkedin.com/in/dave-kuster-1b9251308"
+      },
+      {
+        "id": "ACoAADpnmeEBECGJCONnmFW8W7Hfh9u8ygvT2IE",
+        "firstName": "Lukas",
+        "lastName": "Rees",
+        "position": "Dipl. Holzbauingenieuer | Projektleiter | BSc in Wood Engineering, Timber Structures and Technology (TST) | Schreiner EFZ | Solubois GmbH",
+        "publicIdentifier": "lukas-rees-3951a5234",
+        "linkedinUrl": "https://www.linkedin.com/in/lukas-rees-3951a5234"
+      },
+      {
+        "id": "ACoAADiASNUBRjZVUwcR-mKWu1Kyt83oYmLvsxU",
+        "firstName": "Tobias",
+        "lastName": "Herzog",
+        "position": "Holzbautechniker / Fachlehrer Zimmerleute",
+        "publicIdentifier": "tobias-herzog-471563225",
+        "linkedinUrl": "https://www.linkedin.com/in/tobias-herzog-471563225"
+      },
+      {
+        "id": "ACoAAB9BecEBytmFocwGMBWn9NXPeTkoe9byQg4",
+        "firstName": "Mauro",
+        "lastName": "Schuler",
+        "position": "Leiter Netzbetrieb und Netzbau bei ewz",
+        "publicIdentifier": "mauro-schuler-455747127",
+        "linkedinUrl": "https://www.linkedin.com/in/mauro-schuler-455747127"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAF8a-tgBRvOpmhNr_IHYHEYX8Grn2sJ1vCA"
+    }
+  }
+}

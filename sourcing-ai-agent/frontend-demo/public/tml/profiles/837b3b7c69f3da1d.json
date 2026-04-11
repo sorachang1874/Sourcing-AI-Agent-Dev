@@ -1,0 +1,1348 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAABuic64B952R5-JBL4lBFH-2V4q07o-a7vg",
+    "profile_url": "https://www.linkedin.com/in/ACwAABuic64B952R5-JBL4lBFH-2V4q07o-a7vg"
+  },
+  "item": {
+    "id": "ACoAABuic64ByAamVZUaakEsNpn9x0LY3ddP2yU",
+    "publicIdentifier": "justus-byok",
+    "linkedinUrl": "https://www.linkedin.com/in/justus-byok",
+    "firstName": "Justus",
+    "lastName": "Byok",
+    "emails": [],
+    "companyWebsites": [
+      {
+        "url": "https://www.timelyai.com",
+        "domain": "timelyai.com",
+        "validEmailServer": true
+      },
+      {
+        "url": "https://overland.ai/",
+        "domain": "overland.ai"
+      },
+      {
+        "url": "https://www.starcloud.com/",
+        "domain": "starcloud.com"
+      },
+      {
+        "url": "http://www.anduril.com",
+        "domain": "anduril.com"
+      }
+    ],
+    "headline": "Defense, Security and Resilience",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Berlin, Berlin, Germany",
+      "countryCode": "DE",
+      "parsed": {
+        "text": "Berlin, Germany",
+        "countryCode": "DE",
+        "regionCode": null,
+        "country": "Germany",
+        "countryFull": "Germany",
+        "state": "Berlin",
+        "city": "Berlin"
+      }
+    },
+    "objectUrn": "463631278",
+    "registeredAt": "2015-11-25T14:43:09.286Z",
+    "topSkills": null,
+    "connectionsCount": 14500,
+    "followerCount": 14601,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "79372457",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/79372457/",
+        "companyName": "Stealth",
+        "dateRange": {
+          "start": {
+            "month": 9,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "3156146",
+        "companyId": "2816339",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2816339/",
+        "schoolName": "IE School of Science and Technology"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4E03AQEhf3ulvT5kCA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1688453701151?e=1776902400&v=beta&t=eLSOqF841P07aKYvnsjpU_fxKpcWKsoeGl-oIQF0UhU",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQEhf3ulvT5kCA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1688453701151?e=1776902400&v=beta&t=eLSOqF841P07aKYvnsjpU_fxKpcWKsoeGl-oIQF0UhU",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQEhf3ulvT5kCA/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1688453701151?e=1776902400&v=beta&t=SON6LN4sjzkUon6g_CGRZiujkMQ7Z2XiMZhSqI4PKoE",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQEhf3ulvT5kCA/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1688453701151?e=1776902400&v=beta&t=N4gNsqTew_Bli3f1HhBLQLLinT7jcFXFgPj2aHi7ksY",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQEhf3ulvT5kCA/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1688453701151?e=1776902400&v=beta&t=eObArj4PezvAYKEuoVNVGFDyuwuNOgKCIZin6sfHgWs",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": {
+      "url": "https://media.licdn.com/dms/image/v2/C4E16AQFiJXK8FpmqpA/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1643154103650?e=1776902400&v=beta&t=fANpekeTYV5GGupVyDFaSHfeDcfFoH-zxnlkWbOUFKw",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4E16AQFiJXK8FpmqpA/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1643154103650?e=1776902400&v=beta&t=fANpekeTYV5GGupVyDFaSHfeDcfFoH-zxnlkWbOUFKw",
+          "width": 1400,
+          "height": 350,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4E16AQFiJXK8FpmqpA/profile-displaybackgroundimage-shrink_200_800/profile-displaybackgroundimage-shrink_200_800/0/1643154103650?e=1776902400&v=beta&t=sQB1_BfHgUbZgfMwKM8YRIF_IIiCRJKMIlMx7_NP-VA",
+          "width": 800,
+          "height": 200,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "photo": "https://media.licdn.com/dms/image/v2/D4E03AQEhf3ulvT5kCA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1688453701151?e=1776902400&v=beta&t=eLSOqF841P07aKYvnsjpU_fxKpcWKsoeGl-oIQF0UhU",
+    "profileLocales": [
+      {
+        "country": "DE",
+        "language": "de"
+      }
+    ],
+    "primaryLocale": {
+      "country": "DE",
+      "language": "de"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Defense, Security and Resilience",
+        "locale": "de_DE"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Defense, Security and Resilience",
+        "location": "Berlin/Munich",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Stealth",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/steath/",
+        "companyId": "79372457",
+        "companyUniversalName": "steath",
+        "duration": "8 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2025,
+          "text": "Sep 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGZmytIy-1DPA/company-logo_400_400/B56ZZYBgQTGUAY-/0/1745233511985/timelyai_logo?e=1776902400&v=beta&t=f4rlGgGnn5nfb2ZbEtea4imdU3E9Hoiyo58dTnhOpG4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGZmytIy-1DPA/company-logo_400_400/B56ZZYBgQTGUAY-/0/1745233511985/timelyai_logo?e=1776902400&v=beta&t=f4rlGgGnn5nfb2ZbEtea4imdU3E9Hoiyo58dTnhOpG4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGZmytIy-1DPA/company-logo_200_200/B56ZZYBgQTGUAI-/0/1745233511985/timelyai_logo?e=1776902400&v=beta&t=cGnWuO_6dKQxn5R6tHpkzG7Qxqn1XQB8G3EXP3xErvY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGZmytIy-1DPA/company-logo_100_100/B56ZZYBgQTGUAQ-/0/1745233511985/timelyai_logo?e=1776902400&v=beta&t=P5Q6dcmZ6fp6ZiYhK9v1H-xvtRRyCj3i2Bdz1CfcMZA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Overland AI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/90415924/",
+        "companyId": "90415924",
+        "duration": "1 yr 4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "year": 2025,
+          "text": "2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHXELnJ6WodWg/company-logo_400_400/company-logo_400_400/0/1714505292845/overland_ai_logo?e=1776902400&v=beta&t=XUDmEum1DnQpEECWzEVxq-N14OdXYndoA0X1SOB7Hyo",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHXELnJ6WodWg/company-logo_400_400/company-logo_400_400/0/1714505292845/overland_ai_logo?e=1776902400&v=beta&t=XUDmEum1DnQpEECWzEVxq-N14OdXYndoA0X1SOB7Hyo",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHXELnJ6WodWg/company-logo_200_200/company-logo_200_200/0/1714505292845/overland_ai_logo?e=1776902400&v=beta&t=uWBb9ZHHeJgW60khhF7CePXsPbBYwAEUCwNBGXWHCQA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHXELnJ6WodWg/company-logo_100_100/company-logo_100_100/0/1714505292845/overland_ai_logo?e=1776902400&v=beta&t=3SGy10EsnL5grA0s2DgmhbZ5zrziVJ_6ZZXwWLA27Lc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Starcloud",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/100775936/",
+        "companyId": "100775936",
+        "duration": "1 yr 4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "year": 2025,
+          "text": "2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQElZ9HqY651iw/company-logo_400_400/company-logo_400_400/0/1708480872395/lumen_orbit_logo?e=1776902400&v=beta&t=YK83vbAXkqPbcAY0ExK4MzhdfLGzoeY90DQOpwo9_hs",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQElZ9HqY651iw/company-logo_400_400/company-logo_400_400/0/1708480872395/lumen_orbit_logo?e=1776902400&v=beta&t=YK83vbAXkqPbcAY0ExK4MzhdfLGzoeY90DQOpwo9_hs",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQElZ9HqY651iw/company-logo_200_200/company-logo_200_200/0/1708480872395/lumen_orbit_logo?e=1776902400&v=beta&t=aLDR6t0ADyZv1LkoJq4x1q8qyDKlCyyEMm_r_MVjJRY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQElZ9HqY651iw/company-logo_100_100/company-logo_100_100/0/1708480872395/lumen_orbit_logo?e=1776902400&v=beta&t=X_Y2kYd-u71AsXZEuojpA2qEyjbTDpg2Q10DaHXt0Dk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Anduril Industries",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/18293159/",
+        "companyId": "18293159",
+        "duration": "2 yrs 4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "year": 2024,
+          "text": "2024"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQE_NOVau3lvmw/company-logo_400_400/company-logo_400_400/0/1630637180845/andurilindustries_logo?e=1776902400&v=beta&t=UfoenMWTaQF7nP_Eaz05DiIV4HfXAoAqvImjkQzDDwQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQE_NOVau3lvmw/company-logo_400_400/company-logo_400_400/0/1630637180845/andurilindustries_logo?e=1776902400&v=beta&t=UfoenMWTaQF7nP_Eaz05DiIV4HfXAoAqvImjkQzDDwQ",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQE_NOVau3lvmw/company-logo_200_200/company-logo_200_200/0/1630637180845/andurilindustries_logo?e=1776902400&v=beta&t=RR_R6EXLHLTrTc2AKf0IV7FGhr52k3YK3ZlP2Ea6bYI",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQE_NOVau3lvmw/company-logo_100_100/company-logo_100_100/0/1630637180845/andurilindustries_logo?e=1776902400&v=beta&t=zuidF2vkhjryo-d365Wa79y3LEBkU_vFwRWowo08ObA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "The Bot Company",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/103794577/",
+        "companyId": "103794577",
+        "duration": "2 yrs 4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "year": 2024,
+          "text": "2024"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGUDDJMl5vgxw/company-logo_400_400/company-logo_400_400/0/1728076365915/botco_logo?e=1776902400&v=beta&t=BgZkQuuKmP-5ipeiU6sq48rSgfa5dS_0XQI605WmXjI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGUDDJMl5vgxw/company-logo_400_400/company-logo_400_400/0/1728076365915/botco_logo?e=1776902400&v=beta&t=BgZkQuuKmP-5ipeiU6sq48rSgfa5dS_0XQI605WmXjI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGUDDJMl5vgxw/company-logo_200_200/company-logo_200_200/0/1728076365915/botco_logo?e=1776902400&v=beta&t=r1Nnzj5d0LvNPC9R_8KaKjMFMA3auhoIcfld6yShlZc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGUDDJMl5vgxw/company-logo_100_100/company-logo_100_100/0/1728076365915/botco_logo?e=1776902400&v=beta&t=NU0pYj27TpZY_QTtBkheZGjSqFDpJ527ISvs0mTVZpw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Shield AI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/7952659/",
+        "companyId": "7952659",
+        "duration": "4 yrs 4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "year": 2022,
+          "text": "2022"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGzUdrzUBQzRQ/company-logo_400_400/B56ZfHMjEoGoAk-/0/1751393645137/shield_ai_logo?e=1776902400&v=beta&t=AhBER9TKtafWWRKPDjgeX64-yGkZxYM8T0ujl7rCQII",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGzUdrzUBQzRQ/company-logo_400_400/B56ZfHMjEoGoAk-/0/1751393645137/shield_ai_logo?e=1776902400&v=beta&t=AhBER9TKtafWWRKPDjgeX64-yGkZxYM8T0ujl7rCQII",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGzUdrzUBQzRQ/company-logo_200_200/B56ZfHMjEoGoAU-/0/1751393645137/shield_ai_logo?e=1776902400&v=beta&t=Pgd-zUTvR1UhPGt89zn-44Q5MsG_UjP9he8V28SvVuM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGzUdrzUBQzRQ/company-logo_100_100/B56ZfHMjEoGoAc-/0/1751393645137/shield_ai_logo?e=1776902400&v=beta&t=xAsmDGGyyTxFawrlE_oDAYo_Q_jzxYElo6xlXUShcNM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Anthropic",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/74126343/",
+        "companyId": "74126343",
+        "duration": "4 yrs 4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "year": 2022,
+          "text": "2022"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_400_400/company-logo_400_400/0/1719256729905/anthropicresearch_logo?e=1776902400&v=beta&t=6sv-GagnF1G5d4B4rN1Yu3sq6fln2BP_9tb0s6bARoY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_400_400/company-logo_400_400/0/1719256729905/anthropicresearch_logo?e=1776902400&v=beta&t=6sv-GagnF1G5d4B4rN1Yu3sq6fln2BP_9tb0s6bARoY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_200_200/company-logo_200_200/0/1719256413073/anthropicresearch_logo?e=1776902400&v=beta&t=cPQIIISEsrdyXB00bI4BYAdxnK2Mx72yV0BDdzg3baM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_100_100/company-logo_100_100/0/1719256989269/anthropicresearch_logo?e=1776902400&v=beta&t=6343WBiudLAu8QSHWrlzIJOnlExxTT9uZZpuCs-AeLk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Crusoe",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/19150725/",
+        "companyId": "19150725",
+        "duration": "3 yrs 4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "year": 2023,
+          "text": "2023"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQE7FzuTZ9CHeA/company-logo_400_400/B56Z0hHtRaKcAY-/0/1774377162134/crusoe_logo?e=1776902400&v=beta&t=x5gkcaOxAuue26-6GadcoKh5xBDDB1DvFBbpZ6SoZVE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQE7FzuTZ9CHeA/company-logo_400_400/B56Z0hHtRaKcAY-/0/1774377162134/crusoe_logo?e=1776902400&v=beta&t=x5gkcaOxAuue26-6GadcoKh5xBDDB1DvFBbpZ6SoZVE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQE7FzuTZ9CHeA/company-logo_200_200/B56Z0hHtRaKcAI-/0/1774377162134/crusoe_logo?e=1776902400&v=beta&t=jMFx_f1gslVVxhxLAyuxL-wqzhGmYjikZ-uea09XQ2I",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQE7FzuTZ9CHeA/company-logo_100_100/B56Z0hHtRaKcAQ-/0/1774377162134/crusoe_logo?e=1776902400&v=beta&t=VC_2e-ckBz1KPf8xGxDqoOo5mL-y-b7VxrCKHcp-04o",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyId": "105913171",
+        "duration": "2 yrs 4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "year": 2024,
+          "text": "2024"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "SpaceX",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/30846/",
+        "companyId": "30846",
+        "duration": "5 yrs 4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "year": 2021,
+          "text": "2021"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQEbqLQ-JE0vdQ/company-logo_400_400/company-logo_400_400/0/1630604387686/spacex_logo?e=1776902400&v=beta&t=FdwatxFmyAUnRL8gNRGdXAmiSB71NpSD1PEv8BZCRSo",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEbqLQ-JE0vdQ/company-logo_400_400/company-logo_400_400/0/1630604387686/spacex_logo?e=1776902400&v=beta&t=FdwatxFmyAUnRL8gNRGdXAmiSB71NpSD1PEv8BZCRSo",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEbqLQ-JE0vdQ/company-logo_200_200/company-logo_200_200/0/1630604387686/spacex_logo?e=1776902400&v=beta&t=6-jcr5kWn26kULJYuFWYc5JYfz3P7E1eQagjT7aZ5D0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEbqLQ-JE0vdQ/company-logo_100_100/company-logo_100_100/0/1630604387686/spacex_logo?e=1776902400&v=beta&t=4bHEbRbp89RqhPoA7DHle_fAyXT6B8_DOw36x38PnHc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Lightmatter",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/18377405/",
+        "companyId": "18377405",
+        "duration": "3 yrs 4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "year": 2023,
+          "text": "2023"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQE8LrgY6h2SRw/company-logo_400_400/company-logo_400_400/0/1736296149550/lightmatter_logo?e=1776902400&v=beta&t=aQ5GLrbEdGXBREFLJxqghIh_EMgprgViQm2bCaSRfs0",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQE8LrgY6h2SRw/company-logo_400_400/company-logo_400_400/0/1736296149550/lightmatter_logo?e=1776902400&v=beta&t=aQ5GLrbEdGXBREFLJxqghIh_EMgprgViQm2bCaSRfs0",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQE8LrgY6h2SRw/company-logo_200_200/company-logo_200_200/0/1736296149550/lightmatter_logo?e=1776902400&v=beta&t=f86IT3qbBKKXKDftj1gozeXGcJJQWaH1neBLUvWhjgg",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQE8LrgY6h2SRw/company-logo_100_100/company-logo_100_100/0/1736296149550/lightmatter_logo?e=1776902400&v=beta&t=GVvH_elYmhCCH1AOjrYtrhHDRci_KDz-ACKrtM-cSrA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Lambda",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/2906528/",
+        "companyId": "2906528",
+        "duration": "3 yrs 4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "year": 2023,
+          "text": "2023"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGU4s-lhN0gYw/company-logo_400_400/company-logo_400_400/0/1729098957787/lambda_labs_logo?e=1776902400&v=beta&t=hgo8cecNsDH9IEETjoopHvMqmOzITAaXRwwJmV2qp4E",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGU4s-lhN0gYw/company-logo_400_400/company-logo_400_400/0/1729098957787/lambda_labs_logo?e=1776902400&v=beta&t=hgo8cecNsDH9IEETjoopHvMqmOzITAaXRwwJmV2qp4E",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGU4s-lhN0gYw/company-logo_200_200/company-logo_200_200/0/1729098957787/lambda_labs_logo?e=1776902400&v=beta&t=roDayw3PwThdgRtUuFCBReN_kBKGuO3ckF7JU2KGwQY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGU4s-lhN0gYw/company-logo_100_100/company-logo_100_100/0/1729098957787/lambda_labs_logo?e=1776902400&v=beta&t=v_jwSpCefT4_9U9H_bJ5WRQHqOf6MAa-kejLHwajsUY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Plaid",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/2684737/",
+        "companyId": "2684737",
+        "duration": "3 yrs 4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "year": 2023,
+          "text": "2023"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQET1PssqfCU5g/company-logo_400_400/B4EZarmEzJGYAg-/0/1746635608257/plaid__logo?e=1776902400&v=beta&t=Op9HrAb1X9w0ywj8DhGdHzPgw2q2Eo3yuazrPDncFqE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQET1PssqfCU5g/company-logo_400_400/B4EZarmEzJGYAg-/0/1746635608257/plaid__logo?e=1776902400&v=beta&t=Op9HrAb1X9w0ywj8DhGdHzPgw2q2Eo3yuazrPDncFqE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQET1PssqfCU5g/company-logo_200_200/B4EZarmEzJGYAQ-/0/1746635608257/plaid__logo?e=1776902400&v=beta&t=RahTvhB2jgVYP7Kq2rH8joiSSYatM3Xh2OahGPhR-74",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQET1PssqfCU5g/company-logo_100_100/B4EZarmEzJGYAY-/0/1746635608257/plaid__logo?e=1776902400&v=beta&t=lB4CBxrHHZtzePbPgNErr7obK4rwvCYDHMLt1fExPR0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Freelance Software Engineer",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Flashbuild.xyz",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Flashbuild%2Exyz",
+        "duration": "2 yrs 4 mos",
+        "description": "Working with SMBs building full stack web applications, mobile MVPs, process automation tools",
+        "skills": null,
+        "startDate": {
+          "year": 2024,
+          "text": "2024"
+        },
+        "endDate": {
+          "text": "Present"
+        }
+      },
+      {
+        "position": "Investment Associate",
+        "location": "Munich, Bavaria, Germany",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Antler",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/27221633/",
+        "companyId": "27221633",
+        "duration": "Less than a year",
+        "description": "Launched our Munich office. \n\nAntler is the most active investor globally and one of the most selective - investing in ~0.3% of their dealflow across Europe and globally. Backers of outlier companies around the world such as Airalo (Asia), Lovable (Europe) or Reebelo (US).",
+        "skills": null,
+        "startDate": {
+          "year": 2023,
+          "text": "2023"
+        },
+        "endDate": {
+          "year": 2023,
+          "text": "2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGcO8WhScYJvg/company-logo_400_400/company-logo_400_400/0/1630652634929/antlerglobal_logo?e=1776902400&v=beta&t=rztNvNW-MZkiTFx_hG0GdrbkzxQiMvGqSLUKaCHxLds",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGcO8WhScYJvg/company-logo_400_400/company-logo_400_400/0/1630652634929/antlerglobal_logo?e=1776902400&v=beta&t=rztNvNW-MZkiTFx_hG0GdrbkzxQiMvGqSLUKaCHxLds",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGcO8WhScYJvg/company-logo_200_200/company-logo_200_200/0/1630652634929/antlerglobal_logo?e=1776902400&v=beta&t=EqEVvYddQ2avtC8BTRZNE5TbNbtrFTzXyj4fCYk7cvM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGcO8WhScYJvg/company-logo_100_100/company-logo_100_100/0/1630652634929/antlerglobal_logo?e=1776902400&v=beta&t=BxiDdtySN5PdUiINmM07bE54U-IWWGw2e_1fToLCURw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investment Analyst",
+        "location": "Boulder, Colorado, United States",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Sweater",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/19204614/",
+        "companyId": "19204614",
+        "duration": "2 yrs",
+        "description": "Direct: \n\n- Series C @ Havenly\n- Series B @ The Dyrt\n- Series A @ GO\n- Series A @ True Footage\n- Series A @ Hone Health\n- Series A @ Frances Valentine \n- Series A @ Accredible\n- Series A @ Solarcore\n- Series A @ Trellis\n- Series A @ IQBAR\n- Seed @ Earlybird\n- Seed @ Shappi\n- Seed @ After\n- Seed @ Beem\n- Seed @ Graza\n- Seed @ Pear Suite\n- Seed @ Cloud Apartments\n- Seed @ Guest House\n- Seed @ Cabinet Health\n- Seed @ Wyndly\n- Seed @ EarlyBird\n- Seed @ Shappi\n\n\nFoF:\n\n- Stonks\n- Curate Capital\n- Ganas Ventures\n- Symphonic Capital",
+        "skills": null,
+        "startDate": {
+          "year": 2021,
+          "text": "2021"
+        },
+        "endDate": {
+          "year": 2023,
+          "text": "2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHE4i-x60eOhA/company-logo_400_400/company-logo_400_400/0/1664217005820/sweaterventures_logo?e=1776902400&v=beta&t=QSOLz4OK63RmdehfB4DcK3M-xE0HOGh4RW8Z78aih0w",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHE4i-x60eOhA/company-logo_400_400/company-logo_400_400/0/1664217005820/sweaterventures_logo?e=1776902400&v=beta&t=QSOLz4OK63RmdehfB4DcK3M-xE0HOGh4RW8Z78aih0w",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHE4i-x60eOhA/company-logo_200_200/company-logo_200_200/0/1664217005820/sweaterventures_logo?e=1776902400&v=beta&t=e7zVpslpaoMBcMWytbbIDWd4kW-NQFbOvyLABpyjlUU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHE4i-x60eOhA/company-logo_100_100/company-logo_100_100/0/1664217005820/sweaterventures_logo?e=1776902400&v=beta&t=lc6hNQdY3gZOzuTu7D2ZtqlHHSQVFVh2lF9dVg8p7PM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Product",
+        "location": "New York, New York, United States",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "N26",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3116425/",
+        "companyId": "3116425",
+        "duration": "Less than a year",
+        "description": "Worked on credit score building feature",
+        "skills": null,
+        "startDate": {
+          "year": 2021,
+          "text": "2021"
+        },
+        "endDate": {
+          "year": 2021,
+          "text": "2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHAHm6EVpvgAA/company-logo_400_400/B4EZVMGICmGYAY-/0/1740738429526/n26_logo?e=1776902400&v=beta&t=5frqqM8su7iugNRYxUWtCLml3-pNTCO8cR5mq5qU_Js",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHAHm6EVpvgAA/company-logo_400_400/B4EZVMGICmGYAY-/0/1740738429526/n26_logo?e=1776902400&v=beta&t=5frqqM8su7iugNRYxUWtCLml3-pNTCO8cR5mq5qU_Js",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHAHm6EVpvgAA/company-logo_200_200/B4EZVMGICmGYAI-/0/1740738429526/n26_logo?e=1776902400&v=beta&t=ZJNtWjWAjmFJbJyHdT-TVVIhZet9SWnX7aAQovH_XOY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHAHm6EVpvgAA/company-logo_100_100/B4EZVMGICmGYAQ-/0/1740738429526/n26_logo?e=1776902400&v=beta&t=CynnBA5MsiLJI-Ngco9bWerLcO26xdltQk_O5epppCE",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Asset Management",
+        "location": "Frankfurt, Hesse, Germany",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Wellington Management",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/166910/",
+        "companyId": "166910",
+        "duration": "1 yr",
+        "description": "Sought alpha for institutionals",
+        "skills": null,
+        "startDate": {
+          "year": 2020,
+          "text": "2020"
+        },
+        "endDate": {
+          "year": 2021,
+          "text": "2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEsfxjbsao8xw/company-logo_400_400/B4DZfGLOLdGgAY-/0/1751376520175/wellington_management_logo?e=1776902400&v=beta&t=ceUNJ3rPppZw5kJlKKQ2yAGSnBmm66o0dCKMMtQZjNc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEsfxjbsao8xw/company-logo_400_400/B4DZfGLOLdGgAY-/0/1751376520175/wellington_management_logo?e=1776902400&v=beta&t=ceUNJ3rPppZw5kJlKKQ2yAGSnBmm66o0dCKMMtQZjNc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEsfxjbsao8xw/company-logo_200_200/B4DZfGLOLdGgAI-/0/1751376520175/wellington_management_logo?e=1776902400&v=beta&t=5T7MKo1dZJdZMF1ZmnZ4XjtcT6dZTcBaSXZFjSCszRA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEsfxjbsao8xw/company-logo_100_100/B4DZfGLOLdGgAQ-/0/1751376520175/wellington_management_logo?e=1776902400&v=beta&t=aLd40qPqKfvSwVOciuwnTwib-Kx_wLKx9fyQhhsLZ3g",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investment Management",
+        "location": "Munich, Bavaria, Germany",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Scalable Capital",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/6459769/",
+        "companyId": "6459769",
+        "duration": "1 yr",
+        "description": "Wealthtech, digital ETF robo advisory and brokerage",
+        "skills": null,
+        "startDate": {
+          "year": 2019,
+          "text": "2019"
+        },
+        "endDate": {
+          "year": 2020,
+          "text": "2020"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQG8TzFyexL35Q/company-logo_400_400/company-logo_400_400/0/1728978823052/scalable_capital_logo?e=1776902400&v=beta&t=I6VzVMXhN4MLnC0Cj8rS6BM9kBMe4kyXHODdJtR0lsM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQG8TzFyexL35Q/company-logo_400_400/company-logo_400_400/0/1728978823052/scalable_capital_logo?e=1776902400&v=beta&t=I6VzVMXhN4MLnC0Cj8rS6BM9kBMe4kyXHODdJtR0lsM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQG8TzFyexL35Q/company-logo_200_200/company-logo_200_200/0/1728978823052/scalable_capital_logo?e=1776902400&v=beta&t=SMgXkmWvOdtm9QmcXDWLnApLz96MHNQtFUWo_5SosOc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQG8TzFyexL35Q/company-logo_100_100/company-logo_100_100/0/1728978823052/scalable_capital_logo?e=1776902400&v=beta&t=rz41GXe_6HrB0gsIvv2jOzwAsObbHwdj62vqFZswSGc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Private Capital Advisory",
+        "location": "Düsseldorf, North Rhine-Westphalia, Germany",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Commerzbank AG",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/157323/",
+        "companyId": "157323",
+        "duration": "2 yrs",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "year": 2016,
+          "text": "2016"
+        },
+        "endDate": {
+          "year": 2018,
+          "text": "2018"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHC477dCZPjUw/company-logo_400_400/B4EZhrnTWWHgAY-/0/1754152122206/commerzbank_ag_logo?e=1776902400&v=beta&t=C7ZP_JbdeQPRJldcdN8q5j-2pt3n5uwDrPTS0oAyxNE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHC477dCZPjUw/company-logo_400_400/B4EZhrnTWWHgAY-/0/1754152122206/commerzbank_ag_logo?e=1776902400&v=beta&t=C7ZP_JbdeQPRJldcdN8q5j-2pt3n5uwDrPTS0oAyxNE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHC477dCZPjUw/company-logo_200_200/B4EZhrnTWWHgAI-/0/1754152122206/commerzbank_ag_logo?e=1776902400&v=beta&t=Dgte5Kv700TE7XHGIH-HQJLINYDKPXrJNOSBuMVGv0g",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHC477dCZPjUw/company-logo_100_100/B4EZhrnTWWHgAQ-/0/1754152122206/commerzbank_ag_logo?e=1776902400&v=beta&t=yK1TYmS_S55V7Rnxv7CD4TZN5sUZSV6k7DcuIVdGzQY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "IE School of Science and Technology",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2816339/",
+        "schoolId": "2816339",
+        "degree": "Master of Science - MSc",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "description": "Concentration: Natural Language Processing",
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEL34DQ7x4bmg/company-logo_400_400/company-logo_400_400/0/1663162355752/iesst_logo?e=1776902400&v=beta&t=rGxeaWvqmvygEzRr4rkc7l8Gr5-PZkqv4YpKLlUr-No",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEL34DQ7x4bmg/company-logo_400_400/company-logo_400_400/0/1663162355752/iesst_logo?e=1776902400&v=beta&t=rGxeaWvqmvygEzRr4rkc7l8Gr5-PZkqv4YpKLlUr-No",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEL34DQ7x4bmg/company-logo_200_200/company-logo_200_200/0/1663162355752/iesst_logo?e=1776902400&v=beta&t=REnW1Dzbxuae37dIaRpu4Yq66XPZd4hgQA4mMJ9JKXc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEL34DQ7x4bmg/company-logo_100_100/company-logo_100_100/0/1663162355752/iesst_logo?e=1776902400&v=beta&t=yKJfoEpbYjZ4t1Bgh2usSP71kQwl55dotq2osGENAnU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "North Carolina State University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/4813/",
+        "schoolId": "4813",
+        "degree": "Bachelor of Science - BSc",
+        "fieldOfStudy": "Finance (Double Degree)",
+        "skills": [],
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGaD7AuaL571Q/company-logo_400_400/company-logo_400_400/0/1645128364860/north_carolina_state_university_logo?e=1776902400&v=beta&t=Gaun1U1d2Ccj1fbMprLoTANvee2l11vB1xZ-kFgLSxQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGaD7AuaL571Q/company-logo_400_400/company-logo_400_400/0/1645128364860/north_carolina_state_university_logo?e=1776902400&v=beta&t=Gaun1U1d2Ccj1fbMprLoTANvee2l11vB1xZ-kFgLSxQ",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGaD7AuaL571Q/company-logo_200_200/company-logo_200_200/0/1645128364859/north_carolina_state_university_logo?e=1776902400&v=beta&t=v4cplvmlxlQKViO5wXqOgTqLR4McNPLQrMcmVHUFQzY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGaD7AuaL571Q/company-logo_100_100/company-logo_100_100/0/1645128364859/north_carolina_state_university_logo?e=1776902400&v=beta&t=cGMOwK-5_YhWAYPUg9zCrfpLdnNifqrtpr-taNtgC3s",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "ESB Business School, Reutlingen University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/566966/",
+        "schoolId": "566966",
+        "degree": "Bachelor of Science - BSc",
+        "fieldOfStudy": "International Management (Double Degree)",
+        "skills": [],
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFS64i2LTFjhQ/company-logo_400_400/company-logo_400_400/0/1649160478221/esb_business_school_logo?e=1776902400&v=beta&t=xX7dR63_r2-Sa6vOhcSQTueF_iMOM4rYxkxXZluXEK8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFS64i2LTFjhQ/company-logo_400_400/company-logo_400_400/0/1649160478221/esb_business_school_logo?e=1776902400&v=beta&t=xX7dR63_r2-Sa6vOhcSQTueF_iMOM4rYxkxXZluXEK8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFS64i2LTFjhQ/company-logo_200_200/company-logo_200_200/0/1649160478221/esb_business_school_logo?e=1776902400&v=beta&t=UlOvzo8aOzDLdBFBUi8Lua0PqrlQXKHiClXr4VOh0Hw",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFS64i2LTFjhQ/company-logo_100_100/company-logo_100_100/0/1649160478221/esb_business_school_logo?e=1776902400&v=beta&t=Ygtfns0ob2vUNET9PTl8tyyml3XPimU_nrcEEsb5d10",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Management",
+        "endorsements": "14 endorsements"
+      },
+      {
+        "name": "Microsoft Office",
+        "positions": [
+          "Endorsed by 2 colleagues at Scalable Capital"
+        ],
+        "endorsements": "12 endorsements"
+      },
+      {
+        "name": "Microsoft Excel",
+        "endorsements": "10 endorsements"
+      },
+      {
+        "name": "Microsoft Word",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Banking ",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Asset-Management",
+        "endorsements": "1 endorsement"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAAq-6TMBmKVtleWgKvU5RYvFWfM6Tl3kVRs",
+        "firstName": "Michael",
+        "lastName": "Bassler",
+        "publicIdentifier": "michaelbassler",
+        "linkedinUrl": "https://www.linkedin.com/in/michaelbassler"
+      },
+      {
+        "id": "ACoAABD-b6EBX4l_BVsKnZJdLASofSwAry09CLE",
+        "firstName": "Emanuel",
+        "lastName": "v. Grolman",
+        "publicIdentifier": "emanuel-grolman",
+        "linkedinUrl": "https://www.linkedin.com/in/emanuel-grolman"
+      },
+      {
+        "id": "ACoAABLlyQsBbtBOXhF8ez7T4T3159AJ9UyzU_A",
+        "firstName": "Eva",
+        "lastName": "Spannagl",
+        "publicIdentifier": "evaspannagl",
+        "linkedinUrl": "https://www.linkedin.com/in/evaspannagl"
+      },
+      {
+        "id": "ACoAABOKFegBQViZ-Dt0CogB295eP5iBPxu39yg",
+        "firstName": "Simon",
+        "lastName": "Bartmann",
+        "publicIdentifier": "simon-bartmann-88895091",
+        "linkedinUrl": "https://www.linkedin.com/in/simon-bartmann-88895091"
+      },
+      {
+        "id": "ACoAABc1KzABbtNnrMMxkbAVt6k_SRV8ahCFwdc",
+        "firstName": "Hans-Peter",
+        "lastName": "Frank",
+        "publicIdentifier": "hans-peterfrank",
+        "linkedinUrl": "https://www.linkedin.com/in/hans-peterfrank"
+      },
+      {
+        "id": "ACoAAAynkEEBXx4lQ71otqcmsfMguNVBkk-3i6g",
+        "firstName": "Frederik",
+        "lastName": "Brandis",
+        "publicIdentifier": "frederikbrandis",
+        "linkedinUrl": "https://www.linkedin.com/in/frederikbrandis"
+      },
+      {
+        "id": "ACoAABm8548BJFv25h_w4FLI_6H43k8rGKmmRUs",
+        "firstName": "Davide",
+        "lastName": "B.",
+        "publicIdentifier": "davide-bragetti",
+        "linkedinUrl": "https://www.linkedin.com/in/davide-bragetti"
+      },
+      {
+        "id": "ACoAAANpX4sBHwWv1TSrtte2vgzH-zphB7zfoIQ",
+        "firstName": "Jack",
+        "lastName": "Clark",
+        "publicIdentifier": "jack-clark-5a320317",
+        "linkedinUrl": "https://www.linkedin.com/in/jack-clark-5a320317"
+      },
+      {
+        "id": "ACoAACbE6zABFCusU8_GfoBBl8kW6hOAabjbPRk",
+        "firstName": "Nils",
+        "lastName": "Blach",
+        "publicIdentifier": "nils-blach-8949b7161",
+        "linkedinUrl": "https://www.linkedin.com/in/nils-blach-8949b7161"
+      },
+      {
+        "id": "ACoAABGsVp0B54xKqsiakSbkQ53hWkMGNob2X1E",
+        "firstName": "James",
+        "lastName": "Black",
+        "publicIdentifier": "-james-black",
+        "linkedinUrl": "https://www.linkedin.com/in/-james-black"
+      },
+      {
+        "id": "ACoAAChpvJkBB_BlnGaPip9eEjr3lMzyLc1cuHY",
+        "firstName": "Adriaan",
+        "lastName": "Engelbrecht",
+        "publicIdentifier": "amengelbrecht",
+        "linkedinUrl": "https://www.linkedin.com/in/amengelbrecht"
+      },
+      {
+        "id": "ACoAABzHTW0B-WYLujLkSNon3pbS2xL6pih93ao",
+        "firstName": "Olivier ",
+        "lastName": "Moccafico",
+        "publicIdentifier": "olivier-moccafico",
+        "linkedinUrl": "https://www.linkedin.com/in/olivier-moccafico"
+      },
+      {
+        "id": "ACoAAAFBwCkB780QL1BbIQ9cYx8WG3rduyo8nUQ",
+        "firstName": "Josef",
+        "lastName": "B.",
+        "publicIdentifier": "josef-b-83508a7",
+        "linkedinUrl": "https://www.linkedin.com/in/josef-b-83508a7"
+      },
+      {
+        "id": "ACoAADy6U-oBhc7UGrSvBFLbkCdEv9YwDRHCcIw",
+        "firstName": "Fritz",
+        "lastName": "von Stülpnagel",
+        "publicIdentifier": "fritz-von-stülpnagel-a62260245",
+        "linkedinUrl": "https://www.linkedin.com/in/fritz-von-stülpnagel-a62260245"
+      },
+      {
+        "id": "ACoAAC9rfpYB9euIDgF4Yyk3m40DRa2_3dEv1gM",
+        "firstName": "Wade",
+        "lastName": "Hickey",
+        "publicIdentifier": "wade-hickey-69a5291a2",
+        "linkedinUrl": "https://www.linkedin.com/in/wade-hickey-69a5291a2"
+      },
+      {
+        "id": "ACoAAAnNtSQByruasNw34RvQLHOFbXlj4VI_FRE",
+        "firstName": "Pat",
+        "lastName": "F.",
+        "publicIdentifier": "pat-f-b980ba47",
+        "linkedinUrl": "https://www.linkedin.com/in/pat-f-b980ba47"
+      },
+      {
+        "id": "ACoAAFrYKK4B75SDEEfjaAdDXifToV91dMnfkAk",
+        "firstName": "Philipp",
+        "lastName": "Czerner",
+        "publicIdentifier": "philipp-czerner-43a50b366",
+        "linkedinUrl": "https://www.linkedin.com/in/philipp-czerner-43a50b366"
+      },
+      {
+        "id": "ACoAAA0MGLwBG6gvfcYbFg5vJFlR9G3WU0v0bVA",
+        "firstName": "Laila",
+        "lastName": "R.",
+        "publicIdentifier": "lailarahimi",
+        "linkedinUrl": "https://www.linkedin.com/in/lailarahimi"
+      },
+      {
+        "id": "ACoAABhQxkYBYJxkss9VyOK62iMZaAzTQWiStC8",
+        "firstName": "Arman",
+        "lastName": "P.",
+        "publicIdentifier": "armanp",
+        "linkedinUrl": "https://www.linkedin.com/in/armanp"
+      },
+      {
+        "id": "ACoAAAPH3hkBD4YvYU1lCbTlnKlqFvJCZxL3KlQ",
+        "firstName": "Weiheng",
+        "lastName": "Zhang",
+        "publicIdentifier": "weiheng-zhang",
+        "linkedinUrl": "https://www.linkedin.com/in/weiheng-zhang"
+      },
+      {
+        "id": "ACoAAF0vKjYBtLOjami_65mNd_KO-oDirXdVs9Y",
+        "firstName": "Meron",
+        "lastName": "Tatek",
+        "position": "Computer Science Professional | Technical Researcher & Trainer | Digital Content Strategist & Video Editor",
+        "publicIdentifier": "meron-tatek-2726a1377",
+        "linkedinUrl": "https://www.linkedin.com/in/meron-tatek-2726a1377"
+      },
+      {
+        "id": "ACoAADS9044Br2XHvGvQtqp9Jo4Jlqw4LjDgSbk",
+        "firstName": "Emilka",
+        "lastName": "Puchalski",
+        "position": "Math, CBE, and CS @ Princeton",
+        "publicIdentifier": "emilka-puchalski",
+        "linkedinUrl": "https://www.linkedin.com/in/emilka-puchalski"
+      },
+      {
+        "id": "ACoAAC3xQaQB1VJefQDqyegVnnaH4D_eipWNLiQ",
+        "firstName": "Paramjeet",
+        "lastName": "Birundha",
+        "position": "Senior SRE , Ex-Hotstar ",
+        "publicIdentifier": "paramjeet-birundha",
+        "linkedinUrl": "https://www.linkedin.com/in/paramjeet-birundha"
+      },
+      {
+        "id": "ACoAADRmYsIB_RsGnDiJjtF3kjcgrTNMNt4kE-0",
+        "firstName": "Shadi",
+        "lastName": "Kamal",
+        "position": "Founding Team Member, R&D @ Stealth",
+        "publicIdentifier": "shadi-kamal-002501206",
+        "linkedinUrl": "https://www.linkedin.com/in/shadi-kamal-002501206"
+      },
+      {
+        "id": "ACoAADcs6OkBkesg_RN_athj1nV__lATBKjzVXo",
+        "firstName": "Scarlett",
+        "lastName": "Miller",
+        "position": "AI for Social Good and Human Connection ❤️",
+        "publicIdentifier": "scarlett-miller875",
+        "linkedinUrl": "https://www.linkedin.com/in/scarlett-miller875"
+      },
+      {
+        "id": "ACoAADFmf00BgmCYPOkp2_ZtIQEyA65XTnebs2E",
+        "firstName": "Haniel",
+        "lastName": "Rolemberg",
+        "position": "AI Engineer and Researcher | Building Intelligent and Complex Systems",
+        "publicIdentifier": "hanielrolemberg",
+        "linkedinUrl": "https://www.linkedin.com/in/hanielrolemberg"
+      },
+      {
+        "id": "ACoAADxh1tYBBkfu_TSt0EAwsDQGETvA7e9v538",
+        "firstName": "Suryansh",
+        "lastName": "Prajapati",
+        "position": "Founder @Stealth | @NatWest | ex-Samsung, SAP, AppMastery | CS + Business",
+        "publicIdentifier": "suryanshprajapati",
+        "linkedinUrl": "https://www.linkedin.com/in/suryanshprajapati"
+      },
+      {
+        "id": "ACoAACDsJ6kB584qPlPk_acBZk7WgBRY0xmmu5U",
+        "firstName": "Sheev",
+        "lastName": "Charan",
+        "position": "Building a startup at the intersection of AI x Creativity",
+        "publicIdentifier": "sheevcharan",
+        "linkedinUrl": "https://www.linkedin.com/in/sheevcharan"
+      },
+      {
+        "id": "ACoAADo8dboBTAmMhiqM7v7UfH2Oe_qk76UJNy0",
+        "firstName": "Ferdinand",
+        "lastName": "Pfanzelter Vetleseter",
+        "position": "Building something new… Putting Europe on the map",
+        "publicIdentifier": "fpvetleseter",
+        "linkedinUrl": "https://www.linkedin.com/in/fpvetleseter"
+      },
+      {
+        "id": "ACoAAD_En7QBxZYYBriAdQmTcw3mdHSYgjCzPVU",
+        "firstName": "Dorcas",
+        "lastName": "Ajayi",
+        "position": "AI Builder🤖 | Teaching others how to build with AI | Previous Founder| @Featured on Times Square ",
+        "publicIdentifier": "dorcasajayi",
+        "linkedinUrl": "https://www.linkedin.com/in/dorcasajayi"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAABuic64B952R5-JBL4lBFH-2V4q07o-a7vg"
+    }
+  }
+}

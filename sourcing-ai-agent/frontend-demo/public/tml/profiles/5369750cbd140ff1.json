@@ -1,0 +1,227 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAGKHnLwBXDanyRBgi0cWULuc8Z734Dcnw6w",
+    "profile_url": "https://www.linkedin.com/in/ACwAAGKHnLwBXDanyRBgi0cWULuc8Z734Dcnw6w"
+  },
+  "item": {
+    "id": "ACoAAGKHnLwBW2F7_rkgdXe2SNZco5W_2OexIiI",
+    "publicIdentifier": "radwe-mohammad-a247303a1",
+    "linkedinUrl": "https://www.linkedin.com/in/radwe-mohammad-a247303a1",
+    "firstName": "Radwe",
+    "lastName": "Mohammad",
+    "emails": [
+      {
+        "email": "radwe.mohammad@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "‏رودى‏ في ‏Thinking Machines Lab‏",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Cairo, Egypt",
+      "countryCode": "EG",
+      "parsed": {
+        "text": "Cairo, Egypt",
+        "countryCode": "EG",
+        "regionCode": null,
+        "country": "Egypt",
+        "countryFull": "Egypt",
+        "state": "Cairo",
+        "city": "Cairo"
+      }
+    },
+    "objectUrn": "1653054652",
+    "registeredAt": "2025-12-21T17:19:17.522Z",
+    "topSkills": null,
+    "connectionsCount": 0,
+    "followerCount": 1,
+    "verified": false,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": null,
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": null,
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "AE",
+        "language": "ar"
+      }
+    ],
+    "primaryLocale": {
+      "country": "AE",
+      "language": "ar"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "‏رودى‏ في ‏Thinking Machines Lab‏",
+        "locale": "ar_AE"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "رودى",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": null,
+        "description": null,
+        "skills": null,
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAADdwTusBsJSNZbQ7mefv4VoA3icgATVYnUM",
+        "firstName": "Sergi",
+        "lastName": "Madrona Gutiérrez ",
+        "position": "Administrador de fincas en inmho",
+        "publicIdentifier": "sergi-madrona-gutiérrez-5235a821b",
+        "linkedinUrl": "https://www.linkedin.com/in/sergi-madrona-gutiérrez-5235a821b"
+      },
+      {
+        "id": "ACoAAEZ_v0ABr3-ji7Q9MU3qgh40gLDoswtKpVE",
+        "firstName": "PROCASA",
+        "lastName": "- AYUNTAMIENTO DE CÁDIZ",
+        "position": "--",
+        "publicIdentifier": "procasacádiz",
+        "linkedinUrl": "https://www.linkedin.com/in/procasacádiz"
+      },
+      {
+        "id": "ACoAAF3p9-MBXHuecJqSSAklqne2-eJyOs7hQ84",
+        "firstName": "Trifincas",
+        "lastName": "Melero",
+        "position": "Administración de fincas",
+        "publicIdentifier": "trifincas-melero-aab80537b",
+        "linkedinUrl": "https://www.linkedin.com/in/trifincas-melero-aab80537b"
+      },
+      {
+        "id": "ACoAAB4YW-4BlpBGVWYiy-AutlITvsVeKAXSl-g",
+        "firstName": "Juan Diego",
+        "lastName": "Leal Lobato",
+        "position": "Administración de Fincas",
+        "publicIdentifier": "juan-diego-leal-lobato",
+        "linkedinUrl": "https://www.linkedin.com/in/juan-diego-leal-lobato"
+      },
+      {
+        "id": "ACoAABpNDI0BlC2TM-9LmFSxMzuNWYAtIvQBz4M",
+        "firstName": "M. D. R.",
+        "lastName": "Administración Impuestalia",
+        "position": "Administrativo en Impuestalia",
+        "publicIdentifier": "m-d-r-administración-impuestalia-151939103",
+        "linkedinUrl": "https://www.linkedin.com/in/m-d-r-administración-impuestalia-151939103"
+      },
+      {
+        "id": "ACoAACYqBKsBCxmeU4xjwUPytZgd-_zXnYMJnAg",
+        "firstName": "Roberto",
+        "lastName": "Molinos González",
+        "position": "Administrador de fincas | Gestión de comunidades de propietarios | Bizkaia",
+        "publicIdentifier": "roberto-molinos-gonzález-ba352015a",
+        "linkedinUrl": "https://www.linkedin.com/in/roberto-molinos-gonzález-ba352015a"
+      },
+      {
+        "id": "ACoAABd_svsBiFhuD59jIISn51DadxrZc-9fn94",
+        "firstName": "Øystein",
+        "lastName": "Eide",
+        "position": "Administrator & Secretary of Board - La Canaria Community by Radisson blu",
+        "publicIdentifier": "øystein-eide-b63046b0",
+        "linkedinUrl": "https://www.linkedin.com/in/øystein-eide-b63046b0"
+      },
+      {
+        "id": "ACoAAEfW7KEBOvGUMhaYQ7sIX2MKq6cDccM3MKQ",
+        "firstName": "Carla",
+        "lastName": "Gimenez Muñoz",
+        "position": "Abogada | Administradora de fincas",
+        "publicIdentifier": "carla-gimenez-muñoz-a01784297",
+        "linkedinUrl": "https://www.linkedin.com/in/carla-gimenez-muñoz-a01784297"
+      },
+      {
+        "id": "ACoAAAd44esBGTzhogvR45gU6okd9bnuppgmt-E",
+        "firstName": "Juan",
+        "lastName": "Delgado Álvarez",
+        "position": "Administrador de Fincas",
+        "publicIdentifier": "juandelgadoalvarez",
+        "linkedinUrl": "https://www.linkedin.com/in/juandelgadoalvarez"
+      },
+      {
+        "id": "ACoAABl30-YBZ_d2WiIgbbtk4TsckSXBUGJXvP0",
+        "firstName": "Pablo",
+        "lastName": "Barreiro Pérez",
+        "position": "Administrador en Promociones - Barreiro - Ingenieros",
+        "publicIdentifier": "pablo-barreiro-pérez-60611abb",
+        "linkedinUrl": "https://www.linkedin.com/in/pablo-barreiro-pérez-60611abb"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAGKHnLwBXDanyRBgi0cWULuc8Z734Dcnw6w"
+    }
+  }
+}

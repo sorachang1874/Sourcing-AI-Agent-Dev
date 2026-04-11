@@ -1,0 +1,569 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAACEREG4BproaeJza899ayVZHB-6sJ1X06aw",
+    "profile_url": "https://www.linkedin.com/in/ACwAACEREG4BproaeJza899ayVZHB-6sJ1X06aw"
+  },
+  "item": {
+    "id": "ACoAACEREG4BA1IeeJBq06tuHFUlIUr_Dl4tU4A",
+    "publicIdentifier": "parkjungyeon",
+    "linkedinUrl": "https://www.linkedin.com/in/parkjungyeon",
+    "firstName": "Jungyeon",
+    "lastName": "Park",
+    "emails": [
+      {
+        "email": "jungyeon.park@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Member of Technical Staff @ Thinking Machines",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco Bay Area",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "554766446",
+    "registeredAt": "2017-01-28T17:21:16.729Z",
+    "topSkills": null,
+    "connectionsCount": 833,
+    "followerCount": 856,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 3,
+            "year": 2026,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "18483",
+        "companyId": "1646",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1646/",
+        "schoolName": "Harvard University"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/C5603AQHnrallfwTe_Q/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1652914115644?e=1776902400&v=beta&t=Fl8vIx7Ecm7RI-0hLXM6hqRslaOf3r8811Gr2WBygn0",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQHnrallfwTe_Q/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1652914115644?e=1776902400&v=beta&t=Fl8vIx7Ecm7RI-0hLXM6hqRslaOf3r8811Gr2WBygn0",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQHnrallfwTe_Q/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1652914115644?e=1776902400&v=beta&t=VBwdhr8B8x7OBp8wZ_0SetZouhWF1bq2x96Nntarq0k",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQHnrallfwTe_Q/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1652914115644?e=1776902400&v=beta&t=Ffeb17Dw7A4WCdcqULJ9OLepPfKpE2s2Ml2FL8E5tQM",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQHnrallfwTe_Q/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1652914115644?e=1776902400&v=beta&t=Q_FKoi5jbsH5RXDTupJeSzD_1MmzgrF5HoxJLhmh7Y4",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/C5603AQHnrallfwTe_Q/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1652914115644?e=1776902400&v=beta&t=Fl8vIx7Ecm7RI-0hLXM6hqRslaOf3r8811Gr2WBygn0",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Member of Technical Staff @ Thinking Machines",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "2 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2026,
+          "text": "Mar 2026"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior Research Engineer",
+        "location": "San Francisco, CA",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Google",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1441/",
+        "companyId": "1441",
+        "duration": "3 yrs 10 mos",
+        "description": "Computer Vision at Google Beam",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2022,
+          "text": "Jun 2022"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2026,
+          "text": "Mar 2026"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_200_200/B4EZmhegXHGcAM-/0/1759350753990/google_logo?e=1776902400&v=beta&t=CTzyZ9kqXiycW6UU0lJPQmCNKxu5QeAaPL_y9ftsJX0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_100_100/B4EZmhegXHGcAU-/0/1759350753990/google_logo?e=1776902400&v=beta&t=LRCYpUl9rmgdri4awRP4FVlvccNARAtgcfqxtRHdedI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Researcher",
+        "location": "Palo Alto, California, United States",
+        "employmentType": "Part-time",
+        "workplaceType": null,
+        "companyName": "Stanford University",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1792/",
+        "companyId": "1792",
+        "duration": "1 yr 11 mos",
+        "description": "Palanker Lab, simulating and enhancing prosthetic vision.",
+        "skills": null,
+        "startDate": {
+          "month": "Nov",
+          "year": 2023,
+          "text": "Nov 2023"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2025,
+          "text": "Sep 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_400_400/company-logo_400_400/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=zzE-1MKqCLrmkqb1p2hJqhVuV2hbdZzC0j_ok6Kyhk8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_400_400/company-logo_400_400/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=zzE-1MKqCLrmkqb1p2hJqhVuV2hbdZzC0j_ok6Kyhk8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_200_200/company-logo_200_200/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=0xd9OiQTt31rPm8_wUnQNPsZKrh8XBXIidNxV9RaB5s",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_100_100/company-logo_100_100/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=9qvsDNg8-8GHe51pI3kr1K_DGeN_zXJEt0DlOSSFopY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Software Engineer",
+        "location": "Cambridge, MA",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Massachusetts Institute of Technology",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1503/",
+        "companyId": "1503",
+        "duration": "1 yr 10 mos",
+        "description": "Flavell Lab, systems neuroscience",
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2020,
+          "text": "Sep 2020"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2022,
+          "text": "Jun 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_400_400/company-logo_400_400/0/1689799729035/mit_logo?e=1776902400&v=beta&t=u1PKvlsURdjuQj6vGwgPDc-3muz7cCQ6oGJISjoWshw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_400_400/company-logo_400_400/0/1689799729035/mit_logo?e=1776902400&v=beta&t=u1PKvlsURdjuQj6vGwgPDc-3muz7cCQ6oGJISjoWshw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_200_200/company-logo_200_200/0/1689799729035/mit_logo?e=1776902400&v=beta&t=AB2cY7dhuIbLPIWAjqEjazLVeMiSD5C3JNuYh9NjBw4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_100_100/company-logo_100_100/0/1689799729035/mit_logo?e=1776902400&v=beta&t=IuM-xZiymxMvWzGrHXnXupiD9lk70R68nAJaX2-9P8Y",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Harvard University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1646/",
+        "schoolId": "1646",
+        "degree": "A.B.",
+        "fieldOfStudy": "Computer Science and Biology",
+        "skills": [],
+        "insights": "Activities and societies: Program Marshal, Lowell House Committee Co-Chair, Undergraduate Council, Peer Advising Fellow, Research",
+        "startDate": {
+          "year": 2016,
+          "text": "2016"
+        },
+        "endDate": {
+          "year": 2020,
+          "text": "2020"
+        },
+        "period": "2016 - 2020",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF5t62bcL0e9g/company-logo_400_400/company-logo_400_400/0/1631318058235?e=1776902400&v=beta&t=RkTNKHKBHCNAI5CNo-HAGQ7uOxrr8GBSdP6Mhal50gg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF5t62bcL0e9g/company-logo_400_400/company-logo_400_400/0/1631318058235?e=1776902400&v=beta&t=RkTNKHKBHCNAI5CNo-HAGQ7uOxrr8GBSdP6Mhal50gg",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF5t62bcL0e9g/company-logo_200_200/company-logo_200_200/0/1631318058235?e=1776902400&v=beta&t=y8dfVnr4duhkYkxwxXb0xTfyu2DFsZFXt5hsz507GaM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF5t62bcL0e9g/company-logo_100_100/company-logo_100_100/0/1631318058235?e=1776902400&v=beta&t=LVLwVc7yBweIB3_TixXGZZEymyF01yoePCCl9P-3kb0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [
+      {
+        "role": "Co-Founder",
+        "description": "We empower sighted people to become better allies to the blind community!",
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "organizationName": "The Vorden Initiative",
+        "organizationLinkedinUrl": "https://www.linkedin.com/company/107006341/"
+      },
+      {
+        "role": "Running Guide",
+        "description": "I run with visually impaired athletes as their running guide.",
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "organizationName": "Achilles International",
+        "organizationLinkedinUrl": "https://www.linkedin.com/company/1125985/"
+      }
+    ],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [
+      {
+        "title": "Brain-wide representations of behavior spanning multiple timescales and states in C. elegans",
+        "publishedAt": "Cell · Aug 15, 2023",
+        "description": null,
+        "link": "https://www.sciencedirect.com/science/article/pii/S0092867423008504?via%3Dihub"
+      },
+      {
+        "title": "Hiding the Rabbit: Using a genetic algorithm to investigate shape guidance in visual search",
+        "publishedAt": "Journal of Vision · Jan 4, 2022",
+        "description": null,
+        "link": "https://academic.oup.com/neuro-oncology/article/23/10/1680/6275457?login=true"
+      },
+      {
+        "title": "BET inhibitors repress expression of interferon-stimulated genes and synergize with HDAC inhibitors in glioblastoma",
+        "publishedAt": "Neuro-Oncology · Oct 1, 2021",
+        "description": null,
+        "link": "https://academic.oup.com/neuro-oncology/article/23/10/1680/6275457?login=true"
+      },
+      {
+        "title": "Intravenous immunoglobulin (IVIg) acts directly on conventional T cells to suppress T cell receptor signaling",
+        "publishedAt": "Biochemical and Biophysical Research Communications · Feb 12, 2020",
+        "description": null,
+        "link": "https://www.sciencedirect.com/science/article/abs/pii/S0006291X19322971"
+      },
+      {
+        "title": "Barriers to widespread implementation of patient-reported outcome platforms for cancer patients",
+        "publishedAt": "American Society of Clinical Oncology Palliative and Supportive Care in Oncology Symposium · Nov 16, 2018",
+        "description": null,
+        "link": "https://meetinglibrary.asco.org/record/167110/abstract"
+      },
+      {
+        "title": "Mobile Patient Symptom Managing Platform in Brazil",
+        "publishedAt": "Precision Medicine World Conference · Sep 24, 2018",
+        "description": null,
+        "link": "https://www.pmwcintl.com/jungyeon-park-2018duke/"
+      }
+    ],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAEZnBtoBb1Us7ZKgHfOXAYT764pKcDQy848",
+        "firstName": "Songlin",
+        "lastName": "Yang",
+        "publicIdentifier": "songlin-yang-b8a69728b",
+        "linkedinUrl": "https://www.linkedin.com/in/songlin-yang-b8a69728b"
+      },
+      {
+        "id": "ACoAABih0B0BK7nyKqZytZRLwcGw-QZ2ZUchoaM",
+        "firstName": "Karen",
+        "lastName": "N.",
+        "publicIdentifier": "karenni",
+        "linkedinUrl": "https://www.linkedin.com/in/karenni"
+      },
+      {
+        "id": "ACoAACHgqNcBO7G9QHjfnTyp5v6rVbPMJ19f1dc",
+        "firstName": "Claire",
+        "lastName": "Fu",
+        "publicIdentifier": "clairecfu",
+        "linkedinUrl": "https://www.linkedin.com/in/clairecfu"
+      },
+      {
+        "id": "ACoAABbPXg8BfhxCqSSJTI1D6wJICYiep70tTwc",
+        "firstName": "Shirley",
+        "lastName": "Zheng",
+        "publicIdentifier": "shirleyzheng18",
+        "linkedinUrl": "https://www.linkedin.com/in/shirleyzheng18"
+      },
+      {
+        "id": "ACoAAC3csv4B7tR3tBAvtyf6__U0psYqGxB_cO4",
+        "firstName": "Tracy",
+        "lastName": "Do",
+        "publicIdentifier": "tracyntdo",
+        "linkedinUrl": "https://www.linkedin.com/in/tracyntdo"
+      },
+      {
+        "id": "ACoAACQB4o8BKmZ77A2O0bEcpSmGE921rccyL8U",
+        "firstName": "Sarah",
+        "lastName": "Zeng",
+        "publicIdentifier": "sarah-zeng99",
+        "linkedinUrl": "https://www.linkedin.com/in/sarah-zeng99"
+      },
+      {
+        "id": "ACoAAAVqgMwB4D-5wZZG6DVc5VR_bkLPwMpTuwg",
+        "firstName": "Kathryn",
+        "lastName": "Heal",
+        "publicIdentifier": "kheal",
+        "linkedinUrl": "https://www.linkedin.com/in/kheal"
+      },
+      {
+        "id": "ACoAACmXuVoB_TrKvabgkhDg5vMdavPstJuR2Z8",
+        "firstName": "Emily",
+        "lastName": "Gavrilenko",
+        "publicIdentifier": "emily-gavrilenko",
+        "linkedinUrl": "https://www.linkedin.com/in/emily-gavrilenko"
+      },
+      {
+        "id": "ACoAABCCZNIBIM6SJtoFVYeuTF1Yf-Q_gZNAoYQ",
+        "firstName": "Nancy",
+        "lastName": "Fang",
+        "publicIdentifier": "nancy-linxuan-fang",
+        "linkedinUrl": "https://www.linkedin.com/in/nancy-linxuan-fang"
+      },
+      {
+        "id": "ACoAAAWP1ZwBCKdsja1MHJGqx3H0lKgvb-j_eqo",
+        "firstName": "Audrey",
+        "lastName": "Baid",
+        "publicIdentifier": "audreybaid",
+        "linkedinUrl": "https://www.linkedin.com/in/audreybaid"
+      },
+      {
+        "id": "ACoAAABH3OoBJzGSZqpM6dKUXK8UOpkyk3y3BSM",
+        "firstName": "John",
+        "lastName": "Flynn",
+        "publicIdentifier": "john-flynn-5766b11",
+        "linkedinUrl": "https://www.linkedin.com/in/john-flynn-5766b11"
+      },
+      {
+        "id": "ACoAAAgYwv4Bd5sGixqGCqAnIi4OFAG77z57Hqg",
+        "firstName": "Catherine",
+        "lastName": "Jue",
+        "publicIdentifier": "juecd",
+        "linkedinUrl": "https://www.linkedin.com/in/juecd"
+      },
+      {
+        "id": "ACoAABAJItwBwHBxawni6mxiUbbrCiRqQthxLzM",
+        "firstName": "Xuan",
+        "lastName": "Luo",
+        "publicIdentifier": "xuanluo-roxanne",
+        "linkedinUrl": "https://www.linkedin.com/in/xuanluo-roxanne"
+      },
+      {
+        "id": "ACoAACDS-YoB0wMUz7gWjL5TIo-mz6zo9MHt8wI",
+        "firstName": "Eowyn",
+        "lastName": "Pak",
+        "publicIdentifier": "eowynpak",
+        "linkedinUrl": "https://www.linkedin.com/in/eowynpak"
+      },
+      {
+        "id": "ACoAACPfxS4BCurwWdUwxxE06I_VhKVcRgZ6PmU",
+        "firstName": "Tyler",
+        "lastName": "Griggs",
+        "publicIdentifier": "tyler-griggs",
+        "linkedinUrl": "https://www.linkedin.com/in/tyler-griggs"
+      },
+      {
+        "id": "ACoAABaD7RkB-VxcKwYPALlPWhE0Hpa9_hx15CQ",
+        "firstName": "Peggy",
+        "lastName": "Wang",
+        "publicIdentifier": "peggy-wang-ai",
+        "linkedinUrl": "https://www.linkedin.com/in/peggy-wang-ai"
+      },
+      {
+        "id": "ACoAABpji0UBm70ED8N2hUdqz8jdU-D2ctK-PHI",
+        "firstName": "Lucy",
+        "lastName": "Chai",
+        "publicIdentifier": "lucy-chai",
+        "linkedinUrl": "https://www.linkedin.com/in/lucy-chai"
+      },
+      {
+        "id": "ACoAAB4qbUUBsc9H_NLZN2duLUOOyyFDm-k_ACo",
+        "firstName": "Riley",
+        "lastName": "Shanahan",
+        "publicIdentifier": "rileyshanny",
+        "linkedinUrl": "https://www.linkedin.com/in/rileyshanny"
+      },
+      {
+        "id": "ACoAAAxSLREBGwhkRuQNdn1swhDEeuPa5dQU8mM",
+        "firstName": "Wendy",
+        "lastName": "Wu",
+        "publicIdentifier": "wendy-w-wu",
+        "linkedinUrl": "https://www.linkedin.com/in/wendy-w-wu"
+      },
+      {
+        "id": "ACoAABz3OTcB9t2Rc_ptWq1_QLVi3nfPj2kYPKk",
+        "firstName": "Tooba",
+        "lastName": "Imtiaz",
+        "publicIdentifier": "tooba-imtiaz",
+        "linkedinUrl": "https://www.linkedin.com/in/tooba-imtiaz"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAACEREG4BproaeJza899ayVZHB-6sJ1X06aw"
+    }
+  }
+}

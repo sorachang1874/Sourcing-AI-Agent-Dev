@@ -1,0 +1,896 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAABEmYXYBIOA_JE4u6CgQ_l4EPQzuhjrbgss",
+    "profile_url": "https://www.linkedin.com/in/ACwAABEmYXYBIOA_JE4u6CgQ_l4EPQzuhjrbgss"
+  },
+  "item": {
+    "id": "ACoAABEmYXYB5f-3ZmFG8dI-n9XAlqySBqO-2PA",
+    "publicIdentifier": "jlukecarlson",
+    "linkedinUrl": "https://www.linkedin.com/in/jlukecarlson",
+    "firstName": "Luke",
+    "lastName": "Carlson",
+    "emails": [
+      {
+        "email": "luke.carlson@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Thinking Machines | Member of Technical Staff",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "New York, New York, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "New York City, NY, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "New York",
+        "city": "New York City"
+      }
+    },
+    "objectUrn": "287727990",
+    "registeredAt": "2013-09-14T19:39:15.368Z",
+    "topSkills": null,
+    "connectionsCount": 720,
+    "followerCount": 932,
+    "verified": true,
+    "about": "Building the future of AI at thinkingmachines.ai",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 6,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "19328",
+        "companyId": "3165",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3165/",
+        "schoolName": "University of Pennsylvania"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4E03AQF0Bl26mBdOnA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1723063772585?e=1776902400&v=beta&t=QNVacU7xS-psQMNe8HSDBg9KCKdjJVLZNSA455T4Vz8",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQF0Bl26mBdOnA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1723063772585?e=1776902400&v=beta&t=QNVacU7xS-psQMNe8HSDBg9KCKdjJVLZNSA455T4Vz8",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQF0Bl26mBdOnA/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1723063772565?e=1776902400&v=beta&t=lXjyWL0WU4bNkrpbahw74xP2vQp971EbYy5Bn7LmbbQ",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQF0Bl26mBdOnA/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1723063772565?e=1776902400&v=beta&t=GXSUb29myFaQ6CtLQP48c-gFnDkgUkJAyfKOy9Q6mZM",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQF0Bl26mBdOnA/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1723063772565?e=1776902400&v=beta&t=lDReZMpJdZYf3T4GIfN-nxL6nsDsJr5VZfxHNTYIm04",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4E16AQGi2CIjYPPUvQ/profile-displaybackgroundimage-shrink_350_1400/B4EZx4AjI7JgAY-/0/1771539936197?e=1776902400&v=beta&t=Gntln68UoY7JcgMxMP-Yef8Xs3Zqnr81HCJZuE2MxEk",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E16AQGi2CIjYPPUvQ/profile-displaybackgroundimage-shrink_350_1400/B4EZx4AjI7JgAY-/0/1771539936197?e=1776902400&v=beta&t=Gntln68UoY7JcgMxMP-Yef8Xs3Zqnr81HCJZuE2MxEk",
+          "width": 1400,
+          "height": 350,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E16AQGi2CIjYPPUvQ/profile-displaybackgroundimage-shrink_200_800/B4EZx4AjI7JgAU-/0/1771539936197?e=1776902400&v=beta&t=Qv0FsIvRThVhYdyA9YrE76AdZKoBRZ_eOmoNwuNRVAY",
+          "width": 800,
+          "height": 200,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "photo": "https://media.licdn.com/dms/image/v2/D4E03AQF0Bl26mBdOnA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1723063772585?e=1776902400&v=beta&t=QNVacU7xS-psQMNe8HSDBg9KCKdjJVLZNSA455T4Vz8",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Thinking Machines | Member of Technical Staff",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "New York City Metropolitan Area",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "11 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2025,
+          "text": "Jun 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior Machine Learning Engineer",
+        "location": "New York City Metropolitan Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Apple",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/162479/",
+        "companyId": "162479",
+        "duration": "4 yrs 4 mos",
+        "description": "- Lead engineer in Machine Learning Research group focused on multimodal modeling tools (audio/text/vision)\n- Lead engineer for Multilingual Translation for Foundation Models & Apple Translate, designed pipeline library for training, fine tuning, distillation, evals, and data processing.\n- DRI for major cross functional initiatives staffed by teams of engineers, researchers, and data scientists",
+        "skills": null,
+        "experienceGroupId": "836b5ccc5d295ed53990ae6aab22d6b8f91c1685",
+        "startDate": {
+          "month": "Mar",
+          "year": 2021,
+          "text": "Mar 2021"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2025,
+          "text": "Jun 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_400_400/company-logo_400_400/0/1630637844948/apple_logo?e=1776902400&v=beta&t=KteXM40NNLQ3nz21Do-neoy-f7lbDDA7kJmtS5wwrL4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_400_400/company-logo_400_400/0/1630637844948/apple_logo?e=1776902400&v=beta&t=KteXM40NNLQ3nz21Do-neoy-f7lbDDA7kJmtS5wwrL4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_200_200/company-logo_200_200/0/1630637844948/apple_logo?e=1776902400&v=beta&t=I8RMorsmHMk3gA9b3fT4m2HDgfVtfdB6se4bEZcMHb8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_100_100/company-logo_100_100/0/1630637844948/apple_logo?e=1776902400&v=beta&t=8c3EpxT43tZMihGirOM7eBnDzFHAGiYV-OxaRj_xfjo",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Machine Learning Engineer",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Apple",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/162479/",
+        "companyId": "162479",
+        "duration": "2 yrs 8 mos",
+        "description": "Early developer on Apple's privacy preserving machine learning framework - see our paper \"Federated Evaluation and Tuning for On-Device Personalization\"",
+        "skills": null,
+        "experienceGroupId": "836b5ccc5d295ed53990ae6aab22d6b8f91c1685",
+        "startDate": {
+          "month": "Aug",
+          "year": 2018,
+          "text": "Aug 2018"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2021,
+          "text": "Mar 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_400_400/company-logo_400_400/0/1630637844948/apple_logo?e=1776902400&v=beta&t=KteXM40NNLQ3nz21Do-neoy-f7lbDDA7kJmtS5wwrL4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_400_400/company-logo_400_400/0/1630637844948/apple_logo?e=1776902400&v=beta&t=KteXM40NNLQ3nz21Do-neoy-f7lbDDA7kJmtS5wwrL4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_200_200/company-logo_200_200/0/1630637844948/apple_logo?e=1776902400&v=beta&t=I8RMorsmHMk3gA9b3fT4m2HDgfVtfdB6se4bEZcMHb8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_100_100/company-logo_100_100/0/1630637844948/apple_logo?e=1776902400&v=beta&t=8c3EpxT43tZMihGirOM7eBnDzFHAGiYV-OxaRj_xfjo",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Machine Learning Researcher",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Atomic",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/2913118/",
+        "companyId": "2913118",
+        "duration": "10 mos",
+        "description": "Designed language models and conversational agents for a seed stage chatbot startup (now known as Replicant.ai with 105M+ in funding) during graduate studies",
+        "skills": null,
+        "startDate": {
+          "month": "Nov",
+          "year": 2017,
+          "text": "Nov 2017"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2018,
+          "text": "Aug 2018"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHSTdKxtpoRzQ/company-logo_400_400/company-logo_400_400/0/1734550280849/atomic_vc_logo?e=1776902400&v=beta&t=3EZqpD6BtQKiCX93YQHwr3DVNzSOlR46--HX-Pz3ioU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHSTdKxtpoRzQ/company-logo_400_400/company-logo_400_400/0/1734550280849/atomic_vc_logo?e=1776902400&v=beta&t=3EZqpD6BtQKiCX93YQHwr3DVNzSOlR46--HX-Pz3ioU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHSTdKxtpoRzQ/company-logo_200_200/company-logo_200_200/0/1734550280849/atomic_vc_logo?e=1776902400&v=beta&t=alGrB4fnla9R5wIJ4OlIYQNCTkUCvC0nWJ0Wu2PKKAA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHSTdKxtpoRzQ/company-logo_100_100/company-logo_100_100/0/1734550280849/atomic_vc_logo?e=1776902400&v=beta&t=-GCO9OQI4tJNO7ugevzUFIftgjzdPkNL4eWctLveUvQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Graduate Teaching Assistant",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "University of Pennsylvania",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/university-of-pennsylvania/",
+        "companyId": "3165",
+        "companyUniversalName": "university-of-pennsylvania",
+        "duration": "4 yrs",
+        "description": "I was a teaching assistant for masters & undergrad courses: Artificial Intelligence, Software Engineering Principles, and Programming Languages II",
+        "skills": null,
+        "startDate": {
+          "year": 2014,
+          "text": "2014"
+        },
+        "endDate": {
+          "year": 2018,
+          "text": "2018"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFJvX-Ed9d2gA/company-logo_400_400/B4EZxITZrAGwAY-/0/1770739574173/university_of_pennsylvania_logo?e=1776902400&v=beta&t=NqApUTsFuJ55rlTdjX27Ne_VczdX5akkwt7i8ufO8wM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFJvX-Ed9d2gA/company-logo_400_400/B4EZxITZrAGwAY-/0/1770739574173/university_of_pennsylvania_logo?e=1776902400&v=beta&t=NqApUTsFuJ55rlTdjX27Ne_VczdX5akkwt7i8ufO8wM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFJvX-Ed9d2gA/company-logo_200_200/B4EZxITZrAGwAI-/0/1770739574173/university_of_pennsylvania_logo?e=1776902400&v=beta&t=cg3-mPp1m-LJhlqJ0b_m8O0x6IBh1SgOmBTdRI_1Eew",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFJvX-Ed9d2gA/company-logo_100_100/B4EZxITZrAGwAQ-/0/1770739574173/university_of_pennsylvania_logo?e=1776902400&v=beta&t=1q0sGBWa1tFpUxWwOGq0XSkwJW96PO4xDVsuPChtplw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Program Manager Intern",
+        "location": "Redmond, WA",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Microsoft",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1035/",
+        "companyId": "1035",
+        "duration": "4 mos",
+        "description": "Spent a summer in the Visual Studio team building project templates for cross platform C++ codebases",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2016,
+          "text": "May 2016"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2016,
+          "text": "Aug 2016"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_400_400/B56ZYQ0mrGGoAc-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=47BifJmZk2QcSo7UM_a7lFIk5vBFq49cOHVWx8Pu2dE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_400_400/B56ZYQ0mrGGoAc-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=47BifJmZk2QcSo7UM_a7lFIk5vBFq49cOHVWx8Pu2dE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_200_200/B56ZYQ0mrGGoAM-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=z3mTaKdLV9rmnHGq4MakEXZj6vY7Y9TWAjx0_U7y0X0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_100_100/B56ZYQ0mrGGoAU-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=tKqX5UTArC3FajWCGY-yk-mpPeeR1obx-D3VehmNycQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer",
+        "location": null,
+        "employmentType": "Part-time",
+        "workplaceType": null,
+        "companyName": "Ruse Labs",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Ruse+Labs",
+        "duration": "1 yr 8 mos",
+        "description": "Ruse Labs, in collaboration with the Cooper Hewitt Smithsonian Design Museum and Artsy, created the first algorithm auction art exhibit. \n\nBeyond that project, we worked squarely at the intersection of art and software — building data visualization tools for museums and art galleries",
+        "skills": null,
+        "startDate": {
+          "year": 2014,
+          "text": "2014"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2015,
+          "text": "Aug 2015"
+        }
+      },
+      {
+        "position": "Software Engineering Intern",
+        "location": "New York City",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Braze",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/792882/",
+        "companyId": "792882",
+        "duration": "4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2014,
+          "text": "May 2014"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2014,
+          "text": "Aug 2014"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHm8zx58eJrcg/company-logo_400_400/company-logo_400_400/0/1720024715139/braze_logo?e=1776902400&v=beta&t=IUEdANshNTZcA-uEVP8_I2ZD49a42izVPDzNGPlohe0",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHm8zx58eJrcg/company-logo_400_400/company-logo_400_400/0/1720024715139/braze_logo?e=1776902400&v=beta&t=IUEdANshNTZcA-uEVP8_I2ZD49a42izVPDzNGPlohe0",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHm8zx58eJrcg/company-logo_200_200/company-logo_200_200/0/1720024715139/braze_logo?e=1776902400&v=beta&t=fbND7T51hwDngxDVaqhMhBJ4b58A7wbEwD3f24eowwk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHm8zx58eJrcg/company-logo_100_100/company-logo_100_100/0/1720024715139/braze_logo?e=1776902400&v=beta&t=ZCBpEe7swx1yFlHtDJd0rhNtKRtgxzb9tPhMj83Zbrc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Web Development Intern",
+        "location": "New York City",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Braze",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/792882/",
+        "companyId": "792882",
+        "duration": "1 yr",
+        "description": "Spent multiple summers working for an analytics & customer engagement startup, watched it scale from 8 people to 1000+. Now listed on Nasdaq as BRZE with a $5B market cap.",
+        "skills": null,
+        "startDate": {
+          "year": 2012,
+          "text": "2012"
+        },
+        "endDate": {
+          "year": 2013,
+          "text": "2013"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHm8zx58eJrcg/company-logo_400_400/company-logo_400_400/0/1720024715139/braze_logo?e=1776902400&v=beta&t=IUEdANshNTZcA-uEVP8_I2ZD49a42izVPDzNGPlohe0",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHm8zx58eJrcg/company-logo_400_400/company-logo_400_400/0/1720024715139/braze_logo?e=1776902400&v=beta&t=IUEdANshNTZcA-uEVP8_I2ZD49a42izVPDzNGPlohe0",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHm8zx58eJrcg/company-logo_200_200/company-logo_200_200/0/1720024715139/braze_logo?e=1776902400&v=beta&t=fbND7T51hwDngxDVaqhMhBJ4b58A7wbEwD3f24eowwk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHm8zx58eJrcg/company-logo_100_100/company-logo_100_100/0/1720024715139/braze_logo?e=1776902400&v=beta&t=ZCBpEe7swx1yFlHtDJd0rhNtKRtgxzb9tPhMj83Zbrc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "University of Pennsylvania",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3165/",
+        "schoolId": "3165",
+        "degree": "Master’s Degree",
+        "fieldOfStudy": "Master of Science in Engineering (MSE)",
+        "skills": [],
+        "startDate": {
+          "year": 2016,
+          "text": "2016"
+        },
+        "endDate": {
+          "year": 2018,
+          "text": "2018"
+        },
+        "period": "2016 - 2018",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFJvX-Ed9d2gA/company-logo_400_400/B4EZxITZrAGwAY-/0/1770739574173/university_of_pennsylvania_logo?e=1776902400&v=beta&t=NqApUTsFuJ55rlTdjX27Ne_VczdX5akkwt7i8ufO8wM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFJvX-Ed9d2gA/company-logo_400_400/B4EZxITZrAGwAY-/0/1770739574173/university_of_pennsylvania_logo?e=1776902400&v=beta&t=NqApUTsFuJ55rlTdjX27Ne_VczdX5akkwt7i8ufO8wM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFJvX-Ed9d2gA/company-logo_200_200/B4EZxITZrAGwAI-/0/1770739574173/university_of_pennsylvania_logo?e=1776902400&v=beta&t=cg3-mPp1m-LJhlqJ0b_m8O0x6IBh1SgOmBTdRI_1Eew",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFJvX-Ed9d2gA/company-logo_100_100/B4EZxITZrAGwAQ-/0/1770739574173/university_of_pennsylvania_logo?e=1776902400&v=beta&t=1q0sGBWa1tFpUxWwOGq0XSkwJW96PO4xDVsuPChtplw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "University of Pennsylvania",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3165/",
+        "schoolId": "3165",
+        "degree": "Bachelor of Science in Engineering (BSE)",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "startDate": {
+          "year": 2013,
+          "text": "2013"
+        },
+        "endDate": {
+          "year": 2017,
+          "text": "2017"
+        },
+        "period": "2013 - 2017",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFJvX-Ed9d2gA/company-logo_400_400/B4EZxITZrAGwAY-/0/1770739574173/university_of_pennsylvania_logo?e=1776902400&v=beta&t=NqApUTsFuJ55rlTdjX27Ne_VczdX5akkwt7i8ufO8wM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFJvX-Ed9d2gA/company-logo_400_400/B4EZxITZrAGwAY-/0/1770739574173/university_of_pennsylvania_logo?e=1776902400&v=beta&t=NqApUTsFuJ55rlTdjX27Ne_VczdX5akkwt7i8ufO8wM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFJvX-Ed9d2gA/company-logo_200_200/B4EZxITZrAGwAI-/0/1770739574173/university_of_pennsylvania_logo?e=1776902400&v=beta&t=cg3-mPp1m-LJhlqJ0b_m8O0x6IBh1SgOmBTdRI_1Eew",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFJvX-Ed9d2gA/company-logo_100_100/B4EZxITZrAGwAQ-/0/1770739574173/university_of_pennsylvania_logo?e=1776902400&v=beta&t=1q0sGBWa1tFpUxWwOGq0XSkwJW96PO4xDVsuPChtplw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [
+      {
+        "title": "Federated Evaluation and Tuning for On-Device Personalization",
+        "description": "https://machinelearning.apple.com/research/federated-personalization",
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "associatedWith": "Associated with Apple",
+        "associatedWithLink": null
+      },
+      {
+        "title": "ml_mdm - Matryoshka Diffusion Models",
+        "description": "ml_mdm is a python package for efficiently training high quality text-to-image diffusion models — brought to the public by Luke Carlson, Jiatao Gu, Shuangfei Zhai, and Navdeep Jaitly.",
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "associatedWith": "Associated with Apple",
+        "associatedWithLink": null
+      }
+    ],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Machine Learning"
+      },
+      {
+        "name": "Deep Learning"
+      },
+      {
+        "name": "Python"
+      },
+      {
+        "name": "Programming"
+      },
+      {
+        "name": "Linux"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [
+      {
+        "title": "Dean's List 2015-2016",
+        "issuedBy": "May 2016",
+        "associatedWith": "Associated with University of Pennsylvania",
+        "associatedWithLink": "https://www.linkedin.com/company/3165/"
+      },
+      {
+        "title": "Dean's List 2014-2015",
+        "issuedBy": "University of Pennsylvania",
+        "issuedAt": "May 2015",
+        "associatedWith": "Associated with University of Pennsylvania",
+        "associatedWithLink": "https://www.linkedin.com/company/3165/"
+      }
+    ],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABgwxtcBfqsJJUHPwsSPuBE4K9oKyRqUp5o",
+        "firstName": "Lia",
+        "lastName": "Guy",
+        "publicIdentifier": "aureliaguy",
+        "linkedinUrl": "https://www.linkedin.com/in/aureliaguy"
+      },
+      {
+        "id": "ACoAAACQBzQB5nk5kOpFWQRtK4pv3RaL5q2G-pA",
+        "firstName": "Jonathan",
+        "lastName": "Lachman",
+        "publicIdentifier": "jonathan-lachman-4981b23",
+        "linkedinUrl": "https://www.linkedin.com/in/jonathan-lachman-4981b23"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAACaOARIBRO2EEH12QWQO29L__oI3N2K4u14",
+        "firstName": "Mingjie",
+        "lastName": "Sun",
+        "publicIdentifier": "mingjie-sun-06a761160",
+        "linkedinUrl": "https://www.linkedin.com/in/mingjie-sun-06a761160"
+      },
+      {
+        "id": "ACoAABGzJXcBFaJqVFgqgYNbhaPVKRkP3iG33dA",
+        "firstName": "Noah",
+        "lastName": "Shpak",
+        "publicIdentifier": "nshpak",
+        "linkedinUrl": "https://www.linkedin.com/in/nshpak"
+      },
+      {
+        "id": "ACoAAAJzsfoBp0MxssQYMgmy0ZNO2U3sA58ugwc",
+        "firstName": "Joshua",
+        "lastName": "Gross",
+        "publicIdentifier": "joshgross",
+        "linkedinUrl": "https://www.linkedin.com/in/joshgross"
+      },
+      {
+        "id": "ACoAABYs4-IB5mHx5eVfOHzu1e8xlO3q_kb38IM",
+        "firstName": "Brydon",
+        "lastName": "Eastman",
+        "publicIdentifier": "brydon-eastman-396719a4",
+        "linkedinUrl": "https://www.linkedin.com/in/brydon-eastman-396719a4"
+      },
+      {
+        "id": "ACoAAACo1tYBGy9sT2OWZuEULOMe4K_b2Y22-F8",
+        "firstName": "Alex",
+        "lastName": "Gartrell",
+        "publicIdentifier": "alexgartrell",
+        "linkedinUrl": "https://www.linkedin.com/in/alexgartrell"
+      },
+      {
+        "id": "ACoAABA0sF8BJqwmfoms3veu9TE72tj8JMUQEFA",
+        "firstName": "Sam",
+        "lastName": "Shleifer",
+        "publicIdentifier": "sam-shleifer-a5307a77",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-shleifer-a5307a77"
+      },
+      {
+        "id": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+        "firstName": "Saurabh",
+        "lastName": "Garg",
+        "publicIdentifier": "saurabh-garg-b680b5b8",
+        "linkedinUrl": "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+      },
+      {
+        "id": "ACoAABhKWCYBiuV3Zv9Hbt8t0j-xMRqxawBcSgw",
+        "firstName": "Kurt",
+        "lastName": "Shuster",
+        "publicIdentifier": "kurtshuster1",
+        "linkedinUrl": "https://www.linkedin.com/in/kurtshuster1"
+      },
+      {
+        "id": "ACoAAAl87CYBWKLLyGNTbomy6oqIPv-5n34CXIY",
+        "firstName": "Andrew",
+        "lastName": "Tulloch",
+        "publicIdentifier": "andrew-tulloch-17238745",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-tulloch-17238745"
+      },
+      {
+        "id": "ACoAABV61Q0BF3ER-196Zc9GK5TviMrbbIlVGqg",
+        "firstName": "Samuel",
+        "lastName": "Schoenholz",
+        "publicIdentifier": "samuel-schoenholz-379830a0",
+        "linkedinUrl": "https://www.linkedin.com/in/samuel-schoenholz-379830a0"
+      },
+      {
+        "id": "ACoAABhIg7YBYN2NPIu8voYj5D7JQVZGxonqHvc",
+        "firstName": "Ruiqi",
+        "lastName": "Zhong",
+        "publicIdentifier": "ruiqi-zhong-09a533b4",
+        "linkedinUrl": "https://www.linkedin.com/in/ruiqi-zhong-09a533b4"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAAAO-j_IBXcvIzhZtQ7QNkky6tlnQTcFl9qI",
+        "firstName": "Myle",
+        "lastName": "Ott",
+        "publicIdentifier": "myleott",
+        "linkedinUrl": "https://www.linkedin.com/in/myleott"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAACHkUNgBogKk7Q3xekxMdWLMSikZY2zgQsU",
+        "firstName": "Stephen",
+        "lastName": "Roller",
+        "publicIdentifier": "stephen-roller-38851513a",
+        "linkedinUrl": "https://www.linkedin.com/in/stephen-roller-38851513a"
+      },
+      {
+        "id": "ACoAAANGIoMBWL0nHE7XBizc7IsFhqv6rtEoRm8",
+        "firstName": "Harry",
+        "lastName": "Bisnauth",
+        "position": "Stock Broker at Dundee Securities Corporation",
+        "publicIdentifier": "harry-bisnauth-05748b16",
+        "linkedinUrl": "https://www.linkedin.com/in/harry-bisnauth-05748b16"
+      },
+      {
+        "id": "ACoAAAkQEbgBOUY5FsxnQE3ODvTZTOy8iHAedH4",
+        "firstName": "Alexander",
+        "lastName": "Morana",
+        "position": "stock broker at Self Trade",
+        "publicIdentifier": "alexander-morana-934b0642",
+        "linkedinUrl": "https://www.linkedin.com/in/alexander-morana-934b0642"
+      },
+      {
+        "id": "ACoAAEL0ZqUB_s-meNaGhC0FGF99nPpncYOfTWs",
+        "firstName": "Arshpreet",
+        "lastName": "Singh",
+        "position": "Stock Broker at Angel One",
+        "publicIdentifier": "arshpreet-singh-6b1241274",
+        "linkedinUrl": "https://www.linkedin.com/in/arshpreet-singh-6b1241274"
+      },
+      {
+        "id": "ACoAAAkMhWwBtP9914nf8Bg6SxUfcrSzkdRZmcA",
+        "firstName": "alan",
+        "lastName": "hetherington",
+        "position": "Stock broker at ByPeterandPauls.com",
+        "publicIdentifier": "alan-hetherington-264a1442",
+        "linkedinUrl": "https://www.linkedin.com/in/alan-hetherington-264a1442"
+      },
+      {
+        "id": "ACoAAAjfxWMBFM7BXAArYLRhA9V7-9ovKE-lZ48",
+        "firstName": "sean",
+        "lastName": "nate",
+        "position": "Stock Broker at CIBC",
+        "publicIdentifier": "sean-nate-02ba3b41",
+        "linkedinUrl": "https://www.linkedin.com/in/sean-nate-02ba3b41"
+      },
+      {
+        "id": "ACoAAAM0c9IBcBeqWMDrZe7wb-4cpKDG310YPEQ",
+        "firstName": "Todd",
+        "lastName": "Thiessen",
+        "position": "stock broker at Wolverton Securities",
+        "publicIdentifier": "todd-thiessen-50201016",
+        "linkedinUrl": "https://www.linkedin.com/in/todd-thiessen-50201016"
+      },
+      {
+        "id": "ACoAAAv8KIMBIZ6wfJd5SBpZzH8mS-17EQ-1iTI",
+        "firstName": "Doug",
+        "lastName": "Jones",
+        "position": "stock broker",
+        "publicIdentifier": "doug-jones-8ab40a57",
+        "linkedinUrl": "https://www.linkedin.com/in/doug-jones-8ab40a57"
+      },
+      {
+        "id": "ACoAAAG38VEB0bpod9FMvHL7Z14PY_VBwg9wRjs",
+        "firstName": "Michael",
+        "lastName": "Hyslop",
+        "position": "Stock Broker at Canaccord Capital",
+        "publicIdentifier": "michael-hyslop-2957a59",
+        "linkedinUrl": "https://www.linkedin.com/in/michael-hyslop-2957a59"
+      },
+      {
+        "id": "ACoAAAv4c8cBKgM-NH2AcceoSpMNhoUxOpYthSg",
+        "firstName": "Bob",
+        "lastName": "Dylan",
+        "position": "Stock broker at Wall Street",
+        "publicIdentifier": "bob-dylan-23331257",
+        "linkedinUrl": "https://www.linkedin.com/in/bob-dylan-23331257"
+      },
+      {
+        "id": "ACoAAGOj_N4Bm3WY7-pJUwC7Z8CizIKIJ67Dv2g",
+        "firstName": "Joe",
+        "lastName": "King",
+        "position": "Stock Broker at None",
+        "publicIdentifier": "joe-king-07aa1a3a7",
+        "linkedinUrl": "https://www.linkedin.com/in/joe-king-07aa1a3a7"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAABEmYXYBIOA_JE4u6CgQ_l4EPQzuhjrbgss"
+    }
+  }
+}

@@ -1,0 +1,866 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAABJRjjUB6fbVwY0IM7zi9buQiNCj8mMgZAQ",
+    "profile_url": "https://www.linkedin.com/in/ACwAABJRjjUB6fbVwY0IM7zi9buQiNCj8mMgZAQ"
+  },
+  "item": {
+    "id": "ACoAABJRjjUBRj9EXhEAO-4ZyhHgzD0ztjMvrlI",
+    "publicIdentifier": "andrea-madotto-899b1386",
+    "linkedinUrl": "https://www.linkedin.com/in/andrea-madotto-899b1386",
+    "firstName": "Andrea",
+    "lastName": "Madotto",
+    "emails": [
+      {
+        "email": "andrea.madotto@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Member of Technical Staff at TML",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "307334709",
+    "registeredAt": "2013-12-05T21:41:45.090Z",
+    "topSkills": null,
+    "connectionsCount": 1181,
+    "followerCount": 1214,
+    "verified": true,
+    "about": "Andrea is a Member of Technical Staff at Thinking Machines Lab. Previously, he was a Research Scientist at Meta’s Fundamental AI Research (FAIR), where he focused on multimodal language models and LLM-based agents capable of navigating user interfaces to accomplish user goals.\n\nAndrea earned his doctorate in Electronic & Computer Engineering from The Hong Kong University of Science and Technology (HKUST). He was honored with the Outstanding Paper Award at ACL 2019 and received the Best Paper Award at the NeurIPS 2019 ConvAI Workshop.\n\nHis research has been featured in prominent outlets such as MIT Technology Review and VentureBeat, highlighting its broader impact on the AI and technology landscape.\n\nBeyond his research contributions, Andrea is actively involved in the academic community. He has served as a program committee member and reviewer for leading machine learning and natural language processing conferences, including ACL, EMNLP, NeurIPS, ICML, ICLR, and AAAI. He has also contributed as a reviewer to journals such as the Journal of Natural Language Engineering and Computer Speech & Language. In addition, Andrea co-presented a tutorial on Deeper Conversational AI at NeurIPS 2020.",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 12,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "13904",
+        "companyId": "8801",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/8801/",
+        "schoolName": "Università di Pisa"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/C5603AQE3kpfRLuz25A/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1632919901361?e=1776902400&v=beta&t=RoPXezlaJyHJRGhgAE40VS31liEtSyx6LDWWOo8nC14",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQE3kpfRLuz25A/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1632919901361?e=1776902400&v=beta&t=RoPXezlaJyHJRGhgAE40VS31liEtSyx6LDWWOo8nC14",
+          "width": 500,
+          "height": 500,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQE3kpfRLuz25A/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1632919901361?e=1776902400&v=beta&t=zuKFnH-q5t4_O4niDiX08eJxNJcdcXuJl-gHa1DcfAY",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQE3kpfRLuz25A/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1632919901361?e=1776902400&v=beta&t=jVQotm0Hvepp2qF6gk8pp_XVdcQhND7TiEYGQTUlkr4",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQE3kpfRLuz25A/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1632919901361?e=1776902400&v=beta&t=4mJGwjalYLd3do0fp_T4gG3skpGnkEbcnIibdFj0DSQ",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5616AQFxH_Q0AoDXvA/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1696220016208?e=1776902400&v=beta&t=8X1XtAyIgOw-1zleSrahd1_dyKVqFWCox8ZUaSlWwRI",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5616AQFxH_Q0AoDXvA/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1696220016208?e=1776902400&v=beta&t=8X1XtAyIgOw-1zleSrahd1_dyKVqFWCox8ZUaSlWwRI",
+          "width": 1400,
+          "height": 350,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5616AQFxH_Q0AoDXvA/profile-displaybackgroundimage-shrink_200_800/profile-displaybackgroundimage-shrink_200_800/0/1696220016208?e=1776902400&v=beta&t=BUQUhYztHT0HCiuEMeUaBUyts2DxjYT8b9uBLJMiwH8",
+          "width": 800,
+          "height": 200,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "photo": "https://media.licdn.com/dms/image/v2/C5603AQE3kpfRLuz25A/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1632919901361?e=1776902400&v=beta&t=RoPXezlaJyHJRGhgAE40VS31liEtSyx6LDWWOo8nC14",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Member of Technical Staff at TML",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco Bay Area",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "5 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Dec",
+          "year": 2025,
+          "text": "Dec 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Scientist",
+        "location": "San Francisco Bay Area",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "4 yrs",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2022,
+          "text": "Jan 2022"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2025,
+          "text": "Dec 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "PHD",
+        "location": "Hong Kong SAR",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "The Hong Kong University of Science and Technology",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/11966/",
+        "companyId": "11966",
+        "duration": "3 yrs 3 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "4859dd09b9f0796cd46948b39e611b87c7d4c4ff",
+        "startDate": {
+          "month": "Sep",
+          "year": 2018,
+          "text": "Sep 2018"
+        },
+        "endDate": {
+          "month": "Nov",
+          "year": 2021,
+          "text": "Nov 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGQKg98EcfHTw/company-logo_400_400/B56ZrxjxGdL8AY-/0/1764989277143/hkust_logo?e=1776902400&v=beta&t=FdchI-bwl1boHpK7qcVmD-K_RyoFtYugGuqV5GaYMss",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGQKg98EcfHTw/company-logo_400_400/B56ZrxjxGdL8AY-/0/1764989277143/hkust_logo?e=1776902400&v=beta&t=FdchI-bwl1boHpK7qcVmD-K_RyoFtYugGuqV5GaYMss",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGQKg98EcfHTw/company-logo_200_200/B56ZrxjxGdL8AI-/0/1764989277143/hkust_logo?e=1776902400&v=beta&t=7KxtgjycP_FEcRGwNhGojt9K0yBD-IMeAVbEVcdem1A",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGQKg98EcfHTw/company-logo_100_100/B56ZrxjxGdL8AQ-/0/1764989277143/hkust_logo?e=1776902400&v=beta&t=2dE0TEhDFry6CVBK5HKFZsu0VzuLC-fC2YRzky2zdJI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Assistant",
+        "location": "Hong Kong",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "The Hong Kong University of Science and Technology",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/11966/",
+        "companyId": "11966",
+        "duration": "1 yr 1 mo",
+        "description": "Conducting research on Deep Learning Algorithms at the HKUST CAiRE lab. I mainly worked on building end-to-end architectures to model dialogue responses. Currently, my research interests are:\n- learning to learn (a.k.a. meta-learning), \n- end-to-end dialogue systems using Memory Augmented Neural Networks\n- multi-task learning for word and sentence level embeddings.",
+        "skills": null,
+        "experienceGroupId": "4859dd09b9f0796cd46948b39e611b87c7d4c4ff",
+        "startDate": {
+          "month": "Sep",
+          "year": 2017,
+          "text": "Sep 2017"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2018,
+          "text": "Sep 2018"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGQKg98EcfHTw/company-logo_400_400/B56ZrxjxGdL8AY-/0/1764989277143/hkust_logo?e=1776902400&v=beta&t=FdchI-bwl1boHpK7qcVmD-K_RyoFtYugGuqV5GaYMss",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGQKg98EcfHTw/company-logo_400_400/B56ZrxjxGdL8AY-/0/1764989277143/hkust_logo?e=1776902400&v=beta&t=FdchI-bwl1boHpK7qcVmD-K_RyoFtYugGuqV5GaYMss",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGQKg98EcfHTw/company-logo_200_200/B56ZrxjxGdL8AI-/0/1764989277143/hkust_logo?e=1776902400&v=beta&t=7KxtgjycP_FEcRGwNhGojt9K0yBD-IMeAVbEVcdem1A",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGQKg98EcfHTw/company-logo_100_100/B56ZrxjxGdL8AQ-/0/1764989277143/hkust_logo?e=1776902400&v=beta&t=2dE0TEhDFry6CVBK5HKFZsu0VzuLC-fC2YRzky2zdJI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Teacher Assistant",
+        "location": "Pisa",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Università di Pisa",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/unipisa/",
+        "companyId": "8801",
+        "companyUniversalName": "unipisa",
+        "duration": "4 mos",
+        "description": "Teaching Assistant of the Advanced Programming course of the M.Sc. in Computer Science held at the University of Pisa. I have prepared several lectures and lab exercises, and I have participated in the final project preparation as well as the grading.",
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2017,
+          "text": "Mar 2017"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2017,
+          "text": "Jun 2017"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4D0BAQFkucYwkPUPWg/company-logo_400_400/company-logo_400_400/0/1729755665575/unipisa_logo?e=1776902400&v=beta&t=B_cUMEZBWxdDj-gEoI7a-rn7U5acsr95R8_l4QdjPeI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQFkucYwkPUPWg/company-logo_400_400/company-logo_400_400/0/1729755665575/unipisa_logo?e=1776902400&v=beta&t=B_cUMEZBWxdDj-gEoI7a-rn7U5acsr95R8_l4QdjPeI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQFkucYwkPUPWg/company-logo_200_200/company-logo_200_200/0/1729755665575/unipisa_logo?e=1776902400&v=beta&t=Vsb4ZvsKPCNVhfh3DyWvIU4GXN2QlNVyrr_tDC7enW0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQFkucYwkPUPWg/company-logo_100_100/company-logo_100_100/0/1729755665575/unipisa_logo?e=1776902400&v=beta&t=33dyZk79EuIFTXrf5ySw_Y2sGhei_v_dUcv03cYzP2c",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Università di Pisa",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/8801/",
+        "schoolId": "8801",
+        "degree": "Master of Science (M.Sc.)",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "insights": "Grade: 110/110 with Honours",
+        "startDate": {
+          "year": 2016,
+          "text": "2016"
+        },
+        "endDate": {
+          "year": 2017,
+          "text": "2017"
+        },
+        "period": "2016 - 2017",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4D0BAQFkucYwkPUPWg/company-logo_400_400/company-logo_400_400/0/1729755665575/unipisa_logo?e=1776902400&v=beta&t=B_cUMEZBWxdDj-gEoI7a-rn7U5acsr95R8_l4QdjPeI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQFkucYwkPUPWg/company-logo_400_400/company-logo_400_400/0/1729755665575/unipisa_logo?e=1776902400&v=beta&t=B_cUMEZBWxdDj-gEoI7a-rn7U5acsr95R8_l4QdjPeI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQFkucYwkPUPWg/company-logo_200_200/company-logo_200_200/0/1729755665575/unipisa_logo?e=1776902400&v=beta&t=Vsb4ZvsKPCNVhfh3DyWvIU4GXN2QlNVyrr_tDC7enW0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQFkucYwkPUPWg/company-logo_100_100/company-logo_100_100/0/1729755665575/unipisa_logo?e=1776902400&v=beta&t=33dyZk79EuIFTXrf5ySw_Y2sGhei_v_dUcv03cYzP2c",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Università degli Studi di Perugia",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2052604/",
+        "schoolId": "2052604",
+        "degree": "Bachelor’s degree",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "description": "BSc in Computer Science",
+        "insights": "Grade: 110/110 with Honours",
+        "startDate": {
+          "year": 2011,
+          "text": "2011"
+        },
+        "endDate": {
+          "year": 2014,
+          "text": "2014"
+        },
+        "period": "2011 - 2014",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGkG0u34ews4A/company-logo_400_400/company-logo_400_400/0/1630557917735/universit_degli_studi_di_perugia_logo?e=1776902400&v=beta&t=-nIkcJ1cbhnH6JHCqvm9lMQ5jIimwLA8E0235cFOcss",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGkG0u34ews4A/company-logo_400_400/company-logo_400_400/0/1630557917735/universit_degli_studi_di_perugia_logo?e=1776902400&v=beta&t=-nIkcJ1cbhnH6JHCqvm9lMQ5jIimwLA8E0235cFOcss",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGkG0u34ews4A/company-logo_200_200/company-logo_200_200/0/1630557917735/universit_degli_studi_di_perugia_logo?e=1776902400&v=beta&t=ZV-ng2ItU6_ZPOzP9wi8P4K1BJyAHM4P0-lUsjjua5g",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGkG0u34ews4A/company-logo_100_100/company-logo_100_100/0/1630557917735/universit_degli_studi_di_perugia_logo?e=1776902400&v=beta&t=fcdFkTocCi7GpVzCFFhZK-0cqoKi8QUfNWurkJVxKfg",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "I.T.I.S. A. Volta Perugia",
+        "schoolLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=I%2ET%2EI%2ES%2E+A%2E+Volta+Perugia",
+        "schoolId": null,
+        "degree": "High school degree",
+        "fieldOfStudy": "Electronics and Telecomunication",
+        "skills": [],
+        "startDate": {
+          "year": 2005,
+          "text": "2005"
+        },
+        "endDate": {
+          "year": 2010,
+          "text": "2010"
+        },
+        "period": "2005 - 2010",
+        "schoolLogo": null
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [
+      {
+        "role": "Mentor",
+        "description": "A volunteering activity to teach programming languages to children (mostly Scratch and Python). Pisa CoderDojo is part of the CoderDojo international initiative. I was also one of the organizers of the fi\frst Toscana DojoCon held in Pisa.",
+        "duration": "Feb 2016 - Jun 2017 · 1 yr 5 mos",
+        "startDate": {
+          "month": "Feb",
+          "year": 2016,
+          "text": "Feb 2016"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2017,
+          "text": "Jun 2017 · 1 yr 5 mos"
+        },
+        "organizationName": "CoderDojo",
+        "organizationLinkedinUrl": "https://www.linkedin.com/company/5178906/",
+        "cause": "Education"
+      }
+    ],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "PyTorch",
+        "endorsements": "7 endorsements"
+      },
+      {
+        "name": "TensorFlow",
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "Python",
+        "endorsements": "12 endorsements"
+      },
+      {
+        "name": "Linux",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "JavaScript",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "MySQL",
+        "endorsements": "12 endorsements"
+      },
+      {
+        "name": "LaTeX",
+        "endorsements": "7 endorsements"
+      },
+      {
+        "name": "Research",
+        "positions": [
+          "Endorsed by 2 colleagues at The Hong Kong University of Science and Technology"
+        ],
+        "endorsements": "19 endorsements"
+      },
+      {
+        "name": "Data Analysis",
+        "endorsements": "10 endorsements"
+      },
+      {
+        "name": "Computer Science",
+        "endorsements": "19 endorsements"
+      },
+      {
+        "name": "Algorithms",
+        "endorsements": "11 endorsements"
+      },
+      {
+        "name": "Programming",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Deep Learning",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "Scikit-Learn",
+        "endorsements": "1 endorsement"
+      }
+    ],
+    "publications": [
+      {
+        "title": "Mem2Seq: Effectively Incorporating Knowledge Bases into End-to-End Task-Oriented Dialog Systems",
+        "publishedAt": "ACL2018 · Apr 1, 2018",
+        "description": "Accepted at ACL2018",
+        "link": "https://arxiv.org/pdf/1804.08217.pdf"
+      },
+      {
+        "title": "End-to-End Dynamic Query Memory Network for Entity-Value Independent Task-Oriented Dialog.",
+        "publishedAt": "International Conference on Acoustics, Speech and Signal Processing (IEEE-ICASSP). · Mar 1, 2018",
+        "description": null,
+        "link": "https://2018.ieeeicassp.org/Papers/ViewPapers_MS.asp?PaperNum=3749%3C"
+      },
+      {
+        "title": "End-to-End Recurrent Entity Network for Entity-Value Independent Goal-Oriented Dialog Learning",
+        "publishedAt": "Dialog System Technology Challenges (DSTC6). · Dec 1, 2017",
+        "description": null,
+        "link": "http://workshop.colips.org/dstc6/papers/track1_paper02_wu.pdf"
+      },
+      {
+        "title": "Fa3l at semeval- 2017 task 3: A three embeddings recurrent neural network for question answering.",
+        "publishedAt": "In Proceedings of the 11th InternationalWorkshop on Semantic Evaluation (SemEval-2017), pages 290295, Vancouver, Canada. Association for Computational Linguistics. · Aug 1, 2017",
+        "description": null,
+        "link": "http://www.aclweb.org/anthology/S17-2048"
+      },
+      {
+        "title": "Question Dependent Recurrent Entity Network for Question Answering",
+        "publishedAt": "NL4AI: 1st Workshop on Natural Language for Arti cial Intelligence (NL4AI). · Jul 1, 2017",
+        "description": null,
+        "link": "http://ceur-ws.org/Vol-1983/paper_07.pdf"
+      },
+      {
+        "title": "Super-Spreader Identi\fcation Using Meta-Centrality",
+        "publishedAt": "Nature Scienti c Report 6, 38994; · Dec 1, 2016",
+        "description": null,
+        "link": "https://www.nature.com/articles/srep38994"
+      },
+      {
+        "title": "A Multistrain Bacterial Model for Link Prediction.",
+        "publishedAt": "In Proc. 11th International Conference on Natural Computation (ICNC'15). · Jul 20, 2015",
+        "description": " DOI:110.1109/ICNC.2015.7378141 "
+      }
+    ],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [
+      {
+        "name": "English",
+        "proficiency": "Full professional proficiency"
+      },
+      {
+        "name": "Italian",
+        "proficiency": "Native or bilingual proficiency"
+      }
+    ],
+    "causes": [
+      "Health",
+      "Science and Technology"
+    ],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAAEcxWcB9z9hmZ1L2eJYSq58kIhTdkEcDk8",
+        "firstName": "Fahad",
+        "lastName": "Khan",
+        "position": "Professor, MBZUAI, UAE; Universitetslektor + Docent, Linköping University, Sweden",
+        "publicIdentifier": "fahad-khan-25b3006",
+        "linkedinUrl": "https://www.linkedin.com/in/fahad-khan-25b3006"
+      },
+      {
+        "id": "ACoAACE2EIwB3vNVX9rm6ce5juOGovFUzVvIsCc",
+        "firstName": "Kevin",
+        "lastName": "Lu",
+        "position": "thinking machines",
+        "publicIdentifier": "kzl",
+        "linkedinUrl": "https://www.linkedin.com/in/kzl"
+      },
+      {
+        "id": "ACoAACPt4SYBjnT3NzXYBUg29E9lILjQTX5luls",
+        "firstName": "Piotr",
+        "lastName": "Dollar",
+        "position": "Technical Staff",
+        "publicIdentifier": "pdollar",
+        "linkedinUrl": "https://www.linkedin.com/in/pdollar"
+      },
+      {
+        "id": "ACoAABVKFmIBkAaIrIvEDUEwOqCCx5aujbfxLnM",
+        "firstName": "Abdelrahman",
+        "lastName": "Shaker",
+        "position": "Computer Vision Researcher | PhD",
+        "publicIdentifier": "abdelrahman-shaker-74274b9b",
+        "linkedinUrl": "https://www.linkedin.com/in/abdelrahman-shaker-74274b9b"
+      },
+      {
+        "id": "ACoAAAgB78IBFrSRvjrM16CT0N8_P9uNs_xP3cw",
+        "firstName": "Aurick",
+        "lastName": "Qiao",
+        "position": "AI/ML Systems",
+        "publicIdentifier": "aurickq",
+        "linkedinUrl": "https://www.linkedin.com/in/aurickq"
+      },
+      {
+        "id": "ACoAABzp4sUBkyoQfG_TsXF6h_Z4X00ylEuZSxs",
+        "firstName": "Muhammad",
+        "lastName": "Maaz",
+        "position": "Generative AI | Multimodality | MBZUAI | Meta | Google PhD Fellow 2025",
+        "publicIdentifier": "mmaaz60",
+        "linkedinUrl": "https://www.linkedin.com/in/mmaaz60"
+      },
+      {
+        "id": "ACoAAByeJ8gB_6XKixGrgiTONXxFHXpsfmY2YxI",
+        "firstName": "Yejin",
+        "lastName": "Bang",
+        "position": "NLP & AI Researcher",
+        "publicIdentifier": "yejinbang",
+        "linkedinUrl": "https://www.linkedin.com/in/yejinbang"
+      },
+      {
+        "id": "ACoAACTE2PkBKQRJeN-vz_MZSmk68JD1Rc0vtTk",
+        "firstName": "Peng",
+        "lastName": "XU",
+        "position": "I am a Senior Research Scientist working in NVIDIA building SOTA applications for Large Language Models.",
+        "publicIdentifier": "peng-xu-b61712152",
+        "linkedinUrl": "https://www.linkedin.com/in/peng-xu-b61712152"
+      },
+      {
+        "id": "ACoAABbZAkwB8rpRoSX39_tT8NwQkfrPvBG1BIY",
+        "firstName": "Chien-Sheng (Jason)",
+        "lastName": "WU",
+        "position": "Sr. Director, AI Research - Agentic AI | Interactive and Trustworthy AI | Natural Language Processing",
+        "publicIdentifier": "chien-sheng-jason-wu",
+        "linkedinUrl": "https://www.linkedin.com/in/chien-sheng-jason-wu"
+      },
+      {
+        "id": "ACoAACGv96UBRGCDWpU1GVnEpq8o5p2b5BNWp-E",
+        "firstName": "Hanoona",
+        "lastName": "Abdul Rasheed",
+        "position": "PhD Computer Vision Student at MBZUAI",
+        "publicIdentifier": "hanoona-abdul-rasheed",
+        "linkedinUrl": "https://www.linkedin.com/in/hanoona-abdul-rasheed"
+      },
+      {
+        "id": "ACoAAAD-hTABHsUcZMNYC-D_hAv_HSbY1IIDv3Y",
+        "firstName": "Opher",
+        "lastName": "Lieber",
+        "position": "Thinking Machines",
+        "publicIdentifier": "opherlieber",
+        "linkedinUrl": "https://www.linkedin.com/in/opherlieber"
+      },
+      {
+        "id": "ACoAACHJb44BnaEWmV_mQrDuE1GCkJgeNH3IHZ0",
+        "firstName": "Pascale",
+        "lastName": "Fung",
+        "position": "Co-founder and CRIO AMI Labs, \nex-Senior Director of AI Research Meta-FAIR,\nChair Professor of ECE HKUST, \nFellow of AAAI, IEEE, ACL, ISCA ",
+        "publicIdentifier": "pascale-fung-a3aa05139",
+        "linkedinUrl": "https://www.linkedin.com/in/pascale-fung-a3aa05139"
+      },
+      {
+        "id": "ACoAACy2BxwB9fCrfCBI06w0X-gHyQTFLJIpJGc",
+        "firstName": "Guangxuan",
+        "lastName": "X.",
+        "publicIdentifier": "xgx",
+        "linkedinUrl": "https://www.linkedin.com/in/xgx"
+      },
+      {
+        "id": "ACoAAB4qbUUBsc9H_NLZN2duLUOOyyFDm-k_ACo",
+        "firstName": "Riley",
+        "lastName": "Shanahan",
+        "position": "Eng at Thinking Machines ",
+        "publicIdentifier": "rileyshanny",
+        "linkedinUrl": "https://www.linkedin.com/in/rileyshanny"
+      },
+      {
+        "id": "ACoAADYVioIBRVI2XJe37ND2cm_YpmFCRDMjjOU",
+        "firstName": "Mubarak ",
+        "lastName": "Shah",
+        "position": "Professor at University of Central Florida",
+        "publicIdentifier": "mubarak-shah-b6aa68213",
+        "linkedinUrl": "https://www.linkedin.com/in/mubarak-shah-b6aa68213"
+      },
+      {
+        "id": "ACoAAB3BApkB38H4Z__jKDDFBfF7jt7w16vD0Xs",
+        "firstName": "Rafael",
+        "lastName": "Rafailov",
+        "position": "Member Of Technical Staff - Thinking Machines Lab",
+        "publicIdentifier": "rafael-rafailov-1b521611b",
+        "linkedinUrl": "https://www.linkedin.com/in/rafael-rafailov-1b521611b"
+      },
+      {
+        "id": "ACoAACR7teQBE8LGdadQZOs_ABedAUbf8J5ly3Q",
+        "firstName": "Muhammad Uzair",
+        "lastName": "Khattak",
+        "position": "PhD Student @ EPFL | NVIDIA Jetson AI Specialist",
+        "publicIdentifier": "muhammad-uzair-khattak-204ba1150",
+        "linkedinUrl": "https://www.linkedin.com/in/muhammad-uzair-khattak-204ba1150"
+      },
+      {
+        "id": "ACoAAABs7hcBwoHSjDUIqfhIej6XtpJqU2NxcJQ",
+        "firstName": "Ming-Hsuan",
+        "lastName": "Yang",
+        "position": "Professor at UC Merced; Research Scientist at Google DeepMind",
+        "publicIdentifier": "minghsuanyang",
+        "linkedinUrl": "https://www.linkedin.com/in/minghsuanyang"
+      },
+      {
+        "id": "ACoAAAXRq2kBbgxtEYuqhT9AbSXZWmCe5aiGsZs",
+        "firstName": "Salman",
+        "lastName": "Khan",
+        "publicIdentifier": "salman-khan-12184128",
+        "linkedinUrl": "https://www.linkedin.com/in/salman-khan-12184128"
+      },
+      {
+        "id": "ACoAABWZSkkBnFqlzWSlSJtsZqmUTVrsye1Yzps",
+        "firstName": "Christoph",
+        "lastName": "Feichtenhofer",
+        "position": "Director, Research Scientist at FAIR",
+        "publicIdentifier": "christoph-feichtenhofer-549433a1",
+        "linkedinUrl": "https://www.linkedin.com/in/christoph-feichtenhofer-549433a1"
+      },
+      {
+        "id": "ACoAAGYTJsgBaZE3jKR2s7pEsw0IokXdDkCDUhY",
+        "firstName": "Alessio Yuri",
+        "lastName": "Scordo",
+        "position": "Neolaureato in scienze giuridiche - tirocinante presso studio legale",
+        "publicIdentifier": "alessio-yuri-scordo-1486343b9",
+        "linkedinUrl": "https://www.linkedin.com/in/alessio-yuri-scordo-1486343b9"
+      },
+      {
+        "id": "ACoAAGVt5ccBx0EREoAkcgrXHe9sMpdrIMAka90",
+        "firstName": "Daniele",
+        "lastName": "De Lellis",
+        "position": "AI Systems Developer & Response Evaluator",
+        "publicIdentifier": "daniele-de-lellis-85ba903b5",
+        "linkedinUrl": "https://www.linkedin.com/in/daniele-de-lellis-85ba903b5"
+      },
+      {
+        "id": "ACoAAF9DfSQB9CFZtcQu9S5K_mDaok98gQHMhBY",
+        "firstName": "Omar",
+        "lastName": "B.",
+        "position": "Account Executive @ RENOIR | Probably building another high-performance GTM engine",
+        "publicIdentifier": "omar-b-118306387",
+        "linkedinUrl": "https://www.linkedin.com/in/omar-b-118306387"
+      },
+      {
+        "id": "ACoAAF7jKBEBCc_FOel56FFRyN_gpLhjpwOYyJY",
+        "firstName": "Noemi",
+        "lastName": "Pesante",
+        "position": "Dalla traduzione alla comunicazione digitale | Social Media, Copywriting & Storytelling",
+        "publicIdentifier": "noemi-pesante-729180385",
+        "linkedinUrl": "https://www.linkedin.com/in/noemi-pesante-729180385"
+      },
+      {
+        "id": "ACoAAGFR-EUBqC4a1VxETqsWQe0rXajk24yo7Sg",
+        "firstName": "AGROFIG ",
+        "lastName": "PRIMA",
+        "position": "AGROFIG PRIMA 2025 project",
+        "publicIdentifier": "agrofig-prima-459985396",
+        "linkedinUrl": "https://www.linkedin.com/in/agrofig-prima-459985396"
+      },
+      {
+        "id": "ACoAAF9lbnYBQL4T6Q-uYCizA15Wm8MOMD4jjVc",
+        "firstName": "Aymane",
+        "lastName": "Dengar",
+        "position": "Étudiant à Università di Pisa",
+        "publicIdentifier": "aymane-dengar-49abb9387",
+        "linkedinUrl": "https://www.linkedin.com/in/aymane-dengar-49abb9387"
+      },
+      {
+        "id": "ACoAAGQFB64BIp3xcJFFTPdRqDR9vzfQPYBNBzc",
+        "firstName": "Xinjie",
+        "lastName": "Sun",
+        "position": "Geologist in Zambia | Exploration Geophysics | Incoming Double MSc at University of Pisa & Montanuniversität Leoben",
+        "publicIdentifier": "sunxinjie",
+        "linkedinUrl": "https://www.linkedin.com/in/sunxinjie"
+      },
+      {
+        "id": "ACoAAF6me8EBUvoQoyMxfarQSRD0s4XeEWavCk8",
+        "firstName": "Martina",
+        "lastName": "Flori",
+        "position": "Laureata in biotecnologie mediche e farmaceutiche, con esperienza di ricerca in oncologia presso il CRCM (Marsiglia).\nDesiderosa di entrare a far parte di aziende farmaceutiche e biotecnologiche o di startup innovative",
+        "publicIdentifier": "martina-flori-629983383",
+        "linkedinUrl": "https://www.linkedin.com/in/martina-flori-629983383"
+      },
+      {
+        "id": "ACoAAGVnM2ABiWQrmB0AJ9Ffq97Lx8KGFqrmdTw",
+        "firstName": "Ilaria",
+        "lastName": "Simonelli",
+        "position": "Student | Event Assistant",
+        "publicIdentifier": "ilaria-simonelli-8808ba3b5",
+        "linkedinUrl": "https://www.linkedin.com/in/ilaria-simonelli-8808ba3b5"
+      },
+      {
+        "id": "ACoAAGVRZ70BvkzYsVtYXuf9Ed071mP69x3De58",
+        "firstName": "Shreya",
+        "lastName": "Manoj",
+        "position": "Student at The University of Georgia (Tbilisi)",
+        "publicIdentifier": "shreya-manoj-sm169",
+        "linkedinUrl": "https://www.linkedin.com/in/shreya-manoj-sm169"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAABJRjjUB6fbVwY0IM7zi9buQiNCj8mMgZAQ"
+    }
+  }
+}

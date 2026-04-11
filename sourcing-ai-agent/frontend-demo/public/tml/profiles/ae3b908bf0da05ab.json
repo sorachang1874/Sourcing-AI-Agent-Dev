@@ -1,0 +1,982 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAABndRmcB6OuhnMHhVuRa08zT-RytUq8eZaI",
+    "profile_url": "https://www.linkedin.com/in/ACwAABndRmcB6OuhnMHhVuRa08zT-RytUq8eZaI"
+  },
+  "item": {
+    "id": "ACoAABndRmcBpm4Yye7FXowpjFeEUUMBs2FZM3g",
+    "publicIdentifier": "dphuang2",
+    "linkedinUrl": "https://www.linkedin.com/in/dphuang2",
+    "firstName": "Dylan",
+    "lastName": "H.",
+    "emails": [
+      {
+        "email": "dylan@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco Bay Area",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "433931879",
+    "registeredAt": "2015-07-15T20:54:45.560Z",
+    "topSkills": null,
+    "connectionsCount": 805,
+    "followerCount": 954,
+    "verified": true,
+    "about": "Passionate software engineer.",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 3,
+            "year": 2026,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "18321",
+        "companyId": "2650",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2650/",
+        "schoolName": "University of Illinois at Urbana-Champaign"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": null,
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "2 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2026,
+          "text": "Mar 2026"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Lead Software Engineer",
+        "location": "San Mateo, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Fireworks AI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/91174981/",
+        "companyId": "91174981",
+        "duration": "1 yr 2 mos",
+        "description": "Leading Developer Experience and Evals across Inference, Tuning, and Infrastructure.",
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2025,
+          "text": "Feb 2025"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2026,
+          "text": "Mar 2026"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGBD0h39SCyLw/company-logo_400_400/company-logo_400_400/0/1711133682942/fireworks_ai_logo?e=1776902400&v=beta&t=Jr5KCR0H5T5Qv9l9DR-c_CSbMyuD1R-50FSoxpRh8dM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGBD0h39SCyLw/company-logo_400_400/company-logo_400_400/0/1711133682942/fireworks_ai_logo?e=1776902400&v=beta&t=Jr5KCR0H5T5Qv9l9DR-c_CSbMyuD1R-50FSoxpRh8dM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGBD0h39SCyLw/company-logo_200_200/company-logo_200_200/0/1711133682941/fireworks_ai_logo?e=1776902400&v=beta&t=SwhqEHdov3TTyAwNvn2ppk5uvrvd53qvW4w1v33Q4Qk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGBD0h39SCyLw/company-logo_100_100/company-logo_100_100/0/1711133682942/fireworks_ai_logo?e=1776902400&v=beta&t=QGcLQO4mH3gezLdkjH_T40I-lYZss7ntlxrZi69klY0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Co-Founder",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Konfig",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/82817294/",
+        "companyId": "82817294",
+        "duration": "2 yrs 4 mos",
+        "description": "Generating SDKs, Docs, Demos & Tutorials for REST APIs",
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2022,
+          "text": "Sep 2022"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2024,
+          "text": "Dec 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQGq9jvXT0KJJg/company-logo_400_400/company-logo_400_400/0/1670163581694?e=1776902400&v=beta&t=kYG9YA9dtedJiVm4tflC7CTz2QcMw2YHfhmXOa22ABI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGq9jvXT0KJJg/company-logo_400_400/company-logo_400_400/0/1670163581694?e=1776902400&v=beta&t=kYG9YA9dtedJiVm4tflC7CTz2QcMw2YHfhmXOa22ABI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGq9jvXT0KJJg/company-logo_200_200/company-logo_200_200/0/1670163581694?e=1776902400&v=beta&t=JB7OMoQ9oSpqhe-D-ZOqpAqpt3XQITj_rYG6uxPDIMc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGq9jvXT0KJJg/company-logo_100_100/company-logo_100_100/0/1670163581694?e=1776902400&v=beta&t=rGZQH8Ot-QJV3jEWBed7wQT1orHOPDpbaDywIV9q3YI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior Software Engineer",
+        "location": "Redwood City, California, United States",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "C3.ai",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/414478/",
+        "companyId": "414478",
+        "duration": "1 yr 11 mos",
+        "description": "- Proprietary Language for generating millions of lines of Java\n- Code Generation Testing Framework\n- Code Transpilation\n- Java Code Migration on millions of lines of code\n- Java / JavaScript / Python SDKs\n- Devops\n- Distributed Systems\n- Platform Team",
+        "skills": null,
+        "experienceGroupId": "3cb6efe901508dfe9763ed33679ca0fe17f08bd8",
+        "startDate": {
+          "month": "May",
+          "year": 2020,
+          "text": "May 2020"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2022,
+          "text": "Mar 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHGgb7gn1_KBQ/company-logo_400_400/company-logo_400_400/0/1692041567947/c3_ai_logo?e=1776902400&v=beta&t=f1CU6mgMjWzsBmP_G1wVT4YlQlXFunaefB7GShf0rEU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHGgb7gn1_KBQ/company-logo_400_400/company-logo_400_400/0/1692041567947/c3_ai_logo?e=1776902400&v=beta&t=f1CU6mgMjWzsBmP_G1wVT4YlQlXFunaefB7GShf0rEU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHGgb7gn1_KBQ/company-logo_200_200/company-logo_200_200/0/1692041567947/c3_ai_logo?e=1776902400&v=beta&t=Y4gsbrBOCuzv2jEixMxNUIjpxFJiSIUDvyDtp0qjX9Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHGgb7gn1_KBQ/company-logo_100_100/company-logo_100_100/0/1692041567947/c3_ai_logo?e=1776902400&v=beta&t=9mkXgodRFSgolkFq6NrOGvvCanFfxVHhnZPLmBg1z4U",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer",
+        "location": "Redwood City",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "C3.ai",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/414478/",
+        "companyId": "414478",
+        "duration": "10 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "3cb6efe901508dfe9763ed33679ca0fe17f08bd8",
+        "startDate": {
+          "month": "Aug",
+          "year": 2019,
+          "text": "Aug 2019"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2020,
+          "text": "May 2020"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHGgb7gn1_KBQ/company-logo_400_400/company-logo_400_400/0/1692041567947/c3_ai_logo?e=1776902400&v=beta&t=f1CU6mgMjWzsBmP_G1wVT4YlQlXFunaefB7GShf0rEU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHGgb7gn1_KBQ/company-logo_400_400/company-logo_400_400/0/1692041567947/c3_ai_logo?e=1776902400&v=beta&t=f1CU6mgMjWzsBmP_G1wVT4YlQlXFunaefB7GShf0rEU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHGgb7gn1_KBQ/company-logo_200_200/company-logo_200_200/0/1692041567947/c3_ai_logo?e=1776902400&v=beta&t=Y4gsbrBOCuzv2jEixMxNUIjpxFJiSIUDvyDtp0qjX9Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHGgb7gn1_KBQ/company-logo_100_100/company-logo_100_100/0/1692041567947/c3_ai_logo?e=1776902400&v=beta&t=9mkXgodRFSgolkFq6NrOGvvCanFfxVHhnZPLmBg1z4U",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer Intern",
+        "location": "San Francisco",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "AppDynamics",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/594846/",
+        "companyId": "594846",
+        "duration": "4 mos",
+        "description": "Browser Real User Monitoring Team - JavaScript Execution Time and Session Replay/Classification",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2018,
+          "text": "May 2018"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2018,
+          "text": "Aug 2018"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4D0BAQFCEDqzCKqjgg/company-logo_400_400/company-logo_400_400/0/1720712816927/appdynamics_logo?e=1776902400&v=beta&t=XP5F16LiUi79fov3Kbk1x41ozkMcS7oGV3CtI312HHo",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQFCEDqzCKqjgg/company-logo_400_400/company-logo_400_400/0/1720712816927/appdynamics_logo?e=1776902400&v=beta&t=XP5F16LiUi79fov3Kbk1x41ozkMcS7oGV3CtI312HHo",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQFCEDqzCKqjgg/company-logo_200_200/company-logo_200_200/0/1720712816927/appdynamics_logo?e=1776902400&v=beta&t=VDvJ9Rsp1GOoq6i7kjhHfXSUjawl65_5ORM8FPlbur4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQFCEDqzCKqjgg/company-logo_100_100/company-logo_100_100/0/1720712816927/appdynamics_logo?e=1776902400&v=beta&t=oNGmOQ7R404e24hj1jUmlglNppC5TJ96_VKtC4Ao-5w",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Researcher",
+        "location": "Urbana-Champaign, Illinois Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "University of Illinois at Urbana-Champaign",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/university-of-illinois-urbana-champaign/",
+        "companyId": "2650",
+        "companyUniversalName": "university-of-illinois-urbana-champaign",
+        "duration": "2 yrs 10 mos",
+        "description": "Control Panel Placebo",
+        "skills": null,
+        "startDate": {
+          "month": "Aug",
+          "year": 2015,
+          "text": "Aug 2015"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2018,
+          "text": "May 2018"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGFFDl_Z9pIAA/company-logo_400_400/company-logo_400_400/0/1630611684443/university_of_illinois_at_urbana_champaign_logo?e=1776902400&v=beta&t=1--Z9zB14SnN_KSEEz3x-H2Uy7aJs5OXT38VWWEsQEo",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGFFDl_Z9pIAA/company-logo_400_400/company-logo_400_400/0/1630611684443/university_of_illinois_at_urbana_champaign_logo?e=1776902400&v=beta&t=1--Z9zB14SnN_KSEEz3x-H2Uy7aJs5OXT38VWWEsQEo",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGFFDl_Z9pIAA/company-logo_200_200/company-logo_200_200/0/1630611684443/university_of_illinois_at_urbana_champaign_logo?e=1776902400&v=beta&t=nFuRnwx0uMs09egU9-21TjWewArRDux06lp-r6wcprY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGFFDl_Z9pIAA/company-logo_100_100/company-logo_100_100/0/1630611684443/university_of_illinois_at_urbana_champaign_logo?e=1776902400&v=beta&t=YdPWblWwq_--WXVROnRQ5WEjcYM16NA0RvPcrTcOWgk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Server Performance Intern",
+        "location": "Austin, Texas Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Arm",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/4472/",
+        "companyId": "4472",
+        "duration": "4 mos",
+        "description": "Server Benchmarking Infrastructure",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2017,
+          "text": "May 2017"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2017,
+          "text": "Aug 2017"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEeZEj_YnYWeg/company-logo_400_400/B4EZXss3rjGgAc-/0/1743432940736/arm_logo?e=1776902400&v=beta&t=1YI6ic_0b4ZtKf94wxQwvjMqwuAyzcl4kEexw9GPPaI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEeZEj_YnYWeg/company-logo_400_400/B4EZXss3rjGgAc-/0/1743432940736/arm_logo?e=1776902400&v=beta&t=1YI6ic_0b4ZtKf94wxQwvjMqwuAyzcl4kEexw9GPPaI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEeZEj_YnYWeg/company-logo_200_200/B4EZXss3rjGgAM-/0/1743432940736/arm_logo?e=1776902400&v=beta&t=30nlSSrN7KkT2DetpCaqB8eX6upC1ajSVCjY-kCgUfo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEeZEj_YnYWeg/company-logo_100_100/B4EZXss3rjGgAU-/0/1743432940736/arm_logo?e=1776902400&v=beta&t=VRxQb4qEH8XtjmESF1WqUfkwEUMlUngDWEeXZQLMU3A",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Google Summer of Code Intern",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Berkman Klein Center for Internet & Society at Harvard University",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/2730855/",
+        "companyId": "2730855",
+        "duration": "4 mos",
+        "description": "Data ETL",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2016,
+          "text": "May 2016"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2016,
+          "text": "Aug 2016"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQFcAR6VO3hqng/company-logo_400_400/company-logo_400_400/0/1631365255785?e=1776902400&v=beta&t=2aoHhKsFseNHI-UTx0dQp8blutBQsxdGWXUEqCvAXWk",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFcAR6VO3hqng/company-logo_400_400/company-logo_400_400/0/1631365255785?e=1776902400&v=beta&t=2aoHhKsFseNHI-UTx0dQp8blutBQsxdGWXUEqCvAXWk",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFcAR6VO3hqng/company-logo_200_200/company-logo_200_200/0/1631365255785?e=1776902400&v=beta&t=KVJKtJhq5L7NPrpZSzWbYyF2-Lb1WmjkcxWyOFFD1a0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFcAR6VO3hqng/company-logo_100_100/company-logo_100_100/0/1631365255785?e=1776902400&v=beta&t=PQfAbKPC2ONdUt9ED8NBeRaEgapSfSip1lP0r9hmdtA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "University of Illinois Urbana-Champaign",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2650/",
+        "schoolId": "2650",
+        "degree": "Master of Engineering - MEng",
+        "fieldOfStudy": "Computer Engineering",
+        "skills": [],
+        "startDate": {
+          "year": 2018,
+          "text": "2018"
+        },
+        "endDate": {
+          "year": 2019,
+          "text": "2019"
+        },
+        "period": "2018 - 2019",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGFFDl_Z9pIAA/company-logo_400_400/company-logo_400_400/0/1630611684443/university_of_illinois_at_urbana_champaign_logo?e=1776902400&v=beta&t=1--Z9zB14SnN_KSEEz3x-H2Uy7aJs5OXT38VWWEsQEo",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGFFDl_Z9pIAA/company-logo_400_400/company-logo_400_400/0/1630611684443/university_of_illinois_at_urbana_champaign_logo?e=1776902400&v=beta&t=1--Z9zB14SnN_KSEEz3x-H2Uy7aJs5OXT38VWWEsQEo",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGFFDl_Z9pIAA/company-logo_200_200/company-logo_200_200/0/1630611684443/university_of_illinois_at_urbana_champaign_logo?e=1776902400&v=beta&t=nFuRnwx0uMs09egU9-21TjWewArRDux06lp-r6wcprY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGFFDl_Z9pIAA/company-logo_100_100/company-logo_100_100/0/1630611684443/university_of_illinois_at_urbana_champaign_logo?e=1776902400&v=beta&t=YdPWblWwq_--WXVROnRQ5WEjcYM16NA0RvPcrTcOWgk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "University of Illinois Urbana-Champaign",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2650/",
+        "schoolId": "2650",
+        "degree": "Bachelor of Science (B.S.)",
+        "fieldOfStudy": "Computer Engineering",
+        "skills": [],
+        "startDate": {
+          "year": 2015,
+          "text": "2015"
+        },
+        "endDate": {
+          "year": 2019,
+          "text": "2019"
+        },
+        "period": "2015 - 2019",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGFFDl_Z9pIAA/company-logo_400_400/company-logo_400_400/0/1630611684443/university_of_illinois_at_urbana_champaign_logo?e=1776902400&v=beta&t=1--Z9zB14SnN_KSEEz3x-H2Uy7aJs5OXT38VWWEsQEo",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGFFDl_Z9pIAA/company-logo_400_400/company-logo_400_400/0/1630611684443/university_of_illinois_at_urbana_champaign_logo?e=1776902400&v=beta&t=1--Z9zB14SnN_KSEEz3x-H2Uy7aJs5OXT38VWWEsQEo",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGFFDl_Z9pIAA/company-logo_200_200/company-logo_200_200/0/1630611684443/university_of_illinois_at_urbana_champaign_logo?e=1776902400&v=beta&t=nFuRnwx0uMs09egU9-21TjWewArRDux06lp-r6wcprY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGFFDl_Z9pIAA/company-logo_100_100/company-logo_100_100/0/1630611684443/university_of_illinois_at_urbana_champaign_logo?e=1776902400&v=beta&t=YdPWblWwq_--WXVROnRQ5WEjcYM16NA0RvPcrTcOWgk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [
+      {
+        "givenBy": "Manas Talukdar",
+        "givenByHeadline": "Builder | VP of Engineering | AI, Large-scale systems | Senior Fellow",
+        "givenAt": "December 21, 2023, Manas managed Dylan directly",
+        "givenByLink": "https://www.linkedin.com/in/manastalukdar",
+        "description": "Dylan was part of my organization at C3 AI. He joined us straight out of grad school, a few months before I came onboard. His competence and confidence stood out to me even as I was ramping up and getting to know the lay of the land. Around that time Dylan played a key role for a critical initiative, helping the company reach an important milestone for a major release. I was impressed by his high technical strength, and ability to deliver on time while also absorbing new areas. With organizational growth and new projects, it was an easy decision for me to make Dylan the technical lead for a new engineering team in my org, working on a greenfield project at the intersection of data infrastructure and machine learning.\n\nDylan did a spectacular job in being the technical fulcrum for that team. He worked well with senior architects, data scientists and other stakeholders. He was instrumental in our engagement with an external startup while researching integration with their product. He was meticulous in documentation as well as project management. He wrote high-quality code and was actively involved in design decisions with senior architects. Dylan also did a great job in mentoring and coaching several new engineers in that team. He helped them ramp up and enabled them to be successful. He played a key role in keeping morale high. While the team did not have a dedicated engineering manager at that time, the gap was never felt thanks to his multifaceted talents.\n\nI have no hesitation in saying that Dylan exhibited exceptional drive, competency and leadership abilities. I wholeheartedly recommend him and would welcome the opportunity to work together again. Dylan would be a great asset for any organization!",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQGUUSwcAnSw2w/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1709061240900?e=1776902400&v=beta&t=bpMbWT34e09jDkY2D0U0KQMxokSA6pBlKgLBZV0_RNc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQGUUSwcAnSw2w/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1709061240900?e=1776902400&v=beta&t=bpMbWT34e09jDkY2D0U0KQMxokSA6pBlKgLBZV0_RNc",
+              "width": 389,
+              "height": 389,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQGUUSwcAnSw2w/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1709061240900?e=1776902400&v=beta&t=ztO9olwBRtRep6mwZFrfzuGab_rJyCjtlO3XrjvYJyE",
+              "width": 389,
+              "height": 389,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQGUUSwcAnSw2w/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1709061240900?e=1776902400&v=beta&t=RxpjdT2LPghpwgjGBLHU1UORECN5dtsWjGjpppkbnRc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQGUUSwcAnSw2w/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1709061240900?e=1776902400&v=beta&t=6lVgKAIcbUBmBqEHb6MeEiDnWmDo6m-P0fCWWjCaarU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Cherif Jazra",
+        "givenByHeadline": "ML/Data SWE | ex-Apple, C3 AI, Cornell",
+        "givenAt": "June 10, 2022, Cherif worked with Dylan on the same team",
+        "givenByLink": "https://www.linkedin.com/in/cherifjazra",
+        "description": "Dylan is a bright and passionate engineer with whom I had the privilege to work with at C3. I joined about a year after Dylan, and within this short period of time he had already established himself as a technical leader dedicated to high quality and efficient code. He who would go on to lead the development of a new c3 data product with an empathetic and smart collaborative mindset. I would without a doubt work again with Dylan, and would highly recommend him to anyone looking for a highly skilled engineering leader!",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQH5V8LD00iUUQ/profile-displayphoto-shrink_800_800/B56ZmrQLLSI8Ac-/0/1759514769551?e=1776902400&v=beta&t=wmP0Ht_wv_m77ITNdnn2FpnCr4gnVhNpS1Lg-QHalJU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQH5V8LD00iUUQ/profile-displayphoto-shrink_800_800/B56ZmrQLLSI8Ac-/0/1759514769551?e=1776902400&v=beta&t=wmP0Ht_wv_m77ITNdnn2FpnCr4gnVhNpS1Lg-QHalJU",
+              "width": 799,
+              "height": 800,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQH5V8LD00iUUQ/profile-displayphoto-shrink_400_400/B56ZmrQLLSI8Ag-/0/1759514769551?e=1776902400&v=beta&t=ACS2YVow-tHfWugOMZYQgGsRlK9WSX5R50OtzaoOdy0",
+              "width": 399,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQH5V8LD00iUUQ/profile-displayphoto-shrink_200_200/B56ZmrQLLSI8AY-/0/1759514769551?e=1776902400&v=beta&t=Fm4EP7TLIPPQNyWJNB8QjrsGrMyo7VLEEi9XfGgwH5Q",
+              "width": 199,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQH5V8LD00iUUQ/profile-displayphoto-shrink_100_100/B56ZmrQLLSI8AU-/0/1759514769514?e=1776902400&v=beta&t=O8fC5ihEmslV7w-1i3wYphvzCQGX-50f7Du4hDgiqTc",
+              "width": 99,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "skills": [
+      {
+        "name": "Microsoft Office",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "C",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Microsoft Word",
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "Research",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "C++",
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "Matlab",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "PowerPoint",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Teamwork",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "Social Media",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Java",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "Microsoft Excel",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "PHP",
+        "endorsements": "2 endorsements"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [
+      "Civil Rights and Social Action",
+      "Environment",
+      "Human Rights",
+      "Social Services"
+    ],
+    "featured": {
+      "images": [
+        "https://media.licdn.com/dms/image/v2/D4E22AQENGn8VeW0bog/feedshare-shrink_2048_1536/B4EZY3.D6BGgAo-/0/1744695738393?e=1776902400&v=beta&t=Ji52DbnpL7aol-vktzkO7rLXy1EJfDz9e5Gg77_sXMI"
+      ],
+      "link": "https://www.linkedin.com/feed/update/urn:li:activity:7317784322260762624?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A7317784322260762624%29",
+      "slides": [
+        {
+          "title": null,
+          "subtitle": null,
+          "description": null,
+          "url": "https://www.linkedin.com/feed/update/urn:li:activity:7317784322260762624?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A7317784322260762624%29",
+          "image": {
+            "url": "https://media.licdn.com/dms/image/v2/D4E22AQENGn8VeW0bog/feedshare-shrink_2048_1536/B4EZY3.D6BGgAo-/0/1744695738393?e=1776902400&v=beta&t=Ji52DbnpL7aol-vktzkO7rLXy1EJfDz9e5Gg77_sXMI"
+          }
+        },
+        {
+          "title": "After 3 Years, I Failed. Here's All My Startup's Code. | Dylan Huang",
+          "subtitle": "dylanhuang.com",
+          "description": null,
+          "url": "https://www.linkedin.com/feed/update/urn:li:activity:7274570766837293078?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A7274570766837293078%29",
+          "image": {
+            "url": "https://media.licdn.com/dms/image/sync/v2/D4E27AQFN4Zl6ZPvAbQ/articleshare-shrink_1280_800/articleshare-shrink_1280_800/0/1732730193346?e=1776160800&v=beta&t=F1UXM5Ndd4ZHHKKlQTIg5twC3vAGqC9se8invXs1giw"
+          }
+        }
+      ]
+    },
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAACmzAtgBiDGd-HW1TzeGD6e3xWxnqDi9o-0",
+        "firstName": "Zitong",
+        "lastName": "Yang",
+        "publicIdentifier": "zitongyang",
+        "linkedinUrl": "https://www.linkedin.com/in/zitongyang"
+      },
+      {
+        "id": "ACoAABEmYXYB5f-3ZmFG8dI-n9XAlqySBqO-2PA",
+        "firstName": "Luke",
+        "lastName": "Carlson",
+        "publicIdentifier": "jlukecarlson",
+        "linkedinUrl": "https://www.linkedin.com/in/jlukecarlson"
+      },
+      {
+        "id": "ACoAAEZnBtoBb1Us7ZKgHfOXAYT764pKcDQy848",
+        "firstName": "Songlin",
+        "lastName": "Yang",
+        "publicIdentifier": "songlin-yang-b8a69728b",
+        "linkedinUrl": "https://www.linkedin.com/in/songlin-yang-b8a69728b"
+      },
+      {
+        "id": "ACoAAAQ4Q7kByw3YKf2rFlmWzRMF7P8Gw4S9PIU",
+        "firstName": "Yinghai",
+        "lastName": "L.",
+        "publicIdentifier": "yinghai83",
+        "linkedinUrl": "https://www.linkedin.com/in/yinghai83"
+      },
+      {
+        "id": "ACoAABmsYasBhsFwXKca6Ooio5i6nRfTRvN4d2Y",
+        "firstName": "Liyuan",
+        "lastName": "Liu",
+        "publicIdentifier": "liyuanlucasliu",
+        "linkedinUrl": "https://www.linkedin.com/in/liyuanlucasliu"
+      },
+      {
+        "id": "ACoAACaOARIBRO2EEH12QWQO29L__oI3N2K4u14",
+        "firstName": "Mingjie",
+        "lastName": "Sun",
+        "publicIdentifier": "mingjie-sun-06a761160",
+        "linkedinUrl": "https://www.linkedin.com/in/mingjie-sun-06a761160"
+      },
+      {
+        "id": "ACoAABGzJXcBFaJqVFgqgYNbhaPVKRkP3iG33dA",
+        "firstName": "Noah",
+        "lastName": "Shpak",
+        "publicIdentifier": "nshpak",
+        "linkedinUrl": "https://www.linkedin.com/in/nshpak"
+      },
+      {
+        "id": "ACoAAACo1tYBGy9sT2OWZuEULOMe4K_b2Y22-F8",
+        "firstName": "Alex",
+        "lastName": "Gartrell",
+        "publicIdentifier": "alexgartrell",
+        "linkedinUrl": "https://www.linkedin.com/in/alexgartrell"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAACHG180BXiyeZ2qJgoggx27e4iM3ajxvp18",
+        "firstName": "Andy",
+        "lastName": "Hwang",
+        "publicIdentifier": "andrewnhwang",
+        "linkedinUrl": "https://www.linkedin.com/in/andrewnhwang"
+      },
+      {
+        "id": "ACoAABLLpuMBU7a9WPW-GubLTIkDjAF6hz7Ujkc",
+        "firstName": "Daniel",
+        "lastName": "Xu",
+        "publicIdentifier": "daniel-xu-42b73289",
+        "linkedinUrl": "https://www.linkedin.com/in/daniel-xu-42b73289"
+      },
+      {
+        "id": "ACoAAB3BApkB38H4Z__jKDDFBfF7jt7w16vD0Xs",
+        "firstName": "Rafael",
+        "lastName": "Rafailov",
+        "publicIdentifier": "rafael-rafailov-1b521611b",
+        "linkedinUrl": "https://www.linkedin.com/in/rafael-rafailov-1b521611b"
+      },
+      {
+        "id": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+        "firstName": "Saurabh",
+        "lastName": "Garg",
+        "publicIdentifier": "saurabh-garg-b680b5b8",
+        "linkedinUrl": "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+      },
+      {
+        "id": "ACoAACr4cWgBKbXpi4wxKJ9yET48_MNGQ2kgVtE",
+        "firstName": "Liliang ",
+        "lastName": "Ren",
+        "publicIdentifier": "liliang-ren-ba0529181",
+        "linkedinUrl": "https://www.linkedin.com/in/liliang-ren-ba0529181"
+      },
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAADGE-AoBWopX8Yz0_gxbsPDk1rMk6Mx37ZE",
+        "firstName": "Giovanni",
+        "lastName": "D'Antonio",
+        "publicIdentifier": "giovanni-dantonio",
+        "linkedinUrl": "https://www.linkedin.com/in/giovanni-dantonio"
+      },
+      {
+        "id": "ACoAADYMzQABdXTSxolT2YjHmNBBSeT6YrGSQmQ",
+        "firstName": "Tarushii",
+        "lastName": "Goel",
+        "publicIdentifier": "tarushii-goel",
+        "linkedinUrl": "https://www.linkedin.com/in/tarushii-goel"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAACy2BxwB9fCrfCBI06w0X-gHyQTFLJIpJGc",
+        "firstName": "Guangxuan",
+        "lastName": "X.",
+        "publicIdentifier": "xgx",
+        "linkedinUrl": "https://www.linkedin.com/in/xgx"
+      },
+      {
+        "id": "ACoAAAeoHjYB_Lo5sUFlpZpz2L74oe9nEIKztQA",
+        "firstName": "Jenya",
+        "lastName": "L.",
+        "publicIdentifier": "jenya-l",
+        "linkedinUrl": "https://www.linkedin.com/in/jenya-l"
+      },
+      {
+        "id": "ACoAAAOpFqYB_eK6X8-ml9F_KOrdjwwKSsJoBbs",
+        "firstName": "Léonore",
+        "lastName": "Dassonville",
+        "position": "Financial Analyst - FP&A / Projects & Investment / Controlling & Business Analysis",
+        "publicIdentifier": "léonore-dassonville-b4669718",
+        "linkedinUrl": "https://www.linkedin.com/in/léonore-dassonville-b4669718"
+      },
+      {
+        "id": "ACoAAChRpPgBwXZit0rl_GkZYSnrF7AOEJPMPhg",
+        "firstName": "Coralie",
+        "lastName": "Everaere",
+        "position": "Executive Assistant to the CEO and the Trading Division",
+        "publicIdentifier": "coralie-everaere-b0865516a",
+        "linkedinUrl": "https://www.linkedin.com/in/coralie-everaere-b0865516a"
+      },
+      {
+        "id": "ACoAABTd08wBhD2bJMuBKnu_Ep_QOkVelPcb7w0",
+        "firstName": "Joanna",
+        "lastName": "Hablasek",
+        "position": "Group HR Business Partner and Compensation & Benefits Officer",
+        "publicIdentifier": "hablasek",
+        "linkedinUrl": "https://www.linkedin.com/in/hablasek"
+      },
+      {
+        "id": "ACoAAB6sGnkByfKCh03OkxWkVxng-n8lyWN_ed4",
+        "firstName": "lsaac",
+        "lastName": "Bertin",
+        "position": "HRIS Digital transformation ",
+        "publicIdentifier": "isaacbertin",
+        "linkedinUrl": "https://www.linkedin.com/in/isaacbertin"
+      },
+      {
+        "id": "ACoAAAkHjMYB5E3Sc94yFN5AGLj7CWBiHxI8v7Y",
+        "firstName": "Vincent",
+        "lastName": "LEOTY",
+        "position": "IT Product Manager",
+        "publicIdentifier": "vincent-leoty-80689742",
+        "linkedinUrl": "https://www.linkedin.com/in/vincent-leoty-80689742"
+      },
+      {
+        "id": "ACoAAAe-C-kBe-XAgix6C0qOF-_yyX16c79ejlc",
+        "firstName": "Sandrine",
+        "lastName": "Fofana",
+        "position": "Group Training and Development Manager and HRBP, with Brevet RH & MAS RH",
+        "publicIdentifier": "sandrine-fofana-b4960237",
+        "linkedinUrl": "https://www.linkedin.com/in/sandrine-fofana-b4960237"
+      },
+      {
+        "id": "ACoAAAHWbKABxzVzHMYh-vhOBs7qrfXUnCeiqZA",
+        "firstName": "Christophe",
+        "lastName": "Robert",
+        "position": "Chief Operating Officer at Oryx Energies",
+        "publicIdentifier": "christophe-robert-3403a9a",
+        "linkedinUrl": "https://www.linkedin.com/in/christophe-robert-3403a9a"
+      },
+      {
+        "id": "ACoAAATAlYQBp1HEfgVbdML41lWv9o1mU5OYLRo",
+        "firstName": "Delphine",
+        "lastName": "Gallet",
+        "position": "Human Resources Business Partner",
+        "publicIdentifier": "delphine-gallet-",
+        "linkedinUrl": "https://www.linkedin.com/in/delphine-gallet-"
+      },
+      {
+        "id": "ACoAAABS7pIBT8G1WG2pjkGL-8BhDeeEwoPK8MM",
+        "firstName": "Haja",
+        "lastName": "Rajaonarivo",
+        "position": "Group HR Manager at Oryx Energies",
+        "publicIdentifier": "haja-rajaonarivo",
+        "linkedinUrl": "https://www.linkedin.com/in/haja-rajaonarivo"
+      },
+      {
+        "id": "ACoAAAhJVFYB_rBe3Mz-5z8rANNDVI03qOnXieQ",
+        "firstName": "Haktan",
+        "lastName": "KURKCU",
+        "position": "Senior Financial Controller",
+        "publicIdentifier": "haktan-kurkcu-4726853a",
+        "linkedinUrl": "https://www.linkedin.com/in/haktan-kurkcu-4726853a"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAABndRmcB6OuhnMHhVuRa08zT-RytUq8eZaI"
+    }
+  }
+}

@@ -1,0 +1,592 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAATAFhsBkw4wwQq8gZ6NRNE9_MwIOC1ZT0g",
+    "profile_url": "https://www.linkedin.com/in/ACwAAATAFhsBkw4wwQq8gZ6NRNE9_MwIOC1ZT0g"
+  },
+  "item": {
+    "id": "ACoAAATAFhsB-MSu8aXWUBacbi6fvU_SaAqdBH4",
+    "publicIdentifier": "jshanson7",
+    "linkedinUrl": "https://www.linkedin.com/in/jshanson7",
+    "firstName": "Jeff",
+    "lastName": "Hanson",
+    "emails": [
+      {
+        "email": "jeff.hanson@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Member of Technical Staff @ Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": true,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "79697435",
+    "registeredAt": "2010-06-30T19:47:47.023Z",
+    "topSkills": null,
+    "connectionsCount": 971,
+    "followerCount": 963,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 7,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "19518",
+        "companyId": "3162",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3162/",
+        "schoolName": "The University of Texas at Austin"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5603AQE7liwAgiEUww/profile-displayphoto-crop_800_800/B56ZguyGUZHMAQ-/0/1753131542099?e=1776902400&v=beta&t=wZrbKv33QNKC_re8aDJsrk1dS_E7pqMZA_PoyFLx93w",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQE7liwAgiEUww/profile-displayphoto-crop_800_800/B56ZguyGUZHMAQ-/0/1753131542099?e=1776902400&v=beta&t=wZrbKv33QNKC_re8aDJsrk1dS_E7pqMZA_PoyFLx93w",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQE7liwAgiEUww/profile-displayphoto-scale_400_400/B56ZguyGUZHMAo-/0/1753131542208?e=1776902400&v=beta&t=kSlDMJbNXq67Uvnf28wMimIH9CkxTaaSJ9KArwXlwyE",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQE7liwAgiEUww/profile-displayphoto-scale_200_200/B56ZguyGUZHMAg-/0/1753131542208?e=1776902400&v=beta&t=-4kgtKIary3xhbIQGzpPisrDILsZdB3p6XPOEpZIRbQ",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQE7liwAgiEUww/profile-displayphoto-scale_100_100/B56ZguyGUZHMAk-/0/1753131542208?e=1776902400&v=beta&t=vgUgjnqgpNix5V-m_KbbhUB9kpnfNn4oknUCVmHJyfw",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D5603AQE7liwAgiEUww/profile-displayphoto-crop_800_800/B56ZguyGUZHMAQ-/0/1753131542099?e=1776902400&v=beta&t=wZrbKv33QNKC_re8aDJsrk1dS_E7pqMZA_PoyFLx93w",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Member of Technical Staff @ Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "10 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jul",
+          "year": 2025,
+          "text": "Jul 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer",
+        "location": "San Francisco Bay Area",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "4 yrs 8 mos",
+        "description": "Tupperware, AI Infra",
+        "skills": null,
+        "startDate": {
+          "month": "Dec",
+          "year": 2020,
+          "text": "Dec 2020"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2025,
+          "text": "Jul 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Engineering Manager / Sr. Staff Engineer",
+        "location": "San Francisco Bay Area",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Common Networks",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10562240/",
+        "companyId": "10562240",
+        "duration": "3 yrs 3 mos",
+        "description": "Acquired by Facebook in December 2020.\n\n- EM for team that built network planning system, geofence system, technician mobile app, external website, customer dashboard, and onboarding flow\n- Designed and built tool for visualizing 30K+ installations and radio connections, overlaid with LIDAR data\n- Developed LIDAR-powered algorithm to determine serviceability of new customers in real time\n- Created hardware forecasting system to predict bandwidth and reliability of customer installations\n- Built persistent multi-step onboard flow with authentication, plan selection, booking, and payment",
+        "skills": null,
+        "startDate": {
+          "month": "Oct",
+          "year": 2017,
+          "text": "Oct 2017"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2020,
+          "text": "Dec 2020"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQE_N83Sy6Dx1A/company-logo_400_400/company-logo_400_400/0/1630650107461/common_networks_logo?e=1776902400&v=beta&t=LAkDn5ubYgQniEHckM8MPNLvl841R1aUiiiNaTOW_Ss",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQE_N83Sy6Dx1A/company-logo_400_400/company-logo_400_400/0/1630650107461/common_networks_logo?e=1776902400&v=beta&t=LAkDn5ubYgQniEHckM8MPNLvl841R1aUiiiNaTOW_Ss",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQE_N83Sy6Dx1A/company-logo_200_200/company-logo_200_200/0/1630650107461/common_networks_logo?e=1776902400&v=beta&t=48aFnATMTfTlITJ5mIOfTI3a3yNcyiv8kTHieBVkFgI",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQE_N83Sy6Dx1A/company-logo_100_100/company-logo_100_100/0/1630650107461/common_networks_logo?e=1776902400&v=beta&t=AEW9monykwQ5DH9l-qkQI3T9-rgYtyGW5P-wz-ghkaI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer",
+        "location": "San Francisco Bay Area",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Uber",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1815218/",
+        "companyId": "1815218",
+        "duration": "1 yr 7 mos",
+        "description": "- Created UberStudio, a tool for staging trips between the Rider and Driver apps used by over 80% of the iOS and Android mobile teams\n- Built tool for visualizing the top 100K+ pickup and dropoff locations in each city, overlaid with trip performance metrics (React/Mapbox/WebGL)\n- Designed and built the initial Shared Rides trip detail view in the Driver dashboard",
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2016,
+          "text": "Mar 2016"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2017,
+          "text": "Sep 2017"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFiYnR1Mbtxdg/company-logo_400_400/company-logo_400_400/0/1630552741617/uber_com_logo?e=1776902400&v=beta&t=M3Xr2nGIJbwiL7SweaMx1kmbobUFKb94NlsRcNonpyw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFiYnR1Mbtxdg/company-logo_400_400/company-logo_400_400/0/1630552741617/uber_com_logo?e=1776902400&v=beta&t=M3Xr2nGIJbwiL7SweaMx1kmbobUFKb94NlsRcNonpyw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFiYnR1Mbtxdg/company-logo_200_200/company-logo_200_200/0/1630552741617/uber_com_logo?e=1776902400&v=beta&t=2D-5YpStDmFaF4WSyVMoGvBQxZbwi0or2MOtXfJMy1M",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFiYnR1Mbtxdg/company-logo_100_100/company-logo_100_100/0/1630552741617/uber_com_logo?e=1776902400&v=beta&t=4eVavNfckn6n0iFrQT8Oorq0aSqQa7MJWcBSf_TD1E8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior Software Engineer",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Station X",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Station+X",
+        "duration": "2 yrs 9 mos",
+        "description": "Acquired by Roche in February 2018.\n\n- Led frontend development of application to manage and visualize genomic data\n- Built a UI for viewing 1M+ rows of genetic data performantly in a web browser\n- Migrated frontend stack from Backbone to React",
+        "skills": null,
+        "startDate": {
+          "month": "Jul",
+          "year": 2013,
+          "text": "Jul 2013"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2016,
+          "text": "Mar 2016"
+        }
+      },
+      {
+        "position": "Software Engineer",
+        "location": "San Francisco Bay Area",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Loku",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Loku",
+        "duration": "2 yrs 10 mos",
+        "description": "Acquired by Groupon in July 2013.\n\n- Led growth initiatives to reach 100K users\n- Designed and built the mobile web app",
+        "skills": null,
+        "startDate": {
+          "month": "Oct",
+          "year": 2010,
+          "text": "Oct 2010"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2013,
+          "text": "Jul 2013"
+        }
+      },
+      {
+        "position": "Technical Intern",
+        "location": "Washington, D.C.",
+        "employmentType": "Internship",
+        "workplaceType": null,
+        "companyName": "U.S. Department of Energy (DOE)",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/5556/",
+        "companyId": "5556",
+        "duration": "4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2009,
+          "text": "May 2009"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2009,
+          "text": "Aug 2009"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHGk-ud9KoIkA/company-logo_400_400/company-logo_400_400/0/1738274279109/energy_logo?e=1776902400&v=beta&t=uWyqRntm4bn1T5UAdiZRT-tRn9BHbwbfKQKw-2FYp0M",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHGk-ud9KoIkA/company-logo_400_400/company-logo_400_400/0/1738274279109/energy_logo?e=1776902400&v=beta&t=uWyqRntm4bn1T5UAdiZRT-tRn9BHbwbfKQKw-2FYp0M",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHGk-ud9KoIkA/company-logo_200_200/company-logo_200_200/0/1738274279109/energy_logo?e=1776902400&v=beta&t=nuUXtuuftog3lkkxndycb08pkOM77ob7ex-ZhK6oJmI",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHGk-ud9KoIkA/company-logo_100_100/company-logo_100_100/0/1738274279109/energy_logo?e=1776902400&v=beta&t=Lc1MeEDn9caO4OiwP_Zhk07tOOHNoYF-Ds4ES-s9rQA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "The University of Texas at Austin",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3162/",
+        "schoolId": "3162",
+        "degree": null,
+        "fieldOfStudy": null,
+        "skills": [],
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQEREeDg1PACXA/company-logo_400_400/company-logo_400_400/0/1630670868977/theuniversityoftexasataustin__logo?e=1776902400&v=beta&t=F8avbgGb79wpuxdFupNqVhGZ33P-eI6eq_AKNdI3r_M",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEREeDg1PACXA/company-logo_400_400/company-logo_400_400/0/1630670868977/theuniversityoftexasataustin__logo?e=1776902400&v=beta&t=F8avbgGb79wpuxdFupNqVhGZ33P-eI6eq_AKNdI3r_M",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEREeDg1PACXA/company-logo_200_200/company-logo_200_200/0/1630670868977/theuniversityoftexasataustin__logo?e=1776902400&v=beta&t=Qv8SlRmp0VATJa1eMNxlVyW_QkJ-WuL6dxKihx5r2l0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEREeDg1PACXA/company-logo_100_100/company-logo_100_100/0/1630670868977/theuniversityoftexasataustin__logo?e=1776902400&v=beta&t=_kdDyxLv4iUPhm25zcSLpll7QZGrMEPuhzvhG7KbGIU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAABEmYXYB5f-3ZmFG8dI-n9XAlqySBqO-2PA",
+        "firstName": "Luke",
+        "lastName": "Carlson",
+        "publicIdentifier": "jlukecarlson",
+        "linkedinUrl": "https://www.linkedin.com/in/jlukecarlson"
+      },
+      {
+        "id": "ACoAAAQ4Q7kByw3YKf2rFlmWzRMF7P8Gw4S9PIU",
+        "firstName": "Yinghai",
+        "lastName": "L.",
+        "publicIdentifier": "yinghai83",
+        "linkedinUrl": "https://www.linkedin.com/in/yinghai83"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABgwxtcBfqsJJUHPwsSPuBE4K9oKyRqUp5o",
+        "firstName": "Lia",
+        "lastName": "Guy",
+        "publicIdentifier": "aureliaguy",
+        "linkedinUrl": "https://www.linkedin.com/in/aureliaguy"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAAAJzsfoBp0MxssQYMgmy0ZNO2U3sA58ugwc",
+        "firstName": "Joshua",
+        "lastName": "Gross",
+        "publicIdentifier": "joshgross",
+        "linkedinUrl": "https://www.linkedin.com/in/joshgross"
+      },
+      {
+        "id": "ACoAABYs4-IB5mHx5eVfOHzu1e8xlO3q_kb38IM",
+        "firstName": "Brydon",
+        "lastName": "Eastman",
+        "publicIdentifier": "brydon-eastman-396719a4",
+        "linkedinUrl": "https://www.linkedin.com/in/brydon-eastman-396719a4"
+      },
+      {
+        "id": "ACoAAACo1tYBGy9sT2OWZuEULOMe4K_b2Y22-F8",
+        "firstName": "Alex",
+        "lastName": "Gartrell",
+        "publicIdentifier": "alexgartrell",
+        "linkedinUrl": "https://www.linkedin.com/in/alexgartrell"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+        "firstName": "Saurabh",
+        "lastName": "Garg",
+        "publicIdentifier": "saurabh-garg-b680b5b8",
+        "linkedinUrl": "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+      },
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAAAl87CYBWKLLyGNTbomy6oqIPv-5n34CXIY",
+        "firstName": "Andrew",
+        "lastName": "Tulloch",
+        "publicIdentifier": "andrew-tulloch-17238745",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-tulloch-17238745"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAABPg53YBHdOvmp7pU72eDhcho-7cnwyxk1o",
+        "firstName": "Pia",
+        "lastName": "Santos",
+        "publicIdentifier": "piafsantos",
+        "linkedinUrl": "https://www.linkedin.com/in/piafsantos"
+      },
+      {
+        "id": "ACoAAA4HVN4BOZg5espOvMVoO3OY04NZmuqvMCo",
+        "firstName": "Shaojie",
+        "lastName": "Bai",
+        "publicIdentifier": "shaojie-bai",
+        "linkedinUrl": "https://www.linkedin.com/in/shaojie-bai"
+      },
+      {
+        "id": "ACoAAAO-j_IBXcvIzhZtQ7QNkky6tlnQTcFl9qI",
+        "firstName": "Myle",
+        "lastName": "Ott",
+        "publicIdentifier": "myleott",
+        "linkedinUrl": "https://www.linkedin.com/in/myleott"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAAAji1bkB1eLX4z2Jb9-N2nMhEGNLWptSnqU",
+        "firstName": "Clare",
+        "lastName": "Birch",
+        "publicIdentifier": "clarebirch42",
+        "linkedinUrl": "https://www.linkedin.com/in/clarebirch42"
+      },
+      {
+        "id": "ACoAAAAdzCEB9t8wLSGcpoQ71RdetK75KW7RgS4",
+        "firstName": "Mark",
+        "lastName": "Jen",
+        "publicIdentifier": "markjen",
+        "linkedinUrl": "https://www.linkedin.com/in/markjen"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAATAFhsBkw4wwQq8gZ6NRNE9_MwIOC1ZT0g"
+    }
+  }
+}
