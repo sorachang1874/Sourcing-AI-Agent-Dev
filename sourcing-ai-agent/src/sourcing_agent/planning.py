@@ -536,7 +536,7 @@ def _build_acquisition_tasks(
                 "company_employee_shards": [],
                 "company_employee_shard_policy": company_employee_shard_policy,
                 "company_employee_shard_strategy": str(company_employee_shard_policy.get("strategy_id") or "").strip(),
-                "include_former_search_seed": False,
+                "include_former_search_seed": include_former_search_seed,
                 **linkedin_stage_metadata,
             },
         ),

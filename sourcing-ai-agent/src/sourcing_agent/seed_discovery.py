@@ -326,12 +326,14 @@ class SearchSeedAcquirer:
 
         entries = _dedupe_seed_entries(entries)
         paid_queries = [item["query"] for item in compiled_queries if item["execution_mode"] == "paid_fallback"] or list(search_seed_queries)
+        provider_available = bool(
+            self.accounts or (self.harvest_search_connector and self.harvest_search_connector.settings.enabled)
+        )
         should_run_provider_people_search = False
-        if self.accounts or (self.harvest_search_connector and self.harvest_search_connector.settings.enabled):
-            if provider_search_primary:
-                should_run_provider_people_search = True
-            elif len(entries) < web_result_target and provider_people_search_mode == "fallback_only":
-                should_run_provider_people_search = True
+        if provider_search_primary:
+            should_run_provider_people_search = True
+        elif provider_available and len(entries) < web_result_target and provider_people_search_mode == "fallback_only":
+            should_run_provider_people_search = True
         if should_run_provider_people_search:
             needed = max(web_result_target - len(entries), 0)
             provider_limit = max(needed, web_result_target)
