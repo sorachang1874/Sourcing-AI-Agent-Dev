@@ -3,8 +3,29 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .company_registry import normalize_company_key
-from .domain import AcquisitionStrategyPlan, JobRequest, RetrievalPlan
+from .company_registry import builtin_company_identity, normalize_company_key
+from .domain import (
+    AcquisitionStrategyPlan,
+    JobRequest,
+    RetrievalPlan,
+    normalize_requested_role_bucket,
+    normalize_requested_role_buckets,
+)
+from .query_signal_knowledge import (
+    ALPHABET_COMPANY_URL,
+    DEEPMIND_COMPANY_URL,
+    GOOGLE_COMPANY_URL,
+    canonicalize_scope_signal_label,
+    default_large_org_priority_function_ids,
+    match_scope_signals,
+    related_company_scope_labels,
+    role_bucket_function_ids,
+    role_bucket_role_hints,
+    role_buckets_from_text,
+    scope_signal_keyword_labels,
+    scope_signal_search_query_aliases,
+)
+from .request_normalization import resolve_request_intent_view
 
 
 LARGE_COMPANY_KEYS = {
@@ -20,41 +41,14 @@ LARGE_COMPANY_KEYS = {
 }
 
 LARGE_ORG_SCOPE_COMPANY_URLS = {
-    "google": "https://www.linkedin.com/company/google/",
-    "alphabet": "https://www.linkedin.com/company/alphabet-inc/",
-    "googledeepmind": "https://www.linkedin.com/company/deepmind/",
-    "deepmind": "https://www.linkedin.com/company/deepmind/",
+    "google": GOOGLE_COMPANY_URL,
+    "alphabet": ALPHABET_COMPANY_URL,
+    "googledeepmind": DEEPMIND_COMPANY_URL,
+    "deepmind": DEEPMIND_COMPANY_URL,
 }
 
-LARGE_ORG_PRIORITY_FUNCTION_IDS = ["8", "9", "19", "24"]
+LARGE_ORG_PRIORITY_FUNCTION_IDS = default_large_org_priority_function_ids()
 DEFAULT_PRIMARY_LOCATION = "United States"
-
-SCOPE_HINTS = {
-    "gemini": "Gemini",
-    "deepmind": "Google DeepMind",
-    "veo": "Veo",
-    "nano banana": "Nano Banana",
-    "chatgpt": "ChatGPT",
-    "reasoning": "Reasoning",
-    "post-training": "Post-Training",
-    "post training": "Post-Training",
-    "alignment": "Alignment",
-    "infra": "Infra",
-    "infrastructure": "Infrastructure",
-    "agent": "Agents",
-    "agents": "Agents",
-    "claude": "Claude",
-    "research": "Research",
-    "engineering": "Engineering",
-}
-
-ROLE_HINTS = {
-    "researcher": ["Researcher", "Research Scientist", "Applied Scientist"],
-    "research scientist": ["Research Scientist", "Applied Scientist"],
-    "engineer": ["Engineer", "Software Engineer", "Research Engineer"],
-    "research engineer": ["Research Engineer", "Engineer"],
-    "technical staff": ["Member of Technical Staff", "Technical Staff"],
-}
 
 KEYWORD_CANONICAL_ALIASES = {
     "post-train": "Post-train",
@@ -86,12 +80,8 @@ ACQUISITION_KEYWORD_EXCLUSION_KEYS = {
 
 KEYWORD_PRIORITY_SEARCH_QUERY_ALIASES = {
     "multimodal": ["Multimodal", "Multimodality"],
-    "veo": ["Veo"],
-    "nanobanana": ["Nano Banana"],
     "visionlanguage": ["Vision-language", "Vision Language"],
     "videogeneration": ["Video generation"],
-    "gemini": ["Gemini"],
-    "chatgpt": ["ChatGPT"],
     "reasoning": ["Reasoning", "Reasoning model"],
     "chainofthought": ["Chain-of-thought"],
     "inferencetimecompute": ["Inference-time compute"],
@@ -120,24 +110,65 @@ def compile_acquisition_strategy(
 ) -> AcquisitionStrategyPlan:
     raw_text = f"{request.raw_user_request} {request.query}".strip()
     text = _normalize(raw_text)
-    execution_preferences = dict(request.execution_preferences or {})
+    intent_view = resolve_request_intent_view(
+        request,
+        fallback_categories=categories,
+        fallback_employment_statuses=employment_statuses,
+    )
+    intent_axes = dict(intent_view.get("intent_axes") or {})
+    population_boundary = dict(intent_axes.get("population_boundary") or {})
+    scope_boundary = dict(intent_axes.get("scope_boundary") or {})
+    effective_target_company = str(intent_view.get("target_company") or request.target_company or "").strip()
+    effective_categories = list(intent_view.get("categories") or population_boundary.get("categories") or categories or [])
+    effective_employment_statuses = list(
+        intent_view.get("employment_statuses") or population_boundary.get("employment_statuses") or employment_statuses or []
+    )
+    effective_organization_keywords = list(intent_view.get("organization_keywords") or scope_boundary.get("organization_keywords") or [])
+    effective_keywords = list(intent_view.get("keywords") or [])
+    effective_must_have_keywords = list(intent_view.get("must_have_keywords") or [])
+    effective_must_have_facets = list(intent_view.get("must_have_facets") or [])
+    effective_role_buckets = list(intent_view.get("must_have_primary_role_buckets") or [])
+    execution_preferences = dict(intent_view.get("execution_preferences") or {})
     scope_hints = _merge_scope_hints(
         inferred=_infer_scope_hints(text),
-        explicit=request.organization_keywords,
-        target_company=request.target_company,
+        explicit=effective_organization_keywords,
+        target_company=effective_target_company,
     )
-    strategy_type = _infer_strategy_type(request.target_company, categories, employment_statuses, scope_hints, execution_preferences)
+    strategy_type = _infer_strategy_type(
+        effective_target_company,
+        effective_categories,
+        effective_employment_statuses,
+        scope_hints,
+        execution_preferences,
+    )
     company_scope = _build_company_scope(
-        request.target_company,
+        effective_target_company,
         scope_hints,
         strategy_type,
         execution_preferences,
-        scope_disambiguation=request.scope_disambiguation,
+        scope_disambiguation=dict(intent_view.get("scope_disambiguation") or scope_boundary.get("scope_disambiguation") or {}),
     )
-    role_hints = _infer_role_hints(text)
+    role_hints = _infer_role_hints(
+        text,
+        effective_role_buckets,
+        effective_must_have_facets,
+    )
+    function_ids = _infer_function_ids(
+        text,
+        effective_role_buckets,
+        effective_must_have_facets,
+    )
     keyword_hints = _infer_keyword_hints(
         text,
-        _acquisition_keyword_candidates(request.keywords + request.must_have_keywords + request.must_have_facets),
+        _acquisition_keyword_candidates(
+            effective_keywords
+            + effective_must_have_keywords
+            + effective_must_have_facets
+            + _keyword_like_organization_terms(
+                effective_organization_keywords,
+                target_company=effective_target_company,
+            )
+        ),
     )
 
     roster_sources = _roster_sources(strategy_type)
@@ -150,45 +181,54 @@ def compile_acquisition_strategy(
     cost_policy = _build_cost_policy(
         strategy_type,
         execution_preferences,
-        target_company=request.target_company,
+        target_company=effective_target_company,
         company_scope=company_scope,
         keyword_hints=keyword_hints,
     )
     search_seed_queries = _build_search_seed_queries(
-        request.target_company,
+        effective_target_company,
         company_scope,
         role_hints,
         keyword_hints,
-        employment_statuses,
+        effective_employment_statuses,
         keyword_priority_only=bool(cost_policy.get("keyword_priority_only")),
     )
     filter_hints = _build_filter_hints(
-        request.target_company,
+        effective_target_company,
         company_scope,
         role_hints,
         keyword_hints,
-        employment_statuses,
+        effective_employment_statuses,
         strategy_type=strategy_type,
         cost_policy=cost_policy,
+        function_ids=function_ids,
     )
     confirmation_points = _build_confirmation_points(
         strategy_type,
-        request.target_company,
+        effective_target_company,
         company_scope,
-        employment_statuses,
+        effective_employment_statuses,
         execution_preferences,
         raw_text=raw_text,
         keyword_hints=keyword_hints,
+        scope_disambiguation=dict(intent_view.get("scope_disambiguation") or scope_boundary.get("scope_disambiguation") or {}),
     )
     reasoning = _build_reasoning(
         strategy_type,
-        request.target_company,
+        effective_target_company,
         company_scope,
         retrieval_plan.strategy,
         execution_preferences,
     )
 
-    target_population = _build_target_population(request.target_company, company_scope, categories, employment_statuses, role_hints, keyword_hints)
+    target_population = _build_target_population(
+        effective_target_company,
+        company_scope,
+        effective_categories,
+        effective_employment_statuses,
+        role_hints,
+        keyword_hints,
+    )
     return AcquisitionStrategyPlan(
         strategy_type=strategy_type,
         target_population=target_population,
@@ -203,18 +243,44 @@ def compile_acquisition_strategy(
     )
 
 
+def _merge_execution_preferences_from_intent_axes(
+    existing: dict[str, Any] | None,
+    *,
+    scope_boundary: dict[str, Any] | None = None,
+    acquisition_lane_policy: dict[str, Any] | None = None,
+    fallback_policy: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    merged = dict(existing or {})
+    scope_boundary = dict(scope_boundary or {})
+    confirmed_company_scope = [
+        str(item or "").strip()
+        for item in list(scope_boundary.get("confirmed_company_scope") or [])
+        if str(item or "").strip()
+    ]
+    if confirmed_company_scope and "confirmed_company_scope" not in merged:
+        merged["confirmed_company_scope"] = confirmed_company_scope
+    for source in [dict(acquisition_lane_policy or {}), dict(fallback_policy or {})]:
+        for key, value in source.items():
+            if key in merged or value in (None, "", [], {}):
+                continue
+            merged[key] = value
+    return merged
+
+
 def _normalize(value: str) -> str:
     return " ".join(value.lower().split())
 
 
 def _infer_scope_hints(text: str) -> list[str]:
     hints: list[str] = []
-    for token, label in SCOPE_HINTS.items():
-        if token in text and label not in hints:
-            hints.append(label)
+    for spec in match_scope_signals(text):
+        for label in list(spec.get("organization_keywords") or []):
+            normalized = " ".join(str(label or "").split()).strip()
+            if normalized and normalized not in hints:
+                hints.append(normalized)
     quoted = re.findall(r'"([^"]+)"', text)
     for item in quoted:
-        normalized = " ".join(item.split())
+        normalized = canonicalize_scope_signal_label(item)
         if normalized and normalized not in hints:
             hints.append(normalized)
     return hints[:4]
@@ -266,12 +332,9 @@ def _build_company_scope(
             if scope:
                 return scope
         scope: list[str] = [normalized_company] if normalized_company else []
-        if (
-            normalized_company.lower() == "google"
-            and any(hint in {"Gemini", "Veo", "Nano Banana", "Google DeepMind", "DeepMind"} for hint in scope_hints)
-            and "Google DeepMind" not in scope
-        ):
-            scope.append("Google DeepMind")
+        for label in related_company_scope_labels(normalized_company, scope_hints):
+            if label not in scope:
+                scope.append(label)
         return scope
     if confirmed_scope:
         scope: list[str] = [normalized_company] if normalized_company else []
@@ -288,12 +351,13 @@ def _build_company_scope(
     for hint in scope_hints:
         if hint not in scope:
             scope.append(hint)
-    if (
-        normalized_company.lower() == "google"
-        and any(hint in {"Gemini", "Veo", "Nano Banana", "Google DeepMind", "DeepMind"} for hint in scope_hints)
-        and "Google DeepMind" not in scope
-    ):
-        scope.insert(1, "Google DeepMind")
+    related_labels = related_company_scope_labels(normalized_company, scope_hints)
+    insert_at = 1 if normalized_company else 0
+    for label in related_labels:
+        if label in scope:
+            continue
+        scope.insert(insert_at, label)
+        insert_at += 1
     return scope
 
 
@@ -342,22 +406,29 @@ def _infer_strategy_type(
     if employment_statuses == ["former"]:
         return "former_employee_search"
     if company_key in {"google", "alphabet"}:
-        scope_tokens = {normalize_company_key(item) for item in scope_hints if item}
-        if scope_tokens.intersection({"deepmind", "googledeepmind", "gemini", "veo", "nanobanana"}):
+        if related_company_scope_labels(target_company, scope_hints):
             return "full_company_roster"
     if company_key in LARGE_COMPANY_KEYS or len(scope_hints) >= 2:
         return "scoped_search_roster"
     return "full_company_roster"
 
 
-def _infer_role_hints(text: str) -> list[str]:
-    roles: list[str] = []
-    for token, candidates in ROLE_HINTS.items():
-        if token in text:
-            for candidate in candidates:
-                if candidate not in roles:
-                    roles.append(candidate)
-    return roles[:5]
+def _infer_role_hints(text: str, requested_role_buckets: list[str], requested_facets: list[str]) -> list[str]:
+    normalized_requested_buckets = normalize_requested_role_buckets(requested_role_buckets) + [
+        normalize_requested_role_bucket(item) for item in requested_facets
+    ]
+    matched_buckets = role_buckets_from_text(text)
+    all_buckets = list(dict.fromkeys([*normalized_requested_buckets, *matched_buckets]))
+    return role_bucket_role_hints(all_buckets)[:5]
+
+
+def _infer_function_ids(text: str, requested_role_buckets: list[str], requested_facets: list[str]) -> list[str]:
+    normalized_requested_buckets = normalize_requested_role_buckets(requested_role_buckets) + [
+        normalize_requested_role_bucket(item) for item in requested_facets
+    ]
+    matched_buckets = role_buckets_from_text(text)
+    all_buckets = list(dict.fromkeys([*normalized_requested_buckets, *matched_buckets]))
+    return role_bucket_function_ids(all_buckets)[:4]
 
 
 def _infer_keyword_hints(text: str, explicit_keywords: list[str]) -> list[str]:
@@ -367,6 +438,15 @@ def _infer_keyword_hints(text: str, explicit_keywords: list[str]) -> list[str]:
         candidate = _canonical_keyword_label(keyword)
         if not candidate:
             continue
+        dedupe_key = _canonical_keyword_key(candidate)
+        if dedupe_key in seen_keys:
+            continue
+        seen_keys.add(dedupe_key)
+        hints.append(candidate)
+    for label in scope_signal_keyword_labels(
+        [str(item.get("canonical_label") or "").strip() for item in match_scope_signals(text)]
+    ):
+        candidate = _canonical_keyword_label(label)
         dedupe_key = _canonical_keyword_key(candidate)
         if dedupe_key in seen_keys:
             continue
@@ -390,11 +470,6 @@ def _infer_keyword_hints(text: str, explicit_keywords: list[str]) -> list[str]:
         ("vision-language", "Vision-language"),
         ("vision language", "Vision-language"),
         ("video generation", "Video generation"),
-        ("veo", "Veo"),
-        ("nano banana", "Nano Banana"),
-        ("gemini", "Gemini"),
-        ("chatgpt", "ChatGPT"),
-        ("o1", "o1"),
         ("o3", "o3"),
         ("alignment", "Alignment"),
         ("infrastructure", "Infrastructure"),
@@ -427,7 +502,7 @@ def _keyword_priority_focus_queries(keyword_hints: list[str]) -> list[str]:
         if not canonical_key or canonical_key in KEYWORD_PRIORITY_SKIP_KEYS:
             continue
         alias_key = "".join(ch for ch in canonical_key.lower() if ch.isalnum())
-        alias_queries = KEYWORD_PRIORITY_SEARCH_QUERY_ALIASES.get(alias_key) or [label]
+        alias_queries = scope_signal_search_query_aliases(label) or KEYWORD_PRIORITY_SEARCH_QUERY_ALIASES.get(alias_key) or [label]
         for query in alias_queries:
             normalized = " ".join(str(query or "").split()).strip()
             if not normalized:
@@ -444,11 +519,17 @@ def _canonical_keyword_label(value: str) -> str:
     normalized = " ".join(str(value or "").split()).strip()
     if not normalized:
         return ""
+    known_scope = canonicalize_scope_signal_label(normalized)
+    if known_scope and known_scope != normalized:
+        return known_scope
     return KEYWORD_CANONICAL_ALIASES.get(normalized.lower(), normalized)
 
 
 def _canonical_keyword_key(value: str) -> str:
     normalized = " ".join(str(value or "").lower().split()).strip()
+    known_scope = canonicalize_scope_signal_label(normalized)
+    if known_scope:
+        return " ".join(str(known_scope).lower().split()).strip()
     return KEYWORD_CANONICAL_ALIASES.get(normalized, normalized)
 
 
@@ -476,6 +557,23 @@ def _acquisition_keyword_candidates(explicit_keywords: list[str]) -> list[str]:
         seen.add(key)
         filtered.append(candidate)
     return filtered
+
+
+def _keyword_like_organization_terms(values: list[str], *, target_company: str) -> list[str]:
+    keyword_terms: list[str] = []
+    target_key = normalize_company_key(target_company)
+    for value in list(values or []):
+        candidate = " ".join(str(value or "").split()).strip()
+        if not candidate:
+            continue
+        company_key, builtin = builtin_company_identity(candidate)
+        if builtin is not None:
+            if company_key == target_key:
+                continue
+            continue
+        if candidate not in keyword_terms:
+            keyword_terms.append(candidate)
+    return keyword_terms
 
 
 def _roster_sources(strategy_type: str) -> list[str]:
@@ -537,6 +635,7 @@ def _build_filter_hints(
     *,
     strategy_type: str,
     cost_policy: dict[str, object],
+    function_ids: list[str],
 ) -> dict[str, list[str]]:
     large_org_keyword_probe_mode = bool(cost_policy.get("large_org_keyword_probe_mode"))
     prefer_known_scope_company_urls = large_org_keyword_probe_mode or normalize_company_key(target_company) in {"google", "alphabet"}
@@ -558,7 +657,9 @@ def _build_filter_hints(
     if strategy_type == "full_company_roster":
         filters["locations"] = [DEFAULT_PRIMARY_LOCATION]
     if large_org_keyword_probe_mode:
-        filters["function_ids"] = list(LARGE_ORG_PRIORITY_FUNCTION_IDS)
+        filters["function_ids"] = list(dict.fromkeys([*LARGE_ORG_PRIORITY_FUNCTION_IDS, *list(function_ids or [])]))
+    elif function_ids:
+        filters["function_ids"] = list(function_ids)
     if company_scope[1:]:
         filters["scope_keywords"] = company_scope[1:]
     if role_hints and not (large_org_keyword_probe_mode and keyword_hints):
@@ -622,6 +723,7 @@ def _build_confirmation_points(
     *,
     raw_text: str,
     keyword_hints: list[str],
+    scope_disambiguation: dict[str, Any] | None = None,
 ) -> list[str]:
     points: list[str] = []
     confirmed_scope = [
@@ -644,7 +746,13 @@ def _build_confirmation_points(
             + ", ".join(implicit_keywords[:6])
             + "."
         )
-    ambiguous_terms = _potentially_ambiguous_terms_for_confirmation(raw_text, target_company, company_scope, keyword_hints)
+    ambiguous_terms = _potentially_ambiguous_terms_for_confirmation(
+        raw_text,
+        target_company,
+        company_scope,
+        keyword_hints,
+        scope_disambiguation=scope_disambiguation,
+    )
     if ambiguous_terms:
         points.append(
             "The query includes terms that may be new labs/models/abbreviations and were not confidently grounded: "
@@ -684,6 +792,8 @@ def _potentially_ambiguous_terms_for_confirmation(
     target_company: str,
     company_scope: list[str],
     keyword_hints: list[str],
+    *,
+    scope_disambiguation: dict[str, Any] | None = None,
 ) -> list[str]:
     text = str(raw_text or "")
     if not text:
@@ -731,6 +841,21 @@ def _potentially_ambiguous_terms_for_confirmation(
             continue
         if token not in candidates:
             candidates.append(token)
+    scope_payload = dict(scope_disambiguation or {})
+    if str(scope_payload.get("inferred_scope") or "").strip().lower() == "uncertain":
+        raw_candidates = scope_payload.get("sub_org_candidates")
+        if isinstance(raw_candidates, str):
+            scope_candidates = [item.strip() for item in raw_candidates.split(",")]
+        elif isinstance(raw_candidates, (list, tuple, set)):
+            scope_candidates = [str(item).strip() for item in raw_candidates]
+        else:
+            scope_candidates = []
+        for item in scope_candidates:
+            normalized = " ".join(str(item or "").split()).strip()
+            if not normalized:
+                continue
+            if normalized not in candidates:
+                candidates.append(normalized)
     return candidates
 
 
@@ -831,7 +956,9 @@ def _should_enable_large_org_keyword_probe_mode(
     scope_tokens = {normalize_company_key(item) for item in company_scope if item}
     trigger_tokens = {"deepmind", "googledeepmind", "gemini", "veo", "nanobanana"}
     keyword_tokens = {normalize_company_key(item) for item in keyword_hints if item}
-    return bool(scope_tokens & trigger_tokens) or bool(keyword_tokens & trigger_tokens)
+    if not (scope_tokens & trigger_tokens or keyword_tokens & trigger_tokens):
+        return False
+    return len(keyword_tokens) >= 2
 
 
 def _build_reasoning(

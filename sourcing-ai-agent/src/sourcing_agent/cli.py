@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import sys
 import threading
 import time
 from typing import Any
+from urllib import error as urllib_error
+from urllib import request as urllib_request
 
 from .acquisition import AcquisitionEngine
 from .agent_runtime import AgentRuntimeCoordinator
@@ -30,6 +33,10 @@ from .service_daemon import SingleInstanceError, WorkerDaemonService
 from .semantic_provider import build_semantic_provider
 from .settings import load_settings
 from .storage import SQLiteStore
+
+
+class HostedWorkflowSubmissionError(RuntimeError):
+    pass
 
 
 def _runner_environment(project_root: Path) -> dict[str, str]:
@@ -219,6 +226,98 @@ def start_server_runtime_watchdog(
     return stop_event, thread
 
 
+def start_shared_recovery_service(
+    orchestrator: SourcingOrchestrator,
+    *,
+    poll_seconds: float = 5.0,
+    service_name: str = "worker-recovery-daemon",
+) -> tuple[threading.Event, threading.Thread]:
+    stop_event = threading.Event()
+
+    def _loop() -> None:
+        while not stop_event.is_set():
+            try:
+                service = WorkerDaemonService(
+                    runtime_dir=orchestrator.runtime_dir,
+                    recovery_callback=lambda payload: orchestrator.run_worker_recovery_once(payload),
+                    service_name=service_name,
+                    poll_seconds=max(1.0, float(poll_seconds or 5.0)),
+                    stale_after_seconds=180,
+                    total_limit=4,
+                    callback_payload={
+                        "workflow_resume_stale_after_seconds": 60,
+                        "workflow_queue_resume_stale_after_seconds": 60,
+                        "runtime_heartbeat_source": "shared_recovery_daemon",
+                        "runtime_heartbeat_service_name": service_name,
+                        "runtime_heartbeat_interval_seconds": 60,
+                    },
+                )
+
+                def _stop_bridge() -> None:
+                    stop_event.wait()
+                    service.request_stop()
+
+                threading.Thread(target=_stop_bridge, name=f"{service_name}-stop", daemon=True).start()
+                service.run_forever()
+            except SingleInstanceError:
+                return
+            except Exception:
+                return
+
+    thread = threading.Thread(
+        target=_loop,
+        name=service_name,
+        daemon=True,
+    )
+    thread.start()
+    return stop_event, thread
+
+
+def _resolve_hosted_api_base_url(explicit_base_url: str = "") -> str:
+    base_url = (
+        str(explicit_base_url or "").strip()
+        or str(os.environ.get("SOURCING_AGENT_API_BASE_URL") or "").strip()
+        or "http://127.0.0.1:8765"
+    )
+    return base_url.rstrip("/")
+
+
+def _submit_hosted_workflow_request(
+    payload: dict[str, Any],
+    *,
+    base_url: str,
+    timeout_seconds: float = 15.0,
+) -> dict[str, Any]:
+    request_payload = dict(payload)
+    request_payload["runtime_execution_mode"] = "hosted"
+    request_payload.setdefault("analysis_stage_mode", "two_stage")
+    request_payload.setdefault("auto_job_daemon", False)
+    workflow_request = urllib_request.Request(
+        f"{base_url}/api/workflows",
+        data=json.dumps(request_payload, ensure_ascii=False).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    opener = urllib_request.build_opener(urllib_request.ProxyHandler({}))
+    try:
+        with opener.open(workflow_request, timeout=max(1.0, float(timeout_seconds or 15.0))) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib_error.HTTPError as exc:
+        detail = ""
+        try:
+            detail = exc.read().decode("utf-8")
+        except Exception:
+            detail = ""
+        raise HostedWorkflowSubmissionError(
+            f"HTTP {exc.code} from hosted API {base_url}/api/workflows"
+            + (f": {detail}" if detail else "")
+        ) from exc
+    except urllib_error.URLError as exc:
+        raise HostedWorkflowSubmissionError(
+            f"could not reach hosted API at {base_url} ({exc.reason})"
+        ) from exc
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Sourcing AI Agent backend MVP")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -263,6 +362,23 @@ def main() -> None:
     workflow_parser.add_argument("--must-have-facet", action="append", default=[], help="Optional hard facet filter; repeatable")
     workflow_parser.add_argument("--must-have-primary-role-bucket", action="append", default=[], help="Optional hard primary role bucket filter; repeatable")
     workflow_parser.add_argument("--blocking", action="store_true", help="Run the workflow synchronously in the current CLI process")
+    workflow_parser.add_argument(
+        "--runtime-execution-mode",
+        choices=["hosted", "managed_subprocess", "runner_managed", "detached_sidecar"],
+        default="hosted",
+        help="Workflow runtime mode. Hosted is the default cloud/server path; managed_subprocess keeps the legacy detached runner flow.",
+    )
+    workflow_parser.add_argument(
+        "--hosted-api-base-url",
+        default="",
+        help="Hosted API base URL used when runtime_execution_mode=hosted. Defaults to SOURCING_AGENT_API_BASE_URL or http://127.0.0.1:8765.",
+    )
+    workflow_parser.add_argument(
+        "--hosted-api-timeout-seconds",
+        type=float,
+        default=15.0,
+        help="Timeout for hosted workflow submission over HTTP.",
+    )
     workflow_parser.add_argument("--no-auto-job-daemon", action="store_true", help="Do not auto-start a dedicated job-scoped recovery daemon")
 
     execute_workflow_parser = subparsers.add_parser("execute-workflow", help="Internal: execute a queued workflow job")
@@ -502,6 +618,7 @@ def main() -> None:
     supplement_company_assets_parser = subparsers.add_parser("supplement-company-assets", help="Incrementally supplement an existing company snapshot with former search seed and/or profile enrichment")
     supplement_company_assets_parser.add_argument("--company", required=True, help="Company key or name")
     supplement_company_assets_parser.add_argument("--snapshot-id", default="", help="Optional snapshot id; defaults to latest")
+    supplement_company_assets_parser.add_argument("--rebuild-linkedin-stage-1", action="store_true", help="Rebuild candidate_documents(.linkedin_stage_1) from current roster + existing search-seed snapshot, then normalize the snapshot baseline")
     supplement_company_assets_parser.add_argument("--run-former-search-seed", action="store_true", help="Run Harvest former-member search seed against the existing snapshot")
     supplement_company_assets_parser.add_argument("--former-search-limit", type=int, default=25, help="Requested former search result target")
     supplement_company_assets_parser.add_argument("--former-search-pages", type=int, default=1, help="Requested Harvest profile-search pages")
@@ -521,7 +638,13 @@ def main() -> None:
     )
     supplement_company_assets_parser.add_argument("--profile-force-refresh", action="store_true", help="Bypass local profile cache and refetch selected LinkedIn profiles")
     supplement_company_assets_parser.add_argument("--repair-current-roster-profile-refs", action="store_true", help="Restore current-roster canonical profile refs from the original harvest_company_employees visible asset")
+    supplement_company_assets_parser.add_argument("--repair-current-roster-registry-aliases", action="store_true", help="Backfill registry aliases for current-roster raw LinkedIn URLs by reusing historical local harvest_profiles")
     supplement_company_assets_parser.add_argument("--without-artifacts", action="store_true", help="Skip rebuilding normalized/reusable artifacts after supplement")
+
+    intake_excel_parser = subparsers.add_parser("intake-excel", help="Import spreadsheet contacts, dedupe against local assets, and optionally fetch missing LinkedIn profiles")
+    intake_excel_parser.add_argument("--file", required=True, help="Path to the Excel workbook")
+    continue_excel_intake_parser = subparsers.add_parser("continue-excel-intake", help="Continue an Excel intake manual-review row by selecting a local candidate or a fetched profile")
+    continue_excel_intake_parser.add_argument("--file", required=True, help="Path to a JSON payload describing intake_id + decisions")
 
     backfill_registry_parser = subparsers.add_parser("backfill-linkedin-profile-registry", help="Backfill linkedin_profile_registry from historical runtime/company_assets/*/*/harvest_profiles JSON payloads")
     backfill_registry_parser.add_argument("--company", default="", help="Optional company key filter (e.g. anthropic)")
@@ -544,6 +667,12 @@ def main() -> None:
     upload_bundle_parser.add_argument("--no-resume", action="store_true", help="Force re-upload even when the remote object already exists")
     upload_bundle_parser.add_argument("--archive-mode", choices=["auto", "none", "tar", "tar.gz"], default="auto", help="Bundle payload upload mode")
 
+    delete_bundle_parser = subparsers.add_parser("delete-asset-bundle", help="Delete a remote asset bundle and prune bundle indexes")
+    delete_bundle_parser.add_argument("--bundle-kind", required=True, help="Bundle kind, e.g. company_snapshot")
+    delete_bundle_parser.add_argument("--bundle-id", required=True, help="Bundle id")
+    delete_bundle_parser.add_argument("--max-workers", type=int, default=0, help="Optional concurrent delete worker count; 0 uses config default")
+    delete_bundle_parser.add_argument("--keep-local-index", action="store_true", help="Do not prune the local bundle index entry")
+
     download_bundle_parser = subparsers.add_parser("download-asset-bundle", help="Download an asset bundle from configured object storage")
     download_bundle_parser.add_argument("--bundle-kind", required=True, help="Bundle kind, e.g. company_handoff")
     download_bundle_parser.add_argument("--bundle-id", required=True, help="Bundle id")
@@ -557,9 +686,15 @@ def main() -> None:
     restore_sqlite_parser.add_argument("--backup-dir", default="", help="Optional backup directory")
     restore_sqlite_parser.add_argument("--no-backup", action="store_true", help="Overwrite without backing up current DB")
 
-    subparsers.add_parser("test-model", help="Run provider healthcheck")
+    subparsers.add_parser(
+        "test-model",
+        help="Run provider healthcheck. For low-cost workflow smoke tests, set SOURCING_EXTERNAL_PROVIDER_MODE=simulate or replay to disable Harvest/Search/model/semantic live calls.",
+    )
 
-    serve_parser = subparsers.add_parser("serve", help="Start the HTTP API")
+    serve_parser = subparsers.add_parser(
+        "serve",
+        help="Start the HTTP API. External provider mode still comes from SOURCING_EXTERNAL_PROVIDER_MODE=live|replay|simulate.",
+    )
     serve_parser.add_argument("--host", default="127.0.0.1")
     serve_parser.add_argument("--port", type=int, default=8765)
     serve_parser.add_argument("--disable-runtime-watchdog", action="store_true", help="Disable the server-side recovery watchdog loop")
@@ -603,6 +738,7 @@ def main() -> None:
         "supplement-company-assets",
         "restore-asset-bundle",
         "upload-asset-bundle",
+        "delete-asset-bundle",
         "download-asset-bundle",
         "restore-sqlite-snapshot",
     }:
@@ -744,6 +880,7 @@ def main() -> None:
                     manager.supplement_snapshot(
                         target_company=args.company,
                         snapshot_id=args.snapshot_id,
+                        rebuild_linkedin_stage_1=bool(args.rebuild_linkedin_stage_1),
                         run_former_search_seed=bool(args.run_former_search_seed),
                         former_search_limit=int(args.former_search_limit or 25),
                         former_search_pages=int(args.former_search_pages or 1),
@@ -754,6 +891,7 @@ def main() -> None:
                         profile_only_missing_detail=bool(args.profile_only_missing_detail) and not bool(args.profile_all_known_urls),
                         profile_force_refresh=bool(args.profile_force_refresh),
                         repair_current_roster_profile_refs=bool(args.repair_current_roster_profile_refs),
+                        repair_current_roster_registry_aliases=bool(args.repair_current_roster_registry_aliases),
                         build_artifacts=not args.without_artifacts,
                     ),
                     ensure_ascii=False,
@@ -804,6 +942,21 @@ def main() -> None:
                 )
             )
             return
+        if args.command == "delete-asset-bundle":
+            print(
+                json.dumps(
+                    bundle_manager.delete_bundle(
+                        bundle_kind=args.bundle_kind,
+                        bundle_id=args.bundle_id,
+                        client=storage_client,
+                        max_workers=args.max_workers or None,
+                        prune_local_index=not bool(args.keep_local_index),
+                    ),
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+            return
         if args.command == "download-asset-bundle":
             print(
                 json.dumps(
@@ -847,6 +1000,25 @@ def main() -> None:
         if args.must_have_primary_role_bucket:
             payload["must_have_primary_role_buckets"] = list(args.must_have_primary_role_bucket)
         print(json.dumps(orchestrator.plan_workflow(payload), ensure_ascii=False, indent=2))
+        return
+
+    if args.command == "intake-excel":
+        print(
+            json.dumps(
+                orchestrator.ingest_excel_contacts(
+                    {
+                        "file_path": str(args.file or "").strip(),
+                    }
+                ),
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return
+
+    if args.command == "continue-excel-intake":
+        payload = json.loads(Path(args.file).read_text())
+        print(json.dumps(orchestrator.continue_excel_intake_review(payload), ensure_ascii=False, indent=2))
         return
 
     if args.command == "review-plan":
@@ -936,8 +1108,25 @@ def main() -> None:
         if args.blocking:
             print(json.dumps(orchestrator.run_workflow_blocking(payload), ensure_ascii=False, indent=2))
             return
-        payload["auto_job_daemon"] = not bool(args.no_auto_job_daemon)
-        queued = orchestrator.start_workflow_runner_managed(payload)
+        runtime_execution_mode = str(args.runtime_execution_mode or "hosted").strip().lower() or "hosted"
+        payload["runtime_execution_mode"] = runtime_execution_mode
+        if runtime_execution_mode in {"managed_subprocess", "runner_managed", "detached_sidecar"}:
+            payload["auto_job_daemon"] = not bool(args.no_auto_job_daemon)
+            queued = orchestrator.start_workflow_runner_managed(payload)
+        else:
+            hosted_api_base_url = _resolve_hosted_api_base_url(args.hosted_api_base_url)
+            try:
+                queued = _submit_hosted_workflow_request(
+                    payload,
+                    base_url=hosted_api_base_url,
+                    timeout_seconds=float(args.hosted_api_timeout_seconds or 15.0),
+                )
+            except HostedWorkflowSubmissionError as exc:
+                raise SystemExit(
+                    "Hosted workflow submission failed. Start `serve` and retry, or use "
+                    "`--runtime-execution-mode managed_subprocess` for a standalone local run. "
+                    f"Details: {exc}"
+                ) from exc
         print(json.dumps(queued, ensure_ascii=False, indent=2))
         return
 
@@ -1302,9 +1491,12 @@ def main() -> None:
         return
 
     if args.command == "serve":
+        shared_recovery_stop = None
+        shared_recovery_thread = None
         watchdog_stop = None
         watchdog_thread = None
         if not args.disable_runtime_watchdog:
+            shared_recovery_stop, shared_recovery_thread = start_shared_recovery_service(orchestrator)
             watchdog_stop, watchdog_thread = start_server_runtime_watchdog(
                 orchestrator,
                 poll_seconds=float(args.runtime_watchdog_poll_seconds or 15.0),
@@ -1319,8 +1511,12 @@ def main() -> None:
             server.server_close()
             if watchdog_stop is not None:
                 watchdog_stop.set()
+            if shared_recovery_stop is not None:
+                shared_recovery_stop.set()
             if watchdog_thread is not None:
                 watchdog_thread.join(timeout=max(1.0, float(args.runtime_watchdog_poll_seconds or 15.0)))
+            if shared_recovery_thread is not None:
+                shared_recovery_thread.join(timeout=5.0)
 
 
 if __name__ == "__main__":

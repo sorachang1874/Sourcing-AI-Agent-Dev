@@ -13,9 +13,27 @@ export interface JsonObject {
 export interface IntentRewriteRule {
   rewrite_id?: string;
   summary_label?: string;
+  policy_layer?: string;
   keywords?: string[];
+  must_have_facets?: string[];
+  must_have_primary_role_buckets?: string[];
+  must_have_keywords?: string[];
   targeting_terms?: string[];
   matched_terms?: string[];
+  request_patch?: JsonObject;
+  trigger_sources?: JsonObject;
+  additional_rewrites?: IntentRewriteRule[];
+  notes?: string;
+  [key: string]: JsonValue | undefined;
+}
+
+export interface IntentRewritePolicyCatalogEntry {
+  rewrite_id?: string;
+  summary_label?: string;
+  policy_layer?: string;
+  trigger_sources?: JsonObject;
+  request_patch?: JsonObject;
+  targeting_terms?: string[];
   notes?: string;
   [key: string]: JsonValue | undefined;
 }
@@ -29,6 +47,7 @@ export interface IntentRewriteEntry {
 export interface IntentRewritePayload {
   request: IntentRewriteEntry;
   instruction?: IntentRewriteEntry;
+  policy_catalog?: IntentRewritePolicyCatalogEntry[];
 }
 
 export interface IntentBrief {
@@ -78,6 +97,7 @@ export interface SourcingPlanSummary {
 
 export interface PlanResponse {
   request: JsonObject;
+  request_preview?: JsonObject;
   plan: SourcingPlanSummary;
   plan_review_gate: PlanReviewGate;
   plan_review_session: JsonObject;
@@ -472,6 +492,7 @@ export interface JobResultsResponse {
   agent_trace_spans: JsonObject[];
   agent_workers: JsonObject[];
   intent_rewrite: IntentRewritePayload;
+  request_preview?: JsonObject;
   workflow_stage_summaries?: WorkflowStageSummariesPayload;
   [key: string]: JsonValue | undefined;
 }
@@ -480,6 +501,7 @@ export interface RetrievalJobResponse {
   job_id: string;
   status: string;
   request: JsonObject;
+  request_preview?: JsonObject;
   plan: SourcingPlanSummary | JsonObject;
   intent_rewrite: IntentRewritePayload;
   summary: JsonObject;
@@ -500,6 +522,7 @@ export interface RefinementCompileResponse {
   reason?: string;
   request_patch?: JsonObject;
   request?: JsonObject;
+  request_preview?: JsonObject;
   plan?: SourcingPlanSummary | JsonObject;
   instruction_compiler?: InstructionCompiler;
   baseline_candidate_source?: JsonObject;
@@ -513,6 +536,7 @@ export interface RefinementApplyResponse {
   rerun_job_id?: string;
   request_patch?: JsonObject;
   request?: JsonObject;
+  request_preview?: JsonObject;
   plan?: SourcingPlanSummary | JsonObject;
   instruction_compiler?: InstructionCompiler;
   intent_rewrite?: IntentRewritePayload;

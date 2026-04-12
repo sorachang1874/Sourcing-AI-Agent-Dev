@@ -2,10 +2,15 @@ from __future__ import annotations
 
 import json
 import math
+import os
 from typing import Any, Protocol
 from urllib import error, request
 
 from .settings import SemanticProviderSettings
+
+
+def _external_provider_mode() -> str:
+    return str(os.getenv("SOURCING_EXTERNAL_PROVIDER_MODE") or "live").strip().lower() or "live"
 
 
 class SemanticProvider(Protocol):
@@ -61,6 +66,28 @@ class LocalSemanticProvider:
                 }
             )
         return results
+
+
+class OfflineSemanticProvider(LocalSemanticProvider):
+    def __init__(self, *, mode: str) -> None:
+        normalized_mode = str(mode or "simulate").strip().lower() or "simulate"
+        self.mode = normalized_mode if normalized_mode in {"simulate", "replay"} else "simulate"
+
+    def provider_name(self) -> str:
+        return "offline_semantic"
+
+    def healthcheck(self) -> dict[str, Any]:
+        note = (
+            "Simulated semantic provider; no external embedding or rerank request will be sent."
+            if self.mode == "simulate"
+            else "Replay semantic provider; external embedding and rerank requests are disabled."
+        )
+        return {
+            "provider": self.provider_name(),
+            "status": "ready",
+            "provider_mode": self.mode,
+            "note": note,
+        }
 
 
 class DashScopeSemanticProvider(LocalSemanticProvider):
@@ -182,6 +209,9 @@ class DashScopeSemanticProvider(LocalSemanticProvider):
 
 
 def build_semantic_provider(settings: SemanticProviderSettings) -> SemanticProvider:
+    external_mode = _external_provider_mode()
+    if external_mode in {"simulate", "replay"}:
+        return OfflineSemanticProvider(mode=external_mode)
     if settings.enabled:
         return DashScopeSemanticProvider(settings)
     return LocalSemanticProvider()

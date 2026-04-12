@@ -1,6 +1,7 @@
 import type {
   InstructionCompiler,
   IntentBrief,
+  IntentRewritePolicyCatalogEntry,
   IntentRewriteEntry,
   IntentRewritePayload,
   JsonObject,
@@ -170,6 +171,7 @@ export function mapPlanResponse(payload: unknown): PlanResponse {
   return {
     ...(source as JsonObject),
     request: asJsonObject(source.request),
+    request_preview: source.request_preview ? asJsonObject(source.request_preview) : undefined,
     plan: mapSourcingPlanSummary(source.plan),
     plan_review_gate: mapPlanReviewGate(source.plan_review_gate),
     plan_review_session: asJsonObject(source.plan_review_session),
@@ -258,6 +260,7 @@ export function mapJobResultsResponse(payload: unknown): JobResultsResponse {
     agent_trace_spans: asObjectArray(source.agent_trace_spans),
     agent_workers: asObjectArray(source.agent_workers),
     intent_rewrite: mapIntentRewritePayload(source.intent_rewrite),
+    request_preview: source.request_preview ? asJsonObject(source.request_preview) : undefined,
     workflow_stage_summaries: source.workflow_stage_summaries
       ? mapWorkflowStageSummariesPayload(source.workflow_stage_summaries)
       : undefined,
@@ -492,6 +495,7 @@ export function mapRetrievalJobResponse(payload: unknown): RetrievalJobResponse 
     job_id: asString(source.job_id),
     status: asString(source.status),
     request: asJsonObject(source.request),
+    request_preview: source.request_preview ? asJsonObject(source.request_preview) : undefined,
     plan: mapSourcingPlanSummary(source.plan),
     intent_rewrite: mapIntentRewritePayload(source.intent_rewrite),
     summary: asJsonObject(source.summary),
@@ -519,6 +523,7 @@ export function mapRefinementCompileResponse(payload: unknown): RefinementCompil
     reason: asOptionalString(source.reason),
     request_patch: source.request_patch ? asJsonObject(source.request_patch) : undefined,
     request: source.request ? asJsonObject(source.request) : undefined,
+    request_preview: source.request_preview ? asJsonObject(source.request_preview) : undefined,
     plan: source.plan ? mapSourcingPlanSummary(source.plan) : undefined,
     instruction_compiler: source.instruction_compiler
       ? mapInstructionCompiler(source.instruction_compiler)
@@ -539,6 +544,7 @@ export function mapRefinementApplyResponse(payload: unknown): RefinementApplyRes
     rerun_job_id: asOptionalString(source.rerun_job_id),
     request_patch: source.request_patch ? asJsonObject(source.request_patch) : undefined,
     request: source.request ? asJsonObject(source.request) : undefined,
+    request_preview: source.request_preview ? asJsonObject(source.request_preview) : undefined,
     plan: source.plan ? mapSourcingPlanSummary(source.plan) : undefined,
     instruction_compiler: source.instruction_compiler
       ? mapInstructionCompiler(source.instruction_compiler)
@@ -556,6 +562,9 @@ export function mapIntentRewritePayload(payload: unknown): IntentRewritePayload 
   return {
     request: mapIntentRewriteEntry(source.request),
     instruction: source.instruction ? mapIntentRewriteEntry(source.instruction) : undefined,
+    policy_catalog: source.policy_catalog
+      ? asArray(source.policy_catalog).map((item) => mapIntentRewritePolicyCatalogEntry(item))
+      : undefined,
   };
 }
 
@@ -574,9 +583,32 @@ export function mapIntentRewriteRule(payload: unknown) {
     ...(source as JsonObject),
     rewrite_id: asOptionalString(source.rewrite_id),
     summary_label: asOptionalString(source.summary_label),
+    policy_layer: asOptionalString(source.policy_layer),
     keywords: asOptionalStringArray(source.keywords),
+    must_have_facets: asOptionalStringArray(source.must_have_facets),
+    must_have_primary_role_buckets: asOptionalStringArray(source.must_have_primary_role_buckets),
+    must_have_keywords: asOptionalStringArray(source.must_have_keywords),
     targeting_terms: asOptionalStringArray(source.targeting_terms),
     matched_terms: asOptionalStringArray(source.matched_terms),
+    request_patch: source.request_patch ? asJsonObject(source.request_patch) : undefined,
+    trigger_sources: source.trigger_sources ? asJsonObject(source.trigger_sources) : undefined,
+    additional_rewrites: source.additional_rewrites
+      ? asArray(source.additional_rewrites).map((item) => mapIntentRewriteRule(item))
+      : undefined,
+    notes: asOptionalString(source.notes),
+  };
+}
+
+export function mapIntentRewritePolicyCatalogEntry(payload: unknown): IntentRewritePolicyCatalogEntry {
+  const source = asObject(payload, "IntentRewritePolicyCatalogEntry");
+  return {
+    ...(source as JsonObject),
+    rewrite_id: asOptionalString(source.rewrite_id),
+    summary_label: asOptionalString(source.summary_label),
+    policy_layer: asOptionalString(source.policy_layer),
+    trigger_sources: source.trigger_sources ? asJsonObject(source.trigger_sources) : undefined,
+    request_patch: source.request_patch ? asJsonObject(source.request_patch) : undefined,
+    targeting_terms: asOptionalStringArray(source.targeting_terms),
     notes: asOptionalString(source.notes),
   };
 }

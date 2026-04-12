@@ -601,6 +601,76 @@ class AssetBundleManager:
         (bundle_dir / "download_summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2))
         return summary
 
+    def delete_bundle(
+        self,
+        *,
+        bundle_kind: str,
+        bundle_id: str,
+        client: ObjectStorageClient,
+        max_workers: int | None = None,
+        prune_local_index: bool = True,
+    ) -> dict:
+        normalized_kind = str(bundle_kind or "").strip()
+        normalized_id = str(bundle_id or "").strip()
+        if not normalized_kind or not normalized_id:
+            raise AssetBundleError("bundle_kind and bundle_id are required")
+        remote_prefix = self._bundle_remote_prefix(normalized_kind, normalized_id)
+        manifest_key = f"{remote_prefix}/bundle_manifest.json"
+        manifest_payload: dict[str, Any] = {}
+        try:
+            manifest_payload = json.loads(client.download_bytes(manifest_key).decode("utf-8"))
+        except ObjectStorageNotFoundError:
+            manifest_payload = {}
+
+        object_keys = self._bundle_object_keys_from_manifest(
+            bundle_kind=normalized_kind,
+            bundle_id=normalized_id,
+            manifest_payload=manifest_payload,
+        )
+        resolved_max_workers = self._resolve_max_workers(client, max_workers)
+        deletions = self._parallel_transfer(
+            [{"object_key": object_key} for object_key in object_keys],
+            max_workers=resolved_max_workers,
+            op=lambda item: client.delete_object(str(item.get("object_key") or "")),
+        )
+        deleted_objects = [item for item in deletions if str(item.get("status") or "") == "deleted"]
+        missing_objects = [item for item in deletions if str(item.get("status") or "") == "missing"]
+        sync_run_summary = {
+            "status": "deleted",
+            "bundle_kind": normalized_kind,
+            "bundle_id": normalized_id,
+            "remote_prefix": remote_prefix,
+            "requested_object_count": len(object_keys),
+            "deleted_object_count": len(deleted_objects),
+            "missing_object_count": len(missing_objects),
+            "deleted_object_keys": [str(item.get("object_key") or "") for item in deleted_objects],
+            "missing_object_keys": [str(item.get("object_key") or "") for item in missing_objects],
+            "provider": getattr(getattr(client, "config", None), "provider", ""),
+            "max_workers": resolved_max_workers,
+        }
+        sync_run = self._record_sync_run(
+            action="delete",
+            bundle_kind=normalized_kind,
+            bundle_id=normalized_id,
+            summary=sync_run_summary,
+            extra={
+                "remote_prefix": remote_prefix,
+                "requested_object_keys": list(object_keys),
+            },
+        )
+        self._upload_bundle_delete_records(
+            client,
+            sync_run=sync_run,
+            bundle_kind=normalized_kind,
+            bundle_id=normalized_id,
+        )
+        if prune_local_index:
+            self._remove_bundle_index_entry(normalized_kind, normalized_id)
+        return {
+            **sync_run_summary,
+            "sync_run_id": sync_run["run_id"],
+        }
+
     def _resolve_max_workers(self, client: ObjectStorageClient, requested: int | None) -> int:
         if requested is not None:
             try:
@@ -631,7 +701,7 @@ class AssetBundleManager:
                 results.append(result)
                 if on_result is not None:
                     on_result(result)
-            return sorted(results, key=lambda entry: entry["relative_path"])
+            return sorted(results, key=lambda entry: str(entry.get("relative_path") or entry.get("object_key") or ""))
         results: list[dict] = []
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {executor.submit(op, item): item for item in items}
@@ -640,7 +710,7 @@ class AssetBundleManager:
                 results.append(result)
                 if on_result is not None:
                     on_result(result)
-        return sorted(results, key=lambda entry: entry["relative_path"])
+        return sorted(results, key=lambda entry: str(entry.get("relative_path") or entry.get("object_key") or ""))
 
     def _upload_transfer_item(self, client: ObjectStorageClient, remote_prefix: str, item: dict[str, Any]) -> dict:
         path = Path(item["path"])
@@ -754,6 +824,91 @@ class AssetBundleManager:
             "indexes/bundle_index.json",
             content_type="application/json",
         )
+
+    def _upload_bundle_delete_records(
+        self,
+        client: ObjectStorageClient,
+        *,
+        sync_run: dict[str, Any],
+        bundle_kind: str,
+        bundle_id: str,
+    ) -> None:
+        run_key = f"indexes/sync_runs/{sync_run['run_id']}.json"
+        client.upload_bytes(json.dumps(sync_run, ensure_ascii=False, indent=2).encode("utf-8"), run_key, content_type="application/json")
+        try:
+            remote_index_payload = json.loads(client.download_bytes("indexes/bundle_index.json").decode("utf-8"))
+        except ObjectStorageNotFoundError:
+            remote_index_payload = {"updated_at": "", "bundles": []}
+        bundles = [
+            dict(item)
+            for item in remote_index_payload.get("bundles", [])
+            if not (
+                str(item.get("bundle_kind", "")).strip() == bundle_kind
+                and str(item.get("bundle_id", "")).strip() == bundle_id
+            )
+        ]
+        updated_payload = {
+            "updated_at": _utc_now_iso(),
+            "bundles": sorted(
+                bundles,
+                key=lambda item: (
+                    str(item.get("bundle_kind", "")).strip(),
+                    str(item.get("bundle_id", "")).strip(),
+                ),
+            ),
+        }
+        client.upload_bytes(
+            json.dumps(updated_payload, ensure_ascii=False, indent=2).encode("utf-8"),
+            "indexes/bundle_index.json",
+            content_type="application/json",
+        )
+
+    def _remove_bundle_index_entry(self, bundle_kind: str, bundle_id: str) -> None:
+        self.sync_dir.mkdir(parents=True, exist_ok=True)
+        payload = self._load_json_if_exists(self.sync_bundle_index_path, {"updated_at": "", "bundles": []})
+        bundles = [
+            dict(item)
+            for item in payload.get("bundles", [])
+            if not (
+                str(item.get("bundle_kind", "")).strip() == bundle_kind
+                and str(item.get("bundle_id", "")).strip() == bundle_id
+            )
+        ]
+        updated_payload = {
+            "updated_at": _utc_now_iso(),
+            "bundles": sorted(
+                bundles,
+                key=lambda item: (
+                    str(item.get("bundle_kind", "")).strip(),
+                    str(item.get("bundle_id", "")).strip(),
+                ),
+            ),
+        }
+        self.sync_bundle_index_path.write_text(json.dumps(updated_payload, ensure_ascii=False, indent=2))
+
+    def _bundle_object_keys_from_manifest(
+        self,
+        *,
+        bundle_kind: str,
+        bundle_id: str,
+        manifest_payload: dict[str, Any] | None,
+    ) -> list[str]:
+        remote_prefix = self._bundle_remote_prefix(bundle_kind, bundle_id)
+        object_keys = {
+            f"{remote_prefix}/bundle_manifest.json",
+            f"{remote_prefix}/export_summary.json",
+        }
+        payload = dict(manifest_payload or {})
+        archive_entry = dict(payload.get("archive") or {})
+        archive_relative_path = str(archive_entry.get("relative_path") or "").strip()
+        if archive_relative_path:
+            object_keys.add(f"{remote_prefix}/{archive_relative_path}")
+        else:
+            for record in list(payload.get("files") or []):
+                relative_path = str(dict(record).get("payload_relative_path") or "").strip()
+                if relative_path:
+                    object_keys.add(f"{remote_prefix}/{relative_path}")
+        return sorted(object_keys)
 
     def _load_json_if_exists(self, path: Path, default: dict[str, Any]) -> dict[str, Any]:
         if not path.exists():

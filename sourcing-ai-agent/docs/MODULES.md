@@ -8,6 +8,8 @@
 
 ```text
 User Request
+  -> query_signal_knowledge.py / query_intent_policy.py / query_intent_rewrite.py
+  -> request_normalization.py
   -> planning.py
   -> plan_review.py
   -> acquisition_strategy.py / publication_planning.py / search_planning.py
@@ -21,11 +23,47 @@ User Request
   -> enrichment.py / exploratory_enrichment.py / manual_review_resolution.py / web_fetch.py
   -> scoring.py / semantic_retrieval.py / semantic_provider.py / confidence_policy.py / manual_review.py
   -> result_diff.py / criteria_evolution.py / pattern_suggestions.py
+  -> excel_intake.py (spreadsheet upload path)
   -> storage.py
   -> api.py / cli.py
 ```
 
 ## Module Responsibilities
+
+### `query_signal_knowledge.py`
+
+- 提供稳定的组织 / 产品 / 团队 / 角色知识表
+- 当前负责：
+  - scope signal canonicalization
+  - target company alias resolve
+  - related company / scope labels
+  - role bucket / function id hints
+- durable org/product knowledge 应该优先写在这里，而不是散落到 rewrite 规则里
+
+### `query_intent_policy.py`
+
+- 承载业务 shorthand policy catalog
+- 当前负责：
+  - 维护“华人简称 / 多模态项目 / researcher role”这类业务策略
+  - 为模型 prompt 和 deterministic fallback 提供可审计 policy context
+- 这层是业务策略层，不负责 durable company/product knowledge
+
+### `query_intent_rewrite.py`
+
+- 将 business rewrite policy 应用到原始 query
+- 返回 `intent_rewrite`、summary、request patch
+- 主要作用是：
+  - 给前端可解释 preview
+  - 在模型未覆盖时补一层 deterministic rewrite
+
+### `request_normalization.py`
+
+- 把 request payload materialize 成统一 execution contract
+- 当前核心输出：
+  - `intent_axes`
+  - `intent_view`
+  - `build_effective_request_payload(...)`
+- planning、plan review、acquisition、seed discovery、scoring、semantic retrieval 现在共享这套 contract，而不是各自散读旧 flat fields
 
 ### `planning.py`
 
@@ -35,6 +73,7 @@ User Request
   - 显式承载 `identified_request / target_output / default_execution_strategy / review_focus`
   - 作为产品原生第一段解释层，而不是只保留 `intent_summary` 两句摘要
 - 在 `model_assisted` 下，先通过模型做 request normalization，再用稳定模板生成 brief
+- `request_preview.intent_axes` 现在就是 execution 侧共享的 effective intent contract，而不只是 preview 字段
 - 调用 `AcquisitionStrategyCompiler` 和 `PublicationCoveragePlanner`
 - 当前也会输出 `search_strategy` 和 retrieval `filter_layers`
 
@@ -132,6 +171,7 @@ User Request
   - 本地开发默认可用 filesystem backend
   - 生产环境可切 OSS/R2/S3-compatible object storage
   - bundle upload/download 不绑定具体云厂商
+  - 默认恢复基线优先使用 `sqlite_snapshot + canonical company_snapshot`
 
 ### `acquisition_strategy.py`
 
@@ -158,6 +198,7 @@ User Request
 - 执行 acquisition task
 - 管理 snapshot 生命周期和回退逻辑
 - live connector 失败时回退到最近一次成功的本地 snapshot
+- 进入执行时会先用 `build_effective_request_payload(...)` materialize request，再把统一 payload 传给 worker / search seed / enrichment
 - investor 场景下会先生成 tiered firm plan，再归一化 investor roster
 
 ### `connectors.py`
@@ -170,6 +211,7 @@ User Request
 
 - 用低成本 web search 发现关系和 LinkedIn URL
 - 为 `scoped_search_roster / former_employee_search` 提供候选 seed
+- 当前执行层优先读取 `effective_request_payload`，而不是自行散读 request 的旧扁平字段
 - 现在会执行 search planner 产出的 query bundles
 - `public_interviews / publication_and_blog` 这类 bundle 可以先产出 `public_media_lead`
 - 公开访谈结果会先落 `public_media_results / public_media_analysis`
@@ -240,6 +282,16 @@ User Request
 - 目标是把“低成本 web relation check”从具体搜索引擎解耦
 - 当前真正的 provider 选择逻辑已经上移到 `search_provider.py`
 
+### `excel_intake.py`
+
+- 处理用户手动上传的 Excel 联系人数据
+- 当前职责：
+  - 模型识别表头与 contact schema
+  - 本地 exact / near match 去重
+  - direct LinkedIn URL 优先 fetch；否则走 contact search fallback
+  - 为 `manual_review_local / manual_review_search` 提供 continuation 入口
+  - 将结果落盘到 `runtime/excel_intake/{intake_id}/` 并回写 SQLite/candidate assets
+
 ### `asset_logger.py`
 
 - 所有 connector 的中心化资产落盘入口
@@ -252,12 +304,14 @@ User Request
 - 输出 `high / medium / lead_only`
 - pattern-level boost / penalty 和 confidence policy band 共同决定最终置信度
 - 已与 semantic hit 融合打分，不再只接受纯 lexical match
+- 当前默认不是 LLM 驱动 rerank，而是规则 / lexical / confidence 主链
 
 ### `semantic_retrieval.py`
 
 - 基于 candidate multi-field document 做本地 sparse-vector semantic retrieval
 - 在 structured hard filters 后，为 `hybrid / semantic` 检索补 recall 和 rerank
 - 当前通过 term weighting + cosine similarity 为 corner cases 提供 semantic hit
+- external semantic provider 只在显式允许高成本语义能力时参与；默认仍走本地 sparse retrieval
 
 ### `semantic_provider.py`
 

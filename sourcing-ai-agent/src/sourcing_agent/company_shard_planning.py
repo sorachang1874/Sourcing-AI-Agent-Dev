@@ -4,6 +4,13 @@ from copy import deepcopy
 import re
 from typing import Any, Callable
 
+from .query_signal_knowledge import (
+    ALPHABET_COMPANY_URL,
+    GOOGLE_COMPANY_URL,
+    related_company_scope_urls,
+    scope_signal_search_query_aliases,
+)
+
 
 FULL_COMPANY_EMPLOYEE_RESULT_CAP = 2500
 COMPANY_FILTER_LIST_KEYS = (
@@ -20,18 +27,13 @@ COMPANY_FILTER_LIST_KEYS = (
 )
 
 LARGE_ORG_SCOPE_COMPANY_URLS: dict[str, str] = {
-    "google": "https://www.linkedin.com/company/google/",
-    "alphabet": "https://www.linkedin.com/company/alphabet-inc/",
-    "googledeepmind": "https://www.linkedin.com/company/deepmind/",
-    "deepmind": "https://www.linkedin.com/company/deepmind/",
+    "google": GOOGLE_COMPANY_URL,
+    "alphabet": ALPHABET_COMPANY_URL,
 }
 
 KEYWORD_PROBE_QUERY_ALIASES: dict[str, list[str]] = {
     "multimodal": ["Multimodal", "Multimodality"],
     "multimodality": ["Multimodal", "Multimodality"],
-    "veo": ["Veo"],
-    "nanobanana": ["Nano Banana", "\"Nano Banana\""],
-    "gemini": ["Gemini"],
     "visionlanguage": ["Vision-language"],
     "videogeneration": ["Video generation"],
 }
@@ -127,6 +129,7 @@ def build_large_org_keyword_probe_shard_policy(
     *,
     company_scope: list[str],
     keyword_hints: list[str],
+    function_ids: list[str] | None = None,
     max_pages: int,
     page_limit: int,
 ) -> dict[str, Any]:
@@ -155,7 +158,7 @@ def build_large_org_keyword_probe_shard_policy(
             "root_filters": {
                 "locations": ["United States"],
                 "companies": scope_companies,
-                "function_ids": list(LARGE_ORG_PRIORITY_FUNCTION_IDS),
+                "function_ids": list(function_ids or LARGE_ORG_PRIORITY_FUNCTION_IDS),
             },
             "keyword_shards": keyword_shards,
             "max_pages": max(1, int(max_pages or 1)),
@@ -676,15 +679,13 @@ def _resolve_large_org_scope_companies(company_key: str, company_scope: list[str
         company_url = LARGE_ORG_SCOPE_COMPANY_URLS.get(token)
         if company_url and company_url not in resolved:
             resolved.append(company_url)
+    for item in related_company_scope_urls(company_key, normalized_scope):
+        if item not in resolved:
+            resolved.append(item)
 
     if company_key in {"google", "alphabet"}:
         if LARGE_ORG_SCOPE_COMPANY_URLS["google"] not in resolved:
             resolved.insert(0, LARGE_ORG_SCOPE_COMPANY_URLS["google"])
-        scope_tokens = {_normalize_keyword_token(item) for item in normalized_scope}
-        if scope_tokens.intersection({"googledeepmind", "deepmind", "gemini", "veo", "nanobanana"}):
-            deepmind_url = LARGE_ORG_SCOPE_COMPANY_URLS["deepmind"]
-            if deepmind_url not in resolved:
-                resolved.append(deepmind_url)
     return resolved
 
 
@@ -698,7 +699,7 @@ def _build_keyword_probe_shards(keyword_hints: list[str]) -> list[dict[str, Any]
             continue
         if token in KEYWORD_PROBE_SKIP_TOKENS:
             continue
-        query_terms = KEYWORD_PROBE_QUERY_ALIASES.get(token) or [str(item).strip()]
+        query_terms = scope_signal_search_query_aliases(str(item or "")) or KEYWORD_PROBE_QUERY_ALIASES.get(token) or [str(item).strip()]
         search_query = _canonicalize_search_query(" ".join(term for term in query_terms if str(term).strip()).strip())
         if not search_query:
             continue

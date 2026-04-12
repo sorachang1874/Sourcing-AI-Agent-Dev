@@ -38,6 +38,8 @@
   当前推荐的 hybrid 服务形态与后续产品化路径。
 - [SERVER_RUNTIME_BOOTSTRAP.md](SERVER_RUNTIME_BOOTSTRAP.md)
   长期在线 server / runner 的最小启动流程。
+- [CANONICAL_CLOUD_BUNDLE_CATALOG.md](CANONICAL_CLOUD_BUNDLE_CATALOG.md)
+  当前服务器恢复应使用的 canonical sqlite/company snapshot bundle 清单。
 - [CROSS_DEVICE_SYNC.md](CROSS_DEVICE_SYNC.md)
   Git、secret、object storage、local runtime 的边界与恢复方法。
 

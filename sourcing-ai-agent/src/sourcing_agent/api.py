@@ -136,6 +136,14 @@ def _build_handler(orchestrator: SourcingOrchestrator):
                 result = orchestrator.supplement_company_assets(payload)
                 status = HTTPStatus.OK if result.get("status") != "invalid" else HTTPStatus.BAD_REQUEST
                 return self._send_json(status, result)
+            if path == "/api/intake/excel":
+                result = orchestrator.ingest_excel_contacts(payload)
+                status = HTTPStatus.OK if result.get("status") != "invalid" else HTTPStatus.BAD_REQUEST
+                return self._send_json(status, result)
+            if path == "/api/intake/excel/continue":
+                result = orchestrator.continue_excel_intake_review(payload)
+                status = HTTPStatus.OK if result.get("status") != "invalid" else HTTPStatus.BAD_REQUEST
+                return self._send_json(status, result)
             if path == "/api/criteria/feedback":
                 result = orchestrator.record_criteria_feedback(payload)
                 return self._send_json(HTTPStatus.CREATED, result)

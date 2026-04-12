@@ -4,6 +4,10 @@
 
 这份文档定义当前 `Sourcing AI Agent` 在长期在线 Linux/server 环境上的最小可执行启动流程。
 
+canonical bundle 选择请同时参考：
+
+- `docs/CANONICAL_CLOUD_BUNDLE_CATALOG.md`
+
 目标不是一次性做成全自动平台，而是先把下面三件事固定下来：
 
 - 代码如何落地到服务器
@@ -127,8 +131,8 @@ PYTHONPATH=src python3 -m sourcing_agent.cli upload-asset-bundle \
   --no-resume
 
 PYTHONPATH=src python3 -m sourcing_agent.cli download-asset-bundle \
-  --bundle-kind company_handoff \
-  --bundle-id <bundle_id> \
+  --bundle-kind company_snapshot \
+  --bundle-id <company_snapshot_bundle_id> \
   --output-dir runtime/asset_imports \
   --no-resume
 ```
@@ -162,25 +166,39 @@ mkdir -p runtime/secrets runtime/asset_imports runtime/vendor
 
 ### 4. Restore durable assets
 
-优先恢复最近一次 handoff bundle：
+默认恢复路径应是：
+
+1. 恢复 canonical `sqlite_snapshot`
+2. 再恢复需要的 canonical `company_snapshot`
+
+不要把 `company_handoff` 当成默认 server bootstrap 入口，因为它更重，也更容易把历史测试态文件一起带回。
+
+先恢复 SQLite：
 
 ```bash
 PYTHONPATH=src python3 -m sourcing_agent.cli download-asset-bundle \
-  --bundle-kind company_handoff \
-  --bundle-id <bundle_id> \
+  --bundle-kind sqlite_snapshot \
+  --bundle-id <sqlite_bundle_id> \
+  --output-dir runtime/asset_imports
+
+PYTHONPATH=src python3 -m sourcing_agent.cli restore-sqlite-snapshot \
+  --manifest runtime/asset_imports/<sqlite_bundle_id>/bundle_manifest.json
+```
+
+再恢复公司 snapshot：
+
+```bash
+PYTHONPATH=src python3 -m sourcing_agent.cli download-asset-bundle \
+  --bundle-kind company_snapshot \
+  --bundle-id <company_snapshot_bundle_id> \
   --output-dir runtime/asset_imports
 
 PYTHONPATH=src python3 -m sourcing_agent.cli restore-asset-bundle \
-  --manifest runtime/asset_imports/<bundle_id>/bundle_manifest.json \
+  --manifest runtime/asset_imports/<company_snapshot_bundle_id>/bundle_manifest.json \
   --target-runtime-dir runtime
 ```
 
-如需恢复数据库：
-
-```bash
-PYTHONPATH=src python3 -m sourcing_agent.cli restore-sqlite-snapshot \
-  --manifest /path/to/sqlite_bundle/bundle_manifest.json
-```
+如果要恢复全套 canonical 资产，请直接按 `docs/CANONICAL_CLOUD_BUNDLE_CATALOG.md` 里的 bundle id 顺序执行。
 
 ### 5. Run smoke checks
 

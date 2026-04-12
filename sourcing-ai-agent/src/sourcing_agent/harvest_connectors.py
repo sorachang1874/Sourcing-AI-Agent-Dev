@@ -5,6 +5,7 @@ from dataclasses import field
 from dataclasses import replace
 from hashlib import sha1
 import json
+import os
 from pathlib import Path
 import re
 from shutil import copyfile
@@ -15,6 +16,10 @@ from urllib import error, parse, request
 from .asset_logger import AssetLogger
 from .connectors import CompanyIdentity, CompanyRosterSnapshot
 from .settings import HarvestActorSettings
+
+
+def _external_provider_mode() -> str:
+    return str(os.getenv("SOURCING_EXTERNAL_PROVIDER_MODE") or "live").strip().lower() or "live"
 
 
 class HarvestRetryableRequestError(RuntimeError):
@@ -2067,6 +2072,7 @@ def _execute_harvest_actor_with_checkpoint(
     allow_shared_provider_cache: bool = True,
 ) -> HarvestExecutionResult:
     existing = dict(checkpoint or {})
+    provider_mode = _external_provider_mode()
     cached_body = None
     cache_source = None
     cache_origin = None
@@ -2098,6 +2104,42 @@ def _execute_harvest_actor_with_checkpoint(
                         "cache_origin": str(cache_origin or ""),
                     },
                     metadata={"cache_source": str(cache_source or ""), "cache_origin": str(cache_origin or "")},
+                )
+            ],
+        )
+
+    if provider_mode in {"simulate", "replay"}:
+        simulated_body = _build_offline_harvest_body(
+            logical_name=logical_name,
+            payload=payload,
+            provider_mode=provider_mode,
+        )
+        message = (
+            f"Simulated Harvest response for {logical_name}; no external request was sent."
+            if provider_mode == "simulate"
+            else f"Replay mode returned cached-or-empty Harvest response for {logical_name} without live provider access."
+        )
+        return HarvestExecutionResult(
+            logical_name=logical_name,
+            checkpoint={
+                "logical_name": logical_name,
+                "payload_hash": _payload_cache_key(payload),
+                "status": "completed",
+                "provider_mode": provider_mode,
+                "request_context": dict(request_context or {}),
+            },
+            body=simulated_body,
+            message=message,
+            artifacts=[
+                HarvestExecutionArtifact(
+                    label=f"{provider_mode}_response",
+                    payload={
+                        "logical_name": logical_name,
+                        "payload_hash": _payload_cache_key(payload),
+                        "provider_mode": provider_mode,
+                        "body_count": len(simulated_body) if isinstance(simulated_body, list) else 0,
+                    },
+                    metadata={"provider_mode": provider_mode, "logical_name": logical_name},
                 )
             ],
         )
@@ -2594,8 +2636,15 @@ def _run_harvest_actor_via_async_dataset(
 
 
 def _run_harvest_actor(settings: HarvestActorSettings, payload: dict[str, Any]) -> Any | None:
+    provider_mode = _external_provider_mode()
     logical_name = _infer_harvest_sync_logical_name(payload)
     request_context = _infer_harvest_sync_request_context(payload, settings)
+    if provider_mode in {"simulate", "replay"}:
+        return _build_offline_harvest_body(
+            logical_name=logical_name,
+            payload=payload,
+            provider_mode=provider_mode,
+        )
     if _harvest_sync_should_prefer_async(settings, payload):
         return _run_harvest_actor_via_async_dataset(
             settings,
@@ -2612,6 +2661,50 @@ def _run_harvest_actor(settings: HarvestActorSettings, payload: dict[str, Any]) 
         logical_name=logical_name,
         request_context=request_context,
     )
+
+
+def _build_offline_harvest_body(
+    *,
+    logical_name: str,
+    payload: dict[str, Any],
+    provider_mode: str,
+) -> list[dict[str, Any]]:
+    metadata = {
+        "_offline": True,
+        "_provider_mode": provider_mode,
+        "_logical_name": logical_name,
+    }
+    normalized_mode = str(provider_mode or "simulate").strip().lower() or "simulate"
+    if logical_name == "harvest_profile_scraper_batch":
+        results: list[dict[str, Any]] = []
+        for url in list(payload.get("urls") or []):
+            profile_url = str(url or "").strip()
+            if not profile_url:
+                continue
+            results.append(
+                {
+                    **metadata,
+                    "_harvest_request": {"kind": "url", "value": profile_url, "profile_url": profile_url},
+                    "linkedinUrl": profile_url,
+                    "publicIdentifier": _offline_profile_identifier(profile_url),
+                    "headline": f"Offline {normalized_mode} profile placeholder",
+                    "fullName": "",
+                    "item": {
+                        "linkedinUrl": profile_url,
+                        "publicIdentifier": _offline_profile_identifier(profile_url),
+                        "headline": f"Offline {normalized_mode} profile placeholder",
+                    },
+                }
+            )
+        return results
+    return []
+
+
+def _offline_profile_identifier(profile_url: str) -> str:
+    normalized = str(profile_url or "").strip().rstrip("/")
+    if "/in/" in normalized:
+        return normalized.rsplit("/in/", 1)[-1].strip("/") or "offline-profile"
+    return "offline-profile"
 
 
 def _build_harvest_company_employees_payload(
