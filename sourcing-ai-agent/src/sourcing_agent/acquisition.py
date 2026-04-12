@@ -914,47 +914,6 @@ class AcquisitionEngine:
             )
             return JobRequest.from_payload(base_payload)
 
-        def _stage_request() -> JobRequest:
-            if enrichment_scope == "linkedin_stage_1":
-                return JobRequest(
-                    raw_user_request=job_request.raw_user_request,
-                    query=job_request.query,
-                    target_company=job_request.target_company,
-                    slug_resolution_limit=int(task.metadata.get("slug_resolution_limit", job_request.slug_resolution_limit) or 0),
-                    profile_detail_limit=int(task.metadata.get("profile_detail_limit", job_request.profile_detail_limit) or 0),
-                    publication_scan_limit=0,
-                    publication_lead_limit=0,
-                    exploration_limit=0,
-                    scholar_coauthor_follow_up_limit=0,
-                )
-            if enrichment_scope == "public_web_stage_2":
-                return JobRequest(
-                    raw_user_request=job_request.raw_user_request,
-                    query=job_request.query,
-                    target_company=job_request.target_company,
-                    slug_resolution_limit=0,
-                    profile_detail_limit=0,
-                    publication_scan_limit=int(task.metadata.get("publication_scan_limit", job_request.publication_scan_limit) or 0),
-                    publication_lead_limit=int(task.metadata.get("publication_lead_limit", job_request.publication_lead_limit) or 0),
-                    exploration_limit=int(task.metadata.get("exploration_limit", job_request.exploration_limit) or 0),
-                    scholar_coauthor_follow_up_limit=int(
-                        task.metadata.get("scholar_coauthor_follow_up_limit", job_request.scholar_coauthor_follow_up_limit) or 0
-                    ),
-                )
-            return JobRequest(
-                raw_user_request=job_request.raw_user_request,
-                query=job_request.query,
-                target_company=job_request.target_company,
-                slug_resolution_limit=int(task.metadata.get("slug_resolution_limit", job_request.slug_resolution_limit) or 0),
-                profile_detail_limit=int(task.metadata.get("profile_detail_limit", job_request.profile_detail_limit) or 0),
-                publication_scan_limit=int(task.metadata.get("publication_scan_limit", job_request.publication_scan_limit) or 0),
-                publication_lead_limit=int(task.metadata.get("publication_lead_limit", job_request.publication_lead_limit) or 0),
-                exploration_limit=int(task.metadata.get("exploration_limit", job_request.exploration_limit) or 0),
-                scholar_coauthor_follow_up_limit=int(
-                    task.metadata.get("scholar_coauthor_follow_up_limit", job_request.scholar_coauthor_follow_up_limit) or 0
-                ),
-            )
-
         canonicalization_summary: dict[str, Any] = {}
         source_snapshots: dict[str, Any] = {}
         candidates: list[Candidate] = []

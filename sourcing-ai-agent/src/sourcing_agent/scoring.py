@@ -17,6 +17,7 @@ from .domain import (
     derive_candidate_role_bucket,
     normalize_requested_facet,
     normalize_requested_role_bucket,
+    sanitize_candidate_notes,
 )
 from .query_signal_knowledge import lookup_scope_signal
 from .request_normalization import resolve_request_intent_view
