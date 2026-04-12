@@ -14,6 +14,39 @@
 
 ## 2. 模块划分
 
+### `query_signal_knowledge.py`
+
+- 提供稳定的组织 / 产品 / 团队 / 角色知识表
+- 当前承载：
+  - parent company alias resolve
+  - scope signal canonical label / related company labels
+  - role bucket / function id hints
+- 这层负责 durable knowledge，不直接承载临时业务策略
+
+### `query_intent_policy.py` / `query_intent_rewrite.py`
+
+- 在 stable knowledge 之上补一层业务 shorthand policy
+- 当前职责：
+  - 把“华人 / 多模态 / researcher role”等用户简称编译成 request patch
+  - 为前端返回 `intent_rewrite` / `request_preview` 所需的 summary 与 targeting terms
+- 这层是业务策略层，不应替代 `query_signal_knowledge.py` 中的 durable 映射
+
+### `request_normalization.py`
+
+- 把原始 request payload materialize 成统一的 effective intent contract
+- 当前核心输出：
+  - `intent_axes`
+  - `intent_view`
+  - `build_effective_request_payload(...)`
+- 现在不只是 plan preview 使用它：
+  - planning
+  - plan review
+  - acquisition
+  - seed discovery
+  - scoring
+  - semantic retrieval
+  都应共享同一份 execution semantics
+
 ### `planning.py`
 
 - 从原始用户请求生成 `SourcingPlan`
@@ -23,16 +56,15 @@
   - retrieval `filter_layers`
 - 提供 `hydrate_sourcing_plan(...)`，让 approved plan review session 可以直接进入执行态
 - 当前已能推断 `categories`、`employment_statuses`、`retrieval_strategy`
-- 已接入 `AcquisitionStrategyCompiler` 与 `PublicationCoveragePlanner`
-- 下一阶段需要把 acquisition strategy 也显式产品化，根据意图分叉为：
-  - full company roster
-  - former employee roster
-  - investor-firm roster
-  - domain-specific expert graph / publication graph
-- 还需要增加 `acquisition strategy compiler`：
-  - 先根据用户意图定义目标人群边界，而不是默认扫整家公司
-  - 例如 `Google Gemini pre-train researchers/engineers` 应优先编译为 `Google DeepMind / Gemini-scoped roster`
-  - 在高成本 API 执行前，先输出 `target population / roster strategy / enrichment plan / cost tradeoff` 供用户确认
+- `request_preview.intent_axes` 现在是 execution contract，而不是 preview-only 字段
+- 已接入：
+  - `AcquisitionStrategyCompiler`
+  - `PublicationCoveragePlanner`
+  - `Search Planner`
+- 规划阶段的重点已经从“单纯猜 flat fields”转为：
+  - 先产出稳定的 `intent_axes`
+  - 再由 execution 层 materialize 成 `effective request payload`
+  - 让 `Google Gemini pre-train researchers/engineers` 这类请求在 plan / review / execution 中保持同一语义边界
 
 ### `search_planning.py`
 
@@ -125,6 +157,9 @@
   - `company_snapshot bundle`
   - `company_handoff bundle`
   - `sqlite_snapshot bundle`
+- 当前默认云端恢复路径：
+  - 优先 `sqlite_snapshot + canonical company_snapshot`
+  - `company_handoff` 只保留为可选的重型 handoff 载体，不再作为默认 server bootstrap 入口
 - 当前还已接入 object storage sync：
   - `upload-asset-bundle`
   - `download-asset-bundle`
@@ -147,11 +182,12 @@
 - 编排 company identity、roster acquisition、snapshot normalize、retrieval index prepare
 - 管理本地 `company_assets` snapshot 生命周期
 - 当 live roster acquisition 失败或返回空 roster 时，优先回退到最近一次成功的本地 snapshot
+- 进入执行前会先调用 `build_effective_request_payload(...)`，把 `intent_view` materialize 成统一 worker payload
 - 当前 runtime 已按 acquisition strategy 初步分叉：
   - `full_company_roster` -> live company roster
   - `scoped_search_roster / former_employee_search` -> low-cost search-seed acquisition
   - `investor_firm_roster` -> tiered investor-firm plan + existing investor asset normalization
-- acquisition state 现在会把 `job_id / plan_payload / runtime_mode` 下传给 search/exploration worker
+- acquisition state 现在会把 `job_id / plan_payload / runtime_mode / effective_request_payload` 下传给 search/exploration worker
 - investor firm workflow 当前会先生成 firm tier plan，再将 firm roster 归一化为 investor candidates
 
 ### `connectors.py`
@@ -277,7 +313,12 @@
   - precedence 为 `request_exact -> request_family -> company`
   - `freeze` 会复用冻结时的 band
   - `override` 会直接替换 band 阈值
-- 当前用规则引擎，后续可由 LLM 接管 criteria compile 和 rerank
+- 当前默认仍是规则引擎主链，不是 LLM rerank：
+  - structured filters
+  - lexical / alias hits
+  - semantic hit merge
+  - confidence banding
+- 后续可由 LLM 接管 criteria compile 或补充 rerank，但不是当前默认执行路径
 
 ### `semantic_retrieval.py`
 
@@ -286,6 +327,7 @@
   - 将 candidate 的 `role / team / focus_areas / education / work_history / notes` 组织成 multi-field semantic document
   - 对 query term 做扩展、field weighting 和稀疏向量相似度计算
   - 为 `hybrid / semantic` 结果提供 corner-case recall 与 rerank
+- 默认优先本地 sparse retrieval；只有 `allow_high_cost_sources=true` 且配置了 external semantic provider 时，才会上升到 embedding / rerank provider
 - 这不是最终的 dense embedding / vector DB 方案，但已经让 semantic retrieval 真正进入执行链，而不是只停留在接口预留
 
 ### `semantic_provider.py`
@@ -302,6 +344,17 @@
   - 优先走本地 sparse retrieval 做 candidate preselect
   - 再对候选子集调用外部 embedding / rerank
   - provider 不可用时退回本地 sparse retrieval
+
+### `excel_intake.py`
+
+- 提供独立于 query workflow 的 Excel 上传 intake 通道
+- 当前职责：
+  - 用模型做表头/列语义识别
+  - 提取姓名、公司、职位、LinkedIn、邮箱等 contact schema
+  - 先做本地 exact / near match
+  - direct LinkedIn URL 优先 profile fetch；否则按 contact 去触发 search fallback
+  - 将结果落盘到 `runtime/excel_intake/{intake_id}/`
+  - 支持 `continue-excel-intake` 继续处理 manual review 行
 
 ### `orchestrator.py`
 

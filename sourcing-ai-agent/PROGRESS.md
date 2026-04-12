@@ -1,5 +1,51 @@
 # Sourcing AI Agent Dev Progress
 
+## 2026-04-12
+
+### Canonical cloud bundle catalog 与 intent_axes 执行层下沉
+
+- 已把服务器恢复默认基线收敛为：
+  - 1 个全局 `sqlite_snapshot`
+  - 每个 canonical company 1 个 `company_snapshot`
+- 已新增 canonical bundle 清单文档：
+  - `docs/CANONICAL_CLOUD_BUNDLE_CATALOG.md`
+  - 记录实际 bundle id、恢复顺序、去重策略与 Google clean snapshot 替换说明
+- 已把 `intent_axes` 从展示层继续下沉到执行入口：
+  - `JobRequest.from_payload` 现在可直接 materialize `intent_axes`
+  - plan review instruction inference 会消费 `intent_axes`-only request payload
+  - review apply / target company backfill 也会先 materialize `intent_axes`
+- 已进一步把 planning/acquisition 内部消费切到统一 `intent_view`：
+  - retrieval strategy / structured filters / filter layers / criteria summary / open questions 不再各自散读老字段
+  - acquisition 对 `force_fresh_run / reuse_existing_roster / run_former_search_seed` 的判断也开始统一走 `intent_view`
+  - 修复了一个 request merge 回归：
+    - 模型直接返回的 `scope_disambiguation` 现在会被真正合入 request payload
+    - 不会再被后续规则推断静默覆盖
+- 已补回归测试，确保“模型只返回 intent_axes”时，planning / review / acquisition 仍能生成正确执行字段，而不只是 preview 好看。
+- 本地与 OSS 远端 canonical bundle index 当前都已收敛为：
+  - 7 个 `company_snapshot`
+  - 1 个 `sqlite_snapshot`
+  - legacy `company_handoff` 与旧 Google/SQLite bundle 已从索引删除
+
+### Effective request payload 贯通、规则检索语义澄清与 Excel intake 补档
+
+- 已把 `intent_axes -> intent_view -> effective request payload` 继续下沉到执行末端：
+  - `build_effective_request_payload(...)` 已进入 acquisition worker payload、search seed discovery、retrieval ranking
+  - `seed_discovery.py` 不再各自散读老扁平字段，而是消费统一 execution payload
+  - `scoring.py` 与 `semantic_retrieval.py` 也开始直接按 `intent_view` 解释 `target_company / organization_keywords / employment_statuses / must_have_*`
+- 已明确当前 retrieval 的真实形态，避免文档误导：
+  - 默认 final ranking 不是 LLM-driven rerank
+  - `scoring.py` 仍是规则/lexical/confidence 主链
+  - `semantic_retrieval.py` 默认走本地 sparse semantic
+  - external semantic provider 只在 `allow_high_cost_sources` 打开时参与
+- 已补回归测试，覆盖新的执行语义：
+  - `tests/test_planning_modules.py`
+  - `tests/test_pipeline.py`
+  - `tests/test_scoring.py`
+  - `tests/test_semantic_retrieval.py`
+- 已开始把 Excel intake 纳入当前文档口径：
+  - 当前支持 `intake-excel / continue-excel-intake`
+  - 上传表格后可先做 schema 识别、本地去重、manual review continuation，再决定是否触发新 LinkedIn fetch
+
 ## 2026-04-11
 
 ### Hosted 默认路径文档化、前端禁区明确化与 GitHub 上传边界收束

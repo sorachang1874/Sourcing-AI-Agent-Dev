@@ -16,6 +16,8 @@ from .planning import (
     FULL_COMPANY_EMPLOYEES_LARGE_ORG_MAX_PAGES,
     FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
 )
+from .query_signal_knowledge import scope_review_hints
+from .request_normalization import materialize_request_payload
 
 
 def build_plan_review_gate(request: JobRequest, plan: SourcingPlan) -> dict[str, Any]:
@@ -30,6 +32,11 @@ def build_plan_review_gate(request: JobRequest, plan: SourcingPlan) -> dict[str,
         "precision_recall_bias",
         "acquisition_strategy_override",
         "use_company_employees_lane",
+        "keyword_priority_only",
+        "former_keyword_queries_only",
+        "provider_people_search_query_strategy",
+        "provider_people_search_max_queries",
+        "large_org_keyword_probe_mode",
         "force_fresh_run",
         "reuse_existing_roster",
         "run_former_search_seed",
@@ -205,7 +212,10 @@ def apply_plan_review_decision(
     plan_payload: dict[str, Any],
     decision_payload: dict[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    updated_request = deepcopy(request_payload or {})
+    updated_request = materialize_request_payload(
+        deepcopy(request_payload or {}),
+        target_company=str((request_payload or {}).get("target_company") or "").strip(),
+    )
     updated_plan = deepcopy(plan_payload or {})
     decision = dict(decision_payload or {})
 
@@ -243,27 +253,13 @@ def apply_plan_review_decision(
         acquisition_strategy["filter_hints"] = filter_hints
         updated_plan["acquisition_strategy"] = acquisition_strategy
 
+    target_company = str(updated_request.get("target_company") or inferred_target_company or "").strip()
+    decision_preferences = normalize_execution_preferences(decision, target_company=target_company)
+
     extra_source_families = _normalize_list(decision.get("extra_source_families"))
     confirmed_scope = _normalize_list(decision.get("confirmed_company_scope"))
-    allow_high_cost_sources = bool(decision.get("allow_high_cost_sources") or decision.get("high_cost_sources_approved"))
-    precision_recall_bias = str(decision.get("precision_recall_bias") or "").strip().lower()
-    acquisition_strategy_override = str(
-        decision.get("acquisition_strategy_override")
-        or decision.get("force_acquisition_strategy")
-        or ""
-    ).strip()
-    use_company_employees_lane = _coerce_bool(
-        decision,
-        "use_company_employees_lane",
-        "force_company_employees",
-        "allow_company_employee_api",
-    )
-    force_fresh_run = _coerce_bool(
-        decision,
-        "force_fresh_run",
-        "require_fresh_snapshot",
-        "disable_cached_roster_fallback",
-    )
+    allow_high_cost_sources = "allow_high_cost_sources" in decision_preferences
+    precision_recall_bias = str(decision_preferences.get("precision_recall_bias") or "").strip().lower()
 
     if extra_source_families:
         publication = dict(updated_plan.get("publication_coverage") or {})
@@ -312,20 +308,19 @@ def apply_plan_review_decision(
     if allow_high_cost_sources or precision_recall_bias:
         acquisition_strategy = dict(updated_plan.get("acquisition_strategy") or {})
         cost_policy = dict(acquisition_strategy.get("cost_policy") or {})
-        if allow_high_cost_sources:
-            cost_policy["high_cost_sources_approved"] = True
+        if "allow_high_cost_sources" in decision_preferences:
+            cost_policy["high_cost_requires_approval"] = False
+            cost_policy["high_cost_sources_approved"] = bool(decision_preferences.get("allow_high_cost_sources"))
         if precision_recall_bias:
             cost_policy["precision_recall_bias"] = precision_recall_bias
         acquisition_strategy["cost_policy"] = cost_policy
         updated_plan["acquisition_strategy"] = acquisition_strategy
 
-    if acquisition_strategy_override or use_company_employees_lane or force_fresh_run:
+    if decision_preferences:
         _apply_acquisition_review_preferences(
             updated_plan,
-            target_company=str(updated_request.get("target_company") or "").strip(),
-            strategy_override=acquisition_strategy_override,
-            use_company_employees_lane=use_company_employees_lane,
-            force_fresh_run=force_fresh_run,
+            target_company=target_company,
+            preferences=decision_preferences,
         )
 
     _sync_request_execution_preferences(updated_request, decision)
@@ -406,6 +401,7 @@ def _build_review_company_shard_policy(
             company_key,
             company_scope=list(company_scope or []),
             keyword_hints=[str(item).strip() for item in list(filter_hints.get("keywords") or []) if str(item).strip()],
+            function_ids=[str(item).strip() for item in list(filter_hints.get("function_ids") or []) if str(item).strip()],
             max_pages=max_pages,
             page_limit=FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
         )
@@ -422,27 +418,13 @@ def _google_scope_ambiguity_hints(request: JobRequest) -> list[str]:
     target_key = normalize_company_key(str(request.target_company or ""))
     if target_key not in {"google", "alphabet"}:
         return []
-    hints = [
+    raw_hints = [
         str(item).strip()
         for item in list(request.organization_keywords or [])
         if str(item).strip()
         and str(item).strip().lower() not in {"google", "alphabet"}
     ]
-    if not hints:
-        return []
-    trigger_tokens = (
-        "deepmind",
-        "gemini",
-        "veo",
-        "nano banana",
-        "brain team",
-        "google research",
-    )
-    for hint in hints:
-        lower = hint.lower()
-        if any(token in lower for token in trigger_tokens):
-            return hints
-    return []
+    return scope_review_hints(str(request.target_company or ""), raw_hints)
 
 
 def _resolve_google_scope_disambiguation(request: JobRequest) -> dict[str, Any]:
@@ -557,14 +539,16 @@ def _apply_acquisition_review_preferences(
     plan_payload: dict[str, Any],
     *,
     target_company: str,
-    strategy_override: str,
-    use_company_employees_lane: bool,
-    force_fresh_run: bool,
+    preferences: dict[str, Any],
 ) -> None:
     acquisition_strategy = dict(plan_payload.get("acquisition_strategy") or {})
     current_strategy = str(acquisition_strategy.get("strategy_type") or "").strip()
     desired_strategy = current_strategy
-    normalized_override = strategy_override.strip().lower()
+    normalized_override = str(preferences.get("acquisition_strategy_override") or "").strip().lower()
+    use_company_employees_lane_present = "use_company_employees_lane" in preferences
+    use_company_employees_lane = bool(preferences.get("use_company_employees_lane"))
+    force_fresh_run_present = "force_fresh_run" in preferences
+    force_fresh_run = bool(preferences.get("force_fresh_run"))
     if normalized_override in {
         "full_company_roster",
         "scoped_search_roster",
@@ -589,21 +573,50 @@ def _apply_acquisition_review_preferences(
         acquisition_strategy["roster_sources"] = ["funding_graph", "investor_firm_roster", "linkedin_people_search"]
 
     cost_policy = dict(acquisition_strategy.get("cost_policy") or {})
-    if use_company_employees_lane or desired_strategy == "full_company_roster":
+    if use_company_employees_lane_present:
+        cost_policy["allow_company_employee_api"] = use_company_employees_lane
+    elif desired_strategy == "full_company_roster":
         cost_policy["allow_company_employee_api"] = True
-    if force_fresh_run:
+    if force_fresh_run_present and force_fresh_run:
         cost_policy["allow_cached_roster_fallback"] = False
         cost_policy["allow_historical_profile_inheritance"] = False
         cost_policy["allow_shared_provider_cache"] = False
+    if "keyword_priority_only" in preferences:
+        cost_policy["keyword_priority_only"] = bool(preferences.get("keyword_priority_only"))
+    if "former_keyword_queries_only" in preferences:
+        cost_policy["former_keyword_queries_only"] = bool(preferences.get("former_keyword_queries_only"))
+    if "provider_people_search_query_strategy" in preferences:
+        cost_policy["provider_people_search_query_strategy"] = str(preferences.get("provider_people_search_query_strategy") or "").strip()
+    if "provider_people_search_max_queries" in preferences:
+        cost_policy["provider_people_search_max_queries"] = int(preferences.get("provider_people_search_max_queries") or 0)
+    if "large_org_keyword_probe_mode" in preferences:
+        cost_policy["large_org_keyword_probe_mode"] = bool(preferences.get("large_org_keyword_probe_mode"))
+    if "allow_high_cost_sources" in preferences:
+        cost_policy["high_cost_requires_approval"] = False
+        cost_policy["high_cost_sources_approved"] = bool(preferences.get("allow_high_cost_sources"))
+    if "precision_recall_bias" in preferences:
+        cost_policy["precision_recall_bias"] = str(preferences.get("precision_recall_bias") or "").strip()
     acquisition_strategy["cost_policy"] = cost_policy
 
     reasoning = list(acquisition_strategy.get("reasoning") or [])
-    if use_company_employees_lane:
+    if use_company_employees_lane_present and use_company_employees_lane:
         note = "Plan review forced the acquisition lane onto Harvest company-employees for a fresh full roster."
         if note not in reasoning:
             reasoning.append(note)
-    if force_fresh_run:
+    if use_company_employees_lane_present and not use_company_employees_lane:
+        note = "Plan review explicitly disabled Harvest company-employees and kept acquisition on keyword/search-led lanes."
+        if note not in reasoning:
+            reasoning.append(note)
+    if force_fresh_run_present and force_fresh_run:
         note = "Plan review requested a fresh live acquisition instead of falling back to cached roster snapshots."
+        if note not in reasoning:
+            reasoning.append(note)
+    if bool(preferences.get("keyword_priority_only")):
+        note = "Plan review prioritized keyword-first acquisition over broad roster expansion."
+        if note not in reasoning:
+            reasoning.append(note)
+    if str(preferences.get("provider_people_search_query_strategy") or "").strip().lower() == "all_queries_union":
+        note = "Plan review requested provider people-search to run all keyword queries and union-deduplicate the results."
         if note not in reasoning:
             reasoning.append(note)
     acquisition_strategy["reasoning"] = reasoning
@@ -677,7 +690,11 @@ def _infer_target_company_from_decision(
     plan_payload: dict[str, Any],
     decision_payload: dict[str, Any],
 ) -> str:
-    existing = str(request_payload.get("target_company") or "").strip()
+    effective_request_payload = materialize_request_payload(
+        request_payload,
+        target_company=str((request_payload or {}).get("target_company") or "").strip(),
+    )
+    existing = str(effective_request_payload.get("target_company") or "").strip()
     if existing:
         return existing
 

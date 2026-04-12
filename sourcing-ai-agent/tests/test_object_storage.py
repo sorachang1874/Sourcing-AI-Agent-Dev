@@ -317,6 +317,56 @@ class ObjectStorageSyncTest(unittest.TestCase):
         self.assertEqual(restore["archive_restore"]["status"], "extracted")
         self.assertTrue((restored_runtime_dir / "company_assets" / "acme" / "20260406T120000" / "candidate_000.json").exists())
 
+    def test_delete_bundle_removes_remote_archive_and_prunes_indexes(self) -> None:
+        snapshot_dir = self.runtime_dir / "company_assets" / "acme" / "20260406T120000"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        for index in range(140):
+            (snapshot_dir / f"candidate_{index:03d}.json").write_text(json.dumps({"index": index}))
+        latest_path = self.runtime_dir / "company_assets" / "acme" / "latest_snapshot.json"
+        latest_path.write_text(
+            json.dumps(
+                {
+                    "snapshot_id": "20260406T120000",
+                    "snapshot_dir": str(snapshot_dir),
+                    "company_identity": {"canonical_name": "Acme", "aliases": ["acme"]},
+                }
+            )
+        )
+
+        export = self.bundle_manager.export_company_snapshot_bundle("Acme")
+        upload = self.bundle_manager.upload_bundle(export["manifest_path"], self.client, archive_mode="tar")
+        remote_bundle_dir = (
+            self.object_store_dir
+            / "sourcing-ai-agent-dev-test"
+            / "bundles"
+            / "company_snapshot"
+            / upload["bundle_id"]
+        )
+        self.assertTrue((remote_bundle_dir / "bundle_manifest.json").exists())
+        self.assertTrue((remote_bundle_dir / "payload.tar").exists())
+
+        delete_summary = self.bundle_manager.delete_bundle(
+            bundle_kind=upload["bundle_kind"],
+            bundle_id=upload["bundle_id"],
+            client=self.client,
+        )
+
+        self.assertEqual(delete_summary["status"], "deleted")
+        self.assertEqual(delete_summary["deleted_object_count"], 3)
+        self.assertFalse((remote_bundle_dir / "bundle_manifest.json").exists())
+        self.assertFalse((remote_bundle_dir / "payload.tar").exists())
+        local_index = json.loads((self.runtime_dir / "object_sync" / "bundle_index.json").read_text())
+        self.assertEqual(local_index["bundles"], [])
+        remote_index = json.loads(
+            (
+                self.object_store_dir
+                / "sourcing-ai-agent-dev-test"
+                / "indexes"
+                / "bundle_index.json"
+            ).read_text()
+        )
+        self.assertEqual(remote_index["bundles"], [])
+
     def test_upload_bundle_auto_archive_mode_uses_tar_for_large_bundle(self) -> None:
         snapshot_dir = self.runtime_dir / "company_assets" / "acme" / "20260406T120000"
         snapshot_dir.mkdir(parents=True, exist_ok=True)

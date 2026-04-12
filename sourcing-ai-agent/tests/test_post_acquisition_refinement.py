@@ -86,6 +86,30 @@ class PostAcquisitionRefinementTest(unittest.TestCase):
             ["Greater China experience", "Chinese bilingual outreach"],
         )
 
+    def test_compile_refinement_patch_maps_model_keyword_families_into_shared_fields(self) -> None:
+        class _ModelClient(DeterministicModelClient):
+            def normalize_refinement_instruction(self, payload: dict[str, object]) -> dict[str, object]:  # noqa: ARG002
+                return {
+                    "patch": {
+                        "team_keywords": ["TBD"],
+                        "model_keywords": ["o1"],
+                        "research_direction_keywords": ["reasoning"],
+                    }
+                }
+
+        compiled = compile_refinement_patch_from_instruction(
+            instruction="聚焦 TBD reasoning",
+            base_request={
+                "target_company": "OpenAI",
+                "categories": ["employee"],
+                "employment_statuses": ["current", "former"],
+            },
+            model_client=_ModelClient(),
+        )
+
+        self.assertEqual(compiled["request_patch"]["organization_keywords"], ["TBD"])
+        self.assertEqual(compiled["request_patch"]["keywords"], ["reasoning", "o1"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1186,6 +1186,50 @@ class HarvestConnectorTest(unittest.TestCase):
         self.assertEqual(result.checkpoint["status"], "submitted")
         self.assertEqual(result.artifacts[0].label, "run_post")
 
+    def test_harvest_profile_batch_execute_with_checkpoint_can_simulate_without_live_request(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        connector = HarvestProfileConnector(settings)
+        with tempfile.TemporaryDirectory() as tempdir:
+            snapshot_dir = Path(tempdir) / "runtime" / "company_assets" / "xai" / "snap-simulate"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            with patch.dict("os.environ", {"SOURCING_EXTERNAL_PROVIDER_MODE": "simulate"}), patch(
+                "sourcing_agent.harvest_connectors._submit_harvest_actor_run",
+                side_effect=AssertionError("simulate mode should not submit live Harvest runs"),
+            ):
+                result = connector.execute_batch_with_checkpoint(
+                    ["https://www.linkedin.com/in/jane-doe/"],
+                    snapshot_dir,
+                )
+
+        self.assertFalse(result.pending)
+        self.assertEqual(result.checkpoint["provider_mode"], "simulate")
+        self.assertEqual(result.checkpoint["status"], "completed")
+        self.assertEqual(len(result.body), 1)
+        self.assertEqual(result.body[0]["linkedinUrl"], "https://www.linkedin.com/in/jane-doe/")
+
+    def test_harvest_profile_batch_execute_with_checkpoint_replay_cache_miss_returns_empty_without_live_request(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        connector = HarvestProfileConnector(settings)
+        with tempfile.TemporaryDirectory() as tempdir:
+            snapshot_dir = Path(tempdir) / "runtime" / "company_assets" / "xai" / "snap-replay"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            with patch.dict("os.environ", {"SOURCING_EXTERNAL_PROVIDER_MODE": "replay"}), patch(
+                "sourcing_agent.harvest_connectors._load_cached_harvest_payload",
+                return_value=(None, None, None),
+            ), patch(
+                "sourcing_agent.harvest_connectors._submit_harvest_actor_run",
+                side_effect=AssertionError("replay mode should not submit live Harvest runs"),
+            ):
+                result = connector.execute_batch_with_checkpoint(
+                    ["https://www.linkedin.com/in/jane-doe/"],
+                    snapshot_dir,
+                )
+
+        self.assertFalse(result.pending)
+        self.assertEqual(result.checkpoint["provider_mode"], "replay")
+        self.assertEqual(result.checkpoint["status"], "completed")
+        self.assertEqual(len(result.body), 1)
+
     def test_get_harvest_dataset_items_paginates_large_dataset_download(self) -> None:
         settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
         observed_offsets: list[int] = []

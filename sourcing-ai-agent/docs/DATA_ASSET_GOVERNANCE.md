@@ -68,6 +68,12 @@
 - `company_handoff bundle`
 - `sqlite_snapshot bundle`
 
+补充：
+
+- `company_handoff bundle` 仍是受支持的导出格式
+- 但当前服务器/云端恢复默认基线应优先使用 `company_snapshot + sqlite_snapshot`
+- canonical 恢复清单见 `docs/CANONICAL_CLOUD_BUNDLE_CATALOG.md`
+
 规则：
 
 - bundle 是传输和恢复边界，不是业务语义边界

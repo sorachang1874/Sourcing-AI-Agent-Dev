@@ -130,23 +130,84 @@ class CliWorkflowRunnerTest(unittest.TestCase):
             max_attempts=4,
         )
 
-    def test_start_workflow_command_delegates_to_runner_managed_entrypoint(self) -> None:
+    def test_start_workflow_command_defaults_to_hosted_entrypoint(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             request_path = Path(tempdir) / "workflow.json"
             request_path.write_text('{"target_company":"Reflection AI"}', encoding="utf-8")
             orchestrator = mock.Mock()
-            orchestrator.start_workflow_runner_managed = mock.Mock(return_value={"status": "queued", "job_id": "job-123"})
 
             with mock.patch.object(cli, "build_orchestrator", return_value=orchestrator), mock.patch.object(
+                cli,
+                "_submit_hosted_workflow_request",
+                return_value={"status": "queued", "job_id": "job-123"},
+            ) as hosted_submit_mock, mock.patch.object(
                 cli.sys,
                 "argv",
                 ["cli", "start-workflow", "--file", str(request_path)],
             ), mock.patch("builtins.print") as print_mock:
                 cli.main()
 
+        hosted_submit_mock.assert_called_once()
+        payload = hosted_submit_mock.call_args.args[0]
+        self.assertEqual(payload["target_company"], "Reflection AI")
+        self.assertEqual(hosted_submit_mock.call_args.kwargs["base_url"], "http://127.0.0.1:8765")
+        print_mock.assert_called_once()
+
+    def test_start_workflow_command_hosted_mode_uses_configured_api_base_url(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            request_path = Path(tempdir) / "workflow.json"
+            request_path.write_text('{"target_company":"Google"}', encoding="utf-8")
+            orchestrator = mock.Mock()
+
+            with mock.patch.object(cli, "build_orchestrator", return_value=orchestrator), mock.patch.object(
+                cli,
+                "_submit_hosted_workflow_request",
+                return_value={"status": "queued", "job_id": "job-789"},
+            ) as hosted_submit_mock, mock.patch.object(
+                cli.sys,
+                "argv",
+                [
+                    "cli",
+                    "start-workflow",
+                    "--file",
+                    str(request_path),
+                    "--hosted-api-base-url",
+                    "http://127.0.0.1:9999",
+                    "--hosted-api-timeout-seconds",
+                    "9",
+                ],
+            ), mock.patch("builtins.print"):
+                cli.main()
+
+        hosted_submit_mock.assert_called_once()
+        self.assertEqual(hosted_submit_mock.call_args.kwargs["base_url"], "http://127.0.0.1:9999")
+        self.assertEqual(hosted_submit_mock.call_args.kwargs["timeout_seconds"], 9.0)
+
+    def test_start_workflow_command_can_request_managed_subprocess_entrypoint(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            request_path = Path(tempdir) / "workflow.json"
+            request_path.write_text('{"target_company":"Google"}', encoding="utf-8")
+            orchestrator = mock.Mock()
+            orchestrator.start_workflow_runner_managed = mock.Mock(return_value={"status": "queued", "job_id": "job-456"})
+
+            with mock.patch.object(cli, "build_orchestrator", return_value=orchestrator), mock.patch.object(
+                cli.sys,
+                "argv",
+                [
+                    "cli",
+                    "start-workflow",
+                    "--file",
+                    str(request_path),
+                    "--runtime-execution-mode",
+                    "managed_subprocess",
+                ],
+            ), mock.patch("builtins.print") as print_mock:
+                cli.main()
+
         orchestrator.start_workflow_runner_managed.assert_called_once()
         payload = orchestrator.start_workflow_runner_managed.call_args[0][0]
-        self.assertEqual(payload["target_company"], "Reflection AI")
+        self.assertEqual(payload["target_company"], "Google")
+        self.assertEqual(payload["runtime_execution_mode"], "managed_subprocess")
         self.assertTrue(bool(payload["auto_job_daemon"]))
         print_mock.assert_called_once()
 
@@ -171,14 +232,64 @@ class CliWorkflowRunnerTest(unittest.TestCase):
         )
         print_mock.assert_called_once()
 
+    def test_intake_excel_command_delegates_to_orchestrator(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            workbook_path = Path(tempdir) / "contacts.xlsx"
+            workbook_path.write_bytes(b"placeholder")
+            orchestrator = mock.Mock()
+            orchestrator.ingest_excel_contacts = mock.Mock(return_value={"status": "completed", "intake_id": "excel-1"})
+
+            with mock.patch.object(cli, "build_orchestrator", return_value=orchestrator), mock.patch.object(
+                cli.sys,
+                "argv",
+                ["cli", "intake-excel", "--file", str(workbook_path)],
+            ), mock.patch("builtins.print") as print_mock:
+                cli.main()
+
+        orchestrator.ingest_excel_contacts.assert_called_once_with({"file_path": str(workbook_path)})
+        print_mock.assert_called_once()
+
+    def test_continue_excel_intake_command_delegates_to_orchestrator(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            payload_path = Path(tempdir) / "continue.json"
+            payload = {
+                "intake_id": "excel-1",
+                "decisions": [
+                    {
+                        "row_key": "Contacts#2",
+                        "action": "select_local_candidate",
+                        "selected_candidate_id": "cand-2",
+                    }
+                ],
+            }
+            payload_path.write_text(json.dumps(payload), encoding="utf-8")
+            orchestrator = mock.Mock()
+            orchestrator.continue_excel_intake_review = mock.Mock(return_value={"status": "completed", "intake_id": "excel-1"})
+
+            with mock.patch.object(cli, "build_orchestrator", return_value=orchestrator), mock.patch.object(
+                cli.sys,
+                "argv",
+                ["cli", "continue-excel-intake", "--file", str(payload_path)],
+            ), mock.patch("builtins.print") as print_mock:
+                cli.main()
+
+        orchestrator.continue_excel_intake_review.assert_called_once_with(payload)
+        print_mock.assert_called_once()
+
     def test_serve_command_starts_watchdog_without_blocking_bootstrap_pass(self) -> None:
         orchestrator = mock.Mock()
         server = mock.Mock()
         server.serve_forever.side_effect = KeyboardInterrupt()
+        shared_recovery_stop = mock.Mock()
+        shared_recovery_thread = mock.Mock()
         watchdog_stop = mock.Mock()
         watchdog_thread = mock.Mock()
 
         with mock.patch.object(cli, "build_orchestrator", return_value=orchestrator), mock.patch.object(
+            cli,
+            "start_shared_recovery_service",
+            return_value=(shared_recovery_stop, shared_recovery_thread),
+        ) as start_shared_recovery_mock, mock.patch.object(
             cli,
             "start_server_runtime_watchdog",
             return_value=(watchdog_stop, watchdog_thread),
@@ -196,11 +307,14 @@ class CliWorkflowRunnerTest(unittest.TestCase):
         ), mock.patch("builtins.print"):
             cli.main()
 
+        start_shared_recovery_mock.assert_called_once_with(orchestrator)
         start_watchdog_mock.assert_called_once()
         bootstrap_once_mock.assert_not_called()
         server.server_close.assert_called_once()
         watchdog_stop.set.assert_called_once()
+        shared_recovery_stop.set.assert_called_once()
         watchdog_thread.join.assert_called_once()
+        shared_recovery_thread.join.assert_called_once()
 
     def test_upload_asset_bundle_command_defaults_to_auto_archive_mode(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

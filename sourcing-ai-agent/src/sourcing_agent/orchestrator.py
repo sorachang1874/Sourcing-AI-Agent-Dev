@@ -8,6 +8,7 @@ import fcntl
 import json
 import os
 from pathlib import Path
+import re
 import sqlite3
 import socket
 import sys
@@ -17,7 +18,7 @@ from types import SimpleNamespace
 import uuid
 from typing import Any, Callable
 
-from .acquisition import AcquisitionEngine
+from .acquisition import AcquisitionEngine, _normalize_company_employee_shards
 from .agent_runtime import AgentRuntimeCoordinator
 from .asset_catalog import AssetCatalog
 from .candidate_artifacts import (
@@ -25,6 +26,7 @@ from .candidate_artifacts import (
     build_company_candidate_artifacts,
     load_company_snapshot_candidate_documents,
 )
+from .company_registry import normalize_company_key
 from .company_asset_supplement import CompanyAssetSupplementManager
 from .connectors import CompanyIdentity, CompanyRosterSnapshot
 from .confidence_policy import apply_policy_control, build_confidence_policy
@@ -54,6 +56,7 @@ from .process_supervision import (
     wait_for_service_ready as _wait_for_service_ready,
 )
 from .query_intent_rewrite import interpret_query_intent_rewrite, summarize_query_intent_rewrite
+from .query_intent_policy import list_business_rewrite_policy_catalog
 from .recovery_sidecar import (
     build_hosted_runtime_watchdog_command as _build_hosted_runtime_watchdog_command,
     build_hosted_runtime_watchdog_config as _build_hosted_runtime_watchdog_config,
@@ -73,6 +76,17 @@ from .request_matching import (
     request_signature,
 )
 from .review_plan_instructions import compile_review_payload_from_instruction
+from .request_normalization import (
+    build_request_preview_payload as _shared_build_request_preview_payload,
+    canonicalize_request_payload as _shared_canonicalize_request_payload,
+    expand_request_intent_axes_patch as _shared_expand_request_intent_axes_patch,
+    extract_query_signal_terms as _shared_extract_query_signal_terms,
+    has_structured_request_signals as _shared_has_structured_request_signals,
+    merge_unique_request_string_values as _shared_merge_unique_request_string_values,
+    normalize_request_query_signal as _shared_normalize_request_query_signal,
+    should_skip_query_signal as _shared_should_skip_query_signal,
+    supplement_request_query_signals as _shared_supplement_request_query_signals,
+)
 from .result_diff import build_result_diff
 from .rerun_policy import decide_rerun_policy
 from .scoring import score_candidates
@@ -95,6 +109,7 @@ from .storage import SQLiteStore, _json_safe_payload as _storage_json_safe_paylo
 from .worker_daemon import PersistentWorkerRecoveryDaemon
 from .worker_scheduler import effective_worker_status, summarize_scheduler
 from .execution_preferences import merge_execution_preferences, normalize_execution_preferences
+from .excel_intake import ExcelIntakeService
 from .workflow_refresh import (
     extract_progress_metrics as _extract_progress_metrics,
     extract_refresh_metrics as _extract_refresh_metrics,
@@ -156,6 +171,8 @@ class SourcingOrchestrator:
             acquisition_engine=self.acquisition_engine,
         )
         self._dispatch_lock = threading.Lock()
+        self._progress_takeover_lock = threading.Lock()
+        self._progress_takeover_inflight: dict[str, dict[str, Any]] = {}
         if hasattr(self.acquisition_engine, "multi_source_enricher"):
             exploratory = getattr(self.acquisition_engine.multi_source_enricher, "exploratory_enricher", None)
             if exploratory is not None:
@@ -212,6 +229,36 @@ class SourcingOrchestrator:
             build_artifacts=bool(payload.get("build_artifacts", True)),
         )
 
+    def ingest_excel_contacts(self, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            service = ExcelIntakeService(
+                runtime_dir=self.runtime_dir,
+                store=self.store,
+                settings=self.acquisition_engine.settings,
+                model_client=self.model_client,
+            )
+            return service.ingest_contacts(payload)
+        except Exception as exc:
+            return {
+                "status": "invalid",
+                "reason": str(exc),
+            }
+
+    def continue_excel_intake_review(self, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            service = ExcelIntakeService(
+                runtime_dir=self.runtime_dir,
+                store=self.store,
+                settings=self.acquisition_engine.settings,
+                model_client=self.model_client,
+            )
+            return service.continue_review(payload)
+        except Exception as exc:
+            return {
+                "status": "invalid",
+                "reason": str(exc),
+            }
+
     def plan_workflow(self, payload: dict[str, Any]) -> dict[str, Any]:
         request = JobRequest.from_payload(self._prepare_request_payload(payload))
         plan = build_sourcing_plan(request, self.catalog, self.model_client)
@@ -232,6 +279,10 @@ class SourcingOrchestrator:
         )
         return {
             "request": request.to_record(),
+            "request_preview": _build_request_preview_payload(
+                request=request,
+                effective_request=_build_effective_retrieval_request(request, plan),
+            ),
             "plan": plan.to_record(),
             "plan_review_gate": plan_review_gate,
             "plan_review_session": plan_review_session,
@@ -256,8 +307,7 @@ class SourcingOrchestrator:
         if should_run_worker:
             queued["shared_recovery"] = self.ensure_shared_recovery(payload)
             queued["job_recovery"] = self.ensure_job_scoped_recovery(job_id, payload)
-            worker = threading.Thread(target=self.run_queued_workflow, kwargs={"job_id": job_id}, daemon=True)
-            worker.start()
+            queued["hosted_dispatch"] = self._start_hosted_workflow_thread(job_id, source="start_workflow")
             return queued
         if workflow_status == "joined_existing_job":
             queued["shared_recovery"] = self.ensure_shared_recovery(payload)
@@ -385,7 +435,13 @@ class SourcingOrchestrator:
                 }
             if strategy == "reuse_snapshot" and matched_job:
                 request = self._request_with_snapshot_reuse(request, dispatch)
-            job_id = self._create_workflow_job(request, plan, dispatch_context=dispatch_context)
+            runtime_execution_mode = str(payload.get("runtime_execution_mode") or "hosted").strip().lower() or "hosted"
+            job_id = self._create_workflow_job(
+                request,
+                plan,
+                dispatch_context=dispatch_context,
+                runtime_execution_mode=runtime_execution_mode,
+            )
             dispatch_payload = {
                 "strategy": strategy if strategy == "reuse_snapshot" else "new_job",
                 "scope": str(dispatch.get("scope") or ""),
@@ -1142,6 +1198,7 @@ class SourcingOrchestrator:
             "agent_trace_spans": self.store.list_agent_trace_spans(job_id=job_id),
             "agent_workers": self.agent_runtime.list_workers(job_id=job_id),
             "intent_rewrite": _build_intent_rewrite_payload(request_payload=dict(job.get("request") or {})),
+            "request_preview": _load_job_request_preview(job),
             "workflow_stage_summaries": workflow_stage_summaries,
         }
 
@@ -1154,6 +1211,19 @@ class SourcingOrchestrator:
         results = self.store.get_job_results(job_id)
         manual_review_items = self.store.list_manual_review_items(job_id=job_id, status="", limit=100)
         runtime_controls = self._build_live_runtime_controls_payload(job)
+        auto_recovery = self._maybe_auto_recover_workflow_on_progress(
+            job=job,
+            events=events,
+            workers=workers,
+            runtime_controls=runtime_controls,
+        )
+        if str(auto_recovery.get("status") or "") in {"triggered_inline", "completed"}:
+            job = self.store.get_job(job_id) or job
+            events = self.store.list_job_events(job_id)
+            workers = self.agent_runtime.list_workers(job_id=job_id)
+            results = self.store.get_job_results(job_id)
+            manual_review_items = self.store.list_manual_review_items(job_id=job_id, status="", limit=100)
+            runtime_controls = self._build_live_runtime_controls_payload(job)
         payload = _build_job_progress_payload(
             job=job,
             events=events,
@@ -1162,8 +1232,303 @@ class SourcingOrchestrator:
             manual_review_items=manual_review_items,
             runtime_controls=runtime_controls,
         )
+        if auto_recovery:
+            payload["auto_recovery"] = auto_recovery
         payload["workflow_stage_summaries"] = self._load_workflow_stage_summaries(job=job)
         return payload
+
+    def _workflow_requested_execution_mode(self, job: dict[str, Any], *, events: list[dict[str, Any]] | None = None) -> str:
+        summary = dict(job.get("summary") or {})
+        summary_mode = str(summary.get("runtime_execution_mode") or "").strip().lower()
+        if summary_mode:
+            return summary_mode
+
+        request_payload = dict(job.get("request") or {})
+        request_mode = str(request_payload.get("runtime_execution_mode") or "").strip().lower()
+        if request_mode:
+            return request_mode
+
+        runtime_controls = dict(summary.get("runtime_controls") or {})
+        if runtime_controls:
+            if runtime_controls.get("hosted_runtime_watchdog"):
+                return "hosted"
+            if runtime_controls.get("workflow_runner") or runtime_controls.get("workflow_runner_control"):
+                return "managed_subprocess"
+
+        planning_events = list(events or self.store.list_job_events(str(job.get("job_id") or ""), stage="planning"))
+        for event in planning_events:
+            payload = dict(event.get("payload") or {})
+            event_mode = str(payload.get("runtime_execution_mode") or "").strip().lower()
+            if event_mode:
+                return event_mode
+        return ""
+
+    def _workflow_prefers_hosted_execution(self, job: dict[str, Any], *, events: list[dict[str, Any]] | None = None) -> bool:
+        mode = self._workflow_requested_execution_mode(job, events=events)
+        if mode in {"managed_subprocess", "runner_managed", "detached_sidecar"}:
+            return False
+        if mode == "hosted":
+            return True
+
+        summary = dict(job.get("summary") or {})
+        runtime_controls = dict(summary.get("runtime_controls") or {})
+        if runtime_controls.get("workflow_runner") or runtime_controls.get("workflow_runner_control"):
+            return False
+        return True
+
+    def _maybe_auto_recover_workflow_on_progress(
+        self,
+        *,
+        job: dict[str, Any],
+        events: list[dict[str, Any]],
+        workers: list[dict[str, Any]],
+        runtime_controls: dict[str, Any],
+    ) -> dict[str, Any]:
+        if str(job.get("job_type") or "") != "workflow":
+            return {}
+        job_id = str(job.get("job_id") or "").strip()
+        if not job_id:
+            return {}
+        if str(job.get("status") or "").strip().lower() in {"completed", "failed"}:
+            return {}
+
+        worker_summary = _job_worker_summary(workers)
+        runtime_health = _classify_job_runtime_health(
+            job=job,
+            workers=workers,
+            worker_summary=worker_summary,
+            runtime_controls=runtime_controls,
+            blocked_task=str(dict(job.get("summary") or {}).get("blocked_task") or ""),
+        )
+        classification = str(runtime_health.get("classification") or "").strip()
+        if classification not in {
+            "runner_not_alive",
+            "runner_takeover_pending",
+            "blocked_on_acquisition_workers",
+            "blocked_ready_for_resume",
+            "queued_waiting_for_runner",
+            "runner_failed_to_start",
+        }:
+            return {
+                "status": "skipped",
+                "reason": "runtime_not_takeover_eligible",
+                "classification": classification,
+            }
+
+        cooldown_seconds = max(3, int(_env_int("WORKFLOW_PROGRESS_AUTO_TAKEOVER_COOLDOWN_SECONDS", 15)))
+        recent_events = self.store.list_job_events(
+            job_id,
+            stage="runtime_control",
+            limit=20,
+            descending=True,
+        )
+        for event in recent_events:
+            payload = dict(event.get("payload") or {})
+            if str(payload.get("control") or "") != "progress_auto_takeover":
+                continue
+            created_at = _parse_timestamp(str(event.get("created_at") or ""))
+            if created_at is None:
+                break
+            age_seconds = max(int((datetime.now(timezone.utc) - created_at).total_seconds()), 0)
+            if age_seconds < cooldown_seconds:
+                return {
+                    "status": "skipped",
+                    "reason": "cooldown_active",
+                    "classification": classification,
+                    "cooldown_seconds": cooldown_seconds,
+                    "seconds_until_retry": max(cooldown_seconds - age_seconds, 0),
+                }
+            break
+
+        recovery_payload = {
+            "job_id": job_id,
+            "workflow_stale_scope_job_id": job_id,
+            "workflow_resume_explicit_job": True,
+            "workflow_auto_resume_enabled": True,
+            "workflow_resume_stale_after_seconds": 0,
+            "workflow_resume_limit": 1,
+            "workflow_queue_auto_takeover_enabled": True,
+            "workflow_queue_resume_stale_after_seconds": 0,
+            "workflow_queue_resume_limit": 1,
+            "runtime_heartbeat_source": "progress_poll",
+            "runtime_heartbeat_interval_seconds": 0,
+        }
+        if classification in {
+            "runner_not_alive",
+            "runner_takeover_pending",
+            "blocked_on_acquisition_workers",
+            "runner_failed_to_start",
+        }:
+            recovery_payload["stale_after_seconds"] = 0
+
+        requested_execution_mode = self._workflow_requested_execution_mode(job, events=events)
+        effective_execution_mode = (
+            "hosted" if self._workflow_prefers_hosted_execution(job, events=events) else "managed_subprocess"
+        )
+        inflight = self._get_progress_takeover_inflight(job_id)
+        if inflight:
+            queued_at = str(inflight.get("queued_at") or "").strip()
+            return {
+                "status": "skipped",
+                "reason": "already_inflight",
+                "classification": classification,
+                "requested_execution_mode": requested_execution_mode,
+                "effective_execution_mode": effective_execution_mode,
+                "queued_at": queued_at,
+            }
+
+        return self._queue_progress_auto_takeover(
+            job_id=job_id,
+            classification=classification,
+            requested_execution_mode=requested_execution_mode,
+            effective_execution_mode=effective_execution_mode,
+            recovery_payload=recovery_payload,
+        )
+
+    def _get_progress_takeover_inflight(self, job_id: str) -> dict[str, Any]:
+        normalized_job_id = str(job_id or "").strip()
+        if not normalized_job_id:
+            return {}
+        with self._progress_takeover_lock:
+            current = dict(self._progress_takeover_inflight.get(normalized_job_id) or {})
+        return current
+
+    def _queue_progress_auto_takeover(
+        self,
+        *,
+        job_id: str,
+        classification: str,
+        requested_execution_mode: str,
+        effective_execution_mode: str,
+        recovery_payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        normalized_job_id = str(job_id or "").strip()
+        if not normalized_job_id:
+            return {"status": "skipped", "reason": "invalid_job_id", "classification": classification}
+        queued_at = datetime.now(timezone.utc).isoformat()
+        control_payload = {
+            "control": "progress_auto_takeover",
+            "classification": classification,
+            "requested_execution_mode": requested_execution_mode,
+            "effective_execution_mode": effective_execution_mode,
+            "recovery_status": "queued",
+            "queued_at": queued_at,
+        }
+        with self._progress_takeover_lock:
+            if normalized_job_id in self._progress_takeover_inflight:
+                current = dict(self._progress_takeover_inflight.get(normalized_job_id) or {})
+                return {
+                    "status": "skipped",
+                    "reason": "already_inflight",
+                    "classification": classification,
+                    "requested_execution_mode": requested_execution_mode,
+                    "effective_execution_mode": effective_execution_mode,
+                    "queued_at": str(current.get("queued_at") or ""),
+                }
+            self._progress_takeover_inflight[normalized_job_id] = {
+                "classification": classification,
+                "requested_execution_mode": requested_execution_mode,
+                "effective_execution_mode": effective_execution_mode,
+                "queued_at": queued_at,
+            }
+
+        self.store.append_job_event(
+            normalized_job_id,
+            stage="runtime_control",
+            status="running",
+            detail=f"Progress polling queued automatic workflow takeover for `{classification}`.",
+            payload=control_payload,
+        )
+        thread = threading.Thread(
+            target=self._run_progress_auto_takeover,
+            kwargs={
+                "job_id": normalized_job_id,
+                "classification": classification,
+                "requested_execution_mode": requested_execution_mode,
+                "effective_execution_mode": effective_execution_mode,
+                "recovery_payload": dict(recovery_payload),
+                "queued_at": queued_at,
+            },
+            name=f"progress-auto-takeover-{normalized_job_id}",
+            daemon=True,
+        )
+        thread.start()
+        return {
+            "status": "queued",
+            "classification": classification,
+            "requested_execution_mode": requested_execution_mode,
+            "effective_execution_mode": effective_execution_mode,
+            "recovery_status": "queued",
+            "queued_at": queued_at,
+        }
+
+    def _run_progress_auto_takeover(
+        self,
+        *,
+        job_id: str,
+        classification: str,
+        requested_execution_mode: str,
+        effective_execution_mode: str,
+        recovery_payload: dict[str, Any],
+        queued_at: str,
+    ) -> None:
+        try:
+            recovery = self.run_worker_recovery_once(recovery_payload)
+            workflow_resume = self._extract_progress_takeover_workflow_resume(job_id=job_id, recovery=recovery)
+            self.store.append_job_event(
+                job_id,
+                stage="runtime_control",
+                status="running",
+                detail=f"Progress auto takeover finished for `{classification}`.",
+                payload={
+                    "control": "progress_auto_takeover_result",
+                    "classification": classification,
+                    "requested_execution_mode": requested_execution_mode,
+                    "effective_execution_mode": effective_execution_mode,
+                    "queued_at": queued_at,
+                    "recovery_status": str(recovery.get("status") or ""),
+                    "workflow_resume": workflow_resume,
+                },
+            )
+        except Exception as exc:
+            self.store.append_job_event(
+                job_id,
+                stage="runtime_control",
+                status="failed",
+                detail=f"Progress auto takeover failed for `{classification}`: {exc}",
+                payload={
+                    "control": "progress_auto_takeover_result",
+                    "classification": classification,
+                    "requested_execution_mode": requested_execution_mode,
+                    "effective_execution_mode": effective_execution_mode,
+                    "queued_at": queued_at,
+                    "recovery_status": "failed",
+                    "error": str(exc),
+                },
+            )
+        finally:
+            with self._progress_takeover_lock:
+                self._progress_takeover_inflight.pop(str(job_id or "").strip(), None)
+
+    def _extract_progress_takeover_workflow_resume(
+        self,
+        *,
+        job_id: str,
+        recovery: dict[str, Any],
+    ) -> list[dict[str, str]]:
+        normalized_job_id = str(job_id or "").strip()
+        return [
+            {
+                "job_id": str(item.get("job_id") or ""),
+                "status": str(item.get("status") or ""),
+                "reason": str(item.get("reason") or ""),
+                "resume_mode": str(item.get("resume_mode") or ""),
+                "job_status": str(item.get("job_status") or ""),
+                "job_stage": str(item.get("job_stage") or ""),
+            }
+            for item in list(recovery.get("workflow_resume") or [])
+            if str(item.get("job_id") or "").strip() == normalized_job_id
+        ]
 
     def get_job_trace(self, job_id: str) -> dict[str, Any] | None:
         job = self.store.get_job(job_id)
@@ -1571,9 +1936,11 @@ class SourcingOrchestrator:
         background_reconcile_job_count = 0
         background_search_seed_reconcile_count = 0
         background_harvest_prefetch_reconcile_count = 0
+        active_job_runtime_health: dict[str, dict[str, Any]] = {}
         for job in active_jobs:
+            job_id = str(job.get("job_id") or "")
             runtime_controls = self._build_live_runtime_controls_payload(job)
-            workers = self.agent_runtime.list_workers(job_id=str(job.get("job_id") or ""))
+            workers = self.agent_runtime.list_workers(job_id=job_id)
             worker_summary = _job_worker_summary(workers)
             job_summary = dict(job.get("summary") or {})
             runtime_health = _classify_job_runtime_health(
@@ -1583,6 +1950,8 @@ class SourcingOrchestrator:
                 runtime_controls=runtime_controls,
                 blocked_task=str(job_summary.get("blocked_task") or ""),
             )
+            if job_id:
+                active_job_runtime_health[job_id] = runtime_health
             refresh_metrics = _extract_refresh_metrics(job_summary)
             if refresh_metrics:
                 if int(refresh_metrics.get("pre_retrieval_refresh_count") or 0) > 0:
@@ -1621,8 +1990,24 @@ class SourcingOrchestrator:
                     }
                 )
 
+        stale_acquiring_jobs = [
+            job
+            for job in stale_acquiring_jobs
+            if str(dict(active_job_runtime_health.get(str(job.get("job_id") or ""), {})).get("state") or "") == "stalled"
+        ]
+        stale_queue_jobs = [
+            job
+            for job in stale_queue_jobs
+            if str(dict(active_job_runtime_health.get(str(job.get("job_id") or ""), {})).get("state") or "") == "stalled"
+            or str(job.get("job_id") or "") not in active_job_runtime_health
+        ]
+
         shared_ready = _service_status_is_ready(shared_recovery_status)
         hosted_ready = _service_status_is_ready(hosted_runtime_watchdog_status)
+        job_recovery_ready_count = sum(
+            1 for item in tracked_job_recoveries if bool(dict(item.get("job_recovery") or {}).get("service_ready"))
+        )
+        job_recovery_not_ready_count = max(len(tracked_job_recoveries) - job_recovery_ready_count, 0)
 
         status = "ok"
         if (
@@ -1659,6 +2044,10 @@ class SourcingOrchestrator:
             "background_reconcile_job_count": background_reconcile_job_count,
             "background_search_seed_reconcile_job_count": background_search_seed_reconcile_count,
             "background_harvest_prefetch_reconcile_job_count": background_harvest_prefetch_reconcile_count,
+            "shared_recovery_ready": int(shared_ready),
+            "hosted_runtime_watchdog_ready": int(hosted_ready),
+            "job_recovery_ready_count": job_recovery_ready_count,
+            "job_recovery_not_ready_count": job_recovery_not_ready_count,
         }
         return {
             "status": status,
@@ -1668,6 +2057,15 @@ class SourcingOrchestrator:
                 "shared_recovery": shared_recovery_status,
                 "hosted_runtime_watchdog": hosted_runtime_watchdog_status,
                 "job_recoveries": tracked_job_recoveries,
+            },
+            "service_readiness": {
+                "shared_recovery_ready": shared_ready,
+                "hosted_runtime_watchdog_ready": hosted_ready,
+                "job_recovery_ready_count": job_recovery_ready_count,
+                "job_recovery_not_ready_count": job_recovery_not_ready_count,
+                "auto_recovery_ready": bool(shared_ready or hosted_ready),
+                "recommended_workflow_entrypoint": "serve",
+                "standalone_cli_fallback": "managed_subprocess",
             },
             "metrics": metrics,
             "stalled_jobs": stalled_jobs,
@@ -1718,6 +2116,7 @@ class SourcingOrchestrator:
                 "hosted_runtime_watchdog": dict(dict(health.get("services") or {}).get("hosted_runtime_watchdog") or {}),
                 "tracked_job_recovery_count": int(metrics.get("tracked_job_recovery_count") or 0),
             },
+            "service_readiness": dict(health.get("service_readiness") or {}),
         }
 
     def get_system_progress(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -2921,11 +3320,16 @@ class SourcingOrchestrator:
 
         request = JobRequest.from_payload(merged_request)
         plan = build_sourcing_plan(request, self.catalog, self.model_client)
+        effective_request = _build_effective_retrieval_request(request, plan)
         return {
             "status": "compiled",
             "baseline_job_id": str(baseline_job.get("job_id") or ""),
             "request_patch": request_patch,
             "request": request.to_record(),
+            "request_preview": _build_request_preview_payload(
+                request=request,
+                effective_request=effective_request,
+            ),
             "plan": plan.to_record(),
             "instruction_compiler": instruction_compiler,
             "baseline_candidate_source": dict((baseline_job.get("summary") or {}).get("candidate_source") or {}),
@@ -3018,6 +3422,7 @@ class SourcingOrchestrator:
             "rerun_job_id": rerun_job_id,
             "request_patch": dict(compiled.get("request_patch") or {}),
             "request": request.to_record(),
+            "request_preview": dict(compiled.get("request_preview") or {}),
             "plan": plan_payload,
             "instruction_compiler": dict(compiled.get("instruction_compiler") or {}),
             "intent_rewrite": dict(compiled.get("intent_rewrite") or {}),
@@ -3382,26 +3787,33 @@ class SourcingOrchestrator:
         return gate
 
     def _prepare_request_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
-        canonical_request = JobRequest.from_payload(payload).to_record()
-        planning_mode = str(canonical_request.get("planning_mode") or "").strip().lower()
-        if planning_mode not in {"model_assisted", "llm_brief", "product_brief_model_assisted"}:
-            return canonical_request
+        fallback_request = JobRequest.from_payload(payload).to_record()
+        raw_user_request = str(fallback_request.get("raw_user_request") or fallback_request.get("query") or "").strip()
         explicit_execution_preferences = normalize_execution_preferences(
             payload,
-            target_company=str(canonical_request.get("target_company") or payload.get("target_company") or ""),
+            target_company=str(fallback_request.get("target_company") or payload.get("target_company") or ""),
         )
         normalized_patch = self.model_client.normalize_request(
             {
-                "raw_user_request": canonical_request.get("raw_user_request") or canonical_request.get("query") or "",
-                "current_request": canonical_request,
+                "raw_user_request": raw_user_request,
+                "input_payload": dict(payload or {}),
+                "fallback_request": fallback_request,
+                "current_request": fallback_request,
             }
         )
-        if not isinstance(normalized_patch, dict) or not normalized_patch:
-            return canonical_request
-        merged_payload = _merge_request_payload(
-            canonical_request,
-            normalized_patch,
-            explicit_execution_preferences=explicit_execution_preferences,
+        merged_payload = dict(fallback_request)
+        if isinstance(normalized_patch, dict) and normalized_patch:
+            merged_payload = _merge_request_payload(
+                fallback_request,
+                normalized_patch,
+                explicit_execution_preferences=explicit_execution_preferences,
+            )
+        elif explicit_execution_preferences:
+            merged_payload["execution_preferences"] = explicit_execution_preferences
+        merged_payload = _supplement_request_query_signals(
+            merged_payload,
+            raw_text=raw_user_request,
+            include_raw_keyword_extraction=not _shared_has_structured_request_signals(normalized_patch),
         )
         return JobRequest.from_payload(_canonicalize_request_payload(merged_payload)).to_record()
 
@@ -3646,7 +4058,14 @@ class SourcingOrchestrator:
             "matched_job": {},
         }
 
-    def _create_workflow_job(self, request: JobRequest, plan, *, dispatch_context: dict[str, Any] | None = None) -> str:
+    def _create_workflow_job(
+        self,
+        request: JobRequest,
+        plan,
+        *,
+        dispatch_context: dict[str, Any] | None = None,
+        runtime_execution_mode: str = "hosted",
+    ) -> str:
         job_id = uuid.uuid4().hex[:12]
         dispatch_context = dict(dispatch_context or {})
         self.store.save_job(
@@ -3656,7 +4075,10 @@ class SourcingOrchestrator:
             stage="planning",
             request_payload=request.to_record(),
             plan_payload=plan.to_record(),
-            summary_payload={"message": "Workflow queued"},
+            summary_payload={
+                "message": "Workflow queued",
+                "runtime_execution_mode": str(runtime_execution_mode or "hosted").strip().lower() or "hosted",
+            },
             requester_id=str(dispatch_context.get("requester_id") or ""),
             tenant_id=str(dispatch_context.get("tenant_id") or ""),
             idempotency_key=str(dispatch_context.get("idempotency_key") or ""),
@@ -3673,6 +4095,7 @@ class SourcingOrchestrator:
                 "requester_id": str(dispatch_context.get("requester_id") or ""),
                 "tenant_id": str(dispatch_context.get("tenant_id") or ""),
                 "idempotency_key": str(dispatch_context.get("idempotency_key") or ""),
+                "runtime_execution_mode": str(runtime_execution_mode or "hosted").strip().lower() or "hosted",
             },
         )
         return job_id
@@ -4210,6 +4633,14 @@ class SourcingOrchestrator:
             return None
 
         harvest_dir = snapshot_dir / "harvest_company_employees"
+        segmented_snapshot = self._restore_segmented_roster_snapshot_from_snapshot_dir(
+            snapshot_dir=snapshot_dir,
+            harvest_dir=harvest_dir,
+            identity=effective_identity,
+        )
+        if segmented_snapshot is not None:
+            return segmented_snapshot
+
         queue_summary_path = harvest_dir / "harvest_company_employees_queue_summary.json"
         raw_path = harvest_dir / "harvest_company_employees_raw.json"
         if not queue_summary_path.exists() and not raw_path.exists():
@@ -4239,6 +4670,58 @@ class SourcingOrchestrator:
                 max_pages=max(1, int(queue_summary.get("requested_pages") or 1)),
                 page_limit=max(1, int(queue_summary.get("requested_item_limit") or 25)),
                 company_filters=dict(queue_summary.get("company_filters") or {}),
+                allow_shared_provider_cache=False,
+            )
+        except Exception:
+            return None
+
+    def _restore_segmented_roster_snapshot_from_snapshot_dir(
+        self,
+        *,
+        snapshot_dir: Path,
+        harvest_dir: Path,
+        identity: CompanyIdentity,
+    ) -> CompanyRosterSnapshot | None:
+        plan_path = harvest_dir / "adaptive_shard_plan.json"
+        if not plan_path.exists():
+            return None
+
+        plan_payload = _read_json_dict(plan_path)
+        shards = _normalize_company_employee_shards(plan_payload.get("shards"))
+        if not shards:
+            return None
+
+        shard_root = harvest_dir / "shards"
+        for shard in shards:
+            shard_id = str(shard.get("shard_id") or "").strip()
+            if not shard_id:
+                return None
+            shard_harvest_dir = shard_root / shard_id / "harvest_company_employees"
+            raw_path = shard_harvest_dir / "harvest_company_employees_raw.json"
+            if raw_path.exists():
+                continue
+
+            queue_summary_path = shard_harvest_dir / "harvest_company_employees_queue_summary.json"
+            if not queue_summary_path.exists():
+                return None
+
+            queue_summary = _read_json_dict(queue_summary_path)
+            if str(queue_summary.get("status") or "").strip().lower() != "completed":
+                return None
+
+            artifact_paths = dict(queue_summary.get("artifact_paths") or {})
+            dataset_items_path_value = str(
+                artifact_paths.get("dataset_items") or (shard_harvest_dir / "harvest_company_employees_queue_dataset_items.json")
+            ).strip()
+            dataset_items_path = Path(dataset_items_path_value).expanduser() if dataset_items_path_value else None
+            if dataset_items_path is None or not dataset_items_path.exists():
+                return None
+
+        try:
+            return self.acquisition_engine._fetch_segmented_harvest_company_roster(
+                identity=identity,
+                snapshot_dir=snapshot_dir,
+                shards=shards,
                 allow_shared_provider_cache=False,
             )
         except Exception:
@@ -4350,6 +4833,12 @@ class SourcingOrchestrator:
         pending_workers = [_summarize_worker_runtime(worker) for worker in pending_worker_records]
         active_workers = [_summarize_worker_runtime(worker) for worker in _collect_active_acquisition_workers(workers)]
         baseline_ready, baseline_reason = _acquisition_state_is_baseline_ready(acquisition_state)
+        if (
+            _blocked_task_requires_roster_baseline(plan, blocked_task)
+            and not _acquisition_state_has_roster_snapshot(acquisition_state)
+            and not baseline_ready
+        ):
+            baseline_reason = "awaiting_roster_snapshot"
         requires_stage1_completion = blocked_task in {"enrich_linkedin_profiles", "enrich_profiles_multisource"} and not bool(
             acquisition_state.get("linkedin_stage_completed")
         )
@@ -4415,6 +4904,7 @@ class SourcingOrchestrator:
         if task.task_type == "acquire_full_roster":
             roster_snapshot = acquisition_state.get("roster_snapshot")
             search_seed_snapshot = acquisition_state.get("search_seed_snapshot")
+            candidate_doc_path = acquisition_state.get("candidate_doc_path")
             roster_ready = isinstance(roster_snapshot, CompanyRosterSnapshot) and bool(
                 list(roster_snapshot.visible_entries or []) or list(roster_snapshot.raw_entries or [])
             )
@@ -4422,17 +4912,31 @@ class SourcingOrchestrator:
                 list(search_seed_snapshot.entries or [])
             )
             candidate_ready = bool(acquisition_state.get("candidates"))
+            candidate_doc_ready = isinstance(candidate_doc_path, Path) and candidate_doc_path.exists()
+            reused_snapshot_checkpoint = bool(acquisition_state.get("reused_snapshot_checkpoint"))
+            allow_search_seed_baseline_for_full_roster = bool(
+                acquisition_state.get("allow_search_seed_baseline_for_full_roster")
+            )
             strategy_type = str(task.metadata.get("strategy_type") or "").strip()
             if strategy_type == "full_company_roster":
-                # Recovery can continue from search-seed discovery even when the
-                # full roster task was the original blocker. This lets resume
-                # paths move forward with a usable lower-bound baseline instead
-                # of replaying the expensive roster fetch.
-                return roster_ready or search_seed_ready or candidate_ready
+                return (
+                    roster_ready
+                    or candidate_ready
+                    or candidate_doc_ready
+                    or (reused_snapshot_checkpoint and candidate_doc_ready)
+                    or (allow_search_seed_baseline_for_full_roster and search_seed_ready)
+                )
             if strategy_type in {"scoped_search_roster", "former_employee_search"}:
                 return search_seed_ready or candidate_ready
-            return roster_ready or search_seed_ready or candidate_ready
+            return roster_ready or search_seed_ready or candidate_ready or candidate_doc_ready
         if task.task_type == "acquire_former_search_seed":
+            candidate_doc_path = acquisition_state.get("candidate_doc_path")
+            if (
+                isinstance(candidate_doc_path, Path)
+                and candidate_doc_path.exists()
+                and bool(acquisition_state.get("candidates"))
+            ):
+                return True
             if (
                 bool(acquisition_state.get("reused_snapshot_checkpoint"))
                 and isinstance(acquisition_state.get("candidate_doc_path"), Path)
@@ -4528,7 +5032,7 @@ class SourcingOrchestrator:
             return {}
         query_text = str(request.raw_user_request or request.query or "").strip()
         if allow_ai is None:
-            ai_requested = _env_bool("OUTREACH_LAYERING_ENABLE_AI", True)
+            ai_requested = _env_bool("OUTREACH_LAYERING_ENABLE_AI", False)
         else:
             ai_requested = bool(allow_ai)
         model_client: ModelClient | None = None
@@ -4843,12 +5347,10 @@ class SourcingOrchestrator:
             ),
             "analysis_stage_mode": analysis_stage_mode,
             "stage1_preview": preview_payload,
-            "request_preview": {
-                "target_company": request.target_company,
-                "keywords": list(request.keywords or []),
-                "must_have_facets": list(request.must_have_facets or []),
-                "must_have_primary_role_buckets": list(request.must_have_primary_role_buckets or []),
-            },
+            "request_preview": _build_request_preview_payload(
+                request=request,
+                effective_request=dict(preview_artifact.get("effective_request") or {}),
+            ),
         }
         if awaiting_stage2_confirmation:
             summary_payload["awaiting_user_action"] = "continue_stage2"
@@ -5461,6 +5963,22 @@ class SourcingOrchestrator:
                 "reason": "job_not_queued",
                 "job_status": str(job.get("status") or ""),
                 "job_stage": str(job.get("stage") or ""),
+            }
+        if self._workflow_prefers_hosted_execution(job):
+            hosted_result = self._start_hosted_workflow_thread(job_id, source="workflow_recovery")
+            hosted_status = str(hosted_result.get("status") or "").strip()
+            if hosted_status == "started":
+                return {
+                    "job_id": job_id,
+                    "status": "takeover_started",
+                    "mode": "hosted",
+                    "hosted_dispatch": hosted_result,
+                }
+            return {
+                "job_id": job_id,
+                "status": "takeover_failed",
+                "mode": "hosted",
+                "hosted_dispatch": hosted_result,
             }
         runner_control = self._start_workflow_runner_with_handshake(
             job_id=job_id,
@@ -6350,6 +6868,22 @@ class SourcingOrchestrator:
 
         request = readiness["request"]
         plan = readiness["plan"]
+        if blocked_task == "acquire_full_roster" and str(readiness.get("baseline_reason") or "") == "search_seed_entries_present":
+            job_summary = dict(job.get("summary") or {})
+            acquisition_progress = _normalize_acquisition_progress_payload(job_summary.get("acquisition_progress"))
+            latest_state = dict(acquisition_progress.get("latest_state") or {})
+            latest_state["allow_search_seed_baseline_for_full_roster"] = True
+            acquisition_progress["latest_state"] = latest_state
+            job_summary["acquisition_progress"] = acquisition_progress
+            self.store.save_job(
+                job_id=job_id,
+                job_type="workflow",
+                status="blocked",
+                stage="acquiring",
+                request_payload=request.to_record(),
+                plan_payload=plan.to_record(),
+                summary_payload=job_summary,
+            )
         try:
             resume_result = self._run_workflow_from_acquisition(job_id, request, plan, resume_mode=True)
             latest_job = self.store.get_job(job_id) or {}
@@ -6643,8 +7177,10 @@ class SourcingOrchestrator:
         criteria_patterns = self.store.list_criteria_patterns(target_company=request.target_company)
         retrieval_strategy = _plan_retrieval_strategy(plan)
         semantic_hits = {}
+        semantic_enabled = _env_bool("SOURCING_RETRIEVAL_ENABLE_SEMANTIC", False)
         if (
             not preview_mode
+            and semantic_enabled
             and retrieval_strategy in {"hybrid", "semantic", "semantic_heavy"}
             and effective_request.semantic_rerank_limit > 0
         ):
@@ -6740,7 +7276,7 @@ class SourcingOrchestrator:
             not manual_review_items
             and not matches
             and not list(request.categories or [])
-            and not list(request.employment_statuses or [])
+            and _request_uses_default_full_employment_scope(request)
         ):
             relaxed_review_request = JobRequest.from_payload(
                 {
@@ -6749,6 +7285,8 @@ class SourcingOrchestrator:
                     "employment_statuses": [],
                 }
             )
+            relaxed_review_request.categories = []
+            relaxed_review_request.employment_statuses = []
             relaxed_review_scored = score_candidates(
                 candidates,
                 relaxed_review_request,
@@ -6768,7 +7306,10 @@ class SourcingOrchestrator:
                 relaxed_review_evidence_lookup,
             )
         summary_mode = str(runtime_policy.get("summary_mode") or "").strip().lower()
+        model_summary_enabled = _env_bool("SOURCING_RETRIEVAL_ENABLE_MODEL_SUMMARY", False)
         if preview_mode:
+            summary_mode = "deterministic"
+        if not model_summary_enabled:
             summary_mode = "deterministic"
         if not summary_mode and not bool(effective_request.execution_preferences.get("allow_high_cost_sources")):
             summary_mode = "deterministic"
@@ -6827,6 +7368,10 @@ class SourcingOrchestrator:
             "status": artifact_status,
             "request": request.to_record(),
             "effective_request": effective_request.to_record(),
+            "request_preview": _build_request_preview_payload(
+                request=request,
+                effective_request=effective_request,
+            ),
             "plan": _plan_payload(plan),
             "intent_rewrite": _build_intent_rewrite_payload(request_payload=request.to_record()),
             "summary": summary,
@@ -7370,6 +7915,15 @@ def _effective_request_overrides(request: JobRequest, effective_request: JobRequ
     return overrides
 
 
+def _request_uses_default_full_employment_scope(request: JobRequest) -> bool:
+    normalized = {
+        str(item or "").strip().lower()
+        for item in list(request.employment_statuses or [])
+        if str(item or "").strip()
+    }
+    return normalized in (set(), {"current", "former"})
+
+
 def _lane_for_task(task: Any, plan_payload: dict[str, Any]) -> str:
     strategy_type = str((task.metadata if hasattr(task, "metadata") else {}).get("strategy_type") or "")
     search_strategy = dict(plan_payload.get("search_strategy") or {})
@@ -7403,10 +7957,22 @@ def _merge_request_payload(
     explicit_execution_preferences: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     merged = dict(base_payload or {})
+    initial_target_company = str(patch_payload.get("target_company") or merged.get("target_company") or "").strip()
+    expanded_axes_patch = _shared_expand_request_intent_axes_patch(
+        patch_payload,
+        target_company=initial_target_company,
+    )
+    effective_patch: dict[str, Any] = dict(expanded_axes_patch)
+    for key, value in dict(patch_payload or {}).items():
+        if key == "intent_axes":
+            continue
+        if _has_non_empty_value(value) or _has_non_empty_list(value) or _has_non_empty_dict(value):
+            effective_patch[key] = value
+    target_company = str(effective_patch.get("target_company") or merged.get("target_company") or "").strip()
     base_execution_preferences = normalize_execution_preferences(merged, target_company=str(merged.get("target_company") or ""))
     patch_execution_preferences = normalize_execution_preferences(
-        patch_payload,
-        target_company=str(patch_payload.get("target_company") or merged.get("target_company") or ""),
+        effective_patch,
+        target_company=target_company,
     )
     merged_execution_preferences = merge_execution_preferences(patch_execution_preferences, base_execution_preferences)
     if explicit_execution_preferences:
@@ -7418,59 +7984,66 @@ def _merge_request_payload(
         "target_scope",
         "query",
     ]:
-        if _has_non_empty_value(merged.get(key)):
-            continue
-        candidate = patch_payload.get(key)
+        candidate = effective_patch.get(key)
         if _has_non_empty_value(candidate):
             merged[key] = candidate
+    target_company = str(merged.get("target_company") or target_company or "").strip()
     if not _has_non_empty_value(merged.get("retrieval_strategy")):
-        candidate_strategy = str(patch_payload.get("retrieval_strategy") or "").strip().lower()
+        candidate_strategy = str(effective_patch.get("retrieval_strategy") or "").strip().lower()
+        if candidate_strategy in {"structured", "hybrid", "semantic"}:
+            merged["retrieval_strategy"] = candidate_strategy
+    else:
+        candidate_strategy = str(effective_patch.get("retrieval_strategy") or "").strip().lower()
         if candidate_strategy in {"structured", "hybrid", "semantic"}:
             merged["retrieval_strategy"] = candidate_strategy
     for key in [
         "categories",
         "employment_statuses",
     ]:
-        if _has_non_empty_list(merged.get(key)):
-            continue
-        candidate = patch_payload.get(key)
+        candidate = effective_patch.get(key)
         if _has_non_empty_list(candidate):
             merged[key] = list(candidate)
-    merged["keywords"] = _merge_unique_string_values(
+    merged["keywords"] = _merge_unique_request_string_values(
         merged.get("keywords"),
-        patch_payload.get("keywords"),
-        patch_payload.get("research_direction_keywords"),
-        patch_payload.get("technology_keywords"),
-        patch_payload.get("model_keywords"),
-        patch_payload.get("product_keywords"),
+        effective_patch.get("keywords"),
+        effective_patch.get("research_direction_keywords"),
+        effective_patch.get("technology_keywords"),
+        effective_patch.get("model_keywords"),
+        effective_patch.get("product_keywords"),
+        target_company=target_company,
     )
-    merged["must_have_keywords"] = _merge_unique_string_values(
+    merged["must_have_keywords"] = _merge_unique_request_string_values(
         merged.get("must_have_keywords"),
-        patch_payload.get("must_have_keywords"),
+        effective_patch.get("must_have_keywords"),
+        target_company=target_company,
     )
-    merged["organization_keywords"] = _merge_unique_string_values(
+    merged["organization_keywords"] = _merge_unique_request_string_values(
         merged.get("organization_keywords"),
-        patch_payload.get("organization_keywords"),
-        patch_payload.get("team_keywords"),
-        patch_payload.get("sub_org_keywords"),
-        patch_payload.get("project_keywords"),
+        effective_patch.get("organization_keywords"),
+        effective_patch.get("team_keywords"),
+        effective_patch.get("sub_org_keywords"),
+        effective_patch.get("project_keywords"),
+        target_company=target_company,
     )
-    merged["must_have_facets"] = _merge_unique_string_values(
+    merged["must_have_facets"] = _merge_unique_request_string_values(
         merged.get("must_have_facets"),
-        patch_payload.get("must_have_facets"),
+        effective_patch.get("must_have_facets"),
+        target_company=target_company,
     )
-    merged["must_have_primary_role_buckets"] = _merge_unique_string_values(
+    merged["must_have_primary_role_buckets"] = _merge_unique_request_string_values(
         merged.get("must_have_primary_role_buckets"),
-        patch_payload.get("must_have_primary_role_buckets"),
+        effective_patch.get("must_have_primary_role_buckets"),
+        target_company=target_company,
     )
     merged_scope = merged.get("scope_disambiguation")
-    patch_scope = patch_payload.get("scope_disambiguation")
+    patch_scope = effective_patch.get("scope_disambiguation")
     if isinstance(patch_scope, dict) and patch_scope:
+        patch_scope_dict = dict(patch_scope)
         if not isinstance(merged_scope, dict) or not merged_scope:
-            merged["scope_disambiguation"] = dict(patch_scope)
+            merged["scope_disambiguation"] = patch_scope_dict
         else:
-            merged_scope_dict = dict(merged_scope)
-            for key, value in patch_scope.items():
+            merged_scope_dict = dict(patch_scope_dict)
+            for key, value in dict(merged_scope).items():
                 if key not in merged_scope_dict:
                     merged_scope_dict[key] = value
             merged["scope_disambiguation"] = merged_scope_dict
@@ -7655,7 +8228,11 @@ def _build_job_progress_payload(
     runtime_controls: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     job_summary = dict(job.get("summary") or {})
-    milestones = _job_stage_milestones(events)
+    milestones = _job_stage_milestones(
+        events,
+        current_stage=str(job.get("stage") or ""),
+        job_status=str(job.get("status") or ""),
+    )
     worker_summary = _job_worker_summary(workers)
     latest_event = dict(events[-1]) if events else {}
     started_at = str(job.get("created_at") or "")
@@ -7714,7 +8291,12 @@ def _build_job_progress_payload(
     }
 
 
-def _job_stage_milestones(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _job_stage_milestones(
+    events: list[dict[str, Any]],
+    *,
+    current_stage: str = "",
+    job_status: str = "",
+) -> list[dict[str, Any]]:
     ordered_stages = ["planning", "acquiring", "retrieving", "completed", "failed"]
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for event in events:
@@ -7726,6 +8308,10 @@ def _job_stage_milestones(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for stage in grouped:
         if stage not in stage_order:
             stage_order.append(stage)
+    normalized_current_stage = str(current_stage or "").strip()
+    normalized_job_status = str(job_status or "").strip()
+    stage_position = {stage: index for index, stage in enumerate(stage_order)}
+    current_position = stage_position.get(normalized_current_stage, len(stage_order))
     milestones: list[dict[str, Any]] = []
     for stage in stage_order:
         stage_events = grouped.get(stage) or []
@@ -7738,10 +8324,20 @@ def _job_stage_milestones(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 completed_at = str(event.get("created_at") or "")
                 break
         latest = stage_events[-1]
+        milestone_status = str(latest.get("status") or "")
+        if normalized_current_stage:
+            stage_pos = stage_position.get(stage, len(stage_order))
+            if stage == normalized_current_stage and normalized_job_status not in {"completed", "failed"}:
+                milestone_status = normalized_job_status or "running"
+                completed_at = ""
+            elif stage_pos < current_position:
+                milestone_status = "completed"
+            elif stage_pos > current_position and milestone_status in {"completed", "failed"}:
+                completed_at = str(latest.get("created_at") or "")
         milestones.append(
             {
                 "stage": stage,
-                "status": str(latest.get("status") or ""),
+                "status": milestone_status,
                 "started_at": started_at,
                 "completed_at": completed_at,
                 "latest_detail": str(latest.get("detail") or ""),
@@ -8176,6 +8772,26 @@ def _acquisition_state_is_baseline_ready(state: dict[str, Any]) -> tuple[bool, s
     return False, ""
 
 
+def _acquisition_state_has_roster_snapshot(state: dict[str, Any]) -> bool:
+    roster_snapshot = state.get("roster_snapshot")
+    return isinstance(roster_snapshot, CompanyRosterSnapshot) and (
+        list(roster_snapshot.visible_entries or []) or list(roster_snapshot.raw_entries or [])
+    )
+
+
+def _blocked_task_requires_roster_baseline(plan: Any, blocked_task: str) -> bool:
+    if str(blocked_task or "").strip() != "acquire_full_roster":
+        return False
+    for task in list(getattr(plan, "acquisition_tasks", []) or []):
+        if not isinstance(task, AcquisitionTask):
+            continue
+        if task.task_type != "acquire_full_roster":
+            continue
+        if str(task.metadata.get("strategy_type") or "").strip() == "full_company_roster":
+            return True
+    return False
+
+
 def _elapsed_seconds(started_at: str, ended_at: str) -> int:
     if not started_at or not ended_at:
         return 0
@@ -8267,7 +8883,12 @@ def _serialize_acquisition_state_payload(state: dict[str, Any]) -> dict[str, Any
         value = state.get(dict_key)
         if isinstance(value, dict) and value:
             payload[dict_key] = dict(value)
-    for bool_key in ("linkedin_stage_completed", "public_web_stage_completed", "reused_snapshot_checkpoint"):
+    for bool_key in (
+        "linkedin_stage_completed",
+        "public_web_stage_completed",
+        "reused_snapshot_checkpoint",
+        "allow_search_seed_baseline_for_full_roster",
+    ):
         if bool_key in state:
             payload[bool_key] = bool(state.get(bool_key))
     candidate_doc_path = payload.get("candidate_doc_path") or ""
@@ -8318,7 +8939,12 @@ def _deserialize_acquisition_state_payload(payload: dict[str, Any]) -> dict[str,
         value = payload.get(dict_key)
         if isinstance(value, dict) and value:
             restored[dict_key] = dict(value)
-    for bool_key in ("linkedin_stage_completed", "public_web_stage_completed", "reused_snapshot_checkpoint"):
+    for bool_key in (
+        "linkedin_stage_completed",
+        "public_web_stage_completed",
+        "reused_snapshot_checkpoint",
+        "allow_search_seed_baseline_for_full_roster",
+    ):
         if bool_key in payload:
             restored[bool_key] = bool(payload.get(bool_key))
     candidates = _candidate_records_from_payload(payload.get("candidates"))
@@ -8429,37 +9055,8 @@ def _restore_search_seed_snapshot_from_snapshot_dir(
         }
     )
 
-
-PARENT_COMPANY_ALIASES = {
-    "google deepmind": ("Google", "Google DeepMind"),
-    "deepmind": ("Google", "Google DeepMind"),
-}
-
-
 def _canonicalize_request_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    canonical = dict(payload or {})
-    target_company = str(canonical.get("target_company") or "").strip()
-    if not target_company:
-        return canonical
-    mapped = PARENT_COMPANY_ALIASES.get(target_company.lower())
-    if not mapped:
-        return canonical
-    parent_company, org_label = mapped
-    canonical["target_company"] = parent_company
-    organization_keywords = [str(item or "").strip() for item in list(canonical.get("organization_keywords") or [])]
-    merged_keywords: list[str] = []
-    seen: set[str] = set()
-    for item in [org_label, *organization_keywords]:
-        normalized = " ".join(item.split()).strip()
-        if not normalized or normalized.lower() == parent_company.lower():
-            continue
-        key = normalized.lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        merged_keywords.append(normalized)
-    canonical["organization_keywords"] = merged_keywords
-    return canonical
+    return _shared_canonicalize_request_payload(payload)
 
 
 def _build_intent_rewrite_payload(
@@ -8469,6 +9066,7 @@ def _build_intent_rewrite_payload(
 ) -> dict[str, Any]:
     payload = {
         "request": _build_single_intent_rewrite_entry(_request_intent_text(request_payload)),
+        "policy_catalog": list_business_rewrite_policy_catalog(),
     }
     if instruction is not None:
         payload["instruction"] = _build_single_intent_rewrite_entry(instruction)
@@ -8563,12 +9161,41 @@ def _request_targets_greater_china_outreach(request: JobRequest, rewrite: dict[s
     return False
 
 
+def _supplement_request_query_signals(
+    payload: dict[str, Any],
+    *,
+    raw_text: str,
+    include_raw_keyword_extraction: bool = True,
+) -> dict[str, Any]:
+    return _shared_supplement_request_query_signals(
+        payload,
+        raw_text=raw_text,
+        include_raw_keyword_extraction=include_raw_keyword_extraction,
+    )
+
+
+def _extract_query_signal_terms(raw_text: str, *, target_company: str) -> dict[str, list[str]]:
+    return _shared_extract_query_signal_terms(raw_text, target_company=target_company)
+
+
+def _normalize_request_query_signal(value: str, *, target_company: str) -> str:
+    return _shared_normalize_request_query_signal(value, target_company=target_company)
+
+
+def _should_skip_query_signal(value: str, *, target_company: str) -> bool:
+    return _shared_should_skip_query_signal(value, target_company=target_company)
+
+
 def _has_non_empty_value(value: Any) -> bool:
     return isinstance(value, str) and bool(value.strip())
 
 
 def _has_non_empty_list(value: Any) -> bool:
     return isinstance(value, list) and any(str(item or "").strip() for item in value)
+
+
+def _has_non_empty_dict(value: Any) -> bool:
+    return isinstance(value, dict) and bool(value)
 
 
 def _merge_unique_string_values(*sources: Any) -> list[str]:
@@ -8589,6 +9216,50 @@ def _merge_unique_string_values(*sources: Any) -> list[str]:
             seen.add(key)
             merged.append(value)
     return merged
+
+
+def _merge_unique_request_string_values(*sources: Any, target_company: str = "") -> list[str]:
+    return _shared_merge_unique_request_string_values(*sources, target_company=target_company)
+
+
+def _build_request_preview_payload(
+    *,
+    request: JobRequest | dict[str, Any],
+    effective_request: JobRequest | dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    return _shared_build_request_preview_payload(request=request, effective_request=effective_request)
+
+
+def _load_job_request_preview(job: dict[str, Any]) -> dict[str, Any]:
+    artifact_path = str(job.get("artifact_path") or "").strip()
+    if artifact_path:
+        artifact_payload = _read_json_dict(Path(artifact_path))
+        preview = dict(artifact_payload.get("request_preview") or {})
+        if preview:
+            return preview
+        request_payload = dict(artifact_payload.get("request") or {})
+        effective_request_payload = dict(artifact_payload.get("effective_request") or {})
+        if request_payload:
+            return _build_request_preview_payload(
+                request=request_payload,
+                effective_request=effective_request_payload or request_payload,
+            )
+    request_payload = dict(job.get("request") or {})
+    if not request_payload:
+        return {}
+    plan_payload = dict(job.get("plan") or {})
+    if plan_payload:
+        try:
+            plan = hydrate_sourcing_plan(plan_payload)
+        except Exception:
+            plan = None
+        if plan is not None:
+            request = JobRequest.from_payload(request_payload)
+            return _build_request_preview_payload(
+                request=request,
+                effective_request=_build_effective_retrieval_request(request, plan),
+            )
+    return _build_request_preview_payload(request=request_payload)
 
 
 def _env_bool(name: str, default: bool) -> bool:

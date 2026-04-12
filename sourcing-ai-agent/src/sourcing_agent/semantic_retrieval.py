@@ -13,6 +13,7 @@ from .domain import (
     derive_candidate_facets,
     derive_candidate_role_bucket,
 )
+from .request_normalization import resolve_request_intent_view
 from .scoring import build_query_terms, candidate_matches_structured_filters
 from .semantic_provider import SemanticProvider
 
@@ -71,17 +72,20 @@ def rank_semantic_candidates(
 ) -> dict[str, dict[str, Any]]:
     if limit <= 0:
         return {}
-    candidate_pool = [candidate for candidate in candidates if candidate_matches_structured_filters(candidate, request)]
+    intent_view = resolve_request_intent_view(request)
+    candidate_pool = [
+        candidate for candidate in candidates if candidate_matches_structured_filters(candidate, request, intent_view=intent_view)
+    ]
     if not candidate_pool:
         return {}
 
-    query_terms = _build_semantic_query_terms(request, criteria_patterns or [])
+    query_terms = _build_semantic_query_terms(request, criteria_patterns or [], intent_view=intent_view)
     if not query_terms:
         return {}
 
-    fields = _semantic_fields_for_request(request, semantic_fields)
+    fields = _semantic_fields_for_request(request, semantic_fields, intent_view=intent_view)
     documents = [_build_document(candidate, fields) for candidate in candidate_pool]
-    if _should_use_remote_semantic_provider(request, semantic_provider):
+    if _should_use_remote_semantic_provider(request, semantic_provider, intent_view=intent_view):
         provider_hits = _rank_with_provider(query_terms, documents, semantic_provider, limit=limit)
         if provider_hits:
             return provider_hits
@@ -101,12 +105,15 @@ def rank_semantic_candidates(
 def _should_use_remote_semantic_provider(
     request: JobRequest,
     semantic_provider: SemanticProvider | None,
+    *,
+    intent_view: dict[str, Any] | None = None,
 ) -> bool:
     if semantic_provider is None:
         return False
     if semantic_provider.provider_name() == "local_sparse":
         return False
-    execution_preferences = dict(request.execution_preferences or {})
+    intent_view = dict(intent_view or resolve_request_intent_view(request))
+    execution_preferences = dict(intent_view.get("execution_preferences") or {})
     return bool(execution_preferences.get("allow_high_cost_sources"))
 
 
@@ -216,8 +223,14 @@ def _rank_local_candidates(query_terms: list[str], documents: list[_SemanticDocu
     return hits[:limit]
 
 
-def _build_semantic_query_terms(request: JobRequest, criteria_patterns: list[dict[str, Any]]) -> list[str]:
-    raw_terms = build_query_terms(request, criteria_patterns)
+def _build_semantic_query_terms(
+    request: JobRequest,
+    criteria_patterns: list[dict[str, Any]],
+    *,
+    intent_view: dict[str, Any] | None = None,
+) -> list[str]:
+    intent_view = dict(intent_view or resolve_request_intent_view(request))
+    raw_terms = build_query_terms(request, criteria_patterns, intent_view=intent_view)
     if not raw_terms:
         raw_terms = [request.query or request.raw_user_request]
     expanded: list[str] = []
@@ -226,9 +239,15 @@ def _build_semantic_query_terms(request: JobRequest, criteria_patterns: list[dic
     return _dedupe(expanded)
 
 
-def _semantic_fields_for_request(request: JobRequest, semantic_fields: list[str] | None) -> list[str]:
+def _semantic_fields_for_request(
+    request: JobRequest,
+    semantic_fields: list[str] | None,
+    *,
+    intent_view: dict[str, Any] | None = None,
+) -> list[str]:
+    intent_view = dict(intent_view or resolve_request_intent_view(request))
     fields = list(semantic_fields or SEMANTIC_FIELD_WEIGHTS.keys())
-    if request.must_have_primary_role_buckets:
+    if intent_view.get("must_have_primary_role_buckets"):
         return [field_name for field_name in fields if field_name != "notes"]
     return fields
 

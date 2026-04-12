@@ -35,6 +35,52 @@ class _FakeRemoteSemanticProvider:
 
 
 class SemanticRetrievalTest(unittest.TestCase):
+    def test_semantic_retrieval_prefers_intent_view_over_conflicting_flat_fields(self) -> None:
+        candidates = [
+            Candidate(
+                candidate_id="cand_gemini_pm",
+                name_en="Gemini PM",
+                display_name="Gemini PM",
+                category="employee",
+                target_company="Google",
+                organization="Google DeepMind",
+                employment_status="current",
+                role="Product Manager",
+                team="Gemini",
+                focus_areas="Gemini product strategy",
+            )
+        ]
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "找 Gemini 的产品经理",
+                "query": "Gemini product manager",
+                "target_company": "WrongCo",
+                "semantic_rerank_limit": 5,
+                "intent_axes": {
+                    "population_boundary": {
+                        "categories": ["employee"],
+                        "employment_statuses": ["current", "former"],
+                    },
+                    "scope_boundary": {
+                        "target_company": "Google",
+                        "organization_keywords": ["Google DeepMind", "Gemini"],
+                    },
+                    "thematic_constraints": {
+                        "must_have_primary_role_buckets": ["product_management"],
+                        "keywords": ["Gemini"],
+                    },
+                },
+            }
+        )
+
+        semantic_hits = rank_semantic_candidates(
+            candidates,
+            request,
+            semantic_fields=["role", "team", "focus_areas"],
+            limit=5,
+        )
+        self.assertIn("cand_gemini_pm", semantic_hits)
+
     def test_semantic_hit_recovers_post_train_variant(self) -> None:
         candidates = [
             Candidate(

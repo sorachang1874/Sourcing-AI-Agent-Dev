@@ -35,10 +35,17 @@ from .harvest_connectors import (
     write_harvest_execution_artifact,
 )
 from .model_provider import ModelClient
+from .request_normalization import build_effective_request_payload, resolve_request_intent_view
 from .search_provider import SearchProviderError, build_search_provider
 from .seed_discovery import SearchSeedAcquirer, SearchSeedSnapshot, build_candidates_from_seed_snapshot
 from .settings import AppSettings
 from .storage import SQLiteStore
+
+_FULL_ROSTER_BASELINE_REUSE_MIN_CANDIDATES = 1000
+_FULL_ROSTER_BASELINE_REUSE_CURRENT_RATIO_THRESHOLD = 0.6
+_FULL_ROSTER_BASELINE_REUSE_MIN_CURRENT_COUNT = 250
+_FULL_ROSTER_BASELINE_REUSE_REFERENCE_DISTANCE_RATIO = 0.45
+_FULL_ROSTER_BASELINE_REUSE_REFERENCE_DISTANCE_FLOOR = 250
 
 
 @dataclass(slots=True)
@@ -61,6 +68,13 @@ def _effective_cost_policy(
         effective["allow_historical_profile_inheritance"] = False
         effective["allow_shared_provider_cache"] = False
     return effective
+
+
+def _effective_request_payload(job_request: JobRequest | dict[str, Any]) -> dict[str, Any]:
+    if isinstance(job_request, JobRequest):
+        intent_view = resolve_request_intent_view(job_request)
+        return build_effective_request_payload(job_request, intent_view=intent_view)
+    return build_effective_request_payload(job_request)
 
 
 class AcquisitionEngine:
@@ -191,7 +205,8 @@ class AcquisitionEngine:
         )
 
     def _should_use_local_anthropic_assets(self, job_request: JobRequest) -> bool:
-        execution_preferences = dict(job_request.execution_preferences or {})
+        intent_view = resolve_request_intent_view(job_request)
+        execution_preferences = dict(intent_view.get("execution_preferences") or {})
         if bool(execution_preferences.get("allow_local_bootstrap_fallback")):
             return True
         return not bool(execution_preferences.get("force_fresh_run"))
@@ -315,6 +330,8 @@ class AcquisitionEngine:
                 payload={},
             )
         cost_policy = _effective_cost_policy(task.metadata.get("cost_policy"), job_request)
+        intent_view = resolve_request_intent_view(job_request)
+        effective_execution_preferences = dict(intent_view.get("execution_preferences") or {})
         max_pages = int(task.metadata.get("max_pages", 10) or 10)
         page_limit = int(task.metadata.get("page_limit", 50) or 50)
         company_employee_shards = _normalize_company_employee_shards(task.metadata.get("company_employee_shards"))
@@ -325,10 +342,10 @@ class AcquisitionEngine:
         allow_cached_roster_fallback = bool(cost_policy.get("allow_cached_roster_fallback", True))
         allow_shared_provider_cache = bool(cost_policy.get("allow_shared_provider_cache", True))
         reuse_existing_roster = bool(
-            job_request.execution_preferences.get("reuse_existing_roster") or task.metadata.get("reuse_existing_roster")
+            effective_execution_preferences.get("reuse_existing_roster") or task.metadata.get("reuse_existing_roster")
         )
         acquisition_mode = "live_roster_acquisition"
-        explicitly_requested_former_seed = "run_former_search_seed" in dict(job_request.execution_preferences or {})
+        explicitly_requested_former_seed = "run_former_search_seed" in effective_execution_preferences
         should_run_former_search_seed = self._should_run_default_former_search_seed(task, job_request)
         former_parallel_executor: ThreadPoolExecutor | None = None
         former_parallel_future = None
@@ -724,7 +741,7 @@ class AcquisitionEngine:
             employment_status=employment_status,
             worker_runtime=self.worker_runtime,
             job_id=str(state.get("job_id") or ""),
-            request_payload=job_request.to_record(),
+            request_payload=_effective_request_payload(job_request),
             plan_payload=dict(state.get("plan_payload") or {}),
             runtime_mode=str(state.get("runtime_mode") or "workflow"),
         )
@@ -852,6 +869,50 @@ class AcquisitionEngine:
                 detail="Snapshot directory must exist before profile enrichment.",
                 payload={},
             )
+        effective_request_payload = _effective_request_payload(job_request)
+        effective_target_company = str(effective_request_payload.get("target_company") or job_request.target_company or "").strip()
+
+        def _stage_request() -> JobRequest:
+            base_payload = dict(effective_request_payload)
+            if enrichment_scope == "linkedin_stage_1":
+                base_payload.update(
+                    {
+                        "slug_resolution_limit": int(task.metadata.get("slug_resolution_limit", job_request.slug_resolution_limit) or 0),
+                        "profile_detail_limit": int(task.metadata.get("profile_detail_limit", job_request.profile_detail_limit) or 0),
+                        "publication_scan_limit": 0,
+                        "publication_lead_limit": 0,
+                        "exploration_limit": 0,
+                        "scholar_coauthor_follow_up_limit": 0,
+                    }
+                )
+                return JobRequest.from_payload(base_payload)
+            if enrichment_scope == "public_web_stage_2":
+                base_payload.update(
+                    {
+                        "slug_resolution_limit": 0,
+                        "profile_detail_limit": 0,
+                        "publication_scan_limit": int(task.metadata.get("publication_scan_limit", job_request.publication_scan_limit) or 0),
+                        "publication_lead_limit": int(task.metadata.get("publication_lead_limit", job_request.publication_lead_limit) or 0),
+                        "exploration_limit": int(task.metadata.get("exploration_limit", job_request.exploration_limit) or 0),
+                        "scholar_coauthor_follow_up_limit": int(
+                            task.metadata.get("scholar_coauthor_follow_up_limit", job_request.scholar_coauthor_follow_up_limit) or 0
+                        ),
+                    }
+                )
+                return JobRequest.from_payload(base_payload)
+            base_payload.update(
+                {
+                    "slug_resolution_limit": int(task.metadata.get("slug_resolution_limit", job_request.slug_resolution_limit) or 0),
+                    "profile_detail_limit": int(task.metadata.get("profile_detail_limit", job_request.profile_detail_limit) or 0),
+                    "publication_scan_limit": int(task.metadata.get("publication_scan_limit", job_request.publication_scan_limit) or 0),
+                    "publication_lead_limit": int(task.metadata.get("publication_lead_limit", job_request.publication_lead_limit) or 0),
+                    "exploration_limit": int(task.metadata.get("exploration_limit", job_request.exploration_limit) or 0),
+                    "scholar_coauthor_follow_up_limit": int(
+                        task.metadata.get("scholar_coauthor_follow_up_limit", job_request.scholar_coauthor_follow_up_limit) or 0
+                    ),
+                }
+            )
+            return JobRequest.from_payload(base_payload)
 
         def _stage_request() -> JobRequest:
             if enrichment_scope == "linkedin_stage_1":
@@ -951,7 +1012,7 @@ class AcquisitionEngine:
             logger.write_json(
                 candidate_doc_path,
                 {
-                    "target_company": job_request.target_company,
+                    "target_company": effective_target_company,
                     "strategy_type": strategy_type,
                     "candidate_count": len(candidates),
                     "evidence_count": len(evidence),
@@ -983,6 +1044,7 @@ class AcquisitionEngine:
             )
 
         enrichment_request = _stage_request()
+        downstream_request_payload = dict(effective_request_payload)
         enrichment_identity = (
             snapshot.company_identity
             if isinstance(snapshot, CompanyRosterSnapshot)
@@ -1007,7 +1069,7 @@ class AcquisitionEngine:
             enrichment_request,
             asset_logger=logger,
             job_id=str(state.get("job_id") or ""),
-            request_payload=job_request.to_record(),
+            request_payload=downstream_request_payload,
             plan_payload=dict(state.get("plan_payload") or {}),
             runtime_mode=str(state.get("runtime_mode") or "workflow"),
             parallel_exploration_workers=int(cost_policy.get("parallel_exploration_workers", 2) or 2),
@@ -1202,8 +1264,10 @@ class AcquisitionEngine:
     def _should_run_default_former_search_seed(self, task: AcquisitionTask, job_request: JobRequest) -> bool:
         if str(task.metadata.get("strategy_type") or "") != "full_company_roster":
             return False
-        if "run_former_search_seed" in dict(job_request.execution_preferences or {}):
-            return bool(job_request.execution_preferences.get("run_former_search_seed"))
+        intent_view = resolve_request_intent_view(job_request)
+        effective_execution_preferences = dict(intent_view.get("execution_preferences") or {})
+        if "run_former_search_seed" in effective_execution_preferences:
+            return bool(effective_execution_preferences.get("run_former_search_seed"))
         if not bool(task.metadata.get("include_former_search_seed")):
             return False
         cost_policy = _effective_cost_policy(task.metadata.get("cost_policy"), job_request)
@@ -1354,11 +1418,12 @@ class AcquisitionEngine:
         if self.worker_runtime is None or not job_id:
             return {"worker_status": "skipped"}
 
+        effective_request_payload = build_effective_request_payload(request_payload)
         normalized_company_filters = dict(company_filters or {})
         effective_root_snapshot_dir = Path(root_snapshot_dir) if root_snapshot_dir is not None else snapshot_dir
         worker_handle = self.worker_runtime.begin_worker(
             job_id=job_id,
-            request=JobRequest.from_payload(request_payload),
+            request=JobRequest.from_payload(effective_request_payload),
             plan_payload=plan_payload,
             runtime_mode=runtime_mode,
             lane_id="acquisition_specialist",
@@ -1380,7 +1445,7 @@ class AcquisitionEngine:
                 "company_filters": normalized_company_filters,
                 "worker_key_suffix": str(worker_key_suffix or ""),
                 "span_name_suffix": str(span_name_suffix or ""),
-                "request_payload": request_payload,
+                "request_payload": effective_request_payload,
                 "plan_payload": plan_payload,
                 "runtime_mode": runtime_mode,
                 "allow_shared_provider_cache": allow_shared_provider_cache,
@@ -1899,6 +1964,7 @@ class AcquisitionEngine:
                     snapshot_dir,
                     candidates,
                     evidence,
+                    job_request=job_request,
                 )
             else:
                 inheritance_summary = _profile_inheritance_summary()
@@ -2209,6 +2275,8 @@ def _inherit_historical_profile_captures(
     snapshot_dir: Path,
     candidates: list[Candidate],
     evidence: list[EvidenceRecord],
+    *,
+    job_request: JobRequest | None = None,
 ) -> tuple[list[Candidate], list[EvidenceRecord], dict[str, Any]]:
     company_dir = snapshot_dir.parent
     historical_sources: list[dict[str, Any]] = []
@@ -2256,6 +2324,42 @@ def _inherit_historical_profile_captures(
 
     if not historical_sources:
         return list(candidates), list(evidence), _profile_inheritance_summary()
+
+    baseline_source, baseline_summary = _select_full_roster_baseline_source(
+        historical_sources=historical_sources,
+        current_candidates=candidates,
+        job_request=job_request,
+    )
+    if baseline_source is not None:
+        baseline_candidates = list(baseline_source.get("candidates") or [])
+        baseline_evidence = list(baseline_source.get("evidence") or [])
+        merged_evidence_by_key: dict[tuple[str, str, str, str], EvidenceRecord] = {
+            _evidence_dedupe_key(item): item for item in [*baseline_evidence, *evidence]
+        }
+        summary = _profile_inheritance_summary(
+            history_source_count=len(historical_sources),
+            history_candidate_count=sum(int(item.get("candidate_count") or 0) for item in historical_sources),
+            matched_candidate_count=_count_historical_candidate_matches(candidates, baseline_candidates),
+            inherited_candidate_count=0,
+            inherited_evidence_count=max(len(merged_evidence_by_key) - len(evidence), 0),
+            inherited_membership_review_count=0,
+            carried_forward_candidate_count=len(baseline_candidates),
+            history_sources=[
+                {
+                    "snapshot_id": str(item.get("snapshot_id") or ""),
+                    "source_type": str(item.get("source_type") or ""),
+                    "candidate_count": int(item.get("candidate_count") or 0),
+                    "evidence_count": int(item.get("evidence_count") or 0),
+                }
+                for item in historical_sources
+            ],
+        )
+        summary.update(baseline_summary)
+        merged_evidence = sorted(
+            merged_evidence_by_key.values(),
+            key=lambda item: (item.candidate_id, item.source_type, item.title, item.url or item.source_path),
+        )
+        return list(baseline_candidates) + list(candidates), merged_evidence, summary
 
     match_index: dict[str, list[int]] = {}
     historical_candidates: list[Candidate] = []
@@ -2397,6 +2501,127 @@ def _profile_inheritance_summary(
         "carried_forward_candidate_count": carried_forward_candidate_count,
         "history_sources": list(history_sources or []),
     }
+
+
+def _select_full_roster_baseline_source(
+    *,
+    historical_sources: list[dict[str, Any]],
+    current_candidates: list[Candidate],
+    job_request: JobRequest | None,
+) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    if job_request is None:
+        return None, {"baseline_snapshot_reused": False, "baseline_reason": "job_request_missing"}
+    if str(job_request.target_scope or "").strip().lower() != "full_company_asset":
+        return None, {"baseline_snapshot_reused": False, "baseline_reason": "target_scope_not_full_company_asset"}
+    intent_view = resolve_request_intent_view(job_request)
+    if bool(dict(intent_view.get("execution_preferences") or {}).get("force_fresh_run")):
+        return None, {"baseline_snapshot_reused": False, "baseline_reason": "force_fresh_run"}
+
+    current_candidate_count = len(current_candidates)
+    if current_candidate_count >= _FULL_ROSTER_BASELINE_REUSE_MIN_CANDIDATES:
+        return None, {
+            "baseline_snapshot_reused": False,
+            "baseline_reason": "current_snapshot_already_large_enough",
+            "current_candidate_count": current_candidate_count,
+        }
+
+    sqlite_source = next(
+        (item for item in historical_sources if str(item.get("snapshot_id") or "").strip() == "sqlite"),
+        None,
+    )
+    reference_candidate_count = int((sqlite_source or {}).get("candidate_count") or 0)
+    if reference_candidate_count < _FULL_ROSTER_BASELINE_REUSE_MIN_CANDIDATES:
+        reference_candidate_count = max(
+            (int(item.get("candidate_count") or 0) for item in historical_sources),
+            default=0,
+        )
+    if reference_candidate_count < _FULL_ROSTER_BASELINE_REUSE_MIN_CANDIDATES:
+        return None, {
+            "baseline_snapshot_reused": False,
+            "baseline_reason": "no_large_historical_baseline_available",
+            "current_candidate_count": current_candidate_count,
+        }
+
+    sparse_threshold = max(
+        _FULL_ROSTER_BASELINE_REUSE_MIN_CURRENT_COUNT,
+        max(
+            1,
+            int(reference_candidate_count * _FULL_ROSTER_BASELINE_REUSE_CURRENT_RATIO_THRESHOLD),
+        ),
+    )
+    if current_candidate_count >= sparse_threshold:
+        return None, {
+            "baseline_snapshot_reused": False,
+            "baseline_reason": "current_snapshot_not_sparse_enough",
+            "current_candidate_count": current_candidate_count,
+            "reference_candidate_count": reference_candidate_count,
+        }
+
+    max_distance = max(
+        _FULL_ROSTER_BASELINE_REUSE_REFERENCE_DISTANCE_FLOOR,
+        int(reference_candidate_count * _FULL_ROSTER_BASELINE_REUSE_REFERENCE_DISTANCE_RATIO),
+    )
+    reusable_sources: list[dict[str, Any]] = []
+    for source in historical_sources:
+        source_count = int(source.get("candidate_count") or 0)
+        if source_count < _FULL_ROSTER_BASELINE_REUSE_MIN_CANDIDATES:
+            continue
+        source_snapshot_id = str(source.get("snapshot_id") or "").strip()
+        if source_snapshot_id != "sqlite" and abs(source_count - reference_candidate_count) > max_distance:
+            continue
+        reusable_sources.append(source)
+
+    if not reusable_sources:
+        return None, {
+            "baseline_snapshot_reused": False,
+            "baseline_reason": "no_reusable_baseline_selected",
+            "current_candidate_count": current_candidate_count,
+            "reference_candidate_count": reference_candidate_count,
+        }
+
+    non_sqlite_sources = [
+        item for item in reusable_sources if str(item.get("snapshot_id") or "").strip() != "sqlite"
+    ]
+    candidate_sources = non_sqlite_sources or reusable_sources
+    minimum_distance = min(
+        abs(int(item.get("candidate_count") or 0) - reference_candidate_count)
+        for item in candidate_sources
+    )
+    tied_sources = [
+        item
+        for item in candidate_sources
+        if abs(int(item.get("candidate_count") or 0) - reference_candidate_count) == minimum_distance
+    ]
+    selected = max(tied_sources, key=lambda item: str(item.get("snapshot_id") or ""))
+    return selected, {
+        "baseline_snapshot_reused": True,
+        "baseline_snapshot_id": str(selected.get("snapshot_id") or ""),
+        "baseline_source_type": str(selected.get("source_type") or ""),
+        "baseline_candidate_count": int(selected.get("candidate_count") or 0),
+        "baseline_reason": (
+            "Current scoped snapshot is sparse relative to the reusable full-company baseline; "
+            "reuse the closest historical baseline before canonicalization."
+        ),
+        "current_candidate_count": current_candidate_count,
+        "reference_candidate_count": reference_candidate_count,
+    }
+
+
+def _count_historical_candidate_matches(
+    candidates: list[Candidate],
+    historical_candidates: list[Candidate],
+) -> int:
+    if not candidates or not historical_candidates:
+        return 0
+    match_index: dict[str, list[int]] = {}
+    for index, candidate in enumerate(historical_candidates):
+        for key in _candidate_match_keys(candidate):
+            match_index.setdefault(key, []).append(index)
+    matched = 0
+    for candidate in candidates:
+        if _match_historical_candidates(candidate, historical_candidates, match_index):
+            matched += 1
+    return matched
 
 
 def _load_snapshot_candidate_payload(payload_path: Path, target_company: str) -> tuple[list[Candidate], list[EvidenceRecord]]:
@@ -3132,6 +3357,7 @@ def _extract_domain_hint(snippet: str) -> str:
 
 
 def _build_investor_firm_plan(target_company: str, candidates: list[Candidate], job_request: JobRequest) -> dict[str, Any]:
+    intent_view = resolve_request_intent_view(job_request)
     grouped: dict[str, list[Candidate]] = {}
     for candidate in candidates:
         grouped.setdefault(candidate.organization or "Unknown Firm", []).append(candidate)
@@ -3163,7 +3389,7 @@ def _build_investor_firm_plan(target_company: str, candidates: list[Candidate], 
             f"Full investor-firm roster for institutions connected to {target_company}, followed by later filtering "
             "for role, involvement, and other sourcing criteria."
         ),
-        "keywords": list(job_request.keywords or []),
+        "keywords": list(intent_view.get("keywords") or []),
         "firms": firms,
         "tier_summary": {
             "tier_1": sum(1 for firm in firms if firm["tier"] == "tier_1"),

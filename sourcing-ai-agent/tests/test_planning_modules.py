@@ -7,9 +7,93 @@ from sourcing_agent.model_provider import DeterministicModelClient
 from sourcing_agent.plan_review import apply_plan_review_decision, build_plan_review_gate
 from sourcing_agent.planning import build_sourcing_plan
 from sourcing_agent.publication_planning import compile_publication_coverage_plan
+from sourcing_agent.request_normalization import resolve_request_intent_view
+from sourcing_agent.search_planning import compile_search_strategy
 
 
 class PlanningModulesTest(unittest.TestCase):
+    def test_resolve_request_intent_view_merges_axes_into_effective_execution_semantics(self) -> None:
+        intent_view = resolve_request_intent_view(
+            {
+                "raw_user_request": "我想找Gemini的产品经理",
+                "intent_axes": {
+                    "population_boundary": {
+                        "categories": ["employee"],
+                        "employment_statuses": ["current", "former"],
+                    },
+                    "scope_boundary": {
+                        "target_company": "Google",
+                        "organization_keywords": ["Google DeepMind", "Gemini"],
+                        "confirmed_company_scope": ["Google", "Google DeepMind"],
+                    },
+                    "acquisition_lane_policy": {
+                        "keyword_priority_only": True,
+                    },
+                    "fallback_policy": {
+                        "provider_people_search_query_strategy": "all_queries_union",
+                        "run_former_search_seed": True,
+                    },
+                    "thematic_constraints": {
+                        "must_have_primary_role_buckets": ["product_management"],
+                        "keywords": ["Gemini"],
+                    },
+                },
+            }
+        )
+
+        self.assertEqual(intent_view["target_company"], "Google")
+        self.assertEqual(intent_view["categories"], ["employee"])
+        self.assertEqual(intent_view["employment_statuses"], ["current", "former"])
+        self.assertEqual(intent_view["organization_keywords"], ["Google DeepMind", "Gemini"])
+        self.assertEqual(intent_view["must_have_primary_role_buckets"], ["product_management"])
+        self.assertTrue(intent_view["execution_preferences"]["keyword_priority_only"])
+        self.assertTrue(intent_view["execution_preferences"]["run_former_search_seed"])
+        self.assertEqual(
+            intent_view["execution_preferences"]["provider_people_search_query_strategy"],
+            "all_queries_union",
+        )
+        self.assertEqual(
+            intent_view["execution_preferences"]["confirmed_company_scope"],
+            ["Google", "Google DeepMind"],
+        )
+
+    def test_job_request_materializes_intent_axes_only_payload(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "我想找Gemini的产品经理",
+                "intent_axes": {
+                    "population_boundary": {
+                        "categories": ["employee"],
+                        "employment_statuses": ["current", "former"],
+                    },
+                    "scope_boundary": {
+                        "target_company": "Google",
+                        "organization_keywords": ["Google DeepMind", "Gemini"],
+                    },
+                    "acquisition_lane_policy": {
+                        "keyword_priority_only": True,
+                    },
+                    "fallback_policy": {
+                        "provider_people_search_query_strategy": "all_queries_union",
+                    },
+                    "thematic_constraints": {
+                        "must_have_primary_role_buckets": ["product_management"],
+                        "keywords": ["Gemini"],
+                    },
+                },
+            }
+        )
+
+        self.assertEqual(request.target_company, "Google")
+        self.assertEqual(request.employment_statuses, ["current", "former"])
+        self.assertEqual(request.must_have_primary_role_buckets, ["product_management"])
+        self.assertEqual(request.organization_keywords, ["Google DeepMind", "Gemini"])
+        self.assertTrue(request.execution_preferences["keyword_priority_only"])
+        self.assertEqual(
+            request.execution_preferences["provider_people_search_query_strategy"],
+            "all_queries_union",
+        )
+
     def test_plan_review_decision_backfills_missing_target_company_from_confirmed_scope(self) -> None:
         request_payload = {
             "raw_user_request": "帮我寻找LangChain Infra方向的人",
@@ -61,6 +145,49 @@ class PlanningModulesTest(unittest.TestCase):
         self.assertEqual(updated_request["target_company"], "LangChain")
         self.assertEqual(updated_plan["acquisition_strategy"]["company_scope"][0], "LangChain")
         self.assertEqual(updated_plan["acquisition_strategy"]["filter_hints"]["current_companies"][0], "LangChain")
+
+    def test_plan_review_decision_applies_keyword_first_lane_preferences(self) -> None:
+        request_payload = {
+            "raw_user_request": "给我 Google 做多模态的人",
+            "target_company": "Google",
+            "execution_preferences": {},
+        }
+        plan_payload = {
+            "acquisition_strategy": {
+                "strategy_type": "full_company_roster",
+                "company_scope": ["Google"],
+                "filter_hints": {},
+                "cost_policy": {
+                    "allow_company_employee_api": True,
+                    "provider_people_search_query_strategy": "first_hit",
+                },
+                "reasoning": [],
+            },
+            "acquisition_tasks": [],
+        }
+
+        updated_request, updated_plan = apply_plan_review_decision(
+            request_payload,
+            plan_payload,
+            {
+                "keyword_priority_only": True,
+                "use_company_employees_lane": False,
+                "run_former_search_seed": True,
+                "provider_people_search_query_strategy": "all_queries_union",
+                "provider_people_search_max_queries": 6,
+            },
+        )
+
+        prefs = updated_request["execution_preferences"]
+        cost_policy = updated_plan["acquisition_strategy"]["cost_policy"]
+        self.assertTrue(prefs["keyword_priority_only"])
+        self.assertFalse(prefs["use_company_employees_lane"])
+        self.assertTrue(prefs["run_former_search_seed"])
+        self.assertEqual(prefs["provider_people_search_query_strategy"], "all_queries_union")
+        self.assertEqual(cost_policy["keyword_priority_only"], True)
+        self.assertEqual(cost_policy["allow_company_employee_api"], False)
+        self.assertEqual(cost_policy["provider_people_search_query_strategy"], "all_queries_union")
+        self.assertEqual(cost_policy["provider_people_search_max_queries"], 6)
 
     def test_acquisition_keyword_hints_exclude_outreach_only_terms(self) -> None:
         request = JobRequest(
@@ -132,8 +259,115 @@ class PlanningModulesTest(unittest.TestCase):
         families = [item.family for item in coverage.source_families]
         self.assertIn("official_research", families)
         self.assertIn("official_engineering", families)
+
+    def test_acquisition_strategy_prefers_intent_view_over_conflicting_flat_fields(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "找产品经理",
+                "query": "product manager",
+                "target_company": "WrongCo",
+                "intent_axes": {
+                    "population_boundary": {
+                        "categories": ["employee"],
+                        "employment_statuses": ["current", "former"],
+                    },
+                    "scope_boundary": {
+                        "target_company": "Google",
+                        "organization_keywords": ["Google DeepMind", "Gemini"],
+                    },
+                    "thematic_constraints": {
+                        "must_have_primary_role_buckets": ["product_management"],
+                        "keywords": ["Gemini"],
+                    },
+                },
+            }
+        )
+
+        retrieval_plan = RetrievalPlan(strategy="hybrid", reason="test")
+        strategy = compile_acquisition_strategy(request, ["employee"], ["current"], retrieval_plan)
+
+        self.assertEqual(strategy.strategy_type, "full_company_roster")
+        self.assertEqual(
+            strategy.filter_hints.get("current_companies"),
+            [
+                "https://www.linkedin.com/company/google/",
+                "https://www.linkedin.com/company/deepmind/",
+            ],
+        )
+        self.assertEqual(strategy.filter_hints.get("function_ids"), ["19"])
+        self.assertIn("Gemini", strategy.filter_hints.get("keywords") or [])
+        self.assertTrue(any("Google" in query for query in strategy.search_seed_queries))
+
+    def test_publication_and_search_planning_use_intent_view_scope_and_keywords(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "找产品经理",
+                "query": "product manager",
+                "target_company": "WrongCo",
+                "intent_axes": {
+                    "population_boundary": {
+                        "categories": ["employee"],
+                        "employment_statuses": ["current", "former"],
+                    },
+                    "scope_boundary": {
+                        "target_company": "Google",
+                        "organization_keywords": ["Google DeepMind", "Gemini"],
+                    },
+                    "thematic_constraints": {
+                        "must_have_primary_role_buckets": ["product_management"],
+                        "keywords": ["Gemini"],
+                    },
+                },
+            }
+        )
+
+        retrieval_plan = RetrievalPlan(strategy="hybrid", reason="test")
+        strategy = compile_acquisition_strategy(request, ["employee"], ["current"], retrieval_plan)
+        publication = compile_publication_coverage_plan(request, strategy)
+        search_plan = compile_search_strategy(request, strategy, publication, DeterministicModelClient())
+
+        families = [item.family for item in publication.source_families]
+        self.assertIn("product_subbrand_pages", families)
+        self.assertTrue(any("Gemini contributor" in query for query in publication.seed_queries))
+
+        relationship_bundle = next(item for item in search_plan.query_bundles if item.bundle_id == "relationship_web")
+        self.assertTrue(any("Google" in query for query in relationship_bundle.queries))
+        self.assertTrue(any("Gemini" in query for query in relationship_bundle.queries))
         self.assertIn("official_blog_and_docs", families)
-        self.assertIn("Use LLM extraction for acknowledgement, contributor, and weakly structured bylines.", coverage.extraction_strategy)
+        self.assertIn(
+            "Use LLM extraction for acknowledgement, contributor, and weakly structured bylines.",
+            publication.extraction_strategy,
+        )
+
+    def test_build_sourcing_plan_uses_intent_view_target_company_for_top_level_plan_and_tasks(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "找产品经理",
+                "query": "product manager",
+                "target_company": "WrongCo",
+                "intent_axes": {
+                    "population_boundary": {
+                        "categories": ["employee"],
+                        "employment_statuses": ["current", "former"],
+                    },
+                    "scope_boundary": {
+                        "target_company": "Google",
+                        "organization_keywords": ["Google DeepMind", "Gemini"],
+                    },
+                    "thematic_constraints": {
+                        "must_have_primary_role_buckets": ["product_management"],
+                        "keywords": ["Gemini"],
+                    },
+                },
+            }
+        )
+
+        plan = build_sourcing_plan(request, AssetCatalog.discover(), DeterministicModelClient())
+        acquire_task = next(task for task in plan.acquisition_tasks if task.task_type == "acquire_full_roster")
+
+        self.assertEqual(plan.target_company, "Google")
+        self.assertEqual(acquire_task.status, "ready")
+        self.assertEqual(acquire_task.metadata["max_pages"], 100)
 
     def test_sourcing_plan_contains_search_strategy_and_filter_layers(self) -> None:
         request = JobRequest(
@@ -315,6 +549,23 @@ class PlanningModulesTest(unittest.TestCase):
         self.assertEqual(gate["status"], "ready")
         self.assertNotIn("google_scope_ambiguity_requires_confirmation", gate["reasons"])
         self.assertEqual(gate["scope_disambiguation"]["source"], "llm")
+
+    def test_plan_review_gate_exposes_keyword_first_controls(self) -> None:
+        request = JobRequest(
+            raw_user_request="给我 Google 做多模态的人",
+            query="Google multimodal people",
+            target_company="Google",
+            categories=["employee"],
+            employment_statuses=["current", "former"],
+        )
+        plan = build_sourcing_plan(request, AssetCatalog.discover(), DeterministicModelClient())
+        gate = build_plan_review_gate(request, plan)
+
+        self.assertIn("keyword_priority_only", gate["editable_fields"])
+        self.assertIn("former_keyword_queries_only", gate["editable_fields"])
+        self.assertIn("provider_people_search_query_strategy", gate["editable_fields"])
+        self.assertIn("provider_people_search_max_queries", gate["editable_fields"])
+        self.assertIn("large_org_keyword_probe_mode", gate["editable_fields"])
 
     def test_full_company_preferences_surface_in_plan_without_extra_review(self) -> None:
         request = JobRequest.from_payload(
