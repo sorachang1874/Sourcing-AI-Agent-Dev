@@ -1,0 +1,801 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAABPg53YB1YcCDWF_VGb2pAxxoHXWvKYzFQs",
+    "profile_url": "https://www.linkedin.com/in/ACwAABPg53YB1YcCDWF_VGb2pAxxoHXWvKYzFQs"
+  },
+  "item": {
+    "id": "ACoAABPg53YBHdOvmp7pU72eDhcho-7cnwyxk1o",
+    "publicIdentifier": "piafsantos",
+    "linkedinUrl": "https://www.linkedin.com/in/piafsantos",
+    "firstName": "Pia",
+    "lastName": "Santos",
+    "emails": [
+      {
+        "email": "pia.santos@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Founding Team at Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": true,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "333506422",
+    "registeredAt": "2014-03-26T03:12:17.694Z",
+    "topSkills": null,
+    "connectionsCount": 1147,
+    "followerCount": 1587,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 12,
+            "year": 2024,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "17968",
+        "companyId": "6226",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/6226/",
+        "schoolName": "University of San Francisco"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5616AQFU_Y_3c8vH9Q/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1697040288350?e=1776902400&v=beta&t=uNHhVp9dJx8SGd0zmgFjAhR8ekMyTxx60WC3TNZIrK8",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5616AQFU_Y_3c8vH9Q/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1697040288350?e=1776902400&v=beta&t=uNHhVp9dJx8SGd0zmgFjAhR8ekMyTxx60WC3TNZIrK8",
+          "width": 1400,
+          "height": 350,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5616AQFU_Y_3c8vH9Q/profile-displaybackgroundimage-shrink_200_800/profile-displaybackgroundimage-shrink_200_800/0/1697040288350?e=1776902400&v=beta&t=0Dz1wU5oJlx_m04zXb-x2lM46KbfWQZ3cThFLQ7epuI",
+          "width": 800,
+          "height": 200,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Founding Team at Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Executive Business Partner, Founding Team",
+        "location": "San Francisco, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "1 yr 5 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Dec",
+          "year": 2024,
+          "text": "Dec 2024"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Executive Operations Lead",
+        "location": "San Francisco, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "OpenAI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/11130470/",
+        "companyId": "11130470",
+        "duration": "1 yr 2 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Oct",
+          "year": 2023,
+          "text": "Oct 2023"
+        },
+        "endDate": {
+          "month": "Nov",
+          "year": 2024,
+          "text": "Nov 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_200_200/B56ZT8EYB8HsAI-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=O6RSWlpQ5W4zNCOCTu621qCyTijLuXFJS4pz2_hBQfo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_100_100/B56ZT8EYB8HsAQ-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=y7RA89V9q8GlAjQ1oRU-jf_-n5zlSXRCnykXBIkgHfM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Executive Assistant to the Founders",
+        "location": "Mountain View, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Nuro",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/12957486/",
+        "companyId": "12957486",
+        "duration": "3 yrs 4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2020,
+          "text": "Jun 2020"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2023,
+          "text": "Sep 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHahNycmNp6Gg/company-logo_400_400/company-logo_400_400/0/1630638403898/nuro_inc_logo?e=1776902400&v=beta&t=nFpY1wgsRVYstQToMVEC5v1G5AgYEovxSxtq16ubvwk",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHahNycmNp6Gg/company-logo_400_400/company-logo_400_400/0/1630638403898/nuro_inc_logo?e=1776902400&v=beta&t=nFpY1wgsRVYstQToMVEC5v1G5AgYEovxSxtq16ubvwk",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHahNycmNp6Gg/company-logo_200_200/company-logo_200_200/0/1630638403898/nuro_inc_logo?e=1776902400&v=beta&t=xICfGEg0Tkwy8VoHmQwoJplXoRP4tLnT_JMkGnkBMUc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHahNycmNp6Gg/company-logo_100_100/company-logo_100_100/0/1630638403898/nuro_inc_logo?e=1776902400&v=beta&t=3A3HHpQQAb-nHZPpOwy4qNHyoRw0iKHPoAnRWoSFbao",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Lead Administrative Business Partner, Homes Platform",
+        "location": "San Francisco Bay Area",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Airbnb",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/309694/",
+        "companyId": "309694",
+        "duration": "9 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Oct",
+          "year": 2019,
+          "text": "Oct 2019"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2020,
+          "text": "Jun 2020"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQFhfl32crIGIw/company-logo_400_400/company-logo_400_400/0/1630637496980/airbnb_logo?e=1776902400&v=beta&t=-9EBSuoM2qiLzzUeI-QP65UtwxiAn9NJuUx0fILPcYk",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFhfl32crIGIw/company-logo_400_400/company-logo_400_400/0/1630637496980/airbnb_logo?e=1776902400&v=beta&t=-9EBSuoM2qiLzzUeI-QP65UtwxiAn9NJuUx0fILPcYk",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFhfl32crIGIw/company-logo_200_200/company-logo_200_200/0/1630637496980/airbnb_logo?e=1776902400&v=beta&t=-3qQmvj1qu-2zugzDAxthowl38BYrIBN2iZg4JC2SMM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFhfl32crIGIw/company-logo_100_100/company-logo_100_100/0/1630637496980/airbnb_logo?e=1776902400&v=beta&t=NN0xpAq1y-Paivx3-GiRnB4Z3o78xAGKmROKeyAVIZM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Executive Assistant, Ads & Business Platform Team",
+        "location": "Menlo Park",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Facebook",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/76987811/",
+        "companyId": "76987811",
+        "duration": "2 yrs 2 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "3d8014f33e9437cebe0b34e772e1a84c28ccb9c0",
+        "startDate": {
+          "month": "Sep",
+          "year": 2017,
+          "text": "Sep 2017"
+        },
+        "endDate": {
+          "month": "Oct",
+          "year": 2019,
+          "text": "Oct 2019"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_200_200/company-logo_200_200/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=CL3OcEUIyBJFm9Wkw4iT9gJoWpsvGBIAhhNM0DjZx_A",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_100_100/company-logo_100_100/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=sZq9Sard1kGYVIprgBkNhUvJRTI7tf3pXOCP1bQBfpM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Recruiting Coordinator, Communications & Public Policy",
+        "location": "Menlo Park, CA",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Facebook",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/76987811/",
+        "companyId": "76987811",
+        "duration": "2 yrs 11 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "3d8014f33e9437cebe0b34e772e1a84c28ccb9c0",
+        "startDate": {
+          "month": "Nov",
+          "year": 2014,
+          "text": "Nov 2014"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2017,
+          "text": "Sep 2017"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_200_200/company-logo_200_200/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=CL3OcEUIyBJFm9Wkw4iT9gJoWpsvGBIAhhNM0DjZx_A",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_100_100/company-logo_100_100/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=sZq9Sard1kGYVIprgBkNhUvJRTI7tf3pXOCP1bQBfpM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Office Manager of Events Management & Guest Services",
+        "location": "San Francisco, CA",
+        "employmentType": "Part-time",
+        "workplaceType": null,
+        "companyName": "University of San Francisco",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/university-of-san-francisco/",
+        "companyId": "6226",
+        "companyUniversalName": "university-of-san-francisco",
+        "duration": "2 yrs 8 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2012,
+          "text": "Jan 2012"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2014,
+          "text": "Aug 2014"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4D0BAQFATMFw7dFqGQ/company-logo_400_400/company-logo_400_400/0/1693254438398?e=1776902400&v=beta&t=lYSFSi3ZeF0gqtWmyWtS5kBYoEktG7aVwQZQOtoJcVk",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQFATMFw7dFqGQ/company-logo_400_400/company-logo_400_400/0/1693254438398?e=1776902400&v=beta&t=lYSFSi3ZeF0gqtWmyWtS5kBYoEktG7aVwQZQOtoJcVk",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQFATMFw7dFqGQ/company-logo_200_200/company-logo_200_200/0/1693254438398?e=1776902400&v=beta&t=L7eONDyDSzawu3E37ZkyStq8qBt1RFf0Nr_xQswvujQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQFATMFw7dFqGQ/company-logo_100_100/company-logo_100_100/0/1693254438398?e=1776902400&v=beta&t=iIyYzfRNjpNWuRR0u7EyaMexICcBxAOjWfJB09wVgNA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "University of San Francisco",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/6226/",
+        "schoolId": "6226",
+        "degree": "Bachelor's degree",
+        "fieldOfStudy": "Politics and Legal Studies",
+        "skills": [],
+        "startDate": {
+          "year": 2010,
+          "text": "2010"
+        },
+        "endDate": {
+          "year": 2014,
+          "text": "2014"
+        },
+        "period": "2010 - 2014",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4D0BAQFATMFw7dFqGQ/company-logo_400_400/company-logo_400_400/0/1693254438398?e=1776902400&v=beta&t=lYSFSi3ZeF0gqtWmyWtS5kBYoEktG7aVwQZQOtoJcVk",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQFATMFw7dFqGQ/company-logo_400_400/company-logo_400_400/0/1693254438398?e=1776902400&v=beta&t=lYSFSi3ZeF0gqtWmyWtS5kBYoEktG7aVwQZQOtoJcVk",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQFATMFw7dFqGQ/company-logo_200_200/company-logo_200_200/0/1693254438398?e=1776902400&v=beta&t=L7eONDyDSzawu3E37ZkyStq8qBt1RFf0Nr_xQswvujQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQFATMFw7dFqGQ/company-logo_100_100/company-logo_100_100/0/1693254438398?e=1776902400&v=beta&t=iIyYzfRNjpNWuRR0u7EyaMexICcBxAOjWfJB09wVgNA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Menlo Atherton High School",
+        "schoolLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Menlo+Atherton+High+School",
+        "schoolId": null,
+        "degree": null,
+        "fieldOfStudy": null,
+        "skills": [],
+        "startDate": {
+          "year": 2006,
+          "text": "2006"
+        },
+        "endDate": {
+          "year": 2010,
+          "text": "2010"
+        },
+        "period": "2006 - 2010",
+        "schoolLogo": null
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Community Outreach",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Editing",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Event Planning",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Event Management",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Research",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Time Management",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Customer Service",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Social Media",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Social Networking",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Public Speaking",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Leadership"
+      },
+      {
+        "name": "Microsoft Office",
+        "positions": [
+          "Endorsed by 2 colleagues at University of San Francisco"
+        ],
+        "endorsements": "9 endorsements"
+      },
+      {
+        "name": "Microsoft Word",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Outlook",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Microsoft Excel",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "PowerPoint"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABgwxtcBfqsJJUHPwsSPuBE4K9oKyRqUp5o",
+        "firstName": "Lia",
+        "lastName": "Guy",
+        "publicIdentifier": "aureliaguy",
+        "linkedinUrl": "https://www.linkedin.com/in/aureliaguy"
+      },
+      {
+        "id": "ACoAAACQBzQB5nk5kOpFWQRtK4pv3RaL5q2G-pA",
+        "firstName": "Jonathan",
+        "lastName": "Lachman",
+        "publicIdentifier": "jonathan-lachman-4981b23",
+        "linkedinUrl": "https://www.linkedin.com/in/jonathan-lachman-4981b23"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAAAJzsfoBp0MxssQYMgmy0ZNO2U3sA58ugwc",
+        "firstName": "Joshua",
+        "lastName": "Gross",
+        "publicIdentifier": "joshgross",
+        "linkedinUrl": "https://www.linkedin.com/in/joshgross"
+      },
+      {
+        "id": "ACoAABYs4-IB5mHx5eVfOHzu1e8xlO3q_kb38IM",
+        "firstName": "Brydon",
+        "lastName": "Eastman",
+        "publicIdentifier": "brydon-eastman-396719a4",
+        "linkedinUrl": "https://www.linkedin.com/in/brydon-eastman-396719a4"
+      },
+      {
+        "id": "ACoAABA0sF8BJqwmfoms3veu9TE72tj8JMUQEFA",
+        "firstName": "Sam",
+        "lastName": "Shleifer",
+        "publicIdentifier": "sam-shleifer-a5307a77",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-shleifer-a5307a77"
+      },
+      {
+        "id": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+        "firstName": "Saurabh",
+        "lastName": "Garg",
+        "publicIdentifier": "saurabh-garg-b680b5b8",
+        "linkedinUrl": "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+      },
+      {
+        "id": "ACoAACEKIcoBlH0R5ZT_TKQuJ4i3ZD4WlI1-rME",
+        "firstName": "Jacob",
+        "lastName": "Menick",
+        "position": "Thinking Machines, Founding Team",
+        "publicIdentifier": "jacob-menick-5a277a135",
+        "linkedinUrl": "https://www.linkedin.com/in/jacob-menick-5a277a135"
+      },
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAAAl87CYBWKLLyGNTbomy6oqIPv-5n34CXIY",
+        "firstName": "Andrew",
+        "lastName": "Tulloch",
+        "publicIdentifier": "andrew-tulloch-17238745",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-tulloch-17238745"
+      },
+      {
+        "id": "ACoAABV61Q0BF3ER-196Zc9GK5TviMrbbIlVGqg",
+        "firstName": "Samuel",
+        "lastName": "Schoenholz",
+        "publicIdentifier": "samuel-schoenholz-379830a0",
+        "linkedinUrl": "https://www.linkedin.com/in/samuel-schoenholz-379830a0"
+      },
+      {
+        "id": "ACoAADwrCKUB0FU7B3O7AIg9j_wieI-QOvJrtEE",
+        "firstName": "Katy",
+        "lastName": "Liemandt",
+        "publicIdentifier": "katy-liemandt-399092242",
+        "linkedinUrl": "https://www.linkedin.com/in/katy-liemandt-399092242"
+      },
+      {
+        "id": "ACoAAA6jodABB4FFTQD3NzZ7B0vo91j5zOLQQn4",
+        "firstName": "luke",
+        "lastName": "metz",
+        "publicIdentifier": "luke-metz-5003046a",
+        "linkedinUrl": "https://www.linkedin.com/in/luke-metz-5003046a"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAAAO-j_IBXcvIzhZtQ7QNkky6tlnQTcFl9qI",
+        "firstName": "Myle",
+        "lastName": "Ott",
+        "publicIdentifier": "myleott",
+        "linkedinUrl": "https://www.linkedin.com/in/myleott"
+      },
+      {
+        "id": "ACoAAAji1bkB1eLX4z2Jb9-N2nMhEGNLWptSnqU",
+        "firstName": "Clare",
+        "lastName": "Birch",
+        "publicIdentifier": "clarebirch42",
+        "linkedinUrl": "https://www.linkedin.com/in/clarebirch42"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAAAPH3hkBD4YvYU1lCbTlnKlqFvJCZxL3KlQ",
+        "firstName": "Weiheng",
+        "lastName": "Zhang",
+        "publicIdentifier": "weiheng-zhang",
+        "linkedinUrl": "https://www.linkedin.com/in/weiheng-zhang"
+      },
+      {
+        "id": "ACoAAAmDakkBxQuwJA7NJds2S62Pbazh6dFz-CQ",
+        "firstName": "Clailson",
+        "lastName": "Silva",
+        "position": "Diretor de planejamento comercial na Volumo Digital Marketing",
+        "publicIdentifier": "clailson",
+        "linkedinUrl": "https://www.linkedin.com/in/clailson"
+      },
+      {
+        "id": "ACoAAAgNRRMBwp6xGrmK2h4cXJeSSdqj6LtbLUQ",
+        "firstName": "Mariana",
+        "lastName": "Céspedes",
+        "position": "Gestora de eventos",
+        "publicIdentifier": "marianacespedes",
+        "linkedinUrl": "https://www.linkedin.com/in/marianacespedes"
+      },
+      {
+        "id": "ACoAAATb-NkBCJdFnmTORXJOQa9rZrcRC47zpE8",
+        "firstName": "Nanci",
+        "lastName": "Lopes Inácio ",
+        "position": "Executivo de Contas Sénior | Gestor Comercial |  Desenvolvimento de Negócios | Vendas B2B - B2C  | Seguros |  Gestão de Clientes | Apoio ao Cliente | Perfil Hunter & Closer 🇵🇹 🇧🇷",
+        "publicIdentifier": "nanci-lopes-",
+        "linkedinUrl": "https://www.linkedin.com/in/nanci-lopes-"
+      },
+      {
+        "id": "ACoAAB091IEBE9hkBT_-6JeR4rzg83ugydCVs6k",
+        "firstName": "Carolina",
+        "lastName": "Costa",
+        "position": "Curious | Advertising & Marketing from Strategy to Implementation",
+        "publicIdentifier": "carolinaqcosta",
+        "linkedinUrl": "https://www.linkedin.com/in/carolinaqcosta"
+      },
+      {
+        "id": "ACoAAAVkPbgBZtmWrby-wXu0Tuy4zJChovkdcyM",
+        "firstName": "Aquino",
+        "lastName": "Gamboa",
+        "position": "General Manager | Promóbidos, Lda | Events Organizer",
+        "publicIdentifier": "aquinogamboa",
+        "linkedinUrl": "https://www.linkedin.com/in/aquinogamboa"
+      },
+      {
+        "id": "ACoAAAUy03ABRxotOntIqXfQloSCOk1WrLwbNEQ",
+        "firstName": "António",
+        "lastName": "Albuquerque",
+        "position": "Diretor Comercial Fast Lane II, Lda",
+        "publicIdentifier": "antoniofalbuquerque",
+        "linkedinUrl": "https://www.linkedin.com/in/antoniofalbuquerque"
+      },
+      {
+        "id": "ACoAAAKVL5MBkOhx_MeNZq4dkQFSEy_dPjnBb_E",
+        "firstName": "Willians Soth",
+        "lastName": "Cuba",
+        "position": "Executivo Comercial Regional KA | Trade Marketing HEINEKEN BRASIL Gerente de Contas | Executivo de Contas | Gerente Comercial | Gestor de Compras.",
+        "publicIdentifier": "willians-cuba",
+        "linkedinUrl": "https://www.linkedin.com/in/willians-cuba"
+      },
+      {
+        "id": "ACoAAAX5lj4B78FuOaK8wsi0qHNu1v4PwpDutV8",
+        "firstName": "Luiz Eduardo",
+        "lastName": "Santos",
+        "position": "SALES EXECUTIVE | COMMERCIAL | CUSTOMER RELATIONSHIP",
+        "publicIdentifier": "luiz-eduardo-santos-bba6a229",
+        "linkedinUrl": "https://www.linkedin.com/in/luiz-eduardo-santos-bba6a229"
+      },
+      {
+        "id": "ACoAACMasuQBejPQ-2e86CIC01EXmkmLZb_Duew",
+        "firstName": "RUBENISE",
+        "lastName": "VANDELLI",
+        "position": "Mestra Direito Fiscal-Universidade Lisboa - Pós Graduada Direito Cont Adm e Tributário Português ICPJ - Pós Graduada Direito dos Estrangeiros e Lei da Nacionalidade pela Nova School Of Law\nAdvogada Internacional 🇵🇹🇧🇷",
+        "publicIdentifier": "rubenisevandelliadv",
+        "linkedinUrl": "https://www.linkedin.com/in/rubenisevandelliadv"
+      },
+      {
+        "id": "ACoAACG4jUMBsoXWpTSuc2dQnV727Jnph_gt-DI",
+        "firstName": "leonel",
+        "lastName": "figueiredo da silva",
+        "position": "Executivo de contas sênior na BFA - Banco de Fomento Angola",
+        "publicIdentifier": "leonel-figueiredo-da-silva-62b571139",
+        "linkedinUrl": "https://www.linkedin.com/in/leonel-figueiredo-da-silva-62b571139"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAABPg53YB1YcCDWF_VGb2pAxxoHXWvKYzFQs"
+    }
+  }
+}

@@ -1,0 +1,669 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAEWISqkB1LxqPl20_-_Puz1FnxxSceLTH28",
+    "profile_url": "https://www.linkedin.com/in/ACwAAEWISqkB1LxqPl20_-_Puz1FnxxSceLTH28"
+  },
+  "item": {
+    "id": "ACoAAEWISqkBsSmXKPSyJai6rQwhRBUoHgtqFBA",
+    "publicIdentifier": "feng-yao-661818286",
+    "linkedinUrl": "https://www.linkedin.com/in/feng-yao-661818286",
+    "firstName": "Feng",
+    "lastName": "Yao",
+    "emails": [
+      {
+        "email": "feng.yao@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "PhD student at UCSD.",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Diego, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Diego, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Diego"
+      }
+    },
+    "objectUrn": "1166559913",
+    "registeredAt": "2023-08-04T16:22:20.529Z",
+    "topSkills": null,
+    "connectionsCount": 431,
+    "followerCount": 455,
+    "verified": false,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 11,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "17954",
+        "companyId": "3382",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3382/",
+        "schoolName": "UC San Diego"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4E03AQHRU-SI8iVwcQ/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1694905074666?e=1776902400&v=beta&t=poy4jzNQGo2vyk7tVTovSAhc2P-He-Ip8d_V96duQCQ",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQHRU-SI8iVwcQ/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1694905074666?e=1776902400&v=beta&t=poy4jzNQGo2vyk7tVTovSAhc2P-He-Ip8d_V96duQCQ",
+          "width": 623,
+          "height": 623,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQHRU-SI8iVwcQ/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1694905074666?e=1776902400&v=beta&t=N5ELcBHOkNZMc-6oSifMLlnd0jv4aJ9JDxAhZOGp57U",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQHRU-SI8iVwcQ/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1694905074666?e=1776902400&v=beta&t=jXOPj9MmhPiRCmNB0EFLA5VImKswVsLR1q25N-Oevxg",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQHRU-SI8iVwcQ/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1694905074666?e=1776902400&v=beta&t=CbKnuaZpWxkLL1OACyQdcS236SbL_rmKUo8HSZgIjoE",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D4E03AQHRU-SI8iVwcQ/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1694905074666?e=1776902400&v=beta&t=poy4jzNQGo2vyk7tVTovSAhc2P-He-Ip8d_V96duQCQ",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      },
+      {
+        "country": "CN",
+        "language": "zh"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "PhD student at UCSD.",
+        "locale": "en_US"
+      },
+      {
+        "headline": "Ph.D. student working on Natural Language Processing",
+        "locale": "zh_CN"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco, CA",
+        "employmentType": "Part-time",
+        "workplaceType": "Hybrid",
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "6 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Nov",
+          "year": 2025,
+          "text": "Nov 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Applied Scientist Intern",
+        "location": "Palo Alto, CA",
+        "employmentType": "Internship",
+        "workplaceType": "Hybrid",
+        "companyName": "Amazon",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1586/",
+        "companyId": "1586",
+        "duration": "5 mos",
+        "description": "Rufus Foundation Model Team.",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2025,
+          "text": "Jun 2025"
+        },
+        "endDate": {
+          "month": "Oct",
+          "year": 2025,
+          "text": "Oct 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGDLy4STCnHbg/company-logo_400_400/B56ZnZxDipI0AY-/0/1760295142304/amazon_logo?e=1776902400&v=beta&t=lYPAbzBmg2YQhgQFeMnV-wHyKGvMPrvdCpcjHf_aGWc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGDLy4STCnHbg/company-logo_400_400/B56ZnZxDipI0AY-/0/1760295142304/amazon_logo?e=1776902400&v=beta&t=lYPAbzBmg2YQhgQFeMnV-wHyKGvMPrvdCpcjHf_aGWc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGDLy4STCnHbg/company-logo_200_200/B56ZnZxDipI0AI-/0/1760295142304/amazon_logo?e=1776902400&v=beta&t=Pkt-34tlkuFgo_d6O--s7BFOke10xwNIu23VHSfAC1Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGDLy4STCnHbg/company-logo_100_100/B56ZnZxDipI0AQ-/0/1760295142304/amazon_logo?e=1776902400&v=beta&t=Glfc3A2Yqstx_u6NdGLKHNNMcZSYljXNIHa7f-Ob1fA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Intern",
+        "location": "Redmond, Washington, United States",
+        "employmentType": "Internship",
+        "workplaceType": "Hybrid",
+        "companyName": "Microsoft",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1035/",
+        "companyId": "1035",
+        "duration": "10 mos",
+        "description": "Deep Learning Group & GenAI Team.",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2024,
+          "text": "Jun 2024"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2025,
+          "text": "Mar 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_400_400/B56ZYQ0mrGGoAc-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=47BifJmZk2QcSo7UM_a7lFIk5vBFq49cOHVWx8Pu2dE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_400_400/B56ZYQ0mrGGoAc-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=47BifJmZk2QcSo7UM_a7lFIk5vBFq49cOHVWx8Pu2dE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_200_200/B56ZYQ0mrGGoAM-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=z3mTaKdLV9rmnHGq4MakEXZj6vY7Y9TWAjx0_U7y0X0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_100_100/B56ZYQ0mrGGoAU-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=tKqX5UTArC3FajWCGY-yk-mpPeeR1obx-D3VehmNycQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Intern",
+        "location": "Beijing, China",
+        "employmentType": "Internship",
+        "workplaceType": "Hybrid",
+        "companyName": "DAMO Academy",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/96294508/",
+        "companyId": "96294508",
+        "duration": "6 mos",
+        "description": "Machine Intelligence Team.",
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2022,
+          "text": "Mar 2022"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2022,
+          "text": "Aug 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQFEpXtwYq9tZQ/company-logo_400_400/company-logo_400_400/0/1690454926516?e=1776902400&v=beta&t=Keywdd3hZW2kfQm3mWngGwrh4HyWBmDfUvVRT6CXYr0",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFEpXtwYq9tZQ/company-logo_400_400/company-logo_400_400/0/1690454926516?e=1776902400&v=beta&t=Keywdd3hZW2kfQm3mWngGwrh4HyWBmDfUvVRT6CXYr0",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFEpXtwYq9tZQ/company-logo_200_200/company-logo_200_200/0/1690454926516?e=1776902400&v=beta&t=tfqZQS5qKMlW9M0WuiGQ15qy_wAx32a_vGoUrybJTCk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFEpXtwYq9tZQ/company-logo_100_100/company-logo_100_100/0/1690454926516?e=1776902400&v=beta&t=Tqylk56R4m8giApdxylYvsYQxuuNMu_vFt49ja2L0lg",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "UC San Diego",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3382/",
+        "schoolId": "3382",
+        "degree": "Doctor of Philosophy - PhD",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "startDate": {
+          "month": "Sep",
+          "year": 2023,
+          "text": "Sep 2023"
+        },
+        "endDate": {
+          "year": 2027,
+          "text": "2027"
+        },
+        "period": "Sep 2023 - 2027",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHQYa-3EY_aaQ/company-logo_400_400/company-logo_400_400/0/1630633790917/university_of_california_at_san_diego_logo?e=1776902400&v=beta&t=zzWA-TuQfiXWHBhi1PPEXHdO5_RZARRUGUWuxz9vrDU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHQYa-3EY_aaQ/company-logo_400_400/company-logo_400_400/0/1630633790917/university_of_california_at_san_diego_logo?e=1776902400&v=beta&t=zzWA-TuQfiXWHBhi1PPEXHdO5_RZARRUGUWuxz9vrDU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHQYa-3EY_aaQ/company-logo_200_200/company-logo_200_200/0/1630633790917/university_of_california_at_san_diego_logo?e=1776902400&v=beta&t=tdjQQUwb1beHiMf8xczEGKXBBcIoW5CJ5L948yULvXY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHQYa-3EY_aaQ/company-logo_100_100/company-logo_100_100/0/1630633790917/university_of_california_at_san_diego_logo?e=1776902400&v=beta&t=PrWXY-mSMle4TuAhTdS-qm2T_ltzqM45VeIxYC0c5u0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Tsinghua University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/14022/",
+        "schoolId": "14022",
+        "degree": "Master's degree",
+        "fieldOfStudy": "Computer Science & Law",
+        "skills": [],
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFJU3_2fIeNWw/company-logo_400_400/company-logo_400_400/0/1631309794782?e=1776902400&v=beta&t=5vKo8h73BW4zBciSn7a601C16TydvCU0Qs3a9KvhyhQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFJU3_2fIeNWw/company-logo_400_400/company-logo_400_400/0/1631309794782?e=1776902400&v=beta&t=5vKo8h73BW4zBciSn7a601C16TydvCU0Qs3a9KvhyhQ",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFJU3_2fIeNWw/company-logo_200_200/company-logo_200_200/0/1631309794782?e=1776902400&v=beta&t=huImbSTeW-vFfb4GTUQC3w2Bx39xww2yxyIJ9mu6DGE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFJU3_2fIeNWw/company-logo_100_100/company-logo_100_100/0/1631309794782?e=1776902400&v=beta&t=vF2YWUWfPIDG55Uz9-__o9MAHkK2j3kE-z1EgmFjfls",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "The Australian National University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/162587/",
+        "schoolId": "162587",
+        "degree": "Exchange Student",
+        "fieldOfStudy": "Computer Science and Engineering",
+        "skills": [],
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQEZFo6J_z1gDA/company-logo_400_400/company-logo_400_400/0/1630641750633/australian_national_university_logo?e=1776902400&v=beta&t=z-Qsb2rVAMJVKNH0YkolwCBtzQo3NPp-yL8C3Xg4NQ0",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEZFo6J_z1gDA/company-logo_400_400/company-logo_400_400/0/1630641750633/australian_national_university_logo?e=1776902400&v=beta&t=z-Qsb2rVAMJVKNH0YkolwCBtzQo3NPp-yL8C3Xg4NQ0",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEZFo6J_z1gDA/company-logo_200_200/company-logo_200_200/0/1630641750633/australian_national_university_logo?e=1776902400&v=beta&t=j3SSBnY89BZqCbB2KgCwqC3Q_ccsBam0X_-xc_K4gG0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEZFo6J_z1gDA/company-logo_100_100/company-logo_100_100/0/1630641750633/australian_national_university_logo?e=1776902400&v=beta&t=wMc8fttQz71XsKSvq2OGYbJu_6_V2VSTJ3FwcewQCXQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAABEmYXYB5f-3ZmFG8dI-n9XAlqySBqO-2PA",
+        "firstName": "Luke",
+        "lastName": "Carlson",
+        "publicIdentifier": "jlukecarlson",
+        "linkedinUrl": "https://www.linkedin.com/in/jlukecarlson"
+      },
+      {
+        "id": "ACoAAEZnBtoBb1Us7ZKgHfOXAYT764pKcDQy848",
+        "firstName": "Songlin",
+        "lastName": "Yang",
+        "publicIdentifier": "songlin-yang-b8a69728b",
+        "linkedinUrl": "https://www.linkedin.com/in/songlin-yang-b8a69728b"
+      },
+      {
+        "id": "ACoAABQ5lJUBry2byQYf_TtxDF9Rha9l-RqYsaM",
+        "firstName": "Guang-He",
+        "lastName": "Lee",
+        "publicIdentifier": "guang-he-lee-64577895",
+        "linkedinUrl": "https://www.linkedin.com/in/guang-he-lee-64577895"
+      },
+      {
+        "id": "ACoAABmsYasBhsFwXKca6Ooio5i6nRfTRvN4d2Y",
+        "firstName": "Liyuan",
+        "lastName": "Liu",
+        "publicIdentifier": "liyuanlucasliu",
+        "linkedinUrl": "https://www.linkedin.com/in/liyuanlucasliu"
+      },
+      {
+        "id": "ACoAACHgqNcBO7G9QHjfnTyp5v6rVbPMJ19f1dc",
+        "firstName": "Claire",
+        "lastName": "Fu",
+        "publicIdentifier": "clairecfu",
+        "linkedinUrl": "https://www.linkedin.com/in/clairecfu"
+      },
+      {
+        "id": "ACoAAAgB78IBFrSRvjrM16CT0N8_P9uNs_xP3cw",
+        "firstName": "Aurick",
+        "lastName": "Qiao",
+        "publicIdentifier": "aurickq",
+        "linkedinUrl": "https://www.linkedin.com/in/aurickq"
+      },
+      {
+        "id": "ACoAACaOARIBRO2EEH12QWQO29L__oI3N2K4u14",
+        "firstName": "Mingjie",
+        "lastName": "Sun",
+        "publicIdentifier": "mingjie-sun-06a761160",
+        "linkedinUrl": "https://www.linkedin.com/in/mingjie-sun-06a761160"
+      },
+      {
+        "id": "ACoAAC66rE4BA1J19n2WFXntDP0CA8Uw4NElYBs",
+        "firstName": "Yangjun",
+        "lastName": "Ruan",
+        "publicIdentifier": "yangjun-ruan-55267b19a",
+        "linkedinUrl": "https://www.linkedin.com/in/yangjun-ruan-55267b19a"
+      },
+      {
+        "id": "ACoAABE9sVMBCH0i964WlvecDNyGKTviqyXKcTY",
+        "firstName": "Hannah",
+        "lastName": "T.",
+        "publicIdentifier": "hannahnth",
+        "linkedinUrl": "https://www.linkedin.com/in/hannahnth"
+      },
+      {
+        "id": "ACoAACHG180BXiyeZ2qJgoggx27e4iM3ajxvp18",
+        "firstName": "Andy",
+        "lastName": "Hwang",
+        "publicIdentifier": "andrewnhwang",
+        "linkedinUrl": "https://www.linkedin.com/in/andrewnhwang"
+      },
+      {
+        "id": "ACoAABoG0oUBl986ZaMrLUASG1NhDoJyVlav4Po",
+        "firstName": "Eric",
+        "lastName": "Zhang",
+        "publicIdentifier": "ekzhang",
+        "linkedinUrl": "https://www.linkedin.com/in/ekzhang"
+      },
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAABhKWCYBiuV3Zv9Hbt8t0j-xMRqxawBcSgw",
+        "firstName": "Kurt",
+        "lastName": "Shuster",
+        "publicIdentifier": "kurtshuster1",
+        "linkedinUrl": "https://www.linkedin.com/in/kurtshuster1"
+      },
+      {
+        "id": "ACoAAAd3c8cBXKnzqS80_HMaDIGNdqrXbaFbO5g",
+        "firstName": "James",
+        "lastName": "Sun",
+        "publicIdentifier": "james5un",
+        "linkedinUrl": "https://www.linkedin.com/in/james5un"
+      },
+      {
+        "id": "ACoAACPt4SYBjnT3NzXYBUg29E9lILjQTX5luls",
+        "firstName": "Piotr",
+        "lastName": "Dollar",
+        "publicIdentifier": "pdollar",
+        "linkedinUrl": "https://www.linkedin.com/in/pdollar"
+      },
+      {
+        "id": "ACoAABhIg7YBYN2NPIu8voYj5D7JQVZGxonqHvc",
+        "firstName": "Ruiqi",
+        "lastName": "Zhong",
+        "publicIdentifier": "ruiqi-zhong-09a533b4",
+        "linkedinUrl": "https://www.linkedin.com/in/ruiqi-zhong-09a533b4"
+      },
+      {
+        "id": "ACoAACy2BxwB9fCrfCBI06w0X-gHyQTFLJIpJGc",
+        "firstName": "Guangxuan",
+        "lastName": "X.",
+        "publicIdentifier": "xgx",
+        "linkedinUrl": "https://www.linkedin.com/in/xgx"
+      },
+      {
+        "id": "ACoAAA4HVN4BOZg5espOvMVoO3OY04NZmuqvMCo",
+        "firstName": "Shaojie",
+        "lastName": "Bai",
+        "publicIdentifier": "shaojie-bai",
+        "linkedinUrl": "https://www.linkedin.com/in/shaojie-bai"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAACX2uDEBdW2iclcqJPctaf7y0a0xWV9WZns",
+        "firstName": "Shibo",
+        "lastName": "Hao",
+        "publicIdentifier": "shibo-hao-52937b159",
+        "linkedinUrl": "https://www.linkedin.com/in/shibo-hao-52937b159"
+      },
+      {
+        "id": "ACoAABI9GrkBi8_4zLUYCDgietXCcp0NWNRjAnw",
+        "firstName": "Leah",
+        "lastName": "Waters (Alger)",
+        "position": "Senior Web3 Journalist",
+        "publicIdentifier": "algerleah",
+        "linkedinUrl": "https://www.linkedin.com/in/algerleah"
+      },
+      {
+        "id": "ACoAAALa2fgB-31Z1Zkv8iD6Kc_B8bYpNHjU0gA",
+        "firstName": "Carly",
+        "lastName": "Page",
+        "position": "Freelance technology journalist, copywriter & editor",
+        "publicIdentifier": "carlypage",
+        "linkedinUrl": "https://www.linkedin.com/in/carlypage"
+      },
+      {
+        "id": "ACoAAANOf0ABtKUoYc7L0ovbENk1x_umnpFo1mA",
+        "firstName": "Dom",
+        "lastName": "Lawson",
+        "position": "Freelance Music Journalist",
+        "publicIdentifier": "dom-lawson-2286b416",
+        "linkedinUrl": "https://www.linkedin.com/in/dom-lawson-2286b416"
+      },
+      {
+        "id": "ACoAAAIwzEABsmYHklvu9KcOGFLpnP7FTMAxuN8",
+        "firstName": "Caroline",
+        "lastName": "Bullock",
+        "position": "Journalist at The Times, Mail on Sunday, Mail online",
+        "publicIdentifier": "caroline-bullock-94038410",
+        "linkedinUrl": "https://www.linkedin.com/in/caroline-bullock-94038410"
+      },
+      {
+        "id": "ACoAADMBhhoBVd8tdXxlNc6ETKbtK9JyOq1_vnk",
+        "firstName": "Sabrina",
+        "lastName": "Efrem",
+        "position": "Freelance Journalist | MA Documentary Production student",
+        "publicIdentifier": "sabrina-efrem-8227021ba",
+        "linkedinUrl": "https://www.linkedin.com/in/sabrina-efrem-8227021ba"
+      },
+      {
+        "id": "ACoAAAaKLfgBMWPHhURKyUPkBwY5OvnsMc4r3W0",
+        "firstName": "Peter",
+        "lastName": "O'Rourke",
+        "position": "Freelance Sports Journalist",
+        "publicIdentifier": "peter-o-rourke-9888b230",
+        "linkedinUrl": "https://www.linkedin.com/in/peter-o-rourke-9888b230"
+      },
+      {
+        "id": "ACoAAADKAPQBAiXg4a6iCO2FVSiJSqoAND9Zp3w",
+        "firstName": "Gül Ülgen",
+        "lastName": "Greenslade",
+        "position": "Writer, journalist, translator",
+        "publicIdentifier": "gulgulgreenslade",
+        "linkedinUrl": "https://www.linkedin.com/in/gulgulgreenslade"
+      },
+      {
+        "id": "ACoAAAiJS90Bsw3RJiYBn6SBsYSM0H4knb9r5V0",
+        "firstName": "John",
+        "lastName": "Dingwall",
+        "position": "Journalist & Writer",
+        "publicIdentifier": "johndingwall",
+        "linkedinUrl": "https://www.linkedin.com/in/johndingwall"
+      },
+      {
+        "id": "ACoAAC627zMB71upA6o9EC8L7GGDM4dOyAjZXy8",
+        "firstName": "Sarah-May",
+        "lastName": "Buccieri",
+        "position": "BBC Multiplatform Journalist ",
+        "publicIdentifier": "sarah-may-buccieri-7ab58119a",
+        "linkedinUrl": "https://www.linkedin.com/in/sarah-may-buccieri-7ab58119a"
+      },
+      {
+        "id": "ACoAACJ9j-EB3Nhlm4II1Ae5xM_0-97Al-nNFSs",
+        "firstName": "Syeda",
+        "lastName": "Mehbuba-E-Zannat",
+        "position": "Journalist, Mundusian",
+        "publicIdentifier": "syeda-mehbuba-e-zannat-395959141",
+        "linkedinUrl": "https://www.linkedin.com/in/syeda-mehbuba-e-zannat-395959141"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAEWISqkB1LxqPl20_-_Puz1FnxxSceLTH28"
+    }
+  }
+}

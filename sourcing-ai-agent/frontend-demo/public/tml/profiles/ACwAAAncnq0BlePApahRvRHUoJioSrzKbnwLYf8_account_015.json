@@ -1,0 +1,1216 @@
+{
+  "education": [
+    {
+      "school_name": "New York University",
+      "school_id": "18993",
+      "school_url": "https://www.linkedin.com/school/new-york-university/",
+      "school_logo_url": "https://media.licdn.com/dms/image/v2/C4D0BAQF6TmzLkch0dQ/company-logo_400_400/company-logo_400_400/0/1630556159190/new_york_university_logo?e=1776902400&v=beta&t=-dsVKBFQvuL-tDWXjeKJoZfBe8jlY4FrgrQhui33Psc",
+      "description": null,
+      "field_of_study": "Computer Science",
+      "activities": null,
+      "grade": null,
+      "date_range": {
+        "start": {
+          "month": null,
+          "day": null,
+          "iso": "2010",
+          "year": 2010
+        },
+        "end": {
+          "month": null,
+          "day": null,
+          "iso": "2012",
+          "year": 2012
+        }
+      },
+      "degree": "Master of Science"
+    },
+    {
+      "school_name": "VIT University",
+      "school_id": null,
+      "school_url": null,
+      "school_logo_url": null,
+      "description": null,
+      "field_of_study": "Information Technology",
+      "activities": null,
+      "grade": null,
+      "date_range": {
+        "start": {
+          "month": null,
+          "day": null,
+          "iso": "2005",
+          "year": 2005
+        },
+        "end": {
+          "month": null,
+          "day": null,
+          "iso": "2009",
+          "year": 2009
+        }
+      },
+      "degree": "Bachelor of Technology"
+    }
+  ],
+  "message": "For high volume usage and custom pricing, visit https://app.enrichgraph.io or contact us at support@enrichgraph.io",
+  "contact_info": null,
+  "verifications": {
+    "is_verified": true,
+    "joined_date": null,
+    "sections": null
+  },
+  "badges": {
+    "premium": false,
+    "creator": true,
+    "influencer": false,
+    "top_voice": false,
+    "open_to_work": false,
+    "is_hiring": false
+  },
+  "test_scores": {},
+  "courses": {},
+  "member_urn": "165453485",
+  "volunteer_experiences": {},
+  "entity_urn": "ACoAAAncnq0BajmeOrLikO5AAincnDzuRDUXFjw",
+  "organizations": {},
+  "public_identifier": "soumith",
+  "languages": {},
+  "first_name": "Soumith",
+  "industry": "Computer Software",
+  "last_name": "Chintala",
+  "skills": [
+    "Machine Learning",
+    "C++",
+    "Algorithms",
+    "Computer Vision",
+    "Python",
+    "Java",
+    "Matlab",
+    "Linux",
+    "Distributed Systems",
+    "C",
+    "Robotics",
+    "Shell Scripting",
+    "MySQL",
+    "LaTeX",
+    "R",
+    "Lua",
+    "OpenCV",
+    "Programming",
+    "Embedded Systems",
+    "CUDA"
+  ],
+  "headline": "CTO @ Thinking Machines. Co-founder PyTorch. ",
+  "certifications": {},
+  "projects": {},
+  "location": {
+    "name": "New York, New York, United States",
+    "city": null,
+    "country_code": "US",
+    "country": "United States"
+  },
+  "publications": {},
+  "network_info": null,
+  "profile_photo_url": "https://media.licdn.com/dms/image/v2/C4D03AQG5g1pIcFasbQ/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1625765342393?e=1776902400&v=beta&t=gW_IMtDZAZahzQskUVcM8WnttXQ_bDa4DgWqyHx2Nvs",
+  "summary": "I work on advanced Artificial Intelligence algorithms, and on open-source software for machine learning. \nI'm experienced in leading large engineering and product teams impacting millions of people.\n\nI've consulted with hedge funds, seriously worked on robots, written several open source projects, built frontend web software.",
+  "background_photo_url": null,
+  "websites": [
+    "https://www.linkedin.com/in/soumith"
+  ],
+  "honors": {},
+  "profile_url": "https://www.linkedin.com/in/soumith",
+  "experience": [
+    {
+      "date_range": {
+        "start": {
+          "month": 11,
+          "day": null,
+          "iso": "2025-11",
+          "year": 2025
+        },
+        "end": null
+      },
+      "company_url": "https://www.linkedin.com/company/thinkingmachinesai/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+      "company_employee_count_range": {
+        "start": 11,
+        "end": 50
+      },
+      "company_industry": "Computer Software",
+      "workplace_type": null,
+      "positions": [
+        {
+          "date_range": {
+            "start": {
+              "month": 11,
+              "day": null,
+              "iso": "2025-11",
+              "year": 2025
+            },
+            "end": null
+          },
+          "employment_type": "Full-time",
+          "company_url": "https://www.linkedin.com/company/thinkingmachinesai/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "description": null,
+          "company_employee_count_range": {
+            "start": 11,
+            "end": 50
+          },
+          "company_industry": "Computer Software",
+          "workplace_type": null,
+          "title": "Chief Technology Officer",
+          "company_id": "105913171",
+          "location_name": null,
+          "company_name": "Thinking Machines Lab"
+        }
+      ],
+      "company_id": "105913171",
+      "company_name": "Thinking Machines Lab"
+    },
+    {
+      "date_range": {
+        "start": {
+          "month": 5,
+          "day": null,
+          "iso": "2024-05",
+          "year": 2024
+        },
+        "end": null
+      },
+      "company_url": "https://www.linkedin.com/company/kscale/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGLrqEvO0M7ig/company-logo_400_400/B56Zbap3cnH0Ag-/0/1747425130550/kscale_logo?e=1776902400&v=beta&t=Mto3pY8z2eWHQBFSToUljFv1BvZQg0V7h00tq2bv3jI",
+      "company_employee_count_range": {
+        "start": 2,
+        "end": 10
+      },
+      "company_industry": "Information Technology & Services",
+      "workplace_type": null,
+      "positions": [
+        {
+          "date_range": {
+            "start": {
+              "month": 5,
+              "day": null,
+              "iso": "2024-05",
+              "year": 2024
+            },
+            "end": null
+          },
+          "employment_type": null,
+          "company_url": "https://www.linkedin.com/company/kscale/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGLrqEvO0M7ig/company-logo_400_400/B56Zbap3cnH0Ag-/0/1747425130550/kscale_logo?e=1776902400&v=beta&t=Mto3pY8z2eWHQBFSToUljFv1BvZQg0V7h00tq2bv3jI",
+          "description": null,
+          "company_employee_count_range": {
+            "start": 2,
+            "end": 10
+          },
+          "company_industry": "Information Technology & Services",
+          "workplace_type": null,
+          "title": "Investor",
+          "company_id": "101107935",
+          "location_name": null,
+          "company_name": "K-Scale Labs"
+        }
+      ],
+      "company_id": "101107935",
+      "company_name": "K-Scale Labs"
+    },
+    {
+      "date_range": {
+        "start": {
+          "month": 5,
+          "day": null,
+          "iso": "2024-05",
+          "year": 2024
+        },
+        "end": null
+      },
+      "company_url": "https://www.linkedin.com/company/aiwyn/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQHyOpHLyxlDTw/company-logo_400_400/B4EZaLtO2dHkAc-/0/1746100612818/aiwyn_logo?e=1776902400&v=beta&t=ERfAwvScLgmK0ye1g1uDJib4QBH75d6o-XEhwy5pdDw",
+      "company_employee_count_range": {
+        "start": 51,
+        "end": 200
+      },
+      "company_industry": "Computer Software",
+      "workplace_type": null,
+      "positions": [
+        {
+          "date_range": {
+            "start": {
+              "month": 5,
+              "day": null,
+              "iso": "2024-05",
+              "year": 2024
+            },
+            "end": null
+          },
+          "employment_type": null,
+          "company_url": "https://www.linkedin.com/company/aiwyn/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQHyOpHLyxlDTw/company-logo_400_400/B4EZaLtO2dHkAc-/0/1746100612818/aiwyn_logo?e=1776902400&v=beta&t=ERfAwvScLgmK0ye1g1uDJib4QBH75d6o-XEhwy5pdDw",
+          "description": null,
+          "company_employee_count_range": {
+            "start": 51,
+            "end": 200
+          },
+          "company_industry": "Computer Software",
+          "workplace_type": null,
+          "title": "Investor",
+          "company_id": "70397635",
+          "location_name": null,
+          "company_name": "Aiwyn"
+        }
+      ],
+      "company_id": "70397635",
+      "company_name": "Aiwyn"
+    },
+    {
+      "date_range": {
+        "start": {
+          "month": 3,
+          "day": null,
+          "iso": "2024-03",
+          "year": 2024
+        },
+        "end": null
+      },
+      "company_url": "https://www.linkedin.com/company/getspara/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQGsPbT6dNiL9A/company-logo_400_400/company-logo_400_400/0/1713880751510/getspara_logo?e=1776902400&v=beta&t=-V_Myq4KZbnKvGuB23oE2RHH52ILwcR2P-jEb-p_Cng",
+      "company_employee_count_range": {
+        "start": 11,
+        "end": 50
+      },
+      "company_industry": "Computer Software",
+      "workplace_type": null,
+      "positions": [
+        {
+          "date_range": {
+            "start": {
+              "month": 3,
+              "day": null,
+              "iso": "2024-03",
+              "year": 2024
+            },
+            "end": null
+          },
+          "employment_type": null,
+          "company_url": "https://www.linkedin.com/company/getspara/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQGsPbT6dNiL9A/company-logo_400_400/company-logo_400_400/0/1713880751510/getspara_logo?e=1776902400&v=beta&t=-V_Myq4KZbnKvGuB23oE2RHH52ILwcR2P-jEb-p_Cng",
+          "description": null,
+          "company_employee_count_range": {
+            "start": 11,
+            "end": 50
+          },
+          "company_industry": "Computer Software",
+          "workplace_type": null,
+          "title": "Investor",
+          "company_id": "102126290",
+          "location_name": null,
+          "company_name": "Spara"
+        }
+      ],
+      "company_id": "102126290",
+      "company_name": "Spara"
+    },
+    {
+      "date_range": {
+        "start": {
+          "month": 3,
+          "day": null,
+          "iso": "2024-03",
+          "year": 2024
+        },
+        "end": null
+      },
+      "company_url": null,
+      "company_logo_url": null,
+      "company_employee_count_range": null,
+      "company_industry": null,
+      "workplace_type": null,
+      "positions": [
+        {
+          "date_range": {
+            "start": {
+              "month": 3,
+              "day": null,
+              "iso": "2024-03",
+              "year": 2024
+            },
+            "end": null
+          },
+          "employment_type": null,
+          "company_url": null,
+          "company_logo_url": null,
+          "description": null,
+          "company_employee_count_range": null,
+          "company_industry": null,
+          "workplace_type": null,
+          "title": "Investor",
+          "company_id": null,
+          "location_name": null,
+          "company_name": "Answer.AI"
+        }
+      ],
+      "company_id": null,
+      "company_name": "Answer.AI"
+    },
+    {
+      "date_range": {
+        "start": {
+          "month": 2,
+          "day": null,
+          "iso": "2024-02",
+          "year": 2024
+        },
+        "end": null
+      },
+      "company_url": "https://www.linkedin.com/company/togethercomputer/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQHe__yU45OuCQ/company-logo_400_400/B56Zy0qe7rIcAY-/0/1772557561927/togethercomputer_logo?e=1776902400&v=beta&t=S7xVZPKB7WiLgxbSIDyscFuHADekr5aZKLn-lF2qAo0",
+      "company_employee_count_range": {
+        "start": 201,
+        "end": 500
+      },
+      "company_industry": "Computer Software",
+      "workplace_type": null,
+      "positions": [
+        {
+          "date_range": {
+            "start": {
+              "month": 2,
+              "day": null,
+              "iso": "2024-02",
+              "year": 2024
+            },
+            "end": null
+          },
+          "employment_type": null,
+          "company_url": "https://www.linkedin.com/company/togethercomputer/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQHe__yU45OuCQ/company-logo_400_400/B56Zy0qe7rIcAY-/0/1772557561927/togethercomputer_logo?e=1776902400&v=beta&t=S7xVZPKB7WiLgxbSIDyscFuHADekr5aZKLn-lF2qAo0",
+          "description": null,
+          "company_employee_count_range": {
+            "start": 201,
+            "end": 500
+          },
+          "company_industry": "Computer Software",
+          "workplace_type": null,
+          "title": "Investor",
+          "company_id": "89816302",
+          "location_name": null,
+          "company_name": "Together AI"
+        }
+      ],
+      "company_id": "89816302",
+      "company_name": "Together AI"
+    },
+    {
+      "date_range": {
+        "start": {
+          "month": 2,
+          "day": null,
+          "iso": "2024-02",
+          "year": 2024
+        },
+        "end": null
+      },
+      "company_url": "https://www.linkedin.com/company/theodysseyagency/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D4D0BAQEakbeY6hNNWA/company-logo_400_400/company-logo_400_400/0/1706686828201/vtwentyone_logo?e=1776902400&v=beta&t=3uqZZ6UZtXbR9_6T_90XSwAb82dqV6cDFrUAz9REfQA",
+      "company_employee_count_range": {
+        "start": 2,
+        "end": 10
+      },
+      "company_industry": "Media Production",
+      "workplace_type": null,
+      "positions": [
+        {
+          "date_range": {
+            "start": {
+              "month": 2,
+              "day": null,
+              "iso": "2024-02",
+              "year": 2024
+            },
+            "end": null
+          },
+          "employment_type": null,
+          "company_url": "https://www.linkedin.com/company/theodysseyagency/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4D0BAQEakbeY6hNNWA/company-logo_400_400/company-logo_400_400/0/1706686828201/vtwentyone_logo?e=1776902400&v=beta&t=3uqZZ6UZtXbR9_6T_90XSwAb82dqV6cDFrUAz9REfQA",
+          "description": null,
+          "company_employee_count_range": {
+            "start": 2,
+            "end": 10
+          },
+          "company_industry": "Media Production",
+          "workplace_type": null,
+          "title": "Investor",
+          "company_id": "28981393",
+          "location_name": null,
+          "company_name": "Odyssey"
+        }
+      ],
+      "company_id": "28981393",
+      "company_name": "Odyssey"
+    },
+    {
+      "date_range": {
+        "start": {
+          "month": 11,
+          "day": null,
+          "iso": "2023-11",
+          "year": 2023
+        },
+        "end": null
+      },
+      "company_url": "https://www.linkedin.com/company/reachrx/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQE2DRqykgXTeQ/company-logo_400_400/company-logo_400_400/0/1724858392791/reachrx_logo?e=1776902400&v=beta&t=VIlOBasSU7_EE1uy7BbalTLEDaEAKca3w62I3HFMJCc",
+      "company_employee_count_range": {
+        "start": 2,
+        "end": 10
+      },
+      "company_industry": "Computer Software",
+      "workplace_type": null,
+      "positions": [
+        {
+          "date_range": {
+            "start": {
+              "month": 11,
+              "day": null,
+              "iso": "2023-11",
+              "year": 2023
+            },
+            "end": null
+          },
+          "employment_type": null,
+          "company_url": "https://www.linkedin.com/company/reachrx/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQE2DRqykgXTeQ/company-logo_400_400/company-logo_400_400/0/1724858392791/reachrx_logo?e=1776902400&v=beta&t=VIlOBasSU7_EE1uy7BbalTLEDaEAKca3w62I3HFMJCc",
+          "description": null,
+          "company_employee_count_range": {
+            "start": 2,
+            "end": 10
+          },
+          "company_industry": "Computer Software",
+          "workplace_type": null,
+          "title": "Investor",
+          "company_id": "80692659",
+          "location_name": null,
+          "company_name": "ReachRx"
+        }
+      ],
+      "company_id": "80692659",
+      "company_name": "ReachRx"
+    },
+    {
+      "date_range": {
+        "start": {
+          "month": 8,
+          "day": null,
+          "iso": "2023-08",
+          "year": 2023
+        },
+        "end": null
+      },
+      "company_url": "https://www.linkedin.com/company/lepton-ai/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGKj1Bf7y_YJA/company-logo_400_400/company-logo_400_400/0/1692305589993/lepton_ai_logo?e=1776902400&v=beta&t=yvtlnHcOcb7Ftu1XWATH25CkioMCw94t-pHm3hrz3-I",
+      "company_employee_count_range": {
+        "start": 11,
+        "end": 50
+      },
+      "company_industry": "Computer Software",
+      "workplace_type": null,
+      "positions": [
+        {
+          "date_range": {
+            "start": {
+              "month": 8,
+              "day": null,
+              "iso": "2023-08",
+              "year": 2023
+            },
+            "end": null
+          },
+          "employment_type": null,
+          "company_url": "https://www.linkedin.com/company/lepton-ai/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGKj1Bf7y_YJA/company-logo_400_400/company-logo_400_400/0/1692305589993/lepton_ai_logo?e=1776902400&v=beta&t=yvtlnHcOcb7Ftu1XWATH25CkioMCw94t-pHm3hrz3-I",
+          "description": null,
+          "company_employee_count_range": {
+            "start": 11,
+            "end": 50
+          },
+          "company_industry": "Computer Software",
+          "workplace_type": null,
+          "title": "Investor",
+          "company_id": "91177500",
+          "location_name": null,
+          "company_name": "Lepton AI"
+        }
+      ],
+      "company_id": "91177500",
+      "company_name": "Lepton AI"
+    },
+    {
+      "date_range": {
+        "start": {
+          "month": 5,
+          "day": null,
+          "iso": "2023-05",
+          "year": 2023
+        },
+        "end": null
+      },
+      "company_url": null,
+      "company_logo_url": null,
+      "company_employee_count_range": null,
+      "company_industry": null,
+      "workplace_type": null,
+      "positions": [
+        {
+          "date_range": {
+            "start": {
+              "month": 5,
+              "day": null,
+              "iso": "2023-05",
+              "year": 2023
+            },
+            "end": null
+          },
+          "employment_type": null,
+          "company_url": null,
+          "company_logo_url": null,
+          "description": null,
+          "company_employee_count_range": null,
+          "company_industry": null,
+          "workplace_type": null,
+          "title": "Investor",
+          "company_id": null,
+          "location_name": null,
+          "company_name": "Draw Things"
+        }
+      ],
+      "company_id": null,
+      "company_name": "Draw Things"
+    },
+    {
+      "date_range": {
+        "start": {
+          "month": 1,
+          "day": null,
+          "iso": "2023-01",
+          "year": 2023
+        },
+        "end": null
+      },
+      "company_url": "https://www.linkedin.com/company/1x-technologies/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQHZsT0lsF7-Vg/company-logo_400_400/B56ZuzsFHSIMAY-/0/1768246236128/1x_technologies_logo?e=1776902400&v=beta&t=buUu1ibgK_QfNJJ4uQNABGX_Mn55nUsFpPjwzjgfWsU",
+      "company_employee_count_range": {
+        "start": 201,
+        "end": 500
+      },
+      "company_industry": "Information Technology & Services",
+      "workplace_type": null,
+      "positions": [
+        {
+          "date_range": {
+            "start": {
+              "month": 1,
+              "day": null,
+              "iso": "2023-01",
+              "year": 2023
+            },
+            "end": null
+          },
+          "employment_type": null,
+          "company_url": "https://www.linkedin.com/company/1x-technologies/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQHZsT0lsF7-Vg/company-logo_400_400/B56ZuzsFHSIMAY-/0/1768246236128/1x_technologies_logo?e=1776902400&v=beta&t=buUu1ibgK_QfNJJ4uQNABGX_Mn55nUsFpPjwzjgfWsU",
+          "description": null,
+          "company_employee_count_range": {
+            "start": 201,
+            "end": 500
+          },
+          "company_industry": "Information Technology & Services",
+          "workplace_type": null,
+          "title": "Investor",
+          "company_id": "10583385",
+          "location_name": null,
+          "company_name": "1X"
+        }
+      ],
+      "company_id": "10583385",
+      "company_name": "1X"
+    },
+    {
+      "date_range": {
+        "start": {
+          "month": 12,
+          "day": null,
+          "iso": "2022-12",
+          "year": 2022
+        },
+        "end": null
+      },
+      "company_url": "https://www.linkedin.com/company/runwayml/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQHlN19hJvxBmg/company-logo_400_400/B4EZsNsXZOKcAc-/0/1765461293274/runwayml_logo?e=1776902400&v=beta&t=ZmwLDJJA9QRZj0k0byVDbpLyt1n58EAxwy-L2aoRnSA",
+      "company_employee_count_range": {
+        "start": 51,
+        "end": 200
+      },
+      "company_industry": "Computer Software",
+      "workplace_type": null,
+      "positions": [
+        {
+          "date_range": {
+            "start": {
+              "month": 12,
+              "day": null,
+              "iso": "2022-12",
+              "year": 2022
+            },
+            "end": null
+          },
+          "employment_type": null,
+          "company_url": "https://www.linkedin.com/company/runwayml/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQHlN19hJvxBmg/company-logo_400_400/B4EZsNsXZOKcAc-/0/1765461293274/runwayml_logo?e=1776902400&v=beta&t=ZmwLDJJA9QRZj0k0byVDbpLyt1n58EAxwy-L2aoRnSA",
+          "description": null,
+          "company_employee_count_range": {
+            "start": 51,
+            "end": 200
+          },
+          "company_industry": "Computer Software",
+          "workplace_type": null,
+          "title": "Investor",
+          "company_id": "11741116",
+          "location_name": null,
+          "company_name": "Runway"
+        }
+      ],
+      "company_id": "11741116",
+      "company_name": "Runway"
+    },
+    {
+      "date_range": {
+        "start": {
+          "month": 8,
+          "day": null,
+          "iso": "2022-08",
+          "year": 2022
+        },
+        "end": null
+      },
+      "company_url": "https://www.linkedin.com/company/osmolabs/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQESBr6n68Pxyg/company-logo_400_400/B4EZiZo_MfHIAY-/0/1754924316309/osmolabs_logo?e=1776902400&v=beta&t=A26wOfxXZcqFN1j_pF1ucx897haAvtqEG3pT0fyqvYE",
+      "company_employee_count_range": {
+        "start": 51,
+        "end": 200
+      },
+      "company_industry": "Computer Software",
+      "workplace_type": null,
+      "positions": [
+        {
+          "date_range": {
+            "start": {
+              "month": 8,
+              "day": null,
+              "iso": "2022-08",
+              "year": 2022
+            },
+            "end": null
+          },
+          "employment_type": null,
+          "company_url": "https://www.linkedin.com/company/osmolabs/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQESBr6n68Pxyg/company-logo_400_400/B4EZiZo_MfHIAY-/0/1754924316309/osmolabs_logo?e=1776902400&v=beta&t=A26wOfxXZcqFN1j_pF1ucx897haAvtqEG3pT0fyqvYE",
+          "description": null,
+          "company_employee_count_range": {
+            "start": 51,
+            "end": 200
+          },
+          "company_industry": "Computer Software",
+          "workplace_type": null,
+          "title": "Investor",
+          "company_id": "86035944",
+          "location_name": null,
+          "company_name": "Osmo"
+        }
+      ],
+      "company_id": "86035944",
+      "company_name": "Osmo"
+    },
+    {
+      "date_range": {
+        "start": {
+          "month": 12,
+          "day": null,
+          "iso": "2021-12",
+          "year": 2021
+        },
+        "end": null
+      },
+      "company_url": "https://www.linkedin.com/school/new-york-university/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/C4D0BAQF6TmzLkch0dQ/company-logo_400_400/company-logo_400_400/0/1630556159190/new_york_university_logo?e=1776902400&v=beta&t=-dsVKBFQvuL-tDWXjeKJoZfBe8jlY4FrgrQhui33Psc",
+      "company_employee_count_range": {
+        "start": 10001,
+        "end": null
+      },
+      "company_industry": "Higher Education",
+      "workplace_type": null,
+      "positions": [
+        {
+          "date_range": {
+            "start": {
+              "month": 12,
+              "day": null,
+              "iso": "2021-12",
+              "year": 2021
+            },
+            "end": null
+          },
+          "employment_type": "Part-time",
+          "company_url": "https://www.linkedin.com/school/new-york-university/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C4D0BAQF6TmzLkch0dQ/company-logo_400_400/company-logo_400_400/0/1630556159190/new_york_university_logo?e=1776902400&v=beta&t=-dsVKBFQvuL-tDWXjeKJoZfBe8jlY4FrgrQhui33Psc",
+          "description": null,
+          "company_employee_count_range": {
+            "start": 10001,
+            "end": null
+          },
+          "company_industry": "Higher Education",
+          "workplace_type": null,
+          "title": "Research Visitor",
+          "company_id": "3159",
+          "location_name": null,
+          "company_name": "New York University"
+        }
+      ],
+      "company_id": "3159",
+      "company_name": "New York University"
+    },
+    {
+      "date_range": {
+        "start": {
+          "month": 11,
+          "day": null,
+          "iso": "2021-11",
+          "year": 2021
+        },
+        "end": null
+      },
+      "company_url": "https://www.linkedin.com/company/voltrondata/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQFYDqje3FCkwA/company-logo_400_400/company-logo_400_400/0/1656602038137/voltrondata_logo?e=1776902400&v=beta&t=S3yWmM33QAbOyssYt9U43zeHOwq8sQ-k_KmRVTE8v-I",
+      "company_employee_count_range": {
+        "start": 0,
+        "end": 1
+      },
+      "company_industry": "Computer Software",
+      "workplace_type": null,
+      "positions": [
+        {
+          "date_range": {
+            "start": {
+              "month": 11,
+              "day": null,
+              "iso": "2021-11",
+              "year": 2021
+            },
+            "end": null
+          },
+          "employment_type": "Part-time",
+          "company_url": "https://www.linkedin.com/company/voltrondata/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQFYDqje3FCkwA/company-logo_400_400/company-logo_400_400/0/1656602038137/voltrondata_logo?e=1776902400&v=beta&t=S3yWmM33QAbOyssYt9U43zeHOwq8sQ-k_KmRVTE8v-I",
+          "description": null,
+          "company_employee_count_range": {
+            "start": 0,
+            "end": 1
+          },
+          "company_industry": "Computer Software",
+          "workplace_type": null,
+          "title": "Member of the Advisory Board",
+          "company_id": "74728269",
+          "location_name": null,
+          "company_name": "Voltron Data"
+        }
+      ],
+      "company_id": "74728269",
+      "company_name": "Voltron Data"
+    },
+    {
+      "date_range": {
+        "start": {
+          "month": 4,
+          "day": null,
+          "iso": "2021-04",
+          "year": 2021
+        },
+        "end": null
+      },
+      "company_url": "https://www.linkedin.com/company/anthropicresearch/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_400_400/company-logo_400_400/0/1719256729905/anthropicresearch_logo?e=1776902400&v=beta&t=6sv-GagnF1G5d4B4rN1Yu3sq6fln2BP_9tb0s6bARoY",
+      "company_employee_count_range": {
+        "start": 501,
+        "end": 1000
+      },
+      "company_industry": "Research",
+      "workplace_type": null,
+      "positions": [
+        {
+          "date_range": {
+            "start": {
+              "month": 4,
+              "day": null,
+              "iso": "2021-04",
+              "year": 2021
+            },
+            "end": null
+          },
+          "employment_type": null,
+          "company_url": "https://www.linkedin.com/company/anthropicresearch/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_400_400/company-logo_400_400/0/1719256729905/anthropicresearch_logo?e=1776902400&v=beta&t=6sv-GagnF1G5d4B4rN1Yu3sq6fln2BP_9tb0s6bARoY",
+          "description": null,
+          "company_employee_count_range": {
+            "start": 501,
+            "end": 1000
+          },
+          "company_industry": "Research",
+          "workplace_type": null,
+          "title": "Investor",
+          "company_id": "74126343",
+          "location_name": null,
+          "company_name": "Anthropic"
+        }
+      ],
+      "company_id": "74126343",
+      "company_name": "Anthropic"
+    },
+    {
+      "date_range": {
+        "start": {
+          "month": 9,
+          "day": null,
+          "iso": "2019-09",
+          "year": 2019
+        },
+        "end": null
+      },
+      "company_url": "https://www.linkedin.com/company/volteo-group/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQG0KdGQ8xmFJg/company-logo_400_400-alternative/company-logo_400_400-alternative/0/1630654731457/volteo_group_logo?e=1776902400&v=beta&t=vFLsE9u0rPoe9pkrtqAlINK_muP-cDA6ch4Q3WdOMkw",
+      "company_employee_count_range": {
+        "start": 51,
+        "end": 200
+      },
+      "company_industry": "Information Technology & Services",
+      "workplace_type": null,
+      "positions": [
+        {
+          "date_range": {
+            "start": {
+              "month": 9,
+              "day": null,
+              "iso": "2019-09",
+              "year": 2019
+            },
+            "end": null
+          },
+          "employment_type": null,
+          "company_url": "https://www.linkedin.com/company/volteo-group/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQG0KdGQ8xmFJg/company-logo_400_400-alternative/company-logo_400_400-alternative/0/1630654731457/volteo_group_logo?e=1776902400&v=beta&t=vFLsE9u0rPoe9pkrtqAlINK_muP-cDA6ch4Q3WdOMkw",
+          "description": null,
+          "company_employee_count_range": {
+            "start": 51,
+            "end": 200
+          },
+          "company_industry": "Information Technology & Services",
+          "workplace_type": null,
+          "title": "Investor",
+          "company_id": "69459000",
+          "location_name": null,
+          "company_name": "Volteo Group"
+        }
+      ],
+      "company_id": "69459000",
+      "company_name": "Volteo Group"
+    },
+    {
+      "date_range": {
+        "start": {
+          "month": 8,
+          "day": null,
+          "iso": "2014-08",
+          "year": 2014
+        },
+        "end": {
+          "month": 11,
+          "day": null,
+          "iso": "2025-11",
+          "year": 2025
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/meta/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+      "company_employee_count_range": {
+        "start": 10001,
+        "end": null
+      },
+      "company_industry": "Computer Software",
+      "workplace_type": null,
+      "positions": [
+        {
+          "date_range": {
+            "start": {
+              "month": 7,
+              "day": null,
+              "iso": "2024-07",
+              "year": 2024
+            },
+            "end": {
+              "month": 11,
+              "day": null,
+              "iso": "2025-11",
+              "year": 2025
+            }
+          },
+          "employment_type": null,
+          "company_url": "https://www.linkedin.com/company/meta/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "description": "Tying and fixing a variety of AI things across Meta and the Industry -- Infra, Software, Open Source, Llama, etc.",
+          "company_employee_count_range": {
+            "start": 10001,
+            "end": null
+          },
+          "company_industry": "Computer Software",
+          "workplace_type": null,
+          "title": "AI Fixer",
+          "company_id": "10667",
+          "location_name": "New York, United States",
+          "company_name": "Meta"
+        },
+        {
+          "date_range": {
+            "start": {
+              "month": 2,
+              "day": null,
+              "iso": "2023-02",
+              "year": 2023
+            },
+            "end": {
+              "month": 7,
+              "day": null,
+              "iso": "2024-07",
+              "year": 2024
+            }
+          },
+          "employment_type": "Full-time",
+          "company_url": "https://www.linkedin.com/company/meta/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "description": "Engineering Lead working on AI Infra, PyTorch, Generative AI",
+          "company_employee_count_range": {
+            "start": 10001,
+            "end": null
+          },
+          "company_industry": "Computer Software",
+          "workplace_type": null,
+          "title": "VP / Fellow",
+          "company_id": "10667",
+          "location_name": "New York, United States",
+          "company_name": "Meta"
+        },
+        {
+          "date_range": {
+            "start": {
+              "month": 3,
+              "day": null,
+              "iso": "2021-03",
+              "year": 2021
+            },
+            "end": {
+              "month": 3,
+              "day": null,
+              "iso": "2023-03",
+              "year": 2023
+            }
+          },
+          "employment_type": null,
+          "company_url": "https://www.linkedin.com/company/meta/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "description": "• Researcher with 52,000+ citations and an h-index of 29 in Machine Learning, computer vision, robotics\n• High-risk research. Leading PyTorch",
+          "company_employee_count_range": {
+            "start": 10001,
+            "end": null
+          },
+          "company_industry": "Computer Software",
+          "workplace_type": null,
+          "title": "Distinguished Engineer / Senior Director",
+          "company_id": "10667",
+          "location_name": "New York, United States",
+          "company_name": "Meta"
+        },
+        {
+          "date_range": {
+            "start": {
+              "month": 3,
+              "day": null,
+              "iso": "2019-03",
+              "year": 2019
+            },
+            "end": {
+              "month": 3,
+              "day": null,
+              "iso": "2021-03",
+              "year": 2021
+            }
+          },
+          "employment_type": null,
+          "company_url": "https://www.linkedin.com/company/meta/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "description": "• Lead for the PyTorch ML framework: technical, product, marketing. 100+ engineers.\n• Cross-industry partnerships with Microsoft, Amazon, Google, OpenAI, Tesla, etc.\n• Acquired and advise PapersWithCode",
+          "company_employee_count_range": {
+            "start": 10001,
+            "end": null
+          },
+          "company_industry": "Computer Software",
+          "workplace_type": null,
+          "title": "Principal Engineer",
+          "company_id": "10667",
+          "location_name": "New York, United States",
+          "company_name": "Meta"
+        },
+        {
+          "date_range": {
+            "start": {
+              "month": 8,
+              "day": null,
+              "iso": "2014-08",
+              "year": 2014
+            },
+            "end": {
+              "month": 2,
+              "day": null,
+              "iso": "2019-02",
+              "year": 2019
+            }
+          },
+          "employment_type": null,
+          "company_url": "https://www.linkedin.com/company/meta/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "description": "• Co-created and lead PyTorch from zero customers to industry-wide adoption. Lead engineering, management, product, marketing and partnerships\n• Highly-cited research in Machine Learning on Generative Adversarial Networks: Wasserstein GAN, DCGAN and LAPGAN\n• Highlighted research in SysML, Game AI, NLP, Computer Vision\n• Lead the software and hardware infrastructure decisions for the FAIR organization from early 2015 to end of 2016, including hardware and cluster decisions and software stack design\n• Lead maintainer of the Torch-7 deep learning framework from 2013 until it’s end. At its peak, Torch-7 was used by some of the largest industrial labs in machine learning: Facebook, DeepMind and Twitter, among tens of research labs. Received media and scientific attention for this work, being invited to give several tens of talks on this topic.\n• Created convnet-benchmarks, a popular benchmarking suite for deep learning. It was used from 2015 to 2017 as a gold standard by NVIDIA, AMD, Intel Nervana and many other hardware manufacturers to optimize their systems",
+          "company_employee_count_range": {
+            "start": 10001,
+            "end": null
+          },
+          "company_industry": "Computer Software",
+          "workplace_type": null,
+          "title": "Engineering Manager / Software Engineer 7",
+          "company_id": "10667",
+          "location_name": "New York, United States",
+          "company_name": "Meta"
+        }
+      ],
+      "company_id": "10667",
+      "company_name": "Meta"
+    },
+    {
+      "date_range": {
+        "start": {
+          "month": 7,
+          "day": null,
+          "iso": "2012-07",
+          "year": 2012
+        },
+        "end": {
+          "month": 8,
+          "day": null,
+          "iso": "2014-08",
+          "year": 2014
+        }
+      },
+      "company_url": null,
+      "company_logo_url": null,
+      "company_employee_count_range": null,
+      "company_industry": null,
+      "workplace_type": null,
+      "positions": [
+        {
+          "date_range": {
+            "start": {
+              "month": 7,
+              "day": null,
+              "iso": "2012-07",
+              "year": 2012
+            },
+            "end": {
+              "month": 8,
+              "day": null,
+              "iso": "2014-08",
+              "year": 2014
+            }
+          },
+          "employment_type": null,
+          "company_url": null,
+          "company_logo_url": null,
+          "description": "Built machine learning and vision systems for mobile devices and music (iOS/Android)",
+          "company_employee_count_range": null,
+          "company_industry": null,
+          "workplace_type": null,
+          "title": "Software Engineer",
+          "company_id": null,
+          "location_name": null,
+          "company_name": "Museami"
+        }
+      ],
+      "company_id": null,
+      "company_name": "Museami"
+    },
+    {
+      "date_range": {
+        "start": {
+          "month": 10,
+          "day": null,
+          "iso": "2011-10",
+          "year": 2011
+        },
+        "end": {
+          "month": 9,
+          "day": null,
+          "iso": "2013-09",
+          "year": 2013
+        }
+      },
+      "company_url": "https://www.linkedin.com/school/new-york-university/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/C4D0BAQF6TmzLkch0dQ/company-logo_400_400/company-logo_400_400/0/1630556159190/new_york_university_logo?e=1776902400&v=beta&t=-dsVKBFQvuL-tDWXjeKJoZfBe8jlY4FrgrQhui33Psc",
+      "company_employee_count_range": {
+        "start": 10001,
+        "end": null
+      },
+      "company_industry": "Higher Education",
+      "workplace_type": null,
+      "positions": [
+        {
+          "date_range": {
+            "start": {
+              "month": 10,
+              "day": null,
+              "iso": "2011-10",
+              "year": 2011
+            },
+            "end": {
+              "month": 9,
+              "day": null,
+              "iso": "2013-09",
+              "year": 2013
+            }
+          },
+          "employment_type": null,
+          "company_url": "https://www.linkedin.com/school/new-york-university/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C4D0BAQF6TmzLkch0dQ/company-logo_400_400/company-logo_400_400/0/1630556159190/new_york_university_logo?e=1776902400&v=beta&t=-dsVKBFQvuL-tDWXjeKJoZfBe8jlY4FrgrQhui33Psc",
+          "description": "Built various state-of-the-art machine learning systems using Deep Learning approaches. Projects include state-of-the-art results on Google Street View House Numbers (SVHN) dataset, pedestrian detection using unsupervised multi-stage feature learning and sentiment analysis on natural language data using deep neural language models.",
+          "company_employee_count_range": {
+            "start": 10001,
+            "end": null
+          },
+          "company_industry": "Higher Education",
+          "workplace_type": null,
+          "title": "Junior Research Scientist",
+          "company_id": "3159",
+          "location_name": null,
+          "company_name": "New York University"
+        }
+      ],
+      "company_id": "3159",
+      "company_name": "New York University"
+    }
+  ],
+  "patents": {}
+}

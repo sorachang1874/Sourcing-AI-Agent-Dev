@@ -1,0 +1,756 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAACEKIcoBtMiWUBjnDMYCG-po6a9GLDjREys",
+    "profile_url": "https://www.linkedin.com/in/ACwAACEKIcoBtMiWUBjnDMYCG-po6a9GLDjREys"
+  },
+  "item": {
+    "id": "ACoAACEKIcoBlH0R5ZT_TKQuJ4i3ZD4WlI1-rME",
+    "publicIdentifier": "jacob-menick-5a277a135",
+    "linkedinUrl": "https://www.linkedin.com/in/jacob-menick-5a277a135",
+    "firstName": "Jacob",
+    "lastName": "Menick",
+    "emails": [
+      {
+        "email": "jacob.menick@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Thinking Machines, Founding Team",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "New York City Metropolitan Area",
+      "countryCode": "US",
+      "parsed": {
+        "text": "New York City, NY, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "New York",
+        "city": "New York City"
+      }
+    },
+    "objectUrn": "554312138",
+    "registeredAt": "2016-12-28T13:14:36.803Z",
+    "topSkills": null,
+    "connectionsCount": 902,
+    "followerCount": 897,
+    "verified": true,
+    "about": "I enjoy pushing the frontier of AI research and building useful technology derived from frontier AI.\n\nI am a scientist, engineer, technologist.\n\nI have been fortunate to be able to study — and contribute research toward — fascinating topics within artificial intelligence including LLMs, multimodal models, neural network architecture, and generative modeling more broadly.",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 2,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "12682",
+        "companyId": "4171",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/4171/",
+        "schoolName": "UCL"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/C4D03AQHz5ozJoRy4GQ/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1517349076472?e=1776902400&v=beta&t=ypHCRtmpEJFFs630aPC4gNxCWQ5YhsF1JRgOveLEusA",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4D03AQHz5ozJoRy4GQ/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1517349076472?e=1776902400&v=beta&t=ypHCRtmpEJFFs630aPC4gNxCWQ5YhsF1JRgOveLEusA",
+          "width": 399,
+          "height": 399,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4D03AQHz5ozJoRy4GQ/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1517349076244?e=1776902400&v=beta&t=zqWKy52aatr-BlTun70hcqwQQCdlqPEz6EMLSFt3y0E",
+          "width": 399,
+          "height": 399,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4D03AQHz5ozJoRy4GQ/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1517349077999?e=1776902400&v=beta&t=7dTjtvV7Mlo3YOJSgnzjQw0H9JWMqGwmUSC22GAppsc",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4D03AQHz5ozJoRy4GQ/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1517349077516?e=1776902400&v=beta&t=TWmx3whRDpWHfZAlDKj2dTGbzwVBlwlWPpeykxFNGdY",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/C4D03AQHz5ozJoRy4GQ/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1517349076472?e=1776902400&v=beta&t=ypHCRtmpEJFFs630aPC4gNxCWQ5YhsF1JRgOveLEusA",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Thinking Machines, Founding Team",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff, Founding Team",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "1 yr 3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2025,
+          "text": "Feb 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Member of Technical Staff",
+        "location": "London Area, United Kingdom",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "OpenAI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/11130470/",
+        "companyId": "11130470",
+        "duration": "2 yrs 6 mos",
+        "description": "Training models.\n\n- managed the London unit of the Training research team Dec 2024 thru Feb 2025\n- overall technical lead of GPT-4o mini\n- co-led GPT-4o pretraining\n- worked on the earliest “agentic” LLMs as part of the small team who co-created ChatGPT together. I did the ML behind the first reasonable prototypes of tool-use and specifically web search\n- owned Flagship model post-training in April & May 2023, i.e. my name is on the checkpoints that served ChatGPT and API traffic during this period",
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2022,
+          "text": "Sep 2022"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2025,
+          "text": "Feb 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_200_200/B56ZT8EYB8HsAI-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=O6RSWlpQ5W4zNCOCTu621qCyTijLuXFJS4pz2_hBQfo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_100_100/B56ZT8EYB8HsAQ-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=y7RA89V9q8GlAjQ1oRU-jf_-n5zlSXRCnykXBIkgHfM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Engineer",
+        "location": "Greater London, England, United Kingdom",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "DeepMind",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1594050/",
+        "companyId": "1594050",
+        "duration": "6 yrs 9 mos",
+        "description": "(2021-2022)\nI led DeepMind's flagship work on citing sources with generative language models, GopherCite. I also worked directly on many of DeepMind’s major LLM projects including Gopher, RETRO, and Flamingo.\nhttps://arxiv.org/abs/2203.11147\nhttps://arxiv.org/abs/2112.11446\nhttps://arxiv.org/abs/2112.04426\n\n(2020 - 2021)\nPaved the way for DeepMind's multimodal LMs:\n- Proposed to feed image representations to a frozen autoregressive LM [Frozen]\n- Collaborated on adopting this approach in the Flamingo project.\nhttps://arxiv.org/abs/2106.13884\nhttps://arxiv.org/abs/2204.14198\n\n(2019 - 2020)\nWrote DeepMind's first transformer sharding code and conducted early LLM research:\n- Concurrently invented something similar to the megatron approach\n- Hacked around jax limitations to produce the first multi-host sharded models\n- Trained DeepMind's first multi-billion parameter transformer LM, focused on question-answering.\n- My implementation was forked to form the basis of the Gopher codebase\n\nI also dabbled in forward-mode learning rules for RNNs during this period [Sparse RTRL].\nhttps://arxiv.org/abs/2006.07232\n\n(2018 - 2020)\nDeveloped SOTA autoregressive image models:\n- Collaborated with Charlie Nash on DCTransformer, directly modelling JPEG-like image formats\n- Subscale Pixel Networks, one of the earliest memory-efficient long-context transformers\nhttps://arxiv.org/abs/2103.03841\nhttps://arxiv.org/abs/1812.01608\n\n(2015 - 2018)\nBefore that, I spent a number of years as the padawan of Alex Graves, working on wide-ranging research topics involving latent variable models [Associative Compression Networks], bayesian NNs [NoisyNet], reinforcement learning [unpublished], memory architectures [unpublished], and active learning [Automatic Curriculum Learning]. Became Alex's PhD student with a focus on unsupervised learning motivated by ideas from information theory and data compression.\nhttps://arxiv.org/abs/1804.02476\nhttps://arxiv.org/abs/1704.03003\nhttps://arxiv.org/abs/1706.10295",
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2015,
+          "text": "Sep 2015"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2022,
+          "text": "May 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_400_400/company-logo_400_400/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=r_t5nQiM8A2L0aUP5m-PXCGPiKrvOklfisLwUFyoqwc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_400_400/company-logo_400_400/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=r_t5nQiM8A2L0aUP5m-PXCGPiKrvOklfisLwUFyoqwc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_200_200/company-logo_200_200/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=2BilPPrSvxkF02b9uz-N6ccku99E3v2Y8bAOBExGcFA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_100_100/company-logo_100_100/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=TS688J1rsD8hLhjNZfNOSDSKLf9q38j5d5Qgo7HUC_0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "student researcher - Center for Advanced Computation",
+        "location": "Portland, Oregon Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Reed College",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/17245/",
+        "companyId": "17245",
+        "duration": "1 yr 1 mo",
+        "description": "Studied the evolution of technology.",
+        "skills": null,
+        "experienceGroupId": "1d18c0f337f40a4060d1fad8d370be91f513bfe8",
+        "startDate": {
+          "month": "Aug",
+          "year": 2014,
+          "text": "Aug 2014"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2015,
+          "text": "Aug 2015"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C510BAQF6noqPNXzhJQ/company-logo_400_400/company-logo_400_400/0/1631332699782?e=1776902400&v=beta&t=zd8KKUaw-ZZ3RzNFQYKxIP7GMQrdLUH-xqCYACCxHd8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQF6noqPNXzhJQ/company-logo_400_400/company-logo_400_400/0/1631332699782?e=1776902400&v=beta&t=zd8KKUaw-ZZ3RzNFQYKxIP7GMQrdLUH-xqCYACCxHd8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQF6noqPNXzhJQ/company-logo_200_200/company-logo_200_200/0/1631332699781?e=1776902400&v=beta&t=1NYit2Uj3lfmv91BxNZo4YM8IZE9O2S5FLDdZJnrW0I",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQF6noqPNXzhJQ/company-logo_100_100/company-logo_100_100/0/1631332699781?e=1776902400&v=beta&t=AlWXX-GsEEe-L_Kfz_Wf80soPYcyyh39upQzoJZLnuk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "web app developer for student body",
+        "location": "Portland, Oregon Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Reed College",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/17245/",
+        "companyId": "17245",
+        "duration": "1 yr 4 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "1d18c0f337f40a4060d1fad8d370be91f513bfe8",
+        "startDate": {
+          "month": "Sep",
+          "year": 2013,
+          "text": "Sep 2013"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2014,
+          "text": "Dec 2014"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C510BAQF6noqPNXzhJQ/company-logo_400_400/company-logo_400_400/0/1631332699782?e=1776902400&v=beta&t=zd8KKUaw-ZZ3RzNFQYKxIP7GMQrdLUH-xqCYACCxHd8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQF6noqPNXzhJQ/company-logo_400_400/company-logo_400_400/0/1631332699782?e=1776902400&v=beta&t=zd8KKUaw-ZZ3RzNFQYKxIP7GMQrdLUH-xqCYACCxHd8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQF6noqPNXzhJQ/company-logo_200_200/company-logo_200_200/0/1631332699781?e=1776902400&v=beta&t=1NYit2Uj3lfmv91BxNZo4YM8IZE9O2S5FLDdZJnrW0I",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQF6noqPNXzhJQ/company-logo_100_100/company-logo_100_100/0/1631332699781?e=1776902400&v=beta&t=AlWXX-GsEEe-L_Kfz_Wf80soPYcyyh39upQzoJZLnuk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Intern",
+        "location": "San Diego, California, United States",
+        "employmentType": "Internship",
+        "workplaceType": "On-site",
+        "companyName": "StepStone Group",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/485531/",
+        "companyId": "485531",
+        "duration": "3 mos",
+        "description": "Data Analysis for private equity fund performance. Taught myself to program that summer to automate the excel munging I was tasked with doing.",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2013,
+          "text": "Jun 2013"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2013,
+          "text": "Aug 2013"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQG8o1WF4XWrnw/company-logo_400_400/company-logo_400_400/0/1694633073307/stepstone_group_logo?e=1776902400&v=beta&t=k71hi04uDj9V1RgzfPnsOjp1yJvZMPDOGNDpHzfRw2M",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQG8o1WF4XWrnw/company-logo_400_400/company-logo_400_400/0/1694633073307/stepstone_group_logo?e=1776902400&v=beta&t=k71hi04uDj9V1RgzfPnsOjp1yJvZMPDOGNDpHzfRw2M",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQG8o1WF4XWrnw/company-logo_200_200/company-logo_200_200/0/1694633073307/stepstone_group_logo?e=1776902400&v=beta&t=0Sekw_lZuc0Z86KqAA0v_ibUA9B0g-TlJgRl_iW6jxI",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQG8o1WF4XWrnw/company-logo_100_100/company-logo_100_100/0/1694633073307/stepstone_group_logo?e=1776902400&v=beta&t=Rg8eq51BgVToE8bPhoha_ITKq4Tg-AlTYQ6RGYp3A8Y",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "UCL",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/4171/",
+        "schoolId": "4171",
+        "degree": "Doctor of Philosophy - PhD",
+        "fieldOfStudy": "Artificial Intelligence",
+        "skills": [],
+        "description": "PhD candidate advised by Oriol Vinyals and Marc Deisenroth",
+        "startDate": null,
+        "endDate": {
+          "year": 2018,
+          "text": "2018"
+        },
+        "period": "2018",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQF-wbRsJ7C3Lw/company-logo_400_400/B4EZ0GPzzFJUAg-/0/1773926301476/university_college_london_logo?e=1776902400&v=beta&t=SjFogrct9KdxLJtgEnHJGh6fSXiJbYrIeNomEnlI36A",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQF-wbRsJ7C3Lw/company-logo_400_400/B4EZ0GPzzFJUAg-/0/1773926301476/university_college_london_logo?e=1776902400&v=beta&t=SjFogrct9KdxLJtgEnHJGh6fSXiJbYrIeNomEnlI36A",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQF-wbRsJ7C3Lw/company-logo_200_200/B4EZ0GPzzFJUAQ-/0/1773926301476/university_college_london_logo?e=1776902400&v=beta&t=eR9fcz6N0m0e3DIFwbLAVRb23IQObUd-y7EF-iLgf-g",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQF-wbRsJ7C3Lw/company-logo_100_100/B4EZ0GPzzFJUAY-/0/1773926301476/university_college_london_logo?e=1776902400&v=beta&t=yZbZGpiUXpMgapTmNrH_QlidL2FxL5jpPeoKfaGSGn0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Reed College",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/17245/",
+        "schoolId": "17245",
+        "degree": "Bachelor’s Degree",
+        "fieldOfStudy": "Mathematics",
+        "skills": [],
+        "startDate": {
+          "year": 2011,
+          "text": "2011"
+        },
+        "endDate": {
+          "year": 2015,
+          "text": "2015"
+        },
+        "period": "2011 - 2015",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C510BAQF6noqPNXzhJQ/company-logo_400_400/company-logo_400_400/0/1631332699782?e=1776902400&v=beta&t=zd8KKUaw-ZZ3RzNFQYKxIP7GMQrdLUH-xqCYACCxHd8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQF6noqPNXzhJQ/company-logo_400_400/company-logo_400_400/0/1631332699782?e=1776902400&v=beta&t=zd8KKUaw-ZZ3RzNFQYKxIP7GMQrdLUH-xqCYACCxHd8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQF6noqPNXzhJQ/company-logo_200_200/company-logo_200_200/0/1631332699781?e=1776902400&v=beta&t=1NYit2Uj3lfmv91BxNZo4YM8IZE9O2S5FLDdZJnrW0I",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQF6noqPNXzhJQ/company-logo_100_100/company-logo_100_100/0/1631332699781?e=1776902400&v=beta&t=AlWXX-GsEEe-L_Kfz_Wf80soPYcyyh39upQzoJZLnuk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Data Science",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Deep Learning",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Statistics",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Software Development",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Data Visualization",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Machine Learning"
+      },
+      {
+        "name": "Reinforcement Learning"
+      },
+      {
+        "name": "Language Modeling"
+      },
+      {
+        "name": "Python",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Tensorflow"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABgwxtcBfqsJJUHPwsSPuBE4K9oKyRqUp5o",
+        "firstName": "Lia",
+        "lastName": "Guy",
+        "publicIdentifier": "aureliaguy",
+        "linkedinUrl": "https://www.linkedin.com/in/aureliaguy"
+      },
+      {
+        "id": "ACoAAACQBzQB5nk5kOpFWQRtK4pv3RaL5q2G-pA",
+        "firstName": "Jonathan",
+        "lastName": "Lachman",
+        "publicIdentifier": "jonathan-lachman-4981b23",
+        "linkedinUrl": "https://www.linkedin.com/in/jonathan-lachman-4981b23"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAAAJzsfoBp0MxssQYMgmy0ZNO2U3sA58ugwc",
+        "firstName": "Joshua",
+        "lastName": "Gross",
+        "publicIdentifier": "joshgross",
+        "linkedinUrl": "https://www.linkedin.com/in/joshgross"
+      },
+      {
+        "id": "ACoAABYs4-IB5mHx5eVfOHzu1e8xlO3q_kb38IM",
+        "firstName": "Brydon",
+        "lastName": "Eastman",
+        "publicIdentifier": "brydon-eastman-396719a4",
+        "linkedinUrl": "https://www.linkedin.com/in/brydon-eastman-396719a4"
+      },
+      {
+        "id": "ACoAAACo1tYBGy9sT2OWZuEULOMe4K_b2Y22-F8",
+        "firstName": "Alex",
+        "lastName": "Gartrell",
+        "publicIdentifier": "alexgartrell",
+        "linkedinUrl": "https://www.linkedin.com/in/alexgartrell"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAABA0sF8BJqwmfoms3veu9TE72tj8JMUQEFA",
+        "firstName": "Sam",
+        "lastName": "Shleifer",
+        "publicIdentifier": "sam-shleifer-a5307a77",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-shleifer-a5307a77"
+      },
+      {
+        "id": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+        "firstName": "Saurabh",
+        "lastName": "Garg",
+        "publicIdentifier": "saurabh-garg-b680b5b8",
+        "linkedinUrl": "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+      },
+      {
+        "id": "ACoAABhKWCYBiuV3Zv9Hbt8t0j-xMRqxawBcSgw",
+        "firstName": "Kurt",
+        "lastName": "Shuster",
+        "publicIdentifier": "kurtshuster1",
+        "linkedinUrl": "https://www.linkedin.com/in/kurtshuster1"
+      },
+      {
+        "id": "ACoAAAl87CYBWKLLyGNTbomy6oqIPv-5n34CXIY",
+        "firstName": "Andrew",
+        "lastName": "Tulloch",
+        "publicIdentifier": "andrew-tulloch-17238745",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-tulloch-17238745"
+      },
+      {
+        "id": "ACoAABV61Q0BF3ER-196Zc9GK5TviMrbbIlVGqg",
+        "firstName": "Samuel",
+        "lastName": "Schoenholz",
+        "publicIdentifier": "samuel-schoenholz-379830a0",
+        "linkedinUrl": "https://www.linkedin.com/in/samuel-schoenholz-379830a0"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAABPg53YBHdOvmp7pU72eDhcho-7cnwyxk1o",
+        "firstName": "Pia",
+        "lastName": "Santos",
+        "publicIdentifier": "piafsantos",
+        "linkedinUrl": "https://www.linkedin.com/in/piafsantos"
+      },
+      {
+        "id": "ACoAAAO-j_IBXcvIzhZtQ7QNkky6tlnQTcFl9qI",
+        "firstName": "Myle",
+        "lastName": "Ott",
+        "publicIdentifier": "myleott",
+        "linkedinUrl": "https://www.linkedin.com/in/myleott"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAAAji1bkB1eLX4z2Jb9-N2nMhEGNLWptSnqU",
+        "firstName": "Clare",
+        "lastName": "Birch",
+        "publicIdentifier": "clarebirch42",
+        "linkedinUrl": "https://www.linkedin.com/in/clarebirch42"
+      },
+      {
+        "id": "ACoAAAAdzCEB9t8wLSGcpoQ71RdetK75KW7RgS4",
+        "firstName": "Mark",
+        "lastName": "Jen",
+        "publicIdentifier": "markjen",
+        "linkedinUrl": "https://www.linkedin.com/in/markjen"
+      },
+      {
+        "id": "ACoAABSuDuoBTxWjMIXlkuS_DHxyW6WXBqB9gH0",
+        "firstName": "Marcos",
+        "lastName": "Barbosa",
+        "position": "Gerente de Alimentos e Bebidas/F&B Innovation & Events Sales & Operation/Finalista VIHP 2025",
+        "publicIdentifier": "marcos-barbosa-08a23a98",
+        "linkedinUrl": "https://www.linkedin.com/in/marcos-barbosa-08a23a98"
+      },
+      {
+        "id": "ACoAAE5lBPoBYbmMbwZfRFb-yOGOC_q2lRIqWJc",
+        "firstName": "Joel",
+        "lastName": "Carli",
+        "position": "Coordenador de Futebol na Botafogo de Futebol e Regatas",
+        "publicIdentifier": "joel-carli-18a580308",
+        "linkedinUrl": "https://www.linkedin.com/in/joel-carli-18a580308"
+      },
+      {
+        "id": "ACoAABPmi0sBVefiQSjLyABruZS8IFrldf1IqKw",
+        "firstName": "SHAYANE",
+        "lastName": "RAMOS",
+        "position": "Marketing Estratégico | Storytelling | Marketing Digital | Palestrante",
+        "publicIdentifier": "shayaneramos",
+        "linkedinUrl": "https://www.linkedin.com/in/shayaneramos"
+      },
+      {
+        "id": "ACoAAAzD244Bw8VChQXNIg-_zomwFtxtu46Js_4",
+        "firstName": "Lilian",
+        "lastName": "Lacerda",
+        "position": "Gestão | Comercial | Vendas | Liderança | Inside Sales | Estratégia | Governança para CEOs | Planejamento | Inovação para startups",
+        "publicIdentifier": "lilian-lacerda-vendas",
+        "linkedinUrl": "https://www.linkedin.com/in/lilian-lacerda-vendas"
+      },
+      {
+        "id": "ACoAAAAG7mkBfDTfPI80u3QzNkZ_4yWuy8l9HTk",
+        "firstName": "MARCOS",
+        "lastName": "GIMENEZ",
+        "position": "Advisor / Investor / IT Sales Executive",
+        "publicIdentifier": "marcosgimenez",
+        "linkedinUrl": "https://www.linkedin.com/in/marcosgimenez"
+      },
+      {
+        "id": "ACoAAB_QmEsByIzUHoXCbTqfk7abHaa-BE1_IFw",
+        "firstName": "Leonardo",
+        "lastName": "Dias",
+        "position": "Minha trajetória é pautada por projetos de impacto: na realização de  eventos  à gestão pública, investindo em startups e agora estruturando uma escola para liderar a transformação digital com IA e tecnologia.  ",
+        "publicIdentifier": "leonardo-dias-37790b12a",
+        "linkedinUrl": "https://www.linkedin.com/in/leonardo-dias-37790b12a"
+      },
+      {
+        "id": "ACoAABnXy-4BXoI6n6NSI7TFSWv6o7Urwr9dOns",
+        "firstName": "Túlio",
+        "lastName": "Guimarães",
+        "position": "Head of Innovation & Transformation | Corporate Venture Lead | Head of Digital Products",
+        "publicIdentifier": "tuliohgsantos",
+        "linkedinUrl": "https://www.linkedin.com/in/tuliohgsantos"
+      },
+      {
+        "id": "ACoAAAU6t9YB5WvoRkmirO93b-mDq8K_N-sCgZA",
+        "firstName": "Diego",
+        "lastName": "Torres",
+        "position": "Senior Manager LATAM @ SPORTFIVE | Conectando atletas a marcas globais",
+        "publicIdentifier": "diego-torres-15a47025",
+        "linkedinUrl": "https://www.linkedin.com/in/diego-torres-15a47025"
+      },
+      {
+        "id": "ACoAAAdqE4IBIcdJ3qekuGs76tq-R27jSsHckw0",
+        "firstName": "Leonardo",
+        "lastName": "Keuchguerian Pereira",
+        "position": "Top Voice | Advisor | Investor | Managment-Partner and Investment Advisor at InvestSmart XP |",
+        "publicIdentifier": "leonardokeuchguerianpereira",
+        "linkedinUrl": "https://www.linkedin.com/in/leonardokeuchguerianpereira"
+      },
+      {
+        "id": "ACoAABXXLBwBuKNzXTPLgSiXbNtEoXIt9mAu16U",
+        "firstName": "Sidnei",
+        "lastName": "Loureiro",
+        "position": "CEO Licenci Esportes e CEO-Presidente Genesis Training S/A",
+        "publicIdentifier": "sidneiloureiro",
+        "linkedinUrl": "https://www.linkedin.com/in/sidneiloureiro"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAACEKIcoBtMiWUBjnDMYCG-po6a9GLDjREys"
+    }
+  }
+}

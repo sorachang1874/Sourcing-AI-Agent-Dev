@@ -1,0 +1,867 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAA-iXFgBbU0AqEayHFqHGH_os5YR3uFF8Ok",
+    "profile_url": "https://www.linkedin.com/in/ACwAAA-iXFgBbU0AqEayHFqHGH_os5YR3uFF8Ok"
+  },
+  "item": {
+    "id": "ACoAAA-iXFgBMiB2NPzF__UOrUU2QeciCZEXFJQ",
+    "publicIdentifier": "mianna-chen",
+    "linkedinUrl": "https://www.linkedin.com/in/mianna-chen",
+    "firstName": "Mianna",
+    "lastName": "C.",
+    "emails": [
+      {
+        "email": "mianna@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Founding team at Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco Bay Area",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "262298712",
+    "registeredAt": "2013-06-09T21:33:23.100Z",
+    "topSkills": null,
+    "connectionsCount": 1049,
+    "followerCount": 1043,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 2,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "18867",
+        "companyId": "157313",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/157313/",
+        "schoolName": "Princeton University"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": null,
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Founding team at Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "1 yr 3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2025,
+          "text": "Feb 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research PM",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "OpenAI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/11130470/",
+        "companyId": "11130470",
+        "duration": "1 yr 1 mo",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Dec",
+          "year": 2023,
+          "text": "Dec 2023"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2024,
+          "text": "Dec 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_200_200/B56ZT8EYB8HsAI-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=O6RSWlpQ5W4zNCOCTu621qCyTijLuXFJS4pz2_hBQfo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_100_100/B56ZT8EYB8HsAQ-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=y7RA89V9q8GlAjQ1oRU-jf_-n5zlSXRCnykXBIkgHfM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Product Manager",
+        "location": "New York, New York, United States",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "DeepMind",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1594050/",
+        "companyId": "1594050",
+        "duration": "1 yr 11 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2022,
+          "text": "Feb 2022"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2023,
+          "text": "Dec 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_400_400/company-logo_400_400/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=r_t5nQiM8A2L0aUP5m-PXCGPiKrvOklfisLwUFyoqwc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_400_400/company-logo_400_400/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=r_t5nQiM8A2L0aUP5m-PXCGPiKrvOklfisLwUFyoqwc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_200_200/company-logo_200_200/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=2BilPPrSvxkF02b9uz-N6ccku99E3v2Y8bAOBExGcFA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_100_100/company-logo_100_100/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=TS688J1rsD8hLhjNZfNOSDSKLf9q38j5d5Qgo7HUC_0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Product Manager",
+        "location": "New York, New York, United States",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Two Sigma",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/27915/",
+        "companyId": "27915",
+        "duration": "1 yr 7 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jul",
+          "year": 2020,
+          "text": "Jul 2020"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2022,
+          "text": "Jan 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGCCNjERKTkkg/company-logo_400_400/company-logo_400_400/0/1644366906384/two_sigma_investments_logo?e=1776902400&v=beta&t=IXK0812ZR_2y-6wfUshayqASLNgTatLYpMo455nYtaM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGCCNjERKTkkg/company-logo_400_400/company-logo_400_400/0/1644366906384/two_sigma_investments_logo?e=1776902400&v=beta&t=IXK0812ZR_2y-6wfUshayqASLNgTatLYpMo455nYtaM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGCCNjERKTkkg/company-logo_200_200/company-logo_200_200/0/1644366906384/two_sigma_investments_logo?e=1776902400&v=beta&t=sIw31wujX5W8SlaEfPC6RQ1FRYKhGSiWotzujhrWvVw",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGCCNjERKTkkg/company-logo_100_100/company-logo_100_100/0/1644366906384/two_sigma_investments_logo?e=1776902400&v=beta&t=Xt4f29Q-oa7IMyP1hlWIDO-HtrKe14bbNpnFW_IbPgc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Product Manager (Rotation)",
+        "location": "Mountain View, CA",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Google",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1441/",
+        "companyId": "1441",
+        "duration": "6 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "db9807a66929ce7faeb7553e0b25a2f6175065f7",
+        "startDate": {
+          "month": "Feb",
+          "year": 2018,
+          "text": "Feb 2018"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2018,
+          "text": "Jul 2018"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_200_200/B4EZmhegXHGcAM-/0/1759350753990/google_logo?e=1776902400&v=beta&t=CTzyZ9kqXiycW6UU0lJPQmCNKxu5QeAaPL_y9ftsJX0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_100_100/B4EZmhegXHGcAU-/0/1759350753990/google_logo?e=1776902400&v=beta&t=LRCYpUl9rmgdri4awRP4FVlvccNARAtgcfqxtRHdedI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Team Lead, Strategy",
+        "location": "Mountain View, CA",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Google",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1441/",
+        "companyId": "1441",
+        "duration": "2 yrs 9 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "db9807a66929ce7faeb7553e0b25a2f6175065f7",
+        "startDate": {
+          "month": "Nov",
+          "year": 2015,
+          "text": "Nov 2015"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2018,
+          "text": "Jul 2018"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_200_200/B4EZmhegXHGcAM-/0/1759350753990/google_logo?e=1776902400&v=beta&t=CTzyZ9kqXiycW6UU0lJPQmCNKxu5QeAaPL_y9ftsJX0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_100_100/B4EZmhegXHGcAU-/0/1759350753990/google_logo?e=1776902400&v=beta&t=LRCYpUl9rmgdri4awRP4FVlvccNARAtgcfqxtRHdedI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Head of Operations",
+        "location": "Palo Alto, CA",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Gobble",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1506238/",
+        "companyId": "1506238",
+        "duration": "4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2015,
+          "text": "Jun 2015"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2015,
+          "text": "Sep 2015"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQF1sxMgr7mW7A/company-logo_400_400/company-logo_400_400/0/1630664364002/gobble_logo?e=1776902400&v=beta&t=MkESQGTjYTc5japviyGhlVp9gIJ5jwSm9cypfHIYaEA",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQF1sxMgr7mW7A/company-logo_400_400/company-logo_400_400/0/1630664364002/gobble_logo?e=1776902400&v=beta&t=MkESQGTjYTc5japviyGhlVp9gIJ5jwSm9cypfHIYaEA",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQF1sxMgr7mW7A/company-logo_200_200/company-logo_200_200/0/1630664364002/gobble_logo?e=1776902400&v=beta&t=ADAOdpAL8f64L4P_Ett0Hz4Y7t2qAfgl4Nqo57WRHCo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQF1sxMgr7mW7A/company-logo_100_100/company-logo_100_100/0/1630664364002/gobble_logo?e=1776902400&v=beta&t=D-dkNnXUvTODX2osVW14UZVQIgMyB727IlhXThquDP8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Operations Manager",
+        "location": "New York, NY",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "HelloFresh",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/2454643/",
+        "companyId": "2454643",
+        "duration": "9 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Oct",
+          "year": 2014,
+          "text": "Oct 2014"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2015,
+          "text": "Jun 2015"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQF8SiXS1EPqrQ/company-logo_400_400/B4EZoVxFx4HEAY-/0/1761301782009/hellofresh_logo?e=1776902400&v=beta&t=r4icz-OEXmYeYDkAdH0bbnBPw4M_YITPQDM70o3y5ME",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQF8SiXS1EPqrQ/company-logo_400_400/B4EZoVxFx4HEAY-/0/1761301782009/hellofresh_logo?e=1776902400&v=beta&t=r4icz-OEXmYeYDkAdH0bbnBPw4M_YITPQDM70o3y5ME",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQF8SiXS1EPqrQ/company-logo_200_200/B4EZoVxFx4HEAI-/0/1761301782009/hellofresh_logo?e=1776902400&v=beta&t=Q4Bvew3WssXC9mjkF6VqZwCnYiPeJCGT2TWJXDQ3GNA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQF8SiXS1EPqrQ/company-logo_100_100/B4EZoVxFx4HEAQ-/0/1761301782009/hellofresh_logo?e=1776902400&v=beta&t=AZPCG000jlAg4YnrQmCGZZzUIaCi_RrcV2QNVII9kyA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Sales & Trading Summer Analyst",
+        "location": "Hong Kong SAR",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Citi",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/11448/",
+        "companyId": "11448",
+        "duration": "3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2013,
+          "text": "Jun 2013"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2013,
+          "text": "Aug 2013"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFgF4xtqyXBcg/company-logo_400_400/company-logo_400_400/0/1719257068492/citi_logo?e=1776902400&v=beta&t=Q7eHWnVaxOpn6MmzKmfmNAVX0M8H9Zg7hOob6ehWJsg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFgF4xtqyXBcg/company-logo_400_400/company-logo_400_400/0/1719257068492/citi_logo?e=1776902400&v=beta&t=Q7eHWnVaxOpn6MmzKmfmNAVX0M8H9Zg7hOob6ehWJsg",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFgF4xtqyXBcg/company-logo_200_200/company-logo_200_200/0/1719257270317/citi_logo?e=1776902400&v=beta&t=bgqk4aib-cMxnHYK__N8qORj6batnJPQ1gRNwFmiuCs",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFgF4xtqyXBcg/company-logo_100_100/company-logo_100_100/0/1719257286385/citi_logo?e=1776902400&v=beta&t=2aX34VpBESgUAd3ZOEPFnl2tR6CTBqY5oZG_KqDWUfw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Intern",
+        "location": "Beijing",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "USDA",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/4746/",
+        "companyId": "4746",
+        "duration": "3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jul",
+          "year": 2012,
+          "text": "Jul 2012"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2012,
+          "text": "Sep 2012"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGHu10LMdV11A/company-logo_400_400/company-logo_400_400/0/1719845640942/usda_logo?e=1776902400&v=beta&t=18Shln1Q47AIEAaCUC9x7eA-SITVKFn45xC_MxtywjM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGHu10LMdV11A/company-logo_400_400/company-logo_400_400/0/1719845640942/usda_logo?e=1776902400&v=beta&t=18Shln1Q47AIEAaCUC9x7eA-SITVKFn45xC_MxtywjM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGHu10LMdV11A/company-logo_200_200/company-logo_200_200/0/1719845640942/usda_logo?e=1776902400&v=beta&t=K-ihsdu65hEznOf-mr2dDfTsLwVfnwKIh9gNptCB5JA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGHu10LMdV11A/company-logo_100_100/company-logo_100_100/0/1719845640942/usda_logo?e=1776902400&v=beta&t=YvLCp1WYKfzfqRpnP8rgFS-VrrpeWMZ2oENnRZ8QZYQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Princeton University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/157313/",
+        "schoolId": "157313",
+        "degree": "AB",
+        "fieldOfStudy": "Woodrow Wilson School of Public & International Affairs",
+        "skills": [],
+        "description": "Magna cum laude\nEuropean Union Program Best Senior Thesis Prize Winner",
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQE4zTC5PJAKSA/company-logo_400_400/company-logo_400_400/0/1630648147093/princeton_university_logo?e=1776902400&v=beta&t=-ejT6CJtb1WJH1ltf1aXlgVpSicKPKcnMorTjVwhDiw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQE4zTC5PJAKSA/company-logo_400_400/company-logo_400_400/0/1630648147093/princeton_university_logo?e=1776902400&v=beta&t=-ejT6CJtb1WJH1ltf1aXlgVpSicKPKcnMorTjVwhDiw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQE4zTC5PJAKSA/company-logo_200_200/company-logo_200_200/0/1630648147093/princeton_university_logo?e=1776902400&v=beta&t=ggPm_li0hUErI1U6HnsMryjmaT7fSfuTYqw3Iwn3nJ0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQE4zTC5PJAKSA/company-logo_100_100/company-logo_100_100/0/1630648147093/princeton_university_logo?e=1776902400&v=beta&t=05S5Q38mlOytDLLUfnx7oLpzf9y5HraXODpL-bUd0mc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "The Wharton School",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/5290/",
+        "schoolId": "5290",
+        "degree": "Master of Business Administration - MBA",
+        "fieldOfStudy": null,
+        "skills": [],
+        "description": "Founded Unbiased, a predictive hiring platform that matches stellar, pre-vetted data scientists with employers",
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFQu7wZniptpA/company-logo_400_400/company-logo_400_400/0/1677690194092/the_wharton_school_logo?e=1776902400&v=beta&t=sW5cCSPXksuCk-FjvPkBXsGeBlrbSgaqWfpUx_DcxFw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFQu7wZniptpA/company-logo_400_400/company-logo_400_400/0/1677690194092/the_wharton_school_logo?e=1776902400&v=beta&t=sW5cCSPXksuCk-FjvPkBXsGeBlrbSgaqWfpUx_DcxFw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFQu7wZniptpA/company-logo_200_200/company-logo_200_200/0/1677690194092/the_wharton_school_logo?e=1776902400&v=beta&t=j74WhcKPlFREFO4X23rKsVHfGvXXQsyXNJhTkdHaGqE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFQu7wZniptpA/company-logo_100_100/company-logo_100_100/0/1677690194092/the_wharton_school_logo?e=1776902400&v=beta&t=bHfDk-ac5Tt9sw__wS3OQ5eZdoU8BisWE1tABfwhEzw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAAAQ4Q7kByw3YKf2rFlmWzRMF7P8Gw4S9PIU",
+        "firstName": "Yinghai",
+        "lastName": "L.",
+        "publicIdentifier": "yinghai83",
+        "linkedinUrl": "https://www.linkedin.com/in/yinghai83"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABgwxtcBfqsJJUHPwsSPuBE4K9oKyRqUp5o",
+        "firstName": "Lia",
+        "lastName": "Guy",
+        "publicIdentifier": "aureliaguy",
+        "linkedinUrl": "https://www.linkedin.com/in/aureliaguy"
+      },
+      {
+        "id": "ACoAAACQBzQB5nk5kOpFWQRtK4pv3RaL5q2G-pA",
+        "firstName": "Jonathan",
+        "lastName": "Lachman",
+        "publicIdentifier": "jonathan-lachman-4981b23",
+        "linkedinUrl": "https://www.linkedin.com/in/jonathan-lachman-4981b23"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAABYs4-IB5mHx5eVfOHzu1e8xlO3q_kb38IM",
+        "firstName": "Brydon",
+        "lastName": "Eastman",
+        "publicIdentifier": "brydon-eastman-396719a4",
+        "linkedinUrl": "https://www.linkedin.com/in/brydon-eastman-396719a4"
+      },
+      {
+        "id": "ACoAAACo1tYBGy9sT2OWZuEULOMe4K_b2Y22-F8",
+        "firstName": "Alex",
+        "lastName": "Gartrell",
+        "publicIdentifier": "alexgartrell",
+        "linkedinUrl": "https://www.linkedin.com/in/alexgartrell"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAABA0sF8BJqwmfoms3veu9TE72tj8JMUQEFA",
+        "firstName": "Sam",
+        "lastName": "Shleifer",
+        "publicIdentifier": "sam-shleifer-a5307a77",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-shleifer-a5307a77"
+      },
+      {
+        "id": "ACoAACEKIcoBlH0R5ZT_TKQuJ4i3ZD4WlI1-rME",
+        "firstName": "Jacob",
+        "lastName": "Menick",
+        "position": "Thinking Machines, Founding Team",
+        "publicIdentifier": "jacob-menick-5a277a135",
+        "linkedinUrl": "https://www.linkedin.com/in/jacob-menick-5a277a135"
+      },
+      {
+        "id": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+        "firstName": "Saurabh",
+        "lastName": "Garg",
+        "publicIdentifier": "saurabh-garg-b680b5b8",
+        "linkedinUrl": "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+      },
+      {
+        "id": "ACoAAAl87CYBWKLLyGNTbomy6oqIPv-5n34CXIY",
+        "firstName": "Andrew",
+        "lastName": "Tulloch",
+        "publicIdentifier": "andrew-tulloch-17238745",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-tulloch-17238745"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAABPg53YBHdOvmp7pU72eDhcho-7cnwyxk1o",
+        "firstName": "Pia",
+        "lastName": "Santos",
+        "publicIdentifier": "piafsantos",
+        "linkedinUrl": "https://www.linkedin.com/in/piafsantos"
+      },
+      {
+        "id": "ACoAAAf7ZWcB3BGw5pTmcsFw0vXm4A_CQn6EkFo",
+        "firstName": "Christian",
+        "lastName": "G.",
+        "publicIdentifier": "christianjgibson",
+        "linkedinUrl": "https://www.linkedin.com/in/christianjgibson"
+      },
+      {
+        "id": "ACoAAAO-j_IBXcvIzhZtQ7QNkky6tlnQTcFl9qI",
+        "firstName": "Myle",
+        "lastName": "Ott",
+        "publicIdentifier": "myleott",
+        "linkedinUrl": "https://www.linkedin.com/in/myleott"
+      },
+      {
+        "id": "ACoAAAji1bkB1eLX4z2Jb9-N2nMhEGNLWptSnqU",
+        "firstName": "Clare",
+        "lastName": "Birch",
+        "publicIdentifier": "clarebirch42",
+        "linkedinUrl": "https://www.linkedin.com/in/clarebirch42"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAAAAdzCEB9t8wLSGcpoQ71RdetK75KW7RgS4",
+        "firstName": "Mark",
+        "lastName": "Jen",
+        "publicIdentifier": "markjen",
+        "linkedinUrl": "https://www.linkedin.com/in/markjen"
+      },
+      {
+        "id": "ACoAAF8a-tgBsWqvtTuM92mboyLWNKtBoUa9tIU",
+        "firstName": "Liyan",
+        "lastName": "Chen",
+        "position": "--",
+        "publicIdentifier": "liyan-chen-908445386",
+        "linkedinUrl": "https://www.linkedin.com/in/liyan-chen-908445386"
+      },
+      {
+        "id": "ACoAAF-wKU0B0ntoadXt7VUjWK9yj5o52dHzVKA",
+        "firstName": "Kaif",
+        "lastName": "Rehman",
+        "position": "Laboratory Technician at Thinking Machines Lab",
+        "publicIdentifier": "kaif-rehman-72577b389",
+        "linkedinUrl": "https://www.linkedin.com/in/kaif-rehman-72577b389"
+      },
+      {
+        "id": "ACoAAF3SWDYB6aZAqtjbw1-LDNZ4qxxHLFKTL0g",
+        "firstName": "Md",
+        "lastName": "Mdamaz",
+        "position": "Company work at Thinking Machines Lab",
+        "publicIdentifier": "md-mdamaz-b5a19937b",
+        "linkedinUrl": "https://www.linkedin.com/in/md-mdamaz-b5a19937b"
+      },
+      {
+        "id": "ACoAADopuTsBh9lDxOJzJsV8jI_KfOrsc6Tu7aQ",
+        "firstName": "Aashitosh",
+        "lastName": "Swami",
+        "position": "Lab assistant",
+        "publicIdentifier": "aashitosh-swami-67796a232",
+        "linkedinUrl": "https://www.linkedin.com/in/aashitosh-swami-67796a232"
+      },
+      {
+        "id": "ACoAACA8zv0BTVWLSUHsPJrWsUI10jzn0F57pHo",
+        "firstName": "Damir",
+        "lastName": "Sartayev",
+        "position": "AI CTO & Founder | MY project LNN+LLM+QML=AGI | Quantum, Neuro-symbolic AI | Liquid Neural Networks | RWKV | Mamba(SSM)  | Pharmacy AI, Minerals AI | Full‑Stack AI (LLMs, Agents, Fine‑Tuning, RAG, Vision) | Q-Day Q-ark",
+        "publicIdentifier": "damir-q-day-q-ark",
+        "linkedinUrl": "https://www.linkedin.com/in/damir-q-day-q-ark"
+      },
+      {
+        "id": "ACoAADwrCKUB0FU7B3O7AIg9j_wieI-QOvJrtEE",
+        "firstName": "Katy",
+        "lastName": "Liemandt",
+        "position": "TML | San Francisco",
+        "publicIdentifier": "katy-liemandt-399092242",
+        "linkedinUrl": "https://www.linkedin.com/in/katy-liemandt-399092242"
+      },
+      {
+        "id": "ACoAAAM07-gB20Vg4hTVwpax2eyLJhzmkVGgucg",
+        "firstName": "Katie",
+        "lastName": "Slattery",
+        "position": "Accounting @ Thinking Machines Lab",
+        "publicIdentifier": "katieslattery",
+        "linkedinUrl": "https://www.linkedin.com/in/katieslattery"
+      },
+      {
+        "id": "ACoAACxX5AEBYonmfz9M8tQ8jO7Nx3jIXe_VSjw",
+        "firstName": "Sophie Rose",
+        "lastName": "Shapiro",
+        "position": "Creative Operations",
+        "publicIdentifier": "sophie-rose-shapiro",
+        "linkedinUrl": "https://www.linkedin.com/in/sophie-rose-shapiro"
+      },
+      {
+        "id": "ACoAAFUBvsYBMskyWP5r-Lf7ZUccZSuFy2nCqkA",
+        "firstName": "Ankit",
+        "lastName": "Baghel",
+        "position": "--DMLT lab technician\nb.sc chemistry chemical industry lab",
+        "publicIdentifier": "ankit-baghel-40675a339",
+        "linkedinUrl": "https://www.linkedin.com/in/ankit-baghel-40675a339"
+      },
+      {
+        "id": "ACoAAFrO2hYBQn9I3leFzBjeUmgehOiK_AGSCr8",
+        "firstName": "Muhammad",
+        "lastName": "Adam Usman",
+        "position": "Electrician at Thinking Machines Lab",
+        "publicIdentifier": "muhammad-adam-usman-472276366",
+        "linkedinUrl": "https://www.linkedin.com/in/muhammad-adam-usman-472276366"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAA-iXFgBbU0AqEayHFqHGH_os5YR3uFF8Ok"
+    }
+  }
+}

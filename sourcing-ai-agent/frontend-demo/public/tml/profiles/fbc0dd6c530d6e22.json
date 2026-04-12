@@ -1,0 +1,1658 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAAAEA04BdRoaC9rYk28RTrsMw_4K4LZDQFU",
+    "profile_url": "https://www.linkedin.com/in/ACwAAAAEA04BdRoaC9rYk28RTrsMw_4K4LZDQFU"
+  },
+  "item": {
+    "id": "ACoAAAAEA04B1csoxlu5TIeOG1ijQuT6P2xGxwU",
+    "publicIdentifier": "thomaswdinsmore",
+    "linkedinUrl": "https://www.linkedin.com/in/thomaswdinsmore",
+    "firstName": "Thomas W.",
+    "lastName": "Dinsmore",
+    "emails": [
+      {
+        "email": "thomas.dinsmore@substack.com",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thomaswdinsmore.substack.com/",
+        "domain": "substack.com",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "I write about machine learning tools and software.",
+    "websites": [
+      "https://thomaswdinsmore.substack.com/"
+    ],
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Greater Boston",
+      "countryCode": "US",
+      "parsed": {
+        "text": "Boston, MA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "Massachusetts",
+        "city": "Boston"
+      }
+    },
+    "objectUrn": "262990",
+    "registeredAt": "2004-02-23T14:09:31.000Z",
+    "topSkills": null,
+    "connectionsCount": 8148,
+    "followerCount": 12236,
+    "verified": true,
+    "about": "I write about the business of analytics, machine learning, and AI.",
+    "currentPosition": [
+      {
+        "companyId": null,
+        "companyLinkedinUrl": null,
+        "companyName": "Thomas W Dinsmore LLC",
+        "dateRange": {
+          "start": {
+            "month": 6,
+            "year": 2024,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "19329",
+        "companyId": "5290",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/5290/",
+        "schoolName": "University of Pennsylvania - The Wharton School"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/C4E03AQEHtKgOXpyIuQ/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1521246149944?e=1776902400&v=beta&t=fKYIPYHTwp3sDKo3XsyF3yRGvR6HIV9t9wYbY03_CAg",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4E03AQEHtKgOXpyIuQ/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1521246149944?e=1776902400&v=beta&t=fKYIPYHTwp3sDKo3XsyF3yRGvR6HIV9t9wYbY03_CAg",
+          "width": 500,
+          "height": 500,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4E03AQEHtKgOXpyIuQ/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1521246150274?e=1776902400&v=beta&t=V4UPKcPUr_ECStvi1tuXJFKBNlqalqKIy2SZPjU8-5I",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4E03AQEHtKgOXpyIuQ/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1521246151076?e=1776902400&v=beta&t=zUsUxStdeAzJl3gM9UpzQaLSKUCF15B3GA9VQdxrp2c",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4E03AQEHtKgOXpyIuQ/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1521246150059?e=1776902400&v=beta&t=O7ZxpYWt66JDJ9jPiq6Xos9Jbm8qWOTr9lfwysqjp8g",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/C4E03AQEHtKgOXpyIuQ/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1521246149944?e=1776902400&v=beta&t=fKYIPYHTwp3sDKo3XsyF3yRGvR6HIV9t9wYbY03_CAg",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "I write about machine learning tools and software.",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Smart Person",
+        "location": "Boston, Massachusetts, United States",
+        "employmentType": "Self-employed",
+        "workplaceType": "On-site",
+        "companyName": "Thomas W Dinsmore LLC",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Thomas+W+Dinsmore+LLC",
+        "duration": "1 yr 11 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2024,
+          "text": "Jun 2024"
+        },
+        "endDate": {
+          "text": "Present"
+        }
+      },
+      {
+        "position": "Head of Competitor Intelligence",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Domino Data Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3542130/",
+        "companyId": "3542130",
+        "duration": "2 yrs 7 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Dec",
+          "year": 2021,
+          "text": "Dec 2021"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2024,
+          "text": "Jun 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQFQC4Vw2MVhAw/company-logo_400_400/B56ZfHQGbWGoAw-/0/1751394576361/domino_data_lab_logo?e=1776902400&v=beta&t=5XkWPYY5LgQGyZgMsJvWByxanIeH3C8Sv3tJEn0VU7I",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFQC4Vw2MVhAw/company-logo_400_400/B56ZfHQGbWGoAw-/0/1751394576361/domino_data_lab_logo?e=1776902400&v=beta&t=5XkWPYY5LgQGyZgMsJvWByxanIeH3C8Sv3tJEn0VU7I",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFQC4Vw2MVhAw/company-logo_200_200/B56ZfHQGbWGoAg-/0/1751394576361/domino_data_lab_logo?e=1776902400&v=beta&t=vUFY63mktL6PkwJCKhyuo74aYVhPf0tgQSYlOan4vn4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFQC4Vw2MVhAw/company-logo_100_100/B56ZfHQGbWGoAo-/0/1751394576361/domino_data_lab_logo?e=1776902400&v=beta&t=1deTJxiQmx9tyL-OjzxEbHkkgWNTxIq4Fhdee0asRcQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior Director, Competitor Intelligence",
+        "location": "Greater Boston",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "DataRobot",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/2672915/",
+        "companyId": "2672915",
+        "duration": "3 yrs 10 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2018,
+          "text": "Mar 2018"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2021,
+          "text": "Dec 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGw5toRagF3Pg/company-logo_400_400/company-logo_400_400/0/1731398747234/datarobot_logo?e=1776902400&v=beta&t=1rHAHcz9QP69Rl0STN-DDzrADxRJVQ_sGf2r8_74xac",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGw5toRagF3Pg/company-logo_400_400/company-logo_400_400/0/1731398747234/datarobot_logo?e=1776902400&v=beta&t=1rHAHcz9QP69Rl0STN-DDzrADxRJVQ_sGf2r8_74xac",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGw5toRagF3Pg/company-logo_200_200/company-logo_200_200/0/1731398747234/datarobot_logo?e=1776902400&v=beta&t=93Hk262AYnkZDVAeVOf85pvla1WjLmk9UdtkMXifVz4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGw5toRagF3Pg/company-logo_100_100/company-logo_100_100/0/1731398747234/datarobot_logo?e=1776902400&v=beta&t=uAm7Ldj7bC7koPRNFME_HvZWs1OTfoM_rPhHgCJxHpc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Director of Product Marketing for Data Science",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Cloudera",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/229433/",
+        "companyId": "229433",
+        "duration": "11 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2017,
+          "text": "May 2017"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2018,
+          "text": "Mar 2018"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHVexkKukGI9w/company-logo_400_400/B56Zy.0uE_IkAc-/0/1772728017506/cloudera_logo?e=1776902400&v=beta&t=FIQ2rjJ9TlYtPZ7vp_R2fZtHlv027t2MJXZsfaNhK6I",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHVexkKukGI9w/company-logo_400_400/B56Zy.0uE_IkAc-/0/1772728017506/cloudera_logo?e=1776902400&v=beta&t=FIQ2rjJ9TlYtPZ7vp_R2fZtHlv027t2MJXZsfaNhK6I",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHVexkKukGI9w/company-logo_200_200/B56Zy.0uE_IkAM-/0/1772728017506/cloudera_logo?e=1776902400&v=beta&t=QOs5u5XXRgzYtKEdD3jmytOpcIBYRTSODsO384yjHtw",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHVexkKukGI9w/company-logo_100_100/B56Zy.0uE_IkAU-/0/1772728017506/cloudera_logo?e=1776902400&v=beta&t=kPjE6xK0y6mHU1HujbQuwBQ3_0vBEY1AD263aDVzWtQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Consultant",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thomas W. Dinsmore, LLC",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Thomas+W%2E+Dinsmore%2C+LLC",
+        "duration": "2 yrs",
+        "description": "Analytics market insight. Competitive intelligence. Product definition and communications.",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2015,
+          "text": "Jun 2015"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2017,
+          "text": "May 2017"
+        }
+      },
+      {
+        "position": "Knowledge Expert",
+        "location": "Boston, Massachusetts",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "The Boston Consulting Group",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1784/",
+        "companyId": "1784",
+        "duration": "11 mos",
+        "description": "Subject matter expert in Big Data and Customer Analytics.    Provided thought leadership and case support for strategic consulting engagements.",
+        "skills": null,
+        "startDate": {
+          "month": "Aug",
+          "year": 2014,
+          "text": "Aug 2014"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2015,
+          "text": "Jun 2015"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQE_RmtwzBSpAg/company-logo_400_400/company-logo_400_400/0/1702568604682/boston_consulting_group_logo?e=1776902400&v=beta&t=skf9pE_Z1uCPSjIcn9VYmvC22U69a9CTXEjNroRSsGI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQE_RmtwzBSpAg/company-logo_400_400/company-logo_400_400/0/1702568604682/boston_consulting_group_logo?e=1776902400&v=beta&t=skf9pE_Z1uCPSjIcn9VYmvC22U69a9CTXEjNroRSsGI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQE_RmtwzBSpAg/company-logo_200_200/company-logo_200_200/0/1702568604682/boston_consulting_group_logo?e=1776902400&v=beta&t=Rk8qqWrey3dvkMRXPyAYqzmX7Uwh-OHURqhRHeMblRw",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQE_RmtwzBSpAg/company-logo_100_100/company-logo_100_100/0/1702568604682/boston_consulting_group_logo?e=1776902400&v=beta&t=rBGSMLfk_7NyF2J0aVVs8ivxtG6acYG49uJBwPtXRiM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Director of Product Management",
+        "location": "Greater Boston",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Revolution Analytics",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/263515/",
+        "companyId": "263515",
+        "duration": "1 yr 7 mos",
+        "description": "Worked with customers and sales team to define requirements for Revolution R Enterprise\nPrioritized enhancement requests to Engineering\nManaged limited availability programs\nSupported pricing through competitive analysis",
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2013,
+          "text": "Feb 2013"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2014,
+          "text": "Aug 2014"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQGvFqD92cXDMA/company-logo_400_400/company-logo_400_400/0/1631437572093/revolution_analytics_logo?e=1776902400&v=beta&t=z-axGGShFB3qTDI11BGao4kRjQkTv4eyovV3vzCWGwc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGvFqD92cXDMA/company-logo_400_400/company-logo_400_400/0/1631437572093/revolution_analytics_logo?e=1776902400&v=beta&t=z-axGGShFB3qTDI11BGao4kRjQkTv4eyovV3vzCWGwc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGvFqD92cXDMA/company-logo_200_200/company-logo_200_200/0/1631437572093/revolution_analytics_logo?e=1776902400&v=beta&t=X4E42fAyZ7YYS9mngxho4Y8i77DW8lSOkCzLg_wEwws",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGvFqD92cXDMA/company-logo_100_100/company-logo_100_100/0/1631437572093/revolution_analytics_logo?e=1776902400&v=beta&t=7aSQdQDIV2sgdSbloe4elNiZ8wj91NEYB4corNXpViE",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Solution Architect, Advanced Analytics",
+        "location": "Greater Boston",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Netezza, an IBM Company",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10396/",
+        "companyId": "10396",
+        "duration": "3 yrs 2 mos",
+        "description": "Worked with more than 100 customers to implement high-performance predictive modeling and scoring by leveraging the power of the IBM Netezza appliance.  Evaluated customer needs and current state architecture. Discussed, review and provide information about IBM Netezza Analytics and its interfaces to analytic tools and software.",
+        "skills": null,
+        "startDate": {
+          "year": 2010,
+          "text": "2010"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2013,
+          "text": "Feb 2013"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFRJ04s2BzX2A/company-logo_400_400/company-logo_400_400/0/1631300896667?e=1776902400&v=beta&t=9TpZOqTBOVH64kB94ZEo6P-UIuqJJsm6TxNFmKz-4aM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFRJ04s2BzX2A/company-logo_400_400/company-logo_400_400/0/1631300896667?e=1776902400&v=beta&t=9TpZOqTBOVH64kB94ZEo6P-UIuqJJsm6TxNFmKz-4aM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFRJ04s2BzX2A/company-logo_200_200/company-logo_200_200/0/1631300896667?e=1776902400&v=beta&t=8TgwcQ9O1Aj-CjII61lBQboF2mP1INVXJHWTbizIZnw",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFRJ04s2BzX2A/company-logo_100_100/company-logo_100_100/0/1631300896667?e=1776902400&v=beta&t=Wd8GWGZA6JOE3BLoRNUx_1D6cBV0931txhk4dblDrMA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Principal Consultant",
+        "location": "Greater Chicago Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Razorfish",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/2864/",
+        "companyId": "2864",
+        "duration": "Less than a year",
+        "description": "Led a team of analysts supporting the JCPenney digital media account.  Developed rapid response analytics to quickly assess campaign impact for client senior management.  Deployed new techniques for social media analysis to track market sentiment towards the brand.  Implemented methods to track digital media campaign ROI.",
+        "skills": null,
+        "startDate": {
+          "year": 2010,
+          "text": "2010"
+        },
+        "endDate": {
+          "year": 2010,
+          "text": "2010"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGjJ2q0LbKGVg/company-logo_400_400/B56ZoHPrhoHkAY-/0/1761058142648/sapientrazorfish_logo?e=1776902400&v=beta&t=Ti4wJgX8tsLU2G9W9rr050bKoGB5-20BEEX7REXmkaQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGjJ2q0LbKGVg/company-logo_400_400/B56ZoHPrhoHkAY-/0/1761058142648/sapientrazorfish_logo?e=1776902400&v=beta&t=Ti4wJgX8tsLU2G9W9rr050bKoGB5-20BEEX7REXmkaQ",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGjJ2q0LbKGVg/company-logo_200_200/B56ZoHPrhoHkAI-/0/1761058142647/sapientrazorfish_logo?e=1776902400&v=beta&t=fdNm-z0h0iBCTIb74n75s2Mc1qdlYRs01OUC5cMsHMo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGjJ2q0LbKGVg/company-logo_100_100/B56ZoHPrhoHkAQ-/0/1761058142647/sapientrazorfish_logo?e=1776902400&v=beta&t=-9-gaxaR2R6XnMKfrkmR4waL6S16BJfx320GCwiAlMQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Principal Consultant, Professional Services",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "SAS Institute",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1491/",
+        "companyId": "1491",
+        "duration": "9 yrs",
+        "description": "Led and contributed to client service opportunities with progressively greater scope, complexity and management challenge.  Frequently commended by clients and management for achieving results.\n\nConsulting Business Development: Collaborated with Account Executives to define, scope, plan, position and close SAS consulting projects.  Identified business requirements, developed proposals, secured personnel, performed budget and risk analysis, negotiated agreements and monitored client satisfaction.\n\n-- Positioned and closed consulting projects budgeted at $1.1 million in 2009 (up 30% from 2008); exceeded internal standards for project pricing, margin and risk.\n\n-- Led winning assessment and proposal teams for SAS Marketing Automation and SAS Customer Intelligence solutions, for clients such as Dell, Staples, Office Depot, Morgan Stanley and UBS.\n\n-- Developed innovative consulting solutions for successful implementation of high-performance SAS architecture within time and budget constraints.\n\nProgram and Project Management: Managed projects to implement SAS Campaign Management, SAS Marketing Automation and SAS Customer Intelligence  solutions.  Provided expert assistance to global project teams, including crisis intervention.  Presented best practices and case study to global audiences.\n\n-- Managed successful implementations for Aliant, Dell, Sasktel and United Health Group.\n\n-- Provided cross-functional program management and issue resolution for troubled “at risk” projects at Aegon, Santander and RJR Nabisco.\n\n-- Initiated program office to support multi-country upgrade and implementation for GE Capital.\n\n-- Developed tools and methodology to position and implement SAS Marketing Automation.",
+        "skills": null,
+        "startDate": {
+          "year": 2001,
+          "text": "2001"
+        },
+        "endDate": {
+          "year": 2010,
+          "text": "2010"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFhSD86O7AkYA/company-logo_400_400/company-logo_400_400/0/1720039737493/sas_logo?e=1776902400&v=beta&t=z1V1ioJIsFZ3fBR37teYrU4QN243R7T6MpbcWouGuIE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFhSD86O7AkYA/company-logo_400_400/company-logo_400_400/0/1720039737493/sas_logo?e=1776902400&v=beta&t=z1V1ioJIsFZ3fBR37teYrU4QN243R7T6MpbcWouGuIE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFhSD86O7AkYA/company-logo_200_200/company-logo_200_200/0/1720039737493/sas_logo?e=1776902400&v=beta&t=HMUaYQPtAMeLUXGrmNNVmm6TtVi_mVlBpL9jmTJVcA4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFhSD86O7AkYA/company-logo_100_100/company-logo_100_100/0/1720039737493/sas_logo?e=1776902400&v=beta&t=JToBfozYbxDpji_G4Vqeo9QHMkE3yZrQr2sxLAN1hoQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Principal Consultant",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "PriceWaterhouseCoopers",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1044/",
+        "companyId": "1044",
+        "duration": "1 yr",
+        "description": "Business Analysis (Marketing): Led business process and requirements analysis for Marketing applications.  Contributed domain and application knowledge to Siebel CRM implementations.\n\n-- Completed enterprise-wide assessment of requirements for Siebel Marketing for Sony Electronics (US).\n\n-- Conducted Marketing requirements assessment for division of Cendant; assisted client through software vendor selection process.\n\nProject Management: Provided solution expertise and leadership for teams implementing Campaign Management solutions.\n\n-- Led project team through successful implementation for barnesandnoble.com.\n\n-- Managed vendor contributions to development effort in PwC Solution Center.",
+        "skills": null,
+        "startDate": {
+          "year": 2000,
+          "text": "2000"
+        },
+        "endDate": {
+          "year": 2001,
+          "text": "2001"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFVfAbYbmcpvA/company-logo_400_400/B4EZaB6j58H0AY-/0/1745936334912/pwc_logo?e=1776902400&v=beta&t=MNxRIBmy-RpQBWBHEnqiO3FN2CK5lgfrmf-L4vBcJ5g",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFVfAbYbmcpvA/company-logo_400_400/B4EZaB6j58H0AY-/0/1745936334912/pwc_logo?e=1776902400&v=beta&t=MNxRIBmy-RpQBWBHEnqiO3FN2CK5lgfrmf-L4vBcJ5g",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFVfAbYbmcpvA/company-logo_200_200/B4EZaB6j58H0AI-/0/1745936334912/pwc_logo?e=1776902400&v=beta&t=72yVD2KsKLaoaVBtMY_uYOSfvinqDkh_pjTy955vcWA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFVfAbYbmcpvA/company-logo_100_100/B4EZaB6j58H0AQ-/0/1745936334912/pwc_logo?e=1776902400&v=beta&t=-OBbq1rzIYQGFxn_FIHe3dmiXqD_-dwvbpVRZLt6WYg",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Engagement Manager",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Exchange Applications",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Exchange+Applications",
+        "duration": "2 yrs",
+        "description": "Program and Project Management: Managed projects to implement integrated Marketing solutions based on VALEX software.\n\n-- Organized Program Office to support global CitiCorp rollout; managed implementation for client’s US-based internet bank, led and contributed to implementations in Puerto Rico, Belgium and Singapore.\n\n-- Led  successful implementations for Fidelity, First Card, Mellon Bank, an insurance marketer and dot.com retailer.\nBusiness Analysis (Marketing)\n\nOrganized and led assessments to define client requirements for Marketing applications.  Contributed application knowledge and expertise to client project plans.\n\n-- Led or contributed to assessments for ScotiaBank, CIBC and Royal Bank of Canada.\n\n-- Provided pre-sale architectural guidance to Bank Hapoalim and YK Bank (Istanbul).",
+        "skills": null,
+        "startDate": {
+          "year": 1998,
+          "text": "1998"
+        },
+        "endDate": {
+          "year": 2000,
+          "text": "2000"
+        }
+      },
+      {
+        "position": "Principal Consultant",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/12767/",
+        "companyId": "12767",
+        "duration": "1 yr",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "year": 1997,
+          "text": "1997"
+        },
+        "endDate": {
+          "year": 1998,
+          "text": "1998"
+        },
+        "companyLogo": null
+      },
+      {
+        "position": "Sr. Marketing Analyst",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Prevision Marketing",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Prevision+Marketing",
+        "duration": "1 yr",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "year": 1996,
+          "text": "1996"
+        },
+        "endDate": {
+          "year": 1997,
+          "text": "1997"
+        }
+      },
+      {
+        "position": "Marketing Research Manager",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "AT&T Capital",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1052/",
+        "companyId": "1052",
+        "duration": "2 yrs",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "year": 1994,
+          "text": "1994"
+        },
+        "endDate": {
+          "year": 1996,
+          "text": "1996"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQETZPIp_rERFA/company-logo_400_400/company-logo_400_400/0/1736396366556/att_logo?e=1776902400&v=beta&t=8nh4AVBkFlUf5uSKlTnDeZal4UBP0dFgPWFtWasLyLw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQETZPIp_rERFA/company-logo_400_400/company-logo_400_400/0/1736396366556/att_logo?e=1776902400&v=beta&t=8nh4AVBkFlUf5uSKlTnDeZal4UBP0dFgPWFtWasLyLw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQETZPIp_rERFA/company-logo_200_200/company-logo_200_200/0/1736396366556/att_logo?e=1776902400&v=beta&t=rAWquoblj2lm6oJsMjsGVFSp3wnCLz97GEJG5kADS_Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQETZPIp_rERFA/company-logo_100_100/company-logo_100_100/0/1736396366556/att_logo?e=1776902400&v=beta&t=iBc9x3ysIceBHUdIQVX3ZJ28Zi_gcyQGpF5yW2Kdmys",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Credit Line Strategist",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Chase Card Services",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1068/",
+        "companyId": "1068",
+        "duration": "1 yr",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "year": 1993,
+          "text": "1993"
+        },
+        "endDate": {
+          "year": 1994,
+          "text": "1994"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGxpntCyRgsuA/company-logo_400_400/company-logo_400_400/0/1718711710850/jpmorganchase_logo?e=1776902400&v=beta&t=2amGqOhgrm5pJJ8K8v-vUEtMh_gL1QFxbz8TBYCUgao",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGxpntCyRgsuA/company-logo_400_400/company-logo_400_400/0/1718711710850/jpmorganchase_logo?e=1776902400&v=beta&t=2amGqOhgrm5pJJ8K8v-vUEtMh_gL1QFxbz8TBYCUgao",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGxpntCyRgsuA/company-logo_200_200/company-logo_200_200/0/1718711710850/jpmorganchase_logo?e=1776902400&v=beta&t=ARiDlLOQzCmJIGnRGmoyL-VY7Gd8FMoWS95AhWMKpR0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGxpntCyRgsuA/company-logo_100_100/company-logo_100_100/0/1718711710850/jpmorganchase_logo?e=1776902400&v=beta&t=3L9JTTNAhrrKZlt5SJF7ZU180ydl6e4s7eZkMmdFVxs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Marketing Analyst",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "AT&T Universal Card Services",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1052/",
+        "companyId": "1052",
+        "duration": "1 yr",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "year": 1992,
+          "text": "1992"
+        },
+        "endDate": {
+          "year": 1993,
+          "text": "1993"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQETZPIp_rERFA/company-logo_400_400/company-logo_400_400/0/1736396366556/att_logo?e=1776902400&v=beta&t=8nh4AVBkFlUf5uSKlTnDeZal4UBP0dFgPWFtWasLyLw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQETZPIp_rERFA/company-logo_400_400/company-logo_400_400/0/1736396366556/att_logo?e=1776902400&v=beta&t=8nh4AVBkFlUf5uSKlTnDeZal4UBP0dFgPWFtWasLyLw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQETZPIp_rERFA/company-logo_200_200/company-logo_200_200/0/1736396366556/att_logo?e=1776902400&v=beta&t=rAWquoblj2lm6oJsMjsGVFSp3wnCLz97GEJG5kADS_Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQETZPIp_rERFA/company-logo_100_100/company-logo_100_100/0/1736396366556/att_logo?e=1776902400&v=beta&t=iBc9x3ysIceBHUdIQVX3ZJ28Zi_gcyQGpF5yW2Kdmys",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Associate",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Mercer Management Consulting",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/2453/",
+        "companyId": "2453",
+        "duration": "7 yrs",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "year": 1985,
+          "text": "1985"
+        },
+        "endDate": {
+          "year": 1992,
+          "text": "1992"
+        },
+        "companyLogo": null
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "The Wharton School",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/5290/",
+        "schoolId": "5290",
+        "degree": "MBA",
+        "fieldOfStudy": "Accounting and Decision Sciences",
+        "skills": [],
+        "startDate": {
+          "year": 1977,
+          "text": "1977"
+        },
+        "endDate": {
+          "year": 1979,
+          "text": "1979"
+        },
+        "period": "1977 - 1979",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFQu7wZniptpA/company-logo_400_400/company-logo_400_400/0/1677690194092/the_wharton_school_logo?e=1776902400&v=beta&t=sW5cCSPXksuCk-FjvPkBXsGeBlrbSgaqWfpUx_DcxFw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFQu7wZniptpA/company-logo_400_400/company-logo_400_400/0/1677690194092/the_wharton_school_logo?e=1776902400&v=beta&t=sW5cCSPXksuCk-FjvPkBXsGeBlrbSgaqWfpUx_DcxFw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFQu7wZniptpA/company-logo_200_200/company-logo_200_200/0/1677690194092/the_wharton_school_logo?e=1776902400&v=beta&t=j74WhcKPlFREFO4X23rKsVHfGvXXQsyXNJhTkdHaGqE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFQu7wZniptpA/company-logo_100_100/company-logo_100_100/0/1677690194092/the_wharton_school_logo?e=1776902400&v=beta&t=bHfDk-ac5Tt9sw__wS3OQ5eZdoU8BisWE1tABfwhEzw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Boston University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3556/",
+        "schoolId": "3556",
+        "degree": "BA",
+        "fieldOfStudy": null,
+        "skills": [],
+        "startDate": {
+          "year": 1972,
+          "text": "1972"
+        },
+        "endDate": {
+          "year": 1977,
+          "text": "1977"
+        },
+        "period": "1972 - 1977",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQFBK74krMig1Q/company-logo_400_400/company-logo_400_400/0/1631319084422?e=1776902400&v=beta&t=XE9SVBZT0A3fPEPMF-84_bCvOr_P7Z6WM7V_3P5q6Ko",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFBK74krMig1Q/company-logo_400_400/company-logo_400_400/0/1631319084422?e=1776902400&v=beta&t=XE9SVBZT0A3fPEPMF-84_bCvOr_P7Z6WM7V_3P5q6Ko",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFBK74krMig1Q/company-logo_200_200/company-logo_200_200/0/1631319084422?e=1776902400&v=beta&t=V2fyI7o1j1BZBfzohY5XKm-eCr8CEfA9qqpwAEdBQOk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFBK74krMig1Q/company-logo_100_100/company-logo_100_100/0/1631319084422?e=1776902400&v=beta&t=hSbRdJKFa44HfzUTYttAdvsa0Zl5iXMlj28waQfX4bQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [
+      {
+        "title": "SAS Certified Base Programmer for SAS 9",
+        "issuedAt": "Issued Mar 2010",
+        "issuedBy": "SAS",
+        "issuedByLink": "https://www.linkedin.com/company/1491/",
+        "issuedByLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFhSD86O7AkYA/company-logo_400_400/company-logo_400_400/0/1720039737493/sas_logo?e=1776902400&v=beta&t=z1V1ioJIsFZ3fBR37teYrU4QN243R7T6MpbcWouGuIE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFhSD86O7AkYA/company-logo_400_400/company-logo_400_400/0/1720039737493/sas_logo?e=1776902400&v=beta&t=z1V1ioJIsFZ3fBR37teYrU4QN243R7T6MpbcWouGuIE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFhSD86O7AkYA/company-logo_200_200/company-logo_200_200/0/1720039737493/sas_logo?e=1776902400&v=beta&t=HMUaYQPtAMeLUXGrmNNVmm6TtVi_mVlBpL9jmTJVcA4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFhSD86O7AkYA/company-logo_100_100/company-logo_100_100/0/1720039737493/sas_logo?e=1776902400&v=beta&t=JToBfozYbxDpji_G4Vqeo9QHMkE3yZrQr2sxLAN1hoQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "title": "SAS Certified Base Programmer for SAS 9",
+        "issuedBy": "SAS",
+        "issuedByLink": "https://www.linkedin.com/company/1491/",
+        "issuedByLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFhSD86O7AkYA/company-logo_400_400/company-logo_400_400/0/1720039737493/sas_logo?e=1776902400&v=beta&t=z1V1ioJIsFZ3fBR37teYrU4QN243R7T6MpbcWouGuIE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFhSD86O7AkYA/company-logo_400_400/company-logo_400_400/0/1720039737493/sas_logo?e=1776902400&v=beta&t=z1V1ioJIsFZ3fBR37teYrU4QN243R7T6MpbcWouGuIE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFhSD86O7AkYA/company-logo_200_200/company-logo_200_200/0/1720039737493/sas_logo?e=1776902400&v=beta&t=HMUaYQPtAMeLUXGrmNNVmm6TtVi_mVlBpL9jmTJVcA4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFhSD86O7AkYA/company-logo_100_100/company-logo_100_100/0/1720039737493/sas_logo?e=1776902400&v=beta&t=JToBfozYbxDpji_G4Vqeo9QHMkE3yZrQr2sxLAN1hoQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [
+      {
+        "givenBy": "Bob Laurent",
+        "givenByHeadline": "Product Marketing & AR Leader for High-Growth, B2B Software Companies",
+        "givenAt": "June 28, 2020, Bob managed Thomas W. directly",
+        "givenByLink": "https://www.linkedin.com/in/boblaurent",
+        "description": "Thomas and I worked together for two years at DataRobot, and I was his manager for about a year. I always enjoyed my 1x1 conversations with him because he is truly one of the most knowledgeable and plugged-in people I know about the dynamic data science and analytics market. He is a rare individual who possesses both deep technical knowledge and acute business sense, and is able to leverage both very successfully to analyze competitors (and their products), anticipate strategies, recommend sales and marketing tactics, and contribute to key corporate decisions by senior leaders.\n\nThomas has a time-tested and battle-hardened methodology for working with enterprise sales teams to arm them with the competitive information they need, when they need it. He has his finger on the pulse of the industry, and is constantly assessing new information and prioritizing competitive threats to make sure that assets in a wide variety of formats are always up-to-date and easy to consume. I received frequent kudos from sales and marketing people about not only his work products, but also the training sessions that he conducted that were always timely and focused on delivered information that helps them sell (not just facts about a competitor). He’s also great with customers – providing them with new perspectives to think about when choosing a data science platform, and delivering details in a way that’s always respectful and informative.\n\nWe have also worked closely together on various projects, and his deep market understanding and experience with customers, competitors, industry analyst firms, and executive teams drive new ways of thinking. He’s a great strategic thinker, and collaborating with him on ways to approach a problem was insightful and extremely beneficial. And then, when it’s time to roll up your sleeves and get it done, Thomas was always focused, organized, and delivered the highest caliber of work.\n\nThomas is highly regarded by so many people both inside and outside the company, and someone I have no problem recommending for any organization. He is part of my trusted inner circle of people because I know I can always count on him for honest advice. I sincerely hope we have the opportunity to work directly together in some capacity in the future.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E03AQHe-afSThai8w/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1516169353314?e=1776902400&v=beta&t=2df8gFSqXqOvJPTEGwo2audL5UJyaohHqQ8oesYPMuc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E03AQHe-afSThai8w/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1516169353314?e=1776902400&v=beta&t=2df8gFSqXqOvJPTEGwo2audL5UJyaohHqQ8oesYPMuc",
+              "width": 450,
+              "height": 450,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E03AQHe-afSThai8w/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1516169353339?e=1776902400&v=beta&t=C2OzXluQXW2hNYzw2od9mzZLG4Xv32ZhyexnHUpg4Dc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E03AQHe-afSThai8w/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1516169353318?e=1776902400&v=beta&t=c8nhdipy9tYcVJhyU_UTyoa80yhBUZrdMUmL1AysbM0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E03AQHe-afSThai8w/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1516169353319?e=1776902400&v=beta&t=z0PeWNUxS-mCE4SoMmMu0z2bVYofwIQiXXq49q9YDZs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "J. Graeme Noseworthy",
+        "givenByHeadline": "Technical Events, Experiences, & Content Leader at IBM. President, Chief Volunteer Officer, & Historian at Takodah YMCA. MA Elections Inspector. Volunteer at Harvard Humanitarian Initiative and Leominster Trail Stewards.",
+        "givenAt": "February 8, 2013, J. Graeme worked with Thomas W. but on different teams",
+        "givenByLink": "https://www.linkedin.com/in/graemenoseworthy",
+        "description": "Thomas is much more than an \"Architect.\" He's a planner, an educator, a debater, a builder, a thinker... a DO-ER. At times, I refer to him as \"Admiral.\" And it's not because he has any militaristic rank and it's not because of his status as a frequent flier. It's because he's in complete \"command\" of his industry, his technology, his thought leadership and his role. To be more specific, Thomas can thoroughly examine the big data analytics challenges of any organization and craft a solution set... a strategic plan of attack... to meet their needs and help them invest ahead of scale. That's a key requirement in today's data driven world. It is my pleasure to endorse Thomas and I look forward to hearing what he has to say in 2013 and beyond.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQHlWQbZxmhlrA/profile-displayphoto-crop_800_800/B4EZoHLSMgGYAM-/0/1761056992838?e=1776902400&v=beta&t=8dEO3QIkqNy4GsZ3ZBxNdt-p8GNWRv_r4ty9rhIUqQ8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E03AQHlWQbZxmhlrA/profile-displayphoto-crop_800_800/B4EZoHLSMgGYAM-/0/1761056992838?e=1776902400&v=beta&t=8dEO3QIkqNy4GsZ3ZBxNdt-p8GNWRv_r4ty9rhIUqQ8",
+              "width": 800,
+              "height": 800,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E03AQHlWQbZxmhlrA/profile-displayphoto-scale_400_400/B4EZoHLSMgGYAk-/0/1761056992933?e=1776902400&v=beta&t=L7dgrn-sky6PEKD3sCMd4CmMytAJMSxDNY5KbVCurbE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E03AQHlWQbZxmhlrA/profile-displayphoto-scale_200_200/B4EZoHLSMgGYAc-/0/1761056992933?e=1776902400&v=beta&t=Bn226Xai7fx-BjnAjnnFDFxy06Kog-v853ykJ1BtjcM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E03AQHlWQbZxmhlrA/profile-displayphoto-scale_100_100/B4EZoHLSMgGYAg-/0/1761056992933?e=1776902400&v=beta&t=qcoyZqo1wwwZntwNeh0lrmTwL95BTFeI-BfT1j3gilI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Edward McDonald",
+        "givenByHeadline": "Strategic Revenue Driver Fluent in Enterprise AI, Data Platforms, Digital Transformation and DevOps focused on Helping Global Enterprises Turn Data into Successful Business Outcomes",
+        "givenAt": "September 28, 2012, Edward worked with Thomas W. but on different teams",
+        "givenByLink": "https://www.linkedin.com/in/edward-mcdonald-93b7773",
+        "description": "At every instance, Tom Dinsmore has proven to be a critical cog in the professional services arena while here at SAS. His foresight, expertise, and insistance on excellence differentiates his work from others. I won't dress it up, Tom and I have had our professional differences, but it's because we both believe strongly in what's best for our clients. We were always able to make it work and stay focused on the client's success. Quite simply, I equate Tom's work ethic as effective, focused, and direct. I'm happy to recommend Tom to anyone and can pull from multiple instances of his expertise in action. Frankly, Tom is a leader and a 'get it done' at any cost type of guy that is sorely missed.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E03AQGydP-M2L-Ytg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1585503354262?e=1776902400&v=beta&t=HHO-exflvtSV3LIc_pB2JDc_v0rfskqWGvyEc77KEbk",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E03AQGydP-M2L-Ytg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1585503354262?e=1776902400&v=beta&t=HHO-exflvtSV3LIc_pB2JDc_v0rfskqWGvyEc77KEbk",
+              "width": 428,
+              "height": 428,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E03AQGydP-M2L-Ytg/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1585503354232?e=1776902400&v=beta&t=PGdGZmXGi6amUj5ypn8evHOoXmfzVIQZrKcG88b990w",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E03AQGydP-M2L-Ytg/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1585503354165?e=1776902400&v=beta&t=E0ODEnyqbvLahj0mr1U0_mBi0Jjzd5vIcbBbw7z78Do",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E03AQGydP-M2L-Ytg/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1585503354198?e=1776902400&v=beta&t=fpbLJXrx6xSG70ddD3XxmTLMov7cnb1u6sBNq-m3cBs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Michele Chambers",
+        "givenByHeadline": "B2B fractional CMO | Startup Marketing | Turnaround Marketing | AI | ML | Data | Security | CleanTech",
+        "givenAt": "June 22, 2012, Michele managed Thomas W. directly",
+        "givenByLink": "https://www.linkedin.com/in/chambersmichele",
+        "description": "Thomas is an analytics thought leader and consummate professional. \r\n\r\nHe's diligent, focused and has a wry sense of humor. His thoroughness and clarity are a rare gift in this world of technology where the typical answer is \"it depends\". \r\n\r\nHis experience with both SAS and in-database analytics are unapproachable and leads to his ability to clearly direct conversations and customers to the end goal. \r\n\r\nHis passion and enthusiasm conveys in everything he does. Thomas has phenomenal listening skills and can empathize with customers. \r\n\r\nManaging and working with Thomas has been one of the highlights of my career thus far. I have learned from him and am a better manager and person for having worked with him.",
+        "givenByPicture": {
+          "url": null,
+          "sizes": []
+        }
+      },
+      {
+        "givenBy": "Christiano (Chris) Hage",
+        "givenByHeadline": "LATAM Customer Engineer at Google",
+        "givenAt": "March 24, 2012, Christiano (Chris) worked with Thomas W. on the same team",
+        "givenByLink": "https://www.linkedin.com/in/christianohage",
+        "description": "Thomas' seniority, deep knowledge about analytics, and consultative approach, makes him someone that makes the difference as he brings value to the business. Customers just love him. \r\n\r\nI had the opportunity to learn valuable multidisciplinary topics from Thomas. Smart people make intelligent questions... Observing him, I realized that Thomas always starts his work making the right questions... and then, he has the knowledge to provide valuable advices or proposed solutions. \r\n\r\nThomas delights the audience in meetings or presentations, by the way, he is very keen to share his knowledge, he is someone that people learn to admire since the beginning.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E03AQE6-g0X10y60Q/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1516242668676?e=1776902400&v=beta&t=1dL0wKH_2oq1J2PdCZ9NsiJLTke4udexC2eKiCzLJWE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E03AQE6-g0X10y60Q/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1516242668676?e=1776902400&v=beta&t=1dL0wKH_2oq1J2PdCZ9NsiJLTke4udexC2eKiCzLJWE",
+              "width": 118,
+              "height": 118,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E03AQE6-g0X10y60Q/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1516242668582?e=1776902400&v=beta&t=jmHeWvURiwqxe0LqwFS3tdil6YJZmBGDksa-ugBvWDg",
+              "width": 118,
+              "height": 118,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E03AQE6-g0X10y60Q/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1516242668577?e=1776902400&v=beta&t=zANG-9JxdaiWucpVuFZcIR6uZgqLMxuaek0h4rg-Kko",
+              "width": 118,
+              "height": 118,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E03AQE6-g0X10y60Q/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1516242668968?e=1776902400&v=beta&t=_nQ1bZqZFKOXQ7mXZ6qvtiKCeDmpVPwqRtp2iF0fQuA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Bob Thames",
+        "givenByHeadline": "Executive Coach, Change Evangelist",
+        "givenAt": "February 10, 2010, Bob worked with Thomas W. but on different teams",
+        "givenByLink": "https://www.linkedin.com/in/bobthames",
+        "description": "I met Tom early in my career at SAS and found him immensely helpful in getting me grounded in the culture and the implementation methods of our customer intelligence solutions.  Tom is highly qualified technically and keeps the client agenda front and center in every action.  He is meticulous, disciplined, and always willing to share his knowledge with others. Tom is passionate about his work and is a straight-shooter.  I recommend him highly as a technical advisor, subject-matter expert, and engagement manager.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D03AQFGOq0A4YoT2A/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1610220655233?e=1776902400&v=beta&t=JaDlgnk2WcVT5EpqO2UEERoehS_NykBt0zVy7BzYAcg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D03AQFGOq0A4YoT2A/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1610220655233?e=1776902400&v=beta&t=JaDlgnk2WcVT5EpqO2UEERoehS_NykBt0zVy7BzYAcg",
+              "width": 800,
+              "height": 800,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D03AQFGOq0A4YoT2A/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1610220655233?e=1776902400&v=beta&t=2lMOg_BxNupB5AJgLLk51DFNK0l_FjMa40hfU8qZeFQ",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D03AQFGOq0A4YoT2A/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1610220655233?e=1776902400&v=beta&t=O-1up7_cMFlzoXBz40hyx_ahyc5G6YD69DQ2_b1VL4U",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D03AQFGOq0A4YoT2A/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1610220655233?e=1776902400&v=beta&t=3kfGgsygROrRjgmFIdx48LqYV5XIf9ceIOovhR2Tzl4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Larry DeGuire",
+        "givenByHeadline": "Retired from SAS institute after 15 years of sales experience.",
+        "givenAt": "February 9, 2010, Larry worked with Thomas W. but on different teams",
+        "givenByLink": "https://www.linkedin.com/in/larry-deguire-7b81849",
+        "description": "I worked with Tom Dinsmore in my capacity as an Account Executive with SAS Institute. Tom managed the process engaging consulting resources and identifying consulting services related to my customers.\r\nIn my experience, Tom was the consumate professional who was always highly prepared for any consulting issue or opportunity, For example, one of my customers (a large $22 billion insurance company) had a specific need for SAS consulting that required a very particular type of consultant with highly defined skills (both technical and interpersonal). Tom understood the customer issues, interpersonal dynamics of the client team, and their expectations. He was able to assign the perfect consultant to the engagement who executed flawlessly and delighted the customer. When I met with the consultant and the customer during the testing phase of the work, I have never seen such a delighted customer.\r\nI've worked with Tom on many other engagements at SAS. Recently I closed a key new customer and an important part of the contract was the bundling of consulting services. During our initial kick-off meetings with the customer, Tom stayed engaged as we introduced the Product Manager to the client. He did this to be sure that the engagement got off to a good start. As an account executive, I can't say enough about the importance of a good start to the relationship and Tom has been a big help to me.\r\nI strongly recommend Tom to anyone. He's an outstanding professional.\r\n\r\nRegards,\r\nLarry DeGuire\r\nSenior Account Executive\r\nSAS Institute, Inc.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E03AQEUSjVT_uKFMw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1517756877511?e=1776902400&v=beta&t=o2Dcczm2LpEpvnCuzro8Zp9hXH5pWn0czqr5A6VqfUE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E03AQEUSjVT_uKFMw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1517756877511?e=1776902400&v=beta&t=o2Dcczm2LpEpvnCuzro8Zp9hXH5pWn0czqr5A6VqfUE",
+              "width": 450,
+              "height": 450,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E03AQEUSjVT_uKFMw/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1517756877251?e=1776902400&v=beta&t=C4fNsAPGIh89z9krGIPdkXV197G6Z-Z_tzmw6MJlKKY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E03AQEUSjVT_uKFMw/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1517756877195?e=1776902400&v=beta&t=u88rCl-BuOAkaYijiJNxsvv6IuFvng9q7qZmRCdjrmQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E03AQEUSjVT_uKFMw/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1517756877201?e=1776902400&v=beta&t=7-t18DQCapoO5jhJ0KLYt-2gdz37PVqA5xBqzDUocHc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Evans Travis, PMP",
+        "givenByHeadline": "Experienced Project Recovery Specialist, Senior Program/Project Manager, Operations executive, Project Mgmt Instructor",
+        "givenAt": "February 8, 2010, Evans worked with Thomas W. on the same team",
+        "givenByLink": "https://www.linkedin.com/in/etravis",
+        "description": "Tom is one of those consulting professionals that knows what he is doing.  He demonstrated a long set of real-life experiences with clients and has developed a deep expertise in complex requirements and application implementations.  I have seen him in action with clients and he is methodical, experienced, and very professional.  I highly recommend him.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQEPg7boWVCC0w/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1704749265294?e=1776902400&v=beta&t=p0HKC4cPa3hY6anNCQJkn8f7H2pf4ar_9Rc5sgfd-ds",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQEPg7boWVCC0w/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1704749265294?e=1776902400&v=beta&t=p0HKC4cPa3hY6anNCQJkn8f7H2pf4ar_9Rc5sgfd-ds",
+              "width": 450,
+              "height": 450,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQEPg7boWVCC0w/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1704749265294?e=1776902400&v=beta&t=PCknjG64s-iT6drO5a5Lt3T8-qABeQ3e5g3SFjSoqJY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQEPg7boWVCC0w/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1704749265294?e=1776902400&v=beta&t=DI9fDaWNcqmrdHXHKxAJyqIwWw2qdIeBmjIEOTAuT6w",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQEPg7boWVCC0w/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1704749265294?e=1776902400&v=beta&t=CQPsu-nVCWoKegb2H-IZoKRaod8teaTmOehl5SqBFgk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Paul Bierbusse",
+        "givenByHeadline": "Trusted Global Executive & Thought Leader | C-Suite Advisor to the Global 1000 | Clear Advocate for Growth, Value Creation & Operational Resilience | “No Agenda, Only Outcomes” | Consumer and Retail Sector Expertise",
+        "givenAt": "February 28, 2008, Paul managed Thomas W. directly",
+        "givenByLink": "https://www.linkedin.com/in/paulbierbusse",
+        "description": "Tom is a knowledgeable leader in the areas of customer intelligence, customer analytics, marketing execution and program management.  Tom has demonstrated experience designing, selling and delivering complex solutions -- and strong program/project management skills to execute projects in a high-quality, on-time fashion.  Tom is passionate about his work and a pleasure to work with.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E03AQFprqI0jVLlWA/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1516182594632?e=1776902400&v=beta&t=VmO99UnMdPnETMqH597WSEFIr0j_B3LiSIZOJhEbBxA",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E03AQFprqI0jVLlWA/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1516182594632?e=1776902400&v=beta&t=VmO99UnMdPnETMqH597WSEFIr0j_B3LiSIZOJhEbBxA",
+              "width": 192,
+              "height": 192,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E03AQFprqI0jVLlWA/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1516182594799?e=1776902400&v=beta&t=TsDqCoNfQVYICEuVVemfKMBkV0kHRCkXVfcz2o7Ryz0",
+              "width": 192,
+              "height": 192,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E03AQFprqI0jVLlWA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1516182594669?e=1776902400&v=beta&t=uQKd_W0Ejr_RzM8jKSMU4RTIiORt2NonTSzY_xdWQvE",
+              "width": 192,
+              "height": 192,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E03AQFprqI0jVLlWA/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1516182594728?e=1776902400&v=beta&t=-OeDnPlPKZj1Agfs8bLZLAu8eTdA2fOpy12oMuAURGs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "skills": [
+      {
+        "name": "SAS",
+        "endorsements": "46 endorsements"
+      },
+      {
+        "name": "SPSS",
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "R",
+        "endorsements": "14 endorsements"
+      },
+      {
+        "name": "Enterprise Software",
+        "endorsements": "77 endorsements"
+      },
+      {
+        "name": "Hadoop",
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "Business Analytics",
+        "positions": [
+          "Endorsed by 5 colleagues at DataRobot"
+        ],
+        "endorsements": "66 endorsements"
+      },
+      {
+        "name": "Database Marketing",
+        "positions": [
+          "Endorsed by 3 colleagues at Netezza"
+        ],
+        "endorsements": "19 endorsements"
+      },
+      {
+        "name": "Customer Intelligence",
+        "positions": [
+          "Endorsed by 2 colleagues at DataRobot"
+        ],
+        "endorsements": "15 endorsements"
+      },
+      {
+        "name": "Customer Analytics",
+        "endorsements": "9 endorsements"
+      },
+      {
+        "name": "Marketing Automation",
+        "endorsements": "9 endorsements"
+      },
+      {
+        "name": "Campaign Management",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "Web Analytics",
+        "endorsements": "7 endorsements"
+      },
+      {
+        "name": "Analytics",
+        "endorsements": "99+ endorsements"
+      },
+      {
+        "name": "Data Mining",
+        "endorsements": "70 endorsements"
+      },
+      {
+        "name": "Predictive Analytics",
+        "endorsements": "97 endorsements"
+      },
+      {
+        "name": "Statistical Modeling",
+        "endorsements": "8 endorsements"
+      },
+      {
+        "name": "Segmentation",
+        "endorsements": "9 endorsements"
+      },
+      {
+        "name": "Predictive Modeling",
+        "endorsements": "35 endorsements"
+      },
+      {
+        "name": "Statistics",
+        "endorsements": "9 endorsements"
+      },
+      {
+        "name": "Market Analysis",
+        "endorsements": "8 endorsements"
+      },
+      {
+        "name": "Thought Leadership",
+        "endorsements": "9 endorsements"
+      },
+      {
+        "name": "Marketing Research",
+        "endorsements": "7 endorsements"
+      },
+      {
+        "name": "Digital Marketing",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "Big Data",
+        "endorsements": "99+ endorsements"
+      },
+      {
+        "name": "Business Intelligence",
+        "endorsements": "58 endorsements"
+      },
+      {
+        "name": "Data Warehousing",
+        "endorsements": "31 endorsements"
+      },
+      {
+        "name": "Data Integration",
+        "endorsements": "9 endorsements"
+      },
+      {
+        "name": "Pre-sales",
+        "endorsements": "24 endorsements"
+      },
+      {
+        "name": "CRM",
+        "endorsements": "17 endorsements"
+      },
+      {
+        "name": "Netezza",
+        "endorsements": "7 endorsements"
+      },
+      {
+        "name": "Data Analysis",
+        "endorsements": "13 endorsements"
+      },
+      {
+        "name": "Business Analysis",
+        "endorsements": "31 endorsements"
+      },
+      {
+        "name": "Professional Services",
+        "endorsements": "18 endorsements"
+      },
+      {
+        "name": "Solution Architecture",
+        "endorsements": "16 endorsements"
+      },
+      {
+        "name": "Sales Enablement",
+        "endorsements": "8 endorsements"
+      },
+      {
+        "name": "Requirements Analysis",
+        "endorsements": "15 endorsements"
+      },
+      {
+        "name": "Marketing Analytics",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "Competitive Analysis",
+        "endorsements": "26 endorsements"
+      },
+      {
+        "name": "Communications Audits",
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "Customer Analysis",
+        "endorsements": "17 endorsements"
+      },
+      {
+        "name": "Decision Trees",
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "Logistic Regression",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "Integration",
+        "endorsements": "13 endorsements"
+      },
+      {
+        "name": "Cross-functional Team Leadership",
+        "endorsements": "18 endorsements"
+      },
+      {
+        "name": "Customer Relationship Management (CRM)",
+        "endorsements": "7 endorsements"
+      },
+      {
+        "name": "Market Research",
+        "endorsements": "2 endorsements"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAAG9cqsBA8X3BRRm3ip8D3n4RvHQ4I19yuM",
+        "firstName": "John",
+        "lastName": "Buly",
+        "position": "Data and Analytics Leader |  Passionate about delivering technology to help improve the lives of Patients",
+        "publicIdentifier": "john-buly",
+        "linkedinUrl": "https://www.linkedin.com/in/john-buly"
+      },
+      {
+        "id": "ACoAAAQtcj0B26F8i0wj7aKaB7saDnjcQbziPqM",
+        "firstName": "Cynthia",
+        "lastName": "O'Rourke",
+        "position": "Obnoxiously Full Stack Data Scientist | Views expressed on LinkedIn are solely my own.",
+        "publicIdentifier": "cynthiaorourke",
+        "linkedinUrl": "https://www.linkedin.com/in/cynthiaorourke"
+      },
+      {
+        "id": "ACoAAANyJ68B8P7LdI8IyBgUHFn6b-3is5BNX_I",
+        "firstName": "Troy",
+        "lastName": "Hall",
+        "publicIdentifier": "troyhall24",
+        "linkedinUrl": "https://www.linkedin.com/in/troyhall24"
+      },
+      {
+        "id": "ACoAAAU3t9ABldqpwVY3nnHDJfu8FuKcGHBaN_M",
+        "firstName": "Dennis ",
+        "lastName": "Sawyers",
+        "publicIdentifier": "dennis-sawyers-41439625",
+        "linkedinUrl": "https://www.linkedin.com/in/dennis-sawyers-41439625"
+      },
+      {
+        "id": "ACoAAATY82gBtwWvX42iqL6JvrppU5jqLn5G2Wo",
+        "firstName": "Dan",
+        "lastName": "Wright",
+        "publicIdentifier": "wrightdh",
+        "linkedinUrl": "https://www.linkedin.com/in/wrightdh"
+      },
+      {
+        "id": "ACoAABSaTv4BIi2l2R6AaP-4v4IiQyAxyeLLcGU",
+        "firstName": "Alex",
+        "lastName": "Copp",
+        "position": "Strategic Account Executive",
+        "publicIdentifier": "alex-copp-05291597",
+        "linkedinUrl": "https://www.linkedin.com/in/alex-copp-05291597"
+      },
+      {
+        "id": "ACoAAAByOoABnzll_F-x1zE38wZMOUAaQzImNkY",
+        "firstName": "Ali",
+        "lastName": "Ghodsi",
+        "publicIdentifier": "alighodsi",
+        "linkedinUrl": "https://www.linkedin.com/in/alighodsi"
+      },
+      {
+        "id": "ACoAAAT1knkBKurLdx7ocCJOtEwdp07TIBzisxg",
+        "firstName": "🦾Jepson",
+        "lastName": "Taylor",
+        "publicIdentifier": "jepsontaylor",
+        "linkedinUrl": "https://www.linkedin.com/in/jepsontaylor"
+      },
+      {
+        "id": "ACoAAACf9GYBA5JeM3awG3cgkS8g22-YIf7utWw",
+        "firstName": "Assaf",
+        "lastName": "Pinhasi",
+        "position": "AI, MLOps and Data Architect | Expert Hands-On Consultant",
+        "publicIdentifier": "assafpinhasi",
+        "linkedinUrl": "https://www.linkedin.com/in/assafpinhasi"
+      },
+      {
+        "id": "ACoAAACkIekBVuWZgP2zXPp3-aJlWd8IxeLGikM",
+        "firstName": "Florian",
+        "lastName": "Douetteau",
+        "publicIdentifier": "fdouetteau",
+        "linkedinUrl": "https://www.linkedin.com/in/fdouetteau"
+      },
+      {
+        "id": "ACoAAAHmxoABbfJ5Kzs9_v5fnwmqr4oDsHx7k9c",
+        "firstName": "Christopher",
+        "lastName": "Lynch",
+        "publicIdentifier": "chlynch",
+        "linkedinUrl": "https://www.linkedin.com/in/chlynch"
+      },
+      {
+        "id": "ACoAAAXZegUBVIyosLlHF5d9SZrEheWWHiX4mcA",
+        "firstName": "Tom",
+        "lastName": "Coyle",
+        "publicIdentifier": "tom-coyle-231a4928",
+        "linkedinUrl": "https://www.linkedin.com/in/tom-coyle-231a4928"
+      },
+      {
+        "id": "ACoAAAAefGgBru_2KOkiDiYXn0ArpySVfJM0glg",
+        "firstName": "Lou",
+        "lastName": "Rabon",
+        "publicIdentifier": "lourabon",
+        "linkedinUrl": "https://www.linkedin.com/in/lourabon"
+      },
+      {
+        "id": "ACoAAAFVExUBqOtz-xa7RBDvDQG5VsomfTDhXLE",
+        "firstName": "Andrew",
+        "lastName": "Smeaton ",
+        "publicIdentifier": "andrew-smeaton",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-smeaton"
+      },
+      {
+        "id": "ACoAAAC3xQYBc0jSRZAa-fR20R1ACgJpE9Iz_sY",
+        "firstName": "Biju",
+        "lastName": "Krishnan",
+        "publicIdentifier": "bijuk",
+        "linkedinUrl": "https://www.linkedin.com/in/bijuk"
+      },
+      {
+        "id": "ACoAAAE1w10Bn289aUvkEojL9A62TLrc0_8o8o0",
+        "firstName": "Maciek",
+        "lastName": "Wasiak",
+        "publicIdentifier": "mawasiak",
+        "linkedinUrl": "https://www.linkedin.com/in/mawasiak"
+      },
+      {
+        "id": "ACoAABlqOmkBxVZCRP0coAl4UUtiEvIVv1etdtg",
+        "firstName": "Brian",
+        "lastName": "Gordon",
+        "position": "Reporter at The News and Observer",
+        "publicIdentifier": "briansamuelgordon",
+        "linkedinUrl": "https://www.linkedin.com/in/briansamuelgordon"
+      },
+      {
+        "id": "ACoAAABU6O4B1gomIdlRjyzBOFF4DSlwYWmG5gc",
+        "firstName": "Harini",
+        "lastName": "Gopalakrishnan",
+        "publicIdentifier": "harinigopalakrishnan",
+        "linkedinUrl": "https://www.linkedin.com/in/harinigopalakrishnan"
+      },
+      {
+        "id": "ACoAAANoNUABNBGDTM14E1DIY9zO6Fj6nwfazh4",
+        "firstName": "Ken",
+        "lastName": "Sanford, Ph.D.",
+        "publicIdentifier": "ekenomics",
+        "linkedinUrl": "https://www.linkedin.com/in/ekenomics"
+      },
+      {
+        "id": "ACoAAAEBWeEBZtssnkUNTC2zIwH4PKbojVvcIFc",
+        "firstName": "Nick",
+        "lastName": "Akincilar",
+        "publicIdentifier": "nick-akincilar-3417945",
+        "linkedinUrl": "https://www.linkedin.com/in/nick-akincilar-3417945"
+      },
+      {
+        "id": "ACoAAEfCt8oBGW00HWOhBI7dNH3d6evyEOIzj1A",
+        "firstName": "Rince Iska",
+        "lastName": "Manik",
+        "position": "Fresh Graduate Conventions and Event Management at Politeknik Wilmar Bisnis Indonesia",
+        "publicIdentifier": "rince-iska-manik-5a2246297",
+        "linkedinUrl": "https://www.linkedin.com/in/rince-iska-manik-5a2246297"
+      },
+      {
+        "id": "ACoAAAAKex8BliznWFZ16l0Bnrr5TZ6xLK2Eu-Y",
+        "firstName": "Gerry",
+        "lastName": "Kawengian",
+        "position": "Matakail Communication",
+        "publicIdentifier": "gerry-kawengian-5bb291",
+        "linkedinUrl": "https://www.linkedin.com/in/gerry-kawengian-5bb291"
+      },
+      {
+        "id": "ACoAAC4_IrwB1Cb0OAOsHlB3QBnWqmiMawbPTJs",
+        "firstName": "Muhammad Wahyu",
+        "lastName": "Darmawan",
+        "position": "Plant Pest and Diseases, Agrotechnology",
+        "publicIdentifier": "muhammadwahyudarmawan",
+        "linkedinUrl": "https://www.linkedin.com/in/muhammadwahyudarmawan"
+      },
+      {
+        "id": "ACoAAA60xi4BkeazemOKEXY1zHr3vTen20vGBz0",
+        "firstName": "Josimei",
+        "lastName": "Nugraha",
+        "position": "at Matakail Communication",
+        "publicIdentifier": "josimei-nugraha",
+        "linkedinUrl": "https://www.linkedin.com/in/josimei-nugraha"
+      },
+      {
+        "id": "ACoAAFOXCpcBBGUUKMzYfklWs5AHQhQMy3BnezU",
+        "firstName": "Zaidan",
+        "lastName": "Irfan Iskandar",
+        "position": "Mahasiswa Program Studi Agroteknologi Fakultas Pertanian Univeritas Sumatera Utara. Mendalami bidang ilmu Pemuliaan Tanaman. Aktif ambil peran ke Ilmuwan dan kegiatan kebermanfaatan mahasiswa.",
+        "publicIdentifier": "zaidanirfaniskandar",
+        "linkedinUrl": "https://www.linkedin.com/in/zaidanirfaniskandar"
+      },
+      {
+        "id": "ACoAACD0d8ABqQxp8JQKsNB5n0_GjKsmokw5-5s",
+        "firstName": "Nyimas Cintya",
+        "lastName": "Nike Infrila",
+        "position": "KOL Specialist",
+        "publicIdentifier": "nyimas-cintya-nike-infrila-a281b4135",
+        "linkedinUrl": "https://www.linkedin.com/in/nyimas-cintya-nike-infrila-a281b4135"
+      },
+      {
+        "id": "ACoAABVRwvwBxoTFHkG87UVw3w0sKDDmXfVxbY0",
+        "firstName": "Sarah",
+        "lastName": "Muksin",
+        "position": "Digital Marketing Enthusiast - Social Media Strategist",
+        "publicIdentifier": "sarah-muksin-7b89529b",
+        "linkedinUrl": "https://www.linkedin.com/in/sarah-muksin-7b89529b"
+      },
+      {
+        "id": "ACoAAD9RXz4B2R9GK1goj0wGMA2FX-1iSRNhkfY",
+        "firstName": "Irsyad",
+        "lastName": "Baihaqi Lubis",
+        "position": "Fresh Graduate Mathematics Student at University of North Sumatera",
+        "publicIdentifier": "irsyad-baihaqi-lubis-53a917257",
+        "linkedinUrl": "https://www.linkedin.com/in/irsyad-baihaqi-lubis-53a917257"
+      },
+      {
+        "id": "ACoAADablJwBUPegrX8ek8p-yjiiWvbxSsRoNgM",
+        "firstName": "Emya Karunia",
+        "lastName": "Br Pelawi",
+        "position": "MICE | Event Management ",
+        "publicIdentifier": "emyapelawi",
+        "linkedinUrl": "https://www.linkedin.com/in/emyapelawi"
+      },
+      {
+        "id": "ACoAACL9J_EB11wQko-ACG-EH_IB3MmFg8dyf_0",
+        "firstName": "Sally Ayunda",
+        "lastName": "S.",
+        "position": "Medical Social Worker",
+        "publicIdentifier": "sallysiahaan",
+        "linkedinUrl": "https://www.linkedin.com/in/sallysiahaan"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAAAEA04BdRoaC9rYk28RTrsMw_4K4LZDQFU"
+    }
+  }
+}

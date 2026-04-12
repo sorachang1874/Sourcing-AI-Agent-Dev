@@ -1,0 +1,884 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAACo1tYBodiiQ8k98torPlBEWEquseyRbxM",
+    "profile_url": "https://www.linkedin.com/in/ACwAAACo1tYBodiiQ8k98torPlBEWEquseyRbxM"
+  },
+  "item": {
+    "id": "ACoAAACo1tYBGy9sT2OWZuEULOMe4K_b2Y22-F8",
+    "publicIdentifier": "alexgartrell",
+    "linkedinUrl": "https://www.linkedin.com/in/alexgartrell",
+    "firstName": "Alex",
+    "lastName": "Gartrell",
+    "emails": [
+      {
+        "email": "alex.gartrell@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Engineering @ Thinking Machines, Ex-Meta/Facebook",
+    "openToWork": false,
+    "hiring": false,
+    "premium": true,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco Bay Area",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "11065046",
+    "registeredAt": "2007-03-24T22:17:37.000Z",
+    "topSkills": null,
+    "connectionsCount": 991,
+    "followerCount": 2643,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 2,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "19232",
+        "companyId": "3147",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3147/",
+        "schoolName": "Carnegie Mellon University"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4E03AQEbSxGTWE7TXQ/profile-displayphoto-crop_800_800/B4EZnKy0gNGcAM-/0/1760043944321?e=1776902400&v=beta&t=6mm65zvr_TSvWG-14pt0EnBbhkQdy46lyNd42rrjTE8",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQEbSxGTWE7TXQ/profile-displayphoto-crop_800_800/B4EZnKy0gNGcAM-/0/1760043944321?e=1776902400&v=beta&t=6mm65zvr_TSvWG-14pt0EnBbhkQdy46lyNd42rrjTE8",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQEbSxGTWE7TXQ/profile-displayphoto-scale_400_400/B4EZnKy0gNGcAk-/0/1760043944406?e=1776902400&v=beta&t=ZxKZ9p7B2CLMHZLyPubOGwDv-weGJ4gGalMAtn-ohck",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQEbSxGTWE7TXQ/profile-displayphoto-scale_200_200/B4EZnKy0gNGcAc-/0/1760043944406?e=1776902400&v=beta&t=_aw4PBrO_8nKPCyR6shn191uYg_AqiHhFcf8L4H4wWo",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQEbSxGTWE7TXQ/profile-displayphoto-scale_100_100/B4EZnKy0gNGcAg-/0/1760043944406?e=1776902400&v=beta&t=bTxaEV9Jq_6xQWRSXPtZEqcYrXL_D6s1UAFbLA3cpus",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D4E03AQEbSxGTWE7TXQ/profile-displayphoto-crop_800_800/B4EZnKy0gNGcAM-/0/1760043944321?e=1776902400&v=beta&t=6mm65zvr_TSvWG-14pt0EnBbhkQdy46lyNd42rrjTE8",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Engineering @ Thinking Machines, Ex-Meta/Facebook",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco, California, United States",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "1 yr 3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2025,
+          "text": "Feb 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineering Director in Infrastructure",
+        "location": "Menlo Park, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "7 yrs 8 mos",
+        "description": "# Server Operating Systems (2022 - 2025)\n\nThis group (~200 people) covers everything from Linux Userspace to the Kernel and hardware abstraction layer. We also provide the firmware, driver and userspace abstractions for Facebook's Silicon projects (Video encode, ML Inference, etc) and the software stack that supports board management (OpenBMC).\n\nIn 2024, I took on Infrastructure Efficiency as well. These teams work on everything from low-level tracing infrastructure to high-level efficiency datasets and interfaces that drive our Efficiency opportunity prioritization. \n\n# Linux Kernel (2020 - 2022)\n\nAt the end of 2020, I moved to support Facebook's server kernel efforts. Facebook employees several key maintainers of Linux subsystems including block, bpf, btrfs, cgroups, rcu, and much more. We started with a SWE team of ~15 and more than doubled it in size by establishing consistent standards for incoming leveling and recognizing open source and long-term work.\n\n# Cluster Management - Containers (2017 - 2020)\n\nI managed the engineering teams (~40 people) that own Facebook's container-heavy operating system. This includes teams focused on core container runtime, host management, host configuration, package builds and distribution, health awareness, etc.  I believe strongly in pushing our progress back to the community, so you can see my team's fingerprints on projects like buck, systemd, and the Linux kernel.",
+        "skills": null,
+        "startDate": {
+          "month": "Jul",
+          "year": 2017,
+          "text": "Jul 2017"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2025,
+          "text": "Feb 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Tech Lead",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "2 yrs",
+        "description": "# Tupperware - Linux Containers\n\nI worked on Facebook's container runtime. As an individual contributor, I debugged deep systems issues across a variety of use cases and contributed significant reliability improvements. As a tech lead, I was responsible for roadmap planning and most of the recruiting work. I went on to manage this team.",
+        "skills": null,
+        "experienceGroupId": "317615427abe24f8c449779c140a916582813b4a",
+        "startDate": {
+          "year": 2015,
+          "text": "2015"
+        },
+        "endDate": {
+          "year": 2017,
+          "text": "2017"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer in Infrastructure",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "4 yrs",
+        "description": "# Linux Kernel - Networking\n\nI primarily worked on readying ipvs for Facebook's IPv6-only infrastructure by adding IPv4-in-IPv6 encapsulation. All of that work was done upstream and made available for the broader community. I also designed, built, and deployed a multi-sink virtual networking solution that enabled the roll out of core infrastructure like container orchestration across Facebook's CDN network appliance. I was also responsible for identifying, debugging, and fixing various other kernel issues.\n\n# Traffic Infrastructure - CDN\n\nI designed and built the first iteration of most of Facebook's caching stack, including the caching plugin in the HTTP load balancer and the cache itself (first mcdipper, and then bigcache). I also started the Facebook Network Appliance project including building and deploying the first working prototypes within Facebook's Infrastructure.\n\n# Cache Infrastructure - Memcache\n\nI designed and implemented the first non-ascii memcache protocol used widely at Facebook which would ultimately support billions of operations per second and become the groundwork for future iterations of the protocol. I contributed to a flash-based key-value cache and adapted it to the memcache protocol, which became the foundation of our first native CDN efforts.",
+        "skills": null,
+        "experienceGroupId": "317615427abe24f8c449779c140a916582813b4a",
+        "startDate": {
+          "year": 2011,
+          "text": "2011"
+        },
+        "endDate": {
+          "year": 2015,
+          "text": "2015"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Teaching Assistant",
+        "location": "Greater Pittsburgh Region",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Carnegie Mellon University",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/carnegie-mellon-university/",
+        "companyId": "3147",
+        "companyUniversalName": "carnegie-mellon-university",
+        "duration": "2 yrs 5 mos",
+        "description": "Taught Introduction to Computer Systems and Fundamentals of Software Engineering.  Led recitations, occasional lectures, and produced and graded assignments and exams.",
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2009,
+          "text": "Jan 2009"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2011,
+          "text": "May 2011"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_200_200/company-logo_200_200/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Cr9dcgM6gBeNici6XTUDQUKQfYAc8US2OXBC0P5yB-Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_100_100/company-logo_100_100/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=iJiUJ2BhQORJLlvMYFhw22Mq44Z-z45Fza4_dNRwHSs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Intern",
+        "location": "New York City Metropolitan Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Fog Creek Software",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/55278/",
+        "companyId": "55278",
+        "duration": "3 mos",
+        "description": "A variety of work on Fog Bugz ranging from bug fixes to a comments plugin for the wiki.",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2010,
+          "text": "Jun 2010"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2010,
+          "text": "Aug 2010"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGHoqoy1AW8zQ/company-logo_400_400/company-logo_400_400/0/1630612170724/glitch_dot_com_logo?e=1776902400&v=beta&t=ODIvtH2z7Ze9EVQLrLCQwXuapsLOqPhHXOmvL6EoKJw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGHoqoy1AW8zQ/company-logo_400_400/company-logo_400_400/0/1630612170724/glitch_dot_com_logo?e=1776902400&v=beta&t=ODIvtH2z7Ze9EVQLrLCQwXuapsLOqPhHXOmvL6EoKJw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGHoqoy1AW8zQ/company-logo_200_200/company-logo_200_200/0/1630612170724/glitch_dot_com_logo?e=1776902400&v=beta&t=iYK30XhkpLnIWEREXzpdUlUR3lp4B6Tt_Vm2Dy_WN-U",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGHoqoy1AW8zQ/company-logo_100_100/company-logo_100_100/0/1630612170724/glitch_dot_com_logo?e=1776902400&v=beta&t=CRTXQiBqolY09cjTZfkXvnIrKhdtLgVmDnmOiLS8nsY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Intern",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Cisco Systems",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1063/",
+        "companyId": "1063",
+        "duration": "4 mos",
+        "description": "Automated Quality Assurance stuff.",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2009,
+          "text": "May 2009"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2009,
+          "text": "Aug 2009"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQFYnR_Zrm87Dg/company-logo_400_400/B56ZnMyVr4HUAY-/0/1760077372453/cisco_logo?e=1776902400&v=beta&t=dANlxk3gXmg-Qzyo0P1OboZbrXQ02uToGmbIr4HqPmw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFYnR_Zrm87Dg/company-logo_400_400/B56ZnMyVr4HUAY-/0/1760077372453/cisco_logo?e=1776902400&v=beta&t=dANlxk3gXmg-Qzyo0P1OboZbrXQ02uToGmbIr4HqPmw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFYnR_Zrm87Dg/company-logo_200_200/B56ZnMyVr4HUAI-/0/1760077372453/cisco_logo?e=1776902400&v=beta&t=LYt34KgwfAYxI2b4vuRnGeCH02P_oWf0sFPC-9O4LKA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFYnR_Zrm87Dg/company-logo_100_100/B56ZnMyVr4HUAQ-/0/1760077372453/cisco_logo?e=1776902400&v=beta&t=ls1J8kAYmuHeawFhpxCQj2CgZG8t4CW3KPzKnZhe3_k",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Assistant",
+        "location": "Columbus, Ohio Metropolitan Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "The Ohio State University",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3173/",
+        "companyId": "3173",
+        "duration": "8 mos",
+        "description": "I did some coding in CUDA for general computation on GPUs",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2008,
+          "text": "May 2008"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2008,
+          "text": "Dec 2008"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEw433uw5btkQ/company-logo_400_400/company-logo_400_400/0/1631327096366?e=1776902400&v=beta&t=PIMFs9oQLdi2wfoIdoeB-iUDSVKJj9IGsWo8phIhcww",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEw433uw5btkQ/company-logo_400_400/company-logo_400_400/0/1631327096366?e=1776902400&v=beta&t=PIMFs9oQLdi2wfoIdoeB-iUDSVKJj9IGsWo8phIhcww",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEw433uw5btkQ/company-logo_200_200/company-logo_200_200/0/1631327096365?e=1776902400&v=beta&t=ohZ6RbUEQHgz_aFgHxUG9sL_IRAthQDp3WyAmLWZLWk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEw433uw5btkQ/company-logo_100_100/company-logo_100_100/0/1631327096366?e=1776902400&v=beta&t=K6mZqTlWIv-Iwo2b-9ALNcUxO1uj6NmTbFdwz70CrO8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Intern",
+        "location": "Columbus, Ohio Area",
+        "employmentType": "Internship",
+        "workplaceType": null,
+        "companyName": "Alert Tracking Systems",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Alert+Tracking+Systems",
+        "duration": "Less than a year",
+        "description": "Developed a custom customer-facing bug tracker on a LAMP stack.",
+        "skills": null,
+        "startDate": {
+          "year": 2007,
+          "text": "2007"
+        },
+        "endDate": {
+          "year": 2007,
+          "text": "2007"
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Carnegie Mellon University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3147/",
+        "schoolId": "3147",
+        "degree": "B.S.",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "description": "Graduated with University Honors, College Honors, a Senior Leadership Award, and a 3.65 cumulative GPA",
+        "startDate": {
+          "month": "Aug",
+          "year": 2007,
+          "text": "Aug 2007"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2011,
+          "text": "Jun 2011"
+        },
+        "period": "Aug 2007 - Jun 2011",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_200_200/company-logo_200_200/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Cr9dcgM6gBeNici6XTUDQUKQfYAc8US2OXBC0P5yB-Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_100_100/company-logo_100_100/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=iJiUJ2BhQORJLlvMYFhw22Mq44Z-z45Fza4_dNRwHSs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Git",
+        "assessments": "Passed LinkedIn Skill Assessment",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "C++",
+        "assessments": "Passed LinkedIn Skill Assessment",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Python",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "C",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "JSON",
+        "assessments": "Passed LinkedIn Skill Assessment"
+      },
+      {
+        "name": "JavaScript",
+        "assessments": "Passed LinkedIn Skill Assessment"
+      },
+      {
+        "name": "Distributed Systems",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "Software Engineering",
+        "positions": [
+          "Endorsed by 2 colleagues at Carnegie Mellon University"
+        ],
+        "endorsements": "8 endorsements"
+      },
+      {
+        "name": "HTTP"
+      },
+      {
+        "name": "Content Distribution Networks"
+      },
+      {
+        "name": "SSD"
+      },
+      {
+        "name": "Kernel"
+      },
+      {
+        "name": "Programming",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Memcached"
+      },
+      {
+        "name": "emacs"
+      }
+    ],
+    "publications": [],
+    "courses": [
+      {
+        "title": "Engineering Complex, Large-scale Computer Systems",
+        "number": "15-610",
+        "associatedWith": "Associated with Carnegie Mellon University",
+        "associatedWithLink": "https://www.linkedin.com/company/3147/"
+      },
+      {
+        "title": "Operating System Design and Implementation",
+        "number": "15-410",
+        "associatedWith": "Associated with Carnegie Mellon University",
+        "associatedWithLink": "https://www.linkedin.com/company/3147/"
+      },
+      {
+        "title": "Software Engineering Practicum",
+        "number": "15-413",
+        "associatedWith": "Associated with Carnegie Mellon University",
+        "associatedWithLink": "https://www.linkedin.com/company/3147/"
+      }
+    ],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "position": "AI Researcher, Co-founder @ Thinking Machines Lab",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAAAQ4Q7kByw3YKf2rFlmWzRMF7P8Gw4S9PIU",
+        "firstName": "Yinghai",
+        "lastName": "L.",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "yinghai83",
+        "linkedinUrl": "https://www.linkedin.com/in/yinghai83"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAAAncnq0BajmeOrLikO5AAincnDzuRDUXFjw",
+        "firstName": "Soumith",
+        "lastName": "Chintala",
+        "publicIdentifier": "soumith",
+        "linkedinUrl": "https://www.linkedin.com/in/soumith"
+      },
+      {
+        "id": "ACoAABgwxtcBfqsJJUHPwsSPuBE4K9oKyRqUp5o",
+        "firstName": "Lia",
+        "lastName": "Guy",
+        "position": "Research @ OpenAI",
+        "publicIdentifier": "aureliaguy",
+        "linkedinUrl": "https://www.linkedin.com/in/aureliaguy"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAAAJzsfoBp0MxssQYMgmy0ZNO2U3sA58ugwc",
+        "firstName": "Joshua",
+        "lastName": "Gross",
+        "position": "Engineering Leadership, Meta Superintelligence Lab",
+        "publicIdentifier": "joshgross",
+        "linkedinUrl": "https://www.linkedin.com/in/joshgross"
+      },
+      {
+        "id": "ACoAABYs4-IB5mHx5eVfOHzu1e8xlO3q_kb38IM",
+        "firstName": "Brydon",
+        "lastName": "Eastman",
+        "position": "Nerd @ Thinking Machines Labs | Formerly Member of Technical Staff @ OpenAI | PhD in Mathematical Oncology",
+        "publicIdentifier": "brydon-eastman-396719a4",
+        "linkedinUrl": "https://www.linkedin.com/in/brydon-eastman-396719a4"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAABA0sF8BJqwmfoms3veu9TE72tj8JMUQEFA",
+        "firstName": "Sam",
+        "lastName": "Shleifer",
+        "position": "The Biggest Legend",
+        "publicIdentifier": "sam-shleifer-a5307a77",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-shleifer-a5307a77"
+      },
+      {
+        "id": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+        "firstName": "Saurabh",
+        "lastName": "Garg",
+        "position": "Thinking Machines Lab | Prev: Mistral AI, CMU, IIT-B",
+        "publicIdentifier": "saurabh-garg-b680b5b8",
+        "linkedinUrl": "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+      },
+      {
+        "id": "ACoAAABnAccB9h1LTKUrBFif76qxLwe9k7nyE_s",
+        "firstName": "Ian",
+        "lastName": "O'Connell",
+        "position": "Software engineer",
+        "publicIdentifier": "ianoc",
+        "linkedinUrl": "https://www.linkedin.com/in/ianoc"
+      },
+      {
+        "id": "ACoAAAl87CYBWKLLyGNTbomy6oqIPv-5n34CXIY",
+        "firstName": "Andrew",
+        "lastName": "Tulloch",
+        "position": "AI Research @ Meta",
+        "publicIdentifier": "andrew-tulloch-17238745",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-tulloch-17238745"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "position": "Co-Founder and CEO at Thinking Machines Lab",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAAA4HVN4BOZg5espOvMVoO3OY04NZmuqvMCo",
+        "firstName": "Shaojie",
+        "lastName": "Bai",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "shaojie-bai",
+        "linkedinUrl": "https://www.linkedin.com/in/shaojie-bai"
+      },
+      {
+        "id": "ACoAAAO-j_IBXcvIzhZtQ7QNkky6tlnQTcFl9qI",
+        "firstName": "Myle",
+        "lastName": "Ott",
+        "position": "ML infra at Thinking Machines",
+        "publicIdentifier": "myleott",
+        "linkedinUrl": "https://www.linkedin.com/in/myleott"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAAAji1bkB1eLX4z2Jb9-N2nMhEGNLWptSnqU",
+        "firstName": "Clare",
+        "lastName": "Birch",
+        "publicIdentifier": "clarebirch42",
+        "linkedinUrl": "https://www.linkedin.com/in/clarebirch42"
+      },
+      {
+        "id": "ACoAAAqPUXUB26nPtwJxJLy_Ar7H-YLBlb44QnY",
+        "firstName": "Neal",
+        "lastName": "Wu",
+        "publicIdentifier": "nealwu",
+        "linkedinUrl": "https://www.linkedin.com/in/nealwu"
+      },
+      {
+        "id": "ACoAAAAdzCEB9t8wLSGcpoQ71RdetK75KW7RgS4",
+        "firstName": "Mark",
+        "lastName": "Jen",
+        "position": "Engineer",
+        "publicIdentifier": "markjen",
+        "linkedinUrl": "https://www.linkedin.com/in/markjen"
+      },
+      {
+        "id": "ACoAABGaEy8Bu1ycKB5WUvyRc69OERCzymW7mxY",
+        "firstName": "Jamie",
+        "lastName": "Cahill",
+        "position": "Member of Technical Staff @ Thinking Machines, Ex-Meta",
+        "publicIdentifier": "james-cahill-093a9582",
+        "linkedinUrl": "https://www.linkedin.com/in/james-cahill-093a9582"
+      },
+      {
+        "id": "ACoAACHgqNcBO7G9QHjfnTyp5v6rVbPMJ19f1dc",
+        "firstName": "Claire",
+        "lastName": "Fu",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "clairecfu",
+        "linkedinUrl": "https://www.linkedin.com/in/clairecfu"
+      },
+      {
+        "id": "ACoAACHG180BXiyeZ2qJgoggx27e4iM3ajxvp18",
+        "firstName": "Andy",
+        "lastName": "Hwang",
+        "position": "thinking machines",
+        "publicIdentifier": "andrewnhwang",
+        "linkedinUrl": "https://www.linkedin.com/in/andrewnhwang"
+      },
+      {
+        "id": "ACoAABoG0oUBl986ZaMrLUASG1NhDoJyVlav4Po",
+        "firstName": "Eric",
+        "lastName": "Zhang",
+        "position": "MTS, Thinking Machines",
+        "publicIdentifier": "ekzhang",
+        "linkedinUrl": "https://www.linkedin.com/in/ekzhang"
+      },
+      {
+        "id": "ACoAABhKWCYBiuV3Zv9Hbt8t0j-xMRqxawBcSgw",
+        "firstName": "Kurt",
+        "lastName": "Shuster",
+        "position": "AI Research Engineer",
+        "publicIdentifier": "kurtshuster1",
+        "linkedinUrl": "https://www.linkedin.com/in/kurtshuster1"
+      },
+      {
+        "id": "ACoAADYMzQABdXTSxolT2YjHmNBBSeT6YrGSQmQ",
+        "firstName": "Tarushii",
+        "lastName": "Goel",
+        "position": "Member of Technical Staff @ Thinking Machines",
+        "publicIdentifier": "tarushii-goel",
+        "linkedinUrl": "https://www.linkedin.com/in/tarushii-goel"
+      },
+      {
+        "id": "ACoAACxX5AEBYonmfz9M8tQ8jO7Nx3jIXe_VSjw",
+        "firstName": "Sophie Rose",
+        "lastName": "Shapiro",
+        "position": "Creative Operations",
+        "publicIdentifier": "sophie-rose-shapiro",
+        "linkedinUrl": "https://www.linkedin.com/in/sophie-rose-shapiro"
+      },
+      {
+        "id": "ACoAAGO6_kYBSWZ_9llmmeAdGrKehnbJ15hsMm4",
+        "firstName": "Li",
+        "lastName": "James",
+        "position": "Social Researcher at Thinking Machines Lab",
+        "publicIdentifier": "li-james-6864263a8",
+        "linkedinUrl": "https://www.linkedin.com/in/li-james-6864263a8"
+      },
+      {
+        "id": "ACoAABqU8psBncgwN-WH-D8F1Jq9i7OsFmcPDt4",
+        "firstName": "Jeffrey",
+        "lastName": "Tao",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "jeffrey-tao",
+        "linkedinUrl": "https://www.linkedin.com/in/jeffrey-tao"
+      },
+      {
+        "id": "ACoAAAM8-CoB4EuoMEQ2LLngdqMnC4lLbEgxTy8",
+        "firstName": "Andrew",
+        "lastName": "Straub",
+        "position": "Finance at Thinking Machines Lab",
+        "publicIdentifier": "andrew-straub-52223b16",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-straub-52223b16"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAACo1tYBodiiQ8k98torPlBEWEquseyRbxM"
+    }
+  }
+}

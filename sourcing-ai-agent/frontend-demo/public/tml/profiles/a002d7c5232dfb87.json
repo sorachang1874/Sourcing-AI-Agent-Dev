@@ -1,0 +1,937 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAB0fKjMBNSQdLCckrtp4vC3y4re0YWoR2bo",
+    "profile_url": "https://www.linkedin.com/in/ACwAAB0fKjMBNSQdLCckrtp4vC3y4re0YWoR2bo"
+  },
+  "item": {
+    "id": "ACoAAB0fKjMBQY6J8ofynjzuqNKx36EOwman6jI",
+    "publicIdentifier": "zandraambrosio",
+    "linkedinUrl": "https://www.linkedin.com/in/zandraambrosio",
+    "firstName": "Zandra",
+    "lastName": "Ambrosio",
+    "emails": [
+      {
+        "email": "zandra.ambrosio@datacom.com",
+        "deliverable": true,
+        "catchAllDomain": false,
+        "validEmailServer": true,
+        "free": false,
+        "status": "valid",
+        "qualityScore": 90
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "http://www.datacom.com/",
+        "domain": "datacom.com",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Business operations strategist committed to driving organization growth through people-centered process design and sustainable people management.",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Philippines",
+      "countryCode": "PH",
+      "parsed": {
+        "text": "Philippines",
+        "countryCode": "PH",
+        "regionCode": null,
+        "country": "Philippines",
+        "countryFull": "Philippines"
+      }
+    },
+    "objectUrn": "488581683",
+    "registeredAt": "2016-03-13T06:22:27.229Z",
+    "topSkills": null,
+    "connectionsCount": 1338,
+    "followerCount": 1337,
+    "verified": false,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "5450",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/5450/",
+        "companyName": "Datacom",
+        "dateRange": {
+          "start": {
+            "month": 5,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "15667",
+        "companyId": "11513",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/11513/",
+        "schoolName": "De La Salle University"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5603AQFIVf8yXQbSOA/profile-displayphoto-shrink_800_800/B56Zz10zQTKsAc-/0/1773650785971?e=1776902400&v=beta&t=fldRcAhQEZic6O6Vp6FKtvndUyU_XtqMljY8hUlOeGY",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQFIVf8yXQbSOA/profile-displayphoto-shrink_800_800/B56Zz10zQTKsAc-/0/1773650785971?e=1776902400&v=beta&t=fldRcAhQEZic6O6Vp6FKtvndUyU_XtqMljY8hUlOeGY",
+          "width": 560,
+          "height": 560,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQFIVf8yXQbSOA/profile-displayphoto-shrink_400_400/B56Zz10zQTKsAg-/0/1773650785971?e=1776902400&v=beta&t=3ptHoVf_if_lMcnZhnaUP61C3Nf9EwkKsaOKu9UmQdM",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQFIVf8yXQbSOA/profile-displayphoto-shrink_200_200/B56Zz10zQTKsAY-/0/1773650785971?e=1776902400&v=beta&t=RomO08OklDjuu-G0aT4kY9NvtUog255Rm2r3jFlWif4",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQFIVf8yXQbSOA/profile-displayphoto-shrink_100_100/B56Zz10zQTKsAU-/0/1773650785963?e=1776902400&v=beta&t=bQq3nOLh1dqOcbV2qgFjrhWqTyaer4a6-91nIOoSn98",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D5603AQFIVf8yXQbSOA/profile-displayphoto-shrink_800_800/B56Zz10zQTKsAc-/0/1773650785971?e=1776902400&v=beta&t=fldRcAhQEZic6O6Vp6FKtvndUyU_XtqMljY8hUlOeGY",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Business operations strategist committed to driving organization growth through people-centered process design and sustainable people management.",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Consultant - App Digital Platforms",
+        "location": "Philippines",
+        "employmentType": "Full-time",
+        "workplaceType": "Hybrid",
+        "companyName": "Datacom",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/datacom/",
+        "companyId": "5450",
+        "companyUniversalName": "datacom",
+        "duration": "1 yr",
+        "description": null,
+        "skills": [
+          "Business Process Improvement",
+          "Change Management"
+        ],
+        "startDate": {
+          "month": "May",
+          "year": 2025,
+          "text": "May 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQENZC0JdWhdPA/company-logo_400_400/B56ZfORSi5H8Ag-/0/1751512328772/datacom_logo?e=1776902400&v=beta&t=Z9LHC49IvXmw1Xf-wFszUGqqpQRaJIElHpzNaI_9xF0",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQENZC0JdWhdPA/company-logo_400_400/B56ZfORSi5H8Ag-/0/1751512328772/datacom_logo?e=1776902400&v=beta&t=Z9LHC49IvXmw1Xf-wFszUGqqpQRaJIElHpzNaI_9xF0",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQENZC0JdWhdPA/company-logo_200_200/B56ZfORSi5H8AQ-/0/1751512328772/datacom_logo?e=1776902400&v=beta&t=3yS26vrPLnI0Z0KCmbKuzF9Bq8Ec_Xj2SHqd29bLYoY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQENZC0JdWhdPA/company-logo_100_100/B56ZfORSi5H8AY-/0/1751512328772/datacom_logo?e=1776902400&v=beta&t=-b3PNlY5vkMVnJw5aqprtir3fryDf4nAkq7NFx0rae8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Operations Manager",
+        "location": "Philippines",
+        "employmentType": "Full-time",
+        "workplaceType": "Hybrid",
+        "companyName": "Lokal Lab Siargao",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/70988138/",
+        "companyId": "70988138",
+        "duration": "10 mos",
+        "description": "Manages the NGO’s core operations, including finance, HR, compliance, programs, and community building, while driving continuous process improvements and fostering an efficient, healthy work environment.\n\nDevelops and maintains policies and guidelines for operations, including HR, compliance, finance, community programs, project management, and social enterprises to ensure organizational alignment and sustainability.\n\nLeads financial planning by projecting expenditures and target revenue for both NGO programs and social enterprises, ensuring sustainable funding.\n\nDevelops and designs innovative business models for the organization’s fundraising programs\n\nOversee grant management by negotiating deliverables, budget and timelines, with international NGOs, funders, and donors before funding is secured, and ensuring all deliverables are met during project implementation.\n\nEnables data-driven decision-making by creating KPI monitoring systems and standardized reports on project performance.\n\nPromotes sustainable management practices, championing a collaborative and wellness-focused workplace culture.",
+        "skills": null,
+        "startDate": {
+          "month": "Jul",
+          "year": 2024,
+          "text": "Jul 2024"
+        },
+        "endDate": {
+          "month": "Apr",
+          "year": 2025,
+          "text": "Apr 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQG2Zj74whCt7Q/company-logo_400_400/company-logo_400_400/0/1630646627020?e=1776902400&v=beta&t=CP96xNssfshWTL_e1dndNEIzPvZ_3-YY5G02AuwW5us",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQG2Zj74whCt7Q/company-logo_400_400/company-logo_400_400/0/1630646627020?e=1776902400&v=beta&t=CP96xNssfshWTL_e1dndNEIzPvZ_3-YY5G02AuwW5us",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQG2Zj74whCt7Q/company-logo_200_200/company-logo_200_200/0/1630646627020?e=1776902400&v=beta&t=Zm7tFCmfQ5lOLOv4S5Y2LeU332C4hkFJLXKbV1w-Lvs",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQG2Zj74whCt7Q/company-logo_100_100/company-logo_100_100/0/1630646627020?e=1776902400&v=beta&t=fI0TEoLDvzwC47nvKxUmdNgjW4cYlfwUrDTa2Lks8p4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Personal goal pursuit",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Career Break",
+        "companyLinkedinUrl": null,
+        "duration": "3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Apr",
+          "year": 2024,
+          "text": "Apr 2024"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2024,
+          "text": "Jun 2024"
+        }
+      },
+      {
+        "position": "Senior Business Operations Analyst",
+        "location": "Philippines",
+        "employmentType": "Full-time",
+        "workplaceType": "Remote",
+        "companyName": "Thinking Machines Data Science",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/13190014/",
+        "companyId": "13190014",
+        "duration": "1 yr 8 mos",
+        "description": "Collaborates with Growth leadership team in strategizing for high impact gaps and pain points in the Growth team’s business processes (pre-sales, sales, partnerships) and defining objectives and key results to monitor business performance\n\nOrchestrates cross-functional collaboration to design business processes which have interdependencies on legal, security, finance, sales, technical, and operational workflows\n\nDesigns and implements change management plans for business process improvement initiatives within the Growth team and other interdependent teams such as POC approval process, inbound lead management workflows, and vendor accreditation workflows which resulted in process automation that supported all leads and deals in 2023 across all entities in the Philippines, Thailand, and Singapore",
+        "skills": [
+          "Business Initiatives",
+          "Data Analysis and Reporting",
+          "Problem Solving",
+          "Business Process Improvement",
+          "Change Management",
+          "Interpersonal Communication",
+          "Project Management",
+          "Analytical Skills",
+          "Program Management"
+        ],
+        "experienceGroupId": "86331d58a8cd660f130065f0a9054ea3c2119f13",
+        "startDate": {
+          "month": "Sep",
+          "year": 2022,
+          "text": "Sep 2022"
+        },
+        "endDate": {
+          "month": "Apr",
+          "year": 2024,
+          "text": "Apr 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQEstI8MP-Cbpw/company-logo_400_400/company-logo_400_400/0/1649158174180/thinking_machines_data_science_logo?e=1776902400&v=beta&t=4An45QB2KTLF0reiu82G-yo79cv0ZYjaEXZz3sHcTmo",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEstI8MP-Cbpw/company-logo_400_400/company-logo_400_400/0/1649158174180/thinking_machines_data_science_logo?e=1776902400&v=beta&t=4An45QB2KTLF0reiu82G-yo79cv0ZYjaEXZz3sHcTmo",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEstI8MP-Cbpw/company-logo_200_200/company-logo_200_200/0/1649158174180/thinking_machines_data_science_logo?e=1776902400&v=beta&t=77mcsp8WLfHJZNzY6Nql3MmfMVxS0bGFr_jO_gqdGz8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEstI8MP-Cbpw/company-logo_100_100/company-logo_100_100/0/1649158174180/thinking_machines_data_science_logo?e=1776902400&v=beta&t=8umW-luz5nbmt2Of1Ej__6NEQssgLC8KlX0fZpBW21M",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Partnerships Manager ",
+        "location": "Philippines",
+        "employmentType": "Full-time",
+        "workplaceType": "Remote",
+        "companyName": "Thinking Machines Data Science",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/13190014/",
+        "companyId": "13190014",
+        "duration": "1 yr 3 mos",
+        "description": "Manages the partner development program of the organization for all technical partners\n\nDesigns and manages all internal partnership systems and initiatives within the organization such as but not limited to KPI monitoring and partner benefit utilization processes\n\nCollaborates with senior leadership team on establishing partner relationships, internal partnership systems, and overall partnership strategy\n\nEnsures successful opportunity co-selling with technical partners which resulted to 10% of the company’s annual booked revenue target for 2023 and >10,000 USD in savings from cloud consumption and certification/specialization fees\n\nManaged relationships with Google Cloud, AWS, Microsoft Azure, and Snowflake as key technical partners of the organization in the ASEAN region",
+        "skills": [
+          "Organizational Change Management",
+          "Business Initiatives",
+          "Data Analysis and Reporting",
+          "Problem Solving",
+          "Business Engagement",
+          "Processes Development",
+          "Interpersonal Communication",
+          "Program Management"
+        ],
+        "experienceGroupId": "86331d58a8cd660f130065f0a9054ea3c2119f13",
+        "startDate": {
+          "month": "Jan",
+          "year": 2023,
+          "text": "Jan 2023"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2024,
+          "text": "Mar 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQEstI8MP-Cbpw/company-logo_400_400/company-logo_400_400/0/1649158174180/thinking_machines_data_science_logo?e=1776902400&v=beta&t=4An45QB2KTLF0reiu82G-yo79cv0ZYjaEXZz3sHcTmo",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEstI8MP-Cbpw/company-logo_400_400/company-logo_400_400/0/1649158174180/thinking_machines_data_science_logo?e=1776902400&v=beta&t=4An45QB2KTLF0reiu82G-yo79cv0ZYjaEXZz3sHcTmo",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEstI8MP-Cbpw/company-logo_200_200/company-logo_200_200/0/1649158174180/thinking_machines_data_science_logo?e=1776902400&v=beta&t=77mcsp8WLfHJZNzY6Nql3MmfMVxS0bGFr_jO_gqdGz8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEstI8MP-Cbpw/company-logo_100_100/company-logo_100_100/0/1649158174180/thinking_machines_data_science_logo?e=1776902400&v=beta&t=8umW-luz5nbmt2Of1Ej__6NEQssgLC8KlX0fZpBW21M",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Business Operations & Strategy Consultant",
+        "location": "Manila, National Capital Region, Philippines",
+        "employmentType": "Self-employed",
+        "workplaceType": null,
+        "companyName": "Zandra Ambrosio Business Consultancy",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Zandra+Ambrosio+Business+Consultancy",
+        "duration": "1 yr 4 mos",
+        "description": "Managed a team of technology developers and account managers in providing e-commerce and operations consultancy to local small businesses in the F&B, clothing, and medical equipment distribution industry, in terms of social media marketing, website development, operational systems development, and partnerships\n\nEstablished and maintained relationships with local artists and artisans, couriers, payment gateways, and other service providers for local businesses\n\nDeveloped the website and ran Facebook Ads for an F&B customer, which generated 350% increase in e-commerce revenue in a span of 6 months\n\nDeveloped a semi-automated operations system including inventory management, purchasing management, and sales opportunity systems using Google Workspace for a medical equipment distributor customer",
+        "skills": [
+          "Organizational Change Management",
+          "Business Initiatives",
+          "Data Analysis and Reporting",
+          "Problem Solving",
+          "Business Engagement",
+          "Business Process Improvement",
+          "Processes Development",
+          "Change Management",
+          "Interpersonal Communication",
+          "Project Management",
+          "Analytical Skills",
+          "Program Management"
+        ],
+        "startDate": {
+          "month": "Jun",
+          "year": 2021,
+          "text": "Jun 2021"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2022,
+          "text": "Sep 2022"
+        }
+      },
+      {
+        "position": "Operations Strategist",
+        "location": "Marikina, National Capital Region, Philippines",
+        "employmentType": "Contract",
+        "workplaceType": null,
+        "companyName": "StayGold Holdings Inc.",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/71248850/",
+        "companyId": "71248850",
+        "duration": "7 mos",
+        "description": "Developed new processes to enhance operations such as establishing quality control processes from the supply chain to the warehousing and fulfillment operations, which lead to a 95% decrease in product returns from customers\n\nEstablished KPI monitoring systems for the customer service and fulfillment team in terms of lead generation, sales conversion, and fulfillment efficiency, enabled data-driven top management decisions through quantitative reports on employee, sales, and marketing campaigns efficiency \n\nImplemented an online hiring campaign through the brand’s website and social media which resulted to 120 applicants. \n\nBuilt and maintained successful relationships with payment gateways, couriers, and partner consultants in sales and marketing, and trained employees and managers to use new systems and processes.",
+        "skills": [
+          "Organizational Change Management",
+          "Business Initiatives",
+          "Data Analysis and Reporting",
+          "Problem Solving",
+          "Business Engagement",
+          "Business Process Improvement",
+          "Processes Development",
+          "Change Management",
+          "Project Management",
+          "Analytical Skills",
+          "Program Management"
+        ],
+        "startDate": {
+          "month": "Jan",
+          "year": 2021,
+          "text": "Jan 2021"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2021,
+          "text": "Jul 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEWHrPciozEJA/company-logo_400_400/company-logo_400_400/0/1630559772928?e=1776902400&v=beta&t=wmb916-0VBCM2tFtn2FqfZj-Xaw95AV9yzYBOYczbiw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEWHrPciozEJA/company-logo_400_400/company-logo_400_400/0/1630559772928?e=1776902400&v=beta&t=wmb916-0VBCM2tFtn2FqfZj-Xaw95AV9yzYBOYczbiw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEWHrPciozEJA/company-logo_200_200/company-logo_200_200/0/1630559772927?e=1776902400&v=beta&t=p5rwQINawue3yolSe3pxc5IAO3frwNkTg-xcMaqjAvY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEWHrPciozEJA/company-logo_100_100/company-logo_100_100/0/1630559772927?e=1776902400&v=beta&t=H4v5QPpfVHvWcNi67tRmYQonq1HARvtxkMJeKhD_gWU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Science Research Specialist II",
+        "location": "Quezon City, National Capital Region, Philippines",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "University of the Philippines",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/166683/",
+        "companyId": "166683",
+        "duration": "9 mos",
+        "description": "Fulfilled technical and administrative roles for the project: Smart Plant Production in Controlled Environments (SPICE) Project 1: Standalone Urban Farm\n\nDrafted and filed patent documents for application along with the Supervising Science Research Specialist and spearheaded experiments on utilizing a spectral sensor that enabled additional lighting automation for the Standalone Urban Farm",
+        "skills": [
+          "Problem Solving",
+          "Analytical Skills"
+        ],
+        "startDate": {
+          "month": "Jan",
+          "year": 2020,
+          "text": "Jan 2020"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2020,
+          "text": "Sep 2020"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQFhc7r3beFtvA/company-logo_400_400/company-logo_400_400/0/1672705537119/university_of_the_philippines_logo?e=1776902400&v=beta&t=DF6p2zH7FWklLA0i7j9gmyZikDm6hgGYehFdDDvUWfI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFhc7r3beFtvA/company-logo_400_400/company-logo_400_400/0/1672705537119/university_of_the_philippines_logo?e=1776902400&v=beta&t=DF6p2zH7FWklLA0i7j9gmyZikDm6hgGYehFdDDvUWfI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFhc7r3beFtvA/company-logo_200_200/company-logo_200_200/0/1672705537119/university_of_the_philippines_logo?e=1776902400&v=beta&t=wI-9dDwc5-px-uZT9JKAvLB3-Sb6urwOLsvM9K_bYqc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFhc7r3beFtvA/company-logo_100_100/company-logo_100_100/0/1672705537119/university_of_the_philippines_logo?e=1776902400&v=beta&t=kRGRQF5jcvkSEtdhESsEQczE7de2WYsQfByRLlmgD-8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "De La Salle University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/11513/",
+        "schoolId": "11513",
+        "degree": "Bachelor of Science",
+        "fieldOfStudy": "Electronics and Communications Engineering",
+        "skills": [
+          "Analytical Skills"
+        ],
+        "startDate": {
+          "year": 2014,
+          "text": "2014"
+        },
+        "endDate": {
+          "year": 2019,
+          "text": "2019"
+        },
+        "period": "2014 - 2019",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQFMv8d11yrAAA/company-logo_400_400/company-logo_400_400/0/1631319097833?e=1776902400&v=beta&t=8Qq628bnpm7DENbg0AhjEYkKaJtqoYMIQDKKMH5KFhQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFMv8d11yrAAA/company-logo_400_400/company-logo_400_400/0/1631319097833?e=1776902400&v=beta&t=8Qq628bnpm7DENbg0AhjEYkKaJtqoYMIQDKKMH5KFhQ",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFMv8d11yrAAA/company-logo_200_200/company-logo_200_200/0/1631319097832?e=1776902400&v=beta&t=JGuCVvCH-HbeqvLbXEjMQ8Qffi2wTuf-GFOhhv70nTU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFMv8d11yrAAA/company-logo_100_100/company-logo_100_100/0/1631319097832?e=1776902400&v=beta&t=ilH0MyZGUwXudrKh9w2SefegMVhq9Q78LiXx2AG05Xs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [
+      {
+        "title": "ECE Seminars and Plant Tours",
+        "description": "Communicated with several companies engaged in electronics, telecommunications, semiconductor, manufacturing, and information technology to prepare company talks and plant tours for a group of 29 students.",
+        "duration": "Oct 2018 - Nov 2018",
+        "startDate": {
+          "month": "Oct",
+          "year": 2018,
+          "text": "Oct 2018"
+        },
+        "endDate": {
+          "month": "Nov",
+          "year": 2018,
+          "text": "Nov 2018"
+        },
+        "associatedWith": "Associated with De La Salle University",
+        "associatedWithLink": "https://www.linkedin.com/company/11513/"
+      }
+    ],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Interpersonal Communication",
+        "positions": [
+          "3 experiences across Thinking Machines Data Science and 1 other company"
+        ]
+      },
+      {
+        "name": "Stakeholder Management"
+      },
+      {
+        "name": "Marketing Strategy"
+      },
+      {
+        "name": "Project Coordination"
+      },
+      {
+        "name": "Cross-functional Coordination"
+      },
+      {
+        "name": "Change Management",
+        "positions": [
+          "4 experiences across Datacom and 3 other companies"
+        ],
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Analytical Skills",
+        "positions": [
+          "4 experiences across Thinking Machines Data Science and 3 other companies",
+          "De La Salle University"
+        ]
+      },
+      {
+        "name": "Management"
+      },
+      {
+        "name": "Problem Solving",
+        "positions": [
+          "5 experiences across Thinking Machines Data Science and 3 other companies"
+        ],
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Business Initiatives",
+        "positions": [
+          "4 experiences across Thinking Machines Data Science and 2 other companies"
+        ],
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Processes Development",
+        "positions": [
+          "3 experiences across Thinking Machines Data Science and 2 other companies"
+        ],
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Organizational Change Management",
+        "positions": [
+          "3 experiences across Thinking Machines Data Science and 2 other companies"
+        ],
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Business Engagement",
+        "positions": [
+          "3 experiences across Thinking Machines Data Science and 2 other companies"
+        ]
+      },
+      {
+        "name": "Data Analysis and Reporting",
+        "positions": [
+          "4 experiences across Thinking Machines Data Science and 2 other companies"
+        ],
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Program Management",
+        "positions": [
+          "4 experiences across Thinking Machines Data Science and 2 other companies"
+        ]
+      },
+      {
+        "name": "Project Management",
+        "positions": [
+          "3 experiences across Thinking Machines Data Science and 2 other companies"
+        ]
+      },
+      {
+        "name": "Business Process Improvement",
+        "positions": [
+          "4 experiences across Datacom and 3 other companies"
+        ],
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Research",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Technical Writing",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Teaching",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Embedded Systems"
+      },
+      {
+        "name": "Microsoft Office",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Automation"
+      },
+      {
+        "name": "Social Media"
+      }
+    ],
+    "publications": [
+      {
+        "title": "Implementation of a Closed Loop Control System for the Automation of an Aquaponic System for Urban Setting",
+        "publishedAt": "2019 IEEE 11th International Conference on Humanoid, Nanotechnology, Information Technology, Communication and Control, and Management (HCINEM) · Apr 23, 2020",
+        "description": "Design and implementation of an aquaponic system addressing the limited farming space available in condominiums, which can also perform monitoring and control of environmental parameters and real time data display.",
+        "link": "https://ieeexplore.ieee.org/document/9072729"
+      }
+    ],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [
+      {
+        "name": "English",
+        "proficiency": "Professional working proficiency"
+      },
+      {
+        "name": "Filipino",
+        "proficiency": "Native or bilingual proficiency"
+      }
+    ],
+    "causes": [
+      "Children",
+      "Civil Rights and Social Action",
+      "Education",
+      "Environment",
+      "Science and Technology",
+      "Arts and Culture"
+    ],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAB-bf8oBvOafH0tVWgzjtvQW2j29mZHSXNY",
+        "firstName": "Gabriel",
+        "lastName": "Mallari",
+        "publicIdentifier": "gabriel-mallari-722711129",
+        "linkedinUrl": "https://www.linkedin.com/in/gabriel-mallari-722711129"
+      },
+      {
+        "id": "ACoAACXQYUQBaq67GEx4o9g_DmLYMEWLpnUs_bc",
+        "firstName": "Ma. Theresa",
+        "lastName": "Legarda",
+        "publicIdentifier": "ma-theresa-legarda-458569158",
+        "linkedinUrl": "https://www.linkedin.com/in/ma-theresa-legarda-458569158"
+      },
+      {
+        "id": "ACoAACe-qJ0BTsNdN4JZTGii8Vo4ylAredSDnHM",
+        "firstName": "Zofia",
+        "lastName": "Siccion",
+        "publicIdentifier": "zofia-siccion-42538b167",
+        "linkedinUrl": "https://www.linkedin.com/in/zofia-siccion-42538b167"
+      },
+      {
+        "id": "ACoAAB0IHLQB-HIw110LodmxPFwDK562rY7ngLQ",
+        "firstName": "Renzt",
+        "lastName": "Racela",
+        "publicIdentifier": "renzt-racela-898151117",
+        "linkedinUrl": "https://www.linkedin.com/in/renzt-racela-898151117"
+      },
+      {
+        "id": "ACoAABJHXNIBzvYyfvSXuF9zMAtpQ6q8ahRmq_o",
+        "firstName": "Pavuthriya",
+        "lastName": "Tharmaratnam",
+        "publicIdentifier": "pavuthriya-tharmaratnam-1aa85186",
+        "linkedinUrl": "https://www.linkedin.com/in/pavuthriya-tharmaratnam-1aa85186"
+      },
+      {
+        "id": "ACoAAB9kaaABimDoscWxHIya2OOpr6CgZZomeuA",
+        "firstName": "Trisha Angeline",
+        "lastName": "De Vera",
+        "publicIdentifier": "trisha-angeline-de-vera-480470128",
+        "linkedinUrl": "https://www.linkedin.com/in/trisha-angeline-de-vera-480470128"
+      },
+      {
+        "id": "ACoAACoemB8BYa6Au9QgroQL0_kR4R0WINqxQkM",
+        "firstName": "Haley",
+        "lastName": "Burdett",
+        "publicIdentifier": "haley-burdett-a537a3178",
+        "linkedinUrl": "https://www.linkedin.com/in/haley-burdett-a537a3178"
+      },
+      {
+        "id": "ACoAAB-SYRIBgueqKsMe-pQEvQrJqCpEqG0abK8",
+        "firstName": "John Eric",
+        "lastName": "Rodelas",
+        "publicIdentifier": "john-eric-rodelas-86a483129",
+        "linkedinUrl": "https://www.linkedin.com/in/john-eric-rodelas-86a483129"
+      },
+      {
+        "id": "ACoAACyaHR0B1fG-UgDcJyMVpVXPQDxcN6jehx4",
+        "firstName": "Miguel",
+        "lastName": "Delos Reyes",
+        "publicIdentifier": "miguel-delosreyes",
+        "linkedinUrl": "https://www.linkedin.com/in/miguel-delosreyes"
+      },
+      {
+        "id": "ACoAADkD5IkB1ukAdvjfdel_U9bopcBo94RzYbw",
+        "firstName": "Maria Victoria",
+        "lastName": "Ching",
+        "publicIdentifier": "maria-ching",
+        "linkedinUrl": "https://www.linkedin.com/in/maria-ching"
+      },
+      {
+        "id": "ACoAACqOm_wB2Z0gX5-ba-xKO4uQ9maf3HgNCtw",
+        "firstName": "Mark Jerome",
+        "lastName": "Agrimano",
+        "publicIdentifier": "mark-jerome-agrimano-19014417b",
+        "linkedinUrl": "https://www.linkedin.com/in/mark-jerome-agrimano-19014417b"
+      },
+      {
+        "id": "ACoAABxBinwBiuEmqd3yI5R7ZRmDb6CldRO-Yac",
+        "firstName": "Matthew",
+        "lastName": "Pereja",
+        "publicIdentifier": "matthewpereja",
+        "linkedinUrl": "https://www.linkedin.com/in/matthewpereja"
+      },
+      {
+        "id": "ACoAAAMZtgABKN9zQkQU51Y0qOxbbLopmbcVUNQ",
+        "firstName": "Ted",
+        "lastName": "Grudin",
+        "publicIdentifier": "ted-grudin",
+        "linkedinUrl": "https://www.linkedin.com/in/ted-grudin"
+      },
+      {
+        "id": "ACoAACDNeAUBocfQBFYR0Zj1TScfaVNL_idHMBE",
+        "firstName": "Eldrich Bong",
+        "lastName": "Valencerina",
+        "publicIdentifier": "eldrich-valencerina",
+        "linkedinUrl": "https://www.linkedin.com/in/eldrich-valencerina"
+      },
+      {
+        "id": "ACoAACs918kBW8E-Pd1Z7CIBrGadBOeWGFZdisg",
+        "firstName": "Christer",
+        "lastName": "Ochengco",
+        "publicIdentifier": "christer-ochengco-061b62182",
+        "linkedinUrl": "https://www.linkedin.com/in/christer-ochengco-061b62182"
+      },
+      {
+        "id": "ACoAADQl0w4Bbzj8gXxAZk4fy_NeaA5RzgNPkpg",
+        "firstName": "Ma. Teressa",
+        "lastName": "Malata",
+        "publicIdentifier": "ma-teressa-malata-552000205",
+        "linkedinUrl": "https://www.linkedin.com/in/ma-teressa-malata-552000205"
+      },
+      {
+        "id": "ACoAAB1gjtgBAYd_HH_Uwum9QqHNzoXI1PcxCgI",
+        "firstName": "YiZhen",
+        "lastName": "Wang",
+        "publicIdentifier": "yizhen-wang-160088119",
+        "linkedinUrl": "https://www.linkedin.com/in/yizhen-wang-160088119"
+      },
+      {
+        "id": "ACoAADfJkUABXq6WZV2Lc4m9A1ycdLzVeVnDJsk",
+        "firstName": "Regina",
+        "lastName": "P.",
+        "publicIdentifier": "regina-ca",
+        "linkedinUrl": "https://www.linkedin.com/in/regina-ca"
+      },
+      {
+        "id": "ACoAADPPZd8BO9EsOTLzQh80MCi49xGilazasmw",
+        "firstName": "mansy",
+        "lastName": "abesamis",
+        "publicIdentifier": "mansy-abesamis-79312a203",
+        "linkedinUrl": "https://www.linkedin.com/in/mansy-abesamis-79312a203"
+      },
+      {
+        "id": "ACoAACWM4DMBA-p9gKQunY2RT04u9KwPjAzZ-mU",
+        "firstName": "Jeramil",
+        "lastName": "Ramos",
+        "publicIdentifier": "jeramil-ramos",
+        "linkedinUrl": "https://www.linkedin.com/in/jeramil-ramos"
+      },
+      {
+        "id": "ACoAAF6DKk4BZpeMGJEbj7VNn45ZWrE26iLn3cI",
+        "firstName": "Zlata",
+        "lastName": "Kuncic",
+        "position": "--",
+        "publicIdentifier": "zlata-kuncic-066048383",
+        "linkedinUrl": "https://www.linkedin.com/in/zlata-kuncic-066048383"
+      },
+      {
+        "id": "ACoAAEB6v_sBn41b-Bz6Kr_0k5czdCK1nHHNaks",
+        "firstName": "Vesna",
+        "lastName": "Ivcek",
+        "position": "--",
+        "publicIdentifier": "vesna-ivcek-937355262",
+        "linkedinUrl": "https://www.linkedin.com/in/vesna-ivcek-937355262"
+      },
+      {
+        "id": "ACoAABr5jKoBJt1W3mElvHC3VzHdtuMbeILjStk",
+        "firstName": "Tomislav",
+        "lastName": "Pavlovic",
+        "position": "Battery  repair, , EV driver, DIY solar, , ....",
+        "publicIdentifier": "tomislav-pavlovic-43668b107",
+        "linkedinUrl": "https://www.linkedin.com/in/tomislav-pavlovic-43668b107"
+      },
+      {
+        "id": "ACoAAF8PejYB3l_H5zcEQ-FAqNiYvxZDex3DGPY",
+        "firstName": "Petar Curic",
+        "lastName": "Agency",
+        "position": "--",
+        "publicIdentifier": "petar-curic-agency-61a141386",
+        "linkedinUrl": "https://www.linkedin.com/in/petar-curic-agency-61a141386"
+      },
+      {
+        "id": "ACoAAD60fC8BeCOGAUcQt9HWqgwqLLCBjMegQRU",
+        "firstName": "Damir",
+        "lastName": "Živković",
+        "position": "--",
+        "publicIdentifier": "damir-živković-43b399254",
+        "linkedinUrl": "https://www.linkedin.com/in/damir-živković-43b399254"
+      },
+      {
+        "id": "ACoAAEobyLkBobrSFxLgPrIYgLAYIFs067U3Uis",
+        "firstName": "Milka",
+        "lastName": "Matijašić",
+        "position": "--",
+        "publicIdentifier": "milka-matijašić-5894822a8",
+        "linkedinUrl": "https://www.linkedin.com/in/milka-matijašić-5894822a8"
+      },
+      {
+        "id": "ACoAAGD3IkMBeaxf-IWZdqnRezX9Wajuemoisp4",
+        "firstName": "Ellen",
+        "lastName": "G.",
+        "position": "--",
+        "publicIdentifier": "ellen-g-403994394",
+        "linkedinUrl": "https://www.linkedin.com/in/ellen-g-403994394"
+      },
+      {
+        "id": "ACoAAEyI71cBqA_ViF-Y3xRwbeSXkEZY1ENMKWQ",
+        "firstName": "Angelina",
+        "lastName": "Gracis",
+        "position": "--",
+        "publicIdentifier": "angelina-gracis-2470342ba",
+        "linkedinUrl": "https://www.linkedin.com/in/angelina-gracis-2470342ba"
+      },
+      {
+        "id": "ACoAAA1OycEBBpONfn4QAHsKifA-1au82F8btGA",
+        "firstName": "Jasmina",
+        "lastName": "Pavić-Mrkonjić",
+        "position": "--",
+        "publicIdentifier": "jasmina-pavić-mrkonjić-71593162",
+        "linkedinUrl": "https://www.linkedin.com/in/jasmina-pavić-mrkonjić-71593162"
+      },
+      {
+        "id": "ACoAAFfwAiAB-QhpiZmABLQRgMudcAbuVJ4XKp0",
+        "firstName": "Norman",
+        "lastName": "Majer",
+        "position": "--",
+        "publicIdentifier": "norman-majer-914110352",
+        "linkedinUrl": "https://www.linkedin.com/in/norman-majer-914110352"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAB0fKjMBNSQdLCckrtp4vC3y4re0YWoR2bo"
+    }
+  }
+}

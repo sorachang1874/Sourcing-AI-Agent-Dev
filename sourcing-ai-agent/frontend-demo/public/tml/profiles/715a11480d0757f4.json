@@ -1,0 +1,817 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAABuhnI0BSRQTctQQwpRuQrm_WCy4GTlZQE0",
+    "profile_url": "https://www.linkedin.com/in/ACwAABuhnI0BSRQTctQQwpRuQrm_WCy4GTlZQE0"
+  },
+  "item": {
+    "id": "ACoAABuhnI0BiTg8hQMSwyg8LxcrYYOowCSOSkM",
+    "publicIdentifier": "brandontrabucco",
+    "linkedinUrl": "https://www.linkedin.com/in/brandontrabucco",
+    "firstName": "Brandon",
+    "lastName": "Trabucco",
+    "emails": [
+      {
+        "email": "brandon.trabucco@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      },
+      {
+        "url": "https://www.ml.cmu.edu",
+        "domain": "cmu.edu"
+      }
+    ],
+    "headline": "Thinking Machines Lab; CMU ML (PhD); Berkeley AI (Bachelors); NDSEG Fellow; Singer and Composer",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco Bay Area",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "463576205",
+    "registeredAt": "2015-11-29T23:22:10.145Z",
+    "topSkills": null,
+    "connectionsCount": 771,
+    "followerCount": 872,
+    "verified": false,
+    "about": "[I'm currently at Thinking Machines Lab]\n\nBrandon is a Ph.D. Candidate at the CMU Machine Learning Department advised by Prof. Ruslan Salakhutdinov, and was previously an undergraduate researcher at UC Berkeley working with Prof. Sergey Levine. Brandon's research includes deep learning, generative models, and agents.\n\nHe produces electronic music and considers how AI can augment creative workflows.",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 6,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "19232",
+        "companyId": "3147",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3147/",
+        "schoolName": "Carnegie Mellon University"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4E03AQGeV2hQjeXqGg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1703142126114?e=1776902400&v=beta&t=v0Wzzb2DSWTYqe8EYqomp-UwTCtExAzylaPpuxwChRg",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQGeV2hQjeXqGg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1703142126114?e=1776902400&v=beta&t=v0Wzzb2DSWTYqe8EYqomp-UwTCtExAzylaPpuxwChRg",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQGeV2hQjeXqGg/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1703142126114?e=1776902400&v=beta&t=n_uN5OvHqoyWr_iKR3QyFSy6NGvd4xWmXwztvRhSC3I",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQGeV2hQjeXqGg/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1703142126114?e=1776902400&v=beta&t=P208CrYV361wje64ubs4ygksp78NXlWyaZQkk3Z4B54",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQGeV2hQjeXqGg/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1703142126113?e=1776902400&v=beta&t=Mfy2KRuOGrL0cP3oXsDV5qvU0rgrJGUdUMgzucqrxiA",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": {
+      "url": "https://media.licdn.com/dms/image/v2/C5616AQGTljva3y5USg/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1627086774487?e=1776902400&v=beta&t=s3xwYUbuKDGUK90J5NLUV7fEhUsmfGqtwY-onQvRB3o",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5616AQGTljva3y5USg/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1627086774487?e=1776902400&v=beta&t=s3xwYUbuKDGUK90J5NLUV7fEhUsmfGqtwY-onQvRB3o",
+          "width": 950,
+          "height": 237,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5616AQGTljva3y5USg/profile-displaybackgroundimage-shrink_200_800/profile-displaybackgroundimage-shrink_200_800/0/1627086774487?e=1776902400&v=beta&t=rqdTOX1pmlyzH6WYEnX6KdFEcFCggtArhzxLWZVdNM0",
+          "width": 800,
+          "height": 199,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "photo": "https://media.licdn.com/dms/image/v2/D4E03AQGeV2hQjeXqGg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1703142126114?e=1776902400&v=beta&t=v0Wzzb2DSWTYqe8EYqomp-UwTCtExAzylaPpuxwChRg",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Thinking Machines Lab; CMU ML (PhD); Berkeley AI (Bachelors); NDSEG Fellow; Singer and Composer",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco, CA",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "11 mos",
+        "description": "First 50 staff; Agents + Multimodality",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2025,
+          "text": "Jun 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Doctoral Researcher",
+        "location": "Pittsburgh, PA",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Machine Learning Department at CMU",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/11475075/",
+        "companyId": "11475075",
+        "duration": "4 yrs 8 mos",
+        "description": "Thesis: Scalable Learning Beyond Human Data\nAdv: Prof. Ruslan Salakhutdinov",
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2021,
+          "text": "Sep 2021"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHw6InS0Z8Wng/company-logo_400_400/B4EZu9efDkHoAY-/0/1768410444473/mldcmu_logo?e=1776902400&v=beta&t=CBcUnSNhC895xJI5ur11AnpKFIOcyiyUngDjTPHlvH8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHw6InS0Z8Wng/company-logo_400_400/B4EZu9efDkHoAY-/0/1768410444473/mldcmu_logo?e=1776902400&v=beta&t=CBcUnSNhC895xJI5ur11AnpKFIOcyiyUngDjTPHlvH8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHw6InS0Z8Wng/company-logo_200_200/B4EZu9efDkHoAI-/0/1768410444473/mldcmu_logo?e=1776902400&v=beta&t=R0iFMV9t4SiK-r-XpDjPtqsRUsSb6U5KEt8nmiDG10g",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHw6InS0Z8Wng/company-logo_100_100/B4EZu9efDkHoAQ-/0/1768410444473/mldcmu_logo?e=1776902400&v=beta&t=ADUG7i_SOkbSJVysiMatm2q15dGcty89GhdHQnkrjaw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Internship",
+        "location": "Sunnyvale, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Amazon",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1586/",
+        "companyId": "1586",
+        "duration": "2 yrs 7 mos",
+        "description": "Working on multimodal agents",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2022,
+          "text": "Jun 2022"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2024,
+          "text": "Dec 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGDLy4STCnHbg/company-logo_400_400/B56ZnZxDipI0AY-/0/1760295142304/amazon_logo?e=1776902400&v=beta&t=lYPAbzBmg2YQhgQFeMnV-wHyKGvMPrvdCpcjHf_aGWc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGDLy4STCnHbg/company-logo_400_400/B56ZnZxDipI0AY-/0/1760295142304/amazon_logo?e=1776902400&v=beta&t=lYPAbzBmg2YQhgQFeMnV-wHyKGvMPrvdCpcjHf_aGWc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGDLy4STCnHbg/company-logo_200_200/B56ZnZxDipI0AI-/0/1760295142304/amazon_logo?e=1776902400&v=beta&t=Pkt-34tlkuFgo_d6O--s7BFOke10xwNIu23VHSfAC1Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGDLy4STCnHbg/company-logo_100_100/B56ZnZxDipI0AQ-/0/1760295142304/amazon_logo?e=1776902400&v=beta&t=Glfc3A2Yqstx_u6NdGLKHNNMcZSYljXNIHa7f-Ob1fA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Internship",
+        "location": "Chandler, Arizona, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Intel Labs",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/727974/",
+        "companyId": "727974",
+        "duration": "4 mos",
+        "description": "Working on cross-embodiment learning",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2021,
+          "text": "Jun 2021"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2021,
+          "text": "Sep 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHMPl1uyCtoIw/company-logo_400_400/company-logo_400_400/0/1735061733939/intel_labs_logo?e=1776902400&v=beta&t=bYWWZ0rwbbETtbpqGfIYJA5FxKpjDWigE1muEvNGapE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHMPl1uyCtoIw/company-logo_400_400/company-logo_400_400/0/1735061733939/intel_labs_logo?e=1776902400&v=beta&t=bYWWZ0rwbbETtbpqGfIYJA5FxKpjDWigE1muEvNGapE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHMPl1uyCtoIw/company-logo_200_200/company-logo_200_200/0/1735061733939/intel_labs_logo?e=1776902400&v=beta&t=RqNbLNu73YfhY1bbJHFpazXWt05MwUsW_o-p0Ko2-rM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHMPl1uyCtoIw/company-logo_100_100/company-logo_100_100/0/1735061733939/intel_labs_logo?e=1776902400&v=beta&t=mBbomg-fu-9M1C0VGwE4UjATR_MYHgGQWOWvGWEWTe4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Undergraduate Researcher",
+        "location": "Berkeley, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Berkeley Artificial Intelligence Research",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/19024048/",
+        "companyId": "19024048",
+        "duration": "4 yrs",
+        "description": "Deep Learning & RL\nAdv: Prof. Sergey Levine",
+        "skills": null,
+        "startDate": {
+          "month": "Aug",
+          "year": 2017,
+          "text": "Aug 2017"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2021,
+          "text": "Jul 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQFr7WkPbEyg8g/company-logo_400_400/company-logo_400_400/0/1630609127403?e=1776902400&v=beta&t=4HbqUpGMihzSQykR1Rg7q-gC5jUCgPE0F0N1Wjp1YzI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFr7WkPbEyg8g/company-logo_400_400/company-logo_400_400/0/1630609127403?e=1776902400&v=beta&t=4HbqUpGMihzSQykR1Rg7q-gC5jUCgPE0F0N1Wjp1YzI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFr7WkPbEyg8g/company-logo_200_200/company-logo_200_200/0/1630609127403?e=1776902400&v=beta&t=us9L72LDLXmxSVncjtI60te8TTdcAhOO7Z026bJyzfc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFr7WkPbEyg8g/company-logo_100_100/company-logo_100_100/0/1630609127403?e=1776902400&v=beta&t=y_BU9Oc3QwDcqMes-Nkw3Rr7uaYaQ5jl9lE0m7y-QOk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Carnegie Mellon University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3147/",
+        "schoolId": "3147",
+        "degree": "Doctor of Philosophy - PhD",
+        "fieldOfStudy": "Machine Learning",
+        "skills": [],
+        "startDate": {
+          "month": "Jul",
+          "year": 2021,
+          "text": "Jul 2021"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2026,
+          "text": "Jul 2026"
+        },
+        "period": "Jul 2021 - Jul 2026",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_200_200/company-logo_200_200/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Cr9dcgM6gBeNici6XTUDQUKQfYAc8US2OXBC0P5yB-Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_100_100/company-logo_100_100/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=iJiUJ2BhQORJLlvMYFhw22Mq44Z-z45Fza4_dNRwHSs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "University of California, Berkeley",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2517/",
+        "schoolId": "2517",
+        "degree": "Bachelor of Science - BS",
+        "fieldOfStudy": "EECS",
+        "skills": [],
+        "description": "High Honors ( Top 10% )",
+        "startDate": {
+          "month": "Aug",
+          "year": 2017,
+          "text": "Aug 2017"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2021,
+          "text": "May 2021"
+        },
+        "period": "Aug 2017 - May 2021",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_400_400/company-logo_400_400/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=ihsqGpnHzj0nlc8nr3zQwTYbq6GYQDs_WRmOHxXO6Cs",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_400_400/company-logo_400_400/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=ihsqGpnHzj0nlc8nr3zQwTYbq6GYQDs_WRmOHxXO6Cs",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_200_200/company-logo_200_200/0/1732135669730/uc_berkeley_logo?e=1776902400&v=beta&t=99cgQbgSotN9XiK7TbWS3PhqRVGT8S6VKfitEcMn0-E",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_100_100/company-logo_100_100/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=spLtug0cp3xqHCXq1OoZudTryqzyY85FoIZwfJ-_XzA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "St Helens High School",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/33441141/",
+        "schoolId": "33441141",
+        "degree": "High School Diploma",
+        "fieldOfStudy": null,
+        "skills": [],
+        "description": "Valedictorian",
+        "startDate": {
+          "month": "Aug",
+          "year": 2013,
+          "text": "Aug 2013"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2017,
+          "text": "May 2017"
+        },
+        "period": "Aug 2013 - May 2017",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHNkOOUzUurfA/company-logo_400_400/company-logo_400_400/0/1630590489928?e=1776902400&v=beta&t=Ygat-qlS1g5kIqhqxh9jUjpD5b952STJT3YzYgMdByk",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHNkOOUzUurfA/company-logo_400_400/company-logo_400_400/0/1630590489928?e=1776902400&v=beta&t=Ygat-qlS1g5kIqhqxh9jUjpD5b952STJT3YzYgMdByk",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHNkOOUzUurfA/company-logo_200_200/company-logo_200_200/0/1630590489928?e=1776902400&v=beta&t=zAc6HxHmyNwA8UFdjGGMEvdhv21o1udCH2Al61RIMcU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHNkOOUzUurfA/company-logo_100_100/company-logo_100_100/0/1630590489928?e=1776902400&v=beta&t=6GBmEkl4jzgmp2tnhvKRlH4kd8V0H3pQL8fAtftStN0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "C++",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Java",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Python",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Machine Learning",
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "Computer Vision",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "Parallel Computing",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Research and Development (R&D)",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Rapid Prototyping",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Multivariable Calculus",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Linear Algebra",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Project Management"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [
+      {
+        "title": "NDSEG Fellow",
+        "issuedBy": "US Department Of Defense",
+        "issuedAt": "Apr 2023",
+        "associatedWith": "Associated with Machine Learning Department at CMU",
+        "associatedWithLink": null
+      },
+      {
+        "title": "NSF Honorable Mention",
+        "issuedBy": "National Science Foundation",
+        "issuedAt": "Apr 2023",
+        "associatedWith": "Associated with Machine Learning Department at CMU",
+        "associatedWithLink": null
+      }
+    ],
+    "languages": [],
+    "causes": [],
+    "featured": {
+      "images": [
+        "https://media.licdn.com/dms/image/v2/C5612AQHb0dyI4G9dBA/article-cover_image-shrink_720_1280/article-cover_image-shrink_720_1280/0/1651167320891?e=1776902400&v=beta&t=TrKFyciro_uGNXFuRYnftFSROPraYPhccyZA5oKftFI"
+      ],
+      "link": "https://www.linkedin.com/pulse/anymorph-learning-transferable-policies-inferring-agent-trabucco",
+      "title": "AnyMorph: Learning Transferable Policies By Inferring Agent Morphology",
+      "subtitle": "Brandon Trabucco on LinkedIn",
+      "slides": [
+        {
+          "title": "AnyMorph: Learning Transferable Policies By Inferring Agent Morphology",
+          "subtitle": "Brandon Trabucco on LinkedIn",
+          "description": "Brandon is a Ph.D. Student in the Machine Learning Department at CMU, where he is advised by Russ Salakhutdinov and focuses on Deep Reinforcement Learning and Embodied AI. His work on this project was during his internship at Intel Labs with Intel's Dr. Mariano Phielipp, and Prof. Glen Berseth at MILA. Highlights Our paper, Learning Transferable Policies By Inferring Agent Morphology, delivers state-of-the-art generalization and robustness for controlling large collections of reinforcement learning agents with diverse morphologies and designs. Our method eliminates the need for an engineer to provide information about the morphology and design of the agent that is difficult to acquire in the real world, making our method more flexible and simpler to deploy in practice than prior works. Figure 1. Our method controlling several morphologies of a simulated cheetah using the same policy. The 2022 International Conference on Learning Representations (ICLR) runs from April 25th through the 29th. Specifically dedicated to the improvement of representation learning, or deep learning, ICLR is a leading gathering of professionals presenting cutting-edge research on all aspects of RL and its diverse applications. Our work, Learning Transferable Policies by Inferring Agent Morphology, will be presented as part of the Generalizable Policy Learning in the Physical World workshop. Why Use Morphology-Agnostic Learning? Many situations encountered in our daily lives can be expressed as morphology-agnostic learning, where skills we already have make it easier to learn future skills. When first learning how to ride a bicycle, for example, we obtain skills that can be applied to other activities. Balancing while riding a bicycle is initially quite challenging because it requires the coordination of steering and pedaling to avoid falling. After mastering balance on a bicycle, however, it becomes significantly easier to balance on a scooter even though the scooter requires different movements such as pushing off the ground to move rather than pedaling. Our muscle memory helps us quickly pick up new skills, sometimes without any practice. Reinforcement Learning (RL), a popular framework for training agents to perform tasks by maximizing returns, often involves agents with different morphologies and designs performing similar tasks. Many of these settings can benefit from morphology-agnostic learning to improve efficiency. Suppose you have a robot in your home to help with household chores, and RL is deployed on this robot. When that robot breaks down or is due for an upgrade, you might want to replace only the malfunctioning part, such as the manipulator arm. If the replacement part is different enough from the original, this may change your robot's morphology. When this happens, standard RL agents have to be retrained from scratch, which is time-consuming and expensive for an end-user who may not be an expert. This arduous process of retraining your agent from scratch can be avoided if your agent uses morphology-agnostic RL. Prior works have started to investigate the creation of agents that generalize effectively to new morphologies and designs. These methods typically impose strict design criteria, including Huang et al. 2020 and Kurin et al. 2021, which assume the agent is comprised of identically-designed rigid limbs. However, many real-world systems have designs that do not easily fit such criteria, including robotic systems. Investigating methods that generalize effectively without restricting the class of agent they can accurately model has the potential to unlock the promise of morphology-agnostic RL in the real world. Our Approach Taking the first step toward general-purpose morphology-agnostic RL, we develop an algorithm for learning morphology-agnostic policies without specifying the agent's design in advance. Our key innovation is to represent the agent's design by a sequence of learnable vector embeddings, and let the algorithm infer the agent's morphology automatically. We refer to these embeddings as morphology tokens because they are inspired by word tokens in language modeling. Processing morphology tokens requires our policy to handle input and output sequences of varying sizes, which makes the Transformer a natural choice. The Transformer is a sequence-to-sequence neural network widespread in sequence-modelling due to its success and flexibility in modelling long sequences. Figure 2. Overview of our policy architecture. Our method is a sequence-to-sequence Transformer model (see Vaswani et al. 2017) that is invariant to the dimensionality of the observation space and action space of the agent. By specifying the morphology and design of the agent via a sequence of morphology tokens---inspired by word tokens in language modeling---our policy effectively generalizes to agents with previously unseen morphologies and designs. Crucially, our policy eliminates the need to specify the morphology and design of the agent in advance. Instead, inter-token relationships are discovered with reinforcement learning. We introduce a Transformer-based policy architecture for morphology-agnostic RL, depicted in Figure 2, that effectively controls large collections of agents with different morphologies and designs. Our method has fewer restrictions than prior work, increasing the flexibility and simplicity of deployment in practice. In the next section, we evaluate the gains achieved by our method in zero-shot generalization to unseen morphologies, and robustness when sensors on the agent break. Results We examined the performance of our method when controlling agents with morphologies it was not originally trained to handle. We measured the average return achieved by our method compared to state-of-the-art baselines in literature and observed a 32% improvement in performance when testing generalization to morphologies our method was not originally trained for. A higher average return indicates that our method solves these tasks with more success than prior works. In the two tasks below, the agent's goal is to run forward as quickly as possible. The harder of these tasks, \"Cheetah Walker Humanoid Hoppers,\" requires our method to successfully control 32 different morphologies. Our performance gains suggest our method scales to harder tasks more effectively than prior works and incurs no penalty despite relaxing assumptions about the agent's design that prior works require. Figure 3. Evaluation of zero-shot generalization to unseen morphologies. Our method achieves gains of 28% and 32% on the \"Cheetah Walker Humanoids\" and \"Cheetah Walker Humanoid Hoppers\" tasks respectively. Average return is plotted on the y axis at 2.5 million environment steps with a 95% confidence interval over four independent trials and episodes of length 1000. We also evaluated our method's robustness to sensor noise introduced by sensor breakage, a common occurrence in the real world. We systematically measured the average return attained by our method against baselines when an increasing fraction of the agent's sensors break. We model sensor breakage by replacing corresponding sensor readings with random noise. Our method demonstrates a consistent significant improvement in robustness, illustrated by higher area-under-the-curve. We explore this phenomenon in our paper, finding that our method automatically discovers which sensors to ignore, despite not being trained with sensor noise, or any other model of sensor breakage. Figure 4. Evaluation of robustness to broken sensors. Our method is consistently more robust than prior work to noise introduced when sensors break, modeled by replacing corresponding sensor readings with random noise. Average return is plotted on the y axis at 2.5 million environment steps with a 95% confidence interval over four independent trials and episodes of length 1000. We introduced a method for training morphology-agnostic policies that delivers state-of-the-art generalization and robustness, and eliminates the need for an engineer to provide information about the morphology and design of the agent that is difficult to acquire in the real world. Given the promising results our method demonstrates, we plan to investigate training morphology-agnostic RL with image observations next. Images are straightforward to obtain in the real world, and learning from images is a crucial ability that can facilitate morphology-agnostic RL in real-world robotic systems, where exact pose can be hard to acquire. Meet us at the ICLR 2022 GPL Workshop to learn more!",
+          "url": "https://www.linkedin.com/pulse/anymorph-learning-transferable-policies-inferring-agent-trabucco",
+          "image": {
+            "url": "https://media.licdn.com/dms/image/v2/C5612AQHb0dyI4G9dBA/article-cover_image-shrink_720_1280/article-cover_image-shrink_720_1280/0/1651167320891?e=1776902400&v=beta&t=TrKFyciro_uGNXFuRYnftFSROPraYPhccyZA5oKftFI"
+          }
+        }
+      ]
+    },
+    "moreProfiles": [
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAABEmYXYB5f-3ZmFG8dI-n9XAlqySBqO-2PA",
+        "firstName": "Luke",
+        "lastName": "Carlson",
+        "publicIdentifier": "jlukecarlson",
+        "linkedinUrl": "https://www.linkedin.com/in/jlukecarlson"
+      },
+      {
+        "id": "ACoAABhKWCYBiuV3Zv9Hbt8t0j-xMRqxawBcSgw",
+        "firstName": "Kurt",
+        "lastName": "Shuster",
+        "publicIdentifier": "kurtshuster1",
+        "linkedinUrl": "https://www.linkedin.com/in/kurtshuster1"
+      },
+      {
+        "id": "ACoAABQ5lJUBry2byQYf_TtxDF9Rha9l-RqYsaM",
+        "firstName": "Guang-He",
+        "lastName": "Lee",
+        "publicIdentifier": "guang-he-lee-64577895",
+        "linkedinUrl": "https://www.linkedin.com/in/guang-he-lee-64577895"
+      },
+      {
+        "id": "ACoAAAl87CYBWKLLyGNTbomy6oqIPv-5n34CXIY",
+        "firstName": "Andrew",
+        "lastName": "Tulloch",
+        "publicIdentifier": "andrew-tulloch-17238745",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-tulloch-17238745"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABhIg7YBYN2NPIu8voYj5D7JQVZGxonqHvc",
+        "firstName": "Ruiqi",
+        "lastName": "Zhong",
+        "publicIdentifier": "ruiqi-zhong-09a533b4",
+        "linkedinUrl": "https://www.linkedin.com/in/ruiqi-zhong-09a533b4"
+      },
+      {
+        "id": "ACoAABgwxtcBfqsJJUHPwsSPuBE4K9oKyRqUp5o",
+        "firstName": "Lia",
+        "lastName": "Guy",
+        "publicIdentifier": "aureliaguy",
+        "linkedinUrl": "https://www.linkedin.com/in/aureliaguy"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAACaOARIBRO2EEH12QWQO29L__oI3N2K4u14",
+        "firstName": "Mingjie",
+        "lastName": "Sun",
+        "publicIdentifier": "mingjie-sun-06a761160",
+        "linkedinUrl": "https://www.linkedin.com/in/mingjie-sun-06a761160"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAABYs4-IB5mHx5eVfOHzu1e8xlO3q_kb38IM",
+        "firstName": "Brydon",
+        "lastName": "Eastman",
+        "publicIdentifier": "brydon-eastman-396719a4",
+        "linkedinUrl": "https://www.linkedin.com/in/brydon-eastman-396719a4"
+      },
+      {
+        "id": "ACoAAACo1tYBGy9sT2OWZuEULOMe4K_b2Y22-F8",
+        "firstName": "Alex",
+        "lastName": "Gartrell",
+        "publicIdentifier": "alexgartrell",
+        "linkedinUrl": "https://www.linkedin.com/in/alexgartrell"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAAA4HVN4BOZg5espOvMVoO3OY04NZmuqvMCo",
+        "firstName": "Shaojie",
+        "lastName": "Bai",
+        "publicIdentifier": "shaojie-bai",
+        "linkedinUrl": "https://www.linkedin.com/in/shaojie-bai"
+      },
+      {
+        "id": "ACoAAAO-j_IBXcvIzhZtQ7QNkky6tlnQTcFl9qI",
+        "firstName": "Myle",
+        "lastName": "Ott",
+        "publicIdentifier": "myleott",
+        "linkedinUrl": "https://www.linkedin.com/in/myleott"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAABA0sF8BJqwmfoms3veu9TE72tj8JMUQEFA",
+        "firstName": "Sam",
+        "lastName": "Shleifer",
+        "publicIdentifier": "sam-shleifer-a5307a77",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-shleifer-a5307a77"
+      },
+      {
+        "id": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+        "firstName": "Saurabh",
+        "lastName": "Garg",
+        "publicIdentifier": "saurabh-garg-b680b5b8",
+        "linkedinUrl": "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+      },
+      {
+        "id": "ACoAAFvZPq8BRdouJu0hxzEClmdB4bZM9ZXky78",
+        "firstName": "Nadine",
+        "lastName": "Riebe",
+        "position": "--",
+        "publicIdentifier": "nadine-riebe-6bb095370",
+        "linkedinUrl": "https://www.linkedin.com/in/nadine-riebe-6bb095370"
+      },
+      {
+        "id": "ACoAABA7pS0BwDsB4cpJVo4oNTqWLmkEDgCRB6M",
+        "firstName": "Björn",
+        "lastName": "Wiese",
+        "position": "--",
+        "publicIdentifier": "björn-wiese-83925a77",
+        "linkedinUrl": "https://www.linkedin.com/in/björn-wiese-83925a77"
+      },
+      {
+        "id": "ACoAACfmaokBFb8vQTbRFIUTDNSzeiFWZ7OQvEs",
+        "firstName": "Andrea",
+        "lastName": "Jachmich",
+        "position": "Sustainable Leadership, HNE Eberswalde",
+        "publicIdentifier": "andrea-jachmich-235227168",
+        "linkedinUrl": "https://www.linkedin.com/in/andrea-jachmich-235227168"
+      },
+      {
+        "id": "ACoAAF4RtocB85YPDGj9t6zd5ylARv6qZ3I6ILg",
+        "firstName": "Stefanie ",
+        "lastName": "Hahn",
+        "position": "--",
+        "publicIdentifier": "stefanie-hahn-31b661380",
+        "linkedinUrl": "https://www.linkedin.com/in/stefanie-hahn-31b661380"
+      },
+      {
+        "id": "ACoAABZCoa8BAL_sLjz8CLSc4TKiD4Vn6NnmWhY",
+        "firstName": "Tanja",
+        "lastName": "Salvemini",
+        "position": "--",
+        "publicIdentifier": "tanja-salvemini-a670a5a5",
+        "linkedinUrl": "https://www.linkedin.com/in/tanja-salvemini-a670a5a5"
+      },
+      {
+        "id": "ACoAAESuXEIBd0QzFMPSR26YfPFCyccf1WwuoKk",
+        "firstName": "Alexander",
+        "lastName": "Broschell",
+        "position": "--",
+        "publicIdentifier": "alexander-broschell-36aa8b281",
+        "linkedinUrl": "https://www.linkedin.com/in/alexander-broschell-36aa8b281"
+      },
+      {
+        "id": "ACoAAFiE6BcB9YBw_GcZEB5GY0SHPjX-6rWjgw8",
+        "firstName": "Dörte",
+        "lastName": "Beyer",
+        "position": "--",
+        "publicIdentifier": "dörte-beyer-a47437355",
+        "linkedinUrl": "https://www.linkedin.com/in/dörte-beyer-a47437355"
+      },
+      {
+        "id": "ACoAAGWSEk4BK0Y7RWp4H0bU13UuOslgGvFb48U",
+        "firstName": "Felix",
+        "lastName": "Olbrich",
+        "position": "Signal brennt, kann losgehen!",
+        "publicIdentifier": "felix-olbrich-77a8343b6",
+        "linkedinUrl": "https://www.linkedin.com/in/felix-olbrich-77a8343b6"
+      },
+      {
+        "id": "ACoAACu8J9oBiCVZWkKLDn2VTXSRXfvwUt-wJos",
+        "firstName": "Christine",
+        "lastName": "Telger",
+        "position": "--",
+        "publicIdentifier": "christine-telger-6a2894185",
+        "linkedinUrl": "https://www.linkedin.com/in/christine-telger-6a2894185"
+      },
+      {
+        "id": "ACoAAB6Fut4BAAxo3pZGj5m8b8d3DstfZDgpdPc",
+        "firstName": "Markus",
+        "lastName": "Fenchel",
+        "position": "--",
+        "publicIdentifier": "markus-fenchel-b3a5b2123",
+        "linkedinUrl": "https://www.linkedin.com/in/markus-fenchel-b3a5b2123"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAABuhnI0BSRQTctQQwpRuQrm_WCy4GTlZQE0"
+    }
+  }
+}

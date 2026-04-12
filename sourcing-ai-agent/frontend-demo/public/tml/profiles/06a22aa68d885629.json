@@ -1,0 +1,283 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAGQmJecBh-XMBbppnRmu80gQatJvHu7FtAA",
+    "profile_url": "https://www.linkedin.com/in/ACwAAGQmJecBh-XMBbppnRmu80gQatJvHu7FtAA"
+  },
+  "item": {
+    "id": "ACoAAGQmJecBBj5BzIeaidgEvD9pNT8ekbyvAA8",
+    "publicIdentifier": "micky-mnaree-6078523aa",
+    "linkedinUrl": "https://www.linkedin.com/in/micky-mnaree-6078523aa",
+    "firstName": "Micky",
+    "lastName": "Mnaree",
+    "emails": [
+      {
+        "email": "micky.mnaree@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Engineer at Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Nairobi, Nairobi County, Kenya",
+      "countryCode": "KE",
+      "parsed": {
+        "text": "Nairobi, Kenya",
+        "countryCode": "KE",
+        "regionCode": null,
+        "country": "Kenya",
+        "countryFull": "Kenya",
+        "state": "Nairobi City",
+        "city": "Nairobi"
+      }
+    },
+    "objectUrn": "1680221671",
+    "registeredAt": "2026-02-04T15:55:28.403Z",
+    "topSkills": null,
+    "connectionsCount": 0,
+    "followerCount": 0,
+    "verified": false,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": null,
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4E03AQFdGhdFURznQQ/profile-displayphoto-crop_800_800/B4EZwpX3YLKUAI-/0/1770220649021?e=1776902400&v=beta&t=ywlnw55j4-a6MyaB-oCXTLTeqzDu1GPTsH_BGqljktQ",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQFdGhdFURznQQ/profile-displayphoto-crop_800_800/B4EZwpX3YLKUAI-/0/1770220649021?e=1776902400&v=beta&t=ywlnw55j4-a6MyaB-oCXTLTeqzDu1GPTsH_BGqljktQ",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQFdGhdFURznQQ/profile-displayphoto-scale_400_400/B4EZwpX3YLKUAg-/0/1770220649092?e=1776902400&v=beta&t=LsKunYD58Bp60-gqjP--J7Bq06Xe0oOv1fVdVD65Do8",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQFdGhdFURznQQ/profile-displayphoto-scale_200_200/B4EZwpX3YLKUAY-/0/1770220649092?e=1776902400&v=beta&t=mXeL8eJuliJJ9HX1A2YKna5v4SowBwereR5oz8j4810",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQFdGhdFURznQQ/profile-displayphoto-scale_100_100/B4EZwpX3YLKUAc-/0/1770220649092?e=1776902400&v=beta&t=25o9F3VupVWj2I0JP4MI8biD1QgEkHVLlOMy-g-J_DU",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D4E03AQFdGhdFURznQQ/profile-displayphoto-crop_800_800/B4EZwpX3YLKUAI-/0/1770220649021?e=1776902400&v=beta&t=ywlnw55j4-a6MyaB-oCXTLTeqzDu1GPTsH_BGqljktQ",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Engineer at Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Engineer",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": null,
+        "description": null,
+        "skills": null,
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAAA1LMMBEP7rZg7_ENQ7-PfAaychwocIJj0",
+        "firstName": "Ted",
+        "lastName": "Cui",
+        "publicIdentifier": "tedcui",
+        "linkedinUrl": "https://www.linkedin.com/in/tedcui"
+      },
+      {
+        "id": "ACoAAAEzmtkBvct1c2Cp5CYUBZI8HsJke1DuG9U",
+        "firstName": "Dhruv",
+        "lastName": "Choudhary",
+        "publicIdentifier": "dhruvchoudhary",
+        "linkedinUrl": "https://www.linkedin.com/in/dhruvchoudhary"
+      },
+      {
+        "id": "ACoAAB8WsN0BETHK7pkeybNu_wgBBMAWllBrNBE",
+        "firstName": "Kyle",
+        "lastName": "Q.",
+        "publicIdentifier": "kyle-qian",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-qian"
+      },
+      {
+        "id": "ACoAAF-wKU0B0ntoadXt7VUjWK9yj5o52dHzVKA",
+        "firstName": "Kaif",
+        "lastName": "Rehman",
+        "publicIdentifier": "kaif-rehman-72577b389",
+        "linkedinUrl": "https://www.linkedin.com/in/kaif-rehman-72577b389"
+      },
+      {
+        "id": "ACoAAF8a-tgBsWqvtTuM92mboyLWNKtBoUa9tIU",
+        "firstName": "Liyan",
+        "lastName": "Chen",
+        "position": "--",
+        "publicIdentifier": "liyan-chen-908445386",
+        "linkedinUrl": "https://www.linkedin.com/in/liyan-chen-908445386"
+      },
+      {
+        "id": "ACoAAGKDsJgBWsokuuSZfKWRPVa7hBXeQTfrA0Q",
+        "firstName": "Nourhan",
+        "lastName": "Hany",
+        "position": "‏Freelance Graphic Designer‏ في ‏Freelancer.com‏",
+        "publicIdentifier": "nourhan-hany-1086283a1",
+        "linkedinUrl": "https://www.linkedin.com/in/nourhan-hany-1086283a1"
+      },
+      {
+        "id": "ACoAABGzJXcBFaJqVFgqgYNbhaPVKRkP3iG33dA",
+        "firstName": "Noah",
+        "lastName": "Shpak",
+        "position": "Thinking Machines",
+        "publicIdentifier": "nshpak",
+        "linkedinUrl": "https://www.linkedin.com/in/nshpak"
+      },
+      {
+        "id": "ACoAAAENQhgBH8wIeS6hMrUoWlbKk5L9GWNNQCE",
+        "firstName": "Andrii",
+        "lastName": "Grynenko",
+        "position": "Software Engineer",
+        "publicIdentifier": "andrii-grynenko-a48aab5",
+        "linkedinUrl": "https://www.linkedin.com/in/andrii-grynenko-a48aab5"
+      },
+      {
+        "id": "ACoAAA8JdrgBK-ShYTbFkZL80wSafgw-uaGsb9Q",
+        "firstName": "Kevin",
+        "lastName": "B.",
+        "position": "Security at Thinking Machines Lab",
+        "publicIdentifier": "kevin-b-5885a270",
+        "linkedinUrl": "https://www.linkedin.com/in/kevin-b-5885a270"
+      },
+      {
+        "id": "ACoAAB3BApkB38H4Z__jKDDFBfF7jt7w16vD0Xs",
+        "firstName": "Rafael",
+        "lastName": "Rafailov",
+        "position": "Member Of Technical Staff - Thinking Machines Lab",
+        "publicIdentifier": "rafael-rafailov-1b521611b",
+        "linkedinUrl": "https://www.linkedin.com/in/rafael-rafailov-1b521611b"
+      },
+      {
+        "id": "ACoAADopuTsBh9lDxOJzJsV8jI_KfOrsc6Tu7aQ",
+        "firstName": "Aashitosh",
+        "lastName": "Swami",
+        "position": "Lab assistant",
+        "publicIdentifier": "aashitosh-swami-67796a232",
+        "linkedinUrl": "https://www.linkedin.com/in/aashitosh-swami-67796a232"
+      },
+      {
+        "id": "ACoAABJF4mQBVJYIx7g-ASuPnmo5mH2mDuWdwQg",
+        "firstName": "Erika",
+        "lastName": "Byun",
+        "position": "Thinking Machines Lab",
+        "publicIdentifier": "erika-nakamatsu-byun",
+        "linkedinUrl": "https://www.linkedin.com/in/erika-nakamatsu-byun"
+      },
+      {
+        "id": "ACoAADYMzQABdXTSxolT2YjHmNBBSeT6YrGSQmQ",
+        "firstName": "Tarushii",
+        "lastName": "Goel",
+        "position": "Member of Technical Staff @ Thinking Machines",
+        "publicIdentifier": "tarushii-goel",
+        "linkedinUrl": "https://www.linkedin.com/in/tarushii-goel"
+      },
+      {
+        "id": "ACoAAFrO2hYBQn9I3leFzBjeUmgehOiK_AGSCr8",
+        "firstName": "Muhammad",
+        "lastName": "Adam Usman",
+        "position": "Electrician at Thinking Machines Lab",
+        "publicIdentifier": "muhammad-adam-usman-472276366",
+        "linkedinUrl": "https://www.linkedin.com/in/muhammad-adam-usman-472276366"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAGQmJecBh-XMBbppnRmu80gQatJvHu7FtAA"
+    }
+  }
+}

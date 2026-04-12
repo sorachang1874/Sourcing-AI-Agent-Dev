@@ -1,0 +1,904 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAABebSPMBdNRap0f8ktBSQmRsdhDOLDk03bg",
+    "profile_url": "https://www.linkedin.com/in/ACwAABebSPMBdNRap0f8ktBSQmRsdhDOLDk03bg"
+  },
+  "item": {
+    "id": "ACoAABebSPMByZP3ZnuWuJpWKhAcOO8xLxhLatU",
+    "publicIdentifier": "aliciacphan",
+    "linkedinUrl": "https://www.linkedin.com/in/aliciacphan",
+    "firstName": "Alicia",
+    "lastName": "P.",
+    "emails": [
+      {
+        "email": "alicia@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "IT",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "396052723",
+    "registeredAt": "2015-01-13T18:46:28.232Z",
+    "topSkills": null,
+    "connectionsCount": 1567,
+    "followerCount": 1623,
+    "verified": true,
+    "about": "I’m the best IT person around! My skills include turning things on and off, asking if you’ve turned it on and off, and googling.",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 1,
+            "year": 2026,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5616AQHtyS7Sa4S-iw/profile-displaybackgroundimage-shrink_350_1400/B56Zwp8azbJoAc-/0/1770230230556?e=1776902400&v=beta&t=uUkv6MCEulbCclir7bKxR3RWpGy1nAtx5IdrWytW62s",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5616AQHtyS7Sa4S-iw/profile-displaybackgroundimage-shrink_350_1400/B56Zwp8azbJoAc-/0/1770230230556?e=1776902400&v=beta&t=uUkv6MCEulbCclir7bKxR3RWpGy1nAtx5IdrWytW62s",
+          "width": 1400,
+          "height": 350,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5616AQHtyS7Sa4S-iw/profile-displaybackgroundimage-shrink_200_800/B56Zwp8azbJoAY-/0/1770230230556?e=1776902400&v=beta&t=WXv2FDngyZLGk7bVt6nSGY3iC8BooO0-2iFrOv44wxs",
+          "width": 800,
+          "height": 200,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "IT",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2026,
+          "text": "Jan 2026"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior Manager, IT",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Vanta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/35462987/",
+        "companyId": "35462987",
+        "duration": "1 yr 4 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "a65935de8a61ba41d822ef12e179d211a3274b24",
+        "startDate": {
+          "month": "Oct",
+          "year": 2024,
+          "text": "Oct 2024"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2026,
+          "text": "Jan 2026"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGm_Mgx3KYMRA/company-logo_400_400/company-logo_400_400/0/1683744826721/vanta_security_logo?e=1776902400&v=beta&t=UtVH0r_TyiSbqt8yJadeZ6mDggTAigd6pQ1hj_bUpYk",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGm_Mgx3KYMRA/company-logo_400_400/company-logo_400_400/0/1683744826721/vanta_security_logo?e=1776902400&v=beta&t=UtVH0r_TyiSbqt8yJadeZ6mDggTAigd6pQ1hj_bUpYk",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGm_Mgx3KYMRA/company-logo_200_200/company-logo_200_200/0/1683744826721/vanta_security_logo?e=1776902400&v=beta&t=OXmoOCvoC1GKHLSRKbMbdYFDnoYgeqMZ8C7HkR_YmL8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGm_Mgx3KYMRA/company-logo_100_100/company-logo_100_100/0/1683744826721/vanta_security_logo?e=1776902400&v=beta&t=DnfJuSMy8M53VHmjIMfQgmqo26hXYNMS4sgSMCSgeaQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Manager, IT",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Vanta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/35462987/",
+        "companyId": "35462987",
+        "duration": "2 yrs 10 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "a65935de8a61ba41d822ef12e179d211a3274b24",
+        "startDate": {
+          "month": "Jan",
+          "year": 2022,
+          "text": "Jan 2022"
+        },
+        "endDate": {
+          "month": "Oct",
+          "year": 2024,
+          "text": "Oct 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGm_Mgx3KYMRA/company-logo_400_400/company-logo_400_400/0/1683744826721/vanta_security_logo?e=1776902400&v=beta&t=UtVH0r_TyiSbqt8yJadeZ6mDggTAigd6pQ1hj_bUpYk",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGm_Mgx3KYMRA/company-logo_400_400/company-logo_400_400/0/1683744826721/vanta_security_logo?e=1776902400&v=beta&t=UtVH0r_TyiSbqt8yJadeZ6mDggTAigd6pQ1hj_bUpYk",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGm_Mgx3KYMRA/company-logo_200_200/company-logo_200_200/0/1683744826721/vanta_security_logo?e=1776902400&v=beta&t=OXmoOCvoC1GKHLSRKbMbdYFDnoYgeqMZ8C7HkR_YmL8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGm_Mgx3KYMRA/company-logo_100_100/company-logo_100_100/0/1683744826721/vanta_security_logo?e=1776902400&v=beta&t=DnfJuSMy8M53VHmjIMfQgmqo26hXYNMS4sgSMCSgeaQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Corporate Engineering Manager, Enterprise Applications",
+        "location": "Menlo Park, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Robinhood",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3254263/",
+        "companyId": "3254263",
+        "duration": "9 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "c3772a0663d64f157865cf8064698bc476446b40",
+        "startDate": {
+          "month": "Apr",
+          "year": 2021,
+          "text": "Apr 2021"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2021,
+          "text": "Dec 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQESwNiGp2qYlA/company-logo_400_400/company-logo_400_400/0/1728574763254/robinhood_logo?e=1776902400&v=beta&t=XxgklfwQpWazRIU5Ix54C2HwVNFZqjEs4JfC3FraPvM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQESwNiGp2qYlA/company-logo_400_400/company-logo_400_400/0/1728574763254/robinhood_logo?e=1776902400&v=beta&t=XxgklfwQpWazRIU5Ix54C2HwVNFZqjEs4JfC3FraPvM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQESwNiGp2qYlA/company-logo_200_200/company-logo_200_200/0/1728574763254/robinhood_logo?e=1776902400&v=beta&t=_LpCbbZlcNj122Sbo8jhKQ9m42l518oLJbRWOQxvd0g",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQESwNiGp2qYlA/company-logo_100_100/company-logo_100_100/0/1728574763254/robinhood_logo?e=1776902400&v=beta&t=L33T9HgBV7-wYnGA-Av7meHWWfNpykPR45Jw-dXU-Bk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior Systems Engineer",
+        "location": "Menlo Park, California",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Robinhood",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3254263/",
+        "companyId": "3254263",
+        "duration": "1 yr",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "c3772a0663d64f157865cf8064698bc476446b40",
+        "startDate": {
+          "month": "May",
+          "year": 2020,
+          "text": "May 2020"
+        },
+        "endDate": {
+          "month": "Apr",
+          "year": 2021,
+          "text": "Apr 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQESwNiGp2qYlA/company-logo_400_400/company-logo_400_400/0/1728574763254/robinhood_logo?e=1776902400&v=beta&t=XxgklfwQpWazRIU5Ix54C2HwVNFZqjEs4JfC3FraPvM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQESwNiGp2qYlA/company-logo_400_400/company-logo_400_400/0/1728574763254/robinhood_logo?e=1776902400&v=beta&t=XxgklfwQpWazRIU5Ix54C2HwVNFZqjEs4JfC3FraPvM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQESwNiGp2qYlA/company-logo_200_200/company-logo_200_200/0/1728574763254/robinhood_logo?e=1776902400&v=beta&t=_LpCbbZlcNj122Sbo8jhKQ9m42l518oLJbRWOQxvd0g",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQESwNiGp2qYlA/company-logo_100_100/company-logo_100_100/0/1728574763254/robinhood_logo?e=1776902400&v=beta&t=L33T9HgBV7-wYnGA-Av7meHWWfNpykPR45Jw-dXU-Bk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Support Engineer",
+        "location": "Menlo Park, California, United States",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Robinhood",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3254263/",
+        "companyId": "3254263",
+        "duration": "1 yr 3 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "c3772a0663d64f157865cf8064698bc476446b40",
+        "startDate": {
+          "month": "Mar",
+          "year": 2019,
+          "text": "Mar 2019"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2020,
+          "text": "May 2020"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQESwNiGp2qYlA/company-logo_400_400/company-logo_400_400/0/1728574763254/robinhood_logo?e=1776902400&v=beta&t=XxgklfwQpWazRIU5Ix54C2HwVNFZqjEs4JfC3FraPvM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQESwNiGp2qYlA/company-logo_400_400/company-logo_400_400/0/1728574763254/robinhood_logo?e=1776902400&v=beta&t=XxgklfwQpWazRIU5Ix54C2HwVNFZqjEs4JfC3FraPvM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQESwNiGp2qYlA/company-logo_200_200/company-logo_200_200/0/1728574763254/robinhood_logo?e=1776902400&v=beta&t=_LpCbbZlcNj122Sbo8jhKQ9m42l518oLJbRWOQxvd0g",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQESwNiGp2qYlA/company-logo_100_100/company-logo_100_100/0/1728574763254/robinhood_logo?e=1776902400&v=beta&t=L33T9HgBV7-wYnGA-Av7meHWWfNpykPR45Jw-dXU-Bk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior Lead, Tech Support",
+        "location": "Greater Los Angeles Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "WeWork",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1953412/",
+        "companyId": "1953412",
+        "duration": "7 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "cddd4f7ca1c8a10ac4823a7fc32a1cb24c9f04d0",
+        "startDate": {
+          "month": "Sep",
+          "year": 2018,
+          "text": "Sep 2018"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2019,
+          "text": "Mar 2019"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGvcgAszRyYNg/company-logo_400_400/company-logo_400_400/0/1686147967889/wework_logo?e=1776902400&v=beta&t=qVScnhnpWh4y8JGSIPkMydllaJrI2crqC9JnNVDRWaQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGvcgAszRyYNg/company-logo_400_400/company-logo_400_400/0/1686147967889/wework_logo?e=1776902400&v=beta&t=qVScnhnpWh4y8JGSIPkMydllaJrI2crqC9JnNVDRWaQ",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGvcgAszRyYNg/company-logo_200_200/company-logo_200_200/0/1686147967889/wework_logo?e=1776902400&v=beta&t=BwFG0IVn1_rU7AtuAjhjlrCcFG085end5GrdiLwJQ24",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGvcgAszRyYNg/company-logo_100_100/company-logo_100_100/0/1686147967889/wework_logo?e=1776902400&v=beta&t=ye5N-SX928e3Hp-wKXAKGMPobAbOGr_JSthjF8MNvCQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Technology Lead",
+        "location": "Los Angeles, California",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "WeWork",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1953412/",
+        "companyId": "1953412",
+        "duration": "9 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "cddd4f7ca1c8a10ac4823a7fc32a1cb24c9f04d0",
+        "startDate": {
+          "month": "Jan",
+          "year": 2018,
+          "text": "Jan 2018"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2018,
+          "text": "Sep 2018"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGvcgAszRyYNg/company-logo_400_400/company-logo_400_400/0/1686147967889/wework_logo?e=1776902400&v=beta&t=qVScnhnpWh4y8JGSIPkMydllaJrI2crqC9JnNVDRWaQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGvcgAszRyYNg/company-logo_400_400/company-logo_400_400/0/1686147967889/wework_logo?e=1776902400&v=beta&t=qVScnhnpWh4y8JGSIPkMydllaJrI2crqC9JnNVDRWaQ",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGvcgAszRyYNg/company-logo_200_200/company-logo_200_200/0/1686147967889/wework_logo?e=1776902400&v=beta&t=BwFG0IVn1_rU7AtuAjhjlrCcFG085end5GrdiLwJQ24",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGvcgAszRyYNg/company-logo_100_100/company-logo_100_100/0/1686147967889/wework_logo?e=1776902400&v=beta&t=ye5N-SX928e3Hp-wKXAKGMPobAbOGr_JSthjF8MNvCQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "IT Operations Specialist",
+        "location": "Los Angeles, California",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Snap Inc.",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/15191764/",
+        "companyId": "15191764",
+        "duration": "7 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2017,
+          "text": "Feb 2017"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2017,
+          "text": "Aug 2017"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHHusXflSXnCA/company-logo_400_400/B56Zu0Fu2FG0Ac-/0/1768252960458?e=1776902400&v=beta&t=--wGEJKCndhLAsTP3eY20qjBcq2V8wGW4qFgyRjLYxc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHHusXflSXnCA/company-logo_400_400/B56Zu0Fu2FG0Ac-/0/1768252960458?e=1776902400&v=beta&t=--wGEJKCndhLAsTP3eY20qjBcq2V8wGW4qFgyRjLYxc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHHusXflSXnCA/company-logo_200_200/B56Zu0Fu2FG0AM-/0/1768252960458?e=1776902400&v=beta&t=QarXCeeTrWBAcI6X5TPbXJAIZlv86Y9QjHPD3fGeRZE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHHusXflSXnCA/company-logo_100_100/B56Zu0Fu2FG0AU-/0/1768252960458?e=1776902400&v=beta&t=AXf984XuM9VkKsDQnBJbW1USJ4sWKWL9-cW4zKZT9Bg",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Mac Systems Administration Intern",
+        "location": "Emeryville, California",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Pixar Animation Studios",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/165481/",
+        "companyId": "165481",
+        "duration": "6 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2016,
+          "text": "Jun 2016"
+        },
+        "endDate": {
+          "month": "Nov",
+          "year": 2016,
+          "text": "Nov 2016"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGweVEucihVrw/company-logo_400_400/company-logo_400_400/0/1725600535833/pixar_animation_studios_logo?e=1776902400&v=beta&t=iQuJLFgD-veSWuayGR9Fe9nN75kLDwSx0TnU69Ebnoc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGweVEucihVrw/company-logo_400_400/company-logo_400_400/0/1725600535833/pixar_animation_studios_logo?e=1776902400&v=beta&t=iQuJLFgD-veSWuayGR9Fe9nN75kLDwSx0TnU69Ebnoc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGweVEucihVrw/company-logo_200_200/company-logo_200_200/0/1725600535833/pixar_animation_studios_logo?e=1776902400&v=beta&t=EFi2QFWL-VRiDpBv7H_xonMotjg2ULVyiKqTY1FzPt0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGweVEucihVrw/company-logo_100_100/company-logo_100_100/0/1725600535833/pixar_animation_studios_logo?e=1776902400&v=beta&t=-_C-RZrFNUMSLRmIQNxFRb8z8wGogOKtN2CS8rmLKa0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Technical Specialist",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Apple",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/162479/",
+        "companyId": "162479",
+        "duration": "1 yr 5 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2015,
+          "text": "Feb 2015"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2016,
+          "text": "Jun 2016"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_400_400/company-logo_400_400/0/1630637844948/apple_logo?e=1776902400&v=beta&t=KteXM40NNLQ3nz21Do-neoy-f7lbDDA7kJmtS5wwrL4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_400_400/company-logo_400_400/0/1630637844948/apple_logo?e=1776902400&v=beta&t=KteXM40NNLQ3nz21Do-neoy-f7lbDDA7kJmtS5wwrL4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_200_200/company-logo_200_200/0/1630637844948/apple_logo?e=1776902400&v=beta&t=I8RMorsmHMk3gA9b3fT4m2HDgfVtfdB6se4bEZcMHb8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_100_100/company-logo_100_100/0/1630637844948/apple_logo?e=1776902400&v=beta&t=8c3EpxT43tZMihGirOM7eBnDzFHAGiYV-OxaRj_xfjo",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Customer Service",
+        "positions": [
+          "Endorsed by 3 colleagues at Snap Inc."
+        ],
+        "endorsements": "17 endorsements"
+      },
+      {
+        "name": "Social Media",
+        "positions": [
+          "Endorsed by 3 colleagues at Apple"
+        ],
+        "endorsements": "11 endorsements"
+      },
+      {
+        "name": "iOS",
+        "positions": [
+          "Endorsed by 3 colleagues at Snap Inc."
+        ],
+        "endorsements": "12 endorsements"
+      },
+      {
+        "name": "OS X",
+        "endorsements": "8 endorsements"
+      },
+      {
+        "name": "Troubleshooting",
+        "endorsements": "8 endorsements"
+      },
+      {
+        "name": "Microsoft Excel",
+        "endorsements": "7 endorsements"
+      },
+      {
+        "name": "Mac",
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "Microsoft Office",
+        "endorsements": "7 endorsements"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [
+      {
+        "name": "English",
+        "proficiency": "Native or bilingual proficiency"
+      },
+      {
+        "name": "Vietnamese",
+        "proficiency": "Native or bilingual proficiency"
+      }
+    ],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAAQ4Q7kByw3YKf2rFlmWzRMF7P8Gw4S9PIU",
+        "firstName": "Yinghai",
+        "lastName": "L.",
+        "publicIdentifier": "yinghai83",
+        "linkedinUrl": "https://www.linkedin.com/in/yinghai83"
+      },
+      {
+        "id": "ACoAABJRjjUBRj9EXhEAO-4ZyhHgzD0ztjMvrlI",
+        "firstName": "Andrea",
+        "lastName": "Madotto",
+        "publicIdentifier": "andrea-madotto-899b1386",
+        "linkedinUrl": "https://www.linkedin.com/in/andrea-madotto-899b1386"
+      },
+      {
+        "id": "ACoAAAbBBJsBnpIQdOsJB5IMpR7ePIGOlRam73w",
+        "firstName": "Mario",
+        "lastName": "Saltarelli",
+        "publicIdentifier": "msaltarelli",
+        "linkedinUrl": "https://www.linkedin.com/in/msaltarelli"
+      },
+      {
+        "id": "ACoAABqSHaUBgoPu_j2NSmNfYyGkrcUvLn5mbbo",
+        "firstName": "Jacob",
+        "lastName": "van Gogh",
+        "publicIdentifier": "jacobvangogh",
+        "linkedinUrl": "https://www.linkedin.com/in/jacobvangogh"
+      },
+      {
+        "id": "ACoAAEAbBpQBT4luNj8gPYU6CgQ_GNJey3AJTiE",
+        "firstName": "Rajat",
+        "lastName": "Goel",
+        "publicIdentifier": "rajatgoel2010",
+        "linkedinUrl": "https://www.linkedin.com/in/rajatgoel2010"
+      },
+      {
+        "id": "ACoAACA1ZlYBhPNODsf7Z3UNo1tLYMShFQ7OQJw",
+        "firstName": "Yujia",
+        "lastName": "Bao",
+        "publicIdentifier": "yujia-bao-506b76130",
+        "linkedinUrl": "https://www.linkedin.com/in/yujia-bao-506b76130"
+      },
+      {
+        "id": "ACoAABYs4-IB5mHx5eVfOHzu1e8xlO3q_kb38IM",
+        "firstName": "Brydon",
+        "lastName": "Eastman",
+        "publicIdentifier": "brydon-eastman-396719a4",
+        "linkedinUrl": "https://www.linkedin.com/in/brydon-eastman-396719a4"
+      },
+      {
+        "id": "ACoAAACo1tYBGy9sT2OWZuEULOMe4K_b2Y22-F8",
+        "firstName": "Alex",
+        "lastName": "Gartrell",
+        "publicIdentifier": "alexgartrell",
+        "linkedinUrl": "https://www.linkedin.com/in/alexgartrell"
+      },
+      {
+        "id": "ACoAAAD-hTABHsUcZMNYC-D_hAv_HSbY1IIDv3Y",
+        "firstName": "Opher",
+        "lastName": "Lieber",
+        "publicIdentifier": "opherlieber",
+        "linkedinUrl": "https://www.linkedin.com/in/opherlieber"
+      },
+      {
+        "id": "ACoAAA8JdrgBK-ShYTbFkZL80wSafgw-uaGsb9Q",
+        "firstName": "Kevin",
+        "lastName": "B.",
+        "publicIdentifier": "kevin-b-5885a270",
+        "linkedinUrl": "https://www.linkedin.com/in/kevin-b-5885a270"
+      },
+      {
+        "id": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+        "firstName": "Saurabh",
+        "lastName": "Garg",
+        "publicIdentifier": "saurabh-garg-b680b5b8",
+        "linkedinUrl": "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+      },
+      {
+        "id": "ACoAACEKIcoBlH0R5ZT_TKQuJ4i3ZD4WlI1-rME",
+        "firstName": "Jacob",
+        "lastName": "Menick",
+        "position": "Thinking Machines, Founding Team",
+        "publicIdentifier": "jacob-menick-5a277a135",
+        "linkedinUrl": "https://www.linkedin.com/in/jacob-menick-5a277a135"
+      },
+      {
+        "id": "ACoAADGE-AoBWopX8Yz0_gxbsPDk1rMk6Mx37ZE",
+        "firstName": "Giovanni",
+        "lastName": "D'Antonio",
+        "publicIdentifier": "giovanni-dantonio",
+        "linkedinUrl": "https://www.linkedin.com/in/giovanni-dantonio"
+      },
+      {
+        "id": "ACoAAAQ1QI4Bex6mqv5SgvahWcZuzAuWiTKciBo",
+        "firstName": "Bi",
+        "lastName": "Xue",
+        "publicIdentifier": "bi-xue-9527871b",
+        "linkedinUrl": "https://www.linkedin.com/in/bi-xue-9527871b"
+      },
+      {
+        "id": "ACoAAAhY-psBFcHXNbjunn6_QnPfV6Bo6w4yzug",
+        "firstName": "Kenny",
+        "lastName": "Yu",
+        "publicIdentifier": "kenny-yu-aa3a9a3a",
+        "linkedinUrl": "https://www.linkedin.com/in/kenny-yu-aa3a9a3a"
+      },
+      {
+        "id": "ACoAAAwf4lcBgfLcNvMLGYnAjvxGpzWMO50zhUw",
+        "firstName": "Deepak",
+        "lastName": "Gopinath",
+        "publicIdentifier": "deepakgopinath",
+        "linkedinUrl": "https://www.linkedin.com/in/deepakgopinath"
+      },
+      {
+        "id": "ACoAACy2BxwB9fCrfCBI06w0X-gHyQTFLJIpJGc",
+        "firstName": "Guangxuan",
+        "lastName": "X.",
+        "publicIdentifier": "xgx",
+        "linkedinUrl": "https://www.linkedin.com/in/xgx"
+      },
+      {
+        "id": "ACoAABxxSOoBxMid0wd8m2NDb9w5zTY2lQbrNz4",
+        "firstName": "Leon",
+        "lastName": "G.",
+        "publicIdentifier": "yazhi-gao",
+        "linkedinUrl": "https://www.linkedin.com/in/yazhi-gao"
+      },
+      {
+        "id": "ACoAAB4qbUUBsc9H_NLZN2duLUOOyyFDm-k_ACo",
+        "firstName": "Riley",
+        "lastName": "Shanahan",
+        "publicIdentifier": "rileyshanny",
+        "linkedinUrl": "https://www.linkedin.com/in/rileyshanny"
+      },
+      {
+        "id": "ACoAABVAP64BY4RszeJt11vohsLM-gj1PiARl2o",
+        "firstName": "Jiaming",
+        "lastName": "Cui",
+        "publicIdentifier": "jiaming-cui-57a49a9b",
+        "linkedinUrl": "https://www.linkedin.com/in/jiaming-cui-57a49a9b"
+      },
+      {
+        "id": "ACoAAF8a-tgBsWqvtTuM92mboyLWNKtBoUa9tIU",
+        "firstName": "Liyan",
+        "lastName": "Chen",
+        "position": "--",
+        "publicIdentifier": "liyan-chen-908445386",
+        "linkedinUrl": "https://www.linkedin.com/in/liyan-chen-908445386"
+      },
+      {
+        "id": "ACoAAGKDsJgBWsokuuSZfKWRPVa7hBXeQTfrA0Q",
+        "firstName": "Nourhan",
+        "lastName": "Hany",
+        "position": "‏Freelance Graphic Designer‏ في ‏Freelancer.com‏",
+        "publicIdentifier": "nourhan-hany-1086283a1",
+        "linkedinUrl": "https://www.linkedin.com/in/nourhan-hany-1086283a1"
+      },
+      {
+        "id": "ACoAACaOARIBRO2EEH12QWQO29L__oI3N2K4u14",
+        "firstName": "Mingjie",
+        "lastName": "Sun",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "mingjie-sun-06a761160",
+        "linkedinUrl": "https://www.linkedin.com/in/mingjie-sun-06a761160"
+      },
+      {
+        "id": "ACoAAGDWIksBlJBQ6yLB1D8aji0XfjRiW84siqc",
+        "firstName": "Akinbola",
+        "lastName": "Lateef",
+        "position": "Thinker  at Thinking Machines Lab",
+        "publicIdentifier": "akinbola-lateef-94b110394",
+        "linkedinUrl": "https://www.linkedin.com/in/akinbola-lateef-94b110394"
+      },
+      {
+        "id": "ACoAAF3SWDYB6aZAqtjbw1-LDNZ4qxxHLFKTL0g",
+        "firstName": "Md",
+        "lastName": "Mdamaz",
+        "position": "Company work at Thinking Machines Lab",
+        "publicIdentifier": "md-mdamaz-b5a19937b",
+        "linkedinUrl": "https://www.linkedin.com/in/md-mdamaz-b5a19937b"
+      },
+      {
+        "id": "ACoAADopuTsBh9lDxOJzJsV8jI_KfOrsc6Tu7aQ",
+        "firstName": "Aashitosh",
+        "lastName": "Swami",
+        "position": "Lab assistant",
+        "publicIdentifier": "aashitosh-swami-67796a232",
+        "linkedinUrl": "https://www.linkedin.com/in/aashitosh-swami-67796a232"
+      },
+      {
+        "id": "ACoAACA8zv0BTVWLSUHsPJrWsUI10jzn0F57pHo",
+        "firstName": "Damir",
+        "lastName": "Sartayev",
+        "position": "AI CTO & Founder | MY project LNN+LLM+QML=AGI | Quantum, Neuro-symbolic AI | Liquid Neural Networks | RWKV | Mamba(SSM)  | Pharmacy AI, Minerals AI | Full‑Stack AI (LLMs, Agents, Fine‑Tuning, RAG, Vision) | Q-Day Q-ark",
+        "publicIdentifier": "damir-q-day-q-ark",
+        "linkedinUrl": "https://www.linkedin.com/in/damir-q-day-q-ark"
+      },
+      {
+        "id": "ACoAAGQmJecBBj5BzIeaidgEvD9pNT8ekbyvAA8",
+        "firstName": "Micky",
+        "lastName": "Mnaree",
+        "position": "Engineer at Thinking Machines Lab",
+        "publicIdentifier": "micky-mnaree-6078523aa",
+        "linkedinUrl": "https://www.linkedin.com/in/micky-mnaree-6078523aa"
+      },
+      {
+        "id": "ACoAAFrO2hYBQn9I3leFzBjeUmgehOiK_AGSCr8",
+        "firstName": "Muhammad",
+        "lastName": "Adam Usman",
+        "position": "Electrician at Thinking Machines Lab",
+        "publicIdentifier": "muhammad-adam-usman-472276366",
+        "linkedinUrl": "https://www.linkedin.com/in/muhammad-adam-usman-472276366"
+      },
+      {
+        "id": "ACoAAEWISqkBsSmXKPSyJai6rQwhRBUoHgtqFBA",
+        "firstName": "Feng",
+        "lastName": "Yao",
+        "position": "PhD student at UCSD.",
+        "publicIdentifier": "feng-yao-661818286",
+        "linkedinUrl": "https://www.linkedin.com/in/feng-yao-661818286"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAABebSPMBdNRap0f8ktBSQmRsdhDOLDk03bg"
+    }
+  }
+}

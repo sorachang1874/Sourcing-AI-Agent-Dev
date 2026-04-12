@@ -1,0 +1,524 @@
+{
+  "websites": [
+    "https://www.linkedin.com/in/danilo-carvalho-35908a115"
+  ],
+  "honors": {},
+  "profile_url": "https://www.linkedin.com/in/danilo-carvalho-35908a115",
+  "experience": [
+    {
+      "company_name": "Thinking Machines Lab",
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2025-10",
+          "year": 2025,
+          "month": 10
+        },
+        "end": null
+      },
+      "company_id": "105913171",
+      "workplace_type": null,
+      "company_url": "https://www.linkedin.com/company/thinkingmachinesai/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+      "positions": [
+        {
+          "company_name": "Thinking Machines Lab",
+          "employment_type": "Full-time",
+          "title": "Member of Technical Staff",
+          "date_range": {
+            "start": {
+              "day": null,
+              "iso": "2025-10",
+              "year": 2025,
+              "month": 10
+            },
+            "end": null
+          },
+          "company_id": "105913171",
+          "workplace_type": null,
+          "company_url": "https://www.linkedin.com/company/thinkingmachinesai/",
+          "description": "Training Runtime\nRL Infrastructure",
+          "location_name": "San Francisco Bay Area",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "company_employee_count_range": {
+            "start": 11,
+            "end": 50
+          },
+          "company_industry": "Computer Software"
+        }
+      ],
+      "company_employee_count_range": {
+        "start": 11,
+        "end": 50
+      },
+      "company_industry": "Computer Software"
+    },
+    {
+      "company_name": "Etched",
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2025-05",
+          "year": 2025,
+          "month": 5
+        },
+        "end": {
+          "day": null,
+          "iso": "2025-10",
+          "year": 2025,
+          "month": 10
+        }
+      },
+      "company_id": "93620799",
+      "workplace_type": null,
+      "company_url": "https://www.linkedin.com/company/etched-ai/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQEJn1FE1j5S-A/company-logo_400_400/company-logo_400_400/0/1703108342517/etched_ai_logo?e=1776902400&v=beta&t=Xe7z4Ed_U88xX4lj1uzJdrKkFy5oLIFFi1m-u9PHThU",
+      "positions": [
+        {
+          "company_name": "Etched",
+          "employment_type": null,
+          "title": "Member of Technical Staff",
+          "date_range": {
+            "start": {
+              "day": null,
+              "iso": "2025-05",
+              "year": 2025,
+              "month": 5
+            },
+            "end": {
+              "day": null,
+              "iso": "2025-10",
+              "year": 2025,
+              "month": 10
+            }
+          },
+          "company_id": "93620799",
+          "workplace_type": null,
+          "company_url": "https://www.linkedin.com/company/etched-ai/",
+          "description": "Inference/Host-side lead. Responsible for multiple areas, from scoping, hiring and delivery:\n- RDMA stack & collectives.\n- Distributed runtime.\n- Multi-node inference services.\n- Mentoring and growing, both ICs and TLs.\n\nMultiple cross-functional projects (e.g. kernel driver improvements, system software, codebase)",
+          "location_name": "San Jose, California, United States",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQEJn1FE1j5S-A/company-logo_400_400/company-logo_400_400/0/1703108342517/etched_ai_logo?e=1776902400&v=beta&t=Xe7z4Ed_U88xX4lj1uzJdrKkFy5oLIFFi1m-u9PHThU",
+          "company_employee_count_range": {
+            "start": 51,
+            "end": 200
+          },
+          "company_industry": "Computer Hardware"
+        }
+      ],
+      "company_employee_count_range": {
+        "start": 51,
+        "end": 200
+      },
+      "company_industry": "Computer Hardware"
+    },
+    {
+      "company_name": "Google DeepMind",
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2024-08",
+          "year": 2024,
+          "month": 8
+        },
+        "end": {
+          "day": null,
+          "iso": "2025-05",
+          "year": 2025,
+          "month": 5
+        }
+      },
+      "company_id": "1594050",
+      "workplace_type": null,
+      "company_url": "https://www.linkedin.com/company/googledeepmind/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_400_400/company-logo_400_400/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=r_t5nQiM8A2L0aUP5m-PXCGPiKrvOklfisLwUFyoqwc",
+      "positions": [
+        {
+          "company_name": "Google DeepMind",
+          "employment_type": null,
+          "title": "Research Engineer",
+          "date_range": {
+            "start": {
+              "day": null,
+              "iso": "2024-08",
+              "year": 2024,
+              "month": 8
+            },
+            "end": {
+              "day": null,
+              "iso": "2025-05",
+              "year": 2025,
+              "month": 5
+            }
+          },
+          "company_id": "1594050",
+          "workplace_type": null,
+          "company_url": "https://www.linkedin.com/company/googledeepmind/",
+          "description": "Synthetic data infrastructure.\nPretraining ML debugability and introspection.\nModelling: sparsity, efficiency.",
+          "location_name": null,
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_400_400/company-logo_400_400/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=r_t5nQiM8A2L0aUP5m-PXCGPiKrvOklfisLwUFyoqwc",
+          "company_employee_count_range": {
+            "start": 501,
+            "end": 1000
+          },
+          "company_industry": "Research"
+        }
+      ],
+      "company_employee_count_range": {
+        "start": 501,
+        "end": 1000
+      },
+      "company_industry": "Research"
+    },
+    {
+      "company_name": "Character.AI",
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2024-03",
+          "year": 2024,
+          "month": 3
+        },
+        "end": {
+          "day": null,
+          "iso": "2024-07",
+          "year": 2024,
+          "month": 7
+        }
+      },
+      "company_id": "89486558",
+      "workplace_type": null,
+      "company_url": "https://www.linkedin.com/company/character-ai/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGNjbHSXwgRxA/company-logo_400_400/B56ZkQoTyrG0AY-/0/1756920626627/character_ai_logo?e=1776902400&v=beta&t=iIjQFZ2p-mxKhZ5rdC-PmhG_N1FxyZZ-zhCc61gsMt4",
+      "positions": [
+        {
+          "company_name": "Character.AI",
+          "employment_type": "Full-time",
+          "title": "Member of Technical Staff",
+          "date_range": {
+            "start": {
+              "day": null,
+              "iso": "2024-03",
+              "year": 2024,
+              "month": 3
+            },
+            "end": {
+              "day": null,
+              "iso": "2024-07",
+              "year": 2024,
+              "month": 7
+            }
+          },
+          "company_id": "89486558",
+          "workplace_type": null,
+          "company_url": "https://www.linkedin.com/company/character-ai/",
+          "description": "Initiated and led SDC detection and remediation efforts. Details confidential.\n\nPretraining MFU improvements:\n - Reduced working memory by an order of magnitude (code optimizations+host offload). Wrote safe-by-default wrappers.\n - Collective optimization by characterizatio, tuning and improving isolation of host resources.\n  - Implemented a system where we detect and single out slow nodes by analysing hiersrchical collective timings.\n  - Sharding optimizations, including writing and validation of new sharding schemes.\n\nCreated an led a system for inspecting and profiling live jobs.\n\nConfidential MoE routing research.",
+          "location_name": "Menlo Park, California, United States",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGNjbHSXwgRxA/company-logo_400_400/B56ZkQoTyrG0AY-/0/1756920626627/character_ai_logo?e=1776902400&v=beta&t=iIjQFZ2p-mxKhZ5rdC-PmhG_N1FxyZZ-zhCc61gsMt4",
+          "company_employee_count_range": {
+            "start": 51,
+            "end": 200
+          },
+          "company_industry": "Computer Software"
+        }
+      ],
+      "company_employee_count_range": {
+        "start": 51,
+        "end": 200
+      },
+      "company_industry": "Computer Software"
+    },
+    {
+      "company_name": "Google DeepMind",
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2021-08",
+          "year": 2021,
+          "month": 8
+        },
+        "end": {
+          "day": null,
+          "iso": "2024-03",
+          "year": 2024,
+          "month": 3
+        }
+      },
+      "company_id": "1594050",
+      "workplace_type": null,
+      "company_url": "https://www.linkedin.com/company/googledeepmind/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_400_400/company-logo_400_400/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=r_t5nQiM8A2L0aUP5m-PXCGPiKrvOklfisLwUFyoqwc",
+      "positions": [
+        {
+          "company_name": "Google DeepMind",
+          "employment_type": "Full-time",
+          "title": "Software Engineer",
+          "date_range": {
+            "start": {
+              "day": null,
+              "iso": "2021-08",
+              "year": 2021,
+              "month": 8
+            },
+            "end": {
+              "day": null,
+              "iso": "2024-03",
+              "year": 2024,
+              "month": 3
+            }
+          },
+          "company_id": "1594050",
+          "workplace_type": null,
+          "company_url": "https://www.linkedin.com/company/googledeepmind/",
+          "description": "ML infrastrure for Gemini:\n- Reducing step time with cross-stack optimizations\n- Hardening data loader scalability\n- Testing scale\n\nPreviously:\n\nDeveloping a new hardware accelerator, I'm responsible for the runtime of the system, both host and device. In this system I designed the network interfaces, kernel support for new hardware features and designed a high-IOPS queuing system with batching to achieve performance targets.",
+          "location_name": "Mountain View, California, United States",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_400_400/company-logo_400_400/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=r_t5nQiM8A2L0aUP5m-PXCGPiKrvOklfisLwUFyoqwc",
+          "company_employee_count_range": {
+            "start": 501,
+            "end": 1000
+          },
+          "company_industry": "Research"
+        }
+      ],
+      "company_employee_count_range": {
+        "start": 501,
+        "end": 1000
+      },
+      "company_industry": "Research"
+    },
+    {
+      "company_name": "Google",
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2017-03",
+          "year": 2017,
+          "month": 3
+        },
+        "end": {
+          "day": null,
+          "iso": "2021-08",
+          "year": 2021,
+          "month": 8
+        }
+      },
+      "company_id": "1441",
+      "workplace_type": null,
+      "company_url": "https://www.linkedin.com/company/google/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+      "positions": [
+        {
+          "company_name": "Google",
+          "employment_type": null,
+          "title": "Senior Site Reliability Engineer",
+          "date_range": {
+            "start": {
+              "day": null,
+              "iso": "2017-03",
+              "year": 2017,
+              "month": 3
+            },
+            "end": {
+              "day": null,
+              "iso": "2021-08",
+              "year": 2021,
+              "month": 8
+            }
+          },
+          "company_id": "1441",
+          "workplace_type": null,
+          "company_url": "https://www.linkedin.com/company/google/",
+          "description": "Worked on security libraries that affect most Google production code, with a focus on reliability, maintainability and performance. One of the components I replaced saved tens of Terabytes of RAM and tens of thousands of CPU-years across of the fleet - all while zero rollout issues.\n\nPreviously:\nWorked on a strongly consistent globally distributed filesystem, where I reduced metadata average latency by 100x, 99%-ile tail latency by over 1000x, overhead storage by 100x. My work also focused on reliability, bringing the system down from several pages a week to about a page per month, to the point where we handed the system back to the software engineering team.",
+          "location_name": "Munich, Bavaria, Germany",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+          "company_employee_count_range": {
+            "start": 10001,
+            "end": null
+          },
+          "company_industry": "Computer Software"
+        }
+      ],
+      "company_employee_count_range": {
+        "start": 10001,
+        "end": null
+      },
+      "company_industry": "Computer Software"
+    },
+    {
+      "company_name": "Google",
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2016-01",
+          "year": 2016,
+          "month": 1
+        },
+        "end": {
+          "day": null,
+          "iso": "2016-04",
+          "year": 2016,
+          "month": 4
+        }
+      },
+      "company_id": "1441",
+      "workplace_type": null,
+      "company_url": "https://www.linkedin.com/company/google/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+      "positions": [
+        {
+          "company_name": "Google",
+          "employment_type": null,
+          "title": "Software Reliability Engineering Intern",
+          "date_range": {
+            "start": {
+              "day": null,
+              "iso": "2016-01",
+              "year": 2016,
+              "month": 1
+            },
+            "end": {
+              "day": null,
+              "iso": "2016-04",
+              "year": 2016,
+              "month": 4
+            }
+          },
+          "company_id": "1441",
+          "workplace_type": null,
+          "company_url": "https://www.linkedin.com/company/google/",
+          "description": "Built a software that automatically scaled services based on load.",
+          "location_name": "Mountain View",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+          "company_employee_count_range": {
+            "start": 10001,
+            "end": null
+          },
+          "company_industry": "Computer Software"
+        }
+      ],
+      "company_employee_count_range": {
+        "start": 10001,
+        "end": null
+      },
+      "company_industry": "Computer Software"
+    }
+  ],
+  "contact_info": null,
+  "message": "For high volume usage and custom pricing, visit https://app.enrichgraph.io or contact us at support@enrichgraph.io",
+  "verifications": {
+    "sections": null,
+    "is_verified": true,
+    "joined_date": null
+  },
+  "projects": {},
+  "industry": "Internet",
+  "test_scores": {},
+  "patents": {},
+  "languages": [
+    {
+      "position_held": null,
+      "image_url": null,
+      "url": null,
+      "date_range": null,
+      "company": null,
+      "description": null,
+      "proficiency": "Native or bilingual",
+      "title": null,
+      "company_id": null,
+      "name": "English"
+    },
+    {
+      "position_held": null,
+      "image_url": null,
+      "url": null,
+      "date_range": null,
+      "company": null,
+      "description": null,
+      "proficiency": "Elementary",
+      "title": null,
+      "company_id": null,
+      "name": "German"
+    },
+    {
+      "position_held": null,
+      "image_url": null,
+      "url": null,
+      "date_range": null,
+      "company": null,
+      "description": null,
+      "proficiency": "Native or bilingual",
+      "title": null,
+      "company_id": null,
+      "name": "Portuguese"
+    }
+  ],
+  "education": [
+    {
+      "school_id": "10645",
+      "school_url": "https://www.linkedin.com/school/universidade-estadual-de-campinas/",
+      "school_logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQGkepCvZp_oww/company-logo_400_400/company-logo_400_400/0/1631346230167?e=1776902400&v=beta&t=k2AN1LmSnlAd5WnR5jerBP5Y_2yVd33TV2OcwotG_8E",
+      "degree": "Bachelor's degree",
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2014",
+          "year": 2014,
+          "month": null
+        },
+        "end": {
+          "day": null,
+          "iso": "2016",
+          "year": 2016,
+          "month": null
+        }
+      },
+      "field_of_study": "Computer Science",
+      "activities": null,
+      "description": null,
+      "school_name": "Universidade Estadual de Campinas",
+      "grade": null
+    }
+  ],
+  "organizations": {},
+  "member_urn": "480927093",
+  "volunteer_experiences": {},
+  "entity_urn": "ACoAAByqXXUBEhOg629uCLeNJjh_JXVoDI80KAo",
+  "skills": [
+    "Artificial Intelligence (AI)",
+    "Software Infrastructure",
+    "Large Scale Development",
+    "Storage",
+    "Computer Security",
+    "Cryptography",
+    "Computer Networking",
+    "Operating Systems",
+    "DevOps",
+    "C",
+    "Python",
+    "Compilers"
+  ],
+  "public_identifier": "danilo-carvalho-35908a115",
+  "certifications": {},
+  "summary": null,
+  "publications": {},
+  "last_name": "Carvalho",
+  "courses": {},
+  "headline": "Scale It Up!",
+  "badges": {
+    "is_hiring": false,
+    "premium": false,
+    "creator": false,
+    "influencer": false,
+    "top_voice": false,
+    "open_to_work": false
+  },
+  "first_name": "Danilo",
+  "location": {
+    "country": "United States",
+    "country_code": "US",
+    "name": "Mountain View, California, United States",
+    "city": null
+  },
+  "network_info": null,
+  "profile_photo_url": null,
+  "background_photo_url": null
+}

@@ -1,0 +1,1652 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAAF57BEBvbZEr26oPtkxTzHZeqF6dVoWX-I",
+    "profile_url": "https://www.linkedin.com/in/ACwAAAF57BEBvbZEr26oPtkxTzHZeqF6dVoWX-I"
+  },
+  "item": {
+    "id": "ACoAAAF57BEBytoBtj0_Jv-zJMa602g97u58ZqY",
+    "publicIdentifier": "matthiashendrichs",
+    "linkedinUrl": "https://www.linkedin.com/in/matthiashendrichs",
+    "firstName": "Matthias",
+    "lastName": "Hendrichs",
+    "emails": [],
+    "companyWebsites": [
+      {
+        "url": "https://lsvp.com/",
+        "domain": "lsvp.com",
+        "validEmailServer": true
+      },
+      {
+        "url": "https://www.anthropic.com/",
+        "domain": "anthropic.com"
+      },
+      {
+        "url": "https://x.ai",
+        "domain": "x.ai"
+      },
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai"
+      }
+    ],
+    "headline": "Global Tech Executive & AI Advisor and Investor (ex Apple WW Leadership / ex Unicorn Founder)",
+    "openToWork": false,
+    "hiring": false,
+    "premium": true,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Singapore, Singapore",
+      "countryCode": "SG",
+      "parsed": {
+        "text": "Singapore, Singapore",
+        "countryCode": "SG",
+        "regionCode": null,
+        "country": "Singapore",
+        "countryFull": "Singapore",
+        "state": "Central Singapore Community Development Council",
+        "city": "Singapore"
+      }
+    },
+    "objectUrn": "24767505",
+    "registeredAt": "2008-05-08T03:12:01.000Z",
+    "topSkills": "Business Strategy • Business Development • Sales • Leadership • Artificial Intelligence (AI)",
+    "connectionsCount": 18493,
+    "followerCount": 18624,
+    "verified": true,
+    "about": "A curious, creative, and confident global leader with 30 years of experience across tech companies, small and large start-ups, and strategy consulting. Owned and delivered on multi-billion dollar P&Ls and projects. Built a $1.5B start-up from the ground up. Worked across Europe (11 years) and Asia (19 years), from developing strategies to scaling, running, and optimizing complex businesses. Deep experience across enterprise technology, SaaS platforms, and digital commerce, developing and executing go-to-market strategies in complex, matrixed organizations. A team player and mentor who is thrilled to work with his teams across borders without hierarchies.\n\nCurrent Focus:\nAdvising and investing in frontier AI firms including OpenAI, Anthropic, xAI, Perplexity, and Groq, while actively exploring the next senior operating leadership role. Featured AI commentator on CNBC, keynote speaker, and bylined author in the South China Morning Post, Nikkei Asian Review, and China Daily.\n\nPreviously:\n• Global Chief Commercial Officer at MODIFI - a high growth fintech: Led a diverse, high-performing  commercial team across key global markets, focused on digital trade financing and cross-border B2B payments.\n• Head of Apple’s multi-billion App Store Commerce and Services business in Asia Pacific: Member of the WW leadership team.\n• Partner at tier-1 strategy consulting firms: Booz & Co, Gao Feng Advisory Company.\n• Founder and brain father of several digital start-ups: Including a US$1.5B-valued unicorn.\n• Corporate leadership roles: Luxury retail (LVMH), entertainment/media (Bertelsmann), and chemicals (BASF).\n\nMaster’s degree in Business Administration from the University of Bayreuth, Germany.",
+    "currentPosition": [
+      {
+        "companyId": "30258",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/30258/",
+        "companyName": "Lightspeed",
+        "dateRange": {
+          "start": {
+            "month": null,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "11954",
+        "companyId": "30761",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/30761/",
+        "schoolName": "University of Bayreuth"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5603AQHOmV5akaj9dg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1731593272455?e=1776902400&v=beta&t=2uguhtRzCxLtIadn5i0XmhaS3GZZuN9flt1BXk_OPjs",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQHOmV5akaj9dg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1731593272455?e=1776902400&v=beta&t=2uguhtRzCxLtIadn5i0XmhaS3GZZuN9flt1BXk_OPjs",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQHOmV5akaj9dg/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1731593272439?e=1776902400&v=beta&t=Z8ph3qmbsBfZM3AkGDKOsVjyR0wUIrmPGOx4xeQZVoU",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQHOmV5akaj9dg/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1731593272439?e=1776902400&v=beta&t=p9eKuVGDOULpi9_-3Ed2EVtDkyO-eW7_glyaeehGIa8",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQHOmV5akaj9dg/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1731593272439?e=1776902400&v=beta&t=WQ6pRJFBbyzQ26TsZksQsk9OXwxPBpomVPCo_7cev0k",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4E16AQHPbCfGUPlLFg/profile-displaybackgroundimage-shrink_200_800/profile-displaybackgroundimage-shrink_200_800/0/1685501764192?e=1776902400&v=beta&t=peLfL3a3Mpifo51RL97MkDGSdNJZ2mDO1RfiCr07JCE",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E16AQHPbCfGUPlLFg/profile-displaybackgroundimage-shrink_200_800/profile-displaybackgroundimage-shrink_200_800/0/1685501764192?e=1776902400&v=beta&t=peLfL3a3Mpifo51RL97MkDGSdNJZ2mDO1RfiCr07JCE",
+          "width": 800,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E16AQHPbCfGUPlLFg/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1685501764192?e=1776902400&v=beta&t=tMlREimbv0-zlHia7-KyIJL6IHgsP-HCbJ99Myu_MXE",
+          "width": 800,
+          "height": 200,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "photo": "https://media.licdn.com/dms/image/v2/D5603AQHOmV5akaj9dg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1731593272455?e=1776902400&v=beta&t=2uguhtRzCxLtIadn5i0XmhaS3GZZuN9flt1BXk_OPjs",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Global Tech Executive & AI Advisor and Investor (ex Apple WW Leadership / ex Unicorn Founder)",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Career transition",
+        "location": "Singapore, Singapore",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Career Break",
+        "companyLinkedinUrl": null,
+        "duration": "4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2026,
+          "text": "Jan 2026"
+        },
+        "endDate": {
+          "text": "Present"
+        }
+      },
+      {
+        "position": "Investor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Lightspeed",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/lightspeed-venture-partners/",
+        "companyId": "30258",
+        "companyUniversalName": "lightspeed-venture-partners",
+        "duration": "1 yr 4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "year": 2025,
+          "text": "2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQELfc9OHaLGDw/company-logo_400_400/B4EZaSBgaNHoAY-/0/1746206590923/lightspeed_venture_partners_logo?e=1776902400&v=beta&t=pd0UtcFwQIStwZIVH17il_vpG7s2fBvkAbCkWoS_fwo",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQELfc9OHaLGDw/company-logo_400_400/B4EZaSBgaNHoAY-/0/1746206590923/lightspeed_venture_partners_logo?e=1776902400&v=beta&t=pd0UtcFwQIStwZIVH17il_vpG7s2fBvkAbCkWoS_fwo",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQELfc9OHaLGDw/company-logo_200_200/B4EZaSBgaNHoAI-/0/1746206590923/lightspeed_venture_partners_logo?e=1776902400&v=beta&t=pbki0Zks6mqdNGr0fEI9_kJ68EWr1lzNDxabMyZK3uc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQELfc9OHaLGDw/company-logo_100_100/B4EZaSBgaNHoAQ-/0/1746206590923/lightspeed_venture_partners_logo?e=1776902400&v=beta&t=xFVh2vR_3TPrN0nNktn846HLjiexbE82k6nRZsae7N0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Anthropic",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/74126343/",
+        "companyId": "74126343",
+        "duration": "1 yr 4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "year": 2025,
+          "text": "2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_400_400/company-logo_400_400/0/1719256729905/anthropicresearch_logo?e=1776902400&v=beta&t=6sv-GagnF1G5d4B4rN1Yu3sq6fln2BP_9tb0s6bARoY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_400_400/company-logo_400_400/0/1719256729905/anthropicresearch_logo?e=1776902400&v=beta&t=6sv-GagnF1G5d4B4rN1Yu3sq6fln2BP_9tb0s6bARoY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_200_200/company-logo_200_200/0/1719256413073/anthropicresearch_logo?e=1776902400&v=beta&t=cPQIIISEsrdyXB00bI4BYAdxnK2Mx72yV0BDdzg3baM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_100_100/company-logo_100_100/0/1719256989269/anthropicresearch_logo?e=1776902400&v=beta&t=6343WBiudLAu8QSHWrlzIJOnlExxTT9uZZpuCs-AeLk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "xAI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/96151950/",
+        "companyId": "96151950",
+        "duration": "1 yr 4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "year": 2025,
+          "text": "2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQFGK5Kkd1nUlg/company-logo_400_400/company-logo_400_400/0/1738099065875/xai_logo?e=1776902400&v=beta&t=D9_BxwFh9s6Xs2Cj7r80cNvoc3yl7tyg6f8ZvrbXv64",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFGK5Kkd1nUlg/company-logo_400_400/company-logo_400_400/0/1738099065875/xai_logo?e=1776902400&v=beta&t=D9_BxwFh9s6Xs2Cj7r80cNvoc3yl7tyg6f8ZvrbXv64",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFGK5Kkd1nUlg/company-logo_200_200/company-logo_200_200/0/1738099065875/xai_logo?e=1776902400&v=beta&t=HEoRgaX2hRkDsEbWqIdB85Qph6PAPQDMvqQqOoxhzHc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFGK5Kkd1nUlg/company-logo_100_100/company-logo_100_100/0/1738099065875/xai_logo?e=1776902400&v=beta&t=fPyP5ijKRIbwP3cYP1d0JhCSK_zHRQZxBvUsdDb3vPk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyId": "105913171",
+        "duration": "1 yr 4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "year": 2025,
+          "text": "2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Groq",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/12994410/",
+        "companyId": "12994410",
+        "duration": "1 yr 4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "year": 2025,
+          "text": "2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHu2B6mxi4DzA/company-logo_400_400/B56ZmD6jUWI0AY-/0/1758854788647/groq_logo?e=1776902400&v=beta&t=tKNVVAazQEoekDk9RMd8EoaBNyhRqJAbcxly91C0Yi8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHu2B6mxi4DzA/company-logo_400_400/B56ZmD6jUWI0AY-/0/1758854788647/groq_logo?e=1776902400&v=beta&t=tKNVVAazQEoekDk9RMd8EoaBNyhRqJAbcxly91C0Yi8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHu2B6mxi4DzA/company-logo_200_200/B56ZmD6jUWI0AI-/0/1758854788647/groq_logo?e=1776902400&v=beta&t=1ikIr3C-OklBIIZvshaJcwNcmYQDbmLbHfSQdJefWmI",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHu2B6mxi4DzA/company-logo_100_100/B56ZmD6jUWI0AQ-/0/1758854788647/groq_logo?e=1776902400&v=beta&t=bXXP0LEdiaqSmgIZi_AOkUjv67C3QvUo9KuYnw9yrYQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "SFF Ambassador",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Singapore FinTech Festival",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/13393453/",
+        "companyId": "13393453",
+        "duration": "1 yr 4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "year": 2025,
+          "text": "2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGukRaTiv028w/company-logo_400_400/B56ZqU3VyDHAAY-/0/1763434126878/singapore_fintech_festival_logo?e=1776902400&v=beta&t=_tsunBhYPVJU4z8d0PCgN4M_kpBu4WpnCmTLGMs694c",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGukRaTiv028w/company-logo_400_400/B56ZqU3VyDHAAY-/0/1763434126878/singapore_fintech_festival_logo?e=1776902400&v=beta&t=_tsunBhYPVJU4z8d0PCgN4M_kpBu4WpnCmTLGMs694c",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGukRaTiv028w/company-logo_200_200/B56ZqU3VyDHAAI-/0/1763434126878/singapore_fintech_festival_logo?e=1776902400&v=beta&t=AiFdpa1dwOiv7Bsj8nChltP-j2UXRoCM60imTVKvlks",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGukRaTiv028w/company-logo_100_100/B56ZqU3VyDHAAQ-/0/1763434126878/singapore_fintech_festival_logo?e=1776902400&v=beta&t=CCL0NsOnhLBlo-LMBa6UnpHH5AXR1cEXJSJAZF367A0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Global Chief Commercial Officer (CCO)",
+        "location": "Singapore, Singapore",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "MODIFI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/18540971/",
+        "companyId": "18540971",
+        "duration": "3 yrs 8 mos",
+        "description": "* Owned P&L and end-to-end commercial activities for B2B BNPL, payments and SaaS solutions.\n* Led a diverse, high-performing commercial team consisting of sales, business development, partnerships, marketing and revenue ops across key global markets (13 markets in Asia, Europe and the Americas).\n* Designed and executed go-to-market strategy across 13 markets, including platform commercialization across partner channels (PSPs, marketplaces, ERP integrations).\n* Opened new markets, developing and applying playbooks to scale exponentially.\n* Built, motivated and mentored a highly dispersed team, fostering a collaborative environment and driving successful commercial outcomes.\n* Spearheaded AI transformation as executive sponsor and Perplexity Business Fellow, from GTM, risk assessment to financing processes.\n\nMODIFI (Series C Fintech): Empowering global trade for SMBs with digital trade financing and management. Ranked #7 among Europe's Fastest Growing Companies by Financial Times, MODIFI is the leading global provider of cross-border B2B payments and Buy Now Pay Later (BNPL) services, bridging payment term gaps for international trade.",
+        "skills": [
+          "Go-to-Market Strategy",
+          "Enterprise Technology",
+          "Team Management",
+          "Sales"
+        ],
+        "startDate": {
+          "month": "May",
+          "year": 2022,
+          "text": "May 2022"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2025,
+          "text": "Dec 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGtc3u6rZvslA/company-logo_400_400/company-logo_400_400/0/1630507404977/modifi_moderndigitalfinance_logo?e=1776902400&v=beta&t=ohKrSXC-FLOYX_sBiCi2TEFR6YM65pD3adXNc34klg0",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGtc3u6rZvslA/company-logo_400_400/company-logo_400_400/0/1630507404977/modifi_moderndigitalfinance_logo?e=1776902400&v=beta&t=ohKrSXC-FLOYX_sBiCi2TEFR6YM65pD3adXNc34klg0",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGtc3u6rZvslA/company-logo_200_200/company-logo_200_200/0/1630507404977/modifi_moderndigitalfinance_logo?e=1776902400&v=beta&t=1z-g3OpdAQtT6taWb1sOfVlvERAH8PSyrXgVSH2xsho",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGtc3u6rZvslA/company-logo_100_100/company-logo_100_100/0/1630507404977/modifi_moderndigitalfinance_logo?e=1776902400&v=beta&t=lYm64KAfPt4GnduX9SoEn_Z0J8g1Ha_8Uou0jFsalCE",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Advisor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Perplexity",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/88007673/",
+        "companyId": "88007673",
+        "duration": "8 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Nov",
+          "year": 2024,
+          "text": "Nov 2024"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2025,
+          "text": "Jun 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQH4g_76IvCSFQ/company-logo_400_400/B56ZnzQt3YH8AY-/0/1760722870048/perplexity_ai_logo?e=1776902400&v=beta&t=nIWaobtKD5JDlNDP5EJA73-cC0dgWjwVFAoMao_ZEOc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH4g_76IvCSFQ/company-logo_400_400/B56ZnzQt3YH8AY-/0/1760722870048/perplexity_ai_logo?e=1776902400&v=beta&t=nIWaobtKD5JDlNDP5EJA73-cC0dgWjwVFAoMao_ZEOc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH4g_76IvCSFQ/company-logo_200_200/B56ZnzQt3YH8AI-/0/1760722870048/perplexity_ai_logo?e=1776902400&v=beta&t=PGOXsKtZKJxaoUagqUNFZQ45EWdedI-2aTVyLWnYICY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH4g_76IvCSFQ/company-logo_100_100/B56ZnzQt3YH8AQ-/0/1760722870048/perplexity_ai_logo?e=1776902400&v=beta&t=kWpFwrpj3GsNNuLWmlqbdEbUv3VrZnyCZqV6KpJ5-sA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Advisor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "OpenAI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/11130470/",
+        "companyId": "11130470",
+        "duration": "7 mos",
+        "description": null,
+        "skills": [
+          "Go-to-Market Strategy"
+        ],
+        "startDate": {
+          "month": "Apr",
+          "year": 2024,
+          "text": "Apr 2024"
+        },
+        "endDate": {
+          "month": "Oct",
+          "year": 2024,
+          "text": "Oct 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_200_200/B56ZT8EYB8HsAI-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=O6RSWlpQ5W4zNCOCTu621qCyTijLuXFJS4pz2_hBQfo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_100_100/B56ZT8EYB8HsAQ-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=y7RA89V9q8GlAjQ1oRU-jf_-n5zlSXRCnykXBIkgHfM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Head of App Store Commerce & Services for Asia Pacific",
+        "location": "Hong Kong, Hong Kong SAR",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Apple",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/162479/",
+        "companyId": "162479",
+        "duration": "3 yrs 5 mos",
+        "description": "Member of WW Leadership Team:\n* Led Apple's multi-billion dollar App Store Commerce & Services business across Asia - one of the largest digital commerce platforms in the world.\n* Covered 20 markets in Asia Pacific, including: Japan, Greater China, Korea, SEA, Australia/New Zealand.\n* Owned regional P&L, revenue growth, and go-to-market strategy across mature and emerging markets for App Store, iTunes, Apple Music, Apple TV+, News+, Apple Books, iCloud.\n*Defined industry-specific GTM strategies and operating models for 160+ B2B and enterprise partners across technology, retail, gaming, media, and financial services verticals, driving joint business development and ecosystem expansion, e.g. (1) eCommerce: JD.com, Rakuten, Amazon, eBay, Tmall, Taobao, Lazada (2) traditional retail: 7-11, FamilyMart, Lawson, Wal-Mart, Cosco, Target, Woolworth, Coles, and (3) payments: WeChat Pay, Alipay, Visa, MasterCard, HSBC, Citibank, all major wallets, mobile carriers for carrier billing in Asia.\n* Built and executed multi-vertical commercial playbooks for B2B, B2B2C, SaaS, and subscription businesses, translating Apple’s platform capabilities into sector-specific value propositions.\n* Partnered with global and local teams to localize customer experience, merchandising, and distribution\n* Launched and scaled new markets (incl. Korea and Taiwan), balancing brand integrity with local market dynamics.\n* Built and led regional organization across sales, marketing, operations and partner management.",
+        "skills": [
+          "Go-to-Market Strategy",
+          "Enterprise Technology",
+          "Team Management",
+          "Sales"
+        ],
+        "startDate": {
+          "month": "Mar",
+          "year": 2018,
+          "text": "Mar 2018"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2021,
+          "text": "Jul 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_400_400/company-logo_400_400/0/1630637844948/apple_logo?e=1776902400&v=beta&t=KteXM40NNLQ3nz21Do-neoy-f7lbDDA7kJmtS5wwrL4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_400_400/company-logo_400_400/0/1630637844948/apple_logo?e=1776902400&v=beta&t=KteXM40NNLQ3nz21Do-neoy-f7lbDDA7kJmtS5wwrL4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_200_200/company-logo_200_200/0/1630637844948/apple_logo?e=1776902400&v=beta&t=I8RMorsmHMk3gA9b3fT4m2HDgfVtfdB6se4bEZcMHb8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_100_100/company-logo_100_100/0/1630637844948/apple_logo?e=1776902400&v=beta&t=8c3EpxT43tZMihGirOM7eBnDzFHAGiYV-OxaRj_xfjo",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Interim Executive: Digital Transformation for DFS Travel Retail",
+        "location": "Hong Kong",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "LVMH",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/164788/",
+        "companyId": "164788",
+        "duration": "1 yr",
+        "description": "DFS's global CEO hired me as interim executive to lead large-scale digital transformation project\n* Led internal team of 80 cross-functional members and 25 consultants, reported directly to the CEO.\n* Revitalized the O2O strategy, enhancing digital engagement for customers pre- and post-visit to duty-free retail stores.\n* Embedded Enterprise software (CRM, ERP) and management dashboards (Tableau).\n* Integrated AI/ML-driven analytics into pricing, buying, and store staffing, improving operational efficiency and customer personalization.",
+        "skills": [
+          "Go-to-Market Strategy",
+          "Enterprise Technology",
+          "Team Management"
+        ],
+        "startDate": {
+          "month": "Jan",
+          "year": 2017,
+          "text": "Jan 2017"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2017,
+          "text": "Dec 2017"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQG0ZjiacH285Q/company-logo_400_400/B4EZkPHY7tGcAo-/0/1756895219832/lvmh_logo?e=1776902400&v=beta&t=9exLV6imrGb1cWQ3xq9cFXUs5lkTqXmsO97YXOPTqqk",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQG0ZjiacH285Q/company-logo_400_400/B4EZkPHY7tGcAo-/0/1756895219832/lvmh_logo?e=1776902400&v=beta&t=9exLV6imrGb1cWQ3xq9cFXUs5lkTqXmsO97YXOPTqqk",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQG0ZjiacH285Q/company-logo_200_200/B4EZkPHY7tGcAY-/0/1756895219832/lvmh_logo?e=1776902400&v=beta&t=Ri3AoptBhNOMnyFPePo7eNV1044-CQv6RCKFQ6V1sFE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQG0ZjiacH285Q/company-logo_100_100/B4EZkPHY7tGcAg-/0/1756895219832/lvmh_logo?e=1776902400&v=beta&t=QcnJ56s0fyjhGdZhUhsMHv8VtqQbaY9Y5RycjAC3FjY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Managing Partner & Practice Lead for Digital",
+        "location": "Hong Kong / Shanghai / Beijing",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Gao Feng Advisory Company",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3866898/",
+        "companyId": "3866898",
+        "duration": "3 yrs",
+        "description": "Gao Feng is a pre-eminent strategy and management consulting firm with roots in Greater China. I was the first partner joining founder and consulting legend Dr. Edward Tse building his renowned strategy firm.\n* Opened offices in Shanghai, Beijing and Hong Kong, recruited team of highly talented consultants.\n* Advised global CXOs at Fortune 500 companies (including Reckitt Benckiser, Nestlé) on digital\ntransformation, multi-vertical go-to-market strategy, and enterprise ecosystem engagement across retail, CPG, and technology sectors.\n* Built cross-functional consulting partnerships to extend capabilities and co-sell into new industry verticals.\n* Built solutions for B2C and B2B companies to engage with and sell to consumers on own and 3rd party platforms like Alibaba, JD.com.\n* Conducted projects digitalizing backend and support processes, using AI and machine learning for smarter and more efficient outcomes.\n* Published extensively as a thought leader on digital transformation in Asia, co-authoring articles in the South China Morning Post, Nikkei Asian Review, and China Daily with award-winning.",
+        "skills": [
+          "Go-to-Market Strategy",
+          "Enterprise Technology",
+          "Team Management",
+          "Sales"
+        ],
+        "startDate": {
+          "month": "Jan",
+          "year": 2014,
+          "text": "Jan 2014"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2016,
+          "text": "Dec 2016"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFKerKanMbnqg/company-logo_400_400/company-logo_400_400/0/1631340932542?e=1776902400&v=beta&t=Z7fneHtn8OP40NHU7wDw7kdxgXplkSFdeGJuPnKW1pI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFKerKanMbnqg/company-logo_400_400/company-logo_400_400/0/1631340932542?e=1776902400&v=beta&t=Z7fneHtn8OP40NHU7wDw7kdxgXplkSFdeGJuPnKW1pI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFKerKanMbnqg/company-logo_200_200/company-logo_200_200/0/1631340932542?e=1776902400&v=beta&t=h07Wd4TApcRjoYrmBAZU4egT9CtcHQtar-Flpitk0L4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFKerKanMbnqg/company-logo_100_100/company-logo_100_100/0/1631340932542?e=1776902400&v=beta&t=42e3Do0jTS7EQAotnTFJZFDckHin39DtsEawLGIpOl8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Principal & Office Head Hong Kong",
+        "location": "Hong Kong / Shanghai / Beijing",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Booz & Company.",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10238026/",
+        "companyId": "10238026",
+        "duration": "2 yrs 4 mos",
+        "description": "I was hired to lead the Energy & Chemicals Practice in Asia and build the Private Equity Practice across Greater China. \nIn addition, I was the Office Head for Hong Kong. \n* Engaged directly with CXOs at global enterprises on go-to-market strategy, enterprise transformation, and operating model optimization across consumer, retail, and industrial sectors.\n* Advised clients across industries segments spanning Consumer goods & Retail, Digital media, Chemicals, Industrials.\n* Led the Hong Kong office and regional functional practices responsible of recruiting, staffing and talent development.\n* Wrote award-winning industry viewpoints and publications on Chemicals and Digital in China.",
+        "skills": [
+          "Go-to-Market Strategy",
+          "Enterprise Technology",
+          "Team Management",
+          "Sales"
+        ],
+        "startDate": {
+          "month": "Sep",
+          "year": 2011,
+          "text": "Sep 2011"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2013,
+          "text": "Dec 2013"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQG_lkeyFCG6IA/company-logo_400_400/company-logo_400_400/0/1630640191106/booz__company_logo?e=1776902400&v=beta&t=MmFr0U2M8hpudBw-NvfLskliB3hUShgQYZTWWLiS62A",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQG_lkeyFCG6IA/company-logo_400_400/company-logo_400_400/0/1630640191106/booz__company_logo?e=1776902400&v=beta&t=MmFr0U2M8hpudBw-NvfLskliB3hUShgQYZTWWLiS62A",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQG_lkeyFCG6IA/company-logo_200_200/company-logo_200_200/0/1630640191106/booz__company_logo?e=1776902400&v=beta&t=mEKNYGvvUcLnv_2iLJs50YK0fGn_PvfV5jT0PeU1ACw",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQG_lkeyFCG6IA/company-logo_100_100/company-logo_100_100/0/1630640191106/booz__company_logo?e=1776902400&v=beta&t=mPbyuhmRFJZjJXt3Q-VZBqxw8hjY0ipaCJNHPxsUaL4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Founder & CEO",
+        "location": "Hong Kong / Singapore",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Mobile Guide (HK) Limited",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1898935/",
+        "companyId": "1898935",
+        "duration": "2 yrs 9 mos",
+        "description": "As an avid traveler and technology enthusiast, I created the world’s first interactive travel guide on a rental smartphone.\n* Founded and scaled an interactive travel technology platform valued US$1.5B in 2019, operating in over 82 countries around the world\n* Built extensive third-party distribution network through key travel partners: (1) Hotels, (2) Airlines, (3) Aggregators. Partners included: Lufthansa airlines, Expedia.com, Marriott Group, Hyatt Group, IHG, SPG, Mandarin Oriental hotels, Langham hotels, Godiva, Shanghai Tang, etc.\n* Launched affiliate program with leading travel websites\n* Achieved outstanding international and local media coverage, e.g. feature in TIME magazine, Business Traveler Asia, SQ inflight magazine",
+        "skills": [
+          "Go-to-Market Strategy",
+          "Team Management"
+        ],
+        "startDate": {
+          "month": "Dec",
+          "year": 2009,
+          "text": "Dec 2009"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2012,
+          "text": "Aug 2012"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQEwu1fWTL5fXg/company-logo_400_400/company-logo_400_400/0/1631374553826?e=1776902400&v=beta&t=tjsVsjVESPI0xBPyVfdHs3UP2Onn22-fJM7uqMoIhTs",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEwu1fWTL5fXg/company-logo_400_400/company-logo_400_400/0/1631374553826?e=1776902400&v=beta&t=tjsVsjVESPI0xBPyVfdHs3UP2Onn22-fJM7uqMoIhTs",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEwu1fWTL5fXg/company-logo_200_200/company-logo_200_200/0/1631374553826?e=1776902400&v=beta&t=SABAQCMudOg8Zdyz112LJSPFk8SCkrtbB3Cy123AGIY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEwu1fWTL5fXg/company-logo_100_100/company-logo_100_100/0/1631374553826?e=1776902400&v=beta&t=gpZOWrEDsb7CPCDMu8dZ_XLSgZZOZGo1VGAyYMP6mq0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Business Unit Head Asia Pacific",
+        "location": "Hong Kong SAR",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "BASF",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/2633/",
+        "companyId": "2633",
+        "duration": "2 yrs 5 mos",
+        "description": "* Headed business unit for Asia Pacific with P&L responsibility for US$750M sales p.a.\n* Built network of third-party suppliers and negotiated sourcing deals in China and South Korea\n* Hired, led and mentored regional team in Hong Kong, with local teams across Asia (China, Singapore, Malaysia, Indonesia, Thailand, India, Japan, Korea, Australia, New Zealand)",
+        "skills": [
+          "Go-to-Market Strategy",
+          "Enterprise Technology",
+          "Team Management"
+        ],
+        "experienceGroupId": "1fa5db1703b9e1565a0aef8182e633a90ef1145c",
+        "startDate": {
+          "month": "Jan",
+          "year": 2008,
+          "text": "Jan 2008"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2010,
+          "text": "May 2010"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF849M5dOkEA/company-logo_400_400/company-logo_400_400/0/1720593261563/basf_logo?e=1776902400&v=beta&t=pPXuojQLvwO0FOpXUOyxoDloPKop_450qT-8Th6E_VQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF849M5dOkEA/company-logo_400_400/company-logo_400_400/0/1720593261563/basf_logo?e=1776902400&v=beta&t=pPXuojQLvwO0FOpXUOyxoDloPKop_450qT-8Th6E_VQ",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF849M5dOkEA/company-logo_200_200/company-logo_200_200/0/1720593261563/basf_logo?e=1776902400&v=beta&t=coH4E-hYF6_FGvwk_mLeKqhtgQQOFwYZsRCYiKBmsAs",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF849M5dOkEA/company-logo_100_100/company-logo_100_100/0/1720593261563/basf_logo?e=1776902400&v=beta&t=_IBef-rcktlpboyXu3fQ-DJVvX7WL6yRxAyBg0OXoac",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Strategy Head Functions Asia Pacific",
+        "location": "Hong Kong / Singapore",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "BASF",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/2633/",
+        "companyId": "2633",
+        "duration": "10 mos",
+        "description": "* Developed first-of-its-kind customer-centric strategy for all functional units (HR, IT, Finance, Logistics, etc.) in Asia Pacific\n* Designed roadmap for operational excellence initiatives, enhancing core productivity and resulting in significant cost savings",
+        "skills": [
+          "Go-to-Market Strategy",
+          "Enterprise Technology"
+        ],
+        "experienceGroupId": "1fa5db1703b9e1565a0aef8182e633a90ef1145c",
+        "startDate": {
+          "month": "Mar",
+          "year": 2007,
+          "text": "Mar 2007"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2007,
+          "text": "Dec 2007"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF849M5dOkEA/company-logo_400_400/company-logo_400_400/0/1720593261563/basf_logo?e=1776902400&v=beta&t=pPXuojQLvwO0FOpXUOyxoDloPKop_450qT-8Th6E_VQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF849M5dOkEA/company-logo_400_400/company-logo_400_400/0/1720593261563/basf_logo?e=1776902400&v=beta&t=pPXuojQLvwO0FOpXUOyxoDloPKop_450qT-8Th6E_VQ",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF849M5dOkEA/company-logo_200_200/company-logo_200_200/0/1720593261563/basf_logo?e=1776902400&v=beta&t=coH4E-hYF6_FGvwk_mLeKqhtgQQOFwYZsRCYiKBmsAs",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF849M5dOkEA/company-logo_100_100/company-logo_100_100/0/1720593261563/basf_logo?e=1776902400&v=beta&t=_IBef-rcktlpboyXu3fQ-DJVvX7WL6yRxAyBg0OXoac",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Head of Post-Merger-Integration Asia Pacific",
+        "location": "Hong Kong / Singapore",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "BASF",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/2633/",
+        "companyId": "2633",
+        "duration": "1 yr",
+        "description": "* Integrated global acquisition with more than 1,500 employees at over 130 sites in Asia Pacific without business interruptions; identified $50M synergies and roadmap to secure them  \n* Led PMO and coordinated regional projects teams (120 employees in 15 countries). Reported to President Asia Pacific",
+        "skills": [
+          "Go-to-Market Strategy"
+        ],
+        "experienceGroupId": "1fa5db1703b9e1565a0aef8182e633a90ef1145c",
+        "startDate": {
+          "month": "Mar",
+          "year": 2006,
+          "text": "Mar 2006"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2007,
+          "text": "Feb 2007"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF849M5dOkEA/company-logo_400_400/company-logo_400_400/0/1720593261563/basf_logo?e=1776902400&v=beta&t=pPXuojQLvwO0FOpXUOyxoDloPKop_450qT-8Th6E_VQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF849M5dOkEA/company-logo_400_400/company-logo_400_400/0/1720593261563/basf_logo?e=1776902400&v=beta&t=pPXuojQLvwO0FOpXUOyxoDloPKop_450qT-8Th6E_VQ",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF849M5dOkEA/company-logo_200_200/company-logo_200_200/0/1720593261563/basf_logo?e=1776902400&v=beta&t=coH4E-hYF6_FGvwk_mLeKqhtgQQOFwYZsRCYiKBmsAs",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF849M5dOkEA/company-logo_100_100/company-logo_100_100/0/1720593261563/basf_logo?e=1776902400&v=beta&t=_IBef-rcktlpboyXu3fQ-DJVvX7WL6yRxAyBg0OXoac",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Strategy Consultant (Global Projects)",
+        "location": "Ludwigshafen, Germany",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "BASF",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/2633/",
+        "companyId": "2633",
+        "duration": "1 yr 6 mos",
+        "description": "* Led and supported range of corporate strategy, marketing and operational excellence projects for the Board of Executive Directors globally\n* Developed concept for business model innovation based on Blue Ocean Strategy, allowing business units to create new business ideas and test them in an open-loop collaborative environment ",
+        "skills": [
+          "Go-to-Market Strategy"
+        ],
+        "experienceGroupId": "1fa5db1703b9e1565a0aef8182e633a90ef1145c",
+        "startDate": {
+          "month": "Sep",
+          "year": 2004,
+          "text": "Sep 2004"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2006,
+          "text": "Feb 2006"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF849M5dOkEA/company-logo_400_400/company-logo_400_400/0/1720593261563/basf_logo?e=1776902400&v=beta&t=pPXuojQLvwO0FOpXUOyxoDloPKop_450qT-8Th6E_VQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF849M5dOkEA/company-logo_400_400/company-logo_400_400/0/1720593261563/basf_logo?e=1776902400&v=beta&t=pPXuojQLvwO0FOpXUOyxoDloPKop_450qT-8Th6E_VQ",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF849M5dOkEA/company-logo_200_200/company-logo_200_200/0/1720593261563/basf_logo?e=1776902400&v=beta&t=coH4E-hYF6_FGvwk_mLeKqhtgQQOFwYZsRCYiKBmsAs",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF849M5dOkEA/company-logo_100_100/company-logo_100_100/0/1720593261563/basf_logo?e=1776902400&v=beta&t=_IBef-rcktlpboyXu3fQ-DJVvX7WL6yRxAyBg0OXoac",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Strategy Consultant",
+        "location": "Guetersloh, Germany",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Bertelsmann SE & Co. KGaA",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/4348/",
+        "companyId": "4348",
+        "duration": "2 yrs 5 mos",
+        "description": "Bertelsmann – Europe’s largest media company – offered me a great role to support one of their Division CEOs on strategic projects\n* As part of the Financial Services group, sold back-office outsourcing solutions for A/R, A/P, payroll, SAP R/3 to large regional and global corporate clients\n* Conducted various market entry strategy, M&A and PMI projects",
+        "skills": [
+          "Go-to-Market Strategy",
+          "Enterprise Technology"
+        ],
+        "startDate": {
+          "month": "Apr",
+          "year": 2002,
+          "text": "Apr 2002"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2004,
+          "text": "Aug 2004"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQF1x9WRj0EUWQ/company-logo_400_400/B4EZ0o6fNCIUAY-/0/1774507914430/bertelsmann_logo?e=1776902400&v=beta&t=xlS-UWk46LqW8zDY7gsNv4xAoqpB8odwuyH8cXdOnA0",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQF1x9WRj0EUWQ/company-logo_400_400/B4EZ0o6fNCIUAY-/0/1774507914430/bertelsmann_logo?e=1776902400&v=beta&t=xlS-UWk46LqW8zDY7gsNv4xAoqpB8odwuyH8cXdOnA0",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQF1x9WRj0EUWQ/company-logo_200_200/B4EZ0o6fNCIUAI-/0/1774507914430/bertelsmann_logo?e=1776902400&v=beta&t=wNSKuhzowuqL-Ox0m0qa61f-8jkmsmw4d-ejDRcerjI",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQF1x9WRj0EUWQ/company-logo_100_100/B4EZ0o6fNCIUAQ-/0/1774507914430/bertelsmann_logo?e=1776902400&v=beta&t=bdYxI7K1Hs05Ey4wHGBZKN5hX_SQxLwJPxRcobiMAwM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Founder & CEO",
+        "location": "Bayreuth, Germany",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Intraflux AG",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Intraflux+AG",
+        "duration": "5 yrs",
+        "description": "Following my conviction in customer centricity, I started a VC funded business for Value-add UI/UX solutions for Enterprise software – very early days\n* Created highly innovative methodology using “design thinking” and “human-computer-interaction” to build significantly better UI/UX for large-scale Enterprise software, i.e. Knowledge Mgt Systems\n* Acquired large corporates as customers, including Siemens, HP, AOK, Mannesmann/Vodafone, Roland Berger Consulting\n* Worked with leading software partners, e.g., Oracle, IBM, OpenText",
+        "skills": [
+          "Go-to-Market Strategy",
+          "Enterprise Technology",
+          "Team Management",
+          "Sales"
+        ],
+        "startDate": {
+          "year": 1996,
+          "text": "1996"
+        },
+        "endDate": {
+          "year": 2001,
+          "text": "2001"
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "University of Bayreuth",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/30761/",
+        "schoolId": "30761",
+        "degree": "Master of Science - MS",
+        "fieldOfStudy": "Business Administration",
+        "skills": [],
+        "insights": "Activities and societies: Major in Marketing and Services Management",
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGEF2qTvTKM1A/company-logo_400_400/company-logo_400_400/0/1630457517640/university_of_bayreuth_logo?e=1776902400&v=beta&t=gECaLuG3fDRYCsE6L2sEubgqNBg6Ib4SvOTVIjnAz8c",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGEF2qTvTKM1A/company-logo_400_400/company-logo_400_400/0/1630457517640/university_of_bayreuth_logo?e=1776902400&v=beta&t=gECaLuG3fDRYCsE6L2sEubgqNBg6Ib4SvOTVIjnAz8c",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGEF2qTvTKM1A/company-logo_200_200/company-logo_200_200/0/1630457517640/university_of_bayreuth_logo?e=1776902400&v=beta&t=sHlEvfDtzL_b3U5Y-LaAsJcsTLKneS8AAdPCrQStgvo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGEF2qTvTKM1A/company-logo_100_100/company-logo_100_100/0/1630457517640/university_of_bayreuth_logo?e=1776902400&v=beta&t=uH0BqYlvli4m5oBMyF51ahTMwdYqVwYGVmEs1BUo80s",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "The Wharton School",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/5290/",
+        "schoolId": "5290",
+        "degree": "Cryptocurrency and Blockchain Specialization",
+        "fieldOfStudy": "Finance",
+        "skills": [],
+        "insights": "Activities and societies: Fintech: Foundations & Applications of Financial Technology: Introduction to Digital Currencies",
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFQu7wZniptpA/company-logo_400_400/company-logo_400_400/0/1677690194092/the_wharton_school_logo?e=1776902400&v=beta&t=sW5cCSPXksuCk-FjvPkBXsGeBlrbSgaqWfpUx_DcxFw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFQu7wZniptpA/company-logo_400_400/company-logo_400_400/0/1677690194092/the_wharton_school_logo?e=1776902400&v=beta&t=sW5cCSPXksuCk-FjvPkBXsGeBlrbSgaqWfpUx_DcxFw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFQu7wZniptpA/company-logo_200_200/company-logo_200_200/0/1677690194092/the_wharton_school_logo?e=1776902400&v=beta&t=j74WhcKPlFREFO4X23rKsVHfGvXXQsyXNJhTkdHaGqE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFQu7wZniptpA/company-logo_100_100/company-logo_100_100/0/1677690194092/the_wharton_school_logo?e=1776902400&v=beta&t=bHfDk-ac5Tt9sw__wS3OQ5eZdoU8BisWE1tABfwhEzw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "University of Virginia Darden School of Business",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/15100776/",
+        "schoolId": "15100776",
+        "degree": "Digital Transformation",
+        "fieldOfStudy": null,
+        "skills": [],
+        "insights": "Activities and societies: Digital Transformation, Design Thinking for Innovation, Digital Product Management and Customer-Centric IT-Strategy",
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHzVxe-Iysg7w/company-logo_400_400/company-logo_400_400/0/1631347503820?e=1776902400&v=beta&t=EBT-pAxYAXMS0krKuESiIDfe0eVNlZGi1XfymgSjeeE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHzVxe-Iysg7w/company-logo_400_400/company-logo_400_400/0/1631347503820?e=1776902400&v=beta&t=EBT-pAxYAXMS0krKuESiIDfe0eVNlZGi1XfymgSjeeE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHzVxe-Iysg7w/company-logo_200_200/company-logo_200_200/0/1631347503820?e=1776902400&v=beta&t=7GQ7hHPVk4yRJE2RgUlqv52UOiApbsk2MiDhQbBrGuA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHzVxe-Iysg7w/company-logo_100_100/company-logo_100_100/0/1631347503820?e=1776902400&v=beta&t=J4FC_Kzj1GM211GZdoaMJNfxF0DnIROsG-EfoANSmbY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [
+      {
+        "role": "Mentor",
+        "description": "Provide career guidance and counselling for students",
+        "duration": "Nov 2017 - Apr 2022 · 4 yrs 6 mos",
+        "startDate": {
+          "month": "Nov",
+          "year": 2017,
+          "text": "Nov 2017"
+        },
+        "endDate": {
+          "month": "Apr",
+          "year": 2022,
+          "text": "Apr 2022 · 4 yrs 6 mos"
+        },
+        "organizationName": "HKUST Business School",
+        "organizationLinkedinUrl": "https://www.linkedin.com/company/15093572/",
+        "cause": "Education"
+      },
+      {
+        "role": "Lecturer for MBA program: \"Thinking in strategic frameworks\"",
+        "description": "Provide lecture on thinking in strategic frameworks and related case studies to prepare students for consulting project with NGOs/social enterprises",
+        "duration": "Jun 2017 - Jun 2018 · 1 yr 1 mo",
+        "startDate": {
+          "month": "Jun",
+          "year": 2017,
+          "text": "Jun 2017"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2018,
+          "text": "Jun 2018 · 1 yr 1 mo"
+        },
+        "organizationName": "The Chinese University of Hong Kong (CUHK) Business School",
+        "organizationLinkedinUrl": "https://www.linkedin.com/company/3923680/",
+        "cause": "Education"
+      }
+    ],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Team Management",
+        "positions": [
+          "8 experiences across MODIFI and 7 other companies"
+        ],
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Strategy",
+        "endorsements": "87 endorsements"
+      },
+      {
+        "name": "Management",
+        "endorsements": "49 endorsements"
+      },
+      {
+        "name": "Leadership",
+        "endorsements": "20 endorsements"
+      },
+      {
+        "name": "Strategic Planning",
+        "endorsements": "19 endorsements"
+      },
+      {
+        "name": "Enterprise Technology",
+        "positions": [
+          "9 experiences across MODIFI and 7 other companies"
+        ]
+      },
+      {
+        "name": "Go-to-Market Strategy",
+        "positions": [
+          "13 experiences across MODIFI and 9 other companies"
+        ],
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Artificial Intelligence (AI)",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Sales",
+        "positions": [
+          "5 experiences across MODIFI and 4 other companies"
+        ],
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "Business Strategy",
+        "endorsements": "99+ endorsements"
+      },
+      {
+        "name": "Business Development",
+        "endorsements": "93 endorsements"
+      },
+      {
+        "name": "Management Consulting",
+        "endorsements": "69 endorsements"
+      },
+      {
+        "name": "Digital Strategy",
+        "endorsements": "34 endorsements"
+      },
+      {
+        "name": "Consulting",
+        "endorsements": "35 endorsements"
+      },
+      {
+        "name": "Entrepreneurship",
+        "endorsements": "28 endorsements"
+      },
+      {
+        "name": "Marketing Strategy",
+        "endorsements": "27 endorsements"
+      },
+      {
+        "name": "Start-ups",
+        "endorsements": "28 endorsements"
+      },
+      {
+        "name": "Mergers & Acquisitions",
+        "endorsements": "25 endorsements"
+      },
+      {
+        "name": "Due Diligence",
+        "endorsements": "23 endorsements"
+      },
+      {
+        "name": "Business Process Improvement",
+        "endorsements": "19 endorsements"
+      },
+      {
+        "name": "Business Planning",
+        "endorsements": "16 endorsements"
+      },
+      {
+        "name": "Private Equity",
+        "endorsements": "16 endorsements"
+      },
+      {
+        "name": "Mobile Devices",
+        "endorsements": "14 endorsements"
+      },
+      {
+        "name": "Digital Marketing",
+        "endorsements": "15 endorsements"
+      },
+      {
+        "name": "Strategic Partnerships",
+        "endorsements": "13 endorsements"
+      },
+      {
+        "name": "Organizational Design",
+        "endorsements": "12 endorsements"
+      },
+      {
+        "name": "Executive Management",
+        "endorsements": "11 endorsements"
+      },
+      {
+        "name": "Project Management",
+        "endorsements": "13 endorsements"
+      },
+      {
+        "name": "Market Entry",
+        "endorsements": "12 endorsements"
+      },
+      {
+        "name": "New Business Development",
+        "endorsements": "13 endorsements"
+      },
+      {
+        "name": "M&A experience",
+        "endorsements": "11 endorsements"
+      },
+      {
+        "name": "Business Model Innovation",
+        "endorsements": "12 endorsements"
+      },
+      {
+        "name": "Disruptive Technologies",
+        "endorsements": "12 endorsements"
+      },
+      {
+        "name": "PMI",
+        "endorsements": "11 endorsements"
+      }
+    ],
+    "publications": [
+      {
+        "title": "Why online payment provider Alipay is more than just the Chinese equivalent of PayPal",
+        "publishedAt": "Jul 1, 2015",
+        "description": null,
+        "link": "https://www.linkedin.com/pulse/why-online-payment-provider-alipay-more-than-just-paypal-hendrichs"
+      },
+      {
+        "title": "First China, Then the World",
+        "publishedAt": "German Chamber of Commerce in China · Apr 1, 2013",
+        "description": "How can Chinese Chemical companies beneﬁt from changes in the industrial landscape - pages 21-22",
+        "link": "http://china.ahk.de/fileadmin/ahk_china/newsletter_magazines/GCT_2013-04.pdf"
+      },
+      {
+        "title": "Future of Chemicals Part VII- How China Can Leapfrog the Industry Development Cycle",
+        "publishedAt": "Aug 16, 2012",
+        "description": null,
+        "link": "http://www.booz.com/media/file/BoozCo_Future-of-Chemicals-Part-VII.pdf"
+      },
+      {
+        "title": "A message from robots: it's our turn",
+        "publishedAt": "China Daily · Dec 30, 2011",
+        "description": "A perspective of robots and process automation in industrial manufacturing in China",
+        "link": "http://usa.chinadaily.com.cn/weekly/2011-12/30/content_14354888.htm"
+      },
+      {
+        "title": "China's Digital Champion",
+        "publishedAt": "Booz & Company",
+        "description": "An overview of China internet landscape and successful internet companies in China",
+        "link": "http://www.booz.com/media/uploads/BoozCo_Chinas-Digital-Champions.pdf"
+      }
+    ],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [
+      {
+        "name": "English"
+      },
+      {
+        "name": "German"
+      },
+      {
+        "name": "Spanish"
+      }
+    ],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "PREMIUM_INMAIL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAB7Ai8EBKjQjiPrLCPcyvmzheYJGXVcuZLk",
+        "firstName": "Sheldon",
+        "lastName": "Chin",
+        "publicIdentifier": "sheldonchin",
+        "linkedinUrl": "https://www.linkedin.com/in/sheldonchin"
+      },
+      {
+        "id": "ACoAAAOd9gkBjdqPiZtbin0PYz4wva7Z__9cAQw",
+        "firstName": "Amritha",
+        "lastName": "Kini",
+        "publicIdentifier": "amritha-kini",
+        "linkedinUrl": "https://www.linkedin.com/in/amritha-kini"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAAABDMRMBR3f6hHfD2BUX7D43FT0UzWTlQAg",
+        "firstName": "Guillaume",
+        "lastName": "Princen",
+        "publicIdentifier": "guillaume-princen-3835841",
+        "linkedinUrl": "https://www.linkedin.com/in/guillaume-princen-3835841"
+      },
+      {
+        "id": "ACoAAAZjUBcBxXqUrQ82iTUnKLO965bbccowe1g",
+        "firstName": "Minoru",
+        "lastName": "Fujita",
+        "publicIdentifier": "minoru-fujita-907a842b",
+        "linkedinUrl": "https://www.linkedin.com/in/minoru-fujita-907a842b"
+      },
+      {
+        "id": "ACoAAAKbruwBXEaabp6JEtMcwN0bClAV4x73Z-c",
+        "firstName": "Chris",
+        "lastName": "Halim",
+        "publicIdentifier": "chris-halim",
+        "linkedinUrl": "https://www.linkedin.com/in/chris-halim"
+      },
+      {
+        "id": "ACoAAAC4F6sB4BOOWa5Dz4olrEsQ2gcKU8Rp0Bs",
+        "firstName": "Scott",
+        "lastName": "Albin",
+        "publicIdentifier": "scottalbin",
+        "linkedinUrl": "https://www.linkedin.com/in/scottalbin"
+      },
+      {
+        "id": "ACoAAAB0d14BycB-h5vwkpdqvNMMYHaHL_n7GTk",
+        "firstName": "Vivek",
+        "lastName": "Mahapatra",
+        "publicIdentifier": "vivekmahapatra",
+        "linkedinUrl": "https://www.linkedin.com/in/vivekmahapatra"
+      },
+      {
+        "id": "ACoAAAOz20sBb4A2waHXKVgjSN-YGqtSPpI5-uA",
+        "firstName": "Scott",
+        "lastName": "Fontanez Boren, CFA",
+        "publicIdentifier": "scboren",
+        "linkedinUrl": "https://www.linkedin.com/in/scboren"
+      },
+      {
+        "id": "ACoAAAWKWDYB_BQXchuGA0e3XvXcHjhSl0A45cg",
+        "firstName": "Pachara (Pinn)",
+        "lastName": "Lawjindakul",
+        "publicIdentifier": "pinn",
+        "linkedinUrl": "https://www.linkedin.com/in/pinn"
+      },
+      {
+        "id": "ACoAAAJqB8sB4yikDQjhedLbozs7XGRmi5Ww00w",
+        "firstName": "Vik",
+        "lastName": "Kathuria ",
+        "publicIdentifier": "vikkathuria",
+        "linkedinUrl": "https://www.linkedin.com/in/vikkathuria"
+      },
+      {
+        "id": "ACoAAAAFiC8BfBo42HS-o3ZBrlju_y_CL6X3hAg",
+        "firstName": "Chris",
+        "lastName": "Ciauri",
+        "publicIdentifier": "cciauri",
+        "linkedinUrl": "https://www.linkedin.com/in/cciauri"
+      },
+      {
+        "id": "ACoAAAAAqWoBZhOWnVLBZLPV6iWB57X2dph0gwU",
+        "firstName": "Ravi",
+        "lastName": "Mhatre",
+        "publicIdentifier": "ravimhatre",
+        "linkedinUrl": "https://www.linkedin.com/in/ravimhatre"
+      },
+      {
+        "id": "ACoAABzHTW0B-WYLujLkSNon3pbS2xL6pih93ao",
+        "firstName": "Olivier ",
+        "lastName": "Moccafico",
+        "publicIdentifier": "olivier-moccafico",
+        "linkedinUrl": "https://www.linkedin.com/in/olivier-moccafico"
+      },
+      {
+        "id": "ACoAABEAZjYBJiUPQTYru1lGY0SQnRknDfAOBR8",
+        "firstName": "Dat",
+        "lastName": "Han",
+        "publicIdentifier": "datcheam",
+        "linkedinUrl": "https://www.linkedin.com/in/datcheam"
+      },
+      {
+        "id": "ACoAABTaGAIBwSTe3LnmuqM9IAshOD40tNObfPA",
+        "firstName": "Daishi",
+        "lastName": "Okada",
+        "publicIdentifier": "daishi-okada-1961b099",
+        "linkedinUrl": "https://www.linkedin.com/in/daishi-okada-1961b099"
+      },
+      {
+        "id": "ACoAAACzElYB2-gSCP__bgDiU0gxnxt4QeZAVXY",
+        "firstName": "Hang Kei Simon",
+        "lastName": "Wong",
+        "publicIdentifier": "hangkeisimonwong",
+        "linkedinUrl": "https://www.linkedin.com/in/hangkeisimonwong"
+      },
+      {
+        "id": "ACoAAADOUV8BJ801LMauCZt8XMZwVuFiDhSBTYY",
+        "firstName": "Edouard",
+        "lastName": "de La Jonquiere",
+        "publicIdentifier": "edelajonquiere",
+        "linkedinUrl": "https://www.linkedin.com/in/edelajonquiere"
+      },
+      {
+        "id": "ACoAADVBXI4B28PcBn86Mj3Z9f9TYYGoLq2O1uU",
+        "firstName": "Saloni",
+        "lastName": "Gore",
+        "publicIdentifier": "saloni-gore-a3a28120b",
+        "linkedinUrl": "https://www.linkedin.com/in/saloni-gore-a3a28120b"
+      },
+      {
+        "id": "ACoAABlmzjQBVjoKjtvMYsc1vU9b107j_fam1Xs",
+        "firstName": "James",
+        "lastName": "Alcorn",
+        "publicIdentifier": "james-alcorn-b04880ba",
+        "linkedinUrl": "https://www.linkedin.com/in/james-alcorn-b04880ba"
+      },
+      {
+        "id": "ACoAAA3vWiABevk2bovH0BWi1EzuuUmrrM2__7Y",
+        "firstName": "Julia",
+        "lastName": "Merced",
+        "position": "Import coordinator",
+        "publicIdentifier": "julia-merced-16836766",
+        "linkedinUrl": "https://www.linkedin.com/in/julia-merced-16836766"
+      },
+      {
+        "id": "ACoAAFl1UvkB4q6wwY9MhsDv7qCjJDxYCg5Fcg8",
+        "firstName": "David",
+        "lastName": "Jones",
+        "position": "Import/Export | inland operations",
+        "publicIdentifier": "david-jones-b0977535a",
+        "linkedinUrl": "https://www.linkedin.com/in/david-jones-b0977535a"
+      },
+      {
+        "id": "ACoAAAHEF0cBL1vNAvpbQSBOJ2Gqz5Xj7lEL848",
+        "firstName": "Thetis",
+        "lastName": "Bigham",
+        "position": "Import/Export Trade Compliance Expert",
+        "publicIdentifier": "thetisbigham",
+        "linkedinUrl": "https://www.linkedin.com/in/thetisbigham"
+      },
+      {
+        "id": "ACoAAF7tCWoBwbXPupeE7Hg5TkWzoQdeE62uUNE",
+        "firstName": "Mary",
+        "lastName": "Emmanuel",
+        "position": "Import operations Specialist",
+        "publicIdentifier": "mary-emmanuel-3a2433385",
+        "linkedinUrl": "https://www.linkedin.com/in/mary-emmanuel-3a2433385"
+      },
+      {
+        "id": "ACoAABIKOPQBo0VXJG859YG3b4fbC5OLAVBTSkA",
+        "firstName": "Mark",
+        "lastName": "Surma",
+        "position": "Global Trade Compliance Leader | Import Compliance & Customs Strategy | Duty Optimization (FTAs, First Sale, Drawback) | Section 301 / 232 / IEEPA | SAP GTS | U.S. Licensed Customs Broker",
+        "publicIdentifier": "markcsurma",
+        "linkedinUrl": "https://www.linkedin.com/in/markcsurma"
+      },
+      {
+        "id": "ACoAAAy3IHcBQ6d4Oia5njUZfl5TxuwAjU0PXCo",
+        "firstName": "Jacqueline",
+        "lastName": "Campbell",
+        "position": "Import/Export Global Trade Compliance Specialist",
+        "publicIdentifier": "jacqueline-campbell-8475395b",
+        "linkedinUrl": "https://www.linkedin.com/in/jacqueline-campbell-8475395b"
+      },
+      {
+        "id": "ACoAAGQrDWABE4YO7Zm20XQ_EnNBMNV4itXIyIo",
+        "firstName": "Lourdes",
+        "lastName": "De La Rosa",
+        "position": "Import Export Coordinator",
+        "publicIdentifier": "lourdes-de-la-rosa-6009883aa",
+        "linkedinUrl": "https://www.linkedin.com/in/lourdes-de-la-rosa-6009883aa"
+      },
+      {
+        "id": "ACoAACui9BsB0vRpG67Nb4lSOgMMCRuiJttmpKQ",
+        "firstName": "Gern",
+        "lastName": "Scott",
+        "position": "Import Compliance Specialist",
+        "publicIdentifier": "gern-scott-90b218185",
+        "linkedinUrl": "https://www.linkedin.com/in/gern-scott-90b218185"
+      },
+      {
+        "id": "ACoAACgxAzoB9IDEJLVAMrA9zOe5NWclyAVvUVw",
+        "firstName": "Annmarie",
+        "lastName": "Fiorillo",
+        "position": "Head of Customs Compliance - Global Customs  Compliance Leader",
+        "publicIdentifier": "annmarie-fiorillo-3b69a4169",
+        "linkedinUrl": "https://www.linkedin.com/in/annmarie-fiorillo-3b69a4169"
+      },
+      {
+        "id": "ACoAAAXvg28B7FcVnRR7pZebXM8BhmgV2l4Q3So",
+        "firstName": "Edgar",
+        "lastName": "Bernal",
+        "position": "Founder @ Guverna AI | Licensed Customs Broker | I help SMB Importers streamline import processes with AI.",
+        "publicIdentifier": "edgar-bernal-b5342429",
+        "linkedinUrl": "https://www.linkedin.com/in/edgar-bernal-b5342429"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAAF57BEBvbZEr26oPtkxTzHZeqF6dVoWX-I"
+    }
+  }
+}

@@ -1,0 +1,660 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAABbJeIBp6LZ6x8OmzWEcxEXIP39XMsAbcM",
+    "profile_url": "https://www.linkedin.com/in/ACwAAABbJeIBp6LZ6x8OmzWEcxEXIP39XMsAbcM"
+  },
+  "item": {
+    "id": "ACoAAABbJeIBUCjQgxHK47izrgsSMdXYb8KR2co",
+    "publicIdentifier": "joleneparish",
+    "linkedinUrl": "https://www.linkedin.com/in/joleneparish",
+    "firstName": "Jolene",
+    "lastName": "P.",
+    "emails": [
+      {
+        "email": "jolene@openai.com",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://openai.com/",
+        "domain": "openai.com",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "everything bagel sous-chef",
+    "openToWork": false,
+    "hiring": false,
+    "premium": true,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco Bay Area",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "5973474",
+    "registeredAt": "2006-05-23T18:57:33.000Z",
+    "topSkills": null,
+    "connectionsCount": 763,
+    "followerCount": 1023,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "11130470",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/11130470/",
+        "companyName": "OpenAI",
+        "dateRange": {
+          "start": {
+            "month": 2,
+            "year": 2026,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": null,
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "everything bagel sous-chef",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "OpenAI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/openai/",
+        "companyId": "11130470",
+        "companyUniversalName": "openai",
+        "duration": "3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2026,
+          "text": "Feb 2026"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_200_200/B56ZT8EYB8HsAI-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=O6RSWlpQ5W4zNCOCTu621qCyTijLuXFJS4pz2_hBQfo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_100_100/B56ZT8EYB8HsAQ-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=y7RA89V9q8GlAjQ1oRU-jf_-n5zlSXRCnykXBIkgHfM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyId": "105913171",
+        "duration": "11 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Apr",
+          "year": 2025,
+          "text": "Apr 2025"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2026,
+          "text": "Feb 2026"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "OpenAI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/openai/",
+        "companyId": "11130470",
+        "companyUniversalName": "openai",
+        "duration": "3 yrs",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2022,
+          "text": "May 2022"
+        },
+        "endDate": {
+          "month": "Apr",
+          "year": 2025,
+          "text": "Apr 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_200_200/B56ZT8EYB8HsAI-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=O6RSWlpQ5W4zNCOCTu621qCyTijLuXFJS4pz2_hBQfo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_100_100/B56ZT8EYB8HsAQ-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=y7RA89V9q8GlAjQ1oRU-jf_-n5zlSXRCnykXBIkgHfM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior Manager, Information Security",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Apple",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/162479/",
+        "companyId": "162479",
+        "duration": "5 yrs",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "3e60f275c1ba4dcac173e0bcddb6c027756b17f0",
+        "startDate": {
+          "month": "May",
+          "year": 2017,
+          "text": "May 2017"
+        },
+        "endDate": {
+          "month": "Apr",
+          "year": 2022,
+          "text": "Apr 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_400_400/company-logo_400_400/0/1630637844948/apple_logo?e=1776902400&v=beta&t=KteXM40NNLQ3nz21Do-neoy-f7lbDDA7kJmtS5wwrL4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_400_400/company-logo_400_400/0/1630637844948/apple_logo?e=1776902400&v=beta&t=KteXM40NNLQ3nz21Do-neoy-f7lbDDA7kJmtS5wwrL4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_200_200/company-logo_200_200/0/1630637844948/apple_logo?e=1776902400&v=beta&t=I8RMorsmHMk3gA9b3fT4m2HDgfVtfdB6se4bEZcMHb8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_100_100/company-logo_100_100/0/1630637844948/apple_logo?e=1776902400&v=beta&t=8c3EpxT43tZMihGirOM7eBnDzFHAGiYV-OxaRj_xfjo",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior Security Engineer",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Apple",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/162479/",
+        "companyId": "162479",
+        "duration": "5 yrs 2 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "3e60f275c1ba4dcac173e0bcddb6c027756b17f0",
+        "startDate": {
+          "month": "Apr",
+          "year": 2012,
+          "text": "Apr 2012"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2017,
+          "text": "May 2017"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_400_400/company-logo_400_400/0/1630637844948/apple_logo?e=1776902400&v=beta&t=KteXM40NNLQ3nz21Do-neoy-f7lbDDA7kJmtS5wwrL4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_400_400/company-logo_400_400/0/1630637844948/apple_logo?e=1776902400&v=beta&t=KteXM40NNLQ3nz21Do-neoy-f7lbDDA7kJmtS5wwrL4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_200_200/company-logo_200_200/0/1630637844948/apple_logo?e=1776902400&v=beta&t=I8RMorsmHMk3gA9b3fT4m2HDgfVtfdB6se4bEZcMHb8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_100_100/company-logo_100_100/0/1630637844948/apple_logo?e=1776902400&v=beta&t=8c3EpxT43tZMihGirOM7eBnDzFHAGiYV-OxaRj_xfjo",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Penetration Testing",
+        "positions": [
+          "Endorsed by 7 colleagues at Apple"
+        ],
+        "endorsements": "30 endorsements"
+      },
+      {
+        "name": "Information Security",
+        "positions": [
+          "Endorsed by 9 colleagues at Apple"
+        ],
+        "endorsements": "27 endorsements"
+      },
+      {
+        "name": "Software Development",
+        "positions": [
+          "Endorsed by 3 colleagues at Apple"
+        ],
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "Web Application Security",
+        "endorsements": "22 endorsements"
+      },
+      {
+        "name": "Security",
+        "endorsements": "20 endorsements"
+      },
+      {
+        "name": "Application Security",
+        "endorsements": "13 endorsements"
+      },
+      {
+        "name": "Network Security",
+        "endorsements": "14 endorsements"
+      },
+      {
+        "name": "Code Review",
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "Vulnerability Assessment",
+        "endorsements": "7 endorsements"
+      },
+      {
+        "name": "PCI DSS",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Information Security Management",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "OWASP",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Java",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "SaaS",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Databases",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Linux",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Computer Security",
+        "endorsements": "19 endorsements"
+      },
+      {
+        "name": "Source code review",
+        "endorsements": "4 endorsements"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "PREMIUM_INMAIL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "position": "AI Researcher, Co-founder @ Thinking Machines Lab",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAABEmYXYB5f-3ZmFG8dI-n9XAlqySBqO-2PA",
+        "firstName": "Luke",
+        "lastName": "Carlson",
+        "position": "Thinking Machines | Member of Technical Staff",
+        "publicIdentifier": "jlukecarlson",
+        "linkedinUrl": "https://www.linkedin.com/in/jlukecarlson"
+      },
+      {
+        "id": "ACoAAAQ4Q7kByw3YKf2rFlmWzRMF7P8Gw4S9PIU",
+        "firstName": "Yinghai",
+        "lastName": "L.",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "yinghai83",
+        "linkedinUrl": "https://www.linkedin.com/in/yinghai83"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABgwxtcBfqsJJUHPwsSPuBE4K9oKyRqUp5o",
+        "firstName": "Lia",
+        "lastName": "Guy",
+        "position": "Research @ OpenAI",
+        "publicIdentifier": "aureliaguy",
+        "linkedinUrl": "https://www.linkedin.com/in/aureliaguy"
+      },
+      {
+        "id": "ACoAAACQBzQB5nk5kOpFWQRtK4pv3RaL5q2G-pA",
+        "firstName": "Jonathan",
+        "lastName": "Lachman",
+        "position": "Founding Head of Operations at Thinking Machines Lab",
+        "publicIdentifier": "jonathan-lachman-4981b23",
+        "linkedinUrl": "https://www.linkedin.com/in/jonathan-lachman-4981b23"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAAAbBBJsBnpIQdOsJB5IMpR7ePIGOlRam73w",
+        "firstName": "Mario",
+        "lastName": "Saltarelli",
+        "position": "IT",
+        "publicIdentifier": "msaltarelli",
+        "linkedinUrl": "https://www.linkedin.com/in/msaltarelli"
+      },
+      {
+        "id": "ACoAAAJzsfoBp0MxssQYMgmy0ZNO2U3sA58ugwc",
+        "firstName": "Joshua",
+        "lastName": "Gross",
+        "position": "Engineering Leadership, Meta Superintelligence Lab",
+        "publicIdentifier": "joshgross",
+        "linkedinUrl": "https://www.linkedin.com/in/joshgross"
+      },
+      {
+        "id": "ACoAABYs4-IB5mHx5eVfOHzu1e8xlO3q_kb38IM",
+        "firstName": "Brydon",
+        "lastName": "Eastman",
+        "position": "Nerd @ Thinking Machines Labs | Formerly Member of Technical Staff @ OpenAI | PhD in Mathematical Oncology",
+        "publicIdentifier": "brydon-eastman-396719a4",
+        "linkedinUrl": "https://www.linkedin.com/in/brydon-eastman-396719a4"
+      },
+      {
+        "id": "ACoAAACo1tYBGy9sT2OWZuEULOMe4K_b2Y22-F8",
+        "firstName": "Alex",
+        "lastName": "Gartrell",
+        "position": "Engineering @ Thinking Machines, Ex-Meta/Facebook",
+        "publicIdentifier": "alexgartrell",
+        "linkedinUrl": "https://www.linkedin.com/in/alexgartrell"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAABA0sF8BJqwmfoms3veu9TE72tj8JMUQEFA",
+        "firstName": "Sam",
+        "lastName": "Shleifer",
+        "position": "The Biggest Legend",
+        "publicIdentifier": "sam-shleifer-a5307a77",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-shleifer-a5307a77"
+      },
+      {
+        "id": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+        "firstName": "Saurabh",
+        "lastName": "Garg",
+        "position": "Thinking Machines Lab | Prev: Mistral AI, CMU, IIT-B",
+        "publicIdentifier": "saurabh-garg-b680b5b8",
+        "linkedinUrl": "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+      },
+      {
+        "id": "ACoAAAl87CYBWKLLyGNTbomy6oqIPv-5n34CXIY",
+        "firstName": "Andrew",
+        "lastName": "Tulloch",
+        "position": "AI Research @ Meta",
+        "publicIdentifier": "andrew-tulloch-17238745",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-tulloch-17238745"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "position": "Co-Founder and CEO at Thinking Machines Lab",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAABPg53YBHdOvmp7pU72eDhcho-7cnwyxk1o",
+        "firstName": "Pia",
+        "lastName": "Santos",
+        "position": "Founding Team at Thinking Machines Lab",
+        "publicIdentifier": "piafsantos",
+        "linkedinUrl": "https://www.linkedin.com/in/piafsantos"
+      },
+      {
+        "id": "ACoAAAf7ZWcB3BGw5pTmcsFw0vXm4A_CQn6EkFo",
+        "firstName": "Christian",
+        "lastName": "G.",
+        "publicIdentifier": "christianjgibson",
+        "linkedinUrl": "https://www.linkedin.com/in/christianjgibson"
+      },
+      {
+        "id": "ACoAAAji1bkB1eLX4z2Jb9-N2nMhEGNLWptSnqU",
+        "firstName": "Clare",
+        "lastName": "Birch",
+        "publicIdentifier": "clarebirch42",
+        "linkedinUrl": "https://www.linkedin.com/in/clarebirch42"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAABwCQVkBc_f_rIXO32zKEL-G_35Gga-J8VE",
+        "firstName": "Rotem",
+        "lastName": "Goodman",
+        "position": "Clinical Social Worker, MSW | Lecturer",
+        "publicIdentifier": "rotem-goodman-6a1456111",
+        "linkedinUrl": "https://www.linkedin.com/in/rotem-goodman-6a1456111"
+      },
+      {
+        "id": "ACoAADVID1sByMGxokOCJaVhsnwlBMYwHoFTIxc",
+        "firstName": "Stav",
+        "lastName": "Sharlo",
+        "position": "Real Estate Advocate",
+        "publicIdentifier": "stav-sharlo-aa345320b",
+        "linkedinUrl": "https://www.linkedin.com/in/stav-sharlo-aa345320b"
+      },
+      {
+        "id": "ACoAAD0d24wB_mt3Fdr9i-CUEIJeNcGT397gFOY",
+        "firstName": "Yuval",
+        "lastName": "Levin",
+        "position": "Associate at Goldfarb Gross Seligman",
+        "publicIdentifier": "yuval-levin-778487247",
+        "linkedinUrl": "https://www.linkedin.com/in/yuval-levin-778487247"
+      },
+      {
+        "id": "ACoAADuIp-AB3rTBTMCWDGuyRaLL4aFcukvXAXI",
+        "firstName": "Avihu",
+        "lastName": "Yahlomi",
+        "position": "--",
+        "publicIdentifier": "avihu-yahlomi-b945bb23a",
+        "linkedinUrl": "https://www.linkedin.com/in/avihu-yahlomi-b945bb23a"
+      },
+      {
+        "id": "ACoAAAEfhhYB5SHszW_muNpDax2REAL5SrR9mkI",
+        "firstName": "Noa",
+        "lastName": "Pulver Anca",
+        "position": "מרכזת עבודה קהילתית at מועצה אזורית משגב",
+        "publicIdentifier": "noa-pulver-anca-7323886",
+        "linkedinUrl": "https://www.linkedin.com/in/noa-pulver-anca-7323886"
+      },
+      {
+        "id": "ACoAAAblf6oBqiK55d135VS0D9F7kWqbGTacknM",
+        "firstName": "Olga Rivkin",
+        "lastName": "אולגה ריבקין",
+        "position": "CPA | Accounting Services | Audit | Financial management",
+        "publicIdentifier": "olga-rivkin-cpa",
+        "linkedinUrl": "https://www.linkedin.com/in/olga-rivkin-cpa"
+      },
+      {
+        "id": "ACoAABR-eakBId2eYSc_7aiCRo6k5LXHNklYeiM",
+        "firstName": "Hila",
+        "lastName": "Shohami",
+        "position": "Administrative Manager, Conferences and Seminars Coordinator at Haruv Institute",
+        "publicIdentifier": "hila-shohami-52119597",
+        "linkedinUrl": "https://www.linkedin.com/in/hila-shohami-52119597"
+      },
+      {
+        "id": "ACoAADpHDPkB70BbMDJxo1dGZl4dkhkOCF2t_V0",
+        "firstName": "Dr. Yosef",
+        "lastName": "kula",
+        "position": "Exploring how stress and physiology shape performance in teams operating under extreme conditions.",
+        "publicIdentifier": "dr-yosef-kula-989536233",
+        "linkedinUrl": "https://www.linkedin.com/in/dr-yosef-kula-989536233"
+      },
+      {
+        "id": "ACoAACBDw4EBygtYTpQjAJcoveEncPglbPNuVNA",
+        "firstName": "Almog",
+        "lastName": "Amir",
+        "position": "CEO & Founder – Taagidim IL  | Independent Law Practice Professional at Almog Amir Law Firm",
+        "publicIdentifier": "almog-amir-22934b131",
+        "linkedinUrl": "https://www.linkedin.com/in/almog-amir-22934b131"
+      },
+      {
+        "id": "ACoAAAg4uhoBlxOKGzR027Vb03891dqt_OFYUbw",
+        "firstName": "nili",
+        "lastName": "kaufman",
+        "position": "Project Manager at The Shashua Family Foundation",
+        "publicIdentifier": "nili-kaufman-87623b3a",
+        "linkedinUrl": "https://www.linkedin.com/in/nili-kaufman-87623b3a"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAABbJeIBp6LZ6x8OmzWEcxEXIP39XMsAbcM"
+    }
+  }
+}

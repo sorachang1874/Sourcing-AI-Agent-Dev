@@ -1,0 +1,989 @@
+{
+  "network_info": null,
+  "profile_photo_url": "https://media.licdn.com/dms/image/v2/D5603AQHVeh4lTMbHlg/profile-displayphoto-crop_800_800/B56ZpNwYEVI0AM-/0/1762241120858?e=1776902400&v=beta&t=8zi-rVINsqtNxtTZ7Wkn4lWq9BsgTwIAxjIekfJDiCA",
+  "test_scores": {},
+  "background_photo_url": null,
+  "websites": [
+    "https://www.linkedin.com/in/caroline-ricksen-702588176"
+  ],
+  "patents": {},
+  "profile_url": "https://www.linkedin.com/in/caroline-ricksen-702588176",
+  "summary": null,
+  "message": "For high volume usage and custom pricing, visit https://app.enrichgraph.io or contact us at support@enrichgraph.io",
+  "verifications": {
+    "joined_date": null,
+    "sections": null,
+    "is_verified": false
+  },
+  "languages": {},
+  "badges": {
+    "open_to_work": false,
+    "is_hiring": false,
+    "premium": true,
+    "creator": false,
+    "influencer": false,
+    "top_voice": false
+  },
+  "honors": [
+    {
+      "company_id": null,
+      "description": null,
+      "image_url": null,
+      "title": "First Team All American",
+      "url": null,
+      "position_held": null,
+      "date_range": {
+        "start": {
+          "iso": "2022-07",
+          "year": 2022,
+          "month": 7,
+          "day": null
+        },
+        "end": null
+      },
+      "name": "First Team All American",
+      "company": null
+    },
+    {
+      "company_id": null,
+      "description": null,
+      "image_url": null,
+      "title": "CRCA Scholar Athlete",
+      "url": null,
+      "position_held": null,
+      "date_range": {
+        "start": {
+          "iso": "2022-06",
+          "year": 2022,
+          "month": 6,
+          "day": null
+        },
+        "end": null
+      },
+      "name": "CRCA Scholar Athlete",
+      "company": null
+    },
+    {
+      "company_id": null,
+      "description": "All American Nominee - Sophomore Season",
+      "image_url": null,
+      "title": "All American Nominee",
+      "url": null,
+      "position_held": null,
+      "date_range": {
+        "start": {
+          "iso": "2020-07",
+          "year": 2020,
+          "month": 7,
+          "day": null
+        },
+        "end": null
+      },
+      "name": "All American Nominee",
+      "company": null
+    },
+    {
+      "company_id": null,
+      "description": null,
+      "image_url": null,
+      "title": "Second Team All American ",
+      "url": null,
+      "position_held": null,
+      "date_range": {
+        "start": {
+          "iso": "2019-06",
+          "year": 2019,
+          "month": 6,
+          "day": null
+        },
+        "end": null
+      },
+      "name": "Second Team All American ",
+      "company": null
+    },
+    {
+      "company_id": null,
+      "description": null,
+      "image_url": null,
+      "title": "Principal's Award",
+      "url": null,
+      "position_held": null,
+      "date_range": {
+        "start": {
+          "iso": "2018-06",
+          "year": 2018,
+          "month": 6,
+          "day": null
+        },
+        "end": null
+      },
+      "name": "Principal's Award",
+      "company": null
+    }
+  ],
+  "contact_info": null,
+  "education": [
+    {
+      "school_name": "Stanford University",
+      "school_id": "17926",
+      "school_url": "https://www.linkedin.com/school/stanford-university/",
+      "school_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_400_400/company-logo_400_400/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=zzE-1MKqCLrmkqb1p2hJqhVuV2hbdZzC0j_ok6Kyhk8",
+      "degree": "Bachelor of Science - BS",
+      "field_of_study": "Major in Symbolic Systems, Minor in Ethics & Technology",
+      "activities": "Coxswain on the Open Weight Women's Rowing Team, Co-President for Stanford Women in Business, CFO of Kappa Alpha Theta Sorority, Course Assistant at the Graduate School of Business and design school",
+      "grade": "Alumni",
+      "date_range": {
+        "start": {
+          "iso": "2018-09",
+          "year": 2018,
+          "month": 9,
+          "day": null
+        },
+        "end": {
+          "iso": "2022-06",
+          "year": 2022,
+          "month": 6,
+          "day": null
+        }
+      },
+      "description": null
+    },
+    {
+      "school_name": "Miramonte High School",
+      "school_id": "3199102",
+      "school_url": "https://www.linkedin.com/school/miramonte-high-school/",
+      "school_logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQF_P-g2JEl2LQ/company-logo_400_400/company-logo_400_400/0/1630573913184?e=1776902400&v=beta&t=xNUhE6UagEQ_yH_SQAfxpdWRY38-nWQmRwtaytER9vU",
+      "degree": null,
+      "field_of_study": null,
+      "activities": "Varsity Rowing Team (Coxswain), US Rowing Junior National Team (Coxswain), Yearbook Editor in Chief, Link Crew Commissioner, Peer Tutoring Center Task Leader",
+      "grade": null,
+      "date_range": null,
+      "description": null
+    }
+  ],
+  "certifications": {},
+  "organizations": {},
+  "member_urn": "700145138",
+  "skills": {},
+  "entity_urn": "ACoAACm7XfIB5EjqiHQv8SJP7Y18c3jLrmpNWZI",
+  "volunteer_experiences": {},
+  "public_identifier": "caroline-ricksen-702588176",
+  "courses": [
+    {
+      "company_id": null,
+      "description": null,
+      "image_url": null,
+      "title": "Computational Models of the Neocortex",
+      "url": null,
+      "position_held": null,
+      "date_range": null,
+      "name": "Computational Models of the Neocortex",
+      "company": null
+    },
+    {
+      "company_id": null,
+      "description": null,
+      "image_url": null,
+      "title": "Computer Organization and Systems (CS 107)",
+      "url": null,
+      "position_held": null,
+      "date_range": null,
+      "name": "Computer Organization and Systems (CS 107)",
+      "company": null
+    },
+    {
+      "company_id": null,
+      "description": null,
+      "image_url": null,
+      "title": "Humor: Serious Business",
+      "url": null,
+      "position_held": null,
+      "date_range": null,
+      "name": "Humor: Serious Business",
+      "company": null
+    },
+    {
+      "company_id": null,
+      "description": null,
+      "image_url": null,
+      "title": "Inventing the Future",
+      "url": null,
+      "position_held": null,
+      "date_range": null,
+      "name": "Inventing the Future",
+      "company": null
+    },
+    {
+      "company_id": null,
+      "description": null,
+      "image_url": null,
+      "title": "Minds and Machines",
+      "url": null,
+      "position_held": null,
+      "date_range": null,
+      "name": "Minds and Machines",
+      "company": null
+    },
+    {
+      "company_id": null,
+      "description": null,
+      "image_url": null,
+      "title": "Principles of Economics",
+      "url": null,
+      "position_held": null,
+      "date_range": null,
+      "name": "Principles of Economics",
+      "company": null
+    },
+    {
+      "company_id": null,
+      "description": null,
+      "image_url": null,
+      "title": "Programming Abstractions in C++ (CS 106B)",
+      "url": null,
+      "position_held": null,
+      "date_range": null,
+      "name": "Programming Abstractions in C++ (CS 106B)",
+      "company": null
+    },
+    {
+      "company_id": null,
+      "description": null,
+      "image_url": null,
+      "title": "Programming Methodology (CS 106A)",
+      "url": null,
+      "position_held": null,
+      "date_range": null,
+      "name": "Programming Methodology (CS 106A)",
+      "company": null
+    },
+    {
+      "company_id": null,
+      "description": null,
+      "image_url": null,
+      "title": "Race and Gender in Silicon Valley",
+      "url": null,
+      "position_held": null,
+      "date_range": null,
+      "name": "Race and Gender in Silicon Valley",
+      "company": null
+    },
+    {
+      "company_id": null,
+      "description": null,
+      "image_url": null,
+      "title": "Trust and Safety Engineering",
+      "url": null,
+      "position_held": null,
+      "date_range": null,
+      "name": "Trust and Safety Engineering",
+      "company": null
+    }
+  ],
+  "first_name": "Caroline",
+  "publications": {},
+  "location": {
+    "city": null,
+    "country_code": "US",
+    "name": "San Francisco, California, United States",
+    "country": "United States"
+  },
+  "projects": {},
+  "headline": "Operations @ Thinking Machines Lab",
+  "last_name": "Ricksen",
+  "industry": "Computer Software",
+  "experience": [
+    {
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+      "company_employee_count_range": {
+        "start": 11,
+        "end": 50
+      },
+      "company_industry": "Computer Software",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_id": "105913171",
+          "company_employee_count_range": {
+            "start": 11,
+            "end": 50
+          },
+          "company_industry": "Computer Software",
+          "workplace_type": null,
+          "title": "Member of Operations Staff",
+          "location_name": "San Francisco Bay Area",
+          "company_name": "Thinking Machines Lab",
+          "date_range": {
+            "start": {
+              "iso": "2026-03",
+              "year": 2026,
+              "month": 3,
+              "day": null
+            },
+            "end": null
+          },
+          "employment_type": "Full-time",
+          "description": null,
+          "company_url": "https://www.linkedin.com/company/thinkingmachinesai/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U"
+        }
+      ],
+      "company_name": "Thinking Machines Lab",
+      "date_range": {
+        "start": {
+          "iso": "2026-03",
+          "year": 2026,
+          "month": 3,
+          "day": null
+        },
+        "end": null
+      },
+      "company_url": "https://www.linkedin.com/company/thinkingmachinesai/",
+      "company_id": "105913171"
+    },
+    {
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D4D0BAQGHXCHuFIemPw/company-logo_400_400/company-logo_400_400/0/1702617640533/factory_hq_logo?e=1776902400&v=beta&t=xakn__qwp_vkSvrtAbbUToIRcFzfD_GK_KA7UR1o-zM",
+      "company_employee_count_range": {
+        "start": 51,
+        "end": 200
+      },
+      "company_industry": "Computer Software",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_id": "93213132",
+          "company_employee_count_range": {
+            "start": 51,
+            "end": 200
+          },
+          "company_industry": "Computer Software",
+          "workplace_type": null,
+          "title": "Strategy & Operations",
+          "location_name": "San Francisco, California, United States",
+          "company_name": "Factory",
+          "date_range": {
+            "start": {
+              "iso": "2025",
+              "year": 2025,
+              "month": null,
+              "day": null
+            },
+            "end": {
+              "iso": "2026-03",
+              "year": 2026,
+              "month": 3,
+              "day": null
+            }
+          },
+          "employment_type": null,
+          "description": null,
+          "company_url": "https://www.linkedin.com/company/factory-hq/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4D0BAQGHXCHuFIemPw/company-logo_400_400/company-logo_400_400/0/1702617640533/factory_hq_logo?e=1776902400&v=beta&t=xakn__qwp_vkSvrtAbbUToIRcFzfD_GK_KA7UR1o-zM"
+        },
+        {
+          "company_id": "93213132",
+          "company_employee_count_range": {
+            "start": 51,
+            "end": 200
+          },
+          "company_industry": "Computer Software",
+          "workplace_type": null,
+          "title": "Operations",
+          "location_name": null,
+          "company_name": "Factory",
+          "date_range": {
+            "start": {
+              "iso": "2024",
+              "year": 2024,
+              "month": null,
+              "day": null
+            },
+            "end": {
+              "iso": "2025",
+              "year": 2025,
+              "month": null,
+              "day": null
+            }
+          },
+          "employment_type": "Full-time",
+          "description": null,
+          "company_url": "https://www.linkedin.com/company/factory-hq/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4D0BAQGHXCHuFIemPw/company-logo_400_400/company-logo_400_400/0/1702617640533/factory_hq_logo?e=1776902400&v=beta&t=xakn__qwp_vkSvrtAbbUToIRcFzfD_GK_KA7UR1o-zM"
+        }
+      ],
+      "company_name": "Factory",
+      "date_range": {
+        "start": {
+          "iso": "2024",
+          "year": 2024,
+          "month": null,
+          "day": null
+        },
+        "end": {
+          "iso": "2026-03",
+          "year": 2026,
+          "month": 3,
+          "day": null
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/factory-hq/",
+      "company_id": "93213132"
+    },
+    {
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQEwhJRee2t-4A/company-logo_400_400/company-logo_400_400/0/1709080365389/k5global_logo?e=1776902400&v=beta&t=l88NyDXh-iyBFKmacDtZgqSihEKMmgMwloICFdicsb4",
+      "company_employee_count_range": {
+        "start": 11,
+        "end": 50
+      },
+      "company_industry": "Venture Capital & Private Equity",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_id": "74750554",
+          "company_employee_count_range": {
+            "start": 11,
+            "end": 50
+          },
+          "company_industry": "Venture Capital & Private Equity",
+          "workplace_type": null,
+          "title": "Associate, New Ventures",
+          "location_name": null,
+          "company_name": "K5 Global",
+          "date_range": {
+            "start": {
+              "iso": "2022",
+              "year": 2022,
+              "month": null,
+              "day": null
+            },
+            "end": {
+              "iso": "2024",
+              "year": 2024,
+              "month": null,
+              "day": null
+            }
+          },
+          "employment_type": "Full-time",
+          "description": null,
+          "company_url": "https://www.linkedin.com/company/k5global/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQEwhJRee2t-4A/company-logo_400_400/company-logo_400_400/0/1709080365389/k5global_logo?e=1776902400&v=beta&t=l88NyDXh-iyBFKmacDtZgqSihEKMmgMwloICFdicsb4"
+        },
+        {
+          "company_id": "74750554",
+          "company_employee_count_range": {
+            "start": 11,
+            "end": 50
+          },
+          "company_industry": "Venture Capital & Private Equity",
+          "workplace_type": null,
+          "title": "Investment Analyst",
+          "location_name": "Los Angeles, California, United States",
+          "company_name": "K5 Global",
+          "date_range": {
+            "start": {
+              "iso": "2021",
+              "year": 2021,
+              "month": null,
+              "day": null
+            },
+            "end": {
+              "iso": "2022",
+              "year": 2022,
+              "month": null,
+              "day": null
+            }
+          },
+          "employment_type": "Full-time",
+          "description": null,
+          "company_url": "https://www.linkedin.com/company/k5global/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQEwhJRee2t-4A/company-logo_400_400/company-logo_400_400/0/1709080365389/k5global_logo?e=1776902400&v=beta&t=l88NyDXh-iyBFKmacDtZgqSihEKMmgMwloICFdicsb4"
+        }
+      ],
+      "company_name": "K5 Global",
+      "date_range": {
+        "start": {
+          "iso": "2021",
+          "year": 2021,
+          "month": null,
+          "day": null
+        },
+        "end": {
+          "iso": "2024",
+          "year": 2024,
+          "month": null,
+          "day": null
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/k5global/",
+      "company_id": "74750554"
+    },
+    {
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/C4D0BAQEAcSKJ2mXm2A/company-logo_400_400/company-logo_400_400/0/1630465332425/the_farmlink_project_logo?e=1776902400&v=beta&t=LaPKUgHbPu5eBtEx41DEMWIBLtVliKtj3MsqvDD-8OE",
+      "company_employee_count_range": {
+        "start": 11,
+        "end": 50
+      },
+      "company_industry": "Non-profit Organization Management",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_id": "42803559",
+          "company_employee_count_range": {
+            "start": 11,
+            "end": 50
+          },
+          "company_industry": "Non-profit Organization Management",
+          "workplace_type": null,
+          "title": "Advisory Board Member",
+          "location_name": null,
+          "company_name": "The Farmlink Project",
+          "date_range": {
+            "start": {
+              "iso": "2021",
+              "year": 2021,
+              "month": null,
+              "day": null
+            },
+            "end": {
+              "iso": "2023",
+              "year": 2023,
+              "month": null,
+              "day": null
+            }
+          },
+          "employment_type": "Part-time",
+          "description": null,
+          "company_url": "https://www.linkedin.com/company/the-farmlink-project/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C4D0BAQEAcSKJ2mXm2A/company-logo_400_400/company-logo_400_400/0/1630465332425/the_farmlink_project_logo?e=1776902400&v=beta&t=LaPKUgHbPu5eBtEx41DEMWIBLtVliKtj3MsqvDD-8OE"
+        },
+        {
+          "company_id": "42803559",
+          "company_employee_count_range": {
+            "start": 11,
+            "end": 50
+          },
+          "company_industry": "Non-profit Organization Management",
+          "workplace_type": null,
+          "title": "Head Of Operations",
+          "location_name": null,
+          "company_name": "The Farmlink Project",
+          "date_range": {
+            "start": {
+              "iso": "2020-04",
+              "year": 2020,
+              "month": 4,
+              "day": null
+            },
+            "end": {
+              "iso": "2021-06",
+              "year": 2021,
+              "month": 6,
+              "day": null
+            }
+          },
+          "employment_type": "Full-time",
+          "description": null,
+          "company_url": "https://www.linkedin.com/company/the-farmlink-project/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C4D0BAQEAcSKJ2mXm2A/company-logo_400_400/company-logo_400_400/0/1630465332425/the_farmlink_project_logo?e=1776902400&v=beta&t=LaPKUgHbPu5eBtEx41DEMWIBLtVliKtj3MsqvDD-8OE"
+        }
+      ],
+      "company_name": "The Farmlink Project",
+      "date_range": {
+        "start": {
+          "iso": "2020-04",
+          "year": 2020,
+          "month": 4,
+          "day": null
+        },
+        "end": {
+          "iso": "2023",
+          "year": 2023,
+          "month": null,
+          "day": null
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/the-farmlink-project/",
+      "company_id": "42803559"
+    },
+    {
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQHcj-STGYVNeA/company-logo_400_400/company-logo_400_400/0/1631323714128?e=1776902400&v=beta&t=HPivJNDp-v8JZeZ0qn4yGdqL_AZOd8l8kL2XTXxvIec",
+      "company_employee_count_range": {
+        "start": 51,
+        "end": 200
+      },
+      "company_industry": "Professional Training & Coaching",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_id": "10350844",
+          "company_employee_count_range": {
+            "start": 51,
+            "end": 200
+          },
+          "company_industry": "Professional Training & Coaching",
+          "workplace_type": null,
+          "title": "Co-President",
+          "location_name": null,
+          "company_name": "Stanford Women in Business",
+          "date_range": {
+            "start": {
+              "iso": "2021-04",
+              "year": 2021,
+              "month": 4,
+              "day": null
+            },
+            "end": {
+              "iso": "2022-06",
+              "year": 2022,
+              "month": 6,
+              "day": null
+            }
+          },
+          "employment_type": null,
+          "description": null,
+          "company_url": "https://www.linkedin.com/company/stanford-women-in-business/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQHcj-STGYVNeA/company-logo_400_400/company-logo_400_400/0/1631323714128?e=1776902400&v=beta&t=HPivJNDp-v8JZeZ0qn4yGdqL_AZOd8l8kL2XTXxvIec"
+        },
+        {
+          "company_id": "10350844",
+          "company_employee_count_range": {
+            "start": 51,
+            "end": 200
+          },
+          "company_industry": "Professional Training & Coaching",
+          "workplace_type": null,
+          "title": "Vice President of Finances",
+          "location_name": null,
+          "company_name": "Stanford Women in Business",
+          "date_range": {
+            "start": {
+              "iso": "2020-04",
+              "year": 2020,
+              "month": 4,
+              "day": null
+            },
+            "end": {
+              "iso": "2021-04",
+              "year": 2021,
+              "month": 4,
+              "day": null
+            }
+          },
+          "employment_type": null,
+          "description": null,
+          "company_url": "https://www.linkedin.com/company/stanford-women-in-business/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQHcj-STGYVNeA/company-logo_400_400/company-logo_400_400/0/1631323714128?e=1776902400&v=beta&t=HPivJNDp-v8JZeZ0qn4yGdqL_AZOd8l8kL2XTXxvIec"
+        },
+        {
+          "company_id": "10350844",
+          "company_employee_count_range": {
+            "start": 51,
+            "end": 200
+          },
+          "company_industry": "Professional Training & Coaching",
+          "workplace_type": null,
+          "title": "Director of Young Women's Leadership Summit",
+          "location_name": null,
+          "company_name": "Stanford Women in Business",
+          "date_range": {
+            "start": {
+              "iso": "2019-06",
+              "year": 2019,
+              "month": 6,
+              "day": null
+            },
+            "end": {
+              "iso": "2020-04",
+              "year": 2020,
+              "month": 4,
+              "day": null
+            }
+          },
+          "employment_type": null,
+          "description": null,
+          "company_url": "https://www.linkedin.com/company/stanford-women-in-business/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQHcj-STGYVNeA/company-logo_400_400/company-logo_400_400/0/1631323714128?e=1776902400&v=beta&t=HPivJNDp-v8JZeZ0qn4yGdqL_AZOd8l8kL2XTXxvIec"
+        },
+        {
+          "company_id": "10350844",
+          "company_employee_count_range": {
+            "start": 51,
+            "end": 200
+          },
+          "company_industry": "Professional Training & Coaching",
+          "workplace_type": null,
+          "title": "Marketing Intern",
+          "location_name": null,
+          "company_name": "Stanford Women in Business",
+          "date_range": {
+            "start": {
+              "iso": "2018-09",
+              "year": 2018,
+              "month": 9,
+              "day": null
+            },
+            "end": {
+              "iso": "2019-06",
+              "year": 2019,
+              "month": 6,
+              "day": null
+            }
+          },
+          "employment_type": null,
+          "description": null,
+          "company_url": "https://www.linkedin.com/company/stanford-women-in-business/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQHcj-STGYVNeA/company-logo_400_400/company-logo_400_400/0/1631323714128?e=1776902400&v=beta&t=HPivJNDp-v8JZeZ0qn4yGdqL_AZOd8l8kL2XTXxvIec"
+        }
+      ],
+      "company_name": "Stanford Women in Business",
+      "date_range": {
+        "start": {
+          "iso": "2018-09",
+          "year": 2018,
+          "month": 9,
+          "day": null
+        },
+        "end": {
+          "iso": "2022-06",
+          "year": 2022,
+          "month": 6,
+          "day": null
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/stanford-women-in-business/",
+      "company_id": "10350844"
+    },
+    {
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQFRMqMScvk8Jg/company-logo_400_400/company-logo_400_400/0/1665754213880?e=1776902400&v=beta&t=W6roE-ZF1ekcxb_HspUdk0LiZkNyy_TjbuqI7dgxlT8",
+      "company_employee_count_range": {
+        "start": 11,
+        "end": 50
+      },
+      "company_industry": "Non-profit Organization Management",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_id": "346988",
+          "company_employee_count_range": {
+            "start": 11,
+            "end": 50
+          },
+          "company_industry": "Non-profit Organization Management",
+          "workplace_type": null,
+          "title": "Chief Financial Officer",
+          "location_name": "Stanford University",
+          "company_name": "Kappa Alpha Theta Headquarters",
+          "date_range": {
+            "start": {
+              "iso": "2020-01",
+              "year": 2020,
+              "month": 1,
+              "day": null
+            },
+            "end": {
+              "iso": "2022-01",
+              "year": 2022,
+              "month": 1,
+              "day": null
+            }
+          },
+          "employment_type": null,
+          "description": null,
+          "company_url": "https://www.linkedin.com/company/kappaalphathetahq/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQFRMqMScvk8Jg/company-logo_400_400/company-logo_400_400/0/1665754213880?e=1776902400&v=beta&t=W6roE-ZF1ekcxb_HspUdk0LiZkNyy_TjbuqI7dgxlT8"
+        }
+      ],
+      "company_name": "Kappa Alpha Theta Headquarters",
+      "date_range": {
+        "start": {
+          "iso": "2020-01",
+          "year": 2020,
+          "month": 1,
+          "day": null
+        },
+        "end": {
+          "iso": "2022-01",
+          "year": 2022,
+          "month": 1,
+          "day": null
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/kappaalphathetahq/",
+      "company_id": "346988"
+    },
+    {
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQEJLJap6iSZgw/company-logo_400_400/company-logo_400_400/0/1738264520880/stanforddschool_logo?e=1776902400&v=beta&t=zP6Nms_Z5RKcrpq0iPI6xk7t2FUuqv-XydBJCxl7pa4",
+      "company_employee_count_range": {
+        "start": 51,
+        "end": 200
+      },
+      "company_industry": "Higher Education",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_id": "1638387",
+          "company_employee_count_range": {
+            "start": 51,
+            "end": 200
+          },
+          "company_industry": "Higher Education",
+          "workplace_type": null,
+          "title": "Course Assistant: Design for Play",
+          "location_name": null,
+          "company_name": "Hasso Plattner Institute of Design at Stanford ( d.school )",
+          "date_range": {
+            "start": {
+              "iso": "2021-09",
+              "year": 2021,
+              "month": 9,
+              "day": null
+            },
+            "end": {
+              "iso": "2021-12",
+              "year": 2021,
+              "month": 12,
+              "day": null
+            }
+          },
+          "employment_type": "Part-time",
+          "description": null,
+          "company_url": "https://www.linkedin.com/company/stanforddschool/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQEJLJap6iSZgw/company-logo_400_400/company-logo_400_400/0/1738264520880/stanforddschool_logo?e=1776902400&v=beta&t=zP6Nms_Z5RKcrpq0iPI6xk7t2FUuqv-XydBJCxl7pa4"
+        }
+      ],
+      "company_name": "Stanford d.school",
+      "date_range": {
+        "start": {
+          "iso": "2021-09",
+          "year": 2021,
+          "month": 9,
+          "day": null
+        },
+        "end": {
+          "iso": "2021-12",
+          "year": 2021,
+          "month": 12,
+          "day": null
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/stanforddschool/",
+      "company_id": "1638387"
+    },
+    {
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/C4D0BAQGyTHJCehyEuA/company-logo_400_400/company-logo_400_400/0/1630537027992/stanford_graduate_school_of_business_logo?e=1776902400&v=beta&t=vnSGm2Xc0Th6zojqiHpR00_kCEj1QxjbXaGTSIb7Juc",
+      "company_employee_count_range": {
+        "start": 201,
+        "end": 500
+      },
+      "company_industry": "Higher Education",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_id": "1791",
+          "company_employee_count_range": {
+            "start": 201,
+            "end": 500
+          },
+          "company_industry": "Higher Education",
+          "workplace_type": null,
+          "title": "Teaching Assistant, Humor: Serious Business",
+          "location_name": null,
+          "company_name": "Stanford University Graduate School of Business",
+          "date_range": {
+            "start": {
+              "iso": "2021-01",
+              "year": 2021,
+              "month": 1,
+              "day": null
+            },
+            "end": {
+              "iso": "2021-06",
+              "year": 2021,
+              "month": 6,
+              "day": null
+            }
+          },
+          "employment_type": "Part-time",
+          "description": null,
+          "company_url": "https://www.linkedin.com/school/stanford-graduate-school-of-business/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C4D0BAQGyTHJCehyEuA/company-logo_400_400/company-logo_400_400/0/1630537027992/stanford_graduate_school_of_business_logo?e=1776902400&v=beta&t=vnSGm2Xc0Th6zojqiHpR00_kCEj1QxjbXaGTSIb7Juc"
+        }
+      ],
+      "company_name": "Stanford University Graduate School of Business",
+      "date_range": {
+        "start": {
+          "iso": "2021-01",
+          "year": 2021,
+          "month": 1,
+          "day": null
+        },
+        "end": {
+          "iso": "2021-06",
+          "year": 2021,
+          "month": 6,
+          "day": null
+        }
+      },
+      "company_url": "https://www.linkedin.com/school/stanford-graduate-school-of-business/",
+      "company_id": "1791"
+    },
+    {
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/C4D0BAQG2LAudRGfEHA/company-logo_400_400/company-logo_400_400/0/1657123854586/iconiq_capital_llc_logo?e=1776902400&v=beta&t=ZTlLbaj1kMlwZ68MWoswKHOP5LWhwGe-BLO4Ylgj2xw",
+      "company_employee_count_range": {
+        "start": 201,
+        "end": 500
+      },
+      "company_industry": "Financial Services",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_id": "6376200",
+          "company_employee_count_range": {
+            "start": 201,
+            "end": 500
+          },
+          "company_industry": "Financial Services",
+          "workplace_type": null,
+          "title": "Recruiting Intern",
+          "location_name": "San Francisco Bay Area",
+          "company_name": "ICONIQ Capital",
+          "date_range": {
+            "start": {
+              "iso": "2019-07",
+              "year": 2019,
+              "month": 7,
+              "day": null
+            },
+            "end": {
+              "iso": "2019-09",
+              "year": 2019,
+              "month": 9,
+              "day": null
+            }
+          },
+          "employment_type": null,
+          "description": null,
+          "company_url": "https://www.linkedin.com/company/iconiq-capital-llc/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C4D0BAQG2LAudRGfEHA/company-logo_400_400/company-logo_400_400/0/1657123854586/iconiq_capital_llc_logo?e=1776902400&v=beta&t=ZTlLbaj1kMlwZ68MWoswKHOP5LWhwGe-BLO4Ylgj2xw"
+        }
+      ],
+      "company_name": "ICONIQ",
+      "date_range": {
+        "start": {
+          "iso": "2019-07",
+          "year": 2019,
+          "month": 7,
+          "day": null
+        },
+        "end": {
+          "iso": "2019-09",
+          "year": 2019,
+          "month": 9,
+          "day": null
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/iconiq-capital-llc/",
+      "company_id": "6376200"
+    }
+  ]
+}

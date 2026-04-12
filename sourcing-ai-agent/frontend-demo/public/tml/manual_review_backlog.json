@@ -1,0 +1,50 @@
+[
+  {
+    "candidate_id": "d4d9bea80ea6b934",
+    "display_name": "Guangxuan Xiao",
+    "status_bucket": "former",
+    "category": "lead",
+    "employment_status": "former",
+    "reason": "missing_linkedin",
+    "known_urls": [],
+    "source_datasets": [
+      "thinkingmachineslab_search_seed_candidates"
+    ]
+  },
+  {
+    "candidate_id": "0f8dd9462833dc16",
+    "display_name": "Mira Murati Launches",
+    "status_bucket": "former",
+    "category": "lead",
+    "employment_status": "former",
+    "reason": "missing_linkedin",
+    "known_urls": [],
+    "source_datasets": [
+      "thinkingmachineslab_search_seed_candidates"
+    ]
+  },
+  {
+    "candidate_id": "d99d876864556714",
+    "display_name": "Startup Secures",
+    "status_bucket": "former",
+    "category": "lead",
+    "employment_status": "former",
+    "reason": "missing_linkedin",
+    "known_urls": [],
+    "source_datasets": [
+      "thinkingmachineslab_search_seed_candidates"
+    ]
+  },
+  {
+    "candidate_id": "0d4e7ac6a8505863",
+    "display_name": "Thinking Machines",
+    "status_bucket": "former",
+    "category": "lead",
+    "employment_status": "former",
+    "reason": "missing_linkedin",
+    "known_urls": [],
+    "source_datasets": [
+      "thinkingmachineslab_search_seed_candidates"
+    ]
+  }
+]

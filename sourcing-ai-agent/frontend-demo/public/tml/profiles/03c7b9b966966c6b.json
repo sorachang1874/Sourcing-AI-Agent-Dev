@@ -1,0 +1,990 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAB3BApkBmE-6rGPjeuBpTuYDcrlwMBBno4o",
+    "profile_url": "https://www.linkedin.com/in/ACwAAB3BApkBmE-6rGPjeuBpTuYDcrlwMBBno4o"
+  },
+  "item": {
+    "id": "ACoAAB3BApkB38H4Z__jKDDFBfF7jt7w16vD0Xs",
+    "publicIdentifier": "rafael-rafailov-1b521611b",
+    "linkedinUrl": "https://www.linkedin.com/in/rafael-rafailov-1b521611b",
+    "firstName": "Rafael",
+    "lastName": "Rafailov",
+    "emails": [
+      {
+        "email": "rafael.rafailov@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Member Of Technical Staff - Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "499188377",
+    "registeredAt": "2016-05-20T01:25:27.392Z",
+    "topSkills": null,
+    "connectionsCount": 641,
+    "followerCount": 780,
+    "verified": false,
+    "about": "I graduated with degrees in Applied Mathematics, Statistics and Economics from UC Berkeley, where I also completed the Finance Ph.D. curriculum and multiple graduate courses in Mathematics, Statistics, Operations Research and Economics. My main area of expertise is Financial Engineering, Analytical Finance and Data Science. More information about my skills and projects I've worked on is available under \"Projects\".",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 3,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "17926",
+        "companyId": "1792",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1792/",
+        "schoolName": "Stanford University"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4E03AQFAwsyqpdMAxw/profile-displayphoto-shrink_800_800/B4EZpu33lcKYAc-/0/1762796731206?e=1776902400&v=beta&t=dRP7eHjXdVhw1hesDgeCFOSUgeVU5eI_Or-kjODoRQ4",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQFAwsyqpdMAxw/profile-displayphoto-shrink_800_800/B4EZpu33lcKYAc-/0/1762796731206?e=1776902400&v=beta&t=dRP7eHjXdVhw1hesDgeCFOSUgeVU5eI_Or-kjODoRQ4",
+          "width": 360,
+          "height": 360,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQFAwsyqpdMAxw/profile-displayphoto-shrink_400_400/B4EZpu33lcKYAg-/0/1762796731206?e=1776902400&v=beta&t=v92g-BXhPXBeZ8dxh_jvpisNGRLs7Sm2Ejo8DO_7z6U",
+          "width": 360,
+          "height": 360,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQFAwsyqpdMAxw/profile-displayphoto-shrink_200_200/B4EZpu33lcKYAY-/0/1762796731227?e=1776902400&v=beta&t=-LzLwBcdsIywLkieK2uR0GSQanlw4pAzH1D0kdPwLhk",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQFAwsyqpdMAxw/profile-displayphoto-shrink_100_100/B4EZpu33lcKYAU-/0/1762796731206?e=1776902400&v=beta&t=Lzy3yQLh7zsXHeSMuQMhhJdirST8LMyCotF7584XF4s",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D4E03AQFAwsyqpdMAxw/profile-displayphoto-shrink_800_800/B4EZpu33lcKYAc-/0/1762796731206?e=1776902400&v=beta&t=dRP7eHjXdVhw1hesDgeCFOSUgeVU5eI_Or-kjODoRQ4",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Member Of Technical Staff - Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco Bay Area",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "1 yr 2 mos",
+        "description": "Member Of The Founding Team",
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2025,
+          "text": "Mar 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Doctoral Student",
+        "location": "Stanford, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Stanford University",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/stanford-university/",
+        "companyId": "1792",
+        "companyUniversalName": "stanford-university",
+        "duration": "7 yrs 1 mo",
+        "description": "Ph.D. Student In the IRIS Lab\n\n-Head TA for CS 330 Meta-Learning\n-Head TA for CS 224R Reinforcement Learning",
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2018,
+          "text": "Sep 2018"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2025,
+          "text": "Sep 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_400_400/company-logo_400_400/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=zzE-1MKqCLrmkqb1p2hJqhVuV2hbdZzC0j_ok6Kyhk8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_400_400/company-logo_400_400/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=zzE-1MKqCLrmkqb1p2hJqhVuV2hbdZzC0j_ok6Kyhk8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_200_200/company-logo_200_200/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=0xd9OiQTt31rPm8_wUnQNPsZKrh8XBXIidNxV9RaB5s",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_100_100/company-logo_100_100/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=9qvsDNg8-8GHe51pI3kr1K_DGeN_zXJEt0DlOSSFopY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Student Researcher",
+        "location": "Mountain View, California, United States",
+        "employmentType": "Part-time",
+        "workplaceType": "On-site",
+        "companyName": "Google DeepMind",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1594050/",
+        "companyId": "1594050",
+        "duration": "9 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2023,
+          "text": "Jun 2023"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2024,
+          "text": "Feb 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_400_400/company-logo_400_400/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=r_t5nQiM8A2L0aUP5m-PXCGPiKrvOklfisLwUFyoqwc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_400_400/company-logo_400_400/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=r_t5nQiM8A2L0aUP5m-PXCGPiKrvOklfisLwUFyoqwc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_200_200/company-logo_200_200/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=2BilPPrSvxkF02b9uz-N6ccku99E3v2Y8bAOBExGcFA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_100_100/company-logo_100_100/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=TS688J1rsD8hLhjNZfNOSDSKLf9q38j5d5Qgo7HUC_0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Junior Portfolio Manager",
+        "location": "Greater New York City Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Goldman Sachs",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1382/",
+        "companyId": "1382",
+        "duration": "2 yrs",
+        "description": "Quantitative Investment Strategies",
+        "skills": null,
+        "startDate": {
+          "month": "Jul",
+          "year": 2016,
+          "text": "Jul 2016"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2018,
+          "text": "Jun 2018"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQG9L7InIQVZrQ/company-logo_400_400/company-logo_400_400/0/1722506756452/goldman_sachs_logo?e=1776902400&v=beta&t=DTAHHIGqk0-6NwsKozo49cf7cSVIkRjik6PWy7n4Igo",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQG9L7InIQVZrQ/company-logo_400_400/company-logo_400_400/0/1722506756452/goldman_sachs_logo?e=1776902400&v=beta&t=DTAHHIGqk0-6NwsKozo49cf7cSVIkRjik6PWy7n4Igo",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQG9L7InIQVZrQ/company-logo_200_200/company-logo_200_200/0/1722506756452/goldman_sachs_logo?e=1776902400&v=beta&t=LbXgUBqLTG8WC8WiqJUDLbH1pEMH9-To7Q0kl24pF-o",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQG9L7InIQVZrQ/company-logo_100_100/company-logo_100_100/0/1722506756452/goldman_sachs_logo?e=1776902400&v=beta&t=t2QyjuxlieK0VUXv2C-gha4bouSKyf1_T6PIC1uBDic",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Stanford University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1792/",
+        "schoolId": "1792",
+        "degree": "Doctor of Philosophy - PhD",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "description": "Ph.D. Dissertation: Novel Approaches to Foundation Model Post-Training",
+        "startDate": {
+          "month": "Sep",
+          "year": 2022,
+          "text": "Sep 2022"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2025,
+          "text": "Sep 2025"
+        },
+        "period": "Sep 2022 - Sep 2025",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_400_400/company-logo_400_400/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=zzE-1MKqCLrmkqb1p2hJqhVuV2hbdZzC0j_ok6Kyhk8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_400_400/company-logo_400_400/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=zzE-1MKqCLrmkqb1p2hJqhVuV2hbdZzC0j_ok6Kyhk8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_200_200/company-logo_200_200/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=0xd9OiQTt31rPm8_wUnQNPsZKrh8XBXIidNxV9RaB5s",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_100_100/company-logo_100_100/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=9qvsDNg8-8GHe51pI3kr1K_DGeN_zXJEt0DlOSSFopY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Stanford University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1792/",
+        "schoolId": "1792",
+        "degree": "Master of Science - MS",
+        "fieldOfStudy": "Computer Science/Statistics",
+        "skills": [],
+        "startDate": {
+          "month": "Sep",
+          "year": 2018,
+          "text": "Sep 2018"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2022,
+          "text": "Jun 2022"
+        },
+        "period": "Sep 2018 - Jun 2022",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_400_400/company-logo_400_400/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=zzE-1MKqCLrmkqb1p2hJqhVuV2hbdZzC0j_ok6Kyhk8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_400_400/company-logo_400_400/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=zzE-1MKqCLrmkqb1p2hJqhVuV2hbdZzC0j_ok6Kyhk8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_200_200/company-logo_200_200/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=0xd9OiQTt31rPm8_wUnQNPsZKrh8XBXIidNxV9RaB5s",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_100_100/company-logo_100_100/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=9qvsDNg8-8GHe51pI3kr1K_DGeN_zXJEt0DlOSSFopY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "University of California, Berkeley",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2517/",
+        "schoolId": "2517",
+        "degree": "Bachelor of Arts (B.A.)",
+        "fieldOfStudy": "Applied Mathematics (Honors)",
+        "skills": [],
+        "description": "Completed the Finance Ph.D. Curriculum at the UC Berkeley Walter A. Haas School of Business\n\nSenior Thesis:\n\n\"Misreporting, Collateral Quality and Performance of Private Label Mortgage Backed Securities\"",
+        "startDate": {
+          "year": 2012,
+          "text": "2012"
+        },
+        "endDate": {
+          "year": 2016,
+          "text": "2016"
+        },
+        "period": "2012 - 2016",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_400_400/company-logo_400_400/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=ihsqGpnHzj0nlc8nr3zQwTYbq6GYQDs_WRmOHxXO6Cs",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_400_400/company-logo_400_400/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=ihsqGpnHzj0nlc8nr3zQwTYbq6GYQDs_WRmOHxXO6Cs",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_200_200/company-logo_200_200/0/1732135669730/uc_berkeley_logo?e=1776902400&v=beta&t=99cgQbgSotN9XiK7TbWS3PhqRVGT8S6VKfitEcMn0-E",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_100_100/company-logo_100_100/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=spLtug0cp3xqHCXq1OoZudTryqzyY85FoIZwfJ-_XzA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [
+      {
+        "title": "Series 7",
+        "issuedAt": "Issued Aug 2016",
+        "issuedBy": "FINRA",
+        "issuedByLink": "https://www.linkedin.com/company/1342448/",
+        "issuedByLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQGQ6PoGBC_vZA/company-logo_400_400/company-logo_400_400/0/1656684702749/finra_logo?e=1776902400&v=beta&t=GrHlK4wsyup6PsdGWVNLh3W0Nigot3zEUwwr9bSs7vw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGQ6PoGBC_vZA/company-logo_400_400/company-logo_400_400/0/1656684702749/finra_logo?e=1776902400&v=beta&t=GrHlK4wsyup6PsdGWVNLh3W0Nigot3zEUwwr9bSs7vw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGQ6PoGBC_vZA/company-logo_200_200/company-logo_200_200/0/1656684702749/finra_logo?e=1776902400&v=beta&t=58AAmMitNTLY6UROUGcd_UMadR3e4qyYVg1SaRqInLQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGQ6PoGBC_vZA/company-logo_100_100/company-logo_100_100/0/1656684702749/finra_logo?e=1776902400&v=beta&t=PzKbBDaOgF3wJmvx8ZJHd7odqsoOwWqA9z5_0B8mfDU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [
+      {
+        "title": "On extremums of sums of powered distances to a finite set of points",
+        "publishedAt": "Geometriae Dedicata · Dec 1, 2013",
+        "description": null,
+        "link": "http://link.springer.com/article/10.1007%2Fs10711-012-9804-3"
+      },
+      {
+        "title": "On the sum of powered distances to certain sets of points on the circle",
+        "publishedAt": "Pacific Journal of Mathematics · Nov 28, 2011",
+        "description": null,
+        "link": "http://msp.org/pjm/2011/253-1/p10.xhtml"
+      },
+      {
+        "title": "Misreporting, Collateral Quality and Performance of Private Label Mortgage Backed Securities",
+        "publishedAt": null,
+        "description": "I wrote my senior thesis on the presence of misreporting and its effects and causes in private label MBS under the direction of Professors Richard Stanton and Nancy Wallace at the Walter A. Haas School of Business. It is still work in progress. At the core of the project is the analysis of massive databases of information regarding mortgage loans (Lewtan's ABSNet and Dataquick) and cross referencing to detect any differences in capital structure, occupancy and appraisal overstatement."
+      }
+    ],
+    "courses": [
+      {
+        "title": "Applied Stochastic Processes",
+        "number": "IEOR 263B",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Complex Analysis",
+        "number": "MATH 185",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Complex Analysis",
+        "number": "MATH 185",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Continuous Time Asset Pricing",
+        "number": "PHDBA 239B",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Corporate Finance",
+        "number": "PHDBA 239DB",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Data Analytics for Financial Engineering",
+        "number": "STAT 157",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Differential Topology",
+        "number": "MATH 141",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Discrete Time Asset Pricing",
+        "number": "PHDBA 239A",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Econometrics I",
+        "number": "ECON 240A",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Econometrics II",
+        "number": "ECON 240B",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Economic Theory - Macro",
+        "number": "ECON 101B",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Economic Theory - Micro",
+        "number": "ECON 101A",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Empirical Asset Pricing",
+        "number": "PHDBA 239C",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Financial Economics",
+        "number": "ECON 136",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Financial Engineering II",
+        "number": "IEOR 222",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Financial and Behavioral Economics",
+        "number": "ECON 138",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Honors Abstract Algebra ",
+        "number": " MATH H113",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Intermediate Accounting II",
+        "number": "UGBA 120AB",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Introduction to Financial Engineering",
+        "number": "IEOR 221",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Machine Learning",
+        "number": "STAT 154",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Market Microstructure",
+        "number": "PHDBA 239DA",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Mathematical Statistics",
+        "number": "STAT 135",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Numerical Analysis",
+        "number": "MATH 128",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Numerical Linear Algebra",
+        "number": "MATH 221",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "ODEs and Dynamical Systems",
+        "number": "MATH 204",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Optimization",
+        "number": "MATH 170",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Probability Theory",
+        "number": "STAT 134",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Risk Theory",
+        "number": "ECON 217",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Statistical Computing",
+        "number": "STAT 243",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Stochastic Processes",
+        "number": "STAT 150",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Structure and Interpretation of Computer Programs",
+        "number": "CS 61A",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "The World Economy in the 20th Century",
+        "number": "ECON 115",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Time Series",
+        "number": "STAT 248",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      }
+    ],
+    "patents": [],
+    "honorsAndAwards": [
+      {
+        "title": "University of Michigan Stock Pitching Competition",
+        "issuedBy": "Oct 2015",
+        "description": "Team won second place with a pitch on YELP",
+        "associatedWith": null,
+        "associatedWithLink": null
+      },
+      {
+        "title": "International Mathematics Olympiad - 2011",
+        "description": "Silver Medal",
+        "associatedWith": null,
+        "associatedWithLink": null
+      },
+      {
+        "title": "International Mathematics Olympiad - 2012",
+        "description": "Silver Medal",
+        "associatedWith": null,
+        "associatedWithLink": null
+      },
+      {
+        "title": "Research Science Institute - 2010",
+        "description": "I was part of RSI 2010, were the title of my thesis was \n\"Hausdorff dimension of degree d maps\"",
+        "associatedWith": null,
+        "associatedWithLink": null
+      }
+    ],
+    "languages": [
+      {
+        "name": "Arabic",
+        "proficiency": "Elementary proficiency"
+      },
+      {
+        "name": "Bulgarian",
+        "proficiency": "Native or bilingual proficiency"
+      },
+      {
+        "name": "English",
+        "proficiency": "Full professional proficiency"
+      },
+      {
+        "name": "Russian",
+        "proficiency": "Elementary proficiency"
+      }
+    ],
+    "causes": [
+      "Education",
+      "Politics",
+      "Science and Technology"
+    ],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAACmzAtgBiDGd-HW1TzeGD6e3xWxnqDi9o-0",
+        "firstName": "Zitong",
+        "lastName": "Yang",
+        "position": "Continually self-improving AI",
+        "publicIdentifier": "zitongyang",
+        "linkedinUrl": "https://www.linkedin.com/in/zitongyang"
+      },
+      {
+        "id": "ACoAAACzw60BUBcf9q40tAUpQs0mHqSqAsuPFc8",
+        "firstName": "Sangeen",
+        "lastName": "Zeb",
+        "position": "General Partner at GV (Google Ventures)",
+        "publicIdentifier": "sangeen-zeb-891b413",
+        "linkedinUrl": "https://www.linkedin.com/in/sangeen-zeb-891b413"
+      },
+      {
+        "id": "ACoAAATAFhsB-MSu8aXWUBacbi6fvU_SaAqdBH4",
+        "firstName": "Jeff",
+        "lastName": "Hanson",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "jshanson7",
+        "linkedinUrl": "https://www.linkedin.com/in/jshanson7"
+      },
+      {
+        "id": "ACoAAEZnBtoBb1Us7ZKgHfOXAYT764pKcDQy848",
+        "firstName": "Songlin",
+        "lastName": "Yang",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "songlin-yang-b8a69728b",
+        "linkedinUrl": "https://www.linkedin.com/in/songlin-yang-b8a69728b"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABJRjjUBRj9EXhEAO-4ZyhHgzD0ztjMvrlI",
+        "firstName": "Andrea",
+        "lastName": "Madotto",
+        "position": "Member of Technical Staff at TML",
+        "publicIdentifier": "andrea-madotto-899b1386",
+        "linkedinUrl": "https://www.linkedin.com/in/andrea-madotto-899b1386"
+      },
+      {
+        "id": "ACoAACaOARIBRO2EEH12QWQO29L__oI3N2K4u14",
+        "firstName": "Mingjie",
+        "lastName": "Sun",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "mingjie-sun-06a761160",
+        "linkedinUrl": "https://www.linkedin.com/in/mingjie-sun-06a761160"
+      },
+      {
+        "id": "ACoAACA1ZlYBhPNODsf7Z3UNo1tLYMShFQ7OQJw",
+        "firstName": "Yujia",
+        "lastName": "Bao",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "yujia-bao-506b76130",
+        "linkedinUrl": "https://www.linkedin.com/in/yujia-bao-506b76130"
+      },
+      {
+        "id": "ACoAACKNVUMBztbhQ3RUYQ-Mg89xUJ39N-XJpM4",
+        "firstName": "Long",
+        "lastName": "Lian",
+        "position": "Member of Technical Staff at Thinking Machines Lab | Post-training Team | Large-scale RL | Multi-agent Systems | Real-time Multi-modal Models",
+        "publicIdentifier": "longlian",
+        "linkedinUrl": "https://www.linkedin.com/in/longlian"
+      },
+      {
+        "id": "ACoAABYs4-IB5mHx5eVfOHzu1e8xlO3q_kb38IM",
+        "firstName": "Brydon",
+        "lastName": "Eastman",
+        "position": "Nerd @ Thinking Machines Labs | Formerly Member of Technical Staff @ OpenAI | PhD in Mathematical Oncology",
+        "publicIdentifier": "brydon-eastman-396719a4",
+        "linkedinUrl": "https://www.linkedin.com/in/brydon-eastman-396719a4"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAADgLvm4BAaa-N5zNQvfP5qFptuA8bvJs3nM",
+        "firstName": "Yifei",
+        "lastName": "Zhou",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "yifei-zhou-57aa9b222",
+        "linkedinUrl": "https://www.linkedin.com/in/yifei-zhou-57aa9b222"
+      },
+      {
+        "id": "ACoAABhKWCYBiuV3Zv9Hbt8t0j-xMRqxawBcSgw",
+        "firstName": "Kurt",
+        "lastName": "Shuster",
+        "position": "AI Research Engineer",
+        "publicIdentifier": "kurtshuster1",
+        "linkedinUrl": "https://www.linkedin.com/in/kurtshuster1"
+      },
+      {
+        "id": "ACoAAAd3c8cBXKnzqS80_HMaDIGNdqrXbaFbO5g",
+        "firstName": "James",
+        "lastName": "Sun",
+        "position": "Software Engineer",
+        "publicIdentifier": "james5un",
+        "linkedinUrl": "https://www.linkedin.com/in/james5un"
+      },
+      {
+        "id": "ACoAABhIg7YBYN2NPIu8voYj5D7JQVZGxonqHvc",
+        "firstName": "Ruiqi",
+        "lastName": "Zhong",
+        "position": "AI researcher. LLM + human collaboration.",
+        "publicIdentifier": "ruiqi-zhong-09a533b4",
+        "linkedinUrl": "https://www.linkedin.com/in/ruiqi-zhong-09a533b4"
+      },
+      {
+        "id": "ACoAABqU8psBncgwN-WH-D8F1Jq9i7OsFmcPDt4",
+        "firstName": "Jeffrey",
+        "lastName": "Tao",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "jeffrey-tao",
+        "linkedinUrl": "https://www.linkedin.com/in/jeffrey-tao"
+      },
+      {
+        "id": "ACoAAA4HVN4BOZg5espOvMVoO3OY04NZmuqvMCo",
+        "firstName": "Shaojie",
+        "lastName": "Bai",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "shaojie-bai",
+        "linkedinUrl": "https://www.linkedin.com/in/shaojie-bai"
+      },
+      {
+        "id": "ACoAABxxSOoBxMid0wd8m2NDb9w5zTY2lQbrNz4",
+        "firstName": "Leon",
+        "lastName": "G.",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "yazhi-gao",
+        "linkedinUrl": "https://www.linkedin.com/in/yazhi-gao"
+      },
+      {
+        "id": "ACoAAB4qbUUBsc9H_NLZN2duLUOOyyFDm-k_ACo",
+        "firstName": "Riley",
+        "lastName": "Shanahan",
+        "position": "Eng at Thinking Machines ",
+        "publicIdentifier": "rileyshanny",
+        "linkedinUrl": "https://www.linkedin.com/in/rileyshanny"
+      },
+      {
+        "id": "ACoAAAeoHjYB_Lo5sUFlpZpz2L74oe9nEIKztQA",
+        "firstName": "Jenya",
+        "lastName": "L.",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "jenya-l",
+        "linkedinUrl": "https://www.linkedin.com/in/jenya-l"
+      },
+      {
+        "id": "ACoAAGYHDFwBtpzAmSBo7MV_5d6-FA_qoml24b4",
+        "firstName": "Hana",
+        "lastName": "Suzuki",
+        "position": "AI model development and data analysis in the field of health science",
+        "publicIdentifier": "hana-suzuki-1103113b9",
+        "linkedinUrl": "https://www.linkedin.com/in/hana-suzuki-1103113b9"
+      },
+      {
+        "id": "ACoAAGYHUzkBuOLLHm4DXdIGeUwpT623ApH7AIk",
+        "firstName": "Olivia",
+        "lastName": "Grabowska",
+        "position": "AI model development and data analysis in the field of health science",
+        "publicIdentifier": "olivia-grabowska-70931b3b9",
+        "linkedinUrl": "https://www.linkedin.com/in/olivia-grabowska-70931b3b9"
+      },
+      {
+        "id": "ACoAAGXqJWQBdiu3Pf7UzXSeS55ZGWVNLPMxo4A",
+        "firstName": "Mohamed amine",
+        "lastName": "Smiti",
+        "position": "Étudiant(e) à Stanford University",
+        "publicIdentifier": "mohamed-amine-smiti-b447583b8",
+        "linkedinUrl": "https://www.linkedin.com/in/mohamed-amine-smiti-b447583b8"
+      },
+      {
+        "id": "ACoAAGXyWk0B3WGCkDJXhMidydzq6PG_2bn-Q78",
+        "firstName": "Ramiro",
+        "lastName": "Correa",
+        "position": "Student at Stanford University",
+        "publicIdentifier": "ramiro-correa-2399783b8",
+        "linkedinUrl": "https://www.linkedin.com/in/ramiro-correa-2399783b8"
+      },
+      {
+        "id": "ACoAAGXwNwwBdKJIqNPs9ISwZuQdWa-3qVR-ki0",
+        "firstName": "Julius",
+        "lastName": "Habbo",
+        "position": "Student at Georgia ",
+        "publicIdentifier": "julius-habbo-15090b3b8",
+        "linkedinUrl": "https://www.linkedin.com/in/julius-habbo-15090b3b8"
+      },
+      {
+        "id": "ACoAAGXovP4B2h6d2K4Rf_SO-i4jQE0_jlnpUzs",
+        "firstName": "Olanrewaju",
+        "lastName": "Odunayo",
+        "position": "Student at Stanford University",
+        "publicIdentifier": "olanrewaju-odunayo-67a7133b8",
+        "linkedinUrl": "https://www.linkedin.com/in/olanrewaju-odunayo-67a7133b8"
+      },
+      {
+        "id": "ACoAAGXr0-UB4AiTgz3wTIYoagihUG25X-VJCto",
+        "firstName": "Ella",
+        "lastName": "Ben-Mayor",
+        "position": "Student at Stanford University",
+        "publicIdentifier": "ella-ben-mayor-8857b03b8",
+        "linkedinUrl": "https://www.linkedin.com/in/ella-ben-mayor-8857b03b8"
+      },
+      {
+        "id": "ACoAAGXzdyIBaW2MsTtb06bX-oRNAanI66wNIVQ",
+        "firstName": "Hoptomist",
+        "lastName": "Giraffe",
+        "position": "Student at Stanford University",
+        "publicIdentifier": "hoptomist-giraffe-4829b23b8",
+        "linkedinUrl": "https://www.linkedin.com/in/hoptomist-giraffe-4829b23b8"
+      },
+      {
+        "id": "ACoAAGX6QrgBpb22qBONcXs7UvI82GjDPv6mcJ0",
+        "firstName": "Nicolas",
+        "lastName": "Anelka",
+        "position": "Stanford University okulunda öğrenci",
+        "publicIdentifier": "nicolas-anelka-134b883b8",
+        "linkedinUrl": "https://www.linkedin.com/in/nicolas-anelka-134b883b8"
+      },
+      {
+        "id": "ACoAAGXvU-ABAA7dhg4BZv_S0GwWV6sbtczRJeE",
+        "firstName": "Sample",
+        "lastName": "ID",
+        "position": "Student at Stanford University",
+        "publicIdentifier": "sample-id-5688a13b8",
+        "linkedinUrl": "https://www.linkedin.com/in/sample-id-5688a13b8"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAB3BApkBmE-6rGPjeuBpTuYDcrlwMBBno4o"
+    }
+  }
+}

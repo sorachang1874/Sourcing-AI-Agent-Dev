@@ -1,0 +1,693 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAEZnBtoBYdZE0r4bKkmASFV7VA8d715kQlU",
+    "profile_url": "https://www.linkedin.com/in/ACwAAEZnBtoBYdZE0r4bKkmASFV7VA8d715kQlU"
+  },
+  "item": {
+    "id": "ACoAAEZnBtoBb1Us7ZKgHfOXAYT764pKcDQy848",
+    "publicIdentifier": "songlin-yang-b8a69728b",
+    "linkedinUrl": "https://www.linkedin.com/in/songlin-yang-b8a69728b",
+    "firstName": "Songlin",
+    "lastName": "Yang",
+    "emails": [
+      {
+        "email": "songlin.yang@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Member of Technical Staff at Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "1181157082",
+    "registeredAt": "2023-09-03T16:51:39.139Z",
+    "topSkills": null,
+    "connectionsCount": 541,
+    "followerCount": 850,
+    "verified": true,
+    "about": "https://sustcsonglin.github.io/",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 12,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "18494",
+        "companyId": "1503",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1503/",
+        "schoolName": "Massachusetts Institute of Technology"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4E03AQGC47YlwNRBOw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1725842040469?e=1776902400&v=beta&t=xWykTxsQp6hRmwkcfHaQhs2luLcb946DZJqJyouJ7TU",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQGC47YlwNRBOw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1725842040469?e=1776902400&v=beta&t=xWykTxsQp6hRmwkcfHaQhs2luLcb946DZJqJyouJ7TU",
+          "width": 675,
+          "height": 675,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQGC47YlwNRBOw/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1725842040456?e=1776902400&v=beta&t=0TKeysALdnawe7TAO_GENL9gG8NVg4UQ3fqlcO2efSk",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQGC47YlwNRBOw/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1725842040456?e=1776902400&v=beta&t=zAjdtVk6aly7AP4lKhejN-uc778pfaF9mHfBS207sHY",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQGC47YlwNRBOw/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1725842040456?e=1776902400&v=beta&t=lNIUo2wftCev3vzQlhO3R6PIahbJHKt0V-b5tofbHD8",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D4E03AQGC47YlwNRBOw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1725842040469?e=1776902400&v=beta&t=xWykTxsQp6hRmwkcfHaQhs2luLcb946DZJqJyouJ7TU",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Member of Technical Staff at Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "5 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "17f45b2909f729ee5bf6b1059d0a76a30fbc9ecf",
+        "startDate": {
+          "month": "Dec",
+          "year": 2025,
+          "text": "Dec 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": "Part-time",
+        "workplaceType": "Remote",
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "4 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "17f45b2909f729ee5bf6b1059d0a76a30fbc9ecf",
+        "startDate": {
+          "month": "Sep",
+          "year": 2025,
+          "text": "Sep 2025"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2025,
+          "text": "Dec 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Intern",
+        "location": "Cambridge, Massachusetts, United States",
+        "employmentType": "Internship",
+        "workplaceType": "On-site",
+        "companyName": "MIT-IBM Watson AI Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/107576635/",
+        "companyId": "107576635",
+        "duration": "3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2025,
+          "text": "Jun 2025"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2025,
+          "text": "Aug 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4D0BAQFJdXvB_SsQuw/company-logo_400_400/B4DZb0nAGCHQAc-/0/1747860587608?e=1776902400&v=beta&t=nfM3NX8nbzqzVUr0Ju0LK8uYzGg9-lX8BpL74weAVKM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQFJdXvB_SsQuw/company-logo_400_400/B4DZb0nAGCHQAc-/0/1747860587608?e=1776902400&v=beta&t=nfM3NX8nbzqzVUr0Ju0LK8uYzGg9-lX8BpL74weAVKM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQFJdXvB_SsQuw/company-logo_200_200/B4DZb0nAGCHQAM-/0/1747860587608?e=1776902400&v=beta&t=7TsOSCdXGWOx80wXyxRrW11s1OhbcTmKmd6bnHAJnYY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQFJdXvB_SsQuw/company-logo_100_100/B4DZb0nAGCHQAU-/0/1747860587608?e=1776902400&v=beta&t=46GpHhipndD_RhTS8sCZNvOxVie2xaIu2ELMRuaKiM4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Intern",
+        "location": "Santa Clara County, California, United States",
+        "employmentType": "Internship",
+        "workplaceType": "On-site",
+        "companyName": "NVIDIA",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3608/",
+        "companyId": "3608",
+        "duration": "4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2024,
+          "text": "May 2024"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2024,
+          "text": "Aug 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGV36q2EowSyw/company-logo_400_400/company-logo_400_400/0/1724881581208/nvidia_logo?e=1776902400&v=beta&t=C4mWS6vTQukkUtFskEc75guVQWnxYpncWO_y7nNqVeY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGV36q2EowSyw/company-logo_400_400/company-logo_400_400/0/1724881581208/nvidia_logo?e=1776902400&v=beta&t=C4mWS6vTQukkUtFskEc75guVQWnxYpncWO_y7nNqVeY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGV36q2EowSyw/company-logo_200_200/company-logo_200_200/0/1724881581208/nvidia_logo?e=1776902400&v=beta&t=3Eb3ojsmrCjgggr-i-ceH5i78HKTHMfU_Sw6-_Qwl9I",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGV36q2EowSyw/company-logo_100_100/company-logo_100_100/0/1724881581208/nvidia_logo?e=1776902400&v=beta&t=J1fAnNhA-iMhp5no8LIGLr70F4jKZs6zO4pSLqTQaFc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Massachusetts Institute of Technology",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1503/",
+        "schoolId": "1503",
+        "degree": "Doctor of Philosophy - PhD",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "startDate": {
+          "month": "Sep",
+          "year": 2023,
+          "text": "Sep 2023"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2025,
+          "text": "Dec 2025"
+        },
+        "period": "Sep 2023 - Dec 2025",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_400_400/company-logo_400_400/0/1689799729035/mit_logo?e=1776902400&v=beta&t=u1PKvlsURdjuQj6vGwgPDc-3muz7cCQ6oGJISjoWshw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_400_400/company-logo_400_400/0/1689799729035/mit_logo?e=1776902400&v=beta&t=u1PKvlsURdjuQj6vGwgPDc-3muz7cCQ6oGJISjoWshw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_200_200/company-logo_200_200/0/1689799729035/mit_logo?e=1776902400&v=beta&t=AB2cY7dhuIbLPIWAjqEjazLVeMiSD5C3JNuYh9NjBw4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_100_100/company-logo_100_100/0/1689799729035/mit_logo?e=1776902400&v=beta&t=IuM-xZiymxMvWzGrHXnXupiD9lk70R68nAJaX2-9P8Y",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "ShanghaiTech University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/9372195/",
+        "schoolId": "9372195",
+        "degree": "Master of Science - MS",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "startDate": {
+          "month": "Sep",
+          "year": 2020,
+          "text": "Sep 2020"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2023,
+          "text": "Jun 2023"
+        },
+        "period": "Sep 2020 - Jun 2023",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHv7SvX_ToUcA/company-logo_400_400/company-logo_400_400/0/1631320271211?e=1776902400&v=beta&t=8U0RjffVbStSxahBI3dbHnJaPZJoa1MAcPEuBXVaGTY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHv7SvX_ToUcA/company-logo_400_400/company-logo_400_400/0/1631320271211?e=1776902400&v=beta&t=8U0RjffVbStSxahBI3dbHnJaPZJoa1MAcPEuBXVaGTY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHv7SvX_ToUcA/company-logo_200_200/company-logo_200_200/0/1631320271211?e=1776902400&v=beta&t=FSqiF_euJC1tas9IAb5kQ6Zq0WVpClTt22_EBdkd4VY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHv7SvX_ToUcA/company-logo_100_100/company-logo_100_100/0/1631320271211?e=1776902400&v=beta&t=owz_F2hqgbSF7jmT58m0JoqGC35XeyNg9LyprQAcYO0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Southern University of Science and Technology",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/15136545/",
+        "schoolId": "15136545",
+        "degree": "Bachelor of Engineering - BE",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "startDate": {
+          "year": 2016,
+          "text": "2016"
+        },
+        "endDate": {
+          "year": 2020,
+          "text": "2020"
+        },
+        "period": "2016 - 2020",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFw9MZenT1rpQ/company-logo_400_400/company-logo_400_400/0/1630564533823/_logo?e=1776902400&v=beta&t=lthbLe17xZC5f85bzSLZwduLQwGWHl_eeYHfpmzmtO0",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFw9MZenT1rpQ/company-logo_400_400/company-logo_400_400/0/1630564533823/_logo?e=1776902400&v=beta&t=lthbLe17xZC5f85bzSLZwduLQwGWHl_eeYHfpmzmtO0",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFw9MZenT1rpQ/company-logo_200_200/company-logo_200_200/0/1630564533823/_logo?e=1776902400&v=beta&t=5pqV7wzurnmc4EAFIYjanQqKQUO6_sCrd99cVtkHX7A",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFw9MZenT1rpQ/company-logo_100_100/company-logo_100_100/0/1630564533823/_logo?e=1776902400&v=beta&t=JLoICSwj5w2aoS4SGHAvgkRFjW_AlxVY6zdHDwEzlFY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "position": "AI Researcher, Co-founder @ Thinking Machines Lab",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAABQ5lJUBry2byQYf_TtxDF9Rha9l-RqYsaM",
+        "firstName": "Guang-He",
+        "lastName": "Lee",
+        "position": "Thinking Machines Lab | Prev: Anthropic, Citadel, MIT",
+        "publicIdentifier": "guang-he-lee-64577895",
+        "linkedinUrl": "https://www.linkedin.com/in/guang-he-lee-64577895"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABgwxtcBfqsJJUHPwsSPuBE4K9oKyRqUp5o",
+        "firstName": "Lia",
+        "lastName": "Guy",
+        "position": "Research @ OpenAI",
+        "publicIdentifier": "aureliaguy",
+        "linkedinUrl": "https://www.linkedin.com/in/aureliaguy"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAACaOARIBRO2EEH12QWQO29L__oI3N2K4u14",
+        "firstName": "Mingjie",
+        "lastName": "Sun",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "mingjie-sun-06a761160",
+        "linkedinUrl": "https://www.linkedin.com/in/mingjie-sun-06a761160"
+      },
+      {
+        "id": "ACoAABYs4-IB5mHx5eVfOHzu1e8xlO3q_kb38IM",
+        "firstName": "Brydon",
+        "lastName": "Eastman",
+        "position": "Nerd @ Thinking Machines Labs | Formerly Member of Technical Staff @ OpenAI | PhD in Mathematical Oncology",
+        "publicIdentifier": "brydon-eastman-396719a4",
+        "linkedinUrl": "https://www.linkedin.com/in/brydon-eastman-396719a4"
+      },
+      {
+        "id": "ACoAAACo1tYBGy9sT2OWZuEULOMe4K_b2Y22-F8",
+        "firstName": "Alex",
+        "lastName": "Gartrell",
+        "position": "Engineering @ Thinking Machines, Ex-Meta/Facebook",
+        "publicIdentifier": "alexgartrell",
+        "linkedinUrl": "https://www.linkedin.com/in/alexgartrell"
+      },
+      {
+        "id": "ACoAACHG180BXiyeZ2qJgoggx27e4iM3ajxvp18",
+        "firstName": "Andy",
+        "lastName": "Hwang",
+        "position": "thinking machines",
+        "publicIdentifier": "andrewnhwang",
+        "linkedinUrl": "https://www.linkedin.com/in/andrewnhwang"
+      },
+      {
+        "id": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+        "firstName": "Saurabh",
+        "lastName": "Garg",
+        "position": "Thinking Machines Lab | Prev: Mistral AI, CMU, IIT-B",
+        "publicIdentifier": "saurabh-garg-b680b5b8",
+        "linkedinUrl": "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+      },
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "position": "Thinking about machines",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAAAl87CYBWKLLyGNTbomy6oqIPv-5n34CXIY",
+        "firstName": "Andrew",
+        "lastName": "Tulloch",
+        "position": "AI Research @ Meta",
+        "publicIdentifier": "andrew-tulloch-17238745",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-tulloch-17238745"
+      },
+      {
+        "id": "ACoAABJF4mQBVJYIx7g-ASuPnmo5mH2mDuWdwQg",
+        "firstName": "Erika",
+        "lastName": "Byun",
+        "position": "Thinking Machines Lab",
+        "publicIdentifier": "erika-nakamatsu-byun",
+        "linkedinUrl": "https://www.linkedin.com/in/erika-nakamatsu-byun"
+      },
+      {
+        "id": "ACoAABhIg7YBYN2NPIu8voYj5D7JQVZGxonqHvc",
+        "firstName": "Ruiqi",
+        "lastName": "Zhong",
+        "position": "AI researcher. LLM + human collaboration.",
+        "publicIdentifier": "ruiqi-zhong-09a533b4",
+        "linkedinUrl": "https://www.linkedin.com/in/ruiqi-zhong-09a533b4"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "position": "Co-Founder and CEO at Thinking Machines Lab",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAACy2BxwB9fCrfCBI06w0X-gHyQTFLJIpJGc",
+        "firstName": "Guangxuan",
+        "lastName": "X.",
+        "publicIdentifier": "xgx",
+        "linkedinUrl": "https://www.linkedin.com/in/xgx"
+      },
+      {
+        "id": "ACoAAA4HVN4BOZg5espOvMVoO3OY04NZmuqvMCo",
+        "firstName": "Shaojie",
+        "lastName": "Bai",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "shaojie-bai",
+        "linkedinUrl": "https://www.linkedin.com/in/shaojie-bai"
+      },
+      {
+        "id": "ACoAABd69UIBVKZbNJDGrLZu1EQrJ-BoqO3ucIU",
+        "firstName": "Jiayuan",
+        "lastName": "Mao",
+        "position": "Incoming Assistant Professor at the University of Pennsylvania, Applied Scientist at Amazon FAR",
+        "publicIdentifier": "maojiayuan",
+        "linkedinUrl": "https://www.linkedin.com/in/maojiayuan"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAAAji1bkB1eLX4z2Jb9-N2nMhEGNLWptSnqU",
+        "firstName": "Clare",
+        "lastName": "Birch",
+        "publicIdentifier": "clarebirch42",
+        "linkedinUrl": "https://www.linkedin.com/in/clarebirch42"
+      },
+      {
+        "id": "ACoAAGQr-AEBN5j3bbzzjG3QxLaR1-mFjyT4Xlo",
+        "firstName": "Dm muzibur",
+        "lastName": "Sorder",
+        "position": "Student at Massachusetts Institute of Technology",
+        "publicIdentifier": "dm-muzibur-sorder-3159b73aa",
+        "linkedinUrl": "https://www.linkedin.com/in/dm-muzibur-sorder-3159b73aa"
+      },
+      {
+        "id": "ACoAAGNm6ZABKlrP4z1VzAK9tGd5GRjImGFbghE",
+        "firstName": "Ng",
+        "lastName": "Mai Mai",
+        "position": "Student at Massachusetts Institute of Technology",
+        "publicIdentifier": "ng-mai-mai-8686093a6",
+        "linkedinUrl": "https://www.linkedin.com/in/ng-mai-mai-8686093a6"
+      },
+      {
+        "id": "ACoAAGNmIFkBpM5NEnuvEFse5eqylaob7RsN5t4",
+        "firstName": "Erina",
+        "lastName": "Katoh",
+        "position": "MIT ’29 | RSI ’24",
+        "publicIdentifier": "erina-katoh-aa15a33a6",
+        "linkedinUrl": "https://www.linkedin.com/in/erina-katoh-aa15a33a6"
+      },
+      {
+        "id": "ACoAAGVL1ZcB1tWizahOmF7hLczkAoG7WrOfX3M",
+        "firstName": "SARA",
+        "lastName": "SARITA",
+        "position": "Software Engineer at IBM",
+        "publicIdentifier": "sara-sarita-9b31943b5",
+        "linkedinUrl": "https://www.linkedin.com/in/sara-sarita-9b31943b5"
+      },
+      {
+        "id": "ACoAAGRtRgwBUQQeYHEIg7aMwW9U2MdsuFig8B0",
+        "firstName": "Chand Nawab",
+        "lastName": "Khan",
+        "position": "Student at Massachusetts Institute of Technology",
+        "publicIdentifier": "chand-nawab-khan-0103203b0",
+        "linkedinUrl": "https://www.linkedin.com/in/chand-nawab-khan-0103203b0"
+      },
+      {
+        "id": "ACoAAGTF7vYBY9sRnB5_HtcDGXj8NW-6c5u-kcg",
+        "firstName": "Alex",
+        "lastName": "Boutaud",
+        "position": "Analyst",
+        "publicIdentifier": "alex-boutaud-61a2623b2",
+        "linkedinUrl": "https://www.linkedin.com/in/alex-boutaud-61a2623b2"
+      },
+      {
+        "id": "ACoAAGQ8nP0BSn1Byxag7rW7SV0UlXCE4V9aoME",
+        "firstName": "Shabd",
+        "lastName": "Kumar",
+        "position": "Student at Massachusetts Institute of Technology",
+        "publicIdentifier": "shabd-kumar-6252423ab",
+        "linkedinUrl": "https://www.linkedin.com/in/shabd-kumar-6252423ab"
+      },
+      {
+        "id": "ACoAAGVdXqcBS_ObcqtnlZvcmHkBpe8B1AWt5Cs",
+        "firstName": "Alyssa",
+        "lastName": "Epperson",
+        "position": "New Sports Bar Opening Team Lead at Buffalo Wild Wings | Manager in the Hospitality Industry | Training & Development",
+        "publicIdentifier": "alyssa-epperson-a5b6493b5",
+        "linkedinUrl": "https://www.linkedin.com/in/alyssa-epperson-a5b6493b5"
+      },
+      {
+        "id": "ACoAAGRaXrEBf9uuGzyxS-nA6gjUhWPuyfx3xz4",
+        "firstName": "Kareem",
+        "lastName": "Abdul",
+        "position": "Chief Executive Officer at Dassault Aviation",
+        "publicIdentifier": "kareem-abdul-095a233ab",
+        "linkedinUrl": "https://www.linkedin.com/in/kareem-abdul-095a233ab"
+      },
+      {
+        "id": "ACoAAGVSWnkBGjJdPKsepMOQeCe7k-jdhIr8O8Q",
+        "firstName": "amphere",
+        "lastName": "dicemann",
+        "position": "At mit to nurture my brain on neural networks and everything around them",
+        "publicIdentifier": "amphere-dicemann-0a13603b5",
+        "linkedinUrl": "https://www.linkedin.com/in/amphere-dicemann-0a13603b5"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAEZnBtoBYdZE0r4bKkmASFV7VA8d715kQlU"
+    }
+  }
+}

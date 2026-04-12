@@ -1,0 +1,1204 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAA_Tt4wB-DkOrB_EdsyNYeCtxUX3-WkzRYg",
+    "profile_url": "https://www.linkedin.com/in/ACwAAA_Tt4wB-DkOrB_EdsyNYeCtxUX3-WkzRYg"
+  },
+  "item": {
+    "id": "ACoAAA_Tt4wBMifOgtnn-qFjZBQ0lUpVp4seNHY",
+    "publicIdentifier": "mikkahipol",
+    "linkedinUrl": "https://www.linkedin.com/in/mikkahipol",
+    "firstName": "Mikka Francesca",
+    "lastName": "Hipol",
+    "emails": [
+      {
+        "email": "mikka.hipol@idinsight.org",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "http://idinsight.org",
+        "domain": "idinsight.org",
+        "validEmailServer": true
+      },
+      {
+        "url": "https://www.obama.org/",
+        "domain": "obama.org"
+      },
+      {
+        "url": "https://www.startingbloc.org/",
+        "domain": "startingbloc.org"
+      }
+    ],
+    "headline": "Senior Manager at IDinsight",
+    "openToWork": false,
+    "hiring": false,
+    "premium": true,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Metro Manila",
+      "countryCode": "PH",
+      "parsed": {
+        "text": "Manila, Philippines",
+        "countryCode": "PH",
+        "regionCode": null,
+        "country": "Philippines",
+        "countryFull": "Philippines",
+        "state": "Metro Manila",
+        "city": "Manila"
+      }
+    },
+    "objectUrn": "265533324",
+    "registeredAt": "2013-06-20T04:38:16.059Z",
+    "topSkills": null,
+    "connectionsCount": 1021,
+    "followerCount": 1025,
+    "verified": false,
+    "about": "Project leader with 15+ years of experience in managing complex initiatives that bridge gaps in service delivery, strengthen organizational performance, and inform policy and program design. Adept at translating evidence and stakeholder insights into actionable strategies. Demonstrated success leading multi-sectoral teams, supporting large-scale data collection and evaluation efforts, and advising senior government and nonprofit leaders.\n\nAreas of expertise include project management, strategy and partnership development, executive-level advisory, and organizational transformation.",
+    "currentPosition": [
+      {
+        "companyId": "3001438",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3001438/",
+        "companyName": "IDinsight",
+        "dateRange": {
+          "start": {
+            "month": 8,
+            "year": 2024,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "20306",
+        "companyId": "441164",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/441164/",
+        "schoolName": "Harvard Kennedy School"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": null,
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Senior Manager at IDinsight",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Senior Manager",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "IDinsight",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/idinsight/",
+        "companyId": "3001438",
+        "companyUniversalName": "idinsight",
+        "duration": "1 yr 9 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "7e428dededcf112bbe35db88fc3c97953d3cafda",
+        "startDate": {
+          "month": "Aug",
+          "year": 2024,
+          "text": "Aug 2024"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQF0FxECLx6qOg/company-logo_400_400/company-logo_400_400/0/1630524081556/idinsight_logo?e=1776902400&v=beta&t=84RFW2W4DFtCh6v9xblylHTUIDDrCG5LB29QSutC3_s",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQF0FxECLx6qOg/company-logo_400_400/company-logo_400_400/0/1630524081556/idinsight_logo?e=1776902400&v=beta&t=84RFW2W4DFtCh6v9xblylHTUIDDrCG5LB29QSutC3_s",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQF0FxECLx6qOg/company-logo_200_200/company-logo_200_200/0/1630524081556/idinsight_logo?e=1776902400&v=beta&t=1QNzu0P_Qkd9NIGJTHKshVLIlhQ6KbaeLBLIp7FRGe8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQF0FxECLx6qOg/company-logo_100_100/company-logo_100_100/0/1630524081556/idinsight_logo?e=1776902400&v=beta&t=-tL6ecaoECO5SGY7ZEckIWkboWbxANBb1A68z0lXoB8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Interim DataDelta SEA Regional Lead",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "IDinsight",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/idinsight/",
+        "companyId": "3001438",
+        "companyUniversalName": "idinsight",
+        "duration": "11 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "7e428dededcf112bbe35db88fc3c97953d3cafda",
+        "startDate": {
+          "month": "Jan",
+          "year": 2024,
+          "text": "Jan 2024"
+        },
+        "endDate": {
+          "month": "Nov",
+          "year": 2024,
+          "text": "Nov 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQF0FxECLx6qOg/company-logo_400_400/company-logo_400_400/0/1630524081556/idinsight_logo?e=1776902400&v=beta&t=84RFW2W4DFtCh6v9xblylHTUIDDrCG5LB29QSutC3_s",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQF0FxECLx6qOg/company-logo_400_400/company-logo_400_400/0/1630524081556/idinsight_logo?e=1776902400&v=beta&t=84RFW2W4DFtCh6v9xblylHTUIDDrCG5LB29QSutC3_s",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQF0FxECLx6qOg/company-logo_200_200/company-logo_200_200/0/1630524081556/idinsight_logo?e=1776902400&v=beta&t=1QNzu0P_Qkd9NIGJTHKshVLIlhQ6KbaeLBLIp7FRGe8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQF0FxECLx6qOg/company-logo_100_100/company-logo_100_100/0/1630524081556/idinsight_logo?e=1776902400&v=beta&t=-tL6ecaoECO5SGY7ZEckIWkboWbxANBb1A68z0lXoB8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Manager",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "IDinsight",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/idinsight/",
+        "companyId": "3001438",
+        "companyUniversalName": "idinsight",
+        "duration": "2 yrs 8 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "7e428dededcf112bbe35db88fc3c97953d3cafda",
+        "startDate": {
+          "month": "Dec",
+          "year": 2021,
+          "text": "Dec 2021"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2024,
+          "text": "Jul 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQF0FxECLx6qOg/company-logo_400_400/company-logo_400_400/0/1630524081556/idinsight_logo?e=1776902400&v=beta&t=84RFW2W4DFtCh6v9xblylHTUIDDrCG5LB29QSutC3_s",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQF0FxECLx6qOg/company-logo_400_400/company-logo_400_400/0/1630524081556/idinsight_logo?e=1776902400&v=beta&t=84RFW2W4DFtCh6v9xblylHTUIDDrCG5LB29QSutC3_s",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQF0FxECLx6qOg/company-logo_200_200/company-logo_200_200/0/1630524081556/idinsight_logo?e=1776902400&v=beta&t=1QNzu0P_Qkd9NIGJTHKshVLIlhQ6KbaeLBLIp7FRGe8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQF0FxECLx6qOg/company-logo_100_100/company-logo_100_100/0/1630524081556/idinsight_logo?e=1776902400&v=beta&t=-tL6ecaoECO5SGY7ZEckIWkboWbxANBb1A68z0lXoB8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Interim DataDelta SEA Regional Lead",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "IDinsight",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/idinsight/",
+        "companyId": "3001438",
+        "companyUniversalName": "idinsight",
+        "duration": "6 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "7e428dededcf112bbe35db88fc3c97953d3cafda",
+        "startDate": {
+          "month": "Jul",
+          "year": 2022,
+          "text": "Jul 2022"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2022,
+          "text": "Dec 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQF0FxECLx6qOg/company-logo_400_400/company-logo_400_400/0/1630524081556/idinsight_logo?e=1776902400&v=beta&t=84RFW2W4DFtCh6v9xblylHTUIDDrCG5LB29QSutC3_s",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQF0FxECLx6qOg/company-logo_400_400/company-logo_400_400/0/1630524081556/idinsight_logo?e=1776902400&v=beta&t=84RFW2W4DFtCh6v9xblylHTUIDDrCG5LB29QSutC3_s",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQF0FxECLx6qOg/company-logo_200_200/company-logo_200_200/0/1630524081556/idinsight_logo?e=1776902400&v=beta&t=1QNzu0P_Qkd9NIGJTHKshVLIlhQ6KbaeLBLIp7FRGe8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQF0FxECLx6qOg/company-logo_100_100/company-logo_100_100/0/1630524081556/idinsight_logo?e=1776902400&v=beta&t=-tL6ecaoECO5SGY7ZEckIWkboWbxANBb1A68z0lXoB8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Obama Leader (Asia Pacific)",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Obama Foundation",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/16199652/",
+        "companyId": "16199652",
+        "duration": "6 yrs 5 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Dec",
+          "year": 2019,
+          "text": "Dec 2019"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQFGIvafgB18aw/company-logo_400_400/company-logo_400_400/0/1631386379817?e=1776902400&v=beta&t=TfTtTg8nmfIHgwZxJgdvdWEQBMHKjQcDlXKN_MbhmwA",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFGIvafgB18aw/company-logo_400_400/company-logo_400_400/0/1631386379817?e=1776902400&v=beta&t=TfTtTg8nmfIHgwZxJgdvdWEQBMHKjQcDlXKN_MbhmwA",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFGIvafgB18aw/company-logo_200_200/company-logo_200_200/0/1631386379817?e=1776902400&v=beta&t=KOux8-549bjfAoKM66nUjgCZljVe49qYUERTSpkN94I",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFGIvafgB18aw/company-logo_100_100/company-logo_100_100/0/1631386379817?e=1776902400&v=beta&t=sP1dkP7w_3iwJdO2zT2NL-gGg-Nkuk11MlIEXp0x16I",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Social Innovation Fellow",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "StartingBloc",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/53423/",
+        "companyId": "53423",
+        "duration": "10 yrs",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2016,
+          "text": "May 2016"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFeYyjViKUzdQ/company-logo_400_400/company-logo_400_400/0/1630589148930/startingbloc_logo?e=1776902400&v=beta&t=Tt0u18ii1J9j6NutMuW1azlnXI5GCqpLAz71jvYwwqg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFeYyjViKUzdQ/company-logo_400_400/company-logo_400_400/0/1630589148930/startingbloc_logo?e=1776902400&v=beta&t=Tt0u18ii1J9j6NutMuW1azlnXI5GCqpLAz71jvYwwqg",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFeYyjViKUzdQ/company-logo_200_200/company-logo_200_200/0/1630589148930/startingbloc_logo?e=1776902400&v=beta&t=PLHCTVq_tEXu9MHEghNx_TjxWJzZmNOB5rz4INodNMg",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFeYyjViKUzdQ/company-logo_100_100/company-logo_100_100/0/1630589148930/startingbloc_logo?e=1776902400&v=beta&t=qKiM6XbbgtjexqKuvhnbo7B3FMGTgn51VdYaDBpwJ4w",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Assistant",
+        "location": "Cambridge, Massachusetts, United States",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Bloomberg Harvard City Leadership Initiative",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/35637501/",
+        "companyId": "35637501",
+        "duration": "4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2021,
+          "text": "Feb 2021"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2021,
+          "text": "May 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGvKFNGKwuP9Q/company-logo_400_400/company-logo_400_400/0/1630575868986?e=1776902400&v=beta&t=5oibM2MneTNlhmQl8OVVjPMGHNW1rrI4UQrp0lG-w7A",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGvKFNGKwuP9Q/company-logo_400_400/company-logo_400_400/0/1630575868986?e=1776902400&v=beta&t=5oibM2MneTNlhmQl8OVVjPMGHNW1rrI4UQrp0lG-w7A",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGvKFNGKwuP9Q/company-logo_200_200/company-logo_200_200/0/1630575868986?e=1776902400&v=beta&t=Ad7v1Oti5UdX9XMKkJwFgXMX0P-O0wp_hm06DftDBYQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGvKFNGKwuP9Q/company-logo_100_100/company-logo_100_100/0/1630575868986?e=1776902400&v=beta&t=QTkDog7QjLyyOJuA36bb1Xa4ltIZcU55x_6qfQYKmrM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Social Sector Strategist",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Data Science",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/13190014/",
+        "companyId": "13190014",
+        "duration": "2 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2020,
+          "text": "Mar 2020"
+        },
+        "endDate": {
+          "month": "Apr",
+          "year": 2020,
+          "text": "Apr 2020"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQEstI8MP-Cbpw/company-logo_400_400/company-logo_400_400/0/1649158174180/thinking_machines_data_science_logo?e=1776902400&v=beta&t=4An45QB2KTLF0reiu82G-yo79cv0ZYjaEXZz3sHcTmo",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEstI8MP-Cbpw/company-logo_400_400/company-logo_400_400/0/1649158174180/thinking_machines_data_science_logo?e=1776902400&v=beta&t=4An45QB2KTLF0reiu82G-yo79cv0ZYjaEXZz3sHcTmo",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEstI8MP-Cbpw/company-logo_200_200/company-logo_200_200/0/1649158174180/thinking_machines_data_science_logo?e=1776902400&v=beta&t=77mcsp8WLfHJZNzY6Nql3MmfMVxS0bGFr_jO_gqdGz8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEstI8MP-Cbpw/company-logo_100_100/company-logo_100_100/0/1649158174180/thinking_machines_data_science_logo?e=1776902400&v=beta&t=8umW-luz5nbmt2Of1Ej__6NEQssgLC8KlX0fZpBW21M",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Chief of Staff, Office of the City Mayor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "City Government of San Fernando, La Union",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/18352392/",
+        "companyId": "18352392",
+        "duration": "1 yr 2 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "cab2efcc1e449593a1bf2e307271c020c2328ce8",
+        "startDate": {
+          "month": "Sep",
+          "year": 2018,
+          "text": "Sep 2018"
+        },
+        "endDate": {
+          "month": "Oct",
+          "year": 2019,
+          "text": "Oct 2019"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEvwjwnjXI6IQ/company-logo_400_400/company-logo_400_400/0/1631311036542?e=1776902400&v=beta&t=xOy5Hedan6fgk1GCwHwmJyw8wCXbCy1N8G7gsmIfmlQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEvwjwnjXI6IQ/company-logo_400_400/company-logo_400_400/0/1631311036542?e=1776902400&v=beta&t=xOy5Hedan6fgk1GCwHwmJyw8wCXbCy1N8G7gsmIfmlQ",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEvwjwnjXI6IQ/company-logo_200_200/company-logo_200_200/0/1631311036542?e=1776902400&v=beta&t=ScBrRB1eQUhVQMkMWppDlE7uO5Q1gwEC4kN4rvDTOX0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEvwjwnjXI6IQ/company-logo_100_100/company-logo_100_100/0/1631311036542?e=1776902400&v=beta&t=_Yb1szOu30I_CmdDsIrF_LGBPxTgk2-EK1iyaR6LorU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Head, City Information Office",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "City Government of San Fernando, La Union",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/18352392/",
+        "companyId": "18352392",
+        "duration": "2 yrs 2 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "cab2efcc1e449593a1bf2e307271c020c2328ce8",
+        "startDate": {
+          "month": "Jul",
+          "year": 2016,
+          "text": "Jul 2016"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2018,
+          "text": "Aug 2018"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEvwjwnjXI6IQ/company-logo_400_400/company-logo_400_400/0/1631311036542?e=1776902400&v=beta&t=xOy5Hedan6fgk1GCwHwmJyw8wCXbCy1N8G7gsmIfmlQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEvwjwnjXI6IQ/company-logo_400_400/company-logo_400_400/0/1631311036542?e=1776902400&v=beta&t=xOy5Hedan6fgk1GCwHwmJyw8wCXbCy1N8G7gsmIfmlQ",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEvwjwnjXI6IQ/company-logo_200_200/company-logo_200_200/0/1631311036542?e=1776902400&v=beta&t=ScBrRB1eQUhVQMkMWppDlE7uO5Q1gwEC4kN4rvDTOX0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEvwjwnjXI6IQ/company-logo_100_100/company-logo_100_100/0/1631311036542?e=1776902400&v=beta&t=_Yb1szOu30I_CmdDsIrF_LGBPxTgk2-EK1iyaR6LorU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Communications Director",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Hermenegildo Gualberto Mayoral Campaign",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Hermenegildo+Gualberto+Mayoral+Campaign",
+        "duration": "10 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2015,
+          "text": "Sep 2015"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2016,
+          "text": "Jun 2016"
+        }
+      },
+      {
+        "position": "Co-founder and Head of Education and Training",
+        "location": "NCR - National Capital Region, Philippines",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Ritmo Learning Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Ritmo+Learning+Lab",
+        "duration": "3 yrs 1 mo",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2012,
+          "text": "May 2012"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2015,
+          "text": "May 2015"
+        }
+      },
+      {
+        "position": "Consultant",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Global Electric Transportation",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Global+Electric+Transportation",
+        "duration": "1 yr",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2014,
+          "text": "Feb 2014"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2015,
+          "text": "Jan 2015"
+        }
+      },
+      {
+        "position": "Teacher",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "The Raya School",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=The+Raya+School",
+        "duration": "1 yr",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Apr",
+          "year": 2013,
+          "text": "Apr 2013"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2014,
+          "text": "Mar 2014"
+        }
+      },
+      {
+        "position": "Research Manager",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Gawad Kalinga Community Development Foundation",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/804699/",
+        "companyId": "804699",
+        "duration": "1 yr 2 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "486ad9a8583e856ef28defe58e324b3275a49484",
+        "startDate": {
+          "month": "Jan",
+          "year": 2012,
+          "text": "Jan 2012"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2013,
+          "text": "Feb 2013"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHcLei9IzrbTA/company-logo_400_400/company-logo_400_400/0/1697611781270/gawad_kalinga_community_development_foundation_logo?e=1776902400&v=beta&t=iZp-bX4i1LnfECJXZUTVfZDSuuiwvsFpXaJNyYTDBzI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHcLei9IzrbTA/company-logo_400_400/company-logo_400_400/0/1697611781270/gawad_kalinga_community_development_foundation_logo?e=1776902400&v=beta&t=iZp-bX4i1LnfECJXZUTVfZDSuuiwvsFpXaJNyYTDBzI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHcLei9IzrbTA/company-logo_200_200/company-logo_200_200/0/1697611781270/gawad_kalinga_community_development_foundation_logo?e=1776902400&v=beta&t=alU_MeDW2HXLtePVPRD5kUyoaw1ygaavF8hRZLvENUk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHcLei9IzrbTA/company-logo_100_100/company-logo_100_100/0/1697611781270/gawad_kalinga_community_development_foundation_logo?e=1776902400&v=beta&t=GcGLFCUkqBXkOBv_eMMHBSCHo9hFga0p-aTSPXRpEFc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Program Officer",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Gawad Kalinga Community Development Foundation",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/804699/",
+        "companyId": "804699",
+        "duration": "1 yr",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "486ad9a8583e856ef28defe58e324b3275a49484",
+        "startDate": {
+          "month": "Jan",
+          "year": 2011,
+          "text": "Jan 2011"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2011,
+          "text": "Dec 2011"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHcLei9IzrbTA/company-logo_400_400/company-logo_400_400/0/1697611781270/gawad_kalinga_community_development_foundation_logo?e=1776902400&v=beta&t=iZp-bX4i1LnfECJXZUTVfZDSuuiwvsFpXaJNyYTDBzI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHcLei9IzrbTA/company-logo_400_400/company-logo_400_400/0/1697611781270/gawad_kalinga_community_development_foundation_logo?e=1776902400&v=beta&t=iZp-bX4i1LnfECJXZUTVfZDSuuiwvsFpXaJNyYTDBzI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHcLei9IzrbTA/company-logo_200_200/company-logo_200_200/0/1697611781270/gawad_kalinga_community_development_foundation_logo?e=1776902400&v=beta&t=alU_MeDW2HXLtePVPRD5kUyoaw1ygaavF8hRZLvENUk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHcLei9IzrbTA/company-logo_100_100/company-logo_100_100/0/1697611781270/gawad_kalinga_community_development_foundation_logo?e=1776902400&v=beta&t=GcGLFCUkqBXkOBv_eMMHBSCHo9hFga0p-aTSPXRpEFc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Program Officer",
+        "location": "Metro Manila, National Capital Region, Philippines",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Gawad Kalinga Community Development Foundation",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/804699/",
+        "companyId": "804699",
+        "duration": "1 yr 7 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2008,
+          "text": "Jun 2008"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2009,
+          "text": "Dec 2009"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHcLei9IzrbTA/company-logo_400_400/company-logo_400_400/0/1697611781270/gawad_kalinga_community_development_foundation_logo?e=1776902400&v=beta&t=iZp-bX4i1LnfECJXZUTVfZDSuuiwvsFpXaJNyYTDBzI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHcLei9IzrbTA/company-logo_400_400/company-logo_400_400/0/1697611781270/gawad_kalinga_community_development_foundation_logo?e=1776902400&v=beta&t=iZp-bX4i1LnfECJXZUTVfZDSuuiwvsFpXaJNyYTDBzI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHcLei9IzrbTA/company-logo_200_200/company-logo_200_200/0/1697611781270/gawad_kalinga_community_development_foundation_logo?e=1776902400&v=beta&t=alU_MeDW2HXLtePVPRD5kUyoaw1ygaavF8hRZLvENUk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHcLei9IzrbTA/company-logo_100_100/company-logo_100_100/0/1697611781270/gawad_kalinga_community_development_foundation_logo?e=1776902400&v=beta&t=GcGLFCUkqBXkOBv_eMMHBSCHo9hFga0p-aTSPXRpEFc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Harvard Kennedy School",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/441164/",
+        "schoolId": "441164",
+        "degree": "Master in Public Administration",
+        "fieldOfStudy": "Edward S. Mason Program in Public Policy and Management",
+        "skills": [],
+        "startDate": {
+          "year": 2020,
+          "text": "2020"
+        },
+        "endDate": {
+          "year": 2021,
+          "text": "2021"
+        },
+        "period": "2020 - 2021",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGz7JtcRoH-Hg/company-logo_400_400/company-logo_400_400/0/1631329665234?e=1776902400&v=beta&t=mJ1_1qbaw2tvGjS-NpRwxfsmBKFYTKq2mVdLtJeYYZs",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGz7JtcRoH-Hg/company-logo_400_400/company-logo_400_400/0/1631329665234?e=1776902400&v=beta&t=mJ1_1qbaw2tvGjS-NpRwxfsmBKFYTKq2mVdLtJeYYZs",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGz7JtcRoH-Hg/company-logo_200_200/company-logo_200_200/0/1631329665234?e=1776902400&v=beta&t=YLDgD3r6b0dKhWpcXNX8_Qc53mEyLE6GzLc87eJafAI",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGz7JtcRoH-Hg/company-logo_100_100/company-logo_100_100/0/1631329665234?e=1776902400&v=beta&t=Cgh5iXg9iU8Jbrt69Z8E0Icyyjeaq3-qXltfm6n--7M",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Ateneo de Manila University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/17078/",
+        "schoolId": "17078",
+        "degree": "Bachelor of Arts - BA",
+        "fieldOfStudy": "Psychology",
+        "skills": [],
+        "startDate": {
+          "year": 2004,
+          "text": "2004"
+        },
+        "endDate": {
+          "year": 2008,
+          "text": "2008"
+        },
+        "period": "2004 - 2008",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQFRx9QGyQRWPg/company-logo_400_400/B56Zad8NxjHsAY-/0/1746406530638/ateneo_de_manila_university_logo?e=1776902400&v=beta&t=mWdnDJULD4gyORsZC3mKL9W7ZTWZiGq_S5Add2J1S2s",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFRx9QGyQRWPg/company-logo_400_400/B56Zad8NxjHsAY-/0/1746406530638/ateneo_de_manila_university_logo?e=1776902400&v=beta&t=mWdnDJULD4gyORsZC3mKL9W7ZTWZiGq_S5Add2J1S2s",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFRx9QGyQRWPg/company-logo_200_200/B56Zad8NxjHsAI-/0/1746406530638/ateneo_de_manila_university_logo?e=1776902400&v=beta&t=C94I7ZJbVJ_27SDNao58UgMmArxX9CnBoS_UjwQHoK0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFRx9QGyQRWPg/company-logo_100_100/B56Zad8NxjHsAQ-/0/1746406530638/ateneo_de_manila_university_logo?e=1776902400&v=beta&t=kzg4vplq1qp2XToNJGb13C57TacuGssdgF75b7XnHhs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Public Speaking",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Strategic Planning",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Program Evaluation",
+        "positions": [
+          "Endorsed by 2 colleagues at Gawad Kalinga Community Development Foundation"
+        ],
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Community Organizing",
+        "positions": [
+          "Endorsed by 3 colleagues at Gawad Kalinga Community Development Foundation"
+        ],
+        "endorsements": "7 endorsements"
+      },
+      {
+        "name": "Community Development",
+        "positions": [
+          "Endorsed by 5 colleagues at Gawad Kalinga Community Development Foundation"
+        ],
+        "endorsements": "8 endorsements"
+      },
+      {
+        "name": "Nonprofits",
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "Research",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Volunteer Management",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Community Outreach",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Social Entrepreneurship",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Public Relations",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Event Planning",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Project Management",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Event Management",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Training",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Nonprofit Organizations",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Leadership Development"
+      },
+      {
+        "name": "Training & Development"
+      },
+      {
+        "name": "Community Engagement"
+      },
+      {
+        "name": "Public Policy"
+      },
+      {
+        "name": "Public Affairs"
+      },
+      {
+        "name": "Program Management"
+      },
+      {
+        "name": "Program Development"
+      },
+      {
+        "name": "Organizational Development"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "PREMIUM_INMAIL",
+    "moreProfiles": [
+      {
+        "id": "ACoAACK-ltsBe2szDpuWfkEGZWhHWI1dfuxmkgk",
+        "firstName": "Dominique",
+        "lastName": "Sy",
+        "publicIdentifier": "dominique-sy",
+        "linkedinUrl": "https://www.linkedin.com/in/dominique-sy"
+      },
+      {
+        "id": "ACoAACuVMngBYKVOp92bxlZc1HXkwcAaHaTFwRw",
+        "firstName": "Rivandra",
+        "lastName": "Royono",
+        "publicIdentifier": "rivandra-royono-048a63184",
+        "linkedinUrl": "https://www.linkedin.com/in/rivandra-royono-048a63184"
+      },
+      {
+        "id": "ACoAAB1VMjsBpO9dP8lGFAM5geIzkyo9ESHnYfY",
+        "firstName": "Madison",
+        "lastName": "Hurst",
+        "publicIdentifier": "madisonhurst",
+        "linkedinUrl": "https://www.linkedin.com/in/madisonhurst"
+      },
+      {
+        "id": "ACoAABzTyLYBNIiKqRXMKu6Z7TaZp48TpyxvbJQ",
+        "firstName": "Rico",
+        "lastName": "Bergemann",
+        "publicIdentifier": "rico-bergemann",
+        "linkedinUrl": "https://www.linkedin.com/in/rico-bergemann"
+      },
+      {
+        "id": "ACoAABlsY5kBpxofVj21WkHA4mho7sev16vvr6Y",
+        "firstName": "Byron",
+        "lastName": "Sanborn",
+        "publicIdentifier": "byron-sanborn-821a18ba",
+        "linkedinUrl": "https://www.linkedin.com/in/byron-sanborn-821a18ba"
+      },
+      {
+        "id": "ACoAAB43oQkBCebZk0RFLmiludJ4cwmgj1TFaNk",
+        "firstName": "Aisha",
+        "lastName": "Paramita",
+        "publicIdentifier": "aishaparamita",
+        "linkedinUrl": "https://www.linkedin.com/in/aishaparamita"
+      },
+      {
+        "id": "ACoAACGz1zcBc4pETllSbL2FVNv-gZWv_Ggzjpw",
+        "firstName": "Jerick",
+        "lastName": "Chan",
+        "publicIdentifier": "jjerick-chan",
+        "linkedinUrl": "https://www.linkedin.com/in/jjerick-chan"
+      },
+      {
+        "id": "ACoAAAM_oBMB0HZ-s3lPjZbANU1SNIsAnhzgDAc",
+        "firstName": "Rob",
+        "lastName": "S.",
+        "publicIdentifier": "rob-sampson",
+        "linkedinUrl": "https://www.linkedin.com/in/rob-sampson"
+      },
+      {
+        "id": "ACoAAB9sXHMBtkKWI11FPNTwLFsgUMvjtQvxh3k",
+        "firstName": "Eugénie Rodriguez ",
+        "lastName": "Huibonhoa",
+        "publicIdentifier": "eugenienrh",
+        "linkedinUrl": "https://www.linkedin.com/in/eugenienrh"
+      },
+      {
+        "id": "ACoAACe11LABb1lRp6xrqq_hxQzf2x39GG3qi7o",
+        "firstName": "Ryan",
+        "lastName": "Molen",
+        "publicIdentifier": "ryan-molen-668150167",
+        "linkedinUrl": "https://www.linkedin.com/in/ryan-molen-668150167"
+      },
+      {
+        "id": "ACoAAAoPrM4Br-ZUbQlQBH7QwlUEB7xtULvVbyw",
+        "firstName": "Invictus",
+        "lastName": "Buenaventura",
+        "publicIdentifier": "invictusbuenaventura",
+        "linkedinUrl": "https://www.linkedin.com/in/invictusbuenaventura"
+      },
+      {
+        "id": "ACoAAA23cDAB7K1Nqsa9dOQt4uQ4eJyiQXWP-FE",
+        "firstName": "Alice",
+        "lastName": "Redfern",
+        "publicIdentifier": "aliceredfern28",
+        "linkedinUrl": "https://www.linkedin.com/in/aliceredfern28"
+      },
+      {
+        "id": "ACoAACP_p8gBHb0pewgm15YVHtNC9jWHXAB_b_0",
+        "firstName": "Tyler",
+        "lastName": "Chan",
+        "publicIdentifier": "tylerychan",
+        "linkedinUrl": "https://www.linkedin.com/in/tylerychan"
+      },
+      {
+        "id": "ACoAACcGyNgBS_t2OnfpOv_QYYiEyJyJaQaPtl0",
+        "firstName": "Kassandra",
+        "lastName": "Barnes",
+        "publicIdentifier": "kassandra-barnes",
+        "linkedinUrl": "https://www.linkedin.com/in/kassandra-barnes"
+      },
+      {
+        "id": "ACoAAB_Kx8YBKLWUykK38BbllwBJneMHxkXgLzo",
+        "firstName": "Alec",
+        "lastName": "Lim",
+        "publicIdentifier": "limaleclemuel",
+        "linkedinUrl": "https://www.linkedin.com/in/limaleclemuel"
+      },
+      {
+        "id": "ACoAAACPkpYBnsSbEZbAdNhmi6MxO2a8W4Xe_sc",
+        "firstName": "Douglas",
+        "lastName": "Johnson",
+        "publicIdentifier": "dougj892",
+        "linkedinUrl": "https://www.linkedin.com/in/dougj892"
+      },
+      {
+        "id": "ACoAACbcsp8BKk1PhkzH4B_6O9s6t7GHHIPMQU0",
+        "firstName": "Darahlyn",
+        "lastName": "B.",
+        "publicIdentifier": "darahlyn-b-6a7429162",
+        "linkedinUrl": "https://www.linkedin.com/in/darahlyn-b-6a7429162"
+      },
+      {
+        "id": "ACoAACa9z00BFwGv5iqmztAeF1HaB-DcC6iUCFQ",
+        "firstName": "Isa",
+        "lastName": "del Rosario",
+        "publicIdentifier": "isa-del-rosario",
+        "linkedinUrl": "https://www.linkedin.com/in/isa-del-rosario"
+      },
+      {
+        "id": "ACoAAAjMPQ4BkH4PCx1nRaLszun-8mEVsHaK45c",
+        "firstName": "Mia",
+        "lastName": "Jeong",
+        "publicIdentifier": "mia-jeong",
+        "linkedinUrl": "https://www.linkedin.com/in/mia-jeong"
+      },
+      {
+        "id": "ACoAACdNRk8BdBDFW5UtRbmKknnvvHl1oEMNW8k",
+        "firstName": "Sophia",
+        "lastName": "Andrade",
+        "publicIdentifier": "sophia-andrade-1a79a7164",
+        "linkedinUrl": "https://www.linkedin.com/in/sophia-andrade-1a79a7164"
+      },
+      {
+        "id": "ACoAACVwuiYB2tfpnCqM3BlQ_Jc0pS9EsAwl244",
+        "firstName": "Munier",
+        "lastName": "Mohammad",
+        "position": "E-commerce Specialist For Shopify",
+        "publicIdentifier": "muniermohammad",
+        "linkedinUrl": "https://www.linkedin.com/in/muniermohammad"
+      },
+      {
+        "id": "ACoAAF2AZAEBXvXUjZMGebNQI4yxBP3ikeJrB5U",
+        "firstName": "Abdelrahman",
+        "lastName": "Ali",
+        "position": "Social Media Marketing Specialist at Shopify , Ecommerce Designer & Shopify Developer and Meta ads",
+        "publicIdentifier": "abdelrahman-ali-941429379",
+        "linkedinUrl": "https://www.linkedin.com/in/abdelrahman-ali-941429379"
+      },
+      {
+        "id": "ACoAAF0SMcgBj_em1enqM5NBOBNL_cHLosbrIA4",
+        "firstName": "Hassan",
+        "lastName": "Mohamed",
+        "position": "‏German freelancer ‏ في ‏Shopify‏",
+        "publicIdentifier": "hassan-mohamed-5a0b26376",
+        "linkedinUrl": "https://www.linkedin.com/in/hassan-mohamed-5a0b26376"
+      },
+      {
+        "id": "ACoAAFmKrYkBc6D736jMu6VTBxo91ddZOVkrbng",
+        "firstName": "ONION",
+        "lastName": "-AA",
+        "position": "Assistant at Shopify",
+        "publicIdentifier": "onion-aa-94912b35b",
+        "linkedinUrl": "https://www.linkedin.com/in/onion-aa-94912b35b"
+      },
+      {
+        "id": "ACoAAGVggqwBaOXiUuvH_OWesxHGwl7nto0k_tU",
+        "firstName": "nezar",
+        "lastName": "apo almagd",
+        "position": "‏المبيعات‏ في ‏Shopify‏",
+        "publicIdentifier": "nezar-apo-almagd-ba47283b5",
+        "linkedinUrl": "https://www.linkedin.com/in/nezar-apo-almagd-ba47283b5"
+      },
+      {
+        "id": "ACoAAFkOYNMBL_RoLfI0YqmwzFtrn9ZlBCGlXLc",
+        "firstName": "Shehab",
+        "lastName": "Ramadan",
+        "position": "محامي في Shopify",
+        "publicIdentifier": "shehab-ramadan-72b461358",
+        "linkedinUrl": "https://www.linkedin.com/in/shehab-ramadan-72b461358"
+      },
+      {
+        "id": "ACoAAFnmeckBUZXoNnqxzbT018Jkr4orHnuAXVE",
+        "firstName": "Sherif",
+        "lastName": "Ashraf",
+        "position": "a dropshipper at Shopify",
+        "publicIdentifier": "sherif-ashraf-375151361",
+        "linkedinUrl": "https://www.linkedin.com/in/sherif-ashraf-375151361"
+      },
+      {
+        "id": "ACoAAEskE6AB_YGi9a4yxn24cG4MClw5EZQJ6rQ",
+        "firstName": "Sherry",
+        "lastName": "Adel",
+        "position": "Student at EELU \nIT department",
+        "publicIdentifier": "sherry-adel-0282362b2",
+        "linkedinUrl": "https://www.linkedin.com/in/sherry-adel-0282362b2"
+      },
+      {
+        "id": "ACoAAFwW-L0BP1KcUD18cIHMyrkVtHvFMuWe5VM",
+        "firstName": "mohamed",
+        "lastName": "samir",
+        "position": "معلم فيزياء ",
+        "publicIdentifier": "mohamed-samir-765506371",
+        "linkedinUrl": "https://www.linkedin.com/in/mohamed-samir-765506371"
+      },
+      {
+        "id": "ACoAAGEDpTcBeLJHQBoCXg8-1DVKYycgwnEz5YA",
+        "firstName": "Mina",
+        "lastName": "Emad",
+        "position": "‏مصمم ويب‏ في ‏Shopify‏",
+        "publicIdentifier": "mina-emad-a1b10a395",
+        "linkedinUrl": "https://www.linkedin.com/in/mina-emad-a1b10a395"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAA_Tt4wB-DkOrB_EdsyNYeCtxUX3-WkzRYg"
+    }
+  }
+}

@@ -1,0 +1,785 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAADDB7DAB3QiiJ2yVu2pO0hNuW3saWtCwjwE",
+    "profile_url": "https://www.linkedin.com/in/ACwAADDB7DAB3QiiJ2yVu2pO0hNuW3saWtCwjwE"
+  },
+  "item": {
+    "id": "ACoAADDB7DABJK3fhQa97pAxpbFcGbMtI2pA2Ek",
+    "publicIdentifier": "ruilama",
+    "linkedinUrl": "https://www.linkedin.com/in/ruilama",
+    "firstName": "Ruila",
+    "lastName": "M.",
+    "emails": [
+      {
+        "email": "ruila@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Recruiting@Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": true,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco Bay Area",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "818015280",
+    "registeredAt": "2020-05-12T09:39:19.998Z",
+    "topSkills": null,
+    "connectionsCount": 1300,
+    "followerCount": 2275,
+    "verified": true,
+    "about": "apply at: https://job-boards.greenhouse.io/thinkingmachines",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 12,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "17939",
+        "companyId": "2517",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2517/",
+        "schoolName": "University of California, Berkeley"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4E16AQF-Ut1P-Aoo6Q/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1719351495214?e=1776902400&v=beta&t=N1q8jhMRm4_dJkDIw1-1W1Zi6UMmEZtpdQvVvyRt4iA",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E16AQF-Ut1P-Aoo6Q/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1719351495214?e=1776902400&v=beta&t=N1q8jhMRm4_dJkDIw1-1W1Zi6UMmEZtpdQvVvyRt4iA",
+          "width": 1397,
+          "height": 350,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E16AQF-Ut1P-Aoo6Q/profile-displaybackgroundimage-shrink_200_800/profile-displaybackgroundimage-shrink_200_800/0/1719347373226?e=1776902400&v=beta&t=XFaTuXD_4g1OdjzubD11UoA77HesIIBhK_6o-1zSL1A",
+          "width": 798,
+          "height": 200,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Recruiting@Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Recruiting & Operations",
+        "location": "San Francisco, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "5 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Dec",
+          "year": 2025,
+          "text": "Dec 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Talent Lead",
+        "location": "Palo Alto, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Stealth Startup",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/18583501/",
+        "companyId": "18583501",
+        "duration": "4 mos",
+        "description": null,
+        "skills": [
+          "Technical Recruiting"
+        ],
+        "startDate": {
+          "month": "Sep",
+          "year": 2025,
+          "text": "Sep 2025"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2025,
+          "text": "Dec 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4D0BAQGUKsfjHB8RNQ/company-logo_400_400/company-logo_400_400/0/1735368022724/stealth_startup_51_logo?e=1776902400&v=beta&t=sqGs0iw_vjuB-wRHCH_RrRLDlVWrVeiXmGF_H6sGZtc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQGUKsfjHB8RNQ/company-logo_400_400/company-logo_400_400/0/1735368022724/stealth_startup_51_logo?e=1776902400&v=beta&t=sqGs0iw_vjuB-wRHCH_RrRLDlVWrVeiXmGF_H6sGZtc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQGUKsfjHB8RNQ/company-logo_200_200/company-logo_200_200/0/1735368022724/stealth_startup_51_logo?e=1776902400&v=beta&t=8ulTHfuHx4C9PSQhMhwhWmbiLbp8iGsvmgasi3ZP-10",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQGUKsfjHB8RNQ/company-logo_100_100/company-logo_100_100/0/1735368022724/stealth_startup_51_logo?e=1776902400&v=beta&t=4x262I3p-knAucTum2QUvtcnvll9dfRQ9xRq65rCRFE",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Tech Recruiting Lead",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Windsurf",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/89680378/",
+        "companyId": "89680378",
+        "duration": "7 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "8f8d64ebfadd36099ab01fdfb476e6fcda3836ef",
+        "startDate": {
+          "month": "Feb",
+          "year": 2025,
+          "text": "Feb 2025"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2025,
+          "text": "Aug 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHEjnGdXZ7kVg/company-logo_400_400/B56ZZ9y9z8GQAc-/0/1745867234905/windsurf_logo?e=1776902400&v=beta&t=LLmZCVf1uIdWr810GGepDZFxvs-ZwAF2llE4wnwi5NU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHEjnGdXZ7kVg/company-logo_400_400/B56ZZ9y9z8GQAc-/0/1745867234905/windsurf_logo?e=1776902400&v=beta&t=LLmZCVf1uIdWr810GGepDZFxvs-ZwAF2llE4wnwi5NU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHEjnGdXZ7kVg/company-logo_200_200/B56ZZ9y9z8GQAM-/0/1745867234905/windsurf_logo?e=1776902400&v=beta&t=3uQ7MFWN6h7jDglUH1R4GhLCAme-5a_Rcne9og7RRHk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHEjnGdXZ7kVg/company-logo_100_100/B56ZZ9y9z8GQAU-/0/1745867234905/windsurf_logo?e=1776902400&v=beta&t=zvEcXxKgo9pVosFMDv04M3fwV-UiAHoIPa1OLZKjrEU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Founding Recruiter",
+        "location": "Mountain View, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Windsurf",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/89680378/",
+        "companyId": "89680378",
+        "duration": "11 mos",
+        "description": null,
+        "skills": [
+          "Technical Recruiting"
+        ],
+        "experienceGroupId": "8f8d64ebfadd36099ab01fdfb476e6fcda3836ef",
+        "startDate": {
+          "month": "Apr",
+          "year": 2024,
+          "text": "Apr 2024"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2025,
+          "text": "Feb 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHEjnGdXZ7kVg/company-logo_400_400/B56ZZ9y9z8GQAc-/0/1745867234905/windsurf_logo?e=1776902400&v=beta&t=LLmZCVf1uIdWr810GGepDZFxvs-ZwAF2llE4wnwi5NU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHEjnGdXZ7kVg/company-logo_400_400/B56ZZ9y9z8GQAc-/0/1745867234905/windsurf_logo?e=1776902400&v=beta&t=LLmZCVf1uIdWr810GGepDZFxvs-ZwAF2llE4wnwi5NU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHEjnGdXZ7kVg/company-logo_200_200/B56ZZ9y9z8GQAM-/0/1745867234905/windsurf_logo?e=1776902400&v=beta&t=3uQ7MFWN6h7jDglUH1R4GhLCAme-5a_Rcne9og7RRHk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHEjnGdXZ7kVg/company-logo_100_100/B56ZZ9y9z8GQAU-/0/1745867234905/windsurf_logo?e=1776902400&v=beta&t=zvEcXxKgo9pVosFMDv04M3fwV-UiAHoIPa1OLZKjrEU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "UX Designer",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Stealth Startup",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/18583501/",
+        "companyId": "18583501",
+        "duration": "1 yr",
+        "description": null,
+        "skills": [
+          "Figma (Software)",
+          "Adobe InDesign",
+          "Adobe Premiere Pro",
+          "HTML",
+          "Python (Programming Language)"
+        ],
+        "startDate": {
+          "month": "Apr",
+          "year": 2023,
+          "text": "Apr 2023"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2024,
+          "text": "Mar 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4D0BAQGUKsfjHB8RNQ/company-logo_400_400/company-logo_400_400/0/1735368022724/stealth_startup_51_logo?e=1776902400&v=beta&t=sqGs0iw_vjuB-wRHCH_RrRLDlVWrVeiXmGF_H6sGZtc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQGUKsfjHB8RNQ/company-logo_400_400/company-logo_400_400/0/1735368022724/stealth_startup_51_logo?e=1776902400&v=beta&t=sqGs0iw_vjuB-wRHCH_RrRLDlVWrVeiXmGF_H6sGZtc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQGUKsfjHB8RNQ/company-logo_200_200/company-logo_200_200/0/1735368022724/stealth_startup_51_logo?e=1776902400&v=beta&t=8ulTHfuHx4C9PSQhMhwhWmbiLbp8iGsvmgasi3ZP-10",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQGUKsfjHB8RNQ/company-logo_100_100/company-logo_100_100/0/1735368022724/stealth_startup_51_logo?e=1776902400&v=beta&t=4x262I3p-knAucTum2QUvtcnvll9dfRQ9xRq65rCRFE",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Talent",
+        "location": "Palo Alto, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "OPPO US Research",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=OPPO+US+Research",
+        "duration": "1 yr 3 mos",
+        "description": null,
+        "skills": [
+          "Technical Recruiting",
+          "Onboarding",
+          "New Hire Training"
+        ],
+        "startDate": {
+          "month": "Feb",
+          "year": 2022,
+          "text": "Feb 2022"
+        },
+        "endDate": {
+          "month": "Apr",
+          "year": 2023,
+          "text": "Apr 2023"
+        }
+      },
+      {
+        "position": "Research Assistant",
+        "location": "Berkeley, California, United States",
+        "employmentType": "Part-time",
+        "workplaceType": "Hybrid",
+        "companyName": "University of California, Berkeley, Early Learning Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=University+of+California%2C+Berkeley%2C+Early+Learning+Lab",
+        "duration": "5 mos",
+        "description": null,
+        "skills": [
+          "Research Skills",
+          "Experimental Design"
+        ],
+        "startDate": {
+          "month": "Aug",
+          "year": 2021,
+          "text": "Aug 2021"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2021,
+          "text": "Dec 2021"
+        }
+      },
+      {
+        "position": "Recruiter",
+        "location": "San Francisco Bay Area",
+        "employmentType": "Internship",
+        "workplaceType": "On-site",
+        "companyName": "Stealth Startup",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/18583501/",
+        "companyId": "18583501",
+        "duration": "8 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2020,
+          "text": "May 2020"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2020,
+          "text": "Dec 2020"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4D0BAQGUKsfjHB8RNQ/company-logo_400_400/company-logo_400_400/0/1735368022724/stealth_startup_51_logo?e=1776902400&v=beta&t=sqGs0iw_vjuB-wRHCH_RrRLDlVWrVeiXmGF_H6sGZtc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQGUKsfjHB8RNQ/company-logo_400_400/company-logo_400_400/0/1735368022724/stealth_startup_51_logo?e=1776902400&v=beta&t=sqGs0iw_vjuB-wRHCH_RrRLDlVWrVeiXmGF_H6sGZtc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQGUKsfjHB8RNQ/company-logo_200_200/company-logo_200_200/0/1735368022724/stealth_startup_51_logo?e=1776902400&v=beta&t=8ulTHfuHx4C9PSQhMhwhWmbiLbp8iGsvmgasi3ZP-10",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQGUKsfjHB8RNQ/company-logo_100_100/company-logo_100_100/0/1735368022724/stealth_startup_51_logo?e=1776902400&v=beta&t=4x262I3p-knAucTum2QUvtcnvll9dfRQ9xRq65rCRFE",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "University of California, Berkeley",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2517/",
+        "schoolId": "2517",
+        "degree": "Bachelor of Arts - BA",
+        "fieldOfStudy": "Psychology",
+        "skills": [
+          "Cognitive Psychology",
+          "Clinical Psychology",
+          "Organizational Psychology"
+        ],
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_400_400/company-logo_400_400/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=ihsqGpnHzj0nlc8nr3zQwTYbq6GYQDs_WRmOHxXO6Cs",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_400_400/company-logo_400_400/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=ihsqGpnHzj0nlc8nr3zQwTYbq6GYQDs_WRmOHxXO6Cs",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_200_200/company-logo_200_200/0/1732135669730/uc_berkeley_logo?e=1776902400&v=beta&t=99cgQbgSotN9XiK7TbWS3PhqRVGT8S6VKfitEcMn0-E",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_100_100/company-logo_100_100/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=spLtug0cp3xqHCXq1OoZudTryqzyY85FoIZwfJ-_XzA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "The Johns Hopkins University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3528/",
+        "schoolId": "3528",
+        "degree": "Master of Science",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "startDate": {
+          "year": 2026,
+          "text": "2026"
+        },
+        "endDate": {
+          "year": 2028,
+          "text": "2028"
+        },
+        "period": "2026 - 2028",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEe5RVEEkRh_Q/company-logo_400_400/B4EZs4eJd_JQAc-/0/1766178987371?e=1776902400&v=beta&t=zaZZX9iHmpokyW0smXu8ulQ0fx-wt1LziX5aPqNqnZc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEe5RVEEkRh_Q/company-logo_400_400/B4EZs4eJd_JQAc-/0/1766178987371?e=1776902400&v=beta&t=zaZZX9iHmpokyW0smXu8ulQ0fx-wt1LziX5aPqNqnZc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEe5RVEEkRh_Q/company-logo_200_200/B4EZs4eJd_JQAM-/0/1766178987371?e=1776902400&v=beta&t=_0R90xxDCHk8IBEGldxZp-ku7FExgAccucrxan5RbYA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEe5RVEEkRh_Q/company-logo_100_100/B4EZs4eJd_JQAU-/0/1766178987371?e=1776902400&v=beta&t=cWtqq8i07D0HePwtgUiOmgUaSB-hhrtV8oX2foyWKhk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Time Efficiency"
+      },
+      {
+        "name": "Teaching English as a Second Language"
+      },
+      {
+        "name": "Research Skills"
+      },
+      {
+        "name": "Experimental Design"
+      },
+      {
+        "name": "Experimental Psychology"
+      },
+      {
+        "name": "Onboarding"
+      },
+      {
+        "name": "New Hire Training"
+      },
+      {
+        "name": "Cognitive Psychology",
+        "positions": [
+          "University of California, Berkeley"
+        ]
+      },
+      {
+        "name": "Clinical Psychology",
+        "positions": [
+          "University of California, Berkeley"
+        ]
+      },
+      {
+        "name": "Organizational Psychology",
+        "positions": [
+          "University of California, Berkeley"
+        ]
+      },
+      {
+        "name": "Technical Recruiting",
+        "positions": [
+          "3 experiences across Stealth Startup and 2 other companies"
+        ]
+      },
+      {
+        "name": "HTML",
+        "positions": [
+          "UX Designer at Stealth Startup"
+        ]
+      },
+      {
+        "name": "Python (Programming Language)",
+        "positions": [
+          "UX Designer at Stealth Startup"
+        ]
+      },
+      {
+        "name": "Figma (Software)",
+        "positions": [
+          "UX Designer at Stealth Startup"
+        ]
+      },
+      {
+        "name": "Adobe Illustrator"
+      },
+      {
+        "name": "Adobe InDesign",
+        "positions": [
+          "UX Designer at Stealth Startup"
+        ]
+      },
+      {
+        "name": "Adobe Premiere Pro",
+        "positions": [
+          "UX Designer at Stealth Startup"
+        ]
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [
+      {
+        "title": "President",
+        "issuedBy": "Student Government",
+        "issuedAt": "Jan 2016",
+        "description": "Student Government President throughout Elementary, Middle and High school ",
+        "associatedWith": null,
+        "associatedWithLink": null
+      }
+    ],
+    "languages": [
+      {
+        "name": "English",
+        "proficiency": "Full professional proficiency"
+      },
+      {
+        "name": "Mandarin",
+        "proficiency": "Native or bilingual proficiency"
+      }
+    ],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "PREMIUM_INMAIL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAEZnBtoBb1Us7ZKgHfOXAYT764pKcDQy848",
+        "firstName": "Songlin",
+        "lastName": "Yang",
+        "publicIdentifier": "songlin-yang-b8a69728b",
+        "linkedinUrl": "https://www.linkedin.com/in/songlin-yang-b8a69728b"
+      },
+      {
+        "id": "ACoAABcv4_gBuiGCyTvYZwzHg_3pf_E3WFdMTEw",
+        "firstName": "Priyanka",
+        "lastName": "Mathikshara",
+        "publicIdentifier": "mathikshara",
+        "linkedinUrl": "https://www.linkedin.com/in/mathikshara"
+      },
+      {
+        "id": "ACoAAACQBzQB5nk5kOpFWQRtK4pv3RaL5q2G-pA",
+        "firstName": "Jonathan",
+        "lastName": "Lachman",
+        "publicIdentifier": "jonathan-lachman-4981b23",
+        "linkedinUrl": "https://www.linkedin.com/in/jonathan-lachman-4981b23"
+      },
+      {
+        "id": "ACoAABLQSdwB-EX6jBeRRFv6ZA7HRSA7NgCw3aQ",
+        "firstName": "Varun",
+        "lastName": "Mohan",
+        "publicIdentifier": "varunkmohan",
+        "linkedinUrl": "https://www.linkedin.com/in/varunkmohan"
+      },
+      {
+        "id": "ACoAABE9sVMBCH0i964WlvecDNyGKTviqyXKcTY",
+        "firstName": "Hannah",
+        "lastName": "T.",
+        "publicIdentifier": "hannahnth",
+        "linkedinUrl": "https://www.linkedin.com/in/hannahnth"
+      },
+      {
+        "id": "ACoAABhDRI8BrRajAFBwI2UCAleD-qEEVR9wIbA",
+        "firstName": "Labib Tazwar",
+        "lastName": "Rahman",
+        "publicIdentifier": "labibtazwar",
+        "linkedinUrl": "https://www.linkedin.com/in/labibtazwar"
+      },
+      {
+        "id": "ACoAAAAzmG8BKMpCCR05uWi5Igv5fv1G55-oh-Q",
+        "firstName": "Prof. Dr. Hermann",
+        "lastName": "Eul",
+        "publicIdentifier": "prof-dr-hermann-eul-97b1701",
+        "linkedinUrl": "https://www.linkedin.com/in/prof-dr-hermann-eul-97b1701"
+      },
+      {
+        "id": "ACoAABf1SXABpQZMomSCrquVmVpb5jIXcV8Uq4M",
+        "firstName": "Joanna",
+        "lastName": "Wu",
+        "publicIdentifier": "joannawu-x",
+        "linkedinUrl": "https://www.linkedin.com/in/joannawu-x"
+      },
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAABhnMK4BYM0JP_iKZyqw0Mp3TBDhnH6ghk8",
+        "firstName": "Kevin",
+        "lastName": "Hou",
+        "publicIdentifier": "kevinhou22",
+        "linkedinUrl": "https://www.linkedin.com/in/kevinhou22"
+      },
+      {
+        "id": "ACoAADH19cYBJAApHQw65z7bz16H_C3qX172m0c",
+        "firstName": "Tianming",
+        "lastName": "Xie",
+        "publicIdentifier": "tianming-xie-0b28671b4",
+        "linkedinUrl": "https://www.linkedin.com/in/tianming-xie-0b28671b4"
+      },
+      {
+        "id": "ACoAAAS_rBEBA6R-QjL4IlJGVsD3rEYifr56hrI",
+        "firstName": "Nicholas",
+        "lastName": "Moy",
+        "publicIdentifier": "nicholas-moy",
+        "linkedinUrl": "https://www.linkedin.com/in/nicholas-moy"
+      },
+      {
+        "id": "ACoAABJF4mQBVJYIx7g-ASuPnmo5mH2mDuWdwQg",
+        "firstName": "Erika",
+        "lastName": "Byun",
+        "publicIdentifier": "erika-nakamatsu-byun",
+        "linkedinUrl": "https://www.linkedin.com/in/erika-nakamatsu-byun"
+      },
+      {
+        "id": "ACoAAAYLaFAB6E6Jw0srts8sst2PdJ0pK9PaWVw",
+        "firstName": "Prem",
+        "lastName": "Nair",
+        "publicIdentifier": "premqnair",
+        "linkedinUrl": "https://www.linkedin.com/in/premqnair"
+      },
+      {
+        "id": "ACoAAAIU70ABoq4f17O2Fls4IOq5yGVjaa1us0c",
+        "firstName": "Jeff",
+        "lastName": "Wang",
+        "publicIdentifier": "jefflinwang",
+        "linkedinUrl": "https://www.linkedin.com/in/jefflinwang"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAABPg53YBHdOvmp7pU72eDhcho-7cnwyxk1o",
+        "firstName": "Pia",
+        "lastName": "Santos",
+        "publicIdentifier": "piafsantos",
+        "linkedinUrl": "https://www.linkedin.com/in/piafsantos"
+      },
+      {
+        "id": "ACoAAAAcKtUBhnEmIuzVht2H3oqhJ9tKrO4NQIY",
+        "firstName": "George",
+        "lastName": "Rider",
+        "publicIdentifier": "georgerider",
+        "linkedinUrl": "https://www.linkedin.com/in/georgerider"
+      },
+      {
+        "id": "ACoAABrcWpkBJOp8QK49Ftf4EdHrDIu4NcNRi4g",
+        "firstName": "Peter",
+        "lastName": "Pitetta",
+        "publicIdentifier": "peterpitetta",
+        "linkedinUrl": "https://www.linkedin.com/in/peterpitetta"
+      },
+      {
+        "id": "ACoAAAji1bkB1eLX4z2Jb9-N2nMhEGNLWptSnqU",
+        "firstName": "Clare",
+        "lastName": "Birch",
+        "publicIdentifier": "clarebirch42",
+        "linkedinUrl": "https://www.linkedin.com/in/clarebirch42"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAADDB7DAB3QiiJ2yVu2pO0hNuW3saWtCwjwE"
+    }
+  }
+}

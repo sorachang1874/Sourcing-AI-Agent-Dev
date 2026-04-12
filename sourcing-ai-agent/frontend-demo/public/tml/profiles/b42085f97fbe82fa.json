@@ -1,0 +1,227 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAF_lB6IBFDqdCYLdSF3kJmhTFmIIZzhPkxU",
+    "profile_url": "https://www.linkedin.com/in/ACwAAF_lB6IBFDqdCYLdSF3kJmhTFmIIZzhPkxU"
+  },
+  "item": {
+    "id": "ACoAAF_lB6IBlG9BIYo5BtRTK71eLRdR7Sae2kc",
+    "publicIdentifier": "miriam-pope-82a97038a",
+    "linkedinUrl": "https://www.linkedin.com/in/miriam-pope-82a97038a",
+    "firstName": "Miriam",
+    "lastName": "Pope",
+    "emails": [
+      {
+        "email": "miriam.pope@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Account Manager at Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Adana, Adana, Türkiye",
+      "countryCode": "TR",
+      "parsed": {
+        "text": "Adana, Türkiye",
+        "countryCode": "TR",
+        "regionCode": null,
+        "country": "Turkey",
+        "countryFull": "Türkiye",
+        "state": "Adana",
+        "city": "Adana"
+      }
+    },
+    "objectUrn": "1608845218",
+    "registeredAt": "2025-10-16T05:31:10.061Z",
+    "topSkills": null,
+    "connectionsCount": 0,
+    "followerCount": 0,
+    "verified": false,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": null,
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": null,
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Account Manager at Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Account Manager",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": null,
+        "description": null,
+        "skills": null,
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAACA8zv0BTVWLSUHsPJrWsUI10jzn0F57pHo",
+        "firstName": "Damir",
+        "lastName": "Sartayev",
+        "position": "AI CTO & Founder | MY project LNN+LLM+QML=AGI | Quantum, Neuro-symbolic AI | Liquid Neural Networks | RWKV | Mamba(SSM)  | Pharmacy AI, Minerals AI | Full‑Stack AI (LLMs, Agents, Fine‑Tuning, RAG, Vision) | Q-Day Q-ark",
+        "publicIdentifier": "damir-q-day-q-ark",
+        "linkedinUrl": "https://www.linkedin.com/in/damir-q-day-q-ark"
+      },
+      {
+        "id": "ACoAACPt4SYBjnT3NzXYBUg29E9lILjQTX5luls",
+        "firstName": "Piotr",
+        "lastName": "Dollar",
+        "position": "Technical Staff",
+        "publicIdentifier": "pdollar",
+        "linkedinUrl": "https://www.linkedin.com/in/pdollar"
+      },
+      {
+        "id": "ACoAAAF70jABH9DSpgp0gn2kmhMF2O2_dXo363Y",
+        "firstName": "Lauren Escher",
+        "lastName": "Lennon",
+        "position": "Legal @ Thinking Machines Lab",
+        "publicIdentifier": "lauren-escher-lennon-0944058",
+        "linkedinUrl": "https://www.linkedin.com/in/lauren-escher-lennon-0944058"
+      },
+      {
+        "id": "ACoAAByqXXUBEhOg629uCLeNJjh_JXVoDI80KAo",
+        "firstName": "Danilo",
+        "lastName": "Carvalho",
+        "position": "Scale It Up!",
+        "publicIdentifier": "danilo-carvalho-35908a115",
+        "linkedinUrl": "https://www.linkedin.com/in/danilo-carvalho-35908a115"
+      },
+      {
+        "id": "ACoAAAM07-gB20Vg4hTVwpax2eyLJhzmkVGgucg",
+        "firstName": "Katie",
+        "lastName": "Slattery",
+        "position": "Accounting @ Thinking Machines Lab",
+        "publicIdentifier": "katieslattery",
+        "linkedinUrl": "https://www.linkedin.com/in/katieslattery"
+      },
+      {
+        "id": "ACoAABGzJXcBFaJqVFgqgYNbhaPVKRkP3iG33dA",
+        "firstName": "Noah",
+        "lastName": "Shpak",
+        "position": "Thinking Machines",
+        "publicIdentifier": "nshpak",
+        "linkedinUrl": "https://www.linkedin.com/in/nshpak"
+      },
+      {
+        "id": "ACoAACxX5AEBYonmfz9M8tQ8jO7Nx3jIXe_VSjw",
+        "firstName": "Sophie Rose",
+        "lastName": "Shapiro",
+        "position": "Creative Operations",
+        "publicIdentifier": "sophie-rose-shapiro",
+        "linkedinUrl": "https://www.linkedin.com/in/sophie-rose-shapiro"
+      },
+      {
+        "id": "ACoAABebSPMByZP3ZnuWuJpWKhAcOO8xLxhLatU",
+        "firstName": "Alicia",
+        "lastName": "P.",
+        "position": "IT",
+        "publicIdentifier": "aliciacphan",
+        "linkedinUrl": "https://www.linkedin.com/in/aliciacphan"
+      },
+      {
+        "id": "ACoAAAopC6EBpAPHUFIC1hIpFdklBB-aiMcC0z0",
+        "firstName": "Alexander",
+        "lastName": "Kirillov",
+        "position": "Multimodality at Thinking Machines",
+        "publicIdentifier": "alexander-kirillov-08110749",
+        "linkedinUrl": "https://www.linkedin.com/in/alexander-kirillov-08110749"
+      },
+      {
+        "id": "ACoAAAFeNNIBGA1Mtyi5_iGkRC19uDzKU2t5dVs",
+        "firstName": "Kunal",
+        "lastName": "Bhalla",
+        "position": "knlb.dev",
+        "publicIdentifier": "kunalbhalla",
+        "linkedinUrl": "https://www.linkedin.com/in/kunalbhalla"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAF_lB6IBFDqdCYLdSF3kJmhTFmIIZzhPkxU"
+    }
+  }
+}

@@ -1,0 +1,590 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAACA8zv0BrfOIxYlH6NniX1HBZVgS249urm8",
+    "profile_url": "https://www.linkedin.com/in/ACwAACA8zv0BrfOIxYlH6NniX1HBZVgS249urm8"
+  },
+  "item": {
+    "id": "ACoAACA8zv0BTVWLSUHsPJrWsUI10jzn0F57pHo",
+    "publicIdentifier": "damir-q-day-q-ark",
+    "linkedinUrl": "https://www.linkedin.com/in/damir-q-day-q-ark",
+    "firstName": "Damir",
+    "lastName": "Sartayev",
+    "emails": [
+      {
+        "email": "damir.sartayev@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "AI CTO & Founder | MY project LNN+LLM+QML=AGI | Quantum, Neuro-symbolic AI | Liquid Neural Networks | RWKV | Mamba(SSM)  | Pharmacy AI, Minerals AI | Full‑Stack AI (LLMs, Agents, Fine‑Tuning, RAG, Vision) | Q-Day Q-ark",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Kazakhstan",
+      "countryCode": "KZ",
+      "parsed": {
+        "text": "Aqsay, Kazakhstan",
+        "countryCode": "KZ",
+        "regionCode": null,
+        "country": "Kazakhstan",
+        "countryFull": "Kazakhstan",
+        "state": "West Kazakhstan Province",
+        "city": "Aqsay"
+      }
+    },
+    "objectUrn": "540856061",
+    "registeredAt": "2016-10-28T11:45:38.270Z",
+    "topSkills": "Искусственный интеллект • Машинное обучение • Liquid Neural Networks • Quantum Machine Learning • State Space Models",
+    "connectionsCount": 39,
+    "followerCount": 38,
+    "verified": true,
+    "about": "Building the \"Asymmetric Response\" in AI: Efficiency over Brute Force.\n\nWhile the world burns billions on GPU clusters to scale Transformers, I focus on the next generation of AI architectures: Mamba (SSM), Quantum-Inspired Tensor Networks, RWKV, and Liquid Neural Networks (LNN). My goal is not just to wrap GPT APIs, but to build sovereign, energy-efficient, and mathematically robust AGI systems.\n\nMy philosophy is Neuro-Symbolic AGI:\nAGI = LNN (Logic/Physics/Causality) + LLM (World Knowledge) + QML (Quantum Speed)\nI am a Product-Driven CTO with 12+ years of P&L ownership, turning complex DeepTech concepts into profitable vertical platforms.\n\nMy \"Secret Arsenal\" & Projects:\n🚀 Muhaddis AI (Islamic Intelligence):\nTech: Utilizing Mamba/SSM architectures for infinite context processing without the quadratic cost of Transformers.\nMission: Precise Sanad/Matn analysis and source tracing where \"hallucinations\" are not an option.\n\n🧬 Pharmacy AI & Shafa AI (MedTech):\nTech: Neuro-symbolic engines combined with Knowledge Graphs.\nMission: Clinical decision support where logic \n\n(System 2) must override probability (System 1).\nmining Minerals AI (Industrial):\nTech: Liquid Neural Networks (LNN) and Quantum-Inspired algorithms.\n\nMission: Adapting to chaos. Managing exploration risks and industrial optimization in dynamic, real-world physical environments.\nCore Competencies:\nPost-Transformer Architectures: State Space Models (Mamba), Linear Attention (RWKV), ODE-based Networks (LNN).\n\nSovereign AI: Edge computing, offline-first models, and data privacy.\nFull-Stack AI: From training 700B+ models to multi-agent orchestration and RAG.\nI don't just predict the future of AI. I engineer it.",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 1,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5603AQHgr7pWg17N4Q/profile-displayphoto-crop_800_800/B56ZrQSUCkHIAI-/0/1764431055888?e=1776902400&v=beta&t=yyxI7l0N5OLiVlX_3XoaWuVrDvJuZ3HDTrWtvtVSVLg",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQHgr7pWg17N4Q/profile-displayphoto-crop_800_800/B56ZrQSUCkHIAI-/0/1764431055888?e=1776902400&v=beta&t=yyxI7l0N5OLiVlX_3XoaWuVrDvJuZ3HDTrWtvtVSVLg",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQHgr7pWg17N4Q/profile-displayphoto-scale_400_400/B56ZrQSUCkHIAg-/0/1764431056110?e=1776902400&v=beta&t=XEMOILpyyUV4XsVTKJSfr2YoMGUwYNOqaKrKzORuPII",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQHgr7pWg17N4Q/profile-displayphoto-scale_200_200/B56ZrQSUCkHIAY-/0/1764431056110?e=1776902400&v=beta&t=laMf_BjLWtlo6sk5wEEOPcAY5DwfrFAsYMtnfb0Zjv0",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQHgr7pWg17N4Q/profile-displayphoto-scale_100_100/B56ZrQSUCkHIAc-/0/1764431056110?e=1776902400&v=beta&t=7RokMABBZl9tcCuJ3duWE1AZrUO_ijdmAygrK1_eP0I",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4D16AQEX5tVYzdweTw/profile-displaybackgroundimage-shrink_350_1400/B4DZxnDxE6J8AY-/0/1771255567933?e=1776902400&v=beta&t=lwnbZxXeWOVVLvQhAqtT5aDy8DJmsfeq7-Fk7ON5YS4",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4D16AQEX5tVYzdweTw/profile-displaybackgroundimage-shrink_350_1400/B4DZxnDxE6J8AY-/0/1771255567933?e=1776902400&v=beta&t=lwnbZxXeWOVVLvQhAqtT5aDy8DJmsfeq7-Fk7ON5YS4",
+          "width": 1080,
+          "height": 270,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4D16AQEX5tVYzdweTw/profile-displaybackgroundimage-shrink_200_800/B4DZxnDxE6J8AU-/0/1771255567933?e=1776902400&v=beta&t=IhUAKdnu0M5ybnhqCfBcInEPhS_EfoN2aOBnPKUM9vk",
+          "width": 800,
+          "height": 200,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "photo": "https://media.licdn.com/dms/image/v2/D5603AQHgr7pWg17N4Q/profile-displayphoto-crop_800_800/B56ZrQSUCkHIAI-/0/1764431055888?e=1776902400&v=beta&t=yyxI7l0N5OLiVlX_3XoaWuVrDvJuZ3HDTrWtvtVSVLg",
+    "profileLocales": [
+      {
+        "country": "RU",
+        "language": "ru"
+      }
+    ],
+    "primaryLocale": {
+      "country": "RU",
+      "language": "ru"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "AI CTO & Founder | MY project LNN+LLM+QML=AGI | Quantum, Neuro-symbolic AI | Liquid Neural Networks | RWKV | Mamba(SSM)  | Pharmacy AI, Minerals AI | Full‑Stack AI (LLMs, Agents, Fine‑Tuning, RAG, Vision) | Q-Day Q-ark",
+        "locale": "ru_RU"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "AI engineering",
+        "location": null,
+        "employmentType": "Contract",
+        "workplaceType": "Hybrid",
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "1 yr 4 mos",
+        "description": "AI",
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2025,
+          "text": "Jan 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Rust"
+      },
+      {
+        "name": "Python"
+      },
+      {
+        "name": "SAP"
+      },
+      {
+        "name": "Oracle"
+      },
+      {
+        "name": "Компьютерная техника и комплектующие"
+      },
+      {
+        "name": "Microsoft Excel"
+      },
+      {
+        "name": "Microsoft Word"
+      },
+      {
+        "name": "PowerPoint"
+      },
+      {
+        "name": "Access"
+      },
+      {
+        "name": "Edge AI"
+      },
+      {
+        "name": "Rust GO"
+      },
+      {
+        "name": "Quantum-Inspired Tensor Networks"
+      },
+      {
+        "name": "Sovereign AI Strategy"
+      },
+      {
+        "name": "Mamba Architecture"
+      },
+      {
+        "name": "Quantum Machine Learning (QML)"
+      },
+      {
+        "name": "Neuro-symbolic AI"
+      },
+      {
+        "name": "State Space Models (SSM)"
+      },
+      {
+        "name": "Liquid Neural Networks (LNN)"
+      },
+      {
+        "name": "State Space Models"
+      },
+      {
+        "name": "Quantum Machine Learning"
+      },
+      {
+        "name": "Liquid Neural Networks"
+      },
+      {
+        "name": "Cloud Computing (AWS / GCP / Azure)"
+      },
+      {
+        "name": "MLOps"
+      },
+      {
+        "name": "Data Engineering"
+      },
+      {
+        "name": "Speech Recognition / ASR"
+      },
+      {
+        "name": "Компьютерное зрение"
+      },
+      {
+        "name": "Рекомендательные системы"
+      },
+      {
+        "name": "Natural Language Processing (NLP)"
+      },
+      {
+        "name": "Knowledge Graphs"
+      },
+      {
+        "name": "Deep Learning"
+      },
+      {
+        "name": "Prompt Engineering"
+      },
+      {
+        "name": "Стратегия ведения бизнеса"
+      },
+      {
+        "name": "Искусственный интеллект"
+      },
+      {
+        "name": "Software Architecture"
+      },
+      {
+        "name": "Машинное обучение"
+      },
+      {
+        "name": "Финансовый анализ"
+      },
+      {
+        "name": "Финансовая отчётность"
+      },
+      {
+        "name": "Финансовое моделирование"
+      },
+      {
+        "name": "Бизнес-аналитика"
+      },
+      {
+        "name": "Видеомонтаж"
+      },
+      {
+        "name": "Продажи фармацевтической продукции"
+      },
+      {
+        "name": "Управление программными проектами"
+      },
+      {
+        "name": "Налоги"
+      },
+      {
+        "name": "Аналитический склад ума"
+      },
+      {
+        "name": "Retrieval‑Augmented Generation (RAG)"
+      },
+      {
+        "name": "Large Language Models (LLMs)"
+      },
+      {
+        "name": "Умение владеть собой"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [
+      {
+        "name": "Arabic",
+        "proficiency": "Professional working proficiency"
+      },
+      {
+        "name": "English",
+        "proficiency": "Professional working proficiency"
+      },
+      {
+        "name": "Qazaq",
+        "proficiency": "Native or bilingual proficiency"
+      },
+      {
+        "name": "russian",
+        "proficiency": "Native or bilingual proficiency"
+      }
+    ],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAEZnBtoBb1Us7ZKgHfOXAYT764pKcDQy848",
+        "firstName": "Songlin",
+        "lastName": "Yang",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "songlin-yang-b8a69728b",
+        "linkedinUrl": "https://www.linkedin.com/in/songlin-yang-b8a69728b"
+      },
+      {
+        "id": "ACoAABJRjjUBRj9EXhEAO-4ZyhHgzD0ztjMvrlI",
+        "firstName": "Andrea",
+        "lastName": "Madotto",
+        "position": "Member of Technical Staff at TML",
+        "publicIdentifier": "andrea-madotto-899b1386",
+        "linkedinUrl": "https://www.linkedin.com/in/andrea-madotto-899b1386"
+      },
+      {
+        "id": "ACoAAAPxMTsB6AbW45NodBVmmA7QtDdYCGnuR7A",
+        "firstName": "Lili",
+        "lastName": "Yu",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "lili-yu-6771961a",
+        "linkedinUrl": "https://www.linkedin.com/in/lili-yu-6771961a"
+      },
+      {
+        "id": "ACoAABGzJXcBFaJqVFgqgYNbhaPVKRkP3iG33dA",
+        "firstName": "Noah",
+        "lastName": "Shpak",
+        "position": "Thinking Machines",
+        "publicIdentifier": "nshpak",
+        "linkedinUrl": "https://www.linkedin.com/in/nshpak"
+      },
+      {
+        "id": "ACoAACQq5HoBKvwLgBUlXiVziRWJDXBocy6aOE4",
+        "firstName": "Erik",
+        "lastName": "Wijmans",
+        "position": "AI Researcher",
+        "publicIdentifier": "erik-wijmans-0a226814b",
+        "linkedinUrl": "https://www.linkedin.com/in/erik-wijmans-0a226814b"
+      },
+      {
+        "id": "ACoAAAENQhgBH8wIeS6hMrUoWlbKk5L9GWNNQCE",
+        "firstName": "Andrii",
+        "lastName": "Grynenko",
+        "position": "Software Engineer",
+        "publicIdentifier": "andrii-grynenko-a48aab5",
+        "linkedinUrl": "https://www.linkedin.com/in/andrii-grynenko-a48aab5"
+      },
+      {
+        "id": "ACoAADgLvm4BAaa-N5zNQvfP5qFptuA8bvJs3nM",
+        "firstName": "Yifei",
+        "lastName": "Zhou",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "yifei-zhou-57aa9b222",
+        "linkedinUrl": "https://www.linkedin.com/in/yifei-zhou-57aa9b222"
+      },
+      {
+        "id": "ACoAABA0sF8BJqwmfoms3veu9TE72tj8JMUQEFA",
+        "firstName": "Sam",
+        "lastName": "Shleifer",
+        "position": "The Biggest Legend",
+        "publicIdentifier": "sam-shleifer-a5307a77",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-shleifer-a5307a77"
+      },
+      {
+        "id": "ACoAABoG0oUBl986ZaMrLUASG1NhDoJyVlav4Po",
+        "firstName": "Eric",
+        "lastName": "Zhang",
+        "position": "MTS, Thinking Machines",
+        "publicIdentifier": "ekzhang",
+        "linkedinUrl": "https://www.linkedin.com/in/ekzhang"
+      },
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "position": "Thinking about machines",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAAB25W_cBJvis01d0hMgt6XtRg-rXuYtwxKA",
+        "firstName": "Alexis",
+        "lastName": "Dunn",
+        "publicIdentifier": "alexis-aleyza-dunn",
+        "linkedinUrl": "https://www.linkedin.com/in/alexis-aleyza-dunn"
+      },
+      {
+        "id": "ACoAADGE-AoBWopX8Yz0_gxbsPDk1rMk6Mx37ZE",
+        "firstName": "Giovanni",
+        "lastName": "D'Antonio",
+        "publicIdentifier": "giovanni-dantonio",
+        "linkedinUrl": "https://www.linkedin.com/in/giovanni-dantonio"
+      },
+      {
+        "id": "ACoAAAd3c8cBXKnzqS80_HMaDIGNdqrXbaFbO5g",
+        "firstName": "James",
+        "lastName": "Sun",
+        "position": "Software Engineer",
+        "publicIdentifier": "james5un",
+        "linkedinUrl": "https://www.linkedin.com/in/james5un"
+      },
+      {
+        "id": "ACoAADCkfncB4P7VWZ-S1Ojv9-aHq_bFsA6LBQY",
+        "firstName": "Ziqiao",
+        "lastName": "Ma",
+        "publicIdentifier": "ziqiao-ma",
+        "linkedinUrl": "https://www.linkedin.com/in/ziqiao-ma"
+      },
+      {
+        "id": "ACoAAAM07-gB20Vg4hTVwpax2eyLJhzmkVGgucg",
+        "firstName": "Katie",
+        "lastName": "Slattery",
+        "position": "Accounting @ Thinking Machines Lab",
+        "publicIdentifier": "katieslattery",
+        "linkedinUrl": "https://www.linkedin.com/in/katieslattery"
+      },
+      {
+        "id": "ACoAABuhnI0BiTg8hQMSwyg8LxcrYYOowCSOSkM",
+        "firstName": "Brandon",
+        "lastName": "Trabucco",
+        "position": "Thinking Machines Lab; CMU ML (PhD); Berkeley AI (Bachelors); NDSEG Fellow; Singer and Composer",
+        "publicIdentifier": "brandontrabucco",
+        "linkedinUrl": "https://www.linkedin.com/in/brandontrabucco"
+      },
+      {
+        "id": "ACoAACy2BxwB9fCrfCBI06w0X-gHyQTFLJIpJGc",
+        "firstName": "Guangxuan",
+        "lastName": "X.",
+        "publicIdentifier": "xgx",
+        "linkedinUrl": "https://www.linkedin.com/in/xgx"
+      },
+      {
+        "id": "ACoAAAO-j_IBXcvIzhZtQ7QNkky6tlnQTcFl9qI",
+        "firstName": "Myle",
+        "lastName": "Ott",
+        "position": "ML infra at Thinking Machines",
+        "publicIdentifier": "myleott",
+        "linkedinUrl": "https://www.linkedin.com/in/myleott"
+      },
+      {
+        "id": "ACoAABVAP64BY4RszeJt11vohsLM-gj1PiARl2o",
+        "firstName": "Jiaming",
+        "lastName": "Cui",
+        "position": "Pretraining @ Thinking Machines Lab",
+        "publicIdentifier": "jiaming-cui-57a49a9b",
+        "linkedinUrl": "https://www.linkedin.com/in/jiaming-cui-57a49a9b"
+      },
+      {
+        "id": "ACoAAAAdzCEB9t8wLSGcpoQ71RdetK75KW7RgS4",
+        "firstName": "Mark",
+        "lastName": "Jen",
+        "position": "Engineer",
+        "publicIdentifier": "markjen",
+        "linkedinUrl": "https://www.linkedin.com/in/markjen"
+      },
+      {
+        "id": "ACoAAF8a-tgBsWqvtTuM92mboyLWNKtBoUa9tIU",
+        "firstName": "Liyan",
+        "lastName": "Chen",
+        "position": "--",
+        "publicIdentifier": "liyan-chen-908445386",
+        "linkedinUrl": "https://www.linkedin.com/in/liyan-chen-908445386"
+      },
+      {
+        "id": "ACoAAGKDsJgBWsokuuSZfKWRPVa7hBXeQTfrA0Q",
+        "firstName": "Nourhan",
+        "lastName": "Hany",
+        "position": "‏Freelance Graphic Designer‏ في ‏Freelancer.com‏",
+        "publicIdentifier": "nourhan-hany-1086283a1",
+        "linkedinUrl": "https://www.linkedin.com/in/nourhan-hany-1086283a1"
+      },
+      {
+        "id": "ACoAAA8JdrgBK-ShYTbFkZL80wSafgw-uaGsb9Q",
+        "firstName": "Kevin",
+        "lastName": "B.",
+        "position": "Security at Thinking Machines Lab",
+        "publicIdentifier": "kevin-b-5885a270",
+        "linkedinUrl": "https://www.linkedin.com/in/kevin-b-5885a270"
+      },
+      {
+        "id": "ACoAAB3BApkB38H4Z__jKDDFBfF7jt7w16vD0Xs",
+        "firstName": "Rafael",
+        "lastName": "Rafailov",
+        "position": "Member Of Technical Staff - Thinking Machines Lab",
+        "publicIdentifier": "rafael-rafailov-1b521611b",
+        "linkedinUrl": "https://www.linkedin.com/in/rafael-rafailov-1b521611b"
+      },
+      {
+        "id": "ACoAADopuTsBh9lDxOJzJsV8jI_KfOrsc6Tu7aQ",
+        "firstName": "Aashitosh",
+        "lastName": "Swami",
+        "position": "Lab assistant",
+        "publicIdentifier": "aashitosh-swami-67796a232",
+        "linkedinUrl": "https://www.linkedin.com/in/aashitosh-swami-67796a232"
+      },
+      {
+        "id": "ACoAADwrCKUB0FU7B3O7AIg9j_wieI-QOvJrtEE",
+        "firstName": "Katy",
+        "lastName": "Liemandt",
+        "position": "TML | San Francisco",
+        "publicIdentifier": "katy-liemandt-399092242",
+        "linkedinUrl": "https://www.linkedin.com/in/katy-liemandt-399092242"
+      },
+      {
+        "id": "ACoAADYMzQABdXTSxolT2YjHmNBBSeT6YrGSQmQ",
+        "firstName": "Tarushii",
+        "lastName": "Goel",
+        "position": "Member of Technical Staff @ Thinking Machines",
+        "publicIdentifier": "tarushii-goel",
+        "linkedinUrl": "https://www.linkedin.com/in/tarushii-goel"
+      },
+      {
+        "id": "ACoAAFUBvsYBMskyWP5r-Lf7ZUccZSuFy2nCqkA",
+        "firstName": "Ankit",
+        "lastName": "Baghel",
+        "position": "--DMLT lab technician\nb.sc chemistry chemical industry lab",
+        "publicIdentifier": "ankit-baghel-40675a339",
+        "linkedinUrl": "https://www.linkedin.com/in/ankit-baghel-40675a339"
+      },
+      {
+        "id": "ACoAAFrO2hYBQn9I3leFzBjeUmgehOiK_AGSCr8",
+        "firstName": "Muhammad",
+        "lastName": "Adam Usman",
+        "position": "Electrician at Thinking Machines Lab",
+        "publicIdentifier": "muhammad-adam-usman-472276366",
+        "linkedinUrl": "https://www.linkedin.com/in/muhammad-adam-usman-472276366"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAACA8zv0BrfOIxYlH6NniX1HBZVgS249urm8"
+    }
+  }
+}

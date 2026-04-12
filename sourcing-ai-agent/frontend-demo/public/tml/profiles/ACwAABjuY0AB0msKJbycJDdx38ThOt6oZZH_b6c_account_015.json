@@ -1,0 +1,788 @@
+{
+  "message": "For high volume usage and custom pricing, visit https://app.enrichgraph.io or contact us at support@enrichgraph.io",
+  "certifications": {},
+  "verifications": {
+    "is_verified": true,
+    "joined_date": null,
+    "sections": null
+  },
+  "organizations": {},
+  "volunteer_experiences": {},
+  "projects": {},
+  "patents": {},
+  "member_urn": "418276160",
+  "industry": "Computer Software",
+  "entity_urn": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+  "badges": {
+    "premium": false,
+    "creator": false,
+    "influencer": false,
+    "top_voice": false,
+    "open_to_work": false,
+    "is_hiring": false
+  },
+  "public_identifier": "saurabh-garg-b680b5b8",
+  "test_scores": {},
+  "first_name": "Saurabh",
+  "courses": {},
+  "last_name": "Garg",
+  "languages": {},
+  "headline": "Thinking Machines Lab | Prev: Mistral AI, CMU, IIT-B",
+  "honors": [
+    {
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2018-12",
+          "year": 2018,
+          "month": 12
+        },
+        "end": null
+      },
+      "url": null,
+      "company": null,
+      "company_id": null,
+      "description": "Received the Excellence in Research Award (1 among 110 students) from CSE dept, IIT Bombay for my exceptional work in B.Tech thesis.",
+      "name": "Excellence in Research Award",
+      "image_url": null,
+      "position_held": null,
+      "title": "Excellence in Research Award"
+    },
+    {
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2018-08",
+          "year": 2018,
+          "month": 8
+        },
+        "end": null
+      },
+      "url": null,
+      "company": null,
+      "company_id": null,
+      "description": "Received the Undergraduate Research Award, IIT Bombay for my research contributions",
+      "name": "Undergraduate Research Award",
+      "image_url": null,
+      "position_held": null,
+      "title": "Undergraduate Research Award"
+    },
+    {
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2015-08",
+          "year": 2015,
+          "month": 8
+        },
+        "end": null
+      },
+      "url": null,
+      "company": null,
+      "company_id": null,
+      "description": "Awarded the Institute Academic Award, IIT Bombay for being ranked among the top 10 students in the entire institute during the year 2014-15’",
+      "name": "Institute Academic Award",
+      "image_url": null,
+      "position_held": null,
+      "title": "Institute Academic Award"
+    }
+  ],
+  "contact_info": null,
+  "summary": "Member of technical staff @ TML. Past: Researcher @ Mistral AI | PhD @ CMU | Google Brain | Apple MLR | CS @IITB",
+  "skills": [
+    "Machine Learning",
+    "Research",
+    "Computer Vision",
+    "C++",
+    "Python",
+    "Java",
+    "Leadership",
+    "Public Speaking",
+    "Teaching",
+    "Natural Language Processing (NLP)",
+    "Information Retrieval",
+    "TensorFlow",
+    "PyTorch"
+  ],
+  "location": {
+    "country": "United States",
+    "country_code": "US",
+    "name": "San Francisco, California, United States",
+    "city": null
+  },
+  "network_info": null,
+  "profile_photo_url": "https://media.licdn.com/dms/image/v2/C5603AQFk6cmI9JBFpQ/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1630470012740?e=1776902400&v=beta&t=BiGo161UdFBXqWEiOezn2mE36QMvhh4fp3g-5TBSjFs",
+  "profile_url": "https://www.linkedin.com/in/saurabh-garg-b680b5b8",
+  "education": [
+    {
+      "school_url": "https://www.linkedin.com/school/mldcmu/",
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2019",
+          "year": 2019,
+          "month": null
+        },
+        "end": {
+          "day": null,
+          "iso": "2024",
+          "year": 2024,
+          "month": null
+        }
+      },
+      "school_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQHw6InS0Z8Wng/company-logo_400_400/B4EZu9efDkHoAY-/0/1768410444473/mldcmu_logo?e=1776902400&v=beta&t=CBcUnSNhC895xJI5ur11AnpKFIOcyiyUngDjTPHlvH8",
+      "degree": "Doctor of Philosophy - PhD",
+      "field_of_study": null,
+      "activities": null,
+      "grade": null,
+      "description": null,
+      "school_name": "Machine Learning Department at CMU",
+      "school_id": "3209746"
+    },
+    {
+      "school_url": "https://www.linkedin.com/school/indian-institute-of-technology-bombay/",
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2014",
+          "year": 2014,
+          "month": null
+        },
+        "end": {
+          "day": null,
+          "iso": "2018",
+          "year": 2018,
+          "month": null
+        }
+      },
+      "school_logo_url": "https://media.licdn.com/dms/image/v2/C4D0BAQGmDoDCx_FYpA/company-logo_400_400/company-logo_400_400/0/1660636307357/indian_institute_of_technology_bombay_logo?e=1776902400&v=beta&t=Bz63HIAA5wNBva4W67leu4-7LIrudQraGUOik2FqVWE",
+      "degree": "B.Tech",
+      "field_of_study": "Computer Science and Engineering",
+      "activities": null,
+      "grade": null,
+      "description": null,
+      "school_name": "Indian Institute of Technology, Bombay",
+      "school_id": "13496"
+    },
+    {
+      "school_url": "https://www.linkedin.com/school/kendriya-vidyalaya/",
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2002",
+          "year": 2002,
+          "month": null
+        },
+        "end": {
+          "day": null,
+          "iso": "2014",
+          "year": 2014,
+          "month": null
+        }
+      },
+      "school_logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQFiB3Otc6s1Mw/company-logo_400_400/company-logo_400_400/0/1631344654761?e=1776902400&v=beta&t=nq7LDUmGyJMfl-IMNdX-1i_ge1hXdUacgB1ljKYPp0Q",
+      "degree": "High School",
+      "field_of_study": null,
+      "activities": null,
+      "grade": null,
+      "description": null,
+      "school_name": "Kendriya Vidyalaya",
+      "school_id": "20331"
+    }
+  ],
+  "websites": [
+    "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+  ],
+  "publications": {},
+  "experience": [
+    {
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2025-03",
+          "year": 2025,
+          "month": 3
+        },
+        "end": null
+      },
+      "company_url": "https://www.linkedin.com/company/thinkingmachinesai/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+      "company_employee_count_range": {
+        "start": 11,
+        "end": 50
+      },
+      "company_industry": "Computer Software",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_id": "105913171",
+          "company_url": "https://www.linkedin.com/company/thinkingmachinesai/",
+          "employment_type": "Full-time",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "date_range": {
+            "start": {
+              "day": null,
+              "iso": "2025-03",
+              "year": 2025,
+              "month": 3
+            },
+            "end": null
+          },
+          "company_employee_count_range": {
+            "start": 11,
+            "end": 50
+          },
+          "company_industry": "Computer Software",
+          "description": "Founding team.",
+          "workplace_type": null,
+          "title": "Member of Technical Staff",
+          "location_name": null,
+          "company_name": "Thinking Machines Lab"
+        }
+      ],
+      "company_id": "105913171",
+      "company_name": "Thinking Machines Lab"
+    },
+    {
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2024-04",
+          "year": 2024,
+          "month": 4
+        },
+        "end": {
+          "day": null,
+          "iso": "2025-02",
+          "year": 2025,
+          "month": 2
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/mistralai/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQHEMPM6gZY2kQ/company-logo_400_400/B4EZqSkjBRKsAc-/0/1763395645877/mistralai_logo?e=1776902400&v=beta&t=bRmR_hAosRPx2QnINzjsq9be9L1olRwlDPWQQDFfu6M",
+      "company_employee_count_range": {
+        "start": 201,
+        "end": 500
+      },
+      "company_industry": "Computer Software",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_id": "94273421",
+          "company_url": "https://www.linkedin.com/company/mistralai/",
+          "employment_type": "Full-time",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQHEMPM6gZY2kQ/company-logo_400_400/B4EZqSkjBRKsAc-/0/1763395645877/mistralai_logo?e=1776902400&v=beta&t=bRmR_hAosRPx2QnINzjsq9be9L1olRwlDPWQQDFfu6M",
+          "date_range": {
+            "start": {
+              "day": null,
+              "iso": "2024-04",
+              "year": 2024,
+              "month": 4
+            },
+            "end": {
+              "day": null,
+              "iso": "2025-02",
+              "year": 2025,
+              "month": 2
+            }
+          },
+          "company_employee_count_range": {
+            "start": 201,
+            "end": 500
+          },
+          "company_industry": "Computer Software",
+          "description": null,
+          "workplace_type": null,
+          "title": "AI Research Scientist",
+          "location_name": null,
+          "company_name": "Mistral AI"
+        }
+      ],
+      "company_id": "94273421",
+      "company_name": "Mistral AI"
+    },
+    {
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2019-08",
+          "year": 2019,
+          "month": 8
+        },
+        "end": {
+          "day": null,
+          "iso": "2024-04",
+          "year": 2024,
+          "month": 4
+        }
+      },
+      "company_url": "https://www.linkedin.com/school/carnegie-mellon-university/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+      "company_employee_count_range": {
+        "start": 5001,
+        "end": 10000
+      },
+      "company_industry": "Higher Education",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_id": "3147",
+          "company_url": "https://www.linkedin.com/school/carnegie-mellon-university/",
+          "employment_type": null,
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+          "date_range": {
+            "start": {
+              "day": null,
+              "iso": "2019-08",
+              "year": 2019,
+              "month": 8
+            },
+            "end": {
+              "day": null,
+              "iso": "2024-04",
+              "year": 2024,
+              "month": 4
+            }
+          },
+          "company_employee_count_range": {
+            "start": 5001,
+            "end": 10000
+          },
+          "company_industry": "Higher Education",
+          "description": null,
+          "workplace_type": null,
+          "title": "Graduate Research Assistant",
+          "location_name": "Greater Pittsburgh Area",
+          "company_name": "Carnegie Mellon University"
+        }
+      ],
+      "company_id": "3147",
+      "company_name": "Carnegie Mellon University"
+    },
+    {
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2023-05",
+          "year": 2023,
+          "month": 5
+        },
+        "end": {
+          "day": null,
+          "iso": "2023-09",
+          "year": 2023,
+          "month": 9
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/apple/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_400_400/company-logo_400_400/0/1630637844948/apple_logo?e=1776902400&v=beta&t=KteXM40NNLQ3nz21Do-neoy-f7lbDDA7kJmtS5wwrL4",
+      "company_employee_count_range": {
+        "start": 10001,
+        "end": null
+      },
+      "company_industry": "Consumer Electronics",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_id": "162479",
+          "company_url": "https://www.linkedin.com/company/apple/",
+          "employment_type": "Internship",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_400_400/company-logo_400_400/0/1630637844948/apple_logo?e=1776902400&v=beta&t=KteXM40NNLQ3nz21Do-neoy-f7lbDDA7kJmtS5wwrL4",
+          "date_range": {
+            "start": {
+              "day": null,
+              "iso": "2023-05",
+              "year": 2023,
+              "month": 5
+            },
+            "end": {
+              "day": null,
+              "iso": "2023-09",
+              "year": 2023,
+              "month": 9
+            }
+          },
+          "company_employee_count_range": {
+            "start": 10001,
+            "end": null
+          },
+          "company_industry": "Consumer Electronics",
+          "description": "Worked with Fartash Faghri, Vaishaal Shankar, and Mehrdad Farajtabar.\n\nOur work Tic-CLIP: Continual Training of CLIP Models (https://arxiv.org/abs/2310.16226) is under submission.",
+          "workplace_type": null,
+          "title": "Machine Learning Research Intern",
+          "location_name": "Seattle, Washington, United States",
+          "company_name": "Apple"
+        }
+      ],
+      "company_id": "162479",
+      "company_name": "Apple"
+    },
+    {
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2022-05",
+          "year": 2022,
+          "month": 5
+        },
+        "end": {
+          "day": null,
+          "iso": "2022-12",
+          "year": 2022,
+          "month": 12
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/amazon-web-services/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQFqdm1TZ-RZKQ/company-logo_400_400/B4EZgOay6gHEAg-/0/1752588562343/amazon_web_services_logo?e=1776902400&v=beta&t=LDRq2nbifI5rRrDAI6jngUEQaV-WTVhmAm3YngokD2Q",
+      "company_employee_count_range": {
+        "start": 10001,
+        "end": null
+      },
+      "company_industry": "Information Technology & Services",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_id": "2382910",
+          "company_url": "https://www.linkedin.com/company/amazon-web-services/",
+          "employment_type": "Internship",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQFqdm1TZ-RZKQ/company-logo_400_400/B4EZgOay6gHEAg-/0/1752588562343/amazon_web_services_logo?e=1776902400&v=beta&t=LDRq2nbifI5rRrDAI6jngUEQaV-WTVhmAm3YngokD2Q",
+          "date_range": {
+            "start": {
+              "day": null,
+              "iso": "2022-05",
+              "year": 2022,
+              "month": 5
+            },
+            "end": {
+              "day": null,
+              "iso": "2022-12",
+              "year": 2022,
+              "month": 12
+            }
+          },
+          "company_employee_count_range": {
+            "start": 10001,
+            "end": null
+          },
+          "company_industry": "Information Technology & Services",
+          "description": "Worked with Alex Smola, James Sharpnack, and Nick Erickson. \n\nPublished our work at ICML, 2023 (RLSbench: Domain Adaptation Under Relaxed Label Shift; https://arxiv.org/abs/2302.03020)",
+          "workplace_type": null,
+          "title": "Applied Scientist Intern",
+          "location_name": "Santa Clara, California, United States",
+          "company_name": "Amazon Web Services (AWS)"
+        }
+      ],
+      "company_id": "2382910",
+      "company_name": "Amazon Web Services (AWS)"
+    },
+    {
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2021-06",
+          "year": 2021,
+          "month": 6
+        },
+        "end": {
+          "day": null,
+          "iso": "2021-12",
+          "year": 2021,
+          "month": 12
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/google/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+      "company_employee_count_range": {
+        "start": 10001,
+        "end": null
+      },
+      "company_industry": "Computer Software",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_id": "1441",
+          "company_url": "https://www.linkedin.com/company/google/",
+          "employment_type": "Part-time",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+          "date_range": {
+            "start": {
+              "day": null,
+              "iso": "2021-09",
+              "year": 2021,
+              "month": 9
+            },
+            "end": {
+              "day": null,
+              "iso": "2021-12",
+              "year": 2021,
+              "month": 12
+            }
+          },
+          "company_employee_count_range": {
+            "start": 10001,
+            "end": null
+          },
+          "company_industry": "Computer Software",
+          "description": "Working with Hanie Sedghi and Behnam Neyshabur at Google Brain.\n\nPublished our work at ICLR 2022 (Leveraging Unlabeled Data to Predict Out-of-Distribution Performance; https://arxiv.org/abs/2201.04234)",
+          "workplace_type": null,
+          "title": "Student Researcher",
+          "location_name": "Mountain View, California, United States",
+          "company_name": "Google"
+        },
+        {
+          "company_id": "1441",
+          "company_url": "https://www.linkedin.com/company/google/",
+          "employment_type": "Internship",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+          "date_range": {
+            "start": {
+              "day": null,
+              "iso": "2021-06",
+              "year": 2021,
+              "month": 6
+            },
+            "end": {
+              "day": null,
+              "iso": "2021-08",
+              "year": 2021,
+              "month": 8
+            }
+          },
+          "company_employee_count_range": {
+            "start": 10001,
+            "end": null
+          },
+          "company_industry": "Computer Software",
+          "description": "Worked with Hanie Sedghi and Behnam Neyshabur at Google Brain.",
+          "workplace_type": null,
+          "title": "Research Intern",
+          "location_name": "Mountain View, California, United States",
+          "company_name": "Google"
+        }
+      ],
+      "company_id": "1441",
+      "company_name": "Google"
+    },
+    {
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2018-09",
+          "year": 2018,
+          "month": 9
+        },
+        "end": {
+          "day": null,
+          "iso": "2019-07",
+          "year": 2019,
+          "month": 7
+        }
+      },
+      "company_url": null,
+      "company_logo_url": null,
+      "company_employee_count_range": null,
+      "company_industry": null,
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_id": null,
+          "company_url": null,
+          "employment_type": null,
+          "company_logo_url": null,
+          "date_range": {
+            "start": {
+              "day": null,
+              "iso": "2018-09",
+              "year": 2018,
+              "month": 9
+            },
+            "end": {
+              "day": null,
+              "iso": "2019-07",
+              "year": 2019,
+              "month": 7
+            }
+          },
+          "company_employee_count_range": null,
+          "company_industry": null,
+          "description": null,
+          "workplace_type": null,
+          "title": "Engineer",
+          "location_name": "Suwon, Gyeonggi-do, Korea",
+          "company_name": "Samsung Electronics"
+        }
+      ],
+      "company_id": null,
+      "company_name": "Samsung Electronics"
+    },
+    {
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2016-07",
+          "year": 2016,
+          "month": 7
+        },
+        "end": {
+          "day": null,
+          "iso": "2018-05",
+          "year": 2018,
+          "month": 5
+        }
+      },
+      "company_url": "https://www.linkedin.com/school/indian-institute-of-technology-bombay/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/C4D0BAQGmDoDCx_FYpA/company-logo_400_400/company-logo_400_400/0/1660636307357/indian_institute_of_technology_bombay_logo?e=1776902400&v=beta&t=Bz63HIAA5wNBva4W67leu4-7LIrudQraGUOik2FqVWE",
+      "company_employee_count_range": {
+        "start": 10001,
+        "end": null
+      },
+      "company_industry": "Higher Education",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_id": "157266",
+          "company_url": "https://www.linkedin.com/school/indian-institute-of-technology-bombay/",
+          "employment_type": null,
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C4D0BAQGmDoDCx_FYpA/company-logo_400_400/company-logo_400_400/0/1660636307357/indian_institute_of_technology_bombay_logo?e=1776902400&v=beta&t=Bz63HIAA5wNBva4W67leu4-7LIrudQraGUOik2FqVWE",
+          "date_range": {
+            "start": {
+              "day": null,
+              "iso": "2016-07",
+              "year": 2016,
+              "month": 7
+            },
+            "end": {
+              "day": null,
+              "iso": "2018-05",
+              "year": 2018,
+              "month": 5
+            }
+          },
+          "company_employee_count_range": {
+            "start": 10001,
+            "end": null
+          },
+          "company_industry": "Higher Education",
+          "description": "Ph 107 - Quantum Mechanics (Autumn 2015)\nCS101  - Introduction to programming (Autumn 2016)\nCS101 - Introduction to programming (Spring 2017)\nCS215 - Data Analysis and Interpretation (Autumn 2017)\nCS 419 - Introduction to Machine Learning (Spring 2018)",
+          "workplace_type": null,
+          "title": "Teaching Assistant",
+          "location_name": "Mumbai",
+          "company_name": "Indian Institute of Technology, Bombay"
+        }
+      ],
+      "company_id": "157266",
+      "company_name": "Indian Institute of Technology, Bombay"
+    },
+    {
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2017-05",
+          "year": 2017,
+          "month": 5
+        },
+        "end": {
+          "day": null,
+          "iso": "2017-07",
+          "year": 2017,
+          "month": 7
+        }
+      },
+      "company_url": null,
+      "company_logo_url": null,
+      "company_employee_count_range": null,
+      "company_industry": null,
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_id": null,
+          "company_url": null,
+          "employment_type": null,
+          "company_logo_url": null,
+          "date_range": {
+            "start": {
+              "day": null,
+              "iso": "2017-05",
+              "year": 2017,
+              "month": 5
+            },
+            "end": {
+              "day": null,
+              "iso": "2017-07",
+              "year": 2017,
+              "month": 7
+            }
+          },
+          "company_employee_count_range": null,
+          "company_industry": null,
+          "description": null,
+          "workplace_type": null,
+          "title": "Summer Intern",
+          "location_name": "Suwon, Gyeonggi-do, Korea",
+          "company_name": "Samsung Electronics HQ, Korea"
+        }
+      ],
+      "company_id": null,
+      "company_name": "Samsung Electronics HQ, Korea"
+    },
+    {
+      "date_range": {
+        "start": {
+          "day": null,
+          "iso": "2016-05",
+          "year": 2016,
+          "month": 5
+        },
+        "end": {
+          "day": null,
+          "iso": "2016-07",
+          "year": 2016,
+          "month": 7
+        }
+      },
+      "company_url": "https://www.linkedin.com/school/purdue-university/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQGUO9Kvy1lfEA/company-logo_400_400/company-logo_400_400/0/1630626191299/purdue_university_logo?e=1776902400&v=beta&t=Gowfy1Wv2BkfBcH9-ZORHkwITQybVYgPyrANIzbaMiA",
+      "company_employee_count_range": {
+        "start": 10001,
+        "end": null
+      },
+      "company_industry": "Higher Education",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_id": "3846",
+          "company_url": "https://www.linkedin.com/school/purdue-university/",
+          "employment_type": null,
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQGUO9Kvy1lfEA/company-logo_400_400/company-logo_400_400/0/1630626191299/purdue_university_logo?e=1776902400&v=beta&t=Gowfy1Wv2BkfBcH9-ZORHkwITQybVYgPyrANIzbaMiA",
+          "date_range": {
+            "start": {
+              "day": null,
+              "iso": "2016-05",
+              "year": 2016,
+              "month": 5
+            },
+            "end": {
+              "day": null,
+              "iso": "2016-07",
+              "year": 2016,
+              "month": 7
+            }
+          },
+          "company_employee_count_range": {
+            "start": 10001,
+            "end": null
+          },
+          "company_industry": "Higher Education",
+          "description": null,
+          "workplace_type": null,
+          "title": "Research Internship",
+          "location_name": null,
+          "company_name": "Purdue University"
+        }
+      ],
+      "company_id": "3846",
+      "company_name": "Purdue University"
+    }
+  ],
+  "background_photo_url": null
+}

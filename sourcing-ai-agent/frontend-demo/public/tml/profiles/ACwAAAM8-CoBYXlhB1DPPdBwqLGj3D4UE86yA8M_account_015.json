@@ -1,0 +1,525 @@
+{
+  "languages": {},
+  "message": "For high volume usage and custom pricing, visit https://app.enrichgraph.io or contact us at support@enrichgraph.io",
+  "industry": "Transportation/Trucking/Railroad",
+  "verifications": {
+    "joined_date": null,
+    "sections": null,
+    "is_verified": false
+  },
+  "badges": {
+    "open_to_work": false,
+    "is_hiring": false,
+    "premium": true,
+    "creator": false,
+    "influencer": false,
+    "top_voice": false
+  },
+  "certifications": {},
+  "courses": {},
+  "organizations": {},
+  "member_urn": "54327338",
+  "patents": {},
+  "entity_urn": "ACoAAAM8-CoB4EuoMEQ2LLngdqMnC4lLbEgxTy8",
+  "honors": {},
+  "public_identifier": "andrew-straub-52223b16",
+  "skills": {},
+  "first_name": "Andrew",
+  "volunteer_experiences": {},
+  "last_name": "Straub",
+  "test_scores": {},
+  "headline": "Finance at Thinking Machines Lab",
+  "publications": {},
+  "location": {
+    "name": "San Francisco, California, United States",
+    "city": null,
+    "country_code": "US",
+    "country": "United States"
+  },
+  "projects": {},
+  "education": [
+    {
+      "degree": "BA",
+      "field_of_study": "Economics",
+      "activities": null,
+      "grade": null,
+      "description": null,
+      "school_name": "Boston College",
+      "school_id": "18457",
+      "school_url": "https://www.linkedin.com/school/boston-college/",
+      "school_logo_url": "https://media.licdn.com/dms/image/v2/C4D0BAQHQq9GTK55wuA/company-logo_400_400/company-logo_400_400/0/1630580523474/boston_college_logo?e=1776902400&v=beta&t=bJ1GUwRc6IqqS0dp-ISduM5MdqWoAHf2wWwU8GAxpe8",
+      "date_range": {
+        "start": {
+          "month": null,
+          "day": null,
+          "iso": "2005",
+          "year": 2005
+        },
+        "end": {
+          "month": null,
+          "day": null,
+          "iso": "2009",
+          "year": 2009
+        }
+      }
+    },
+    {
+      "degree": null,
+      "field_of_study": null,
+      "activities": null,
+      "grade": null,
+      "description": null,
+      "school_name": "Lawrence Academy",
+      "school_id": null,
+      "school_url": null,
+      "school_logo_url": null,
+      "date_range": {
+        "start": {
+          "month": null,
+          "day": null,
+          "iso": "2001",
+          "year": 2001
+        },
+        "end": {
+          "month": null,
+          "day": null,
+          "iso": "2005",
+          "year": 2005
+        }
+      }
+    }
+  ],
+  "profile_photo_url": null,
+  "background_photo_url": null,
+  "websites": [
+    "https://www.linkedin.com/in/andrew-straub-52223b16"
+  ],
+  "summary": null,
+  "profile_url": "https://www.linkedin.com/in/andrew-straub-52223b16",
+  "experience": [
+    {
+      "date_range": {
+        "start": {
+          "month": 12,
+          "day": null,
+          "iso": "2025-12",
+          "year": 2025
+        },
+        "end": null
+      },
+      "company_url": "https://www.linkedin.com/company/thinkingmachinesai/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+      "company_id": "105913171",
+      "company_employee_count_range": {
+        "start": 11,
+        "end": 50
+      },
+      "company_industry": "Computer Software",
+      "workplace_type": null,
+      "positions": [
+        {
+          "date_range": {
+            "start": {
+              "month": 12,
+              "day": null,
+              "iso": "2025-12",
+              "year": 2025
+            },
+            "end": null
+          },
+          "company_url": "https://www.linkedin.com/company/thinkingmachinesai/",
+          "employment_type": "Full-time",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "company_id": "105913171",
+          "company_employee_count_range": {
+            "start": 11,
+            "end": 50
+          },
+          "company_industry": "Computer Software",
+          "workplace_type": null,
+          "title": "Finance",
+          "description": null,
+          "location_name": null,
+          "company_name": "Thinking Machines Lab"
+        }
+      ],
+      "company_name": "Thinking Machines Lab"
+    },
+    {
+      "date_range": {
+        "start": {
+          "month": 9,
+          "day": null,
+          "iso": "2022-09",
+          "year": 2022
+        },
+        "end": {
+          "month": 12,
+          "day": null,
+          "iso": "2025-12",
+          "year": 2025
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/cargomatic/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGkj5-9nmmTQA/company-logo_400_400/company-logo_400_400/0/1706121105022/cargomatic_logo?e=1776902400&v=beta&t=FRQnq3ssAP8gn3Xqg-P1jVMyXcCz6Sdjoe8OgkGo-6I",
+      "company_id": "2944478",
+      "company_employee_count_range": {
+        "start": 51,
+        "end": 200
+      },
+      "company_industry": "Transportation/Trucking/Railroad",
+      "workplace_type": null,
+      "positions": [
+        {
+          "date_range": {
+            "start": {
+              "month": 9,
+              "day": null,
+              "iso": "2022-09",
+              "year": 2022
+            },
+            "end": {
+              "month": 12,
+              "day": null,
+              "iso": "2025-12",
+              "year": 2025
+            }
+          },
+          "company_url": "https://www.linkedin.com/company/cargomatic/",
+          "employment_type": null,
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGkj5-9nmmTQA/company-logo_400_400/company-logo_400_400/0/1706121105022/cargomatic_logo?e=1776902400&v=beta&t=FRQnq3ssAP8gn3Xqg-P1jVMyXcCz6Sdjoe8OgkGo-6I",
+          "company_id": "2944478",
+          "company_employee_count_range": {
+            "start": 51,
+            "end": 200
+          },
+          "company_industry": "Transportation/Trucking/Railroad",
+          "workplace_type": null,
+          "title": "Chief Financial Officer",
+          "description": null,
+          "location_name": null,
+          "company_name": "Cargomatic"
+        }
+      ],
+      "company_name": "Cargomatic"
+    },
+    {
+      "date_range": {
+        "start": {
+          "month": 8,
+          "day": null,
+          "iso": "2019-08",
+          "year": 2019
+        },
+        "end": {
+          "month": 9,
+          "day": null,
+          "iso": "2022-09",
+          "year": 2022
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/softbank-investment-advisers/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQEK_xSd8nvHrA/company-logo_400_400/B56ZanvJn0GgAY-/0/1746570877723/softbank_investment_advisers_logo?e=1776902400&v=beta&t=fp4Xk95AgR8jNmScwgPQ5XDuUJDIF3hRCJB7kzl4jXc",
+      "company_id": "27161398",
+      "company_employee_count_range": {
+        "start": 201,
+        "end": 500
+      },
+      "company_industry": "Venture Capital & Private Equity",
+      "workplace_type": null,
+      "positions": [
+        {
+          "date_range": {
+            "start": {
+              "month": 8,
+              "day": null,
+              "iso": "2019-08",
+              "year": 2019
+            },
+            "end": {
+              "month": 9,
+              "day": null,
+              "iso": "2022-09",
+              "year": 2022
+            }
+          },
+          "company_url": "https://www.linkedin.com/company/softbank-investment-advisers/",
+          "employment_type": null,
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQEK_xSd8nvHrA/company-logo_400_400/B56ZanvJn0GgAY-/0/1746570877723/softbank_investment_advisers_logo?e=1776902400&v=beta&t=fp4Xk95AgR8jNmScwgPQ5XDuUJDIF3hRCJB7kzl4jXc",
+          "company_id": "27161398",
+          "company_employee_count_range": {
+            "start": 201,
+            "end": 500
+          },
+          "company_industry": "Venture Capital & Private Equity",
+          "workplace_type": null,
+          "title": "Director",
+          "description": null,
+          "location_name": "San Francisco Bay Area",
+          "company_name": "SoftBank Investment Advisers"
+        }
+      ],
+      "company_name": "SoftBank Investment Advisers"
+    },
+    {
+      "date_range": {
+        "start": {
+          "month": 5,
+          "day": null,
+          "iso": "2016-05",
+          "year": 2016
+        },
+        "end": {
+          "month": 8,
+          "day": null,
+          "iso": "2019-08",
+          "year": 2019
+        }
+      },
+      "company_url": null,
+      "company_logo_url": null,
+      "company_id": null,
+      "company_employee_count_range": null,
+      "company_industry": null,
+      "workplace_type": null,
+      "positions": [
+        {
+          "date_range": {
+            "start": {
+              "month": 5,
+              "day": null,
+              "iso": "2016-05",
+              "year": 2016
+            },
+            "end": {
+              "month": 8,
+              "day": null,
+              "iso": "2019-08",
+              "year": 2019
+            }
+          },
+          "company_url": null,
+          "employment_type": null,
+          "company_logo_url": null,
+          "company_id": null,
+          "company_employee_count_range": null,
+          "company_industry": null,
+          "workplace_type": null,
+          "title": "Vice President",
+          "description": null,
+          "location_name": "New York, NY",
+          "company_name": "HPS Investment Partners, LLC"
+        }
+      ],
+      "company_name": "HPS Investment Partners, LLC"
+    },
+    {
+      "date_range": {
+        "start": {
+          "month": 7,
+          "day": null,
+          "iso": "2009-07",
+          "year": 2009
+        },
+        "end": {
+          "month": 5,
+          "day": null,
+          "iso": "2016-05",
+          "year": 2016
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/goldman-sachs/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQG9L7InIQVZrQ/company-logo_400_400/company-logo_400_400/0/1722506756452/goldman_sachs_logo?e=1776902400&v=beta&t=DTAHHIGqk0-6NwsKozo49cf7cSVIkRjik6PWy7n4Igo",
+      "company_id": "1382",
+      "company_employee_count_range": {
+        "start": 10001,
+        "end": null
+      },
+      "company_industry": "Financial Services",
+      "workplace_type": null,
+      "positions": [
+        {
+          "date_range": {
+            "start": {
+              "month": 7,
+              "day": null,
+              "iso": "2014-07",
+              "year": 2014
+            },
+            "end": {
+              "month": 5,
+              "day": null,
+              "iso": "2016-05",
+              "year": 2016
+            }
+          },
+          "company_url": "https://www.linkedin.com/company/goldman-sachs/",
+          "employment_type": null,
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQG9L7InIQVZrQ/company-logo_400_400/company-logo_400_400/0/1722506756452/goldman_sachs_logo?e=1776902400&v=beta&t=DTAHHIGqk0-6NwsKozo49cf7cSVIkRjik6PWy7n4Igo",
+          "company_id": "1382",
+          "company_employee_count_range": {
+            "start": 10001,
+            "end": null
+          },
+          "company_industry": "Financial Services",
+          "workplace_type": null,
+          "title": "Associate",
+          "description": "Technology, Media and Telecom Investment Banking",
+          "location_name": "New York",
+          "company_name": "Goldman Sachs"
+        },
+        {
+          "date_range": {
+            "start": {
+              "month": 7,
+              "day": null,
+              "iso": "2013-07",
+              "year": 2013
+            },
+            "end": {
+              "month": 7,
+              "day": null,
+              "iso": "2014-07",
+              "year": 2014
+            }
+          },
+          "company_url": "https://www.linkedin.com/company/goldman-sachs/",
+          "employment_type": null,
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQG9L7InIQVZrQ/company-logo_400_400/company-logo_400_400/0/1722506756452/goldman_sachs_logo?e=1776902400&v=beta&t=DTAHHIGqk0-6NwsKozo49cf7cSVIkRjik6PWy7n4Igo",
+          "company_id": "1382",
+          "company_employee_count_range": {
+            "start": 10001,
+            "end": null
+          },
+          "company_industry": "Financial Services",
+          "workplace_type": null,
+          "title": "Analyst",
+          "description": "Technology, Media and Telecom Investment Banking",
+          "location_name": "San Francisco",
+          "company_name": "Goldman Sachs"
+        },
+        {
+          "date_range": {
+            "start": {
+              "month": 11,
+              "day": null,
+              "iso": "2011-11",
+              "year": 2011
+            },
+            "end": {
+              "month": 7,
+              "day": null,
+              "iso": "2013-07",
+              "year": 2013
+            }
+          },
+          "company_url": "https://www.linkedin.com/company/goldman-sachs/",
+          "employment_type": null,
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQG9L7InIQVZrQ/company-logo_400_400/company-logo_400_400/0/1722506756452/goldman_sachs_logo?e=1776902400&v=beta&t=DTAHHIGqk0-6NwsKozo49cf7cSVIkRjik6PWy7n4Igo",
+          "company_id": "1382",
+          "company_employee_count_range": {
+            "start": 10001,
+            "end": null
+          },
+          "company_industry": "Financial Services",
+          "workplace_type": null,
+          "title": "Analyst",
+          "description": "Public Sector and Infrastructure Investment Banking",
+          "location_name": "New York",
+          "company_name": "Goldman Sachs"
+        },
+        {
+          "date_range": {
+            "start": {
+              "month": 7,
+              "day": null,
+              "iso": "2009-07",
+              "year": 2009
+            },
+            "end": {
+              "month": 11,
+              "day": null,
+              "iso": "2011-11",
+              "year": 2011
+            }
+          },
+          "company_url": "https://www.linkedin.com/company/goldman-sachs/",
+          "employment_type": null,
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQG9L7InIQVZrQ/company-logo_400_400/company-logo_400_400/0/1722506756452/goldman_sachs_logo?e=1776902400&v=beta&t=DTAHHIGqk0-6NwsKozo49cf7cSVIkRjik6PWy7n4Igo",
+          "company_id": "1382",
+          "company_employee_count_range": {
+            "start": 10001,
+            "end": null
+          },
+          "company_industry": "Financial Services",
+          "workplace_type": null,
+          "title": "Financial Analyst",
+          "description": "Private Wealth Management",
+          "location_name": "Boston",
+          "company_name": "Goldman Sachs"
+        }
+      ],
+      "company_name": "Goldman Sachs"
+    },
+    {
+      "date_range": {
+        "start": {
+          "month": 6,
+          "day": null,
+          "iso": "2008-06",
+          "year": 2008
+        },
+        "end": {
+          "month": 8,
+          "day": null,
+          "iso": "2008-08",
+          "year": 2008
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/goldman-sachs/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQG9L7InIQVZrQ/company-logo_400_400/company-logo_400_400/0/1722506756452/goldman_sachs_logo?e=1776902400&v=beta&t=DTAHHIGqk0-6NwsKozo49cf7cSVIkRjik6PWy7n4Igo",
+      "company_id": "1382",
+      "company_employee_count_range": {
+        "start": 10001,
+        "end": null
+      },
+      "company_industry": "Financial Services",
+      "workplace_type": null,
+      "positions": [
+        {
+          "date_range": {
+            "start": {
+              "month": 6,
+              "day": null,
+              "iso": "2008-06",
+              "year": 2008
+            },
+            "end": {
+              "month": 8,
+              "day": null,
+              "iso": "2008-08",
+              "year": 2008
+            }
+          },
+          "company_url": "https://www.linkedin.com/company/goldman-sachs/",
+          "employment_type": null,
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQG9L7InIQVZrQ/company-logo_400_400/company-logo_400_400/0/1722506756452/goldman_sachs_logo?e=1776902400&v=beta&t=DTAHHIGqk0-6NwsKozo49cf7cSVIkRjik6PWy7n4Igo",
+          "company_id": "1382",
+          "company_employee_count_range": {
+            "start": 10001,
+            "end": null
+          },
+          "company_industry": "Financial Services",
+          "workplace_type": null,
+          "title": "Summer Intern",
+          "description": "Private Wealth Management",
+          "location_name": "Boston",
+          "company_name": "Goldman Sachs"
+        }
+      ],
+      "company_name": "Goldman Sachs"
+    }
+  ],
+  "contact_info": null,
+  "network_info": null
+}

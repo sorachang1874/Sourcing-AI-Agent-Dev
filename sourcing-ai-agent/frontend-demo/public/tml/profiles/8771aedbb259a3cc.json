@@ -1,0 +1,282 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAGGnOAQBFEm8w8hyLViqcMRu8d_0E2BvRME",
+    "profile_url": "https://www.linkedin.com/in/ACwAAGGnOAQBFEm8w8hyLViqcMRu8d_0E2BvRME"
+  },
+  "item": {
+    "id": "ACoAAGGnOAQBmo5LOn6ly-fKnf0FsRb_WPeau4o",
+    "publicIdentifier": "vakratund-securities-63081a398",
+    "linkedinUrl": "https://www.linkedin.com/in/vakratund-securities-63081a398",
+    "firstName": "Vakratund",
+    "lastName": "Securities",
+    "emails": [
+      {
+        "email": "vakratund.securities@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Sales Specialist at Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Thane, Maharashtra, India",
+      "countryCode": "IN",
+      "parsed": {
+        "text": "Thāne, India",
+        "countryCode": "IN",
+        "regionCode": null,
+        "country": "India",
+        "countryFull": "India",
+        "state": "Maharashtra",
+        "city": "Thāne"
+      }
+    },
+    "objectUrn": "1638348804",
+    "registeredAt": "2025-11-11T12:11:34.063Z",
+    "topSkills": null,
+    "connectionsCount": 0,
+    "followerCount": 0,
+    "verified": false,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": null,
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4D03AQEl4R-5-h9OUA/profile-displayphoto-shrink_400_400/B4DZpy1BofIEAg-/0/1762863094553?e=1776902400&v=beta&t=-gq1psYrM_YfllijnLO6Sm62BDbSVau39hN9HlDe-9g",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4D03AQEl4R-5-h9OUA/profile-displayphoto-shrink_400_400/B4DZpy1BofIEAg-/0/1762863094553?e=1776902400&v=beta&t=-gq1psYrM_YfllijnLO6Sm62BDbSVau39hN9HlDe-9g",
+          "width": 96,
+          "height": 96,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4D03AQEl4R-5-h9OUA/profile-displayphoto-shrink_200_200/B4DZpy1BofIEAY-/0/1762863094553?e=1776902400&v=beta&t=6ONtCbXx0HTh8gHS8A5OIYmaOi7j3QUtHnY0ZmAqNJ0",
+          "width": 96,
+          "height": 96,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4D03AQEl4R-5-h9OUA/profile-displayphoto-shrink_800_800/B4DZpy1BofIEAc-/0/1762863094553?e=1776902400&v=beta&t=zLUqceLJpkuTzezGCt81iMaTRQ6mad_0popBIBCVGWw",
+          "width": 96,
+          "height": 96,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4D03AQEl4R-5-h9OUA/profile-displayphoto-shrink_100_100/B4DZpy1BofIEAU-/0/1762863094513?e=1776902400&v=beta&t=EbqYUDUyKvF2fnnYEqwZfisjTn1V7X8Ya0J97zBVxWY",
+          "width": 96,
+          "height": 96,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D4D03AQEl4R-5-h9OUA/profile-displayphoto-shrink_400_400/B4DZpy1BofIEAg-/0/1762863094553?e=1776902400&v=beta&t=-gq1psYrM_YfllijnLO6Sm62BDbSVau39hN9HlDe-9g",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Sales Specialist at Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Sales Specialist",
+        "location": null,
+        "employmentType": "Internship",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": null,
+        "description": null,
+        "skills": null,
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "moreProfiles": [
+      {
+        "id": "ACoAAFpCltABWsgsrhlYJzlC8hJ6VZhiQC0nmD0",
+        "firstName": "plio",
+        "lastName": "mil",
+        "publicIdentifier": "plio-mil-954182363",
+        "linkedinUrl": "https://www.linkedin.com/in/plio-mil-954182363"
+      },
+      {
+        "id": "ACoAABD07aQBqkUgssebt-Lnm6787CN2rpjc-CE",
+        "firstName": "Cari",
+        "lastName": "Wellstone",
+        "publicIdentifier": "carihannahwellstone",
+        "linkedinUrl": "https://www.linkedin.com/in/carihannahwellstone"
+      },
+      {
+        "id": "ACoAACrhULMBVY_zCbjWOjJhx2il9gGlMJcbbbU",
+        "firstName": "Shervin",
+        "lastName": "Dastpak",
+        "publicIdentifier": "shervin-dastpak-a17b18180",
+        "linkedinUrl": "https://www.linkedin.com/in/shervin-dastpak-a17b18180"
+      },
+      {
+        "id": "ACoAABPg53YBHdOvmp7pU72eDhcho-7cnwyxk1o",
+        "firstName": "Pia",
+        "lastName": "Santos",
+        "publicIdentifier": "piafsantos",
+        "linkedinUrl": "https://www.linkedin.com/in/piafsantos"
+      },
+      {
+        "id": "ACoAAE7SjgoBhC8jNB4ApY6UoxCJIlPsTwnEizU",
+        "firstName": "Andy",
+        "lastName": "Wenninger",
+        "position": "Geschäftsführer",
+        "publicIdentifier": "andy-wenninger-462a6230a",
+        "linkedinUrl": "https://www.linkedin.com/in/andy-wenninger-462a6230a"
+      },
+      {
+        "id": "ACoAABEf1tUBO3oVpNKSDpQuSRngqC_rjeuRz1Y",
+        "firstName": "Christian",
+        "lastName": "Löschen",
+        "position": "COO / Geschäftsführer ",
+        "publicIdentifier": "christian-löschen-1b127180",
+        "linkedinUrl": "https://www.linkedin.com/in/christian-löschen-1b127180"
+      },
+      {
+        "id": "ACoAABOHAJUB4gQlNvF3w9MdMYxCmBrSP5pjFp8",
+        "firstName": "Michael",
+        "lastName": "Kollatschny",
+        "position": "Geschäftsführer - Managing Director bei ZDF Digital Medienproduktion GmbH",
+        "publicIdentifier": "michael-kollatschny-95987391",
+        "linkedinUrl": "https://www.linkedin.com/in/michael-kollatschny-95987391"
+      },
+      {
+        "id": "ACoAAATIzkMB0kDFBM1ThxEUvq-KsZwyP4MWhGE",
+        "firstName": "Yana",
+        "lastName": "Endress",
+        "position": "Project Manager | Business Analyst",
+        "publicIdentifier": "yana-endress",
+        "linkedinUrl": "https://www.linkedin.com/in/yana-endress"
+      },
+      {
+        "id": "ACoAABZ0_kEB1mJL06gD8ONDnH_pb30eGgCEBzQ",
+        "firstName": "Dr. Markus",
+        "lastName": "Steeg",
+        "position": "General Manager",
+        "publicIdentifier": "dr-markus-steeg-a81217a6",
+        "linkedinUrl": "https://www.linkedin.com/in/dr-markus-steeg-a81217a6"
+      },
+      {
+        "id": "ACoAAA0PlZEBdInPpvGE2OZ5c_IJyGbGaZBIUMk",
+        "firstName": "Henning",
+        "lastName": "Bruckhoff",
+        "position": "Geschäftsführer",
+        "publicIdentifier": "henning-bruckhoff-64147461",
+        "linkedinUrl": "https://www.linkedin.com/in/henning-bruckhoff-64147461"
+      },
+      {
+        "id": "ACoAAEtnmOsBzJHzvRxceK2jFYAAwPXH0xC4edA",
+        "firstName": "Nuno",
+        "lastName": "Figueiras",
+        "position": "Geschäftsführer ",
+        "publicIdentifier": "nuno-figueiras-97780a2b3",
+        "linkedinUrl": "https://www.linkedin.com/in/nuno-figueiras-97780a2b3"
+      },
+      {
+        "id": "ACoAACaCBJIBx1JG21JX7wLWNsl3gyr5Rxl2rzU",
+        "firstName": "Tobias",
+        "lastName": "Himmerich",
+        "position": "Gründer & Geschäftsführer EDUvation",
+        "publicIdentifier": "tobias-himmerich-556442160",
+        "linkedinUrl": "https://www.linkedin.com/in/tobias-himmerich-556442160"
+      },
+      {
+        "id": "ACoAAAOQmNABtvSqLcUXabf5F7RItilCw_n34OA",
+        "firstName": "Jörg",
+        "lastName": "Schaub",
+        "position": "Geschäftsführer | Netzwerken | Projektmanagement | Marketing",
+        "publicIdentifier": "jörg-schaub-10004318",
+        "linkedinUrl": "https://www.linkedin.com/in/jörg-schaub-10004318"
+      },
+      {
+        "id": "ACoAAD8IJIgBC1at6JLHFzvLc64qo8Gquu5rqlU",
+        "firstName": "Dirk",
+        "lastName": "Wenzel",
+        "position": "Geschäftsführer",
+        "publicIdentifier": "dirk-wenzel",
+        "linkedinUrl": "https://www.linkedin.com/in/dirk-wenzel"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAGGnOAQBFEm8w8hyLViqcMRu8d_0E2BvRME"
+    }
+  }
+}

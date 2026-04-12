@@ -1,0 +1,174 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAFzY2IcB8E1ycyS8A1rjJ_a0rZopUyHV-xw",
+    "profile_url": "https://www.linkedin.com/in/ACwAAFzY2IcB8E1ycyS8A1rjJ_a0rZopUyHV-xw"
+  },
+  "item": {
+    "id": "ACoAAFzY2IcBm1KksaL4iAYznm122ZBkJeesCUI",
+    "publicIdentifier": "gowda-ram-charan-59b813375",
+    "linkedinUrl": "https://www.linkedin.com/in/gowda-ram-charan-59b813375",
+    "firstName": "Gowda",
+    "lastName": "Ram Charan",
+    "emails": [
+      {
+        "email": "gowda.ram@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Tax Advisor at Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Penamaluru, Andhra Pradesh, India",
+      "countryCode": "IN",
+      "parsed": {
+        "text": "Andhra Pradesh, India",
+        "countryCode": "IN",
+        "regionCode": null,
+        "country": "India",
+        "countryFull": "India",
+        "state": "Andhra Pradesh"
+      }
+    },
+    "objectUrn": "1557715079",
+    "registeredAt": "2025-07-19T08:51:24.233Z",
+    "topSkills": null,
+    "connectionsCount": 0,
+    "followerCount": 1,
+    "verified": false,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": null,
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": null,
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Tax Advisor at Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Tax Advisor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": null,
+        "description": null,
+        "skills": null,
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAACFGX-YBLvdlSZTLjKYq6dDc0WlclZxbyb4",
+        "firstName": "Mollana",
+        "lastName": "B.",
+        "publicIdentifier": "mollana-b-2b2b63136",
+        "linkedinUrl": "https://www.linkedin.com/in/mollana-b-2b2b63136"
+      },
+      {
+        "id": "ACoAAGUmJ8YBJ3y4cTS88uKgKwf3d_00zse_rOk",
+        "firstName": "Ema",
+        "lastName": "Vokshi",
+        "publicIdentifier": "ema-vokshi-99a3a33b4",
+        "linkedinUrl": "https://www.linkedin.com/in/ema-vokshi-99a3a33b4"
+      },
+      {
+        "id": "ACoAAFU3qsQBoEDeVg3-kYR3VNa1dskVDFO46Fw",
+        "firstName": "UNION DANCE",
+        "lastName": "undefined",
+        "publicIdentifier": "union-dance-undefined-45898333a",
+        "linkedinUrl": "https://www.linkedin.com/in/union-dance-undefined-45898333a"
+      },
+      {
+        "id": "ACoAAFI_ZwABV5rq_SlI8tv3DjKBZt4s8NIopRA",
+        "firstName": "Paida",
+        "lastName": "Todd",
+        "publicIdentifier": "paida-todd-768155326",
+        "linkedinUrl": "https://www.linkedin.com/in/paida-todd-768155326"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAFzY2IcB8E1ycyS8A1rjJ_a0rZopUyHV-xw"
+    }
+  }
+}

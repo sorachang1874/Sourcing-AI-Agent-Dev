@@ -1,0 +1,1103 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAAQ4Q7kBL8s3fB64BeFbvv_WIdEB8pGbqgU",
+    "profile_url": "https://www.linkedin.com/in/ACwAAAQ4Q7kBL8s3fB64BeFbvv_WIdEB8pGbqgU"
+  },
+  "item": {
+    "id": "ACoAAAQ4Q7kByw3YKf2rFlmWzRMF7P8Gw4S9PIU",
+    "publicIdentifier": "yinghai83",
+    "linkedinUrl": "https://www.linkedin.com/in/yinghai83",
+    "firstName": "Yinghai",
+    "lastName": "L.",
+    "emails": [
+      {
+        "email": "yinghai@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Member of Technical Staff @ Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco Bay Area",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "70796217",
+    "registeredAt": "2010-03-22T10:14:23.841Z",
+    "topSkills": null,
+    "connectionsCount": 1716,
+    "followerCount": 2168,
+    "verified": true,
+    "about": "I was the tech lead of research inference team in OpenAI. Before joining OAI, I was a software engineer at Facebook AI Infra, leading the effort of building inference system for recommendation and generative AI model. \n\nPreviously, I received the Ph.D. degree in electrical engineering from Fudan University, Shanghai, China in 2010. After graduation, I worked as a postdoctoral researcher in EECS department, Northwestern University before I joined industry in Bay Area. \n\nSpecialties: Software Engineering, Algorithms, Distributed Computing, System Level Optimization, Machine Learning \n\nPublication: http://scholar.google.com/citations?user=prBXsm8AAAAJ",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 2,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "11109",
+        "companyId": "22859",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/22859/",
+        "schoolName": "Fudan University"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": {
+      "url": "https://media.licdn.com/dms/image/v2/C4D16AQEsY0EmFCWNGg/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1516877639885?e=1776902400&v=beta&t=20Csak2ZSjY0vS5dvH0YXnLlFLOnN0uu22OfOVHPzNI",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4D16AQEsY0EmFCWNGg/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1516877639885?e=1776902400&v=beta&t=20Csak2ZSjY0vS5dvH0YXnLlFLOnN0uu22OfOVHPzNI",
+          "width": 1400,
+          "height": 350,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4D16AQEsY0EmFCWNGg/profile-displaybackgroundimage-shrink_200_800/profile-displaybackgroundimage-shrink_200_800/0/1516877640173?e=1776902400&v=beta&t=ccuzJPmt_HjiAeao2NjObMpV3pzVE_FACI8ZGGku8dE",
+          "width": 800,
+          "height": 200,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Member of Technical Staff @ Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco Bay Area",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "1 yr 3 mos",
+        "description": "Founding team.",
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2025,
+          "text": "Feb 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "OpenAI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/11130470/",
+        "companyId": "11130470",
+        "duration": "1 yr 2 mos",
+        "description": "Tech Lead of Research Inference at Research Platform, contributing to GPT-4.5, o-series of reasoning models.",
+        "skills": null,
+        "startDate": {
+          "month": "Dec",
+          "year": 2023,
+          "text": "Dec 2023"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2025,
+          "text": "Jan 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_200_200/B56ZT8EYB8HsAI-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=O6RSWlpQ5W4zNCOCTu621qCyTijLuXFJS4pz2_hBQfo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_100_100/B56ZT8EYB8HsAQ-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=y7RA89V9q8GlAjQ1oRU-jf_-n5zlSXRCnykXBIkgHfM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Principal Software Engineer",
+        "location": "Menlo Park, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "1 yr 5 mos",
+        "description": "Tech lead for AI Inference at Meta Infra. I'm working on Generative AI inference deployment right now. I contributed to the inference part of LLaMa2. And recently, I led the development and deployment inference system that powers the Generative AI products from Meta.",
+        "skills": null,
+        "experienceGroupId": "eb1b375383aaf4617be6235119dc565355ccdff0",
+        "startDate": {
+          "month": "Aug",
+          "year": 2022,
+          "text": "Aug 2022"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2023,
+          "text": "Dec 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior Staff Software Engineer",
+        "location": "Menlo Park, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "1 yr",
+        "description": "I led the GPU inference effort for AI-driven recommendation models for Ads and Facebook/Instagram Reels.",
+        "skills": null,
+        "experienceGroupId": "eb1b375383aaf4617be6235119dc565355ccdff0",
+        "startDate": {
+          "month": "Sep",
+          "year": 2021,
+          "text": "Sep 2021"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2022,
+          "text": "Aug 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior Technical Lead Manager",
+        "location": "Menlo Park, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "7 mos",
+        "description": "Led the software development and deployment of first generation of inference accelerator in Meta.",
+        "skills": null,
+        "experienceGroupId": "eb1b375383aaf4617be6235119dc565355ccdff0",
+        "startDate": {
+          "month": "Mar",
+          "year": 2021,
+          "text": "Mar 2021"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2021,
+          "text": "Sep 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Technical Lead Manager",
+        "location": "Menlo Park, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "1 yr 1 mo",
+        "description": "Founded the AI Accelerator Enablement team and grew it to a 20+ people org, helping Facebook AI workload accelerate, targeting at recommendation and content understanding models.",
+        "skills": null,
+        "experienceGroupId": "eb1b375383aaf4617be6235119dc565355ccdff0",
+        "startDate": {
+          "month": "Mar",
+          "year": 2020,
+          "text": "Mar 2020"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2021,
+          "text": "Mar 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Staff Software Engineer",
+        "location": "Menlo Park, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "8 mos",
+        "description": "Tech Lead for PyTorch@Scale",
+        "skills": null,
+        "experienceGroupId": "eb1b375383aaf4617be6235119dc565355ccdff0",
+        "startDate": {
+          "month": "Aug",
+          "year": 2019,
+          "text": "Aug 2019"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2020,
+          "text": "Mar 2020"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior Software Engineer",
+        "location": "Menlo Park, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "2 yrs 6 mos",
+        "description": "Worked on scaling realtime database 100X and then switched team to Caffe2/PyTorch.",
+        "skills": null,
+        "experienceGroupId": "eb1b375383aaf4617be6235119dc565355ccdff0",
+        "startDate": {
+          "month": "Mar",
+          "year": 2017,
+          "text": "Mar 2017"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2019,
+          "text": "Aug 2019"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer",
+        "location": "Menlo Park, California",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "1 yr",
+        "description": "Real-time data\nBuilding backend services for large-scale \n- In-memory database\n- Real-time/Stream processing",
+        "skills": null,
+        "experienceGroupId": "eb1b375383aaf4617be6235119dc565355ccdff0",
+        "startDate": {
+          "month": "Apr",
+          "year": 2016,
+          "text": "Apr 2016"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2017,
+          "text": "Mar 2017"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Sr. Software Engineer",
+        "location": "Palo Alto, California",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "MZ",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/323717/",
+        "companyId": "323717",
+        "duration": "9 mos",
+        "description": "I'm with RTplatform™ team, helping push out the real-time messaging system (live at http://www.mz.com/rtplatform.html on April 2016). My focus is on performance/scalability optimization of the backend system, from Erlang application-level to C/C++ extension to break the limitation of Erlang VM. \n\nSome of my work is summarized in the talk that I gave at Erlang Factory 2016 San Francisco, titled \"High Performance Erlang: Pitfalls and Solutions\".",
+        "skills": null,
+        "startDate": {
+          "month": "Aug",
+          "year": 2015,
+          "text": "Aug 2015"
+        },
+        "endDate": {
+          "month": "Apr",
+          "year": 2016,
+          "text": "Apr 2016"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHakiESdo95jw/company-logo_400_400/company-logo_400_400/0/1630628768965/mz_logo?e=1776902400&v=beta&t=NV3Qr2dRoDto9efPPwe2EBfx057CeVPQJJG2YVa1cB0",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHakiESdo95jw/company-logo_400_400/company-logo_400_400/0/1630628768965/mz_logo?e=1776902400&v=beta&t=NV3Qr2dRoDto9efPPwe2EBfx057CeVPQJJG2YVa1cB0",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHakiESdo95jw/company-logo_200_200/company-logo_200_200/0/1630628768965/mz_logo?e=1776902400&v=beta&t=0UdLws4EoZMQfoZkQhj83RgixlXCAthdIBxr2JM2s-Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHakiESdo95jw/company-logo_100_100/company-logo_100_100/0/1630628768965/mz_logo?e=1776902400&v=beta&t=CjlZv4aHlyTvXh7VAl5Lf5zVpldpsn-4PVmhsFOYQII",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "R&D Engineer, Sr. II",
+        "location": "Mountain View, California",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Synopsys Inc",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/2457/",
+        "companyId": "2457",
+        "duration": "3 yrs 7 mos",
+        "description": "- Re-architected and implemented the distributed backend of large-scale cell characterization for better reliability and scalability. \n- Top-down performance analysis and optimization for distributed cell characterization and modeling.\n- Developed methodology and flow to characterize aging effect of VLSI circuit. \n- General research on system level scheduling and optimization. Papers published on ICCAD'12, DATE'13 and TVLSI.",
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2012,
+          "text": "Jan 2012"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2015,
+          "text": "Jul 2015"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEq7MVORIs3MA/company-logo_400_400/company-logo_400_400/0/1631306256041?e=1776902400&v=beta&t=VNMOAKOSSyKxVQhgVLeX_ssPsWdmUsSHqFi4X7v52cM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEq7MVORIs3MA/company-logo_400_400/company-logo_400_400/0/1631306256041?e=1776902400&v=beta&t=VNMOAKOSSyKxVQhgVLeX_ssPsWdmUsSHqFi4X7v52cM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEq7MVORIs3MA/company-logo_200_200/company-logo_200_200/0/1631306256041?e=1776902400&v=beta&t=h4XSr7qFS790j75vIY6hsko-GNk6-ctbmQUq1Mf8JtA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEq7MVORIs3MA/company-logo_100_100/company-logo_100_100/0/1631306256041?e=1776902400&v=beta&t=IdB270YP2TIPy9gBnoTDqMDaS4KgF7C1RvQ9-J69TLg",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Postdoctoral Researcher",
+        "location": "Evanston, Illinois",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Northwestern University",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3196/",
+        "companyId": "3196",
+        "duration": "1 yr 5 mos",
+        "description": "Under the supervision of Prof. Hai Zhou. My Research interests include optimization algorithm design and parallel programming for VLSI CAD. Papers have been published on DAC'11, ASPDAC'11 and ICCAD'12.",
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2010,
+          "text": "Sep 2010"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2012,
+          "text": "Jan 2012"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQH-sXOOSUF3aA/company-logo_400_400/company-logo_400_400/0/1631319371681?e=1776902400&v=beta&t=kbJBFgVHzEnTvj_ReovpKIsAbiy50L8Y0CCy8rcuM_U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQH-sXOOSUF3aA/company-logo_400_400/company-logo_400_400/0/1631319371681?e=1776902400&v=beta&t=kbJBFgVHzEnTvj_ReovpKIsAbiy50L8Y0CCy8rcuM_U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQH-sXOOSUF3aA/company-logo_200_200/company-logo_200_200/0/1631319371681?e=1776902400&v=beta&t=iJuw_lGBcdv2UOjF8JCkegCZhfuPJjUBAQ5uZbo9jig",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQH-sXOOSUF3aA/company-logo_100_100/company-logo_100_100/0/1631319371681?e=1776902400&v=beta&t=Cd5bPKaNoaY_x4Cm1n4Glg8Yfm8fnIYQl7svsh6QOMo",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Engineering Intern",
+        "location": "Shanghai, China",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Synopsys",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/2457/",
+        "companyId": "2457",
+        "duration": "3 mos",
+        "description": "This was part of the Fudan-Synopsys collaboration program. I worked on clock tree optimization: performance improvement and debugging.",
+        "skills": null,
+        "startDate": {
+          "month": "Jul",
+          "year": 2007,
+          "text": "Jul 2007"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2007,
+          "text": "Sep 2007"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEq7MVORIs3MA/company-logo_400_400/company-logo_400_400/0/1631306256041?e=1776902400&v=beta&t=VNMOAKOSSyKxVQhgVLeX_ssPsWdmUsSHqFi4X7v52cM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEq7MVORIs3MA/company-logo_400_400/company-logo_400_400/0/1631306256041?e=1776902400&v=beta&t=VNMOAKOSSyKxVQhgVLeX_ssPsWdmUsSHqFi4X7v52cM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEq7MVORIs3MA/company-logo_200_200/company-logo_200_200/0/1631306256041?e=1776902400&v=beta&t=h4XSr7qFS790j75vIY6hsko-GNk6-ctbmQUq1Mf8JtA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEq7MVORIs3MA/company-logo_100_100/company-logo_100_100/0/1631306256041?e=1776902400&v=beta&t=IdB270YP2TIPy9gBnoTDqMDaS4KgF7C1RvQ9-J69TLg",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Fudan University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/22859/",
+        "schoolId": "22859",
+        "degree": "Ph.D.",
+        "fieldOfStudy": "Electrical Engineering",
+        "skills": [],
+        "description": "Graduated with honor. Thesis topic: Statistical circuit reliability analysis and parallel algorithms for VLSI optimization.",
+        "insights": "Activities and societies: Men's basketball team",
+        "startDate": {
+          "year": 2005,
+          "text": "2005"
+        },
+        "endDate": {
+          "year": 2010,
+          "text": "2010"
+        },
+        "period": "2005 - 2010",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFqaH7FoO2N-w/company-logo_400_400/company-logo_400_400/0/1631314786336?e=1776902400&v=beta&t=ZuLLkeEgPVj9zY_gFoCgSbb804EPXukFojkGQuAG6MI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFqaH7FoO2N-w/company-logo_400_400/company-logo_400_400/0/1631314786336?e=1776902400&v=beta&t=ZuLLkeEgPVj9zY_gFoCgSbb804EPXukFojkGQuAG6MI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFqaH7FoO2N-w/company-logo_200_200/company-logo_200_200/0/1631314786336?e=1776902400&v=beta&t=gzW21mR7s-wZbqyo_5J3IKA4DShFthjccDm7MBW-hZA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFqaH7FoO2N-w/company-logo_100_100/company-logo_100_100/0/1631314786336?e=1776902400&v=beta&t=_UPQjlaDHOvB24mG8sIxQQIM9NAoSahiiOfskO4S5TM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Tongji University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/47892/",
+        "schoolId": "47892",
+        "degree": "B.E.",
+        "fieldOfStudy": "Electrical Engineering",
+        "skills": [],
+        "insights": "Activities and societies: Men's basketball team",
+        "startDate": {
+          "year": 2001,
+          "text": "2001"
+        },
+        "endDate": {
+          "year": 2005,
+          "text": "2005"
+        },
+        "period": "2001 - 2005",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFusmx49BkQVg/company-logo_400_400/company-logo_400_400/0/1631329380081?e=1776902400&v=beta&t=aiD1dFIenfccDHHyv0eyUyNhXzTGQHGyLVImvH3TB20",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFusmx49BkQVg/company-logo_400_400/company-logo_400_400/0/1631329380081?e=1776902400&v=beta&t=aiD1dFIenfccDHHyv0eyUyNhXzTGQHGyLVImvH3TB20",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFusmx49BkQVg/company-logo_200_200/company-logo_200_200/0/1631329380080?e=1776902400&v=beta&t=_Vjyuq1XAcMr1JrW7VyW1omLsO_D8D6kcu4R347C4g8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFusmx49BkQVg/company-logo_100_100/company-logo_100_100/0/1631329380080?e=1776902400&v=beta&t=la_HR2LkXlFhdo6Rq1K2ZvP-78e_AMueuS9qzYKay_Y",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Algorithms",
+        "positions": [
+          "Endorsed by 3 colleagues at MZ"
+        ],
+        "endorsements": "14 endorsements"
+      },
+      {
+        "name": "Distributed Systems",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "C/C++ STL",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Optimization",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Parallel Computing",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "High Performance Computing",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Haskell",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Machine Learning"
+      },
+      {
+        "name": "Matlab",
+        "endorsements": "9 endorsements"
+      },
+      {
+        "name": "Python",
+        "endorsements": "7 endorsements"
+      },
+      {
+        "name": "C++",
+        "endorsements": "5 endorsements"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [
+      {
+        "title": "Quarterly Recognition Award",
+        "issuedBy": "Synopsys Inc",
+        "issuedAt": "Jan 2015",
+        "description": "For my contribution to rebuilding the distributed backend of our cell characterization tool, Siliconsmart (R).  ",
+        "associatedWith": "Associated with Synopsys Inc",
+        "associatedWithLink": null
+      }
+    ],
+    "languages": [
+      {
+        "name": "Chinese",
+        "proficiency": "Native or bilingual proficiency"
+      },
+      {
+        "name": "English",
+        "proficiency": "Full professional proficiency"
+      }
+    ],
+    "causes": [
+      "Animal Welfare",
+      "Education",
+      "Environment",
+      "Health"
+    ],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAABEmYXYB5f-3ZmFG8dI-n9XAlqySBqO-2PA",
+        "firstName": "Luke",
+        "lastName": "Carlson",
+        "publicIdentifier": "jlukecarlson",
+        "linkedinUrl": "https://www.linkedin.com/in/jlukecarlson"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABgwxtcBfqsJJUHPwsSPuBE4K9oKyRqUp5o",
+        "firstName": "Lia",
+        "lastName": "Guy",
+        "publicIdentifier": "aureliaguy",
+        "linkedinUrl": "https://www.linkedin.com/in/aureliaguy"
+      },
+      {
+        "id": "ACoAABMugyUBsZ9MwIVIzmOSzlvmO6TOFL-mfAU",
+        "firstName": "Chih-Kuan (Jason)",
+        "lastName": "Yeh",
+        "publicIdentifier": "chih-kuan-jason-yeh-8859378b",
+        "linkedinUrl": "https://www.linkedin.com/in/chih-kuan-jason-yeh-8859378b"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAACaOARIBRO2EEH12QWQO29L__oI3N2K4u14",
+        "firstName": "Mingjie",
+        "lastName": "Sun",
+        "publicIdentifier": "mingjie-sun-06a761160",
+        "linkedinUrl": "https://www.linkedin.com/in/mingjie-sun-06a761160"
+      },
+      {
+        "id": "ACoAAAJzsfoBp0MxssQYMgmy0ZNO2U3sA58ugwc",
+        "firstName": "Joshua",
+        "lastName": "Gross",
+        "publicIdentifier": "joshgross",
+        "linkedinUrl": "https://www.linkedin.com/in/joshgross"
+      },
+      {
+        "id": "ACoAABYs4-IB5mHx5eVfOHzu1e8xlO3q_kb38IM",
+        "firstName": "Brydon",
+        "lastName": "Eastman",
+        "publicIdentifier": "brydon-eastman-396719a4",
+        "linkedinUrl": "https://www.linkedin.com/in/brydon-eastman-396719a4"
+      },
+      {
+        "id": "ACoAAACo1tYBGy9sT2OWZuEULOMe4K_b2Y22-F8",
+        "firstName": "Alex",
+        "lastName": "Gartrell",
+        "publicIdentifier": "alexgartrell",
+        "linkedinUrl": "https://www.linkedin.com/in/alexgartrell"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+        "firstName": "Saurabh",
+        "lastName": "Garg",
+        "publicIdentifier": "saurabh-garg-b680b5b8",
+        "linkedinUrl": "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+      },
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAAAl87CYBWKLLyGNTbomy6oqIPv-5n34CXIY",
+        "firstName": "Andrew",
+        "lastName": "Tulloch",
+        "publicIdentifier": "andrew-tulloch-17238745",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-tulloch-17238745"
+      },
+      {
+        "id": "ACoAABhIg7YBYN2NPIu8voYj5D7JQVZGxonqHvc",
+        "firstName": "Ruiqi",
+        "lastName": "Zhong",
+        "publicIdentifier": "ruiqi-zhong-09a533b4",
+        "linkedinUrl": "https://www.linkedin.com/in/ruiqi-zhong-09a533b4"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAAA4HVN4BOZg5espOvMVoO3OY04NZmuqvMCo",
+        "firstName": "Shaojie",
+        "lastName": "Bai",
+        "publicIdentifier": "shaojie-bai",
+        "linkedinUrl": "https://www.linkedin.com/in/shaojie-bai"
+      },
+      {
+        "id": "ACoAAAO-j_IBXcvIzhZtQ7QNkky6tlnQTcFl9qI",
+        "firstName": "Myle",
+        "lastName": "Ott",
+        "publicIdentifier": "myleott",
+        "linkedinUrl": "https://www.linkedin.com/in/myleott"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAAAAdzCEB9t8wLSGcpoQ71RdetK75KW7RgS4",
+        "firstName": "Mark",
+        "lastName": "Jen",
+        "publicIdentifier": "markjen",
+        "linkedinUrl": "https://www.linkedin.com/in/markjen"
+      },
+      {
+        "id": "ACoAAAoKDO4B9V5NAxdbsasw5Tj-JsohnU9iELc",
+        "firstName": "Nicole",
+        "lastName": "Rosson",
+        "position": "Director, Global Services and Operations at Cedars-Sinai",
+        "publicIdentifier": "nicole-rosson-6664a748",
+        "linkedinUrl": "https://www.linkedin.com/in/nicole-rosson-6664a748"
+      },
+      {
+        "id": "ACoAACGYPjQBT7F82DtdW-rPuHvGnIIMG1DulZ0",
+        "firstName": "Vinicius",
+        "lastName": "Dantas Martins",
+        "position": "Postdoctoral Fellow | Cedars Sinai",
+        "publicIdentifier": "viniciusdantasmartins",
+        "linkedinUrl": "https://www.linkedin.com/in/viniciusdantasmartins"
+      },
+      {
+        "id": "ACoAABL4V7kBFswiOP2dNUp7oPDMtwohhid_DRw",
+        "firstName": "Atieh",
+        "lastName": "Abedin",
+        "position": "Postdoc follows. Computational biologist/Bioinformatician",
+        "publicIdentifier": "atieh-abedin-3617058a",
+        "linkedinUrl": "https://www.linkedin.com/in/atieh-abedin-3617058a"
+      },
+      {
+        "id": "ACoAAB2lj_sBF31k2dfkf3dY6uo3QXDkCwaMRH8",
+        "firstName": "Thacyana",
+        "lastName": "T. Carvalho, PhD",
+        "position": "Project Scientist | Dept. of Pediatrics | Infectious and Immunologic Diseases Research Center (IIDRC)",
+        "publicIdentifier": "thacyana-t-carvalho-phd-2236a911a",
+        "linkedinUrl": "https://www.linkedin.com/in/thacyana-t-carvalho-phd-2236a911a"
+      },
+      {
+        "id": "ACoAACbwTIoB7Du95yr91dxCpz7GezGkXdPaDb0",
+        "firstName": "Jesús",
+        "lastName": "Muñoz-Estrada, Ph.D.",
+        "position": "Scientist | Stem Cell & iPSC Models | Neurodegeneration & Alzheimer’s Disease | Multi-Omics | Drug Discovery & Translational Research",
+        "publicIdentifier": "jesusmues",
+        "linkedinUrl": "https://www.linkedin.com/in/jesusmues"
+      },
+      {
+        "id": "ACoAACEy5l0BTMO1BKP2sR0y8yIsMYyU0OgB2Lk",
+        "firstName": "Avipsa",
+        "lastName": "Bose, Ph.D.",
+        "position": "Postdoctoral Scientist at Cedars-Sinai | Postdoctoral Associate at Weill Cornell Medicine | Ph.D. from Indian Institute of Science | Organoids | Molecular Biology | Cell Biology | Biochemistry | Gastrointestinal Biology",
+        "publicIdentifier": "avipsa-bose-ph-d-791648136",
+        "linkedinUrl": "https://www.linkedin.com/in/avipsa-bose-ph-d-791648136"
+      },
+      {
+        "id": "ACoAADVt9d4B97ZFK0zVRS7cyt0BLu7dz2uJ_aI",
+        "firstName": "Sandeep",
+        "lastName": "Kahlon",
+        "position": "Data Science | Analytics | GIS \nExpertise in Statistical Modeling and Analysis",
+        "publicIdentifier": "sandeep-kahlon-392251210",
+        "linkedinUrl": "https://www.linkedin.com/in/sandeep-kahlon-392251210"
+      },
+      {
+        "id": "ACoAAAxAg8kBpxmuGpIx740erHYjFvSWeUAIn-c",
+        "firstName": "Pranali",
+        "lastName": "Shah, PhD.",
+        "position": "Project Scientist at Cedars-Sinai",
+        "publicIdentifier": "pranali-shah-phd-289a0b58",
+        "linkedinUrl": "https://www.linkedin.com/in/pranali-shah-phd-289a0b58"
+      },
+      {
+        "id": "ACoAADPskc0BKHZ1vmG5FOmEg1uixjnuL-TFc80",
+        "firstName": "Ahmed",
+        "lastName": "Mohamed",
+        "position": "Resident Physician at Cedars-Sinai",
+        "publicIdentifier": "ahmed-mohamed-0118b1203",
+        "linkedinUrl": "https://www.linkedin.com/in/ahmed-mohamed-0118b1203"
+      },
+      {
+        "id": "ACoAABLJv_wB85BQe_hl3LS0UDjT358T9wDfMio",
+        "firstName": "Stephan D.",
+        "lastName": "Kamdem",
+        "position": "Principle Security Analyst | Cedars-Sinai MC",
+        "publicIdentifier": "stephan-kamdem-it-professional",
+        "linkedinUrl": "https://www.linkedin.com/in/stephan-kamdem-it-professional"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAAQ4Q7kBL8s3fB64BeFbvv_WIdEB8pGbqgU"
+    }
+  }
+}

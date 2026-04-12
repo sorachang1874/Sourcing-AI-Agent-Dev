@@ -1,0 +1,1022 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAADYMzQAB6tuocZUNUAGdyFW5OqdaGumTW5M",
+    "profile_url": "https://www.linkedin.com/in/ACwAADYMzQAB6tuocZUNUAGdyFW5OqdaGumTW5M"
+  },
+  "item": {
+    "id": "ACoAADYMzQABdXTSxolT2YjHmNBBSeT6YrGSQmQ",
+    "publicIdentifier": "tarushii-goel",
+    "linkedinUrl": "https://www.linkedin.com/in/tarushii-goel",
+    "firstName": "Tarushii",
+    "lastName": "Goel",
+    "emails": [
+      {
+        "email": "tarushii.goel@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Member of Technical Staff @ Thinking Machines",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "McLean, Virginia, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "McLean, VA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "Virginia",
+        "city": "McLean"
+      }
+    },
+    "objectUrn": "906808576",
+    "registeredAt": "2021-06-05T22:02:41.326Z",
+    "topSkills": "CUDA • Go (Programming Language) • Python (Programming Language) • C++",
+    "connectionsCount": 649,
+    "followerCount": 691,
+    "verified": true,
+    "about": "I think a lot about AI and systems.",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 2,
+            "year": 2026,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "18494",
+        "companyId": "1503",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1503/",
+        "schoolName": "Massachusetts Institute of Technology"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4E03AQEfcoWu6ylJ8w/profile-displayphoto-crop_800_800/B4EZgVsoXYHIAI-/0/1752710678273?e=1776902400&v=beta&t=q3iluDYifQ_ZGCtWP34d2sj_nbMDwKKmw7DXYuGO2aI",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQEfcoWu6ylJ8w/profile-displayphoto-crop_800_800/B4EZgVsoXYHIAI-/0/1752710678273?e=1776902400&v=beta&t=q3iluDYifQ_ZGCtWP34d2sj_nbMDwKKmw7DXYuGO2aI",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQEfcoWu6ylJ8w/profile-displayphoto-scale_400_400/B4EZgVsoXYHIAg-/0/1752710678357?e=1776902400&v=beta&t=MHv6UbnpKprW36BUP7tsyL18Pf3GGGyf5CSA5VM1E-w",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQEfcoWu6ylJ8w/profile-displayphoto-scale_200_200/B4EZgVsoXYHIAY-/0/1752710678357?e=1776902400&v=beta&t=pywqPOKhkZFzuov1N08Jt9KC-K2h9wFCiyB097thoxs",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQEfcoWu6ylJ8w/profile-displayphoto-scale_100_100/B4EZgVsoXYHIAc-/0/1752710678357?e=1776902400&v=beta&t=XaQ2CtXyaQg2jcWwF-v-oUBm93sF1y6uUppCcPFEnQc",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D4E03AQEfcoWu6ylJ8w/profile-displayphoto-crop_800_800/B4EZgVsoXYHIAI-/0/1752710678273?e=1776902400&v=beta&t=q3iluDYifQ_ZGCtWP34d2sj_nbMDwKKmw7DXYuGO2aI",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Member of Technical Staff @ Thinking Machines",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2026,
+          "text": "Feb 2026"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Pareto Fellow",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Pareto Fellowship",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/106560410/",
+        "companyId": "106560410",
+        "duration": "1 mo",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2025,
+          "text": "Sep 2025"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2025,
+          "text": "Sep 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGrw9gt7QDC8g/company-logo_400_400/B4EZWvD3QwGgAk-/0/1742398780908/pareto_fellowship_logo?e=1776902400&v=beta&t=pZBMerqaTBMFzyTrwpyP8N4loa9VgIImJAASYoCgZxk",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGrw9gt7QDC8g/company-logo_400_400/B4EZWvD3QwGgAk-/0/1742398780908/pareto_fellowship_logo?e=1776902400&v=beta&t=pZBMerqaTBMFzyTrwpyP8N4loa9VgIImJAASYoCgZxk",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGrw9gt7QDC8g/company-logo_200_200/B4EZWvD3QwGgAU-/0/1742398780908/pareto_fellowship_logo?e=1776902400&v=beta&t=S8ShOdgAO02nDTouP9AxfzixF6IBf5Sz2JojL-VRHOA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGrw9gt7QDC8g/company-logo_100_100/B4EZWvD3QwGgAc-/0/1742398780908/pareto_fellowship_logo?e=1776902400&v=beta&t=XNGG9MBDLVTwOOikbLhYwI7Ir0peRNi41sKHGAfqruA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Quantitative Technology Intern",
+        "location": "Chicago, Illinois, United States",
+        "employmentType": "Internship",
+        "workplaceType": "On-site",
+        "companyName": "Radix Trading LLC",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3805043/",
+        "companyId": "3805043",
+        "duration": "3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2025,
+          "text": "Jun 2025"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2025,
+          "text": "Aug 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQEysf27W1ewaw/company-logo_400_400/B56ZcxysI1HUAY-/0/1748887061543/radix_trading_logo?e=1776902400&v=beta&t=8pv_9SL8fX9U0mBssBI0hRpeQCghF_oqsJ-OYemRM2U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEysf27W1ewaw/company-logo_400_400/B56ZcxysI1HUAY-/0/1748887061543/radix_trading_logo?e=1776902400&v=beta&t=8pv_9SL8fX9U0mBssBI0hRpeQCghF_oqsJ-OYemRM2U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEysf27W1ewaw/company-logo_200_200/B56ZcxysI1HUAI-/0/1748887061543/radix_trading_logo?e=1776902400&v=beta&t=q4MZr2VK9DRZVOeDn7G_cLVcM2_XUC7p94b25Bc8nDE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEysf27W1ewaw/company-logo_100_100/B56ZcxysI1HUAQ-/0/1748887061543/radix_trading_logo?e=1776902400&v=beta&t=Jv3pmCISKbVyMwrzpZc1o3ASQ4-_qS7-T4FE1kZjzus",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer Intern",
+        "location": "New York, New York, United States",
+        "employmentType": "Internship",
+        "workplaceType": "On-site",
+        "companyName": "Modal",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/79045818/",
+        "companyId": "79045818",
+        "duration": "3 mos",
+        "description": null,
+        "skills": [
+          "Go (Programming Language)",
+          "Python (Programming Language)",
+          "Rust (Programming Language)"
+        ],
+        "startDate": {
+          "month": "Dec",
+          "year": 2024,
+          "text": "Dec 2024"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2025,
+          "text": "Feb 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHy7exnpF9hzA/company-logo_400_400/B4EZmTj1JVKQAY-/0/1759117267991/modal_labs_logo?e=1776902400&v=beta&t=W9OpWpm605wEJqJtXsGhe6E26c-bFsPw0LeKQt9s6UI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHy7exnpF9hzA/company-logo_400_400/B4EZmTj1JVKQAY-/0/1759117267991/modal_labs_logo?e=1776902400&v=beta&t=W9OpWpm605wEJqJtXsGhe6E26c-bFsPw0LeKQt9s6UI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHy7exnpF9hzA/company-logo_200_200/B4EZmTj1JVKQAI-/0/1759117267991/modal_labs_logo?e=1776902400&v=beta&t=PYcE1TzYrlMjvXtZRGgMGFYm8utylMr3gChKCQTsTlE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHy7exnpF9hzA/company-logo_100_100/B4EZmTj1JVKQAQ-/0/1759117267991/modal_labs_logo?e=1776902400&v=beta&t=51io2eLiYDJMH1x9TaincMubw3o_OkSVOdYgOc7Fglg",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Deep Learning Performance Engineer Intern",
+        "location": "Santa Clara, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "NVIDIA",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3608/",
+        "companyId": "3608",
+        "duration": "4 mos",
+        "description": "Fast Kernels (CUTLASS)",
+        "skills": [
+          "C++",
+          "CUDA"
+        ],
+        "startDate": {
+          "month": "Sep",
+          "year": 2024,
+          "text": "Sep 2024"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2024,
+          "text": "Dec 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGV36q2EowSyw/company-logo_400_400/company-logo_400_400/0/1724881581208/nvidia_logo?e=1776902400&v=beta&t=C4mWS6vTQukkUtFskEc75guVQWnxYpncWO_y7nNqVeY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGV36q2EowSyw/company-logo_400_400/company-logo_400_400/0/1724881581208/nvidia_logo?e=1776902400&v=beta&t=C4mWS6vTQukkUtFskEc75guVQWnxYpncWO_y7nNqVeY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGV36q2EowSyw/company-logo_200_200/company-logo_200_200/0/1724881581208/nvidia_logo?e=1776902400&v=beta&t=3Eb3ojsmrCjgggr-i-ceH5i78HKTHMfU_Sw6-_Qwl9I",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGV36q2EowSyw/company-logo_100_100/company-logo_100_100/0/1724881581208/nvidia_logo?e=1776902400&v=beta&t=J1fAnNhA-iMhp5no8LIGLr70F4jKZs6zO4pSLqTQaFc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Embedded Systems Engineer Intern",
+        "location": "Mountain View, California, United States",
+        "employmentType": "Internship",
+        "workplaceType": "On-site",
+        "companyName": "Reliable Robotics Corporation",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/18255261/",
+        "companyId": "18255261",
+        "duration": "3 mos",
+        "description": null,
+        "skills": [
+          "Python (Programming Language)",
+          "C++"
+        ],
+        "startDate": {
+          "month": "Jun",
+          "year": 2024,
+          "text": "Jun 2024"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2024,
+          "text": "Aug 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHjktxC_txolA/company-logo_400_400/company-logo_400_400/0/1630597143184/reliablerobotics_logo?e=1776902400&v=beta&t=yb6O3WDJ0_ZewoXlZF13qjVI5n8ooHe875wLmvU-uss",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHjktxC_txolA/company-logo_400_400/company-logo_400_400/0/1630597143184/reliablerobotics_logo?e=1776902400&v=beta&t=yb6O3WDJ0_ZewoXlZF13qjVI5n8ooHe875wLmvU-uss",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHjktxC_txolA/company-logo_200_200/company-logo_200_200/0/1630597143184/reliablerobotics_logo?e=1776902400&v=beta&t=dDVjC4iT5sSxEmvJLh3rjxVU9pEsq2djc83upOzxZjw",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHjktxC_txolA/company-logo_100_100/company-logo_100_100/0/1630597143184/reliablerobotics_logo?e=1776902400&v=beta&t=1ipBxyCjtt7LJ2zoCZqAXV1HeJkF7v0xbXLit7YdP6c",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer Intern",
+        "location": "Mountain View, California, United States",
+        "employmentType": "Internship",
+        "workplaceType": "On-site",
+        "companyName": "Windsurf",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/89680378/",
+        "companyId": "89680378",
+        "duration": "3 mos",
+        "description": null,
+        "skills": [
+          "Go (Programming Language)",
+          "Python (Programming Language)",
+          "C++",
+          "CUDA"
+        ],
+        "startDate": {
+          "month": "Jun",
+          "year": 2023,
+          "text": "Jun 2023"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2023,
+          "text": "Aug 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHEjnGdXZ7kVg/company-logo_400_400/B56ZZ9y9z8GQAc-/0/1745867234905/windsurf_logo?e=1776902400&v=beta&t=LLmZCVf1uIdWr810GGepDZFxvs-ZwAF2llE4wnwi5NU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHEjnGdXZ7kVg/company-logo_400_400/B56ZZ9y9z8GQAc-/0/1745867234905/windsurf_logo?e=1776902400&v=beta&t=LLmZCVf1uIdWr810GGepDZFxvs-ZwAF2llE4wnwi5NU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHEjnGdXZ7kVg/company-logo_200_200/B56ZZ9y9z8GQAM-/0/1745867234905/windsurf_logo?e=1776902400&v=beta&t=3uQ7MFWN6h7jDglUH1R4GhLCAme-5a_Rcne9og7RRHk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHEjnGdXZ7kVg/company-logo_100_100/B56ZZ9y9z8GQAU-/0/1745867234905/windsurf_logo?e=1776902400&v=beta&t=zvEcXxKgo9pVosFMDv04M3fwV-UiAHoIPa1OLZKjrEU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Machine Learning Intern",
+        "location": null,
+        "employmentType": "Internship",
+        "workplaceType": "Remote",
+        "companyName": "Dartmouth Health",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/56134040/",
+        "companyId": "56134040",
+        "duration": "2 yrs 3 mos",
+        "description": "Designed ArcticAI, an automated surgical assistant for Mohs surgery under the mentorship of Dr. Joshua Levy. Implemented state-of-the-art machine learning algorithms for panoptic segmentation and graph classification to detect cancer in skin tissue images.",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2021,
+          "text": "Jun 2021"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2023,
+          "text": "Aug 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFv0maS4kwfjA/company-logo_400_400/company-logo_400_400/0/1649854733578/dartmouth_hitchcock_health_logo?e=1776902400&v=beta&t=x9k1HN3k8jMtvCcpIQ3KrHFWhd2q30XHx5WUBaVkgl8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFv0maS4kwfjA/company-logo_400_400/company-logo_400_400/0/1649854733578/dartmouth_hitchcock_health_logo?e=1776902400&v=beta&t=x9k1HN3k8jMtvCcpIQ3KrHFWhd2q30XHx5WUBaVkgl8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFv0maS4kwfjA/company-logo_200_200/company-logo_200_200/0/1649854733578/dartmouth_hitchcock_health_logo?e=1776902400&v=beta&t=4JhRtBb19CNG9abOtgRL0wAPTkeBT9J7CSoOmYqfNrs",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFv0maS4kwfjA/company-logo_100_100/company-logo_100_100/0/1649854733578/dartmouth_hitchcock_health_logo?e=1776902400&v=beta&t=O8FwME-DKlJW1wWgU6Ap5hrRORYOYzn8ljASc1guvdQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Algorithms Intern",
+        "location": "Boston, Massachusetts, United States",
+        "employmentType": "Internship",
+        "workplaceType": "Hybrid",
+        "companyName": "QuEra Computing Inc.",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/70501755/",
+        "companyId": "70501755",
+        "duration": "4 mos",
+        "description": "Research areas:\n- Industry applications of quantum computing technology\n- Quantum reservoir computing",
+        "skills": [
+          "Julia (Programming Language)"
+        ],
+        "startDate": {
+          "month": "Jan",
+          "year": 2023,
+          "text": "Jan 2023"
+        },
+        "endDate": {
+          "month": "Apr",
+          "year": 2023,
+          "text": "Apr 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHoGWG_H7PVFw/company-logo_400_400/B56ZltogQ4KIAY-/0/1758480959270/quera_computing_inc_logo?e=1776902400&v=beta&t=6BGUOJYds_djiUc3o77cKqaiV8qL3KAYK38_OrdRagM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHoGWG_H7PVFw/company-logo_400_400/B56ZltogQ4KIAY-/0/1758480959270/quera_computing_inc_logo?e=1776902400&v=beta&t=6BGUOJYds_djiUc3o77cKqaiV8qL3KAYK38_OrdRagM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHoGWG_H7PVFw/company-logo_200_200/B56ZltogQ4KIAI-/0/1758480959270/quera_computing_inc_logo?e=1776902400&v=beta&t=sRh17hjdUBY9_mdRHPbQl1ynO8xcwtIY2IVMD0roT5U",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHoGWG_H7PVFw/company-logo_100_100/B56ZltogQ4KIAQ-/0/1758480959270/quera_computing_inc_logo?e=1776902400&v=beta&t=z-Fr9IAbZrhmTylOCHLWamLX0BkHwV3bEZF5BJMec6A",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Intern",
+        "location": null,
+        "employmentType": "Internship",
+        "workplaceType": "Hybrid",
+        "companyName": "Joint Quantum Institute",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/18654800/",
+        "companyId": "18654800",
+        "duration": "3 mos",
+        "description": "Researched optimal sensing protocols for photonic systems using the Cramer-Rao bound under Dr. Alexey Gorshkov.",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2022,
+          "text": "Jun 2022"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2022,
+          "text": "Aug 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFIsUCXppC7wA/company-logo_400_400/company-logo_400_400/0/1631357404726/joint_quantum_institute_logo?e=1776902400&v=beta&t=YELR4ETUDeemh7dbaxscWBV8aAP5ELZGxKVLWJgJMAs",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFIsUCXppC7wA/company-logo_400_400/company-logo_400_400/0/1631357404726/joint_quantum_institute_logo?e=1776902400&v=beta&t=YELR4ETUDeemh7dbaxscWBV8aAP5ELZGxKVLWJgJMAs",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFIsUCXppC7wA/company-logo_200_200/company-logo_200_200/0/1631357404726/joint_quantum_institute_logo?e=1776902400&v=beta&t=G6F4Nm6u4Oliraa9bXzhKJZ6VXAUVQvqJi1GtEMonyU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFIsUCXppC7wA/company-logo_100_100/company-logo_100_100/0/1631357404726/joint_quantum_institute_logo?e=1776902400&v=beta&t=8GY8XaySNxLHylt7IoMTAjy8XlsGxyD8vMtDDoxiVcg",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Massachusetts Institute of Technology",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1503/",
+        "schoolId": "1503",
+        "degree": "Course 6-3 (Computer Science)",
+        "fieldOfStudy": null,
+        "skills": [],
+        "insights": "Grade: 5.0/5.0",
+        "startDate": {
+          "month": "Aug",
+          "year": 2022,
+          "text": "Aug 2022"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2026,
+          "text": "Jun 2026"
+        },
+        "period": "Aug 2022 - Jun 2026",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_400_400/company-logo_400_400/0/1689799729035/mit_logo?e=1776902400&v=beta&t=u1PKvlsURdjuQj6vGwgPDc-3muz7cCQ6oGJISjoWshw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_400_400/company-logo_400_400/0/1689799729035/mit_logo?e=1776902400&v=beta&t=u1PKvlsURdjuQj6vGwgPDc-3muz7cCQ6oGJISjoWshw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_200_200/company-logo_200_200/0/1689799729035/mit_logo?e=1776902400&v=beta&t=AB2cY7dhuIbLPIWAjqEjazLVeMiSD5C3JNuYh9NjBw4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_100_100/company-logo_100_100/0/1689799729035/mit_logo?e=1776902400&v=beta&t=IuM-xZiymxMvWzGrHXnXupiD9lk70R68nAJaX2-9P8Y",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Thomas Jefferson High School for Science and Technology",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/11190603/",
+        "schoolId": "11190603",
+        "degree": "Advanced Studies",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "insights": "Grade: 4.58/4.0\nActivities and societies: Teaching Coordinator of the TJ Machine Learning Club\nMember of the Senior Computer Team, Physics Team, Poi Club",
+        "startDate": {
+          "year": 2018,
+          "text": "2018"
+        },
+        "endDate": {
+          "year": 2022,
+          "text": "2022"
+        },
+        "period": "2018 - 2022",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHHUi77woqbKA/company-logo_400_400/B4EZX87ir7HUAY-/0/1743705222380/tjpartnershipfund_logo?e=1776902400&v=beta&t=a0UZ-LJV-PCWjUycCf-F2ZIE2ESM9arXllmzpAb_GXk",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHHUi77woqbKA/company-logo_400_400/B4EZX87ir7HUAY-/0/1743705222380/tjpartnershipfund_logo?e=1776902400&v=beta&t=a0UZ-LJV-PCWjUycCf-F2ZIE2ESM9arXllmzpAb_GXk",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHHUi77woqbKA/company-logo_200_200/B4EZX87ir7HUAI-/0/1743705222379/tjpartnershipfund_logo?e=1776902400&v=beta&t=Zagsqy9UHcC3Z85UHOMj9_kQG9fE4A-n5-EGsHKQXxM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHHUi77woqbKA/company-logo_100_100/B4EZX87ir7HUAQ-/0/1743705222380/tjpartnershipfund_logo?e=1776902400&v=beta&t=8fHeL0uyi8ckuFBACw61_RiwCVr5z49eQ9eVAoVpBN0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "CUDA",
+        "positions": [
+          "2 experiences across NVIDIA and 1 other company"
+        ]
+      },
+      {
+        "name": "Go (Programming Language)",
+        "positions": [
+          "2 experiences across Modal and 1 other company"
+        ]
+      },
+      {
+        "name": "Rust (Programming Language)",
+        "positions": [
+          "Software Engineer Intern at Modal"
+        ]
+      },
+      {
+        "name": "Julia (Programming Language)",
+        "positions": [
+          "Algorithms Intern at QuEra Computing Inc."
+        ]
+      },
+      {
+        "name": "Python (Programming Language)",
+        "positions": [
+          "3 experiences across Modal and 2 other companies"
+        ]
+      },
+      {
+        "name": "C++",
+        "positions": [
+          "3 experiences across NVIDIA and 2 other companies"
+        ]
+      }
+    ],
+    "publications": [
+      {
+        "title": "Optimal function estimation with photonic quantum sensor networks",
+        "publishedAt": "Phys. Rev. Research",
+        "link": "https://link.aps.org/doi/10.1103/PhysRevResearch.6.013246"
+      }
+    ],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [
+      {
+        "title": "NCWIT Collegiate Award",
+        "issuedBy": "Apr 2025",
+        "description": "10k prize",
+        "associatedWith": null,
+        "associatedWithLink": null
+      },
+      {
+        "title": "Neo Scholar Finalist",
+        "issuedBy": "Aug 2024",
+        "associatedWith": null,
+        "associatedWithLink": null
+      },
+      {
+        "title": "4th Place MIT Battlecode",
+        "issuedBy": "Jan 2024",
+        "description": "Team om nom: https://github.com/CyrilSharma/Battlecode2024/tree/main",
+        "associatedWith": null,
+        "associatedWithLink": null
+      },
+      {
+        "title": "TreeHacks InterSystems IntegratedML Challenge 3rd Place",
+        "issuedBy": "Feb 2023",
+        "associatedWith": null,
+        "associatedWithLink": null
+      },
+      {
+        "title": "iQuHACK 2023 Quantinuum Challenge Winner",
+        "issuedBy": "Jan 2023",
+        "description": "https://www.iquise.mit.edu/iQuHACK/2023-01-27",
+        "associatedWith": null,
+        "associatedWithLink": null
+      },
+      {
+        "title": "Classiq Quantum Computing Youth Prize and 3rd Place",
+        "issuedBy": "Jun 2022",
+        "description": "Designed quantum algorithms and received $1500 in prize money and a paid trip to the Quantum.Tech conference in Boston to receive the prize.\n\nFeatured in the news:\nhttps://thequantuminsider.com/2022/07/05/classiq-coding-competition-inspires-new-generation-of-quantum-talent/\nhttp://connection.media.clients.ellingtoncms.com/news/documents/2022/07/06/BFLS_070622_DatlWs7.pdf",
+        "associatedWith": null,
+        "associatedWithLink": null
+      },
+      {
+        "title": "European Girls Olympiad in Informatics (EGOI) Silver Medalist",
+        "issuedBy": "Jun 2021",
+        "associatedWith": null,
+        "associatedWithLink": null
+      },
+      {
+        "title": "USA Computing Olympiad Platinum Division",
+        "issuedBy": "Apr 2021",
+        "associatedWith": null,
+        "associatedWithLink": null
+      },
+      {
+        "title": "USA Physics Olympiad Exam Qualifier",
+        "issuedBy": "Apr 2021",
+        "associatedWith": null,
+        "associatedWithLink": null
+      }
+    ],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "moreProfiles": [
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAABEmYXYB5f-3ZmFG8dI-n9XAlqySBqO-2PA",
+        "firstName": "Luke",
+        "lastName": "Carlson",
+        "publicIdentifier": "jlukecarlson",
+        "linkedinUrl": "https://www.linkedin.com/in/jlukecarlson"
+      },
+      {
+        "id": "ACoAABQ5lJUBry2byQYf_TtxDF9Rha9l-RqYsaM",
+        "firstName": "Guang-He",
+        "lastName": "Lee",
+        "publicIdentifier": "guang-he-lee-64577895",
+        "linkedinUrl": "https://www.linkedin.com/in/guang-he-lee-64577895"
+      },
+      {
+        "id": "ACoAAAPxMTsB6AbW45NodBVmmA7QtDdYCGnuR7A",
+        "firstName": "Lili",
+        "lastName": "Yu",
+        "publicIdentifier": "lili-yu-6771961a",
+        "linkedinUrl": "https://www.linkedin.com/in/lili-yu-6771961a"
+      },
+      {
+        "id": "ACoAABmsYasBhsFwXKca6Ooio5i6nRfTRvN4d2Y",
+        "firstName": "Liyuan",
+        "lastName": "Liu",
+        "publicIdentifier": "liyuanlucasliu",
+        "linkedinUrl": "https://www.linkedin.com/in/liyuanlucasliu"
+      },
+      {
+        "id": "ACoAACHgqNcBO7G9QHjfnTyp5v6rVbPMJ19f1dc",
+        "firstName": "Claire",
+        "lastName": "Fu",
+        "publicIdentifier": "clairecfu",
+        "linkedinUrl": "https://www.linkedin.com/in/clairecfu"
+      },
+      {
+        "id": "ACoAAA6pVIcB_iFqE_N7wQhmisZ7W_7tGpS_VQ8",
+        "firstName": "Tessa",
+        "lastName": "Barton",
+        "publicIdentifier": "theresacbarton",
+        "linkedinUrl": "https://www.linkedin.com/in/theresacbarton"
+      },
+      {
+        "id": "ACoAABGzJXcBFaJqVFgqgYNbhaPVKRkP3iG33dA",
+        "firstName": "Noah",
+        "lastName": "Shpak",
+        "publicIdentifier": "nshpak",
+        "linkedinUrl": "https://www.linkedin.com/in/nshpak"
+      },
+      {
+        "id": "ACoAACA1ZlYBhPNODsf7Z3UNo1tLYMShFQ7OQJw",
+        "firstName": "Yujia",
+        "lastName": "Bao",
+        "publicIdentifier": "yujia-bao-506b76130",
+        "linkedinUrl": "https://www.linkedin.com/in/yujia-bao-506b76130"
+      },
+      {
+        "id": "ACoAAAhY-psBFcHXNbjunn6_QnPfV6Bo6w4yzug",
+        "firstName": "Kenny",
+        "lastName": "Yu",
+        "publicIdentifier": "kenny-yu-aa3a9a3a",
+        "linkedinUrl": "https://www.linkedin.com/in/kenny-yu-aa3a9a3a"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAABqU8psBncgwN-WH-D8F1Jq9i7OsFmcPDt4",
+        "firstName": "Jeffrey",
+        "lastName": "Tao",
+        "publicIdentifier": "jeffrey-tao",
+        "linkedinUrl": "https://www.linkedin.com/in/jeffrey-tao"
+      },
+      {
+        "id": "ACoAACy2BxwB9fCrfCBI06w0X-gHyQTFLJIpJGc",
+        "firstName": "Guangxuan",
+        "lastName": "X.",
+        "publicIdentifier": "xgx",
+        "linkedinUrl": "https://www.linkedin.com/in/xgx"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAABLLpuMBU7a9WPW-GubLTIkDjAF6hz7Ujkc",
+        "firstName": "Daniel",
+        "lastName": "Xu",
+        "publicIdentifier": "daniel-xu-42b73289",
+        "linkedinUrl": "https://www.linkedin.com/in/daniel-xu-42b73289"
+      },
+      {
+        "id": "ACoAABA0sF8BJqwmfoms3veu9TE72tj8JMUQEFA",
+        "firstName": "Sam",
+        "lastName": "Shleifer",
+        "publicIdentifier": "sam-shleifer-a5307a77",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-shleifer-a5307a77"
+      },
+      {
+        "id": "ACoAAAeoHjYB_Lo5sUFlpZpz2L74oe9nEIKztQA",
+        "firstName": "Jenya",
+        "lastName": "L.",
+        "publicIdentifier": "jenya-l",
+        "linkedinUrl": "https://www.linkedin.com/in/jenya-l"
+      },
+      {
+        "id": "ACoAABoG0oUBl986ZaMrLUASG1NhDoJyVlav4Po",
+        "firstName": "Eric",
+        "lastName": "Zhang",
+        "publicIdentifier": "ekzhang",
+        "linkedinUrl": "https://www.linkedin.com/in/ekzhang"
+      },
+      {
+        "id": "ACoAACEKIcoBlH0R5ZT_TKQuJ4i3ZD4WlI1-rME",
+        "firstName": "Jacob",
+        "lastName": "Menick",
+        "publicIdentifier": "jacob-menick-5a277a135",
+        "linkedinUrl": "https://www.linkedin.com/in/jacob-menick-5a277a135"
+      },
+      {
+        "id": "ACoAABVAP64BY4RszeJt11vohsLM-gj1PiARl2o",
+        "firstName": "Jiaming",
+        "lastName": "Cui",
+        "publicIdentifier": "jiaming-cui-57a49a9b",
+        "linkedinUrl": "https://www.linkedin.com/in/jiaming-cui-57a49a9b"
+      },
+      {
+        "id": "ACoAAGRcBuAB-KZgH4Dy4UZsTAUiT0exzYKWkBM",
+        "firstName": "Idrees",
+        "lastName": "Gull",
+        "position": "Student at Massachusetts Institute of Technology",
+        "publicIdentifier": "idrees-gull-aa8a753ab",
+        "linkedinUrl": "https://www.linkedin.com/in/idrees-gull-aa8a753ab"
+      },
+      {
+        "id": "ACoAAGQr-AEBN5j3bbzzjG3QxLaR1-mFjyT4Xlo",
+        "firstName": "Dm muzibur",
+        "lastName": "Sorder",
+        "position": "Student at Massachusetts Institute of Technology",
+        "publicIdentifier": "dm-muzibur-sorder-3159b73aa",
+        "linkedinUrl": "https://www.linkedin.com/in/dm-muzibur-sorder-3159b73aa"
+      },
+      {
+        "id": "ACoAAGOPoLABBNTLSXBZ072O48cFJ4J8zMtP1PQ",
+        "firstName": "Nadim",
+        "lastName": "Mahmud",
+        "position": "AI Researcher | Mapping Digital Discourse & Echo Chambers | Expertise in NLP, NetworkX & Data Science | Building Transparent & Fair AI Systems",
+        "publicIdentifier": "nadim-mahmud-a684953a7",
+        "linkedinUrl": "https://www.linkedin.com/in/nadim-mahmud-a684953a7"
+      },
+      {
+        "id": "ACoAAGOjXIIBdt0BhWdDCAMElq3eCLxuN6Sjuw0",
+        "firstName": "Bannaradee",
+        "lastName": "Thanangkul Ph.​D. Computer Science (AI)",
+        "position": "Trusted Business & Investment Advisor, Rethinking Business Decisions in the Age of Technology",
+        "publicIdentifier": "bannaradee-thanangkul-ph-​d-computer-science-ai-36a9ba3a7",
+        "linkedinUrl": "https://www.linkedin.com/in/bannaradee-thanangkul-ph-​d-computer-science-ai-36a9ba3a7"
+      },
+      {
+        "id": "ACoAAGTUIHgBll22wcIME6ZQBjtawLHRWJl77Pc",
+        "firstName": "Preeti Rathore",
+        "lastName": "Rathore",
+        "position": "Student at Massachusetts Institute of Technology",
+        "publicIdentifier": "preeti-rathore-rathore-9886303b2",
+        "linkedinUrl": "https://www.linkedin.com/in/preeti-rathore-rathore-9886303b2"
+      },
+      {
+        "id": "ACoAAGTXuLEBa7gpLC_Iuo6ABXtxwEOz7ULNnZo",
+        "firstName": "Ehtisham",
+        "lastName": "Shani",
+        "position": "Student at Massachusetts Institute of Technology",
+        "publicIdentifier": "ehtisham-shani-1817253b2",
+        "linkedinUrl": "https://www.linkedin.com/in/ehtisham-shani-1817253b2"
+      },
+      {
+        "id": "ACoAAGRtRgwBUQQeYHEIg7aMwW9U2MdsuFig8B0",
+        "firstName": "Chand Nawab",
+        "lastName": "Khan",
+        "position": "Student at Massachusetts Institute of Technology",
+        "publicIdentifier": "chand-nawab-khan-0103203b0",
+        "linkedinUrl": "https://www.linkedin.com/in/chand-nawab-khan-0103203b0"
+      },
+      {
+        "id": "ACoAAGVos_EB2OUkY9U07UNgL1UfBql27Q_xKRw",
+        "firstName": "Thendi",
+        "lastName": "Daka",
+        "position": "Student at Massachusetts Institute of Technology",
+        "publicIdentifier": "thendi-daka-8419473b5",
+        "linkedinUrl": "https://www.linkedin.com/in/thendi-daka-8419473b5"
+      },
+      {
+        "id": "ACoAAGQ8nP0BSn1Byxag7rW7SV0UlXCE4V9aoME",
+        "firstName": "Shabd",
+        "lastName": "Kumar",
+        "position": "Student at Massachusetts Institute of Technology",
+        "publicIdentifier": "shabd-kumar-6252423ab",
+        "linkedinUrl": "https://www.linkedin.com/in/shabd-kumar-6252423ab"
+      },
+      {
+        "id": "ACoAAGTWAmwB0zVzRPbXKU6kybz_Rq8LHb7e688",
+        "firstName": "Maria Eduarda",
+        "lastName": "Lima",
+        "position": "Aluno da instituição de ensino IFBA - Instituto Federal da Bahia",
+        "publicIdentifier": "maria-eduarda-lima-2646903b2",
+        "linkedinUrl": "https://www.linkedin.com/in/maria-eduarda-lima-2646903b2"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAADYMzQAB6tuocZUNUAGdyFW5OqdaGumTW5M"
+    }
+  }
+}

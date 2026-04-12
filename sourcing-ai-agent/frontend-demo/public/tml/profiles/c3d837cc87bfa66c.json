@@ -1,0 +1,384 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAFwpBAcBkPHmDCYPUFAkb4TtADcx9ZJzNpU",
+    "profile_url": "https://www.linkedin.com/in/ACwAAFwpBAcBkPHmDCYPUFAkb4TtADcx9ZJzNpU"
+  },
+  "item": {
+    "id": "ACoAAFwpBAcBgETDFaHqT-Gl3020nX5lrriSmAw",
+    "publicIdentifier": "akash-kumar-b73996371",
+    "linkedinUrl": "https://www.linkedin.com/in/akash-kumar-b73996371",
+    "firstName": "Akash",
+    "lastName": "Kumar",
+    "emails": [
+      {
+        "email": "akash.kumar@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Machine Learning Engineer at Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Kakori, Uttar Pradesh, India",
+      "countryCode": "IN",
+      "parsed": {
+        "text": "Kākori, India",
+        "countryCode": "IN",
+        "regionCode": null,
+        "country": "India",
+        "countryFull": "India",
+        "state": "Uttar Pradesh",
+        "city": "Kākori"
+      }
+    },
+    "objectUrn": "1546191879",
+    "registeredAt": "2025-06-26T15:30:30.670Z",
+    "topSkills": null,
+    "connectionsCount": 0,
+    "followerCount": 0,
+    "verified": false,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": null,
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": null,
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Machine Learning Engineer at Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Machine Learning Engineer",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": null,
+        "description": null,
+        "skills": null,
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAADO8iWkBatyAGxC2lsXMYHP6kUgEpAvFTLI",
+        "firstName": "Ria",
+        "lastName": "Pipalwa",
+        "position": "MSc Marketing | University College Dublin | Former communications consultant at Avian We. | Social Impact | Storytelling | Event Management",
+        "publicIdentifier": "riapipalwa",
+        "linkedinUrl": "https://www.linkedin.com/in/riapipalwa"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAACNQrUgBauh-nN054D_d1fwGbW6k3ErIucQ",
+        "firstName": "Jennifer",
+        "lastName": "H.",
+        "position": "Software Engineer | Stanford CS",
+        "publicIdentifier": "jenniferhe1",
+        "linkedinUrl": "https://www.linkedin.com/in/jenniferhe1"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAAAAWldQBOsoCXLpqsc_2VwUTUy0CbOeaOjE",
+        "firstName": "Srinivas",
+        "lastName": "Narayanan",
+        "publicIdentifier": "srinivasnarayanan",
+        "linkedinUrl": "https://www.linkedin.com/in/srinivasnarayanan"
+      },
+      {
+        "id": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+        "firstName": "Saurabh",
+        "lastName": "Garg",
+        "position": "Thinking Machines Lab | Prev: Mistral AI, CMU, IIT-B",
+        "publicIdentifier": "saurabh-garg-b680b5b8",
+        "linkedinUrl": "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+      },
+      {
+        "id": "ACoAAABbJeIBUCjQgxHK47izrgsSMdXYb8KR2co",
+        "firstName": "Jolene",
+        "lastName": "P.",
+        "position": "everything bagel sous-chef",
+        "publicIdentifier": "joleneparish",
+        "linkedinUrl": "https://www.linkedin.com/in/joleneparish"
+      },
+      {
+        "id": "ACoAAFzBUR0Bt1zRKAzI8OS7_g6ytwU9UvfJwnI",
+        "firstName": "Lathika",
+        "lastName": "gunasekaran",
+        "position": "Digital Marketing Manager at Thinking Machines Lab",
+        "publicIdentifier": "lathika-gunasekaran-1651ab375",
+        "linkedinUrl": "https://www.linkedin.com/in/lathika-gunasekaran-1651ab375"
+      },
+      {
+        "id": "ACoAAAl87CYBWKLLyGNTbomy6oqIPv-5n34CXIY",
+        "firstName": "Andrew",
+        "lastName": "Tulloch",
+        "position": "AI Research @ Meta",
+        "publicIdentifier": "andrew-tulloch-17238745",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-tulloch-17238745"
+      },
+      {
+        "id": "ACoAADwrCKUB0FU7B3O7AIg9j_wieI-QOvJrtEE",
+        "firstName": "Katy",
+        "lastName": "Liemandt",
+        "position": "TML | San Francisco",
+        "publicIdentifier": "katy-liemandt-399092242",
+        "linkedinUrl": "https://www.linkedin.com/in/katy-liemandt-399092242"
+      },
+      {
+        "id": "ACoAAA60dCkBPxd9WJow3i1-Z3DEgyG1vFwT4ww",
+        "firstName": "민석",
+        "lastName": "홍",
+        "position": "SAMSUNG System LSI Principal Engineer",
+        "publicIdentifier": "민석-홍-4897566a",
+        "linkedinUrl": "https://www.linkedin.com/in/민석-홍-4897566a"
+      },
+      {
+        "id": "ACoAAASB3uoB5dX8ixOr7vFdKDbn5gRuf0U3iKE",
+        "firstName": "승현",
+        "lastName": "임",
+        "position": "Principle engineer at Samsung Electronics",
+        "publicIdentifier": "승현-임-74a3a921",
+        "linkedinUrl": "https://www.linkedin.com/in/승현-임-74a3a921"
+      },
+      {
+        "id": "ACoAAFpCltABWsgsrhlYJzlC8hJ6VZhiQC0nmD0",
+        "firstName": "plio",
+        "lastName": "mil",
+        "position": "Think at Thinking Machines Lab",
+        "publicIdentifier": "plio-mil-954182363",
+        "linkedinUrl": "https://www.linkedin.com/in/plio-mil-954182363"
+      },
+      {
+        "id": "ACoAADQpeukB21fGXj9FiYGt8hqdJNzvgBY6IKY",
+        "firstName": "Yaswanth",
+        "lastName": "B",
+        "position": "Lead System Engineer @ EPAM Systems | Microsoft Certified: Azure Solutions Architect Expert",
+        "publicIdentifier": "yaswanth-b-1210b7205",
+        "linkedinUrl": "https://www.linkedin.com/in/yaswanth-b-1210b7205"
+      },
+      {
+        "id": "ACoAABpf9_cBgRKl9IzNJLMAkyeyyeo-yaSNUis",
+        "firstName": "창범",
+        "lastName": "박",
+        "position": "--",
+        "publicIdentifier": "창범-박-7b3236104",
+        "linkedinUrl": "https://www.linkedin.com/in/창범-박-7b3236104"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "position": "Co-Founder and CEO at Thinking Machines Lab",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAABI5TkoBkKUDTsAnnpK-qzUhDfANMxT6VFg",
+        "firstName": "Brandon (ByungMan)",
+        "lastName": "Min",
+        "position": "Principal Engineer at Samsung Electronics System LSI",
+        "publicIdentifier": "brandon-byungman-min-06248886",
+        "linkedinUrl": "https://www.linkedin.com/in/brandon-byungman-min-06248886"
+      },
+      {
+        "id": "ACoAAB_slIsB70ZbkpSJSHNOKcZ5fdURWsAsfa4",
+        "firstName": "Cashel",
+        "lastName": "Lobo",
+        "position": "In search of my next career move",
+        "publicIdentifier": "cashel-lobo-80b45412b",
+        "linkedinUrl": "https://www.linkedin.com/in/cashel-lobo-80b45412b"
+      },
+      {
+        "id": "ACoAAAPH3hkBD4YvYU1lCbTlnKlqFvJCZxL3KlQ",
+        "firstName": "Weiheng",
+        "lastName": "Zhang",
+        "position": "Founding Head of Finance at Thinking Machines Lab",
+        "publicIdentifier": "weiheng-zhang",
+        "linkedinUrl": "https://www.linkedin.com/in/weiheng-zhang"
+      },
+      {
+        "id": "ACoAACHgqNcBO7G9QHjfnTyp5v6rVbPMJ19f1dc",
+        "firstName": "Claire",
+        "lastName": "Fu",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "clairecfu",
+        "linkedinUrl": "https://www.linkedin.com/in/clairecfu"
+      },
+      {
+        "id": "ACoAACKNVUMBztbhQ3RUYQ-Mg89xUJ39N-XJpM4",
+        "firstName": "Long",
+        "lastName": "Lian",
+        "position": "Member of Technical Staff at Thinking Machines Lab | Post-training Team | Large-scale RL | Multi-agent Systems | Real-time Multi-modal Models",
+        "publicIdentifier": "longlian",
+        "linkedinUrl": "https://www.linkedin.com/in/longlian"
+      },
+      {
+        "id": "ACoAAGDWIksBlJBQ6yLB1D8aji0XfjRiW84siqc",
+        "firstName": "Akinbola",
+        "lastName": "Lateef",
+        "position": "Thinker  at Thinking Machines Lab",
+        "publicIdentifier": "akinbola-lateef-94b110394",
+        "linkedinUrl": "https://www.linkedin.com/in/akinbola-lateef-94b110394"
+      },
+      {
+        "id": "ACoAABoG0oUBl986ZaMrLUASG1NhDoJyVlav4Po",
+        "firstName": "Eric",
+        "lastName": "Zhang",
+        "position": "MTS, Thinking Machines",
+        "publicIdentifier": "ekzhang",
+        "linkedinUrl": "https://www.linkedin.com/in/ekzhang"
+      },
+      {
+        "id": "ACoAADYMzQABdXTSxolT2YjHmNBBSeT6YrGSQmQ",
+        "firstName": "Tarushii",
+        "lastName": "Goel",
+        "position": "Member of Technical Staff @ Thinking Machines",
+        "publicIdentifier": "tarushii-goel",
+        "linkedinUrl": "https://www.linkedin.com/in/tarushii-goel"
+      },
+      {
+        "id": "ACoAACxX5AEBYonmfz9M8tQ8jO7Nx3jIXe_VSjw",
+        "firstName": "Sophie Rose",
+        "lastName": "Shapiro",
+        "position": "Creative Operations",
+        "publicIdentifier": "sophie-rose-shapiro",
+        "linkedinUrl": "https://www.linkedin.com/in/sophie-rose-shapiro"
+      },
+      {
+        "id": "ACoAAFUBvsYBMskyWP5r-Lf7ZUccZSuFy2nCqkA",
+        "firstName": "Ankit",
+        "lastName": "Baghel",
+        "position": "--DMLT lab technician\nb.sc chemistry chemical industry lab",
+        "publicIdentifier": "ankit-baghel-40675a339",
+        "linkedinUrl": "https://www.linkedin.com/in/ankit-baghel-40675a339"
+      },
+      {
+        "id": "ACoAAGO6_kYBSWZ_9llmmeAdGrKehnbJ15hsMm4",
+        "firstName": "Li",
+        "lastName": "James",
+        "position": "Social Researcher at Thinking Machines Lab",
+        "publicIdentifier": "li-james-6864263a8",
+        "linkedinUrl": "https://www.linkedin.com/in/li-james-6864263a8"
+      },
+      {
+        "id": "ACoAAFrO2hYBQn9I3leFzBjeUmgehOiK_AGSCr8",
+        "firstName": "Muhammad",
+        "lastName": "Adam Usman",
+        "position": "Electrician at Thinking Machines Lab",
+        "publicIdentifier": "muhammad-adam-usman-472276366",
+        "linkedinUrl": "https://www.linkedin.com/in/muhammad-adam-usman-472276366"
+      },
+      {
+        "id": "ACoAABqU8psBncgwN-WH-D8F1Jq9i7OsFmcPDt4",
+        "firstName": "Jeffrey",
+        "lastName": "Tao",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "jeffrey-tao",
+        "linkedinUrl": "https://www.linkedin.com/in/jeffrey-tao"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAFwpBAcBkPHmDCYPUFAkb4TtADcx9ZJzNpU"
+    }
+  }
+}

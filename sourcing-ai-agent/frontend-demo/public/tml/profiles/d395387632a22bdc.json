@@ -1,0 +1,227 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAGC39lcBsXNYAdxmTvr5iURAVYlwo78OZ9c",
+    "profile_url": "https://www.linkedin.com/in/ACwAAGC39lcBsXNYAdxmTvr5iURAVYlwo78OZ9c"
+  },
+  "item": {
+    "id": "ACoAAGC39lcBzohl5k1lutPYVRzppLNdV0kYDjQ",
+    "publicIdentifier": "daudi-zablon-5b3518393",
+    "linkedinUrl": "https://www.linkedin.com/in/daudi-zablon-5b3518393",
+    "firstName": "Daudi",
+    "lastName": "Zablon",
+    "emails": [
+      {
+        "email": "daudi.zablon@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Laboratory Technician at Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Mbeya, Mbeya Region, Tanzania",
+      "countryCode": "TZ",
+      "parsed": {
+        "text": "Mbeya, United Republic of Tanzania",
+        "countryCode": "TZ",
+        "regionCode": null,
+        "country": "Tanzania",
+        "countryFull": "United Republic of Tanzania",
+        "state": "Mbeya",
+        "city": "Mbeya"
+      }
+    },
+    "objectUrn": "1622668887",
+    "registeredAt": "2025-12-05T19:30:50.782Z",
+    "topSkills": null,
+    "connectionsCount": 0,
+    "followerCount": 1,
+    "verified": false,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": null,
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": null,
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Laboratory Technician at Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Laboratory Technician",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": null,
+        "description": null,
+        "skills": null,
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAABCno10BfJfmDhCujoW3ueYiveSs0DmUtOI",
+        "firstName": "maria ilaria",
+        "lastName": "dosei",
+        "position": "Communications and Marketing, WAMGROUP Corporate, WAM România",
+        "publicIdentifier": "doseimariailaria",
+        "linkedinUrl": "https://www.linkedin.com/in/doseimariailaria"
+      },
+      {
+        "id": "ACoAAALtF-0BWjHFiwC4OZAty_EajLl9UxMYZQg",
+        "firstName": "Ioana",
+        "lastName": "Nadasan",
+        "position": "Admin Team Coordinator, Admissions Responsible at Royal School in Transylvania",
+        "publicIdentifier": "ioana-nadasan-09153614",
+        "linkedinUrl": "https://www.linkedin.com/in/ioana-nadasan-09153614"
+      },
+      {
+        "id": "ACoAAFzIQVsBM_V7xcJGHbYiFLCCt8mvGfDnh2E",
+        "firstName": "Brenda",
+        "lastName": "Bahati",
+        "position": "--",
+        "publicIdentifier": "brenda-bahati-33738a375",
+        "linkedinUrl": "https://www.linkedin.com/in/brenda-bahati-33738a375"
+      },
+      {
+        "id": "ACoAAAJlTCMBnTUxugk3cSGEtL1SSQmqIPeRm_w",
+        "firstName": "Anca",
+        "lastName": "Simion",
+        "position": "Assessor Counselor - Directorate General Technical Assistance EU Programme - Ministry of Investments and European Projects",
+        "publicIdentifier": "anca-simion-a5756311",
+        "linkedinUrl": "https://www.linkedin.com/in/anca-simion-a5756311"
+      },
+      {
+        "id": "ACoAADeo-0YBBLOKmhQQ9ZmUI1ctaGdWysb0xYk",
+        "firstName": "Alina",
+        "lastName": "R.",
+        "position": "Commodity trader",
+        "publicIdentifier": "alina-r-99a899220",
+        "linkedinUrl": "https://www.linkedin.com/in/alina-r-99a899220"
+      },
+      {
+        "id": "ACoAAAZlFUUB2oLyZsGjZL7DTKpxs2wbQyEt2jI",
+        "firstName": "Dr Cosmin",
+        "lastName": "Vasile FCIArb",
+        "position": "Managing Partner Zamfirescu Racoti Vasile&Partners",
+        "publicIdentifier": "dr-cosmin-vasile-fciarb-a85b1b2b",
+        "linkedinUrl": "https://www.linkedin.com/in/dr-cosmin-vasile-fciarb-a85b1b2b"
+      },
+      {
+        "id": "ACoAABosodQB0qxxoFsKlpAmfvMeJbFLdm1y0HE",
+        "firstName": "Stefan",
+        "lastName": "DEACONU",
+        "position": "President, Court of Internaţional Commercial Arbitration, Chamber of Commerce and Industry of Romania",
+        "publicIdentifier": "stefan-deaconu-818093103",
+        "linkedinUrl": "https://www.linkedin.com/in/stefan-deaconu-818093103"
+      },
+      {
+        "id": "ACoAAAXnejABnbaIVXsVpOP6jM9gX64UFdhDvqg",
+        "firstName": "Costel",
+        "lastName": "Dragu",
+        "position": "Senior Java developer la Societe Generale",
+        "publicIdentifier": "costeldragu",
+        "linkedinUrl": "https://www.linkedin.com/in/costeldragu"
+      },
+      {
+        "id": "ACoAABdhZxUBqAbvxOkic3HU2lMPUA8pRywjVe0",
+        "firstName": "Laurentiu",
+        "lastName": "Lapusescu",
+        "position": "Technical Director la Scott Air Ventilation Systems",
+        "publicIdentifier": "laurentiu-lapusescu-b31449ab",
+        "linkedinUrl": "https://www.linkedin.com/in/laurentiu-lapusescu-b31449ab"
+      },
+      {
+        "id": "ACoAAAp6GqMB0vaYsRDLMbY0Jug8ri30XerViQU",
+        "firstName": "Constantin",
+        "lastName": "Rosu",
+        "position": "Managing Partner",
+        "publicIdentifier": "constantin-rosu-343a494a",
+        "linkedinUrl": "https://www.linkedin.com/in/constantin-rosu-343a494a"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAGC39lcBsXNYAdxmTvr5iURAVYlwo78OZ9c"
+    }
+  }
+}

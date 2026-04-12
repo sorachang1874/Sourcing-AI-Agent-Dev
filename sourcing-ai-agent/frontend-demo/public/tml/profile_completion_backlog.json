@@ -1,0 +1,38 @@
+[
+  {
+    "candidate_id": "be2851e64c42b670",
+    "display_name": "HR. Esraa",
+    "status_bucket": "former",
+    "category": "former_employee",
+    "employment_status": "former",
+    "reason": "profile_detail_gap",
+    "linkedin_url": "https://www.linkedin.com/in/ACwAAF2vzbwBq4HNnxCgKuQ91mh_K2H5HvCYuIo",
+    "source_datasets": [
+      "thinkingmachineslab_search_seed_candidates"
+    ]
+  },
+  {
+    "candidate_id": "749e9057685bf63e",
+    "display_name": "Micheal Stones",
+    "status_bucket": "former",
+    "category": "former_employee",
+    "employment_status": "former",
+    "reason": "profile_detail_gap",
+    "linkedin_url": "https://www.linkedin.com/in/ACwAAF0zu6IBlqQdwoSpIGkrSSBPAXgpKzs2vSo",
+    "source_datasets": [
+      "thinkingmachineslab_search_seed_candidates"
+    ]
+  },
+  {
+    "candidate_id": "1f2a5664f6d8efc7",
+    "display_name": "Neda Shoaie",
+    "status_bucket": "former",
+    "category": "former_employee",
+    "employment_status": "former",
+    "reason": "profile_detail_gap",
+    "linkedin_url": "https://www.linkedin.com/in/ACwAAF6LIsUBdBoarqzawz-sfgkuaN3TG3rHW4E",
+    "source_datasets": [
+      "thinkingmachineslab_search_seed_candidates"
+    ]
+  }
+]

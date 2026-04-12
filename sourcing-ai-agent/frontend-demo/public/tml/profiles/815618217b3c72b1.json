@@ -1,0 +1,792 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAABgwxtcBUlaTTo7cRNxz5U5bmmPZkjBHNdI",
+    "profile_url": "https://www.linkedin.com/in/ACwAABgwxtcBUlaTTo7cRNxz5U5bmmPZkjBHNdI"
+  },
+  "item": {
+    "id": "ACoAABgwxtcBfqsJJUHPwsSPuBE4K9oKyRqUp5o",
+    "publicIdentifier": "aureliaguy",
+    "linkedinUrl": "https://www.linkedin.com/in/aureliaguy",
+    "firstName": "Lia",
+    "lastName": "Guy",
+    "emails": [
+      {
+        "email": "lia.guy@openai.com",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://openai.com/",
+        "domain": "openai.com",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Research @ OpenAI",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America"
+      }
+    },
+    "objectUrn": "405849815",
+    "registeredAt": "2015-03-06T04:30:21.610Z",
+    "topSkills": null,
+    "connectionsCount": 721,
+    "followerCount": 714,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "11130470",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/11130470/",
+        "companyName": "OpenAI",
+        "dateRange": {
+          "start": {
+            "month": 1,
+            "year": 2026,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "17939",
+        "companyId": "2517",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2517/",
+        "schoolName": "University of California, Berkeley"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5603AQFQ-TUS2XKb8Q/profile-displayphoto-shrink_800_800/B56ZX0.Xm1GcAc-/0/1743571745650?e=1776902400&v=beta&t=KrbAE45TWZE7henfGgi82gkFmGJ9T4NcUwPi86Zh2Hs",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQFQ-TUS2XKb8Q/profile-displayphoto-shrink_800_800/B56ZX0.Xm1GcAc-/0/1743571745650?e=1776902400&v=beta&t=KrbAE45TWZE7henfGgi82gkFmGJ9T4NcUwPi86Zh2Hs",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQFQ-TUS2XKb8Q/profile-displayphoto-shrink_400_400/B56ZX0.Xm1GcAg-/0/1743571745631?e=1776902400&v=beta&t=Cs4fVVKfvBQ8NQ4mdMZRr3T642K8nV-e1TzRARIP3Ss",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQFQ-TUS2XKb8Q/profile-displayphoto-shrink_200_200/B56ZX0.Xm1GcAY-/0/1743571745650?e=1776902400&v=beta&t=SpnFK5dZa-gvQbjALhVnzeivcBXJvU4KkkXTbVRZbbE",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQFQ-TUS2XKb8Q/profile-displayphoto-shrink_100_100/B56ZX0.Xm1GcAU-/0/1743571745650?e=1776902400&v=beta&t=mcPswTCDibpuxp2sRFp0tR3waSfovxceXijQO-_Ut9U",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D5603AQFQ-TUS2XKb8Q/profile-displayphoto-shrink_800_800/B56ZX0.Xm1GcAc-/0/1743571745650?e=1776902400&v=beta&t=KrbAE45TWZE7henfGgi82gkFmGJ9T4NcUwPi86Zh2Hs",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Research @ OpenAI",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "OpenAI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/openai/",
+        "companyId": "11130470",
+        "companyUniversalName": "openai",
+        "duration": "4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2026,
+          "text": "Jan 2026"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_200_200/B56ZT8EYB8HsAI-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=O6RSWlpQ5W4zNCOCTu621qCyTijLuXFJS4pz2_hBQfo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_100_100/B56ZT8EYB8HsAQ-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=y7RA89V9q8GlAjQ1oRU-jf_-n5zlSXRCnykXBIkgHfM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco Bay Area",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyId": "105913171",
+        "duration": "9 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2025,
+          "text": "May 2025"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2026,
+          "text": "Jan 2026"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Member Of Technical Staff",
+        "location": "San Francisco Bay Area",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "OpenAI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/openai/",
+        "companyId": "11130470",
+        "companyUniversalName": "openai",
+        "duration": "3 yrs 1 mo",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Apr",
+          "year": 2022,
+          "text": "Apr 2022"
+        },
+        "endDate": {
+          "month": "Apr",
+          "year": 2025,
+          "text": "Apr 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_200_200/B56ZT8EYB8HsAI-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=O6RSWlpQ5W4zNCOCTu621qCyTijLuXFJS4pz2_hBQfo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_100_100/B56ZT8EYB8HsAQ-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=y7RA89V9q8GlAjQ1oRU-jf_-n5zlSXRCnykXBIkgHfM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Engineer",
+        "location": "London, United Kingdom",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "DeepMind",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1594050/",
+        "companyId": "1594050",
+        "duration": "3 yrs 3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2019,
+          "text": "Jan 2019"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2022,
+          "text": "Mar 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_400_400/company-logo_400_400/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=r_t5nQiM8A2L0aUP5m-PXCGPiKrvOklfisLwUFyoqwc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_400_400/company-logo_400_400/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=r_t5nQiM8A2L0aUP5m-PXCGPiKrvOklfisLwUFyoqwc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_200_200/company-logo_200_200/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=2BilPPrSvxkF02b9uz-N6ccku99E3v2Y8bAOBExGcFA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_100_100/company-logo_100_100/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=TS688J1rsD8hLhjNZfNOSDSKLf9q38j5d5Qgo7HUC_0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer Intern",
+        "location": "Mountain View",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Google",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1441/",
+        "companyId": "1441",
+        "duration": "1 yr 3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2017,
+          "text": "Jun 2017"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2018,
+          "text": "Aug 2018"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_200_200/B4EZmhegXHGcAM-/0/1759350753990/google_logo?e=1776902400&v=beta&t=CTzyZ9kqXiycW6UU0lJPQmCNKxu5QeAaPL_y9ftsJX0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_100_100/B4EZmhegXHGcAU-/0/1759350753990/google_logo?e=1776902400&v=beta&t=LRCYpUl9rmgdri4awRP4FVlvccNARAtgcfqxtRHdedI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "University of California, Berkeley",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2517/",
+        "schoolId": "2517",
+        "degree": "Computer Science",
+        "fieldOfStudy": null,
+        "skills": [],
+        "insights": "Activities and societies: Pioneers in Engineering, Berkeley Finance Club, Society of Women Engineers",
+        "startDate": {
+          "year": 2014,
+          "text": "2014"
+        },
+        "endDate": {
+          "year": 2018,
+          "text": "2018"
+        },
+        "period": "2014 - 2018",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_400_400/company-logo_400_400/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=ihsqGpnHzj0nlc8nr3zQwTYbq6GYQDs_WRmOHxXO6Cs",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_400_400/company-logo_400_400/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=ihsqGpnHzj0nlc8nr3zQwTYbq6GYQDs_WRmOHxXO6Cs",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_200_200/company-logo_200_200/0/1732135669730/uc_berkeley_logo?e=1776902400&v=beta&t=99cgQbgSotN9XiK7TbWS3PhqRVGT8S6VKfitEcMn0-E",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_100_100/company-logo_100_100/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=spLtug0cp3xqHCXq1OoZudTryqzyY85FoIZwfJ-_XzA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Java",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "C",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Python",
+        "assessments": "Passed LinkedIn Skill Assessment",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Linux",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Software Development",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Programming",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "SQL",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Unix",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Windows",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Deep Learning",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Artificial Intelligence (AI)",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Computer Vision",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Algorithms",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "C++",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "TensorFlow",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Machine Learning",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Data Science",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Research",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Computer Science",
+        "endorsements": "1 endorsement"
+      }
+    ],
+    "publications": [],
+    "courses": [
+      {
+        "title": "Computer Vision",
+        "number": "CS C280",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Data Structures",
+        "number": "CS 61B",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Discrete Mathematics and Probability Theory",
+        "number": "CS 70",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Great Ideas in Computer Architecture (Machine Structures)",
+        "number": "CS 61C",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Introduction to AI",
+        "number": "CS 188",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Introduction to CS Theory",
+        "number": "CS 170",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Introduction to Economics",
+        "number": "Econ 1",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Introduction to Machine Learning",
+        "number": "CS 189",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Introductory Probability and Statistics for Business",
+        "number": "Stats 21",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Linear Algebra and Differential Equations",
+        "number": "Math 54",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Optimization Models and Applications",
+        "number": "EECS 127",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Principles of Business",
+        "number": "UGBA 10",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "The Structure and Interpretation of Computer Programs",
+        "number": "CS 61A",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      }
+    ],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAAACQBzQB5nk5kOpFWQRtK4pv3RaL5q2G-pA",
+        "firstName": "Jonathan",
+        "lastName": "Lachman",
+        "publicIdentifier": "jonathan-lachman-4981b23",
+        "linkedinUrl": "https://www.linkedin.com/in/jonathan-lachman-4981b23"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAAAJzsfoBp0MxssQYMgmy0ZNO2U3sA58ugwc",
+        "firstName": "Joshua",
+        "lastName": "Gross",
+        "publicIdentifier": "joshgross",
+        "linkedinUrl": "https://www.linkedin.com/in/joshgross"
+      },
+      {
+        "id": "ACoAABYs4-IB5mHx5eVfOHzu1e8xlO3q_kb38IM",
+        "firstName": "Brydon",
+        "lastName": "Eastman",
+        "publicIdentifier": "brydon-eastman-396719a4",
+        "linkedinUrl": "https://www.linkedin.com/in/brydon-eastman-396719a4"
+      },
+      {
+        "id": "ACoAAACo1tYBGy9sT2OWZuEULOMe4K_b2Y22-F8",
+        "firstName": "Alex",
+        "lastName": "Gartrell",
+        "publicIdentifier": "alexgartrell",
+        "linkedinUrl": "https://www.linkedin.com/in/alexgartrell"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAABA0sF8BJqwmfoms3veu9TE72tj8JMUQEFA",
+        "firstName": "Sam",
+        "lastName": "Shleifer",
+        "publicIdentifier": "sam-shleifer-a5307a77",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-shleifer-a5307a77"
+      },
+      {
+        "id": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+        "firstName": "Saurabh",
+        "lastName": "Garg",
+        "publicIdentifier": "saurabh-garg-b680b5b8",
+        "linkedinUrl": "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+      },
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAAABnAccB9h1LTKUrBFif76qxLwe9k7nyE_s",
+        "firstName": "Ian",
+        "lastName": "O'Connell",
+        "publicIdentifier": "ianoc",
+        "linkedinUrl": "https://www.linkedin.com/in/ianoc"
+      },
+      {
+        "id": "ACoAAAl87CYBWKLLyGNTbomy6oqIPv-5n34CXIY",
+        "firstName": "Andrew",
+        "lastName": "Tulloch",
+        "publicIdentifier": "andrew-tulloch-17238745",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-tulloch-17238745"
+      },
+      {
+        "id": "ACoAABV61Q0BF3ER-196Zc9GK5TviMrbbIlVGqg",
+        "firstName": "Samuel",
+        "lastName": "Schoenholz",
+        "publicIdentifier": "samuel-schoenholz-379830a0",
+        "linkedinUrl": "https://www.linkedin.com/in/samuel-schoenholz-379830a0"
+      },
+      {
+        "id": "ACoAABhIg7YBYN2NPIu8voYj5D7JQVZGxonqHvc",
+        "firstName": "Ruiqi",
+        "lastName": "Zhong",
+        "publicIdentifier": "ruiqi-zhong-09a533b4",
+        "linkedinUrl": "https://www.linkedin.com/in/ruiqi-zhong-09a533b4"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAABPg53YBHdOvmp7pU72eDhcho-7cnwyxk1o",
+        "firstName": "Pia",
+        "lastName": "Santos",
+        "publicIdentifier": "piafsantos",
+        "linkedinUrl": "https://www.linkedin.com/in/piafsantos"
+      },
+      {
+        "id": "ACoAAAO-j_IBXcvIzhZtQ7QNkky6tlnQTcFl9qI",
+        "firstName": "Myle",
+        "lastName": "Ott",
+        "publicIdentifier": "myleott",
+        "linkedinUrl": "https://www.linkedin.com/in/myleott"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAAAji1bkB1eLX4z2Jb9-N2nMhEGNLWptSnqU",
+        "firstName": "Clare",
+        "lastName": "Birch",
+        "publicIdentifier": "clarebirch42",
+        "linkedinUrl": "https://www.linkedin.com/in/clarebirch42"
+      },
+      {
+        "id": "ACoAAC2l_tsB18hSUAPt4dvrRBrQAToy0kkVIys",
+        "firstName": "Adam",
+        "lastName": "Majmudar",
+        "position": "adammaj.com // research @ openai",
+        "publicIdentifier": "adam-majmudar-24b596194",
+        "linkedinUrl": "https://www.linkedin.com/in/adam-majmudar-24b596194"
+      },
+      {
+        "id": "ACoAAGLiezAB6ZrOktz4ngXe9pfV2SprMDA5P1Y",
+        "firstName": "Prateek",
+        "lastName": "Singh",
+        "position": "Head Technology Consultant at OpenAI | ex - Cognizant",
+        "publicIdentifier": "prateek-singh-1807233a3",
+        "linkedinUrl": "https://www.linkedin.com/in/prateek-singh-1807233a3"
+      },
+      {
+        "id": "ACoAAFMaVKkBYY_Qp8ylIF_QKT2sDsTjcEyqaHc",
+        "firstName": "Cleo",
+        "lastName": "Washer",
+        "position": "Student Athlete at Brown University | GPT Lab @ OpenAI",
+        "publicIdentifier": "cleo-washer-835b1432a",
+        "linkedinUrl": "https://www.linkedin.com/in/cleo-washer-835b1432a"
+      },
+      {
+        "id": "ACoAADkVTH0BkXEFx789H7_1ULZxhLd08rQLOX0",
+        "firstName": "Olivia",
+        "lastName": "Santiago",
+        "position": "Helping Enterprises Securely Adopt AI @ OpenAI | Cybersecurity, AI & SaaS",
+        "publicIdentifier": "olivia-a-santiago",
+        "linkedinUrl": "https://www.linkedin.com/in/olivia-a-santiago"
+      },
+      {
+        "id": "ACoAAD1fHKcBapS_ufACuUUAEhr9FeXpKRrqBT4",
+        "firstName": "Matthew ",
+        "lastName": "Lopez",
+        "position": "Sales & Business Development Leader (currently hiring)",
+        "publicIdentifier": "matthew-lopez-5739aa248",
+        "linkedinUrl": "https://www.linkedin.com/in/matthew-lopez-5739aa248"
+      },
+      {
+        "id": "ACoAADrx7gQBR3u7Jpi0jyev3Y3RW0FjVv4kVos",
+        "firstName": "Parthava",
+        "lastName": "Naidu",
+        "position": "Data Scientist @OpenAI | Python | LLMs | SQL | Docker | FAISS | AWS  | Matplotlib | PyTorch | RAG | Pandas | Kubernetes | Pinecone | Azure | Fine-tuning| Prompt Engineering | Computer Vision | Chatbots | Scikit-learn |",
+        "publicIdentifier": "parthava-naidu-684237237",
+        "linkedinUrl": "https://www.linkedin.com/in/parthava-naidu-684237237"
+      },
+      {
+        "id": "ACoAAEi2WA4B88GspCrfiLLFesFlU7RYO3kFj_Q",
+        "firstName": "Noah",
+        "lastName": "Jaghori",
+        "position": "Venture Capitalist - Three Time Successful Exit Entrepreneur - Martial Artist/Cage Fighter",
+        "publicIdentifier": "noah-jaghori",
+        "linkedinUrl": "https://www.linkedin.com/in/noah-jaghori"
+      },
+      {
+        "id": "ACoAAD1eicABqBlwXGLQRXjQmDs4gk_fzQCmyNA",
+        "firstName": "Blainoo",
+        "lastName": "Avant Garde ",
+        "position": "Love this app. Y’all look amazing!! You Can Always Feel Free To Reach Out. \nIf You Want More Customers For Your Business I Can Help You Out. Willing To Tackle Any Task Thought Of.\nDm Me",
+        "publicIdentifier": "blainoo-avant-garde-854990248",
+        "linkedinUrl": "https://www.linkedin.com/in/blainoo-avant-garde-854990248"
+      },
+      {
+        "id": "ACoAAGMhDy0B1CX27sPhbARHscUqaw3V4K9ektg",
+        "firstName": "Pooja",
+        "lastName": "Ruhela",
+        "position": "Student at Kd international school ",
+        "publicIdentifier": "pooja-ruhela-579b803a4",
+        "linkedinUrl": "https://www.linkedin.com/in/pooja-ruhela-579b803a4"
+      },
+      {
+        "id": "ACoAAEw-xgcBaYLigninzNIYr1kPH6ZCcIWaoxk",
+        "firstName": "Juliane",
+        "lastName": "Schmitz",
+        "position": "Director of People Operations @OpenAI",
+        "publicIdentifier": "juliane-schmitz-68748b2b8",
+        "linkedinUrl": "https://www.linkedin.com/in/juliane-schmitz-68748b2b8"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAABgwxtcBUlaTTo7cRNxz5U5bmmPZkjBHNdI"
+    }
+  }
+}

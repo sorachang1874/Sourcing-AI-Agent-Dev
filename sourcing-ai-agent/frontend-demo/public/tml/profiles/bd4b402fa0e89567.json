@@ -1,0 +1,815 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAAd3c8cBBJbvdEkW0zUzKGwYat9UZQX_afQ",
+    "profile_url": "https://www.linkedin.com/in/ACwAAAd3c8cBBJbvdEkW0zUzKGwYat9UZQX_afQ"
+  },
+  "item": {
+    "id": "ACoAAAd3c8cBXKnzqS80_HMaDIGNdqrXbaFbO5g",
+    "publicIdentifier": "james5un",
+    "linkedinUrl": "https://www.linkedin.com/in/james5un",
+    "firstName": "James",
+    "lastName": "Sun",
+    "emails": [
+      {
+        "email": "james.sun@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Software Engineer",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco Bay Area",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "125268935",
+    "registeredAt": "2011-06-20T12:37:48.648Z",
+    "topSkills": null,
+    "connectionsCount": 1004,
+    "followerCount": 1047,
+    "verified": true,
+    "about": "Software engineer on distributed systems, training platforms, and databases.",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 11,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "17959",
+        "companyId": "5372",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/5372/",
+        "schoolName": "UC Santa Barbara"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5603AQEEt5QH5PXX_g/profile-displayphoto-crop_800_800/B56ZoIo7zyKAAI-/0/1761081541330?e=1776902400&v=beta&t=sDAewdY5ld21w2nDOqRsqW57gX67toqKjT4qyD06aKU",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQEEt5QH5PXX_g/profile-displayphoto-crop_800_800/B56ZoIo7zyKAAI-/0/1761081541330?e=1776902400&v=beta&t=sDAewdY5ld21w2nDOqRsqW57gX67toqKjT4qyD06aKU",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQEEt5QH5PXX_g/profile-displayphoto-scale_400_400/B56ZoIo7zyKAAg-/0/1761081541451?e=1776902400&v=beta&t=LMtiEbzLK4gy-J1t9CgUh9cARKTCQYw36qnZ4R-AzZ4",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQEEt5QH5PXX_g/profile-displayphoto-scale_200_200/B56ZoIo7zyKAAY-/0/1761081541451?e=1776902400&v=beta&t=ekNXjoNm__CI1kD9C_qgGPZ3bsGt1rjwvcD3zAMdnJc",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQEEt5QH5PXX_g/profile-displayphoto-scale_100_100/B56ZoIo7zyKAAc-/0/1761081541451?e=1776902400&v=beta&t=h6CT7eItIYuUjIMdSM156fAE3LxQZRyszgMsdb4tVQg",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D5603AQEEt5QH5PXX_g/profile-displayphoto-crop_800_800/B56ZoIo7zyKAAI-/0/1761081541330?e=1776902400&v=beta&t=sDAewdY5ld21w2nDOqRsqW57gX67toqKjT4qyD06aKU",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Software Engineer",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "6 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Nov",
+          "year": 2025,
+          "text": "Nov 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer",
+        "location": "San Francisco Bay Area",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "2 yrs 8 mos",
+        "description": "Large-scale pre- and post-training for LLMs. One of the Initial founding members of Monarch (https://meta-pytorch.org/monarch/), a distributed execution engine for PyTorch.",
+        "skills": null,
+        "experienceGroupId": "1d4e08ca8027a31445156548c3a6cf099bccd671",
+        "startDate": {
+          "month": "Apr",
+          "year": 2023,
+          "text": "Apr 2023"
+        },
+        "endDate": {
+          "month": "Nov",
+          "year": 2025,
+          "text": "Nov 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer",
+        "location": "San Francisco Bay Area",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "6 yrs 4 mos",
+        "description": "Uber tech lead of Presto (https://prestodb.io/), an open-source distributed SQL query engine at EB scale. Led the efforts of 10X latency reduction for data analytics through hierarchical cache, SQL dialect unification across analytical engines, batch engine consolidation between Presto and SparkSQL, C++ vectorized acceleration for Presto evaluation, etc. First and co-authors of various Presto papers.",
+        "skills": null,
+        "experienceGroupId": "1d4e08ca8027a31445156548c3a6cf099bccd671",
+        "startDate": {
+          "month": "Jan",
+          "year": 2017,
+          "text": "Jan 2017"
+        },
+        "endDate": {
+          "month": "Apr",
+          "year": 2023,
+          "text": "Apr 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Pure Storage",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1632202/",
+        "companyId": "1632202",
+        "duration": "1 yr 4 mos",
+        "description": "Engineer working on synchronized and asynchronized data replication in a cluster. Contributed to key features including failure recovery and non-disruptive upgrade during replication",
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2015,
+          "text": "Sep 2015"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2016,
+          "text": "Dec 2016"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHY8dBMsvlbUw/company-logo_400_400/B56ZyKlQsMGoAY-/0/1771851549770/purestorage_logo?e=1776902400&v=beta&t=LICHkFGZR2w4RmMRCaKmZ38c_Q9PDAkBZRwefI92OQ4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHY8dBMsvlbUw/company-logo_400_400/B56ZyKlQsMGoAY-/0/1771851549770/purestorage_logo?e=1776902400&v=beta&t=LICHkFGZR2w4RmMRCaKmZ38c_Q9PDAkBZRwefI92OQ4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHY8dBMsvlbUw/company-logo_200_200/B56ZyKlQsMGoAI-/0/1771851549770/purestorage_logo?e=1776902400&v=beta&t=L0POIBXKD7iw5rUevXscYbeELEtKBgxlc0znuv9oM7k",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHY8dBMsvlbUw/company-logo_100_100/B56ZyKlQsMGoAQ-/0/1771851549770/purestorage_logo?e=1776902400&v=beta&t=2_jILSUbFlDYhsfn7UrelgmTPszTPXJ-IcOv_rJeyQA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer Intern",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Samsung Research America",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1753/",
+        "companyId": "1753",
+        "duration": "4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2014,
+          "text": "Jun 2014"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2014,
+          "text": "Sep 2014"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQFsvADfvcJi_A/company-logo_400_400/company-logo_400_400/0/1676336400451/samsung_electronics_logo?e=1776902400&v=beta&t=S8kp-6K8GAfHr94qrqHSzZOCdyCPpygOUjJHucUczwA",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFsvADfvcJi_A/company-logo_400_400/company-logo_400_400/0/1676336400451/samsung_electronics_logo?e=1776902400&v=beta&t=S8kp-6K8GAfHr94qrqHSzZOCdyCPpygOUjJHucUczwA",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFsvADfvcJi_A/company-logo_200_200/company-logo_200_200/0/1676336400451/samsung_electronics_logo?e=1776902400&v=beta&t=PalYkfm8_6lqWCpt5wyFBkXUnfvoDQPNUqiOxrqbGcY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFsvADfvcJi_A/company-logo_100_100/company-logo_100_100/0/1676336400451/samsung_electronics_logo?e=1776902400&v=beta&t=Cd_1lJ_YdcckAXwPLRk7rZn6BGqrJaCYGpWzWu55Fb0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Intern",
+        "location": "Greater New York City Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "IBM Thomas J Watson Research Center",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1009/",
+        "companyId": "1009",
+        "duration": "4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2012,
+          "text": "Jun 2012"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2012,
+          "text": "Sep 2012"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGiz5ecgpCtkA/company-logo_400_400/company-logo_400_400/0/1688684715866/ibm_logo?e=1776902400&v=beta&t=lvn_XgKnHL6D2RIsPvznl9bRtuFCCOW4XRo14QISjQY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGiz5ecgpCtkA/company-logo_400_400/company-logo_400_400/0/1688684715866/ibm_logo?e=1776902400&v=beta&t=lvn_XgKnHL6D2RIsPvznl9bRtuFCCOW4XRo14QISjQY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGiz5ecgpCtkA/company-logo_200_200/company-logo_200_200/0/1688684715866/ibm_logo?e=1776902400&v=beta&t=DdS_AmJzO8hVZJzkCH0A37Kd4MX4miZ-oSSRUJKGI-A",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGiz5ecgpCtkA/company-logo_100_100/company-logo_100_100/0/1688684715866/ibm_logo?e=1776902400&v=beta&t=nw_NDHrg6jEPysPyTTyDRMaPjW2xaXuMTVb6V65M_3E",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Intern",
+        "location": "Greater New York City Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "IBM Thomas J Watson Research Center",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1009/",
+        "companyId": "1009",
+        "duration": "4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2011,
+          "text": "Jun 2011"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2011,
+          "text": "Sep 2011"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGiz5ecgpCtkA/company-logo_400_400/company-logo_400_400/0/1688684715866/ibm_logo?e=1776902400&v=beta&t=lvn_XgKnHL6D2RIsPvznl9bRtuFCCOW4XRo14QISjQY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGiz5ecgpCtkA/company-logo_400_400/company-logo_400_400/0/1688684715866/ibm_logo?e=1776902400&v=beta&t=lvn_XgKnHL6D2RIsPvznl9bRtuFCCOW4XRo14QISjQY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGiz5ecgpCtkA/company-logo_200_200/company-logo_200_200/0/1688684715866/ibm_logo?e=1776902400&v=beta&t=DdS_AmJzO8hVZJzkCH0A37Kd4MX4miZ-oSSRUJKGI-A",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGiz5ecgpCtkA/company-logo_100_100/company-logo_100_100/0/1688684715866/ibm_logo?e=1776902400&v=beta&t=nw_NDHrg6jEPysPyTTyDRMaPjW2xaXuMTVb6V65M_3E",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "UC Santa Barbara",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/5372/",
+        "schoolId": "5372",
+        "degree": "Doctor of Philosophy (Ph.D.)",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "description": "Database theory and query languages",
+        "startDate": {
+          "year": 2010,
+          "text": "2010"
+        },
+        "endDate": {
+          "year": 2015,
+          "text": "2015"
+        },
+        "period": "2010 - 2015",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C510BAQHEZRcLGw73jQ/company-logo_400_400/company-logo_400_400/0/1631314878613?e=1776902400&v=beta&t=0yFNYFzDNTPlJL8nRQts2NnCiCe3edzp1jtfxSESr98",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQHEZRcLGw73jQ/company-logo_400_400/company-logo_400_400/0/1631314878613?e=1776902400&v=beta&t=0yFNYFzDNTPlJL8nRQts2NnCiCe3edzp1jtfxSESr98",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQHEZRcLGw73jQ/company-logo_200_200/company-logo_200_200/0/1631314878612?e=1776902400&v=beta&t=J8wfepL5oXFUOdY4DjxnQ0xEQN7PwbDP7Ss-X02x9fQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQHEZRcLGw73jQ/company-logo_100_100/company-logo_100_100/0/1631314878612?e=1776902400&v=beta&t=hgHzDcZAlg0DRjsSLuJXs3EagBnhmYeDjL13cbVFtVI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Fudan University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/22859/",
+        "schoolId": "22859",
+        "degree": "Bachelor's Degree",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "startDate": {
+          "year": 2006,
+          "text": "2006"
+        },
+        "endDate": {
+          "year": 2010,
+          "text": "2010"
+        },
+        "period": "2006 - 2010",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFqaH7FoO2N-w/company-logo_400_400/company-logo_400_400/0/1631314786336?e=1776902400&v=beta&t=ZuLLkeEgPVj9zY_gFoCgSbb804EPXukFojkGQuAG6MI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFqaH7FoO2N-w/company-logo_400_400/company-logo_400_400/0/1631314786336?e=1776902400&v=beta&t=ZuLLkeEgPVj9zY_gFoCgSbb804EPXukFojkGQuAG6MI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFqaH7FoO2N-w/company-logo_200_200/company-logo_200_200/0/1631314786336?e=1776902400&v=beta&t=gzW21mR7s-wZbqyo_5J3IKA4DShFthjccDm7MBW-hZA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFqaH7FoO2N-w/company-logo_100_100/company-logo_100_100/0/1631314786336?e=1776902400&v=beta&t=_UPQjlaDHOvB24mG8sIxQQIM9NAoSahiiOfskO4S5TM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Algorithms",
+        "endorsements": "20 endorsements"
+      },
+      {
+        "name": "Computer Science",
+        "endorsements": "11 endorsements"
+      },
+      {
+        "name": "Web Services",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Databases",
+        "positions": [
+          "Endorsed by 2 colleagues at Meta"
+        ],
+        "endorsements": "10 endorsements"
+      },
+      {
+        "name": "Java",
+        "positions": [
+          "Endorsed by 2 colleagues at Meta"
+        ],
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "SQL",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Python",
+        "endorsements": "20 endorsements"
+      },
+      {
+        "name": "C++",
+        "assessments": "Passed LinkedIn Skill Assessment",
+        "endorsements": "12 endorsements"
+      },
+      {
+        "name": "C",
+        "endorsements": "11 endorsements"
+      },
+      {
+        "name": "LaTeX",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "Linux",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Eclipse",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "MySQL",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "HTML",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "JavaScript",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "C#",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "PHP",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Unix"
+      },
+      {
+        "name": "Git",
+        "assessments": "Passed LinkedIn Skill Assessment"
+      },
+      {
+        "name": "Python (Programming Language)",
+        "endorsements": "1 endorsement"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [
+      {
+        "name": "English",
+        "proficiency": "Full professional proficiency"
+      }
+    ],
+    "causes": [],
+    "featured": {
+      "images": [
+        "https://media.licdn.com/dms/image/v2/D562DAQFolkhOv3Dfuw/profile-treasury-image-shrink_8192_8192/profile-treasury-image-shrink_8192_8192/0/1734150880182?e=1776160800&v=beta&t=jvfgMZ9JqKqcWqOPdSwJ_IXIqdxH5riSkvNQd6kTn6I"
+      ],
+      "link": "https://research.facebook.com/publications/presto-a-decade-of-sql-analytics-at-meta/",
+      "title": "Presto: A Decade of SQL Analytics at Meta - Meta Research | Meta Research",
+      "subtitle": "Meta Research",
+      "slides": [
+        {
+          "title": "Presto: A Decade of SQL Analytics at Meta - Meta Research | Meta Research",
+          "subtitle": "Meta Research",
+          "description": null,
+          "url": "https://research.facebook.com/publications/presto-a-decade-of-sql-analytics-at-meta/",
+          "image": {
+            "url": "https://media.licdn.com/dms/image/v2/D562DAQFolkhOv3Dfuw/profile-treasury-image-shrink_8192_8192/profile-treasury-image-shrink_8192_8192/0/1734150880182?e=1776160800&v=beta&t=jvfgMZ9JqKqcWqOPdSwJ_IXIqdxH5riSkvNQd6kTn6I"
+          }
+        },
+        {
+          "title": "Presto: SQL on Everything - Meta Research | Meta Research",
+          "subtitle": "Meta Research",
+          "description": null,
+          "url": "https://research.facebook.com/publications/presto-sql-on-everything/",
+          "image": {
+            "url": "https://media.licdn.com/dms/image/v2/D562DAQGH7ujOL0uglg/profile-treasury-image-shrink_8192_8192/profile-treasury-image-shrink_8192_8192/0/1734150955438?e=1776160800&v=beta&t=NdzhrIcS3NbL4shQeTjeeuL_1Z0c6JDcsZC8F-sTgTI"
+          }
+        },
+        {
+          "title": "Shared Foundations: Modernizing Meta’s Data Lakehouse - Meta Research | Meta Research",
+          "subtitle": "Meta Research",
+          "description": null,
+          "url": "https://research.facebook.com/publications/shared-foundations-modernizing-metas-data-lakehouse/",
+          "image": {
+            "url": "https://media.licdn.com/dms/image/v2/D562DAQFn4jNkOWbDEw/profile-treasury-image-shrink_800_800/profile-treasury-image-shrink_800_800/0/1734150995947?e=1776160800&v=beta&t=RfPsw7WIVeqpCKS-mSjO__are9jDF7yvMLk8puR6wHQ"
+          }
+        }
+      ]
+    },
+    "moreProfiles": [
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAAATAFhsB-MSu8aXWUBacbi6fvU_SaAqdBH4",
+        "firstName": "Jeff",
+        "lastName": "Hanson",
+        "publicIdentifier": "jshanson7",
+        "linkedinUrl": "https://www.linkedin.com/in/jshanson7"
+      },
+      {
+        "id": "ACoAAEZnBtoBb1Us7ZKgHfOXAYT764pKcDQy848",
+        "firstName": "Songlin",
+        "lastName": "Yang",
+        "publicIdentifier": "songlin-yang-b8a69728b",
+        "linkedinUrl": "https://www.linkedin.com/in/songlin-yang-b8a69728b"
+      },
+      {
+        "id": "ACoAABQ5lJUBry2byQYf_TtxDF9Rha9l-RqYsaM",
+        "firstName": "Guang-He",
+        "lastName": "Lee",
+        "publicIdentifier": "guang-he-lee-64577895",
+        "linkedinUrl": "https://www.linkedin.com/in/guang-he-lee-64577895"
+      },
+      {
+        "id": "ACoAAAncnq0BajmeOrLikO5AAincnDzuRDUXFjw",
+        "firstName": "Soumith",
+        "lastName": "Chintala",
+        "publicIdentifier": "soumith",
+        "linkedinUrl": "https://www.linkedin.com/in/soumith"
+      },
+      {
+        "id": "ACoAABmsYasBhsFwXKca6Ooio5i6nRfTRvN4d2Y",
+        "firstName": "Liyuan",
+        "lastName": "Liu",
+        "publicIdentifier": "liyuanlucasliu",
+        "linkedinUrl": "https://www.linkedin.com/in/liyuanlucasliu"
+      },
+      {
+        "id": "ACoAABGaEy8Bu1ycKB5WUvyRc69OERCzymW7mxY",
+        "firstName": "Jamie",
+        "lastName": "Cahill",
+        "publicIdentifier": "james-cahill-093a9582",
+        "linkedinUrl": "https://www.linkedin.com/in/james-cahill-093a9582"
+      },
+      {
+        "id": "ACoAAAQ1QI4Bex6mqv5SgvahWcZuzAuWiTKciBo",
+        "firstName": "Bi",
+        "lastName": "Xue",
+        "publicIdentifier": "bi-xue-9527871b",
+        "linkedinUrl": "https://www.linkedin.com/in/bi-xue-9527871b"
+      },
+      {
+        "id": "ACoAACHgqNcBO7G9QHjfnTyp5v6rVbPMJ19f1dc",
+        "firstName": "Claire",
+        "lastName": "Fu",
+        "publicIdentifier": "clairecfu",
+        "linkedinUrl": "https://www.linkedin.com/in/clairecfu"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAABE9sVMBCH0i964WlvecDNyGKTviqyXKcTY",
+        "firstName": "Hannah",
+        "lastName": "T.",
+        "publicIdentifier": "hannahnth",
+        "linkedinUrl": "https://www.linkedin.com/in/hannahnth"
+      },
+      {
+        "id": "ACoAAAhY-psBFcHXNbjunn6_QnPfV6Bo6w4yzug",
+        "firstName": "Kenny",
+        "lastName": "Yu",
+        "publicIdentifier": "kenny-yu-aa3a9a3a",
+        "linkedinUrl": "https://www.linkedin.com/in/kenny-yu-aa3a9a3a"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAAAENQhgBH8wIeS6hMrUoWlbKk5L9GWNNQCE",
+        "firstName": "Andrii",
+        "lastName": "Grynenko",
+        "publicIdentifier": "andrii-grynenko-a48aab5",
+        "linkedinUrl": "https://www.linkedin.com/in/andrii-grynenko-a48aab5"
+      },
+      {
+        "id": "ACoAAACo1tYBGy9sT2OWZuEULOMe4K_b2Y22-F8",
+        "firstName": "Alex",
+        "lastName": "Gartrell",
+        "publicIdentifier": "alexgartrell",
+        "linkedinUrl": "https://www.linkedin.com/in/alexgartrell"
+      },
+      {
+        "id": "ACoAACHG180BXiyeZ2qJgoggx27e4iM3ajxvp18",
+        "firstName": "Andy",
+        "lastName": "Hwang",
+        "publicIdentifier": "andrewnhwang",
+        "linkedinUrl": "https://www.linkedin.com/in/andrewnhwang"
+      },
+      {
+        "id": "ACoAACy2BxwB9fCrfCBI06w0X-gHyQTFLJIpJGc",
+        "firstName": "Guangxuan",
+        "lastName": "X.",
+        "publicIdentifier": "xgx",
+        "linkedinUrl": "https://www.linkedin.com/in/xgx"
+      },
+      {
+        "id": "ACoAAAeoHjYB_Lo5sUFlpZpz2L74oe9nEIKztQA",
+        "firstName": "Jenya",
+        "lastName": "L.",
+        "publicIdentifier": "jenya-l",
+        "linkedinUrl": "https://www.linkedin.com/in/jenya-l"
+      },
+      {
+        "id": "ACoAABoG0oUBl986ZaMrLUASG1NhDoJyVlav4Po",
+        "firstName": "Eric",
+        "lastName": "Zhang",
+        "publicIdentifier": "ekzhang",
+        "linkedinUrl": "https://www.linkedin.com/in/ekzhang"
+      },
+      {
+        "id": "ACoAAAL78DgBwclIkVIu3zesYf5-HL7UfI6xL8Q",
+        "firstName": "Rajesh",
+        "lastName": "Nishtala",
+        "publicIdentifier": "rajeshnishtala",
+        "linkedinUrl": "https://www.linkedin.com/in/rajeshnishtala"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAAd3c8cBBJbvdEkW0zUzKGwYat9UZQX_afQ"
+    }
+  }
+}

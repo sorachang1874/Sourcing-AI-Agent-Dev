@@ -1,0 +1,832 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAAf7ZWcBz0oHcV9mAAReYhcjHKxR-bQrPPU",
+    "profile_url": "https://www.linkedin.com/in/ACwAAAf7ZWcBz0oHcV9mAAReYhcjHKxR-bQrPPU"
+  },
+  "item": {
+    "id": "ACoAAAf7ZWcB3BGw5pTmcsFw0vXm4A_CQn6EkFo",
+    "publicIdentifier": "christianjgibson",
+    "linkedinUrl": "https://www.linkedin.com/in/christianjgibson",
+    "firstName": "Christian",
+    "lastName": "G.",
+    "emails": [
+      {
+        "email": "christian@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Curious Typist",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "133916007",
+    "registeredAt": "2011-08-05T16:05:32.997Z",
+    "topSkills": null,
+    "connectionsCount": 510,
+    "followerCount": 775,
+    "verified": true,
+    "about": "I check LinkedIn messages infrequently, perhaps monthly. If you can, reach out via email or phone instead of via InMail - both remain unchanged for over a decade.\n\nI'm not open to new positions right now, and generally pass on paid consultations, focus groups, financial services, and recruiting pitches. I keep my LinkedIn connections limited to folks I've worked with or know personally, and only make referrals when I can genuinely vouch for someone's work.\n\nThat said I'm always excited to chat about infra, datacenters, or startups in general - and if you're around SF, I'm typically up for a quick coffee constitutional around the city!",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 2,
+            "year": 2025,
+            "day": null
+          },
+          "end": {
+            "month": 2,
+            "year": 2026,
+            "day": null
+          }
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "18797",
+        "companyId": "166586",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/166586/",
+        "schoolName": "University of North Carolina at Charlotte"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": null,
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Curious Typist",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "Hybrid",
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "1 yr 1 mo",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2025,
+          "text": "Feb 2025"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2026,
+          "text": "Feb 2026"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "Hybrid",
+        "companyName": "OpenAI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/11130470/",
+        "companyId": "11130470",
+        "duration": "4 yrs 8 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jul",
+          "year": 2020,
+          "text": "Jul 2020"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2025,
+          "text": "Feb 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_200_200/B56ZT8EYB8HsAI-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=O6RSWlpQ5W4zNCOCTu621qCyTijLuXFJS4pz2_hBQfo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_100_100/B56ZT8EYB8HsAQ-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=y7RA89V9q8GlAjQ1oRU-jf_-n5zlSXRCnykXBIkgHfM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior Software Engineer",
+        "location": "Oakland, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "Hybrid",
+        "companyName": "Even",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Even",
+        "duration": "1 yr 7 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2019,
+          "text": "Jan 2019"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2020,
+          "text": "Jul 2020"
+        }
+      },
+      {
+        "position": "Director Of Engineering",
+        "location": "Charlotte, North Carolina, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Stratifyd",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10813350/",
+        "companyId": "10813350",
+        "duration": "1 yr 1 mo",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "f53d6f2b906520a2126bbc9477474443cbc611ad",
+        "startDate": {
+          "month": "Jan",
+          "year": 2018,
+          "text": "Jan 2018"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2019,
+          "text": "Jan 2019"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFhFbNVMJHiEQ/company-logo_400_400/company-logo_400_400/0/1672777996009/stratifyd_logo?e=1776902400&v=beta&t=vEVx-JbhFLwVm5j0lfFAaWSekaYZWZ34qRVh-Fvh-8g",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFhFbNVMJHiEQ/company-logo_400_400/company-logo_400_400/0/1672777996009/stratifyd_logo?e=1776902400&v=beta&t=vEVx-JbhFLwVm5j0lfFAaWSekaYZWZ34qRVh-Fvh-8g",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFhFbNVMJHiEQ/company-logo_200_200/company-logo_200_200/0/1672777996009/stratifyd_logo?e=1776902400&v=beta&t=oZX43KHiLemcbZ-3hDes3gLuZfQKOlIm5NVJxMaYZtA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFhFbNVMJHiEQ/company-logo_100_100/company-logo_100_100/0/1672777996009/stratifyd_logo?e=1776902400&v=beta&t=PD60cs-JQ2A5F-M29cotaw-J5q7ekEsA2DeYHKryGqM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior Software Engineer",
+        "location": "Charlotte, North Carolina, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Stratifyd",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10813350/",
+        "companyId": "10813350",
+        "duration": "2 yrs 5 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "f53d6f2b906520a2126bbc9477474443cbc611ad",
+        "startDate": {
+          "month": "Aug",
+          "year": 2015,
+          "text": "Aug 2015"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2017,
+          "text": "Dec 2017"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFhFbNVMJHiEQ/company-logo_400_400/company-logo_400_400/0/1672777996009/stratifyd_logo?e=1776902400&v=beta&t=vEVx-JbhFLwVm5j0lfFAaWSekaYZWZ34qRVh-Fvh-8g",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFhFbNVMJHiEQ/company-logo_400_400/company-logo_400_400/0/1672777996009/stratifyd_logo?e=1776902400&v=beta&t=vEVx-JbhFLwVm5j0lfFAaWSekaYZWZ34qRVh-Fvh-8g",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFhFbNVMJHiEQ/company-logo_200_200/company-logo_200_200/0/1672777996009/stratifyd_logo?e=1776902400&v=beta&t=oZX43KHiLemcbZ-3hDes3gLuZfQKOlIm5NVJxMaYZtA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFhFbNVMJHiEQ/company-logo_100_100/company-logo_100_100/0/1672777996009/stratifyd_logo?e=1776902400&v=beta&t=PD60cs-JQ2A5F-M29cotaw-J5q7ekEsA2DeYHKryGqM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer",
+        "location": "Charlotte, North Carolina, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Stratifyd",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10813350/",
+        "companyId": "10813350",
+        "duration": "10 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "f53d6f2b906520a2126bbc9477474443cbc611ad",
+        "startDate": {
+          "month": "Oct",
+          "year": 2014,
+          "text": "Oct 2014"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2015,
+          "text": "Jul 2015"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFhFbNVMJHiEQ/company-logo_400_400/company-logo_400_400/0/1672777996009/stratifyd_logo?e=1776902400&v=beta&t=vEVx-JbhFLwVm5j0lfFAaWSekaYZWZ34qRVh-Fvh-8g",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFhFbNVMJHiEQ/company-logo_400_400/company-logo_400_400/0/1672777996009/stratifyd_logo?e=1776902400&v=beta&t=vEVx-JbhFLwVm5j0lfFAaWSekaYZWZ34qRVh-Fvh-8g",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFhFbNVMJHiEQ/company-logo_200_200/company-logo_200_200/0/1672777996009/stratifyd_logo?e=1776902400&v=beta&t=oZX43KHiLemcbZ-3hDes3gLuZfQKOlIm5NVJxMaYZtA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFhFbNVMJHiEQ/company-logo_100_100/company-logo_100_100/0/1672777996009/stratifyd_logo?e=1776902400&v=beta&t=PD60cs-JQ2A5F-M29cotaw-J5q7ekEsA2DeYHKryGqM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineering Intern",
+        "location": "Charlotte, North Carolina, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "Hybrid",
+        "companyName": "Stratifyd",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10813350/",
+        "companyId": "10813350",
+        "duration": "4 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "f53d6f2b906520a2126bbc9477474443cbc611ad",
+        "startDate": {
+          "month": "Jun",
+          "year": 2014,
+          "text": "Jun 2014"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2014,
+          "text": "Sep 2014"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFhFbNVMJHiEQ/company-logo_400_400/company-logo_400_400/0/1672777996009/stratifyd_logo?e=1776902400&v=beta&t=vEVx-JbhFLwVm5j0lfFAaWSekaYZWZ34qRVh-Fvh-8g",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFhFbNVMJHiEQ/company-logo_400_400/company-logo_400_400/0/1672777996009/stratifyd_logo?e=1776902400&v=beta&t=vEVx-JbhFLwVm5j0lfFAaWSekaYZWZ34qRVh-Fvh-8g",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFhFbNVMJHiEQ/company-logo_200_200/company-logo_200_200/0/1672777996009/stratifyd_logo?e=1776902400&v=beta&t=oZX43KHiLemcbZ-3hDes3gLuZfQKOlIm5NVJxMaYZtA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFhFbNVMJHiEQ/company-logo_100_100/company-logo_100_100/0/1672777996009/stratifyd_logo?e=1776902400&v=beta&t=PD60cs-JQ2A5F-M29cotaw-J5q7ekEsA2DeYHKryGqM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Assistant",
+        "location": "Charlotte, North Carolina, United States",
+        "employmentType": "Part-time",
+        "workplaceType": null,
+        "companyName": "UNC Charlotte",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/unc-charlotte/",
+        "companyId": "166586",
+        "companyUniversalName": "unc-charlotte",
+        "duration": "2 yrs 2 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2013,
+          "text": "May 2013"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2015,
+          "text": "Jun 2015"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQFungcgjUTABw/company-logo_400_400/B56ZeEs4dcGoAY-/0/1750278048123/unc_charlotte_logo?e=1776902400&v=beta&t=tKNgd0ReHPhop3CbQFwCbMWpCf0wgROkCFHzf3s69J4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFungcgjUTABw/company-logo_400_400/B56ZeEs4dcGoAY-/0/1750278048123/unc_charlotte_logo?e=1776902400&v=beta&t=tKNgd0ReHPhop3CbQFwCbMWpCf0wgROkCFHzf3s69J4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFungcgjUTABw/company-logo_200_200/B56ZeEs4dcGoAI-/0/1750278048123/unc_charlotte_logo?e=1776902400&v=beta&t=UEbI6-eRYWzTwq5guoJM8r_oJs6u_Yar1tlEs9HkiQE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFungcgjUTABw/company-logo_100_100/B56ZeEs4dcGoAQ-/0/1750278048123/unc_charlotte_logo?e=1776902400&v=beta&t=uJ1oJJsf5tydc9qLUYXtMzWNh_3wZ0aa3yNELq02DJs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Mathematics and Science Tutor",
+        "location": "Charlotte, North Carolina, United States",
+        "employmentType": "Part-time",
+        "workplaceType": null,
+        "companyName": "Early Bird Learning",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Early+Bird+Learning",
+        "duration": "1 yr",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2013,
+          "text": "Sep 2013"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2014,
+          "text": "Aug 2014"
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "University of North Carolina at Charlotte",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/166586/",
+        "schoolId": "166586",
+        "degree": "Bachelor of Science - BS",
+        "fieldOfStudy": "Mathematics and Computer Science",
+        "skills": [],
+        "insights": "Grade: 3.71",
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQFungcgjUTABw/company-logo_400_400/B56ZeEs4dcGoAY-/0/1750278048123/unc_charlotte_logo?e=1776902400&v=beta&t=tKNgd0ReHPhop3CbQFwCbMWpCf0wgROkCFHzf3s69J4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFungcgjUTABw/company-logo_400_400/B56ZeEs4dcGoAY-/0/1750278048123/unc_charlotte_logo?e=1776902400&v=beta&t=tKNgd0ReHPhop3CbQFwCbMWpCf0wgROkCFHzf3s69J4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFungcgjUTABw/company-logo_200_200/B56ZeEs4dcGoAI-/0/1750278048123/unc_charlotte_logo?e=1776902400&v=beta&t=UEbI6-eRYWzTwq5guoJM8r_oJs6u_Yar1tlEs9HkiQE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFungcgjUTABw/company-logo_100_100/B56ZeEs4dcGoAQ-/0/1750278048123/unc_charlotte_logo?e=1776902400&v=beta&t=uJ1oJJsf5tydc9qLUYXtMzWNh_3wZ0aa3yNELq02DJs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "University of North Carolina at Charlotte",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/166586/",
+        "schoolId": "166586",
+        "degree": "Minor",
+        "fieldOfStudy": "Bioinformatics",
+        "skills": [],
+        "insights": "Grade: 4.00",
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQFungcgjUTABw/company-logo_400_400/B56ZeEs4dcGoAY-/0/1750278048123/unc_charlotte_logo?e=1776902400&v=beta&t=tKNgd0ReHPhop3CbQFwCbMWpCf0wgROkCFHzf3s69J4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFungcgjUTABw/company-logo_400_400/B56ZeEs4dcGoAY-/0/1750278048123/unc_charlotte_logo?e=1776902400&v=beta&t=tKNgd0ReHPhop3CbQFwCbMWpCf0wgROkCFHzf3s69J4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFungcgjUTABw/company-logo_200_200/B56ZeEs4dcGoAI-/0/1750278048123/unc_charlotte_logo?e=1776902400&v=beta&t=UEbI6-eRYWzTwq5guoJM8r_oJs6u_Yar1tlEs9HkiQE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFungcgjUTABw/company-logo_100_100/B56ZeEs4dcGoAQ-/0/1750278048123/unc_charlotte_logo?e=1776902400&v=beta&t=uJ1oJJsf5tydc9qLUYXtMzWNh_3wZ0aa3yNELq02DJs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Python",
+        "assessments": "Passed LinkedIn Skill Assessment",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "PostgreSQL"
+      },
+      {
+        "name": "Linux"
+      },
+      {
+        "name": "Java",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "C++"
+      },
+      {
+        "name": "R",
+        "assessments": "Passed LinkedIn Skill Assessment"
+      },
+      {
+        "name": "MongoDB",
+        "assessments": "Passed LinkedIn Skill Assessment"
+      },
+      {
+        "name": "Github"
+      },
+      {
+        "name": "JSON",
+        "assessments": "Passed LinkedIn Skill Assessment"
+      },
+      {
+        "name": "Git",
+        "assessments": "Passed LinkedIn Skill Assessment"
+      },
+      {
+        "name": "JavaScript"
+      },
+      {
+        "name": "Python (Programming Language)",
+        "assessments": "Passed LinkedIn Skill Assessment"
+      },
+      {
+        "name": "Programming"
+      },
+      {
+        "name": "Go (Golang)"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABgwxtcBfqsJJUHPwsSPuBE4K9oKyRqUp5o",
+        "firstName": "Lia",
+        "lastName": "Guy",
+        "publicIdentifier": "aureliaguy",
+        "linkedinUrl": "https://www.linkedin.com/in/aureliaguy"
+      },
+      {
+        "id": "ACoAAACQBzQB5nk5kOpFWQRtK4pv3RaL5q2G-pA",
+        "firstName": "Jonathan",
+        "lastName": "Lachman",
+        "publicIdentifier": "jonathan-lachman-4981b23",
+        "linkedinUrl": "https://www.linkedin.com/in/jonathan-lachman-4981b23"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAABGzJXcBFaJqVFgqgYNbhaPVKRkP3iG33dA",
+        "firstName": "Noah",
+        "lastName": "Shpak",
+        "publicIdentifier": "nshpak",
+        "linkedinUrl": "https://www.linkedin.com/in/nshpak"
+      },
+      {
+        "id": "ACoAAAJzsfoBp0MxssQYMgmy0ZNO2U3sA58ugwc",
+        "firstName": "Joshua",
+        "lastName": "Gross",
+        "publicIdentifier": "joshgross",
+        "linkedinUrl": "https://www.linkedin.com/in/joshgross"
+      },
+      {
+        "id": "ACoAABYs4-IB5mHx5eVfOHzu1e8xlO3q_kb38IM",
+        "firstName": "Brydon",
+        "lastName": "Eastman",
+        "publicIdentifier": "brydon-eastman-396719a4",
+        "linkedinUrl": "https://www.linkedin.com/in/brydon-eastman-396719a4"
+      },
+      {
+        "id": "ACoAAACo1tYBGy9sT2OWZuEULOMe4K_b2Y22-F8",
+        "firstName": "Alex",
+        "lastName": "Gartrell",
+        "publicIdentifier": "alexgartrell",
+        "linkedinUrl": "https://www.linkedin.com/in/alexgartrell"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAABA0sF8BJqwmfoms3veu9TE72tj8JMUQEFA",
+        "firstName": "Sam",
+        "lastName": "Shleifer",
+        "publicIdentifier": "sam-shleifer-a5307a77",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-shleifer-a5307a77"
+      },
+      {
+        "id": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+        "firstName": "Saurabh",
+        "lastName": "Garg",
+        "publicIdentifier": "saurabh-garg-b680b5b8",
+        "linkedinUrl": "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+      },
+      {
+        "id": "ACoAAABnAccB9h1LTKUrBFif76qxLwe9k7nyE_s",
+        "firstName": "Ian",
+        "lastName": "O'Connell",
+        "publicIdentifier": "ianoc",
+        "linkedinUrl": "https://www.linkedin.com/in/ianoc"
+      },
+      {
+        "id": "ACoAAAl87CYBWKLLyGNTbomy6oqIPv-5n34CXIY",
+        "firstName": "Andrew",
+        "lastName": "Tulloch",
+        "publicIdentifier": "andrew-tulloch-17238745",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-tulloch-17238745"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAABPg53YBHdOvmp7pU72eDhcho-7cnwyxk1o",
+        "firstName": "Pia",
+        "lastName": "Santos",
+        "publicIdentifier": "piafsantos",
+        "linkedinUrl": "https://www.linkedin.com/in/piafsantos"
+      },
+      {
+        "id": "ACoAAAO-j_IBXcvIzhZtQ7QNkky6tlnQTcFl9qI",
+        "firstName": "Myle",
+        "lastName": "Ott",
+        "publicIdentifier": "myleott",
+        "linkedinUrl": "https://www.linkedin.com/in/myleott"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAAAji1bkB1eLX4z2Jb9-N2nMhEGNLWptSnqU",
+        "firstName": "Clare",
+        "lastName": "Birch",
+        "publicIdentifier": "clarebirch42",
+        "linkedinUrl": "https://www.linkedin.com/in/clarebirch42"
+      },
+      {
+        "id": "ACoAAAAdzCEB9t8wLSGcpoQ71RdetK75KW7RgS4",
+        "firstName": "Mark",
+        "lastName": "Jen",
+        "publicIdentifier": "markjen",
+        "linkedinUrl": "https://www.linkedin.com/in/markjen"
+      },
+      {
+        "id": "ACoAAGHdRS0BRxBLzTbAqop2wMAFY5jYGOvHoc0",
+        "firstName": "Asad",
+        "lastName": "Ullah",
+        "position": "UNC Charlotte, USA | PhD Student in Statistics | Graduate Teaching Assistant | Miami University Alum (MS Math) | Sukkur IBA University Alum (BS Math) | R | Python | Biostatistics Research",
+        "publicIdentifier": "asad-ullah-579a48399",
+        "linkedinUrl": "https://www.linkedin.com/in/asad-ullah-579a48399"
+      },
+      {
+        "id": "ACoAAGHDpj0BlnfQNU6jFGQG7QONJRNQQzByyOg",
+        "firstName": "Brooklynn",
+        "lastName": "Botner",
+        "position": "Aspiring Motorsports Professional | University of North Carolina at Charlotte",
+        "publicIdentifier": "brooklynn-n-botner",
+        "linkedinUrl": "https://www.linkedin.com/in/brooklynn-n-botner"
+      },
+      {
+        "id": "ACoAAGQBW4IBxV38BBECXNmPv57GTXrVB_5Qrz4",
+        "firstName": "Caroline",
+        "lastName": "Barnhill",
+        "position": "MSW Student at University of North Carolina at Charlotte",
+        "publicIdentifier": "caroline-barnhill-22aa8b3a9",
+        "linkedinUrl": "https://www.linkedin.com/in/caroline-barnhill-22aa8b3a9"
+      },
+      {
+        "id": "ACoAAGQJ6YIBXrxSPXjuYsWOpPEm4-PGg4ImEY4",
+        "firstName": "Sahithi",
+        "lastName": "Reddy",
+        "position": "IAM Engineer | Access Governance | SSO, MFA | SailPoint & Okta | Security Engineering | Ping | Entra ID",
+        "publicIdentifier": "sahithi-reddy-76a0bb3aa",
+        "linkedinUrl": "https://www.linkedin.com/in/sahithi-reddy-76a0bb3aa"
+      },
+      {
+        "id": "ACoAAGBpWD8BHBZIM2eo1C5EYeGNrzw0wj5C-Ck",
+        "firstName": "Blessing ",
+        "lastName": "Ndon",
+        "position": "BSA Analyst II/ Fraud Specialist",
+        "publicIdentifier": "blessingndon",
+        "linkedinUrl": "https://www.linkedin.com/in/blessingndon"
+      },
+      {
+        "id": "ACoAAGPtDVQB2OfOluwuPPHTafwkcxoc8RlMyX4",
+        "firstName": "Nicole",
+        "lastName": "Sutherland",
+        "position": "HR Coordinator| HR Operations & Recruiting Support| Compliance & Employee Records ",
+        "publicIdentifier": "nicole-sutherland-1045493a9",
+        "linkedinUrl": "https://www.linkedin.com/in/nicole-sutherland-1045493a9"
+      },
+      {
+        "id": "ACoAAGR4z0oBi8VK4n75aGbny9kxctVw8hvauQo",
+        "firstName": "Janie ",
+        "lastName": "Nina",
+        "position": "Senior Cloud Security Engineer | AWS & Azure | Zero Trust | DevSecOps | Kubernetes Security | IaC & Automation | CISSP | CCSP",
+        "publicIdentifier": "janie-ita9",
+        "linkedinUrl": "https://www.linkedin.com/in/janie-ita9"
+      },
+      {
+        "id": "ACoAAGQPTb8BUzBKnPutTYLRfcvMzMUHVpt9FDs",
+        "firstName": "Sarah",
+        "lastName": "Creech",
+        "position": "Major in Professional Studies with a minor in political science ",
+        "publicIdentifier": "sarah-creech-13b2503aa",
+        "linkedinUrl": "https://www.linkedin.com/in/sarah-creech-13b2503aa"
+      },
+      {
+        "id": "ACoAAGQ0FFIBrN3ca_xSpz0V8oLJEZQs6zXVaw8",
+        "firstName": "Mohith",
+        "lastName": "G",
+        "position": "Senior Business Intelligence Developer | PL 300 | DP 900",
+        "publicIdentifier": "mohith-g-a420123ab",
+        "linkedinUrl": "https://www.linkedin.com/in/mohith-g-a420123ab"
+      },
+      {
+        "id": "ACoAAGUHQu0B_6BOS92nQHvaKqcOMf9h7CepI1c",
+        "firstName": "Chiyere",
+        "lastName": "Arinze",
+        "position": "Field Research Coordinator at the Light Institute for Global Health and Transformation",
+        "publicIdentifier": "chiyere-arinze-1797883b3",
+        "linkedinUrl": "https://www.linkedin.com/in/chiyere-arinze-1797883b3"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAAf7ZWcBz0oHcV9mAAReYhcjHKxR-bQrPPU"
+    }
+  }
+}

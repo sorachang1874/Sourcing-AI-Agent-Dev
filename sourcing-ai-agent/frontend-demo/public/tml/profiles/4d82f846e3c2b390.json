@@ -1,0 +1,953 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAA_4_bgBsgJnz_Z6sgtwwrf3PjSyobzgNlE",
+    "profile_url": "https://www.linkedin.com/in/ACwAAA_4_bgBsgJnz_Z6sgtwwrf3PjSyobzgNlE"
+  },
+  "item": {
+    "id": "ACoAAA_4_bgBYB9NTIqXzrC7wV6IBsO8eVjnmR8",
+    "publicIdentifier": "anthony-bertolli-9348b275",
+    "linkedinUrl": "https://www.linkedin.com/in/anthony-bertolli-9348b275",
+    "firstName": "Anthony",
+    "lastName": "Bertolli",
+    "emails": [
+      {
+        "email": "anthony.bertolli@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Operations Team @ Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": true,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "267976120",
+    "registeredAt": "2013-06-28T21:07:11.052Z",
+    "topSkills": null,
+    "connectionsCount": 152,
+    "followerCount": 153,
+    "verified": false,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 3,
+            "year": 2026,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "17942",
+        "companyId": "2842",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2842/",
+        "schoolName": "University of California, Davis"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5603AQFAPZ7XU1UhYA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1719250756820?e=1776902400&v=beta&t=sU8OVxLPw-roWu4mLevx9yyABnHsGs9KzH4hQXIHrkw",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQFAPZ7XU1UhYA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1719250756820?e=1776902400&v=beta&t=sU8OVxLPw-roWu4mLevx9yyABnHsGs9KzH4hQXIHrkw",
+          "width": 788,
+          "height": 788,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQFAPZ7XU1UhYA/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1719250756810?e=1776902400&v=beta&t=K3XWUe_BxhsMCgIgwWESAD1FJHlj6tzo336G4O3psgE",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQFAPZ7XU1UhYA/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1719250756810?e=1776902400&v=beta&t=XcWyP9HoKx5JSy51CcajQ4Xe0d_mBuULvFpxplnQxxk",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQFAPZ7XU1UhYA/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1719250756810?e=1776902400&v=beta&t=VfcfZMpwwhgzR_4QpYtC2HD05ixccVL8tn79elFMXNU",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D5603AQFAPZ7XU1UhYA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1719250756820?e=1776902400&v=beta&t=sU8OVxLPw-roWu4mLevx9yyABnHsGs9KzH4hQXIHrkw",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Operations Team @ Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Operations Staff",
+        "location": "San Francisco Bay Area",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "2 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2026,
+          "text": "Mar 2026"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Ecommerce Manager",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Quince & Co",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/76174011/",
+        "companyId": "76174011",
+        "duration": "1 yr",
+        "description": "Manage vendor partnerships, product strategy, and fulfillment for Quince & Co’s digital retail operations.\nOversee sourcing, packaging, inventory, and logistics workflows.\nDevelop all creative and operational collateral for product launches and collaborations with small producers and artisans.",
+        "skills": [
+          "Digital Strategy",
+          "Operations Management",
+          "E-commerce Optimization"
+        ],
+        "experienceGroupId": "e25c6dd229022889acc050b49ed2f56bf55d5506",
+        "startDate": {
+          "month": "Apr",
+          "year": 2025,
+          "text": "Apr 2025"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2026,
+          "text": "Mar 2026"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHI61-7YfVyqw/company-logo_400_400/company-logo_400_400/0/1729295722854/quinceco_logo?e=1776902400&v=beta&t=iq4gaOtxEiUe_qpLlmgZTlCVLhHKvWgzH5wieqZHL3g",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHI61-7YfVyqw/company-logo_400_400/company-logo_400_400/0/1729295722854/quinceco_logo?e=1776902400&v=beta&t=iq4gaOtxEiUe_qpLlmgZTlCVLhHKvWgzH5wieqZHL3g",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHI61-7YfVyqw/company-logo_200_200/company-logo_200_200/0/1729295722854/quinceco_logo?e=1776902400&v=beta&t=ryGmFB9nU4appVIVXBkw6jg_NJrls71TwTwh-Cjmqas",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHI61-7YfVyqw/company-logo_100_100/company-logo_100_100/0/1729295722854/quinceco_logo?e=1776902400&v=beta&t=hPFNLgPgT4VNhtYGsDJXolMtUdmWrXzStU5IVh0iP4I",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Feed the Future | Creative Strategy & Partnerships",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Quince & Co",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/76174011/",
+        "companyId": "76174011",
+        "duration": "1 yr 8 mos",
+        "description": "Feed the Future\n(501c3 Affiliate of Quince & Co)\nLead creative strategy, partnerships, and communications for Feed the Future, a nonprofit founded by Lindsay & Michael Tusk to connect chefs, farmers, and educators in advancing regenerative agriculture.\n\nOversee brand storytelling, early stage board development, and donor engagement.\nManage editorial, media, and event initiatives that amplify impact and grow reach.\nDevelop content, campaigns, and partnerships that strengthen visibility, fundraising, and mission alignment across California and beyond.",
+        "skills": [
+          "Nonprofit Organizations",
+          "Marketing Strategy",
+          "Nonprofit Board Development",
+          "Fundraising Campaign Management"
+        ],
+        "experienceGroupId": "e25c6dd229022889acc050b49ed2f56bf55d5506",
+        "startDate": {
+          "month": "Aug",
+          "year": 2024,
+          "text": "Aug 2024"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2026,
+          "text": "Mar 2026"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHI61-7YfVyqw/company-logo_400_400/company-logo_400_400/0/1729295722854/quinceco_logo?e=1776902400&v=beta&t=iq4gaOtxEiUe_qpLlmgZTlCVLhHKvWgzH5wieqZHL3g",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHI61-7YfVyqw/company-logo_400_400/company-logo_400_400/0/1729295722854/quinceco_logo?e=1776902400&v=beta&t=iq4gaOtxEiUe_qpLlmgZTlCVLhHKvWgzH5wieqZHL3g",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHI61-7YfVyqw/company-logo_200_200/company-logo_200_200/0/1729295722854/quinceco_logo?e=1776902400&v=beta&t=ryGmFB9nU4appVIVXBkw6jg_NJrls71TwTwh-Cjmqas",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHI61-7YfVyqw/company-logo_100_100/company-logo_100_100/0/1729295722854/quinceco_logo?e=1776902400&v=beta&t=hPFNLgPgT4VNhtYGsDJXolMtUdmWrXzStU5IVh0iP4I",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Executive Assistant",
+        "location": "San Francisco, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Quince & Co",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/76174011/",
+        "companyId": "76174011",
+        "duration": "1 yr 10 mos",
+        "description": "Operations & Executive Support\nManage complex travel, event planning, and executive scheduling for Chef Michael Tusk and the leadership team.\nCoordinate international culinary collaborations and partnerships.\nOversee confidential communications, logistics, and multi-brand coordination across Quince, Cotogna, and Verjus.\n\nSustainability & Sourcing\nIntegrate regenerative agriculture and sourcing initiatives via our non-profit, Feed the Future.\nConduct sustainability audits across properties to ensure compliance with environmental and industry-leading standards.\nManage ingredient traceability programs and partnerships with small producers to align purchasing with regenerative values.\n\nCreative & Design Direction\nCollaborate on branding, event design, and creative collateral across Quince, Cotogna, and Verjus.\nManage external artisan partnerships, design assets, and visual storytelling projects.",
+        "skills": [
+          "Operations Management",
+          "Administration",
+          "Organizational Leadership"
+        ],
+        "experienceGroupId": "e25c6dd229022889acc050b49ed2f56bf55d5506",
+        "startDate": {
+          "month": "Jun",
+          "year": 2024,
+          "text": "Jun 2024"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2026,
+          "text": "Mar 2026"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHI61-7YfVyqw/company-logo_400_400/company-logo_400_400/0/1729295722854/quinceco_logo?e=1776902400&v=beta&t=iq4gaOtxEiUe_qpLlmgZTlCVLhHKvWgzH5wieqZHL3g",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHI61-7YfVyqw/company-logo_400_400/company-logo_400_400/0/1729295722854/quinceco_logo?e=1776902400&v=beta&t=iq4gaOtxEiUe_qpLlmgZTlCVLhHKvWgzH5wieqZHL3g",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHI61-7YfVyqw/company-logo_200_200/company-logo_200_200/0/1729295722854/quinceco_logo?e=1776902400&v=beta&t=ryGmFB9nU4appVIVXBkw6jg_NJrls71TwTwh-Cjmqas",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHI61-7YfVyqw/company-logo_100_100/company-logo_100_100/0/1729295722854/quinceco_logo?e=1776902400&v=beta&t=hPFNLgPgT4VNhtYGsDJXolMtUdmWrXzStU5IVh0iP4I",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Private Events Assistant",
+        "location": "San Francisco Bay Area",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Quince & Co",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/76174011/",
+        "companyId": "76174011",
+        "duration": "5 mos",
+        "description": null,
+        "skills": [
+          "Administrative Assistance",
+          "Private Events",
+          "Event Sales",
+          "Event Planning",
+          "Event Management"
+        ],
+        "experienceGroupId": "e25c6dd229022889acc050b49ed2f56bf55d5506",
+        "startDate": {
+          "month": "Feb",
+          "year": 2024,
+          "text": "Feb 2024"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2024,
+          "text": "Jun 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHI61-7YfVyqw/company-logo_400_400/company-logo_400_400/0/1729295722854/quinceco_logo?e=1776902400&v=beta&t=iq4gaOtxEiUe_qpLlmgZTlCVLhHKvWgzH5wieqZHL3g",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHI61-7YfVyqw/company-logo_400_400/company-logo_400_400/0/1729295722854/quinceco_logo?e=1776902400&v=beta&t=iq4gaOtxEiUe_qpLlmgZTlCVLhHKvWgzH5wieqZHL3g",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHI61-7YfVyqw/company-logo_200_200/company-logo_200_200/0/1729295722854/quinceco_logo?e=1776902400&v=beta&t=ryGmFB9nU4appVIVXBkw6jg_NJrls71TwTwh-Cjmqas",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHI61-7YfVyqw/company-logo_100_100/company-logo_100_100/0/1729295722854/quinceco_logo?e=1776902400&v=beta&t=hPFNLgPgT4VNhtYGsDJXolMtUdmWrXzStU5IVh0iP4I",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Marketing Content Creator and Strategist",
+        "location": "Berkeley, California, United States",
+        "employmentType": "Part-time",
+        "workplaceType": "Hybrid",
+        "companyName": "If So, How?",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/18035053/",
+        "companyId": "18035053",
+        "duration": "2 yrs 2 mos",
+        "description": "Collaborated with marketing team to develop brand marketing strategy. \n\nProduced marketing materials for social media and internal brand use.",
+        "skills": [
+          "Digital Photography",
+          "Media Production",
+          "Videography"
+        ],
+        "startDate": {
+          "month": "Aug",
+          "year": 2022,
+          "text": "Aug 2022"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2024,
+          "text": "Sep 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFd59alBawemA/company-logo_400_400/company-logo_400_400/0/1631349398972?e=1776902400&v=beta&t=19K_N8eB6XL2XlF1DxgYTqZxGHpo80oFezTwQ83D5Vc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFd59alBawemA/company-logo_400_400/company-logo_400_400/0/1631349398972?e=1776902400&v=beta&t=19K_N8eB6XL2XlF1DxgYTqZxGHpo80oFezTwQ83D5Vc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFd59alBawemA/company-logo_200_200/company-logo_200_200/0/1631349398972?e=1776902400&v=beta&t=Cx-Dekw8V-Y9igtFW5Gthd2hEr4gQtMrlThtfQ86awM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFd59alBawemA/company-logo_100_100/company-logo_100_100/0/1631349398972?e=1776902400&v=beta&t=1axbJ-I5vKJPtEqBlYg76-Yntj9OGZypgjVy1ZNzCEw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Editor and Administrator ",
+        "location": "Berkeley, California, United States",
+        "employmentType": "Self-employed",
+        "workplaceType": null,
+        "companyName": "Notice! Newsletter",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Notice%21+Newsletter",
+        "duration": "2 yrs 6 mos",
+        "description": "Researched, wrote, and edited The Notice!—a food and culture newsletter centered on engaging the senses and cultivating intuition in the kitchen.\n\nDeveloped essays and features that explored the art of cooking as sensory practice and creative expression.\nOversaw tone, content flow, and production to create a cohesive reader experience.\nPhotographed and processed digital media and collateral for promotion",
+        "skills": [
+          "Digital Photography",
+          "Administration",
+          "Social Media",
+          "Copy Editing",
+          "Marketing"
+        ],
+        "startDate": {
+          "month": "Apr",
+          "year": 2022,
+          "text": "Apr 2022"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2024,
+          "text": "Sep 2024"
+        }
+      },
+      {
+        "position": "Climate-smart Gardening Project Manager",
+        "location": "Davis, California, United States",
+        "employmentType": "Internship",
+        "workplaceType": "Hybrid",
+        "companyName": "UCANR",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/2585987/",
+        "companyId": "2585987",
+        "duration": "7 mos",
+        "description": "Produced a qualtrics survey to assess educational needs of Master Gardeners statewide. \n\nDeveloped a training course for the Master Gardener program in climate smart gardening. \n\nCreated educational materials destined for social media/organization use.\n\nOrganized and presented findings and reccomendations to key stakeholders at UC ANR",
+        "skills": [
+          "Adult Education",
+          "Qualtrics",
+          "Project Management",
+          "Research Skills",
+          "Data Analysis"
+        ],
+        "startDate": {
+          "month": "Jan",
+          "year": 2023,
+          "text": "Jan 2023"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2023,
+          "text": "Jul 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHyNLeA6VUZpQ/company-logo_400_400/company-logo_400_400/0/1630668083020/ucanr_logo?e=1776902400&v=beta&t=kcWnESP57o48YdywgpQu3zkE_4v3wC9qYbh6F5TS87c",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHyNLeA6VUZpQ/company-logo_400_400/company-logo_400_400/0/1630668083020/ucanr_logo?e=1776902400&v=beta&t=kcWnESP57o48YdywgpQu3zkE_4v3wC9qYbh6F5TS87c",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHyNLeA6VUZpQ/company-logo_200_200/company-logo_200_200/0/1630668083020/ucanr_logo?e=1776902400&v=beta&t=7qnBkfdWQlDaGO7BAqkLmT_Vr2eJOlFk_NPnWgkfMvw",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHyNLeA6VUZpQ/company-logo_100_100/company-logo_100_100/0/1630668083020/ucanr_logo?e=1776902400&v=beta&t=k5ppUFlBULc5NnOVDuWPrSHea-_DF0jTLkhKrDJB-eg",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "University of California, Davis",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2842/",
+        "schoolId": "2842",
+        "degree": "Bachelor of Science - BS",
+        "fieldOfStudy": "Sustainable Agriculture and Food Systems",
+        "skills": [],
+        "insights": "Activities and societies: Departmental Citation for senior thesis research and collaboration with UC ANR - Awarded by the U.C. Davis Department of Land, Air & Water Resources\n\nCitation for Outstanding Performance in recognition of outstanding undergraduate accomplishments - Awarded by U.C. Davis Sustainable Agriculture & Food Systems program\n\nPresident - UC Davis Cycling Race Team & Club",
+        "startDate": null,
+        "endDate": {
+          "month": "Mar",
+          "year": 2024,
+          "text": "Mar 2024"
+        },
+        "period": "Mar 2024",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQEoGOIHB7x65w/company-logo_400_400/B56ZnoqcQMKMAg-/0/1760545064338/uc_davis_logo?e=1776902400&v=beta&t=2u9O9kgIkxBs30NVwOr2pqQP3CZvonu-hX1jAUdLaLw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEoGOIHB7x65w/company-logo_400_400/B56ZnoqcQMKMAg-/0/1760545064338/uc_davis_logo?e=1776902400&v=beta&t=2u9O9kgIkxBs30NVwOr2pqQP3CZvonu-hX1jAUdLaLw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEoGOIHB7x65w/company-logo_200_200/B56ZnoqcQMKMAQ-/0/1760545064338/uc_davis_logo?e=1776902400&v=beta&t=uN3ELIn9JhakR8GGW_kyBGYrcFyzoqlOxJfZzyPTutE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEoGOIHB7x65w/company-logo_100_100/B56ZnoqcQMKMAY-/0/1760545064338/uc_davis_logo?e=1776902400&v=beta&t=1VWIeWOpL-MkpL2U6aohN-Rnjix4cglWjM98gATN4Ps",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Berkeley High School",
+        "schoolLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Berkeley+High+School",
+        "schoolId": null,
+        "degree": null,
+        "fieldOfStudy": null,
+        "skills": [],
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": null
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "PowerPoint",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Microsoft Word",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Microsoft Excel",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Administrative Assistance",
+        "positions": [
+          "Private Events Assistant at Quince & Co"
+        ],
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Private Events",
+        "positions": [
+          "Private Events Assistant at Quince & Co"
+        ],
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Event Sales",
+        "positions": [
+          "Private Events Assistant at Quince & Co"
+        ]
+      },
+      {
+        "name": "Event Planning",
+        "positions": [
+          "Private Events Assistant at Quince & Co"
+        ]
+      },
+      {
+        "name": "Event Management",
+        "positions": [
+          "Private Events Assistant at Quince & Co"
+        ]
+      },
+      {
+        "name": "Marketing Strategy",
+        "positions": [
+          "Feed the Future | Creative Strategy & Partnerships at Quince & Co"
+        ]
+      },
+      {
+        "name": "Nonprofit Board Development",
+        "positions": [
+          "Feed the Future | Creative Strategy & Partnerships at Quince & Co"
+        ]
+      },
+      {
+        "name": "Fundraising Campaign Management",
+        "positions": [
+          "Feed the Future | Creative Strategy & Partnerships at Quince & Co"
+        ]
+      },
+      {
+        "name": "Organizational Leadership",
+        "positions": [
+          "Executive Assistant at Quince & Co"
+        ]
+      },
+      {
+        "name": "Digital Strategy",
+        "positions": [
+          "Ecommerce Manager at Quince & Co"
+        ]
+      },
+      {
+        "name": "Nonprofit Organizations",
+        "positions": [
+          "Feed the Future | Creative Strategy & Partnerships at Quince & Co"
+        ]
+      },
+      {
+        "name": "Operations Management",
+        "positions": [
+          "2 experiences at Quince & Co"
+        ]
+      },
+      {
+        "name": "E-commerce Optimization",
+        "positions": [
+          "Ecommerce Manager at Quince & Co"
+        ]
+      },
+      {
+        "name": "Media Production",
+        "positions": [
+          "Marketing Content Creator and Strategist at If So, How?"
+        ]
+      },
+      {
+        "name": "Videography",
+        "positions": [
+          "Marketing Content Creator and Strategist at If So, How?"
+        ]
+      },
+      {
+        "name": "Project Management",
+        "positions": [
+          "Climate-smart Gardening Project Manager at UCANR"
+        ]
+      },
+      {
+        "name": "Adult Education",
+        "positions": [
+          "Climate-smart Gardening Project Manager at UCANR"
+        ]
+      },
+      {
+        "name": "Research Skills",
+        "positions": [
+          "Climate-smart Gardening Project Manager at UCANR"
+        ]
+      },
+      {
+        "name": "Qualtrics",
+        "positions": [
+          "Climate-smart Gardening Project Manager at UCANR"
+        ]
+      },
+      {
+        "name": "Data Analysis",
+        "positions": [
+          "Climate-smart Gardening Project Manager at UCANR"
+        ]
+      },
+      {
+        "name": "Digital Photography",
+        "positions": [
+          "2 experiences across If So, How? and 1 other company"
+        ]
+      },
+      {
+        "name": "Copy Editing"
+      },
+      {
+        "name": "Administration",
+        "positions": [
+          "2 experiences across Quince & Co and 1 other company"
+        ]
+      },
+      {
+        "name": "Marketing"
+      },
+      {
+        "name": "Social Media"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "PREMIUM_INMAIL",
+    "moreProfiles": [
+      {
+        "id": "ACoAACPlF_sB3XJxnKkmTFzJzRm-HsM2rkgvV7I",
+        "firstName": "Daniel",
+        "lastName": "Page",
+        "publicIdentifier": "daniel-page-a77820149",
+        "linkedinUrl": "https://www.linkedin.com/in/daniel-page-a77820149"
+      },
+      {
+        "id": "ACoAAFPFkLcBGjqE8FdG-24Yt2X0z6iwCPAJLNA",
+        "firstName": "Jacki",
+        "lastName": "L.",
+        "publicIdentifier": "jackimlb",
+        "linkedinUrl": "https://www.linkedin.com/in/jackimlb"
+      },
+      {
+        "id": "ACoAACRdRT8BXRjcrmMRRdzOLwQ7cttafTBXMII",
+        "firstName": "Katie",
+        "lastName": "S.",
+        "publicIdentifier": "katie-s-85339a150",
+        "linkedinUrl": "https://www.linkedin.com/in/katie-s-85339a150"
+      },
+      {
+        "id": "ACoAABvvBCkB3elJx_L286Ui5pse_lA9Vy1tYwQ",
+        "firstName": "Lissa",
+        "lastName": "Arnold",
+        "publicIdentifier": "lissaarnold",
+        "linkedinUrl": "https://www.linkedin.com/in/lissaarnold"
+      },
+      {
+        "id": "ACoAADDm0DABTmGytEYdx2_aX-43Tx22FDuRyAo",
+        "firstName": "Chase",
+        "lastName": "Sutton",
+        "publicIdentifier": "cbsutton10",
+        "linkedinUrl": "https://www.linkedin.com/in/cbsutton10"
+      },
+      {
+        "id": "ACoAABD07aQBqkUgssebt-Lnm6787CN2rpjc-CE",
+        "firstName": "Cari",
+        "lastName": "Wellstone",
+        "publicIdentifier": "carihannahwellstone",
+        "linkedinUrl": "https://www.linkedin.com/in/carihannahwellstone"
+      },
+      {
+        "id": "ACoAAE_kvlgB2rLh3rypIIYxGNQSifs0aAAhQrw",
+        "firstName": "Amanda",
+        "lastName": "Gallagher",
+        "publicIdentifier": "amanda-gallagherxxx",
+        "linkedinUrl": "https://www.linkedin.com/in/amanda-gallagherxxx"
+      },
+      {
+        "id": "ACoAAA-OjyIB0UhdaS4-ERQ2zgScDVhFVnyam4A",
+        "firstName": "Max",
+        "lastName": "Caspescha",
+        "publicIdentifier": "max-cas",
+        "linkedinUrl": "https://www.linkedin.com/in/max-cas"
+      },
+      {
+        "id": "ACoAAD46ovQBHWlnwJJfeqETMS-shIjaDRgWAlM",
+        "firstName": "Danielle",
+        "lastName": "Lord",
+        "publicIdentifier": "danielle-lord-184788251",
+        "linkedinUrl": "https://www.linkedin.com/in/danielle-lord-184788251"
+      },
+      {
+        "id": "ACoAAD3viM8Bvg0n59oqd79WW5H1ZwCxPmSsJRQ",
+        "firstName": "Allyson",
+        "lastName": "Thom",
+        "publicIdentifier": "allyson-thom-9a7bb324b",
+        "linkedinUrl": "https://www.linkedin.com/in/allyson-thom-9a7bb324b"
+      },
+      {
+        "id": "ACoAAAQi7BMBxfp80BHRjbKTvRZ3YqSInWWMQWQ",
+        "firstName": "Michael",
+        "lastName": "Tusk",
+        "publicIdentifier": "michael-tusk-72b2a81b",
+        "linkedinUrl": "https://www.linkedin.com/in/michael-tusk-72b2a81b"
+      },
+      {
+        "id": "ACoAADwrCKUB0FU7B3O7AIg9j_wieI-QOvJrtEE",
+        "firstName": "Katy",
+        "lastName": "Liemandt",
+        "publicIdentifier": "katy-liemandt-399092242",
+        "linkedinUrl": "https://www.linkedin.com/in/katy-liemandt-399092242"
+      },
+      {
+        "id": "ACoAAFUyeY8BJ60mkW8CPyxjl_lz5CxbLXnZUx8",
+        "firstName": "Charlie",
+        "lastName": "Cui",
+        "publicIdentifier": "charliecui01",
+        "linkedinUrl": "https://www.linkedin.com/in/charliecui01"
+      },
+      {
+        "id": "ACoAADlYFrEBTye35tsKnr7Tm1AFA4p4aup7q3w",
+        "firstName": "Jackson",
+        "lastName": "Bigelow",
+        "publicIdentifier": "jacksonbigelow",
+        "linkedinUrl": "https://www.linkedin.com/in/jacksonbigelow"
+      },
+      {
+        "id": "ACoAACwaf8oBmq7ovPaA66QgewoEhdfxH5xTMBo",
+        "firstName": "Sean",
+        "lastName": "Ferry",
+        "publicIdentifier": "sean-ferry-776976187",
+        "linkedinUrl": "https://www.linkedin.com/in/sean-ferry-776976187"
+      },
+      {
+        "id": "ACoAAD-R0fkBaH8-bAjE7GM67YQUpEtcdK4WWkI",
+        "firstName": "Leif",
+        "lastName": "Hedendal",
+        "publicIdentifier": "hedendal",
+        "linkedinUrl": "https://www.linkedin.com/in/hedendal"
+      },
+      {
+        "id": "ACoAADNFMuABp-BJT-Oi1tmx1mEY9eQ755KcCeI",
+        "firstName": "Sydney",
+        "lastName": "Niiyama",
+        "publicIdentifier": "sydney-niiyama-3940a1200",
+        "linkedinUrl": "https://www.linkedin.com/in/sydney-niiyama-3940a1200"
+      },
+      {
+        "id": "ACoAABPpADsBhb_MGVcTP5x2u4gutHedVOJcpm0",
+        "firstName": "Jason",
+        "lastName": "Conlow",
+        "publicIdentifier": "jasonconlow",
+        "linkedinUrl": "https://www.linkedin.com/in/jasonconlow"
+      },
+      {
+        "id": "ACoAAAIfBP0BO__dqt1kuWtBrVQffKOfkNpgak8",
+        "firstName": "Kaitlin",
+        "lastName": "Fischer",
+        "publicIdentifier": "kaitlin-fischer-625b02b",
+        "linkedinUrl": "https://www.linkedin.com/in/kaitlin-fischer-625b02b"
+      },
+      {
+        "id": "ACoAAAUNyPYBdmsFlBJnJ0Dm7MUeq7uE8Apv0_4",
+        "firstName": "Sarah",
+        "lastName": "Podar",
+        "publicIdentifier": "sarahpodar",
+        "linkedinUrl": "https://www.linkedin.com/in/sarahpodar"
+      },
+      {
+        "id": "ACoAAF8a-tgBsWqvtTuM92mboyLWNKtBoUa9tIU",
+        "firstName": "Liyan",
+        "lastName": "Chen",
+        "position": "--",
+        "publicIdentifier": "liyan-chen-908445386",
+        "linkedinUrl": "https://www.linkedin.com/in/liyan-chen-908445386"
+      },
+      {
+        "id": "ACoAABGaEy8Bu1ycKB5WUvyRc69OERCzymW7mxY",
+        "firstName": "Jamie",
+        "lastName": "Cahill",
+        "position": "Member of Technical Staff @ Thinking Machines, Ex-Meta",
+        "publicIdentifier": "james-cahill-093a9582",
+        "linkedinUrl": "https://www.linkedin.com/in/james-cahill-093a9582"
+      },
+      {
+        "id": "ACoAAGKDsJgBWsokuuSZfKWRPVa7hBXeQTfrA0Q",
+        "firstName": "Nourhan",
+        "lastName": "Hany",
+        "position": "‏Freelance Graphic Designer‏ في ‏Freelancer.com‏",
+        "publicIdentifier": "nourhan-hany-1086283a1",
+        "linkedinUrl": "https://www.linkedin.com/in/nourhan-hany-1086283a1"
+      },
+      {
+        "id": "ACoAAGDWIksBlJBQ6yLB1D8aji0XfjRiW84siqc",
+        "firstName": "Akinbola",
+        "lastName": "Lateef",
+        "position": "Thinker  at Thinking Machines Lab",
+        "publicIdentifier": "akinbola-lateef-94b110394",
+        "linkedinUrl": "https://www.linkedin.com/in/akinbola-lateef-94b110394"
+      },
+      {
+        "id": "ACoAADopuTsBh9lDxOJzJsV8jI_KfOrsc6Tu7aQ",
+        "firstName": "Aashitosh",
+        "lastName": "Swami",
+        "position": "Lab assistant",
+        "publicIdentifier": "aashitosh-swami-67796a232",
+        "linkedinUrl": "https://www.linkedin.com/in/aashitosh-swami-67796a232"
+      },
+      {
+        "id": "ACoAACA8zv0BTVWLSUHsPJrWsUI10jzn0F57pHo",
+        "firstName": "Damir",
+        "lastName": "Sartayev",
+        "position": "AI CTO & Founder | MY project LNN+LLM+QML=AGI | Quantum, Neuro-symbolic AI | Liquid Neural Networks | RWKV | Mamba(SSM)  | Pharmacy AI, Minerals AI | Full‑Stack AI (LLMs, Agents, Fine‑Tuning, RAG, Vision) | Q-Day Q-ark",
+        "publicIdentifier": "damir-q-day-q-ark",
+        "linkedinUrl": "https://www.linkedin.com/in/damir-q-day-q-ark"
+      },
+      {
+        "id": "ACoAAGQmJecBBj5BzIeaidgEvD9pNT8ekbyvAA8",
+        "firstName": "Micky",
+        "lastName": "Mnaree",
+        "position": "Engineer at Thinking Machines Lab",
+        "publicIdentifier": "micky-mnaree-6078523aa",
+        "linkedinUrl": "https://www.linkedin.com/in/micky-mnaree-6078523aa"
+      },
+      {
+        "id": "ACoAAFUBvsYBMskyWP5r-Lf7ZUccZSuFy2nCqkA",
+        "firstName": "Ankit",
+        "lastName": "Baghel",
+        "position": "--DMLT lab technician\nb.sc chemistry chemical industry lab",
+        "publicIdentifier": "ankit-baghel-40675a339",
+        "linkedinUrl": "https://www.linkedin.com/in/ankit-baghel-40675a339"
+      },
+      {
+        "id": "ACoAAFrO2hYBQn9I3leFzBjeUmgehOiK_AGSCr8",
+        "firstName": "Muhammad",
+        "lastName": "Adam Usman",
+        "position": "Electrician at Thinking Machines Lab",
+        "publicIdentifier": "muhammad-adam-usman-472276366",
+        "linkedinUrl": "https://www.linkedin.com/in/muhammad-adam-usman-472276366"
+      },
+      {
+        "id": "ACoAAEWISqkBsSmXKPSyJai6rQwhRBUoHgtqFBA",
+        "firstName": "Feng",
+        "lastName": "Yao",
+        "position": "PhD student at UCSD.",
+        "publicIdentifier": "feng-yao-661818286",
+        "linkedinUrl": "https://www.linkedin.com/in/feng-yao-661818286"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAA_4_bgBsgJnz_Z6sgtwwrf3PjSyobzgNlE"
+    }
+  }
+}

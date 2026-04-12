@@ -1,0 +1,583 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAAO-j_IB8fCWI2zNtM-gjYfdHVyJR8f2WCg",
+    "profile_url": "https://www.linkedin.com/in/ACwAAAO-j_IB8fCWI2zNtM-gjYfdHVyJR8f2WCg"
+  },
+  "item": {
+    "id": "ACoAAAO-j_IBXcvIzhZtQ7QNkky6tlnQTcFl9qI",
+    "publicIdentifier": "myleott",
+    "linkedinUrl": "https://www.linkedin.com/in/myleott",
+    "firstName": "Myle",
+    "lastName": "Ott",
+    "emails": [
+      {
+        "email": "myle.ott@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "ML infra at Thinking Machines",
+    "openToWork": false,
+    "hiring": false,
+    "premium": true,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "New York, New York, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "New York City, NY, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "New York",
+        "city": "New York City"
+      }
+    },
+    "objectUrn": "62820338",
+    "registeredAt": "2010-01-05T10:04:28.220Z",
+    "topSkills": null,
+    "connectionsCount": 1052,
+    "followerCount": 1700,
+    "verified": false,
+    "about": "ML infra at Thinking Machines Lab. Previously founding researcher at Character.AI. Led early LLMs at Meta AI including FSDP, OPT, RoBERTa and fairseq.",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 12,
+            "year": 2024,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "18946",
+        "companyId": "3523",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3523/",
+        "schoolName": "Cornell University"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/C4E03AQGOP9TqDG0bOg/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1576887878636?e=1776902400&v=beta&t=rxP8AV7BN0NUAsf-owRj9KHbzr42c19dL-UF-31xVXU",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4E03AQGOP9TqDG0bOg/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1576887878636?e=1776902400&v=beta&t=rxP8AV7BN0NUAsf-owRj9KHbzr42c19dL-UF-31xVXU",
+          "width": 300,
+          "height": 300,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4E03AQGOP9TqDG0bOg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1576887878669?e=1776902400&v=beta&t=I-bpD_F2aJQTeb_KLINbKiYZUNK5x-eEzNJbtxWbJ30",
+          "width": 300,
+          "height": 300,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4E03AQGOP9TqDG0bOg/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1576887878573?e=1776902400&v=beta&t=-HiJGV1RoJZFPbZLXE3A5wKt7NtM_ZwVOzopg30haXc",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4E03AQGOP9TqDG0bOg/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1576887878603?e=1776902400&v=beta&t=fUMdW9ffzsN2ptkJiyijeu9N24HBYQrB3NA7ohJrCLo",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/C4E03AQGOP9TqDG0bOg/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1576887878636?e=1776902400&v=beta&t=rxP8AV7BN0NUAsf-owRj9KHbzr42c19dL-UF-31xVXU",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "ML infra at Thinking Machines",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "1 yr 5 mos",
+        "description": "ML infra",
+        "skills": null,
+        "startDate": {
+          "month": "Dec",
+          "year": 2024,
+          "text": "Dec 2024"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Distinguished Research Scientist",
+        "location": "New York, New York, United States",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Google DeepMind",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1594050/",
+        "companyId": "1594050",
+        "duration": "5 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Aug",
+          "year": 2024,
+          "text": "Aug 2024"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2024,
+          "text": "Dec 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_400_400/company-logo_400_400/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=r_t5nQiM8A2L0aUP5m-PXCGPiKrvOklfisLwUFyoqwc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_400_400/company-logo_400_400/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=r_t5nQiM8A2L0aUP5m-PXCGPiKrvOklfisLwUFyoqwc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_200_200/company-logo_200_200/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=2BilPPrSvxkF02b9uz-N6ccku99E3v2Y8bAOBExGcFA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_100_100/company-logo_100_100/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=TS688J1rsD8hLhjNZfNOSDSKLf9q38j5d5Qgo7HUC_0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Founding Researcher",
+        "location": "New York, New York, United States",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Character.AI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/89486558/",
+        "companyId": "89486558",
+        "duration": "2 yrs 8 mos",
+        "description": "Led ML engineering and infrastructure.",
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2022,
+          "text": "Jan 2022"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2024,
+          "text": "Aug 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGNjbHSXwgRxA/company-logo_400_400/B56ZkQoTyrG0AY-/0/1756920626627/character_ai_logo?e=1776902400&v=beta&t=iIjQFZ2p-mxKhZ5rdC-PmhG_N1FxyZZ-zhCc61gsMt4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGNjbHSXwgRxA/company-logo_400_400/B56ZkQoTyrG0AY-/0/1756920626627/character_ai_logo?e=1776902400&v=beta&t=iIjQFZ2p-mxKhZ5rdC-PmhG_N1FxyZZ-zhCc61gsMt4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGNjbHSXwgRxA/company-logo_200_200/B56ZkQoTyrG0AI-/0/1756920626627/character_ai_logo?e=1776902400&v=beta&t=ktdgZyhXyFclt7dry6ukj1GvX5WbOFbqWa9ONRs2dlE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGNjbHSXwgRxA/company-logo_100_100/B56ZkQoTyrG0AQ-/0/1756920626627/character_ai_logo?e=1776902400&v=beta&t=S7cBW5d-I9ubNwlka8z5Abge45lXx9yYBgRdE6pgd0M",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Principal Research Engineer",
+        "location": "New York, New York, United States",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "8 yrs",
+        "description": "Research on large-scale LLMs. Authored Fully Sharded Data Parallel (FSDP), fairseq, OPT 175B, RoBERTa.",
+        "skills": null,
+        "startDate": {
+          "year": 2013,
+          "text": "2013"
+        },
+        "endDate": {
+          "year": 2021,
+          "text": "2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "PhD, Natural Language Processing",
+        "location": "Ithaca, NY",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Cornell University",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/cornell-university/",
+        "companyId": "3523",
+        "companyUniversalName": "cornell-university",
+        "duration": "6 yrs",
+        "description": "Research on deceptive online reviews, which received the Test of Time award at ACL 2021.",
+        "skills": null,
+        "startDate": {
+          "year": 2007,
+          "text": "2007"
+        },
+        "endDate": {
+          "year": 2013,
+          "text": "2013"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQE8SOXGRyv7LA/company-logo_400_400/company-logo_400_400/0/1631339899678?e=1776902400&v=beta&t=z9EFnVC4jc3IxQB_5kqZY2twhs1zh2Ujg4UhI6lnvpE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQE8SOXGRyv7LA/company-logo_400_400/company-logo_400_400/0/1631339899678?e=1776902400&v=beta&t=z9EFnVC4jc3IxQB_5kqZY2twhs1zh2Ujg4UhI6lnvpE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQE8SOXGRyv7LA/company-logo_200_200/company-logo_200_200/0/1631339899678?e=1776902400&v=beta&t=8gqRb5n6ds_eGdBVsrRa4BIwJxYLH19ImYd_laDJuRs",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQE8SOXGRyv7LA/company-logo_100_100/company-logo_100_100/0/1631339899678?e=1776902400&v=beta&t=mU_RrLLR-_WiPMdGl7V8gFPp5Oov5XKzqLiWoFS3_r4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Cornell University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3523/",
+        "schoolId": "3523",
+        "degree": "Ph.D.",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "startDate": {
+          "year": 2007,
+          "text": "2007"
+        },
+        "endDate": {
+          "year": 2013,
+          "text": "2013"
+        },
+        "period": "2007 - 2013",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQE8SOXGRyv7LA/company-logo_400_400/company-logo_400_400/0/1631339899678?e=1776902400&v=beta&t=z9EFnVC4jc3IxQB_5kqZY2twhs1zh2Ujg4UhI6lnvpE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQE8SOXGRyv7LA/company-logo_400_400/company-logo_400_400/0/1631339899678?e=1776902400&v=beta&t=z9EFnVC4jc3IxQB_5kqZY2twhs1zh2Ujg4UhI6lnvpE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQE8SOXGRyv7LA/company-logo_200_200/company-logo_200_200/0/1631339899678?e=1776902400&v=beta&t=8gqRb5n6ds_eGdBVsrRa4BIwJxYLH19ImYd_laDJuRs",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQE8SOXGRyv7LA/company-logo_100_100/company-logo_100_100/0/1631339899678?e=1776902400&v=beta&t=mU_RrLLR-_WiPMdGl7V8gFPp5Oov5XKzqLiWoFS3_r4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Natural Language Processing",
+        "positions": [
+          "Endorsed by 2 colleagues at Cornell University"
+        ],
+        "endorsements": "10 endorsements"
+      },
+      {
+        "name": "Sentiment Analysis",
+        "positions": [
+          "Endorsed by 2 colleagues at Cornell University"
+        ],
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Information Extraction",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Text Mining",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Machine Learning",
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "Information Retrieval",
+        "endorsements": "6 endorsements"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAABEmYXYB5f-3ZmFG8dI-n9XAlqySBqO-2PA",
+        "firstName": "Luke",
+        "lastName": "Carlson",
+        "publicIdentifier": "jlukecarlson",
+        "linkedinUrl": "https://www.linkedin.com/in/jlukecarlson"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABgwxtcBfqsJJUHPwsSPuBE4K9oKyRqUp5o",
+        "firstName": "Lia",
+        "lastName": "Guy",
+        "publicIdentifier": "aureliaguy",
+        "linkedinUrl": "https://www.linkedin.com/in/aureliaguy"
+      },
+      {
+        "id": "ACoAAACQBzQB5nk5kOpFWQRtK4pv3RaL5q2G-pA",
+        "firstName": "Jonathan",
+        "lastName": "Lachman",
+        "publicIdentifier": "jonathan-lachman-4981b23",
+        "linkedinUrl": "https://www.linkedin.com/in/jonathan-lachman-4981b23"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAABGzJXcBFaJqVFgqgYNbhaPVKRkP3iG33dA",
+        "firstName": "Noah",
+        "lastName": "Shpak",
+        "publicIdentifier": "nshpak",
+        "linkedinUrl": "https://www.linkedin.com/in/nshpak"
+      },
+      {
+        "id": "ACoAAAJzsfoBp0MxssQYMgmy0ZNO2U3sA58ugwc",
+        "firstName": "Joshua",
+        "lastName": "Gross",
+        "publicIdentifier": "joshgross",
+        "linkedinUrl": "https://www.linkedin.com/in/joshgross"
+      },
+      {
+        "id": "ACoAABYs4-IB5mHx5eVfOHzu1e8xlO3q_kb38IM",
+        "firstName": "Brydon",
+        "lastName": "Eastman",
+        "publicIdentifier": "brydon-eastman-396719a4",
+        "linkedinUrl": "https://www.linkedin.com/in/brydon-eastman-396719a4"
+      },
+      {
+        "id": "ACoAAACo1tYBGy9sT2OWZuEULOMe4K_b2Y22-F8",
+        "firstName": "Alex",
+        "lastName": "Gartrell",
+        "publicIdentifier": "alexgartrell",
+        "linkedinUrl": "https://www.linkedin.com/in/alexgartrell"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAABA0sF8BJqwmfoms3veu9TE72tj8JMUQEFA",
+        "firstName": "Sam",
+        "lastName": "Shleifer",
+        "publicIdentifier": "sam-shleifer-a5307a77",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-shleifer-a5307a77"
+      },
+      {
+        "id": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+        "firstName": "Saurabh",
+        "lastName": "Garg",
+        "publicIdentifier": "saurabh-garg-b680b5b8",
+        "linkedinUrl": "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+      },
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAABhKWCYBiuV3Zv9Hbt8t0j-xMRqxawBcSgw",
+        "firstName": "Kurt",
+        "lastName": "Shuster",
+        "publicIdentifier": "kurtshuster1",
+        "linkedinUrl": "https://www.linkedin.com/in/kurtshuster1"
+      },
+      {
+        "id": "ACoAAAl87CYBWKLLyGNTbomy6oqIPv-5n34CXIY",
+        "firstName": "Andrew",
+        "lastName": "Tulloch",
+        "publicIdentifier": "andrew-tulloch-17238745",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-tulloch-17238745"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAAA4HVN4BOZg5espOvMVoO3OY04NZmuqvMCo",
+        "firstName": "Shaojie",
+        "lastName": "Bai",
+        "publicIdentifier": "shaojie-bai",
+        "linkedinUrl": "https://www.linkedin.com/in/shaojie-bai"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAACHkUNgBogKk7Q3xekxMdWLMSikZY2zgQsU",
+        "firstName": "Stephen",
+        "lastName": "Roller",
+        "publicIdentifier": "stephen-roller-38851513a",
+        "linkedinUrl": "https://www.linkedin.com/in/stephen-roller-38851513a"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAAO-j_IB8fCWI2zNtM-gjYfdHVyJR8f2WCg"
+    }
+  }
+}

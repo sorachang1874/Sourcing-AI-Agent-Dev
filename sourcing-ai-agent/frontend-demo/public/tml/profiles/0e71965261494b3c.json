@@ -1,0 +1,1206 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAAoDkzgBwuu5Qxd-NN9S2IdhwpkQ2dt-adw",
+    "profile_url": "https://www.linkedin.com/in/ACwAAAoDkzgBwuu5Qxd-NN9S2IdhwpkQ2dt-adw"
+  },
+  "item": {
+    "id": "ACoAAAoDkzgBOjd_V9dYcTipq4XPeXJ9HOPji90",
+    "publicIdentifier": "lisabethhan",
+    "linkedinUrl": "https://www.linkedin.com/in/lisabethhan",
+    "firstName": "Lisa",
+    "lastName": "Han",
+    "emails": [
+      {
+        "email": "lisa@lsvp.com",
+        "deliverable": true,
+        "catchAllDomain": false,
+        "validEmailServer": true,
+        "free": false,
+        "status": "valid",
+        "qualityScore": 80
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://lsvp.com/",
+        "domain": "lsvp.com",
+        "validEmailServer": true
+      },
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai"
+      },
+      {
+        "url": "https://basepowercompany.com/careers",
+        "domain": "basepowercompany.com"
+      },
+      {
+        "url": "https://suno.com/",
+        "domain": "suno.com"
+      }
+    ],
+    "headline": "Partner at Lightspeed Venture Partners",
+    "openToWork": false,
+    "hiring": false,
+    "premium": true,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "168006456",
+    "registeredAt": "2012-02-13T21:38:35.413Z",
+    "topSkills": null,
+    "connectionsCount": 3348,
+    "followerCount": 4564,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "30258",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/30258/",
+        "companyName": "Lightspeed Venture Partners",
+        "dateRange": {
+          "start": {
+            "month": null,
+            "year": 2022,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "19626",
+        "companyId": "14976",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/14976/",
+        "schoolName": "Middlebury College"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5603AQHADkGk5jYUHw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1709623601896?e=1776902400&v=beta&t=VYvxw7AGCNu9MxtZ6sFsaoFAK8NnNF8kGyOm_BgcYSs",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQHADkGk5jYUHw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1709623601896?e=1776902400&v=beta&t=VYvxw7AGCNu9MxtZ6sFsaoFAK8NnNF8kGyOm_BgcYSs",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQHADkGk5jYUHw/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1709623601896?e=1776902400&v=beta&t=zVHllDREzdrl9RJGd1RTyURMljHn99Ve8E31eyj13cc",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQHADkGk5jYUHw/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1709623601896?e=1776902400&v=beta&t=dQpG2tGm5Bzv-fGMVAAD7gRedYlDmd0RZdxipKrJIHs",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQHADkGk5jYUHw/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1709623601896?e=1776902400&v=beta&t=_j3o6G3J99s2J1unoGQVOvEbNVs0R9mde-WbI7ftz9Q",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D5603AQHADkGk5jYUHw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1709623601896?e=1776902400&v=beta&t=VYvxw7AGCNu9MxtZ6sFsaoFAK8NnNF8kGyOm_BgcYSs",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Partner at Lightspeed Venture Partners",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Partner",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Lightspeed Venture Partners",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/lightspeed-venture-partners/",
+        "companyId": "30258",
+        "companyUniversalName": "lightspeed-venture-partners",
+        "duration": "4 yrs 4 mos",
+        "description": "Early stage enterprise team\n\nInvestments: \nBase\nCharacter AI\nDistyl\nPika\nRamp\nSuno\nThinking Machines",
+        "skills": null,
+        "startDate": {
+          "year": 2022,
+          "text": "2022"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQELfc9OHaLGDw/company-logo_400_400/B4EZaSBgaNHoAY-/0/1746206590923/lightspeed_venture_partners_logo?e=1776902400&v=beta&t=pd0UtcFwQIStwZIVH17il_vpG7s2fBvkAbCkWoS_fwo",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQELfc9OHaLGDw/company-logo_400_400/B4EZaSBgaNHoAY-/0/1746206590923/lightspeed_venture_partners_logo?e=1776902400&v=beta&t=pd0UtcFwQIStwZIVH17il_vpG7s2fBvkAbCkWoS_fwo",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQELfc9OHaLGDw/company-logo_200_200/B4EZaSBgaNHoAI-/0/1746206590923/lightspeed_venture_partners_logo?e=1776902400&v=beta&t=pbki0Zks6mqdNGr0fEI9_kJ68EWr1lzNDxabMyZK3uc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQELfc9OHaLGDw/company-logo_100_100/B4EZaSBgaNHoAQ-/0/1746206590923/lightspeed_venture_partners_logo?e=1776902400&v=beta&t=xFVh2vR_3TPrN0nNktn846HLjiexbE82k6nRZsae7N0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyId": "105913171",
+        "duration": "1 yr 4 mos",
+        "description": "Led Lightspeed investment in Seed",
+        "skills": null,
+        "startDate": {
+          "year": 2025,
+          "text": "2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Base Power Company",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/96134922/",
+        "companyId": "96134922",
+        "duration": "1 yr 4 mos",
+        "description": "Led Lightspeed investment in Series B",
+        "skills": null,
+        "startDate": {
+          "year": 2025,
+          "text": "2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGa1XHSBB0iDA/company-logo_400_400/B56ZilJkymH0Ag-/0/1755117407692/basepowercompany_logo?e=1776902400&v=beta&t=SFIdqooPKEZIkuQpbW-LJ9RNpj9D8nIf2png5KvhT48",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGa1XHSBB0iDA/company-logo_400_400/B56ZilJkymH0Ag-/0/1755117407692/basepowercompany_logo?e=1776902400&v=beta&t=SFIdqooPKEZIkuQpbW-LJ9RNpj9D8nIf2png5KvhT48",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGa1XHSBB0iDA/company-logo_200_200/B56ZilJkymH0AQ-/0/1755117407692/basepowercompany_logo?e=1776902400&v=beta&t=nHXFc6sU3tPmLXbkhSGb3weO_zp1Eyd3QshKK5W9yI4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGa1XHSBB0iDA/company-logo_100_100/B56ZilJkymH0AY-/0/1755117407692/basepowercompany_logo?e=1776902400&v=beta&t=V9KXt4QPMAiRTqN0v1jck-lH68-f37A1TOxWXd9rq4g",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Suno",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/81884275/",
+        "companyId": "81884275",
+        "duration": "2 yrs 4 mos",
+        "description": "Led Series B",
+        "skills": null,
+        "startDate": {
+          "year": 2024,
+          "text": "2024"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFmogwl4opi3A/company-logo_400_400/B4EZaMrdUbHIAY-/0/1746116925976/sunomusic_logo?e=1776902400&v=beta&t=BiTSBobClt2p37Ugi-n13SBdt1l7-Vfgzwyklam7vk4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFmogwl4opi3A/company-logo_400_400/B4EZaMrdUbHIAY-/0/1746116925976/sunomusic_logo?e=1776902400&v=beta&t=BiTSBobClt2p37Ugi-n13SBdt1l7-Vfgzwyklam7vk4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFmogwl4opi3A/company-logo_200_200/B4EZaMrdUbHIAI-/0/1746116925976/sunomusic_logo?e=1776902400&v=beta&t=AeSPgXU8tyylV1FQorDJkbnpB7-dPLYqJrfJwyZkN9U",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFmogwl4opi3A/company-logo_100_100/B4EZaMrdUbHIAQ-/0/1746116925976/sunomusic_logo?e=1776902400&v=beta&t=ADVdWkQpyMxEfxvFPrs7Wl-hyVOgL3B8r7B-X3gfHJA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Pika",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/100326421/",
+        "companyId": "100326421",
+        "duration": "3 yrs 4 mos",
+        "description": "Led Series A",
+        "skills": null,
+        "startDate": {
+          "year": 2023,
+          "text": "2023"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGIOxsgqP0B9Q/company-logo_400_400/B4EZk5Wg9fIMAY-/0/1757603827995/pika_labs_logo?e=1776902400&v=beta&t=iPW6VP6oezP1f5C0I8gJSMeirz4i7Jv_rr4avtMT2RE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGIOxsgqP0B9Q/company-logo_400_400/B4EZk5Wg9fIMAY-/0/1757603827995/pika_labs_logo?e=1776902400&v=beta&t=iPW6VP6oezP1f5C0I8gJSMeirz4i7Jv_rr4avtMT2RE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGIOxsgqP0B9Q/company-logo_200_200/B4EZk5Wg9fIMAI-/0/1757603827995/pika_labs_logo?e=1776902400&v=beta&t=-UO6sQuxJvKjfCJLCSw3TihCffsTNEcf3gzZqXswHf0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGIOxsgqP0B9Q/company-logo_100_100/B4EZk5Wg9fIMAQ-/0/1757603827995/pika_labs_logo?e=1776902400&v=beta&t=hgJLFkXHKi3HZjMBwotjtS-DrqEaGkc1XDLqRwZxYqo",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Character.AI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/89486558/",
+        "companyId": "89486558",
+        "duration": "1 yr",
+        "description": "Invested in Series A",
+        "skills": null,
+        "startDate": {
+          "year": 2023,
+          "text": "2023"
+        },
+        "endDate": {
+          "year": 2024,
+          "text": "2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGNjbHSXwgRxA/company-logo_400_400/B56ZkQoTyrG0AY-/0/1756920626627/character_ai_logo?e=1776902400&v=beta&t=iIjQFZ2p-mxKhZ5rdC-PmhG_N1FxyZZ-zhCc61gsMt4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGNjbHSXwgRxA/company-logo_400_400/B56ZkQoTyrG0AY-/0/1756920626627/character_ai_logo?e=1776902400&v=beta&t=iIjQFZ2p-mxKhZ5rdC-PmhG_N1FxyZZ-zhCc61gsMt4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGNjbHSXwgRxA/company-logo_200_200/B56ZkQoTyrG0AI-/0/1756920626627/character_ai_logo?e=1776902400&v=beta&t=ktdgZyhXyFclt7dry6ukj1GvX5WbOFbqWa9ONRs2dlE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGNjbHSXwgRxA/company-logo_100_100/B56ZkQoTyrG0AQ-/0/1756920626627/character_ai_logo?e=1776902400&v=beta&t=S7cBW5d-I9ubNwlka8z5Abge45lXx9yYBgRdE6pgd0M",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Advisor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Ramp",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1406226/",
+        "companyId": "1406226",
+        "duration": "4 yrs 3 mos",
+        "description": "Head of BD and Partnerships ---> Advisor",
+        "skills": null,
+        "startDate": {
+          "month": "Nov",
+          "year": 2019,
+          "text": "Nov 2019"
+        },
+        "endDate": {
+          "year": 2024,
+          "text": "2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFpzb0Ial_Qaw/company-logo_400_400/company-logo_400_400/0/1735867522188?e=1776902400&v=beta&t=d6cYpOTVWlJBC6IjWYw4c1X_WOC_5ESFeuhVetGfGTE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFpzb0Ial_Qaw/company-logo_400_400/company-logo_400_400/0/1735867522188?e=1776902400&v=beta&t=d6cYpOTVWlJBC6IjWYw4c1X_WOC_5ESFeuhVetGfGTE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFpzb0Ial_Qaw/company-logo_200_200/company-logo_200_200/0/1735867522188?e=1776902400&v=beta&t=kpRG_Y6PcHb4_-YD9D_hzPjjoildht2xbvv-HAswHoo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFpzb0Ial_Qaw/company-logo_100_100/company-logo_100_100/0/1735867522188?e=1776902400&v=beta&t=e27vsLIyjCIAAgW7o-tViTO9nZlmXNv_nRX4Xie6vrg",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Seed/A Investor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Personal",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Personal",
+        "duration": "2 yrs 6 mos",
+        "description": "Prepared (acquired by Axon), ROI (acquired by OpenAI), Pave (fka Trove), Secureframe, AltoIRA, Justos, Spline, Rutter, Column Tax, Hightouch, Cohere, Metlo, Sagewell, Modernloop, Alongside, Unit Finance, and Parafin",
+        "skills": null,
+        "startDate": {
+          "month": "Aug",
+          "year": 2019,
+          "text": "Aug 2019"
+        },
+        "endDate": {
+          "year": 2022,
+          "text": "2022"
+        }
+      },
+      {
+        "position": "Business Development and Demand Gen",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Atrium",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/18053797/",
+        "companyId": "18053797",
+        "duration": "2 yrs 7 mos",
+        "description": "First business hire at Atrium. Helped grow business from 0-20M ARR and a team of 10 to over 250. Created Atrium Scale, which helped over 50 founders raise >$300M in Seed/A funding.\n\nHead of Business Development and Partnerships \nGrowth and customer acquisition initiatives for Atrium (channel partnerships, events, outbound campaigns). \n\nProduct Manager: \nLed the public launch of Atrium in September 2017.\nDesigned and launched Atrium's first client facing products (onboarding, core).",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2017,
+          "text": "May 2017"
+        },
+        "endDate": {
+          "month": "Nov",
+          "year": 2019,
+          "text": "Nov 2019"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQG5PTMLL0vTRQ/company-logo_400_400/company-logo_400_400/0/1630667535397/atriumteam_logo?e=1776902400&v=beta&t=17I13C1YFxPUjf3YbQgrSTtS-W_dyOUuFPinSTY7U1M",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQG5PTMLL0vTRQ/company-logo_400_400/company-logo_400_400/0/1630667535397/atriumteam_logo?e=1776902400&v=beta&t=17I13C1YFxPUjf3YbQgrSTtS-W_dyOUuFPinSTY7U1M",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQG5PTMLL0vTRQ/company-logo_200_200/company-logo_200_200/0/1630667535397/atriumteam_logo?e=1776902400&v=beta&t=GvFmJckY-KNfm9voyXjY2HqE3eSTD6VAnJVbtYxQs6w",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQG5PTMLL0vTRQ/company-logo_100_100/company-logo_100_100/0/1630667535397/atriumteam_logo?e=1776902400&v=beta&t=_kuBzcMnd8PlP9RfPjIkG3oZaBiwHMTwlC9CHkEgGjw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Product Manager",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "IBM",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1009/",
+        "companyId": "1009",
+        "duration": "1 yr 1 mo",
+        "description": "1. Watson Internet of Things product development - developed and shipped new audio IoT software for leading US automobile companies that now account for $XXmm business offering \n2. QRadar and Identity and Access product development - Developed and led design in refresh of IBM security identity and governance software, contributing to increase in enterprise deals won",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2016,
+          "text": "May 2016"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2017,
+          "text": "May 2017"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGiz5ecgpCtkA/company-logo_400_400/company-logo_400_400/0/1688684715866/ibm_logo?e=1776902400&v=beta&t=lvn_XgKnHL6D2RIsPvznl9bRtuFCCOW4XRo14QISjQY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGiz5ecgpCtkA/company-logo_400_400/company-logo_400_400/0/1688684715866/ibm_logo?e=1776902400&v=beta&t=lvn_XgKnHL6D2RIsPvznl9bRtuFCCOW4XRo14QISjQY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGiz5ecgpCtkA/company-logo_200_200/company-logo_200_200/0/1688684715866/ibm_logo?e=1776902400&v=beta&t=DdS_AmJzO8hVZJzkCH0A37Kd4MX4miZ-oSSRUJKGI-A",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGiz5ecgpCtkA/company-logo_100_100/company-logo_100_100/0/1688684715866/ibm_logo?e=1776902400&v=beta&t=nw_NDHrg6jEPysPyTTyDRMaPjW2xaXuMTVb6V65M_3E",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Team USA Ladies Singles Skating",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "US Figure Skating Association",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/52135623/",
+        "companyId": "52135623",
+        "duration": "14 yrs",
+        "description": "Competed for Team USA",
+        "skills": null,
+        "startDate": {
+          "year": 1998,
+          "text": "1998"
+        },
+        "endDate": {
+          "year": 2012,
+          "text": "2012"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGtd1R5tKgFOA/company-logo_400_400/company-logo_400_400/0/1630656585065/us_figure_skating_association_logo?e=1776902400&v=beta&t=UOoHM2V0iC5axVVPS_wEXzz69bCVUVjql0Y3pcD4IPk",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGtd1R5tKgFOA/company-logo_400_400/company-logo_400_400/0/1630656585065/us_figure_skating_association_logo?e=1776902400&v=beta&t=UOoHM2V0iC5axVVPS_wEXzz69bCVUVjql0Y3pcD4IPk",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGtd1R5tKgFOA/company-logo_200_200/company-logo_200_200/0/1630656585065/us_figure_skating_association_logo?e=1776902400&v=beta&t=PLfbSlVQI6Pb29qrTs6PFikCebCMhhWfzGWZsw1koZo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGtd1R5tKgFOA/company-logo_100_100/company-logo_100_100/0/1630656585065/us_figure_skating_association_logo?e=1776902400&v=beta&t=g14xbevNIf0A2umNkQMrS6tlsAr3X-EE-66AYcWOSPs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Middlebury College",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/14976/",
+        "schoolId": "14976",
+        "degree": "Bachelor's Degree",
+        "fieldOfStudy": null,
+        "skills": [],
+        "description": "Economics and Philosophy",
+        "insights": "Activities and societies: Student Government Association",
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFTSWjitgPc_w/company-logo_400_400/company-logo_400_400/0/1688077021173/middlebury_college_logo?e=1776902400&v=beta&t=LszRKyq3_GcYTqOWLENxQpx2Be9vJJq7quekZQLBPUM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFTSWjitgPc_w/company-logo_400_400/company-logo_400_400/0/1688077021173/middlebury_college_logo?e=1776902400&v=beta&t=LszRKyq3_GcYTqOWLENxQpx2Be9vJJq7quekZQLBPUM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFTSWjitgPc_w/company-logo_200_200/company-logo_200_200/0/1688077021172/middlebury_college_logo?e=1776902400&v=beta&t=z3p3ogZ5uuMtAijVzdSINTVahqglmOOyisS6-EcEXxk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFTSWjitgPc_w/company-logo_100_100/company-logo_100_100/0/1688077021172/middlebury_college_logo?e=1776902400&v=beta&t=ud9B0T0BtBVGqjPCTrrP-_scMUUMDuGwdKvSOb4b2Pc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "The London School of Economics and Political Science (LSE)",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/6544/",
+        "schoolId": "6544",
+        "degree": "Management",
+        "fieldOfStudy": null,
+        "skills": [],
+        "description": "Economics and Public Policy",
+        "insights": "Activities and societies:  General Course President",
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQEmNyPMuyVfyQ/company-logo_400_400/company-logo_400_400/0/1657529757949/london_school_of_economics_logo?e=1776902400&v=beta&t=WLcSp8CH8DnvD_lklRldxnJteMA4i-NRQPleVH3cW40",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEmNyPMuyVfyQ/company-logo_400_400/company-logo_400_400/0/1657529757949/london_school_of_economics_logo?e=1776902400&v=beta&t=WLcSp8CH8DnvD_lklRldxnJteMA4i-NRQPleVH3cW40",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEmNyPMuyVfyQ/company-logo_200_200/company-logo_200_200/0/1657529757949/london_school_of_economics_logo?e=1776902400&v=beta&t=KAEcO-KoHtmdVKeRgOEROWmvhgiYCSmLRE2zaIzBlOE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEmNyPMuyVfyQ/company-logo_100_100/company-logo_100_100/0/1657529757949/london_school_of_economics_logo?e=1776902400&v=beta&t=SBVxsAS_Lh-I2xig2iR0UaHsMfZDfzuL79HThHXRbHc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [
+      {
+        "title": "Venture Capital (VC) Experience and Start-Up Funding Performance (2015)",
+        "description": "Our research looks to assess the relationship between founders’ previous venture capitalist experience and the effect this had on the time taken (quickness) to obtain investment. In order to do this, we gathered data regarding founders’ venture capital experience, previous start-up founding experience, and start-up founding date (if it was founded pre or post recession) on all current Boston software start-ups who successfully procured two major initial funding rounds (Series A and B). We find that previous venture capital experience did not have an effect on funding quickness. In fact, what did have a positive statistically significant impact is the number of previous start-ups founded. While founders’ previous venture capital experience has no impact, these results indicate that the potential success of gathering funding for technology start-ups in the Boston community is dependent on the founders’ previous start-ups founded and when the start-up was founded (pre or post recession).",
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "associatedWith": "Associated with The London School of Economics and Political Science (LSE)",
+        "associatedWithLink": "https://www.linkedin.com/company/6544/",
+        "contributors": [
+          {
+            "linkedinUrl": "https://www.linkedin.com/in/ACoAABNhdkcB77xyQnHXojBmx8OC2k4f2nfr_G8"
+          },
+          {
+            "linkedinUrl": "https://www.linkedin.com/in/ACoAABhc32cBGxVTDP5TXYd0dfBpSvIr9fxNHss"
+          },
+          {
+            "linkedinUrl": "https://www.linkedin.com/in/ACoAABMiF2wBv3Z8vrrVOjN_9NsnoPaolkFMYbw"
+          }
+        ]
+      }
+    ],
+    "volunteering": [],
+    "receivedRecommendations": [
+      {
+        "givenBy": "Matt Ward",
+        "givenByHeadline": "Product Management Leader for Cloud and Network",
+        "givenAt": "August 22, 2017, Matt managed Lisa directly",
+        "givenByLink": "https://www.linkedin.com/in/matthewward4",
+        "description": "Lisa is energetic and creative.  She quickly learned to navigate a large company to provide leadership.  She owned the optimization of a large development project and steered direction on a new strategic product offering.  great team player.",
+        "givenByPicture": {
+          "url": null,
+          "sizes": []
+        }
+      },
+      {
+        "givenBy": "Simon PORCHER",
+        "givenByHeadline": "Directeur de l’Institut d’Economie de l’Eau | Auteur de « La fin de l’eau ? » (Fayard)",
+        "givenAt": "September 8, 2015, Simon was Lisa’s teacher",
+        "givenByLink": "https://www.linkedin.com/in/simon-porcher-27013125",
+        "description": "Lisa was my student for two terms in the core course MG202– Analytical Methods for Management – while I was lecturing at the LSE in 2014-2015. Lisa is among the most brilliant student I ever had: she was always over-prepared during the seminars and keen on having feedbacks to improve her work. Apart her pure academic skills, Lisa showed strong communication skills inside and outside the classroom. On a more personal note, I felt that Lisa was strongly appreciated by both her peers and professors for her outgoing, warm and supportive attitude. I warmly support her in her future applications and career. ",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQE4QNWtg2RKTg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1705270955522?e=1776902400&v=beta&t=Xq3twVBcooV9CfH5jijZJHXindKyvEG-rAPOLCUhbQI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E03AQE4QNWtg2RKTg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1705270955522?e=1776902400&v=beta&t=Xq3twVBcooV9CfH5jijZJHXindKyvEG-rAPOLCUhbQI",
+              "width": 800,
+              "height": 800,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E03AQE4QNWtg2RKTg/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1705270955522?e=1776902400&v=beta&t=k4iMgbGx6vlUaQdPS-nr1DIc0TdWj6t3eAKv0dCYJCI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E03AQE4QNWtg2RKTg/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1705270955522?e=1776902400&v=beta&t=sLPP11MjWva_P6IvuG5KIZ738JiZnklDTRFnp57IdUw",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E03AQE4QNWtg2RKTg/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1705270955522?e=1776902400&v=beta&t=tgyAVd5X_JXE_3I-tNuXw4XfgGWDyf3_X5fF72HJOjE",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "skills": [
+      {
+        "name": "Social Media",
+        "endorsements": "17 endorsements"
+      },
+      {
+        "name": "Research",
+        "endorsements": "17 endorsements"
+      },
+      {
+        "name": "Economics",
+        "endorsements": "7 endorsements"
+      },
+      {
+        "name": "Editing",
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "Data Analysis",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Statistics",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Marketing",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Product Marketing"
+      },
+      {
+        "name": "Photography",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Market Research",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Event Planning",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Entrepreneurship",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Social Media Marketing"
+      },
+      {
+        "name": "Marketing Strategy",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Social Networking"
+      },
+      {
+        "name": "Analytics"
+      },
+      {
+        "name": "Product Management"
+      },
+      {
+        "name": "Cross-functional Team Leadership"
+      },
+      {
+        "name": "Public Speaking",
+        "endorsements": "14 endorsements"
+      },
+      {
+        "name": "Microsoft Excel",
+        "endorsements": "10 endorsements"
+      },
+      {
+        "name": "PowerPoint",
+        "endorsements": "9 endorsements"
+      },
+      {
+        "name": "Leadership",
+        "endorsements": "9 endorsements"
+      },
+      {
+        "name": "Microsoft Word",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "Management",
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "Photoshop",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Spanish",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Mandarin",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Adobe Creative Suite",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Team Leadership"
+      },
+      {
+        "name": "Python"
+      },
+      {
+        "name": "Stata"
+      },
+      {
+        "name": "WordPress"
+      },
+      {
+        "name": "Microsoft Office",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "Microsoft PowerPoint",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Teamwork",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "R-Project Statistics"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [
+      {
+        "title": "Phi Beta Kappa",
+        "issuedBy": "Jan 2016",
+        "associatedWith": null,
+        "associatedWithLink": null
+      },
+      {
+        "title": "LSESU Outstanding Contribution Award",
+        "issuedBy": "The London School of Economics",
+        "issuedAt": "May 2015",
+        "description": "Drafted and passed a 10% tuition discount bill for General Course students enrolling in LSE Master's programs to foster stronger alumni ties and promote education equity.",
+        "associatedWith": "Associated with The London School of Economics and Political Science (LSE)",
+        "associatedWithLink": "https://www.linkedin.com/company/6544/"
+      },
+      {
+        "title": "Andrew Mellon Grant Awardee 2014-2015",
+        "issuedBy": "Mar 2014",
+        "associatedWith": "Associated with Middlebury College",
+        "associatedWithLink": "https://www.linkedin.com/company/14976/"
+      },
+      {
+        "title": "IBM Thomas J. Watson Memorial Scholarship Recipient",
+        "issuedBy": "IBM",
+        "issuedAt": "Jun 2012",
+        "associatedWith": null,
+        "associatedWithLink": null
+      },
+      {
+        "title": "Others",
+        "description": "Heritage Festival's National Invitational Choral Festival Silver Medal\nHorace Mann Scholar \nAP Scholar w/Distinction\nBoston Globe Scholastic Art Nominee\nWellesley College Book Award\nNational Spanish Exam Silver Medal",
+        "associatedWith": null,
+        "associatedWithLink": null
+      }
+    ],
+    "languages": [
+      {
+        "name": "English"
+      },
+      {
+        "name": "Mandarin Chinese"
+      },
+      {
+        "name": "Spanish"
+      }
+    ],
+    "causes": [
+      "Arts and Culture",
+      "Economic Empowerment",
+      "Education",
+      "Poverty Alleviation",
+      "Science and Technology"
+    ],
+    "featured": {
+      "images": [
+        "https://media.licdn.com/dms/image/v2/D5622AQHN3GlJlQH7BA/feedshare-shrink_1280/B56ZnEjXxnKAAs-/0/1759939235823?e=1776902400&v=beta&t=2y2ZQ9EE07Uxyc25GRM2lNDf7kxvxKbBOmuLoxhySDU"
+      ],
+      "link": "https://www.linkedin.com/feed/update/urn:li:activity:7381720184861986816?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A7381720184861986816%29",
+      "slides": [
+        {
+          "title": null,
+          "subtitle": null,
+          "description": null,
+          "url": "https://www.linkedin.com/feed/update/urn:li:activity:7381720184861986816?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A7381720184861986816%29",
+          "image": {
+            "url": "https://media.licdn.com/dms/image/v2/D5622AQHN3GlJlQH7BA/feedshare-shrink_1280/B56ZnEjXxnKAAs-/0/1759939235823?e=1776902400&v=beta&t=2y2ZQ9EE07Uxyc25GRM2lNDf7kxvxKbBOmuLoxhySDU"
+          }
+        },
+        {
+          "title": null,
+          "subtitle": null,
+          "description": null,
+          "url": "https://www.linkedin.com/feed/update/urn:li:activity:7246854980530266112?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A7246854980530266112%29",
+          "image": {
+            "url": "https://media.licdn.com/dms/image/v2/D5622AQGo9DgGw-RISw/feedshare-shrink_2048_1536/feedshare-shrink_2048_1536/0/1727784866088?e=1776902400&v=beta&t=3oXpHfUokG9cIhEFOAwXNZ1q0jXKI0_zWvBv_jF9ERc"
+          }
+        },
+        {
+          "title": "Legaltech x AI: The Lightspeed View - Lightspeed Venture Partners",
+          "subtitle": "lsvp.com",
+          "description": null,
+          "url": "https://www.linkedin.com/feed/update/urn:li:activity:7140356549805228032?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A7140356549805228032%29",
+          "image": {
+            "url": "https://media.licdn.com/dms/image/sync/v2/D5627AQGVMY2-B7v8LA/articleshare-shrink_1280_800/articleshare-shrink_1280_800/0/1770918938772?e=1776160800&v=beta&t=KdlVFrWXdE1bLx7fmhxJwZx60QJZrykJRYEt2zRoKC0"
+          }
+        },
+        {
+          "title": "From Tel Aviv to the Bay — scaling the Lightspeed enterprise team",
+          "subtitle": "medium.com",
+          "description": null,
+          "url": "https://www.linkedin.com/feed/update/urn:li:activity:6987832644088578048?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A6987832644088578048%29",
+          "image": {
+            "url": "https://media.licdn.com/dms/image/sync/v2/C5627AQGI0ZmJmolAfw/articleshare-shrink_1280_800/articleshare-shrink_1280_800/0/1712050712939?e=1776160800&v=beta&t=XH90eBtm3O7vp_SQ_ktPf2ZBkuFcp-KfXKvzWq9l-7g"
+          }
+        }
+      ]
+    },
+    "composeOptionType": "PREMIUM_INMAIL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAABHEdEBX41azndF9YfqvH1I0BKMLOTmJtk",
+        "firstName": "Anand",
+        "lastName": "Iyer",
+        "publicIdentifier": "anandiyer",
+        "linkedinUrl": "https://www.linkedin.com/in/anandiyer"
+      },
+      {
+        "id": "ACoAAAzTvYABvMGL0BhzWvn235PUEsUKhkGdKsU",
+        "firstName": "Connor",
+        "lastName": "Love",
+        "publicIdentifier": "connor-love-a800a260",
+        "linkedinUrl": "https://www.linkedin.com/in/connor-love-a800a260"
+      },
+      {
+        "id": "ACoAAAN5MHUB8NxdeysCZUeAgXa8OGvtZNRhRBU",
+        "firstName": "Bucky",
+        "lastName": "Moore",
+        "publicIdentifier": "buckymoore",
+        "linkedinUrl": "https://www.linkedin.com/in/buckymoore"
+      },
+      {
+        "id": "ACoAAAX0wPMB8IkPafF2XEcI4tYh4pybRym1yDw",
+        "firstName": "Sebastian",
+        "lastName": "Duesterhoeft",
+        "publicIdentifier": "sebastian-duesterhoeft-84356b29",
+        "linkedinUrl": "https://www.linkedin.com/in/sebastian-duesterhoeft-84356b29"
+      },
+      {
+        "id": "ACoAAAMMS4cBv_Z-FPkcOJpiFdH083zDyV8zMeQ",
+        "firstName": "Nnamdi",
+        "lastName": "Iregbulem",
+        "publicIdentifier": "nnamdiiregbulem",
+        "linkedinUrl": "https://www.linkedin.com/in/nnamdiiregbulem"
+      },
+      {
+        "id": "ACoAAAdVjIQBkGP_I_WgE6woBceI1egNQhg3DJk",
+        "firstName": "Katherine",
+        "lastName": "Zhang",
+        "publicIdentifier": "kat-zhang",
+        "linkedinUrl": "https://www.linkedin.com/in/kat-zhang"
+      },
+      {
+        "id": "ACoAAArF0S4Bvidm719q0zfq8JcCdDne7SOzeiw",
+        "firstName": "Sachin",
+        "lastName": "Patel",
+        "publicIdentifier": "sachpat",
+        "linkedinUrl": "https://www.linkedin.com/in/sachpat"
+      },
+      {
+        "id": "ACoAAB8rl4kBL6DSKXNk9Yh_-UqxYMVm6DYNsUk",
+        "firstName": "Amber",
+        "lastName": "Yang",
+        "publicIdentifier": "amber-yang",
+        "linkedinUrl": "https://www.linkedin.com/in/amber-yang"
+      },
+      {
+        "id": "ACoAAANtGhsBGuZuDmwGT8cmRw808JTVrzL-MGM",
+        "firstName": "Anoushka",
+        "lastName": "Vaswani",
+        "publicIdentifier": "anoushka-vaswani-aa330017",
+        "linkedinUrl": "https://www.linkedin.com/in/anoushka-vaswani-aa330017"
+      },
+      {
+        "id": "ACoAAAsfqGwBqwqIYcUSwQfZBPVEa8waEaV17eQ",
+        "firstName": "Brenton",
+        "lastName": "Fargnoli, M.D.",
+        "publicIdentifier": "brentonfargnoli",
+        "linkedinUrl": "https://www.linkedin.com/in/brentonfargnoli"
+      },
+      {
+        "id": "ACoAACK38N0BmQvjrzIl2iwAslSjUeql5WMQhlM",
+        "firstName": "Naveed",
+        "lastName": "Matinfar",
+        "publicIdentifier": "naveed-matinfar-4790a3143",
+        "linkedinUrl": "https://www.linkedin.com/in/naveed-matinfar-4790a3143"
+      },
+      {
+        "id": "ACoAAAAFLDMB5R5D8parghrH5WUxk3OYBdqvcuA",
+        "firstName": "Will",
+        "lastName": "Kohler",
+        "publicIdentifier": "will-kohler-217144",
+        "linkedinUrl": "https://www.linkedin.com/in/will-kohler-217144"
+      },
+      {
+        "id": "ACoAAACKppMBjcLR9XiEnWw2wXlY6Db3CWJewqI",
+        "firstName": "Raviraj",
+        "lastName": "Jain",
+        "publicIdentifier": "ravirajjain",
+        "linkedinUrl": "https://www.linkedin.com/in/ravirajjain"
+      },
+      {
+        "id": "ACoAAAAVW7EBKTpx3YBY9c2bSuGc-z8y9O1gOCk",
+        "firstName": "Peter",
+        "lastName": "Steinle",
+        "publicIdentifier": "peter-steinle-041576",
+        "linkedinUrl": "https://www.linkedin.com/in/peter-steinle-041576"
+      },
+      {
+        "id": "ACoAAAKhoggBbwS2YVsi6oDWXNetMWzveuFOLlI",
+        "firstName": "Galym",
+        "lastName": "Imanbayev, MD",
+        "publicIdentifier": "galymimanbayev",
+        "linkedinUrl": "https://www.linkedin.com/in/galymimanbayev"
+      },
+      {
+        "id": "ACoAAAj1dUQBVxcyTzfViz_vKCLoCG60nGzkcYs",
+        "firstName": "Amish",
+        "lastName": "Desai",
+        "publicIdentifier": "aadesai",
+        "linkedinUrl": "https://www.linkedin.com/in/aadesai"
+      },
+      {
+        "id": "ACoAAAmCPZgBIb84qLfwCBlHl1T3hFeKHCwOCVw",
+        "firstName": "Sam",
+        "lastName": "Eisler",
+        "publicIdentifier": "sam-eisler",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-eisler"
+      },
+      {
+        "id": "ACoAAB7o1EEBE1ioGZ8MiDQ_qoCzHHfTqVAAyqA",
+        "firstName": "Elijah",
+        "lastName": "Conniff",
+        "publicIdentifier": "elijahconniff",
+        "linkedinUrl": "https://www.linkedin.com/in/elijahconniff"
+      },
+      {
+        "id": "ACoAACCNMnMBYrSDHabPC5A3xvx9qFgmIXvvqf4",
+        "firstName": "Lina",
+        "lastName": "Z.",
+        "publicIdentifier": "linazhuo666",
+        "linkedinUrl": "https://www.linkedin.com/in/linazhuo666"
+      },
+      {
+        "id": "ACoAABlmzjQBVjoKjtvMYsc1vU9b107j_fam1Xs",
+        "firstName": "James",
+        "lastName": "Alcorn",
+        "publicIdentifier": "james-alcorn-b04880ba",
+        "linkedinUrl": "https://www.linkedin.com/in/james-alcorn-b04880ba"
+      },
+      {
+        "id": "ACoAAGJIu8IBpkWZgyU_hXrRbc9JTeQjCXa3VOM",
+        "firstName": "Jemal Mohammed Boruu",
+        "lastName": "undefined",
+        "position": "Student at College",
+        "publicIdentifier": "jemal-mohammed-boruu-undefined-1422843a0",
+        "linkedinUrl": "https://www.linkedin.com/in/jemal-mohammed-boruu-undefined-1422843a0"
+      },
+      {
+        "id": "ACoAAGNfNw8B0T3ZgYdPqpUnHjw0Ag5PEkOk4xA",
+        "firstName": "Isla",
+        "lastName": "Johnston",
+        "position": "Student-Athlete at Middlebury College",
+        "publicIdentifier": "isla-johnston-9534053a6",
+        "linkedinUrl": "https://www.linkedin.com/in/isla-johnston-9534053a6"
+      },
+      {
+        "id": "ACoAAEQwj9YBng1cZ4n2bB5VhmFWJ-G2Y5r49dU",
+        "firstName": "Hanna",
+        "lastName": "Freund",
+        "position": "Environmental Policy Major at Middlebury College",
+        "publicIdentifier": "hanna-freund1",
+        "linkedinUrl": "https://www.linkedin.com/in/hanna-freund1"
+      },
+      {
+        "id": "ACoAAE8VwtQB-w1HnQ-7kyB6p6q9XngqV8Bck5U",
+        "firstName": "Surya",
+        "lastName": "Patel",
+        "position": "Middlebury College, Class of '29",
+        "publicIdentifier": "surya-patel-298427310",
+        "linkedinUrl": "https://www.linkedin.com/in/surya-patel-298427310"
+      },
+      {
+        "id": "ACoAAEN38eIBBEMjUDfFHZG9ztx2SUdjMXsKijw",
+        "firstName": "Justin ",
+        "lastName": "DeLucia",
+        "position": "Student-Athlete studying International Politics and Economics at Middlebury College",
+        "publicIdentifier": "justin-delucia",
+        "linkedinUrl": "https://www.linkedin.com/in/justin-delucia"
+      },
+      {
+        "id": "ACoAAGAHzB0BhKrdwVy55c357JKxsWB9YsUSVLk",
+        "firstName": "Andrew",
+        "lastName": "Baay",
+        "position": "Student-Athlete at Middlebury College",
+        "publicIdentifier": "andrew-baay-33968b38b",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-baay-33968b38b"
+      },
+      {
+        "id": "ACoAAGBXwp8B37L1VULYyLh-CzM-kmQZY39lEhA",
+        "firstName": "ezii",
+        "lastName": "I.",
+        "position": null,
+        "publicIdentifier": "ezii-i-b3b397391",
+        "linkedinUrl": "https://www.linkedin.com/in/ezii-i-b3b397391"
+      },
+      {
+        "id": "ACoAAFzcvQwBGzCZY0wzhgiIDKV-fqqltuy-kBA",
+        "firstName": "JD",
+        "lastName": "Ball",
+        "position": "Student Athlete at Middlebury College",
+        "publicIdentifier": "jd-ball-150917375",
+        "linkedinUrl": "https://www.linkedin.com/in/jd-ball-150917375"
+      },
+      {
+        "id": "ACoAAF0o1hkBObPoMbscbV3Q1dZdC_9m4wehBnY",
+        "firstName": "Ian Walter",
+        "lastName": "Harvey",
+        "position": "Sophomore at Middlebury College",
+        "publicIdentifier": "ianwalterharvey",
+        "linkedinUrl": "https://www.linkedin.com/in/ianwalterharvey"
+      },
+      {
+        "id": "ACoAAGIQqkIBMsTsgVYtt9iwkh7gIvo411xP6fg",
+        "firstName": "Samantha",
+        "lastName": "Czaplicki",
+        "position": "Student at Middlebury College",
+        "publicIdentifier": "samantha-czaplicki-802bb139a",
+        "linkedinUrl": "https://www.linkedin.com/in/samantha-czaplicki-802bb139a"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAAoDkzgBwuu5Qxd-NN9S2IdhwpkQ2dt-adw"
+    }
+  }
+}

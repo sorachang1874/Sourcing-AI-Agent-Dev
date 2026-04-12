@@ -1,0 +1,1166 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAAJzsfoBkUTrnGwQnznNfBI5U0-zoset9nU",
+    "profile_url": "https://www.linkedin.com/in/ACwAAAJzsfoBkUTrnGwQnznNfBI5U0-zoset9nU"
+  },
+  "item": {
+    "id": "ACoAAAJzsfoBp0MxssQYMgmy0ZNO2U3sA58ugwc",
+    "publicIdentifier": "joshgross",
+    "linkedinUrl": "https://www.linkedin.com/in/joshgross",
+    "firstName": "Joshua",
+    "lastName": "Gross",
+    "emails": [
+      {
+        "email": "joshua.gross@meta.com",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://www.metacareers.com/",
+        "domain": "meta.com",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Engineering Leadership, Meta Superintelligence Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": true,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "South San Francisco, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "41136634",
+    "registeredAt": "2009-02-23T09:45:15.900Z",
+    "topSkills": "Python (Programming Language) • JavaScript • C++ • Java",
+    "connectionsCount": 1553,
+    "followerCount": 2052,
+    "verified": true,
+    "about": "Founding Member of Technical Staff at Thinking Machines, and formerly OpenAI. I'm a leader in engineering focused on building AGI.",
+    "currentPosition": [
+      {
+        "companyId": "10667",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyName": "Meta",
+        "dateRange": {
+          "start": {
+            "month": 3,
+            "year": 2026,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "19689",
+        "companyId": "4099",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/4099/",
+        "schoolName": "University of Wisconsin-Madison"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5603AQGZ4SFFm9PK7A/profile-displayphoto-crop_800_800/B56ZtRrSjDHgAI-/0/1766601862006?e=1776902400&v=beta&t=iHhxMwRzb4tIrHk4PSTeD-pyCmDWt9pJi24mlMYu8cM",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQGZ4SFFm9PK7A/profile-displayphoto-crop_800_800/B56ZtRrSjDHgAI-/0/1766601862006?e=1776902400&v=beta&t=iHhxMwRzb4tIrHk4PSTeD-pyCmDWt9pJi24mlMYu8cM",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQGZ4SFFm9PK7A/profile-displayphoto-scale_400_400/B56ZtRrSjDHgAg-/0/1766601862092?e=1776902400&v=beta&t=b5FUqwZr1kkvHfo__gvNujLuELoZVTUGIZfMgnNxx3I",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQGZ4SFFm9PK7A/profile-displayphoto-scale_200_200/B56ZtRrSjDHgAY-/0/1766601862092?e=1776902400&v=beta&t=kvUAc1pSdL3xAjddp_9fyr8n9TIbt2K7LzPOhzVzm4A",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQGZ4SFFm9PK7A/profile-displayphoto-scale_100_100/B56ZtRrSjDHgAc-/0/1766601862092?e=1776902400&v=beta&t=W_zTzm9YcAC0i56lxPZ8JMxo-xU5u-7Tfd-hPrMys90",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D5603AQGZ4SFFm9PK7A/profile-displayphoto-crop_800_800/B56ZtRrSjDHgAI-/0/1766601862006?e=1776902400&v=beta&t=iHhxMwRzb4tIrHk4PSTeD-pyCmDWt9pJi24mlMYu8cM",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Engineering Leadership, Meta Superintelligence Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Engineering Leadership",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/meta/",
+        "companyId": "10667",
+        "companyUniversalName": "meta",
+        "duration": "2 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2026,
+          "text": "Mar 2026"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Founding Member of Technical Staff",
+        "location": "San Francisco, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "Hybrid",
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyId": "105913171",
+        "duration": "1 yr 2 mos",
+        "description": "Founding team.\nBuilt and shipped Tinker, a low-level fine-tuning API, zero-to-one.",
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2025,
+          "text": "Feb 2025"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2026,
+          "text": "Mar 2026"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "OpenAI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/11130470/",
+        "companyId": "11130470",
+        "duration": "2 yrs 5 mos",
+        "description": "Built early Human Data team. Contributed to GPT3.5Turbo, GPT4.\nScaled ChatGPT to 400m users, built the ChatGPT org, and created the ChatGPT data flywheel with post-training.\nCodex post-training team.",
+        "skills": null,
+        "startDate": {
+          "month": "Oct",
+          "year": 2022,
+          "text": "Oct 2022"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2025,
+          "text": "Feb 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_200_200/B56ZT8EYB8HsAI-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=O6RSWlpQ5W4zNCOCTu621qCyTijLuXFJS4pz2_hBQfo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_100_100/B56ZT8EYB8HsAQ-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=y7RA89V9q8GlAjQ1oRU-jf_-n5zlSXRCnykXBIkgHfM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior Software Engineer",
+        "location": "Menlo Park, California",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Facebook",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/76987811/",
+        "companyId": "76987811",
+        "duration": "4 yrs 2 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Oct",
+          "year": 2018,
+          "text": "Oct 2018"
+        },
+        "endDate": {
+          "month": "Nov",
+          "year": 2022,
+          "text": "Nov 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_200_200/company-logo_200_200/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=CL3OcEUIyBJFm9Wkw4iT9gJoWpsvGBIAhhNM0DjZx_A",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_100_100/company-logo_100_100/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=sZq9Sard1kGYVIprgBkNhUvJRTI7tf3pXOCP1bQBfpM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Sensor Calibration Engineer",
+        "location": "Cupertino, California",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Apple",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/162479/",
+        "companyId": "162479",
+        "duration": "1 yr 3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Aug",
+          "year": 2017,
+          "text": "Aug 2017"
+        },
+        "endDate": {
+          "month": "Oct",
+          "year": 2018,
+          "text": "Oct 2018"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_400_400/company-logo_400_400/0/1630637844948/apple_logo?e=1776902400&v=beta&t=KteXM40NNLQ3nz21Do-neoy-f7lbDDA7kJmtS5wwrL4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_400_400/company-logo_400_400/0/1630637844948/apple_logo?e=1776902400&v=beta&t=KteXM40NNLQ3nz21Do-neoy-f7lbDDA7kJmtS5wwrL4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_200_200/company-logo_200_200/0/1630637844948/apple_logo?e=1776902400&v=beta&t=I8RMorsmHMk3gA9b3fT4m2HDgfVtfdB6se4bEZcMHb8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_100_100/company-logo_100_100/0/1630637844948/apple_logo?e=1776902400&v=beta&t=8c3EpxT43tZMihGirOM7eBnDzFHAGiYV-OxaRj_xfjo",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Swift Navigation",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3319918/",
+        "companyId": "3319918",
+        "duration": "1 yr 11 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Oct",
+          "year": 2015,
+          "text": "Oct 2015"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2017,
+          "text": "Aug 2017"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGEGmJXW3gI6A/company-logo_400_400/company-logo_400_400/0/1732060963173/swift_navigation_logo?e=1776902400&v=beta&t=97X3ABqsTZLMVPhx7EOQ4Wl48kfXFm8l32DDNk10w6I",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGEGmJXW3gI6A/company-logo_400_400/company-logo_400_400/0/1732060963173/swift_navigation_logo?e=1776902400&v=beta&t=97X3ABqsTZLMVPhx7EOQ4Wl48kfXFm8l32DDNk10w6I",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGEGmJXW3gI6A/company-logo_200_200/company-logo_200_200/0/1732060963173/swift_navigation_logo?e=1776902400&v=beta&t=Q5sBx8zuLARNjPQyb1EIfDJcEgx4QmmUggyGnqt_riI",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGEGmJXW3gI6A/company-logo_100_100/company-logo_100_100/0/1732060963173/swift_navigation_logo?e=1776902400&v=beta&t=CWJfN9J9d9e9kLd0lXBerOk5VHJ_wHuojaLRove1hG8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer",
+        "location": "Sunnyvale, CA",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Yahoo!",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1288/",
+        "companyId": "1288",
+        "duration": "2 yrs 3 mos",
+        "description": "iOS engineer -> created editorial platform on Yahoo News Digest.",
+        "skills": null,
+        "startDate": {
+          "month": "Aug",
+          "year": 2013,
+          "text": "Aug 2013"
+        },
+        "endDate": {
+          "month": "Oct",
+          "year": 2015,
+          "text": "Oct 2015"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHZRIvlF1NvZA/company-logo_400_400/company-logo_400_400/0/1734629033465/yahoo_logo?e=1776902400&v=beta&t=tyoKWOjjRA2BeufKGvXBFBWHkbTEaAWCK1LH1mzBGgw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHZRIvlF1NvZA/company-logo_400_400/company-logo_400_400/0/1734629033465/yahoo_logo?e=1776902400&v=beta&t=tyoKWOjjRA2BeufKGvXBFBWHkbTEaAWCK1LH1mzBGgw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHZRIvlF1NvZA/company-logo_200_200/company-logo_200_200/0/1734629033465/yahoo_logo?e=1776902400&v=beta&t=1nVR5z7fxUI0LuIAhrouqrG2RA6tMBwjBnzu0e3vdLM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHZRIvlF1NvZA/company-logo_100_100/company-logo_100_100/0/1734629033465/yahoo_logo?e=1776902400&v=beta&t=qzVdd30zO1ELed5xdznH0nO-72k4t64sThqn6__upgI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "President",
+        "location": "Greater Madison Area",
+        "employmentType": "Self-employed",
+        "workplaceType": null,
+        "companyName": "SpanDeX, Inc.",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=SpanDeX%2C+Inc%2E",
+        "duration": "1 yr 1 mo",
+        "description": "Cofounded a real-time collaborative editor with server-side code execution capabilities. Agile business and software development. Hired, raised funds, built product.",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2012,
+          "text": "May 2012"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2013,
+          "text": "May 2013"
+        }
+      },
+      {
+        "position": "President",
+        "location": "Franksville, WI",
+        "employmentType": "Self-employed",
+        "workplaceType": null,
+        "companyName": "Cortex Creations, LLC",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Cortex+Creations%2C+LLC",
+        "duration": "7 yrs 2 mos",
+        "description": "Founded, ran company, managed full-time employees (small-business experience).\nSpearheaded minimalist web framework now called Cortex-Frame.\nIn 2007, built and scaled Facebook applications to millions of users on a single server.",
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2006,
+          "text": "Jan 2006"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2013,
+          "text": "Feb 2013"
+        }
+      },
+      {
+        "position": "Author",
+        "location": "Madison, WI",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Pearson Publishing / Addison-Wesley",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/2137/",
+        "companyId": "2137",
+        "duration": "6 mos",
+        "description": "Video tutorial recording for PHP, MySQL, HTML and JavaScript LiveLesson.",
+        "skills": null,
+        "startDate": {
+          "month": "Dec",
+          "year": 2011,
+          "text": "Dec 2011"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2012,
+          "text": "May 2012"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQG9W4lfcWc9dQ/company-logo_400_400/B4EZYPofEYHkAY-/0/1744018993869/pearson_logo?e=1776902400&v=beta&t=nUwaJY_uQ4lR17-6YQqNG0vB6Bytf0nDaS8bBNs6rU0",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQG9W4lfcWc9dQ/company-logo_400_400/B4EZYPofEYHkAY-/0/1744018993869/pearson_logo?e=1776902400&v=beta&t=nUwaJY_uQ4lR17-6YQqNG0vB6Bytf0nDaS8bBNs6rU0",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQG9W4lfcWc9dQ/company-logo_200_200/B4EZYPofEYHkAI-/0/1744018993869/pearson_logo?e=1776902400&v=beta&t=1Fc-i_8udNbXR_MKyNz7bhpz1z_ALpZoksfPsOecc1s",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQG9W4lfcWc9dQ/company-logo_100_100/B4EZYPofEYHkAQ-/0/1744018993869/pearson_logo?e=1776902400&v=beta&t=eyDwDn3BrkhnulcCFst171eGMadQWaV9Y5eFHyUYj6E",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Mobile Software Engineer",
+        "location": "San Francisco, CA",
+        "employmentType": "Internship",
+        "workplaceType": null,
+        "companyName": "Astrid",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1552587/",
+        "companyId": "1552587",
+        "duration": "8 mos",
+        "description": "Load testing pre-launch, database optimization, Ruby on Rails in production.\nAndroid application development.\niOS and public site launch.",
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2011,
+          "text": "Jan 2011"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2011,
+          "text": "Aug 2011"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHuE8eMLy1e9w/company-logo_400_400/company-logo_400_400/0/1631324897528?e=1776902400&v=beta&t=mTJt67deht4b752QKDR-2CLoClGZBO68bAt8cdPTPCE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHuE8eMLy1e9w/company-logo_400_400/company-logo_400_400/0/1631324897528?e=1776902400&v=beta&t=mTJt67deht4b752QKDR-2CLoClGZBO68bAt8cdPTPCE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHuE8eMLy1e9w/company-logo_200_200/company-logo_200_200/0/1631324897528?e=1776902400&v=beta&t=KlnIQC6cBDuT9wTtb5VzAa0HiADQR0ttUEFXeKqvXnM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHuE8eMLy1e9w/company-logo_100_100/company-logo_100_100/0/1631324897528?e=1776902400&v=beta&t=36kypcxAzfDluAgk7dOpfjANeRG5LtiAEP4ObznR2GQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Technical Reviewer",
+        "location": "Greater Madison Area",
+        "employmentType": "Freelance",
+        "workplaceType": null,
+        "companyName": "Pearson North America",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/2137/",
+        "companyId": "2137",
+        "duration": "2 yrs 1 mo",
+        "description": "- Developer's Guide to Social Programming: Building Social Context Using Facebook, Google Friend Connect, and the Twitter API, Mark David Hawker (2009)\n- Test-Driven Javascript Development, Christian Johansen (2009)",
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2009,
+          "text": "Jan 2009"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2011,
+          "text": "Jan 2011"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQG9W4lfcWc9dQ/company-logo_400_400/B4EZYPofEYHkAY-/0/1744018993869/pearson_logo?e=1776902400&v=beta&t=nUwaJY_uQ4lR17-6YQqNG0vB6Bytf0nDaS8bBNs6rU0",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQG9W4lfcWc9dQ/company-logo_400_400/B4EZYPofEYHkAY-/0/1744018993869/pearson_logo?e=1776902400&v=beta&t=nUwaJY_uQ4lR17-6YQqNG0vB6Bytf0nDaS8bBNs6rU0",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQG9W4lfcWc9dQ/company-logo_200_200/B4EZYPofEYHkAI-/0/1744018993869/pearson_logo?e=1776902400&v=beta&t=1Fc-i_8udNbXR_MKyNz7bhpz1z_ALpZoksfPsOecc1s",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQG9W4lfcWc9dQ/company-logo_100_100/B4EZYPofEYHkAQ-/0/1744018993869/pearson_logo?e=1776902400&v=beta&t=eyDwDn3BrkhnulcCFst171eGMadQWaV9Y5eFHyUYj6E",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Web Developer",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "IceCube Neutrino Observatory",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=IceCube+Neutrino+Observatory",
+        "duration": "5 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Apr",
+          "year": 2010,
+          "text": "Apr 2010"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2010,
+          "text": "Aug 2010"
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "University of Wisconsin-Madison",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/4099/",
+        "schoolId": "4099",
+        "degree": "Bachelor of Arts",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "startDate": {
+          "year": 2009,
+          "text": "2009"
+        },
+        "endDate": {
+          "year": 2013,
+          "text": "2013"
+        },
+        "period": "2009 - 2013",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQFyYW54n5mwAw/company-logo_400_400/company-logo_400_400/0/1630601304331/university_of_wisconsin_madison_logo?e=1776902400&v=beta&t=wvxiQBgUnjXdwAk0IObiT5Wj6TKUeAe0dsTc65a_B6I",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFyYW54n5mwAw/company-logo_400_400/company-logo_400_400/0/1630601304331/university_of_wisconsin_madison_logo?e=1776902400&v=beta&t=wvxiQBgUnjXdwAk0IObiT5Wj6TKUeAe0dsTc65a_B6I",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFyYW54n5mwAw/company-logo_200_200/company-logo_200_200/0/1630601304331/university_of_wisconsin_madison_logo?e=1776902400&v=beta&t=JIZjxIyPx28gvO2q5ssmaawR06ihMxZMP5fsoP6FPJk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFyYW54n5mwAw/company-logo_100_100/company-logo_100_100/0/1630601304331/university_of_wisconsin_madison_logo?e=1776902400&v=beta&t=WiXXgwWugZh6iAllcwcr5PFeMXeSBDbLjxMwfYnOlPM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [
+      {
+        "givenBy": "Youssef Ali",
+        "givenByHeadline": "Founder and CMO @ 1UP Nova | MBA, Social Media Marketing",
+        "givenAt": "August 24, 2018, Youssef was Joshua’s client",
+        "givenByLink": "https://www.linkedin.com/in/yosephbasha",
+        "description": "I was a client of Joshua when he was only 14, he took charge and developed a complete fully functional web software that was very impressive and ahead of our time back then. Great seeing all your accomplishments so far, and hopefully I can work with you again some day on a new project. ",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQGRz21MZPbRvA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1580977616237?e=1776902400&v=beta&t=-HrBT2PGw_w7ZtmbBDascKazPpVVScMfXMuc6Tsc1EM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQGRz21MZPbRvA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1580977616237?e=1776902400&v=beta&t=-HrBT2PGw_w7ZtmbBDascKazPpVVScMfXMuc6Tsc1EM",
+              "width": 800,
+              "height": 800,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQGRz21MZPbRvA/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1580977616198?e=1776902400&v=beta&t=6FtENf89sNyPqPp8o7CZQiiftIkhNCGIRqAPiuhzmek",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQGRz21MZPbRvA/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1580977616152?e=1776902400&v=beta&t=QIpj-5et4YkZIv1sNqeS6ERiZV3jQI5vtSNXDkYIU-o",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQGRz21MZPbRvA/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1580977616175?e=1776902400&v=beta&t=EKKvWhxbpAk7DfG_zvi6iXKEgeboCN5e2TPHWbY6jiY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Tim S.",
+        "givenByHeadline": "3x CTO | Helping people connect well",
+        "givenAt": "August 21, 2012, Tim managed Joshua directly",
+        "givenByLink": "https://www.linkedin.com/in/timothysu",
+        "description": "Josh was a pleasure to work with and manage. He is an incredibly sharp engineer, a fast learner, and a deep thinker. More importantly, he has a passion for his work that drives him forward in every situation. As an intern, he created more value than any past or future intern we have hired, which is a pretty high bar. In addition to his technical abilities, Josh is a creative and bold thinker with an intuitive understanding of social software and the human interactions that drive them. He is mature beyond his years, responsible, trustworthy, fun, high-energy, and overall, one of the best people around.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQFVaaqL6aBQ6A/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1516286162109?e=1776902400&v=beta&t=YcoZ5VWurCf9LbXEQGkhgB1zl-zr885fv-JbgXcZC5Q",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQFVaaqL6aBQ6A/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1516286162109?e=1776902400&v=beta&t=YcoZ5VWurCf9LbXEQGkhgB1zl-zr885fv-JbgXcZC5Q",
+              "width": 450,
+              "height": 450,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQFVaaqL6aBQ6A/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1516286162128?e=1776902400&v=beta&t=FzauB8cy2G3W3htDEHrN-hIxVoArhbWDK0ZNyiG6MBM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQFVaaqL6aBQ6A/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1516286162275?e=1776902400&v=beta&t=JKuyDpuIcKcguXJ2jTLQVy_kl-KUZqNFDMuBNn42nX8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQFVaaqL6aBQ6A/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1516286162112?e=1776902400&v=beta&t=xELh-u1JkzRoV9cKwJP-yxft0usWTzqoKPPuBpREqdg",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Jon Paris",
+        "givenByHeadline": "Senior Director, Product Management at Meta",
+        "givenAt": "August 20, 2012, Jon managed Joshua directly",
+        "givenByLink": "https://www.linkedin.com/in/jnparis",
+        "description": "Managing performance at scale? He's done it. Building iOS apps? Done it.  Envisioning features through API integrations and coding it up in a few hours? Easy for Josh. Overall, Josh was a delight to work with and made our engineering team stronger and happier.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQEOtUPXUcR_bw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1709187569015?e=1776902400&v=beta&t=v7pUGy6yP5hyhaEDY3sV3FRAF9yswGUwGxJF564gW5s",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E03AQEOtUPXUcR_bw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1709187569015?e=1776902400&v=beta&t=v7pUGy6yP5hyhaEDY3sV3FRAF9yswGUwGxJF564gW5s",
+              "width": 800,
+              "height": 800,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E03AQEOtUPXUcR_bw/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1709187569015?e=1776902400&v=beta&t=yP1yGYZRU8lUMZ6TDmnej0dwrz18NF-g7B0r3Gzpomw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E03AQEOtUPXUcR_bw/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1709187569015?e=1776902400&v=beta&t=7WKzYU_1R34jpLzKJMmaobwyYGTF8sVig5pOLG-8UiE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E03AQEOtUPXUcR_bw/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1709187569015?e=1776902400&v=beta&t=h-evczvT6PwHzvko-E6Ujp0cO_NXJXqkDk2Tezhqxt8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "skills": [
+      {
+        "name": "Python (Programming Language)"
+      },
+      {
+        "name": "Ruby on Rails",
+        "endorsements": "15 endorsements"
+      },
+      {
+        "name": "JavaScript",
+        "assessments": "Passed LinkedIn Skill Assessment",
+        "endorsements": "50 endorsements"
+      },
+      {
+        "name": "Node.js",
+        "assessments": "Passed LinkedIn Skill Assessment",
+        "endorsements": "7 endorsements"
+      },
+      {
+        "name": "LaTeX",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Git",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "Ruby",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Python",
+        "endorsements": "8 endorsements"
+      },
+      {
+        "name": "PHP",
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "MySQL",
+        "endorsements": "16 endorsements"
+      },
+      {
+        "name": "jQuery",
+        "endorsements": "12 endorsements"
+      },
+      {
+        "name": "C++",
+        "assessments": "Passed LinkedIn Skill Assessment"
+      },
+      {
+        "name": "Java"
+      },
+      {
+        "name": "Web Development",
+        "positions": [
+          "Endorsed by 5 colleagues at Yahoo"
+        ],
+        "endorsements": "29 endorsements"
+      },
+      {
+        "name": "Project Management",
+        "endorsements": "12 endorsements"
+      },
+      {
+        "name": "Web Application Design",
+        "endorsements": "7 endorsements"
+      },
+      {
+        "name": "Scalability",
+        "endorsements": "11 endorsements"
+      },
+      {
+        "name": "Southeast Asian Cuisine",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Entrepreneurship",
+        "endorsements": "7 endorsements"
+      },
+      {
+        "name": "Start-ups",
+        "endorsements": "7 endorsements"
+      },
+      {
+        "name": "Programming",
+        "endorsements": "15 endorsements"
+      },
+      {
+        "name": "Agile Methodologies",
+        "endorsements": "8 endorsements"
+      },
+      {
+        "name": "User Experience",
+        "endorsements": "10 endorsements"
+      },
+      {
+        "name": "Software Development",
+        "endorsements": "11 endorsements"
+      },
+      {
+        "name": "Haskell",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Computer Science"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [
+      {
+        "name": "Mandarin"
+      }
+    ],
+    "causes": [
+      "Civil Rights and Social Action",
+      "Environment",
+      "Human Rights",
+      "Poverty Alleviation",
+      "Science and Technology"
+    ],
+    "featured": null,
+    "composeOptionType": "PREMIUM_INMAIL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "position": "AI Researcher, Co-founder @ Thinking Machines Lab",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAAAQ4Q7kByw3YKf2rFlmWzRMF7P8Gw4S9PIU",
+        "firstName": "Yinghai",
+        "lastName": "L.",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "yinghai83",
+        "linkedinUrl": "https://www.linkedin.com/in/yinghai83"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABgwxtcBfqsJJUHPwsSPuBE4K9oKyRqUp5o",
+        "firstName": "Lia",
+        "lastName": "Guy",
+        "position": "Research @ OpenAI",
+        "publicIdentifier": "aureliaguy",
+        "linkedinUrl": "https://www.linkedin.com/in/aureliaguy"
+      },
+      {
+        "id": "ACoAAACQBzQB5nk5kOpFWQRtK4pv3RaL5q2G-pA",
+        "firstName": "Jonathan",
+        "lastName": "Lachman",
+        "position": "Founding Head of Operations at Thinking Machines Lab",
+        "publicIdentifier": "jonathan-lachman-4981b23",
+        "linkedinUrl": "https://www.linkedin.com/in/jonathan-lachman-4981b23"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAABYs4-IB5mHx5eVfOHzu1e8xlO3q_kb38IM",
+        "firstName": "Brydon",
+        "lastName": "Eastman",
+        "position": "Nerd @ Thinking Machines Labs | Formerly Member of Technical Staff @ OpenAI | PhD in Mathematical Oncology",
+        "publicIdentifier": "brydon-eastman-396719a4",
+        "linkedinUrl": "https://www.linkedin.com/in/brydon-eastman-396719a4"
+      },
+      {
+        "id": "ACoAAACo1tYBGy9sT2OWZuEULOMe4K_b2Y22-F8",
+        "firstName": "Alex",
+        "lastName": "Gartrell",
+        "position": "Engineering @ Thinking Machines, Ex-Meta/Facebook",
+        "publicIdentifier": "alexgartrell",
+        "linkedinUrl": "https://www.linkedin.com/in/alexgartrell"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAABA0sF8BJqwmfoms3veu9TE72tj8JMUQEFA",
+        "firstName": "Sam",
+        "lastName": "Shleifer",
+        "position": "The Biggest Legend",
+        "publicIdentifier": "sam-shleifer-a5307a77",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-shleifer-a5307a77"
+      },
+      {
+        "id": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+        "firstName": "Saurabh",
+        "lastName": "Garg",
+        "position": "Thinking Machines Lab | Prev: Mistral AI, CMU, IIT-B",
+        "publicIdentifier": "saurabh-garg-b680b5b8",
+        "linkedinUrl": "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+      },
+      {
+        "id": "ACoAABhKWCYBiuV3Zv9Hbt8t0j-xMRqxawBcSgw",
+        "firstName": "Kurt",
+        "lastName": "Shuster",
+        "position": "AI Research Engineer",
+        "publicIdentifier": "kurtshuster1",
+        "linkedinUrl": "https://www.linkedin.com/in/kurtshuster1"
+      },
+      {
+        "id": "ACoAAAl87CYBWKLLyGNTbomy6oqIPv-5n34CXIY",
+        "firstName": "Andrew",
+        "lastName": "Tulloch",
+        "position": "AI Research @ Meta",
+        "publicIdentifier": "andrew-tulloch-17238745",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-tulloch-17238745"
+      },
+      {
+        "id": "ACoAABV61Q0BF3ER-196Zc9GK5TviMrbbIlVGqg",
+        "firstName": "Samuel",
+        "lastName": "Schoenholz",
+        "position": "Thinking Machines Lab | Ex: OpenAI, Google Brain",
+        "publicIdentifier": "samuel-schoenholz-379830a0",
+        "linkedinUrl": "https://www.linkedin.com/in/samuel-schoenholz-379830a0"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "position": "Co-Founder and CEO at Thinking Machines Lab",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAABPg53YBHdOvmp7pU72eDhcho-7cnwyxk1o",
+        "firstName": "Pia",
+        "lastName": "Santos",
+        "position": "Founding Team at Thinking Machines Lab",
+        "publicIdentifier": "piafsantos",
+        "linkedinUrl": "https://www.linkedin.com/in/piafsantos"
+      },
+      {
+        "id": "ACoAAAO-j_IBXcvIzhZtQ7QNkky6tlnQTcFl9qI",
+        "firstName": "Myle",
+        "lastName": "Ott",
+        "position": "ML infra at Thinking Machines",
+        "publicIdentifier": "myleott",
+        "linkedinUrl": "https://www.linkedin.com/in/myleott"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAAAji1bkB1eLX4z2Jb9-N2nMhEGNLWptSnqU",
+        "firstName": "Clare",
+        "lastName": "Birch",
+        "publicIdentifier": "clarebirch42",
+        "linkedinUrl": "https://www.linkedin.com/in/clarebirch42"
+      },
+      {
+        "id": "ACoAAAAdzCEB9t8wLSGcpoQ71RdetK75KW7RgS4",
+        "firstName": "Mark",
+        "lastName": "Jen",
+        "position": "Engineer",
+        "publicIdentifier": "markjen",
+        "linkedinUrl": "https://www.linkedin.com/in/markjen"
+      },
+      {
+        "id": "ACoAADTW9akBE0movI8cHPmgQMrkvVi1RzjBhw4",
+        "firstName": "Saskia",
+        "lastName": "Hippe",
+        "position": "Profisportlerin, Volleyball | Teamsport, Fitness Training",
+        "publicIdentifier": "saskia-hippe-575a7a208",
+        "linkedinUrl": "https://www.linkedin.com/in/saskia-hippe-575a7a208"
+      },
+      {
+        "id": "ACoAABOjXdYBCSu0QAEtnFXDQOxctgsZJledM24",
+        "firstName": "Olivier",
+        "lastName": "Senn",
+        "position": "Loving the world of sports",
+        "publicIdentifier": "olivier-senn-64640b92",
+        "linkedinUrl": "https://www.linkedin.com/in/olivier-senn-64640b92"
+      },
+      {
+        "id": "ACoAABc3oSYBpGFzvSRW4dvzb-do3XJoNzL8kZU",
+        "firstName": "Lars",
+        "lastName": "Weibel",
+        "position": "Director Sport bei Swiss Ice Hockey Federation",
+        "publicIdentifier": "lars-weibel-79a549aa",
+        "linkedinUrl": "https://www.linkedin.com/in/lars-weibel-79a549aa"
+      },
+      {
+        "id": "ACoAABIaZecBnR0jU9PWGYG1Rsz1gdVCuA1ozEY",
+        "firstName": "Thomas",
+        "lastName": "Zamboni",
+        "position": "Director Education at Swiss Ice Hockey Federation",
+        "publicIdentifier": "thomas-zamboni-a0786b85",
+        "linkedinUrl": "https://www.linkedin.com/in/thomas-zamboni-a0786b85"
+      },
+      {
+        "id": "ACoAAAUJLGQBw-EGfYPqBJdlET6BCM63Tiy9W0o",
+        "firstName": "Ronnie",
+        "lastName": "Schildknecht",
+        "position": "11facher Ironmansieger | 4. Rang Ironman Hawaii | Geschäftsführer bei I-Ron Sportmanagement",
+        "publicIdentifier": "ronnie-schildknecht-11836524",
+        "linkedinUrl": "https://www.linkedin.com/in/ronnie-schildknecht-11836524"
+      },
+      {
+        "id": "ACoAABFMLCQBY4xJpplImRcEehEWoyyQqlVK_Rk",
+        "firstName": "Zuffi",
+        "lastName": "Dario",
+        "position": "Fussball-Trainer beim FC Winterthur",
+        "publicIdentifier": "zuffi-dario-65823281",
+        "linkedinUrl": "https://www.linkedin.com/in/zuffi-dario-65823281"
+      },
+      {
+        "id": "ACoAAAbOkp0B_Fpe-uXcvAyw1Nt_2__CM2b_O2k",
+        "firstName": "Philipp",
+        "lastName": "Bohnenblust",
+        "position": "Sportchef SCL Young Tigers & Asst. Leiter Sport SCL Tigers",
+        "publicIdentifier": "philipp-bohnenblust-8252b432",
+        "linkedinUrl": "https://www.linkedin.com/in/philipp-bohnenblust-8252b432"
+      },
+      {
+        "id": "ACoAAA2NAyQBWmjmsiwHcbHiz9R9OVGbWdfMIZ4",
+        "firstName": "Thomas",
+        "lastName": "Peter",
+        "position": "Geschäftsführer Swiss Cycling",
+        "publicIdentifier": "thomas-peter-60417964",
+        "linkedinUrl": "https://www.linkedin.com/in/thomas-peter-60417964"
+      },
+      {
+        "id": "ACoAAA_LH4oBfNKDN1c_Da8To3b4vV8YhIc-gCY",
+        "firstName": "Stephan",
+        "lastName": "Siegrist",
+        "position": "Professional Alpinist Keynote | Speaker | Mountain-Guide | Author",
+        "publicIdentifier": "stephan-siegrist",
+        "linkedinUrl": "https://www.linkedin.com/in/stephan-siegrist"
+      },
+      {
+        "id": "ACoAAA938wIB9ydgbAp7qsz6pB4Ze3ivzRxDaYM",
+        "firstName": "Dominic",
+        "lastName": "Lammer",
+        "position": "Profi-Eishockeyspieler bei Lakers Sport AG",
+        "publicIdentifier": "dominic-lammer-8aaab472",
+        "linkedinUrl": "https://www.linkedin.com/in/dominic-lammer-8aaab472"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAAJzsfoBkUTrnGwQnznNfBI5U0-zoset9nU"
+    }
+  }
+}

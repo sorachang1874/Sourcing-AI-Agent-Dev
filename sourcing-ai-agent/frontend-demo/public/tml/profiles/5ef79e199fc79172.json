@@ -1,0 +1,1413 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAAM07-gBDGl4QBUZPpcmaHEPHyUNZClO4D0",
+    "profile_url": "https://www.linkedin.com/in/ACwAAAM07-gBDGl4QBUZPpcmaHEPHyUNZClO4D0"
+  },
+  "item": {
+    "id": "ACoAAAM07-gB20Vg4hTVwpax2eyLJhzmkVGgucg",
+    "publicIdentifier": "katieslattery",
+    "linkedinUrl": "https://www.linkedin.com/in/katieslattery",
+    "firstName": "Katie",
+    "lastName": "Slattery",
+    "emails": [
+      {
+        "email": "katie.slattery@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Accounting @ Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": true,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "53800936",
+    "registeredAt": "2009-09-15T15:08:23.772Z",
+    "topSkills": null,
+    "connectionsCount": 3262,
+    "followerCount": 3502,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 9,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5603AQGDsCv-zSzgjg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1729220446716?e=1776902400&v=beta&t=YnQZdaBCD0omP4TBTswZn73pPALGUvhb_qgDByao6Ks",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQGDsCv-zSzgjg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1729220446716?e=1776902400&v=beta&t=YnQZdaBCD0omP4TBTswZn73pPALGUvhb_qgDByao6Ks",
+          "width": 536,
+          "height": 536,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQGDsCv-zSzgjg/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1729220446712?e=1776902400&v=beta&t=6ohQhzh7fVlYwm3l8hiddZkarp98g8_fheYSH8UQCI4",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQGDsCv-zSzgjg/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1729220446712?e=1776902400&v=beta&t=ku3UegH_N0gpaRK4E0qcD8BMUca0V9wFwat43Q2Hxwo",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQGDsCv-zSzgjg/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1729220446712?e=1776902400&v=beta&t=Y-NDpZpyQhL8JcO1pPAFf-dJlIy_Sl2So26mTn9xeTo",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": {
+      "url": "https://media.licdn.com/dms/image/v2/C5616AQGV0NrVF1zntw/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1595393380755?e=1776902400&v=beta&t=A-ZQomQ2wsP6YgfbbUhiL85SakIKbknp3bKo1kSG_D4",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5616AQGV0NrVF1zntw/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1595393380755?e=1776902400&v=beta&t=A-ZQomQ2wsP6YgfbbUhiL85SakIKbknp3bKo1kSG_D4",
+          "width": 1400,
+          "height": 350,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5616AQGV0NrVF1zntw/profile-displaybackgroundimage-shrink_200_800/profile-displaybackgroundimage-shrink_200_800/0/1595393380755?e=1776902400&v=beta&t=5CYoPdHRUTjRA9dhsJHFCGkoOyMQH9GZt_KQRm0zp7o",
+          "width": 800,
+          "height": 200,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "photo": "https://media.licdn.com/dms/image/v2/D5603AQGDsCv-zSzgjg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1729220446716?e=1776902400&v=beta&t=YnQZdaBCD0omP4TBTswZn73pPALGUvhb_qgDByao6Ks",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Accounting @ Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Accounting",
+        "location": "San Francisco Bay Area",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "8 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2025,
+          "text": "Sep 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "VP, Accounting & Corporate Controller",
+        "location": "Oakland, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Fivetran",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3954657/",
+        "companyId": "3954657",
+        "duration": "3 yrs 8 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "f6ab162676a1790de6971d8dbdf7080828c1dde5",
+        "startDate": {
+          "month": "Mar",
+          "year": 2022,
+          "text": "Mar 2022"
+        },
+        "endDate": {
+          "month": "Oct",
+          "year": 2025,
+          "text": "Oct 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4D0BAQG1AQxEZbI6ng/company-logo_400_400/company-logo_400_400/0/1711745976624/fivetran_logo?e=1776902400&v=beta&t=yJAmppVh5xHYo2Zv5zrWs7IPWb_VfLjTkSEW-baJ3bk",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQG1AQxEZbI6ng/company-logo_400_400/company-logo_400_400/0/1711745976624/fivetran_logo?e=1776902400&v=beta&t=yJAmppVh5xHYo2Zv5zrWs7IPWb_VfLjTkSEW-baJ3bk",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQG1AQxEZbI6ng/company-logo_200_200/company-logo_200_200/0/1711745976624/fivetran_logo?e=1776902400&v=beta&t=8lbmQZzhcXPTkYxlfHgAI4OMo4HowA7BwOEOKteeVz0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQG1AQxEZbI6ng/company-logo_100_100/company-logo_100_100/0/1711745976624/fivetran_logo?e=1776902400&v=beta&t=JCdbcGm94wheraLsWiYW3JSK_PGz36XNumI7yvxMR24",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Corporate Controller",
+        "location": "Oakland, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Fivetran",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3954657/",
+        "companyId": "3954657",
+        "duration": "1 yr",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "f6ab162676a1790de6971d8dbdf7080828c1dde5",
+        "startDate": {
+          "month": "Mar",
+          "year": 2021,
+          "text": "Mar 2021"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2022,
+          "text": "Feb 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4D0BAQG1AQxEZbI6ng/company-logo_400_400/company-logo_400_400/0/1711745976624/fivetran_logo?e=1776902400&v=beta&t=yJAmppVh5xHYo2Zv5zrWs7IPWb_VfLjTkSEW-baJ3bk",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQG1AQxEZbI6ng/company-logo_400_400/company-logo_400_400/0/1711745976624/fivetran_logo?e=1776902400&v=beta&t=yJAmppVh5xHYo2Zv5zrWs7IPWb_VfLjTkSEW-baJ3bk",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQG1AQxEZbI6ng/company-logo_200_200/company-logo_200_200/0/1711745976624/fivetran_logo?e=1776902400&v=beta&t=8lbmQZzhcXPTkYxlfHgAI4OMo4HowA7BwOEOKteeVz0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQG1AQxEZbI6ng/company-logo_100_100/company-logo_100_100/0/1711745976624/fivetran_logo?e=1776902400&v=beta&t=JCdbcGm94wheraLsWiYW3JSK_PGz36XNumI7yvxMR24",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Founder and Managing Director",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "HYRE Company",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/29369498/",
+        "companyId": "29369498",
+        "duration": "1 yr 6 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Oct",
+          "year": 2019,
+          "text": "Oct 2019"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2021,
+          "text": "Mar 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQGm-VUxmvW2PA/company-logo_400_400/company-logo_400_400/0/1630570813208/hyrecompany_logo?e=1776902400&v=beta&t=sXniIwXCrxMbe6sbOvYK51aS9q9nuouj5r9npmktoa4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGm-VUxmvW2PA/company-logo_400_400/company-logo_400_400/0/1630570813208/hyrecompany_logo?e=1776902400&v=beta&t=sXniIwXCrxMbe6sbOvYK51aS9q9nuouj5r9npmktoa4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGm-VUxmvW2PA/company-logo_200_200/company-logo_200_200/0/1630570813208/hyrecompany_logo?e=1776902400&v=beta&t=9W_APCGTmQhPZb3grA6hWOYJ5II60ynynQykZx2xDwo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGm-VUxmvW2PA/company-logo_100_100/company-logo_100_100/0/1630570813208/hyrecompany_logo?e=1776902400&v=beta&t=fcZncs2olXFIlPRdZ8PmE_gzVSV6qy9ZTGB0lCr7XP8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Corporate Controller, Global Head of Accounting",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Zume Inc.",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/18488667/",
+        "companyId": "18488667",
+        "duration": "1 yr 2 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Oct",
+          "year": 2018,
+          "text": "Oct 2018"
+        },
+        "endDate": {
+          "month": "Nov",
+          "year": 2019,
+          "text": "Nov 2019"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEfn9S9F9Oopw/company-logo_400_400/company-logo_400_400/0/1630592963999/zumeinc_logo?e=1776902400&v=beta&t=EizWf1WjSlWnKRaf3kypZRhf77B2iJ3_qGnKjJv4Y2c",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEfn9S9F9Oopw/company-logo_400_400/company-logo_400_400/0/1630592963999/zumeinc_logo?e=1776902400&v=beta&t=EizWf1WjSlWnKRaf3kypZRhf77B2iJ3_qGnKjJv4Y2c",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEfn9S9F9Oopw/company-logo_200_200/company-logo_200_200/0/1630592963999/zumeinc_logo?e=1776902400&v=beta&t=G1pPCbrBXYGnY-K5y19wkACTR3HHH1sCSB0yCjyjv6U",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEfn9S9F9Oopw/company-logo_100_100/company-logo_100_100/0/1630592963999/zumeinc_logo?e=1776902400&v=beta&t=GvCEPTe5AqNxwNRriI6h-z1t1l3UcFepPqFykL9AqhQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Corporate Controller",
+        "location": "San Francisco, California",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Tubi",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3650994/",
+        "companyId": "3650994",
+        "duration": "1 yr 4 mos",
+        "description": "Acquired by Fox ",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2017,
+          "text": "Jun 2017"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2018,
+          "text": "Sep 2018"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQFEu-MB10s_VA/company-logo_400_400/company-logo_400_400/0/1709128803062/tubi_tv_logo?e=1776902400&v=beta&t=-qDmOChIRhosRTkq1x7WdVAai-h8Ezy7JNBhATfxHrc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFEu-MB10s_VA/company-logo_400_400/company-logo_400_400/0/1709128803062/tubi_tv_logo?e=1776902400&v=beta&t=-qDmOChIRhosRTkq1x7WdVAai-h8Ezy7JNBhATfxHrc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFEu-MB10s_VA/company-logo_200_200/company-logo_200_200/0/1709128803062/tubi_tv_logo?e=1776902400&v=beta&t=bYTQvGuPTRK2aY2fXxApiRh1a0BLaTQb8Ve-8ie_sMs",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFEu-MB10s_VA/company-logo_100_100/company-logo_100_100/0/1709128803062/tubi_tv_logo?e=1776902400&v=beta&t=fwS1WX744NfKN30BYJSF1w5WhQdEPTyKEC94tUinV9M",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Manager, Venture Capital Practice",
+        "location": "San Francisco/Silicon Valley",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "KPMG US",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1079/",
+        "companyId": "1079",
+        "duration": "1 yr",
+        "description": "Clients included: \n\n- Twilio, Inc.\n- Stripe, Inc. \n- Square, Inc. \n- Slack, Inc. \n- Zuora, Inc. \n- Practice Fusion, Inc.",
+        "skills": null,
+        "experienceGroupId": "f3feaee4a3c5e334b1abedc010820f16cf874c51",
+        "startDate": {
+          "month": "Jul",
+          "year": 2016,
+          "text": "Jul 2016"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2017,
+          "text": "Jun 2017"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFujenQWGHyUw/company-logo_400_400/B4EZx3zZGkIsAc-/0/1771536487156/kpmg_us_logo?e=1776902400&v=beta&t=bcRF1emx4pU1MpBkXWQm1JfOlitMzFlLQWX-XxA2lfw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFujenQWGHyUw/company-logo_400_400/B4EZx3zZGkIsAc-/0/1771536487156/kpmg_us_logo?e=1776902400&v=beta&t=bcRF1emx4pU1MpBkXWQm1JfOlitMzFlLQWX-XxA2lfw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFujenQWGHyUw/company-logo_200_200/B4EZx3zZGkIsAM-/0/1771536487156/kpmg_us_logo?e=1776902400&v=beta&t=mG00dlzScNXCZ8zEnhqCofbC0kk5ttmWPlzy11NkSP4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFujenQWGHyUw/company-logo_100_100/B4EZx3zZGkIsAU-/0/1771536487156/kpmg_us_logo?e=1776902400&v=beta&t=08wXAlWGPNbFs20Nnd6-td_rW7JRKlkNb0wheM8dosw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior Associate, Venture Capital Practice",
+        "location": "San Francisco/Silicon Valley",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "KPMG US",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1079/",
+        "companyId": "1079",
+        "duration": "1 yr 8 mos",
+        "description": "Certified Public Accountant (CPA)\n\nKPMG’s Venture Capital Practice provides integrated audit, tax, and advisory services designed to meet the unique needs of start-ups and emerging growth companies.",
+        "skills": null,
+        "experienceGroupId": "f3feaee4a3c5e334b1abedc010820f16cf874c51",
+        "startDate": {
+          "month": "Dec",
+          "year": 2014,
+          "text": "Dec 2014"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2016,
+          "text": "Jul 2016"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFujenQWGHyUw/company-logo_400_400/B4EZx3zZGkIsAc-/0/1771536487156/kpmg_us_logo?e=1776902400&v=beta&t=bcRF1emx4pU1MpBkXWQm1JfOlitMzFlLQWX-XxA2lfw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFujenQWGHyUw/company-logo_400_400/B4EZx3zZGkIsAc-/0/1771536487156/kpmg_us_logo?e=1776902400&v=beta&t=bcRF1emx4pU1MpBkXWQm1JfOlitMzFlLQWX-XxA2lfw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFujenQWGHyUw/company-logo_200_200/B4EZx3zZGkIsAM-/0/1771536487156/kpmg_us_logo?e=1776902400&v=beta&t=mG00dlzScNXCZ8zEnhqCofbC0kk5ttmWPlzy11NkSP4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFujenQWGHyUw/company-logo_100_100/B4EZx3zZGkIsAU-/0/1771536487156/kpmg_us_logo?e=1776902400&v=beta&t=08wXAlWGPNbFs20Nnd6-td_rW7JRKlkNb0wheM8dosw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior Associate, Management Consulting",
+        "location": "Los Angeles",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "KPMG Ireland",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/409624/",
+        "companyId": "409624",
+        "duration": "7 mos",
+        "description": "M&A consultant for $7.6 billion acquisition of ILFC by AerCap. ",
+        "skills": null,
+        "experienceGroupId": "3a209451e69419c5117db0ba2d672ee7ad446743",
+        "startDate": {
+          "month": "May",
+          "year": 2014,
+          "text": "May 2014"
+        },
+        "endDate": {
+          "month": "Nov",
+          "year": 2014,
+          "text": "Nov 2014"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQE1w9D3nU_NqA/company-logo_400_400/B4EZfPOthVHYAY-/0/1751528430081/kpmg_ireland_logo?e=1776902400&v=beta&t=LZfyQS9MibIE9daBpsUYXs6q7M2QYtIzhN4ROngJO6E",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQE1w9D3nU_NqA/company-logo_400_400/B4EZfPOthVHYAY-/0/1751528430081/kpmg_ireland_logo?e=1776902400&v=beta&t=LZfyQS9MibIE9daBpsUYXs6q7M2QYtIzhN4ROngJO6E",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQE1w9D3nU_NqA/company-logo_200_200/B4EZfPOthVHYAI-/0/1751528430081/kpmg_ireland_logo?e=1776902400&v=beta&t=pB4n_897FAl_YpAVinqgXC9h0g-8-axKR_7ZBn58seQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQE1w9D3nU_NqA/company-logo_100_100/B4EZfPOthVHYAQ-/0/1751528430081/kpmg_ireland_logo?e=1776902400&v=beta&t=wDNYer3j9ZlMXrl8uvvOXnngE_6OtvlLL8GV8vLiFUE",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior Associate, Audit",
+        "location": "Ireland",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "KPMG Ireland",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/409624/",
+        "companyId": "409624",
+        "duration": "2 yrs 9 mos",
+        "description": "- ACA Qualified\n- FAE 2013 - 1st attempt\n- Winner of KPMG's Global Project Bright initiative 2012\n- Enactus Business Advisory Board member for University College Dublin 2013/2014 (winning 1st prize at national level and 4th prize at global championships in Beijing)",
+        "skills": null,
+        "experienceGroupId": "3a209451e69419c5117db0ba2d672ee7ad446743",
+        "startDate": {
+          "month": "Sep",
+          "year": 2011,
+          "text": "Sep 2011"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2014,
+          "text": "May 2014"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQE1w9D3nU_NqA/company-logo_400_400/B4EZfPOthVHYAY-/0/1751528430081/kpmg_ireland_logo?e=1776902400&v=beta&t=LZfyQS9MibIE9daBpsUYXs6q7M2QYtIzhN4ROngJO6E",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQE1w9D3nU_NqA/company-logo_400_400/B4EZfPOthVHYAY-/0/1751528430081/kpmg_ireland_logo?e=1776902400&v=beta&t=LZfyQS9MibIE9daBpsUYXs6q7M2QYtIzhN4ROngJO6E",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQE1w9D3nU_NqA/company-logo_200_200/B4EZfPOthVHYAI-/0/1751528430081/kpmg_ireland_logo?e=1776902400&v=beta&t=pB4n_897FAl_YpAVinqgXC9h0g-8-axKR_7ZBn58seQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQE1w9D3nU_NqA/company-logo_100_100/B4EZfPOthVHYAQ-/0/1751528430081/kpmg_ireland_logo?e=1776902400&v=beta&t=wDNYer3j9ZlMXrl8uvvOXnngE_6OtvlLL8GV8vLiFUE",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Master of Accounting",
+        "location": "Ireland",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Michael Smurfit Graduate School of Business UCD",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/400838/",
+        "companyId": "400838",
+        "duration": "1 yr 2 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2010,
+          "text": "Sep 2010"
+        },
+        "endDate": {
+          "month": "Oct",
+          "year": 2011,
+          "text": "Oct 2011"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFeoY8iuxxI6Q/company-logo_400_400/company-logo_400_400/0/1631302733490?e=1776902400&v=beta&t=dqn4Wg-wCeh-PAsuEwFOG5Inqy1HzdKRWGWuTJMfHO8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFeoY8iuxxI6Q/company-logo_400_400/company-logo_400_400/0/1631302733490?e=1776902400&v=beta&t=dqn4Wg-wCeh-PAsuEwFOG5Inqy1HzdKRWGWuTJMfHO8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFeoY8iuxxI6Q/company-logo_200_200/company-logo_200_200/0/1631302733490?e=1776902400&v=beta&t=OiMHbO1WvnTqb3hXNQgZBNoss4iYHgR1GeRrD0TylbM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFeoY8iuxxI6Q/company-logo_100_100/company-logo_100_100/0/1631302733490?e=1776902400&v=beta&t=HBNFn93EZsdnbBTLenuG63GZxBQnkjsjZDLcYgXL2Q8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Consultant",
+        "location": "Singapore",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Kerry Consulting Pte Ltd (Singapore)",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/116743/",
+        "companyId": "116743",
+        "duration": "3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2010,
+          "text": "May 2010"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2010,
+          "text": "Jul 2010"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQEFDl3eXac9aQ/company-logo_400_400/company-logo_400_400/0/1710492171107/kerry_consulting_logo?e=1776902400&v=beta&t=jCGGGDxHlljVpCPBDBn3hvsOb3X59l8mEVWM0-YEHgE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEFDl3eXac9aQ/company-logo_400_400/company-logo_400_400/0/1710492171107/kerry_consulting_logo?e=1776902400&v=beta&t=jCGGGDxHlljVpCPBDBn3hvsOb3X59l8mEVWM0-YEHgE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEFDl3eXac9aQ/company-logo_200_200/company-logo_200_200/0/1710492171107/kerry_consulting_logo?e=1776902400&v=beta&t=gaJZyndBS3B27ijkcz-1-21XODU6YPdTg0lIEI8nvVk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEFDl3eXac9aQ/company-logo_100_100/company-logo_100_100/0/1710492171107/kerry_consulting_logo?e=1776902400&v=beta&t=OCDd4xvb5ea2wlISuShgSTCPdGla3fg2Q-JcidIAev0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Audit Intern",
+        "location": "Ireland",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "KPMG Ireland",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/409624/",
+        "companyId": "409624",
+        "duration": "3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2009,
+          "text": "Jun 2009"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2009,
+          "text": "Aug 2009"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQE1w9D3nU_NqA/company-logo_400_400/B4EZfPOthVHYAY-/0/1751528430081/kpmg_ireland_logo?e=1776902400&v=beta&t=LZfyQS9MibIE9daBpsUYXs6q7M2QYtIzhN4ROngJO6E",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQE1w9D3nU_NqA/company-logo_400_400/B4EZfPOthVHYAY-/0/1751528430081/kpmg_ireland_logo?e=1776902400&v=beta&t=LZfyQS9MibIE9daBpsUYXs6q7M2QYtIzhN4ROngJO6E",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQE1w9D3nU_NqA/company-logo_200_200/B4EZfPOthVHYAI-/0/1751528430081/kpmg_ireland_logo?e=1776902400&v=beta&t=pB4n_897FAl_YpAVinqgXC9h0g-8-axKR_7ZBn58seQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQE1w9D3nU_NqA/company-logo_100_100/B4EZfPOthVHYAQ-/0/1751528430081/kpmg_ireland_logo?e=1776902400&v=beta&t=wDNYer3j9ZlMXrl8uvvOXnngE_6OtvlLL8GV8vLiFUE",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "California Board of Accountancy",
+        "schoolLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=California+Board+of+Accountancy",
+        "schoolId": null,
+        "degree": "Certified Public Accountant (CPA) - Active License",
+        "fieldOfStudy": null,
+        "skills": [],
+        "startDate": {
+          "year": 2016,
+          "text": "2016"
+        },
+        "endDate": {
+          "year": 2016,
+          "text": "2016"
+        },
+        "period": "2016 - 2016",
+        "schoolLogo": null
+      },
+      {
+        "schoolName": "Chartered Accountants Ireland",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1267092/",
+        "schoolId": "1267092",
+        "degree": "ACA Qualified",
+        "fieldOfStudy": null,
+        "skills": [],
+        "startDate": {
+          "year": 2011,
+          "text": "2011"
+        },
+        "endDate": {
+          "year": 2014,
+          "text": "2014"
+        },
+        "period": "2011 - 2014",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEwrfvcW_CqYg/company-logo_400_400/B4DZeB5mcNGkAY-/0/1750231050359/chartered_accountants_ireland_logo?e=1776902400&v=beta&t=luIkq8500w-0hEMCfz_MPd1b1YdKe4zdNwnOGVSWwVE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEwrfvcW_CqYg/company-logo_400_400/B4DZeB5mcNGkAY-/0/1750231050359/chartered_accountants_ireland_logo?e=1776902400&v=beta&t=luIkq8500w-0hEMCfz_MPd1b1YdKe4zdNwnOGVSWwVE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEwrfvcW_CqYg/company-logo_200_200/B4DZeB5mcNGkAI-/0/1750231050359/chartered_accountants_ireland_logo?e=1776902400&v=beta&t=wGHd0cXHyy5McsVtRqjWxkp5DSdqkyjSWdSundEfBKc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQEwrfvcW_CqYg/company-logo_100_100/B4DZeB5mcNGkAQ-/0/1750231050359/chartered_accountants_ireland_logo?e=1776902400&v=beta&t=YZaIbp8p1qDxiVGF76N7uhRT-s54lxnLDfF1UyLddC4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "UCD Michael Smurfit Graduate Business School",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/400838/",
+        "schoolId": "400838",
+        "degree": "MAcc",
+        "fieldOfStudy": "Master of Accounting",
+        "skills": [],
+        "startDate": {
+          "year": 2010,
+          "text": "2010"
+        },
+        "endDate": {
+          "year": 2011,
+          "text": "2011"
+        },
+        "period": "2010 - 2011",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFeoY8iuxxI6Q/company-logo_400_400/company-logo_400_400/0/1631302733490?e=1776902400&v=beta&t=dqn4Wg-wCeh-PAsuEwFOG5Inqy1HzdKRWGWuTJMfHO8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFeoY8iuxxI6Q/company-logo_400_400/company-logo_400_400/0/1631302733490?e=1776902400&v=beta&t=dqn4Wg-wCeh-PAsuEwFOG5Inqy1HzdKRWGWuTJMfHO8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFeoY8iuxxI6Q/company-logo_200_200/company-logo_200_200/0/1631302733490?e=1776902400&v=beta&t=OiMHbO1WvnTqb3hXNQgZBNoss4iYHgR1GeRrD0TylbM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFeoY8iuxxI6Q/company-logo_100_100/company-logo_100_100/0/1631302733490?e=1776902400&v=beta&t=HBNFn93EZsdnbBTLenuG63GZxBQnkjsjZDLcYgXL2Q8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "University College Dublin",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/8462/",
+        "schoolId": "8462",
+        "degree": "Bachelor of Commerce (B.Com.)",
+        "fieldOfStudy": null,
+        "skills": [],
+        "startDate": {
+          "year": 2007,
+          "text": "2007"
+        },
+        "endDate": {
+          "year": 2010,
+          "text": "2010"
+        },
+        "period": "2007 - 2010",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHmljJ9tD3olA/company-logo_400_400/company-logo_400_400/0/1631349740728?e=1776902400&v=beta&t=LH39m_rStX3OOnnuGcocTE4gqrvZpC_GGgGfFbv6I2w",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHmljJ9tD3olA/company-logo_400_400/company-logo_400_400/0/1631349740728?e=1776902400&v=beta&t=LH39m_rStX3OOnnuGcocTE4gqrvZpC_GGgGfFbv6I2w",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHmljJ9tD3olA/company-logo_200_200/company-logo_200_200/0/1631349740728?e=1776902400&v=beta&t=y3di_WKztzwQIHFzstVzqbG4vJRtpF-PEEGNQ5nzj4c",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHmljJ9tD3olA/company-logo_100_100/company-logo_100_100/0/1631349740728?e=1776902400&v=beta&t=w7Hc8dAcTdiSyCwXlmCVam6NY_ouqsRDTStWpOKATGE",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "HEC Montréal",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/15093273/",
+        "schoolId": "15093273",
+        "degree": "Bachelor of Commerce (B.Com.) - Erasmus Year",
+        "fieldOfStudy": null,
+        "skills": [],
+        "startDate": {
+          "year": 2008,
+          "text": "2008"
+        },
+        "endDate": {
+          "year": 2009,
+          "text": "2009"
+        },
+        "period": "2008 - 2009",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQFZ_p0E0-8U7g/company-logo_400_400/company-logo_400_400/0/1679316341217/hecmontreal_logo?e=1776902400&v=beta&t=eqvgFHR2wTYMjXM9n757kgq52aCS8anOmNasc-AFrGs",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFZ_p0E0-8U7g/company-logo_400_400/company-logo_400_400/0/1679316341217/hecmontreal_logo?e=1776902400&v=beta&t=eqvgFHR2wTYMjXM9n757kgq52aCS8anOmNasc-AFrGs",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFZ_p0E0-8U7g/company-logo_200_200/company-logo_200_200/0/1679316341217/hecmontreal_logo?e=1776902400&v=beta&t=aEolpZjIozf5-LlJ-UFJagxdESkJgM1Wh6mj_r-OSCg",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFZ_p0E0-8U7g/company-logo_100_100/company-logo_100_100/0/1679316341217/hecmontreal_logo?e=1776902400&v=beta&t=H_2Dl8gtEpulG27eZGAoEiUKmld_Kv8FPsLx9YzDaSY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Mount Anville Secondary School",
+        "schoolLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Mount+Anville+Secondary+School",
+        "schoolId": null,
+        "degree": null,
+        "fieldOfStudy": null,
+        "skills": [],
+        "startDate": {
+          "year": 2001,
+          "text": "2001"
+        },
+        "endDate": {
+          "year": 2007,
+          "text": "2007"
+        },
+        "period": "2001 - 2007",
+        "schoolLogo": null
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Auditing",
+        "positions": [
+          "Endorsed by 2 colleagues at KPMG US"
+        ],
+        "endorsements": "45 endorsements"
+      },
+      {
+        "name": "Financial Reporting",
+        "positions": [
+          "Endorsed by 3 colleagues at KPMG US"
+        ],
+        "endorsements": "29 endorsements"
+      },
+      {
+        "name": "IFRS",
+        "positions": [
+          "Endorsed by 3 colleagues at KPMG Ireland"
+        ],
+        "endorsements": "31 endorsements"
+      },
+      {
+        "name": "US GAAP",
+        "endorsements": "16 endorsements"
+      },
+      {
+        "name": "Internal Controls",
+        "endorsements": "11 endorsements"
+      },
+      {
+        "name": "Financial Audits",
+        "endorsements": "8 endorsements"
+      },
+      {
+        "name": "UK GAAP",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Corporate Finance",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "Financial Services",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "Mergers ",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Mergers & Acquisitions",
+        "endorsements": "8 endorsements"
+      },
+      {
+        "name": "Accounting",
+        "endorsements": "9 endorsements"
+      },
+      {
+        "name": "Big 4",
+        "endorsements": "13 endorsements"
+      },
+      {
+        "name": "Revenue Recognition",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Management",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Financial Accounting",
+        "endorsements": "8 endorsements"
+      },
+      {
+        "name": "Financial Analysis",
+        "endorsements": "9 endorsements"
+      },
+      {
+        "name": "Finance",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Cash Flow Forecasting",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Project Management",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Executive Management",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Tax",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Communication",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Analytical Skills",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Leadership",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Mentoring",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Strategy",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Decision-Making",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Strategic Planning",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Microsoft Excel",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "QuickBooks",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "General Ledger",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Cash Flow Management",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Cash Flow Analysis",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Financial Planning",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Corporate FP&A",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Financial Project Management",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Forecasting",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Financial Modeling",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Budgeting",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Financial Statement Analysis",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "CPA",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Generally Accepted Accounting Principles (GAAP)",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Netsuite",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "NetSuite",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Accounts Receivable (AR)",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Accounts Payable",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Account Reconciliation",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Start-ups",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Hiring",
+        "endorsements": "1 endorsement"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [
+      {
+        "title": "Honoree - 2020 Emerging Leader ",
+        "issuedBy": "The CFO Leadership Council",
+        "issuedAt": "Jan 2020",
+        "associatedWith": null,
+        "associatedWithLink": null
+      },
+      {
+        "title": "Winner of the KPMG National Project Bright Initiative ",
+        "issuedBy": "KPMG",
+        "issuedAt": "Nov 2012",
+        "description": "Winner of the KPMG Project Bright Initiative 2012, a global CSR competition in KPMG. Seconded to Child Helpline, South Africa to lead fundraising efforts in September 2013.",
+        "associatedWith": "Associated with KPMG Ireland",
+        "associatedWithLink": null
+      }
+    ],
+    "languages": [],
+    "causes": [
+      "Science and Technology"
+    ],
+    "featured": {
+      "images": [
+        "https://media.licdn.com/dms/image/sync/v2/D5627AQHOjMQkvtQecA/articleshare-shrink_1280_800/articleshare-shrink_1280_800/0/1711150262502?e=1776160800&v=beta&t=aysi7gr-1JaWSq96gvrWo6iRNJp8XtA35W6KU76revE"
+      ],
+      "link": "https://www.youtube.com/watch?v=4wcHOg8rDog",
+      "title": "Controllers Classified Ep. 9: Building High-performing & Global Finance Teams with Katie Slattery",
+      "subtitle": "YouTube",
+      "slides": [
+        {
+          "title": "Controllers Classified Ep. 9: Building High-performing & Global Finance Teams with Katie Slattery",
+          "subtitle": "YouTube",
+          "description": null,
+          "url": "https://www.youtube.com/watch?v=4wcHOg8rDog",
+          "image": {
+            "url": "https://media.licdn.com/dms/image/sync/v2/D5627AQHOjMQkvtQecA/articleshare-shrink_1280_800/articleshare-shrink_1280_800/0/1711150262502?e=1776160800&v=beta&t=aysi7gr-1JaWSq96gvrWo6iRNJp8XtA35W6KU76revE"
+          }
+        },
+        {
+          "title": "The Unicorn Playbook",
+          "subtitle": "info.airbase.com",
+          "description": null,
+          "url": "https://info.airbase.com/rs/658-EVO-605/images/unicorn-playbook.pdf",
+          "image": {
+            "url": "https://media.licdn.com/dms/image/v2/D562DAQFW3319zESulw/profile-treasury-image-shrink_8192_8192/profile-treasury-image-shrink_8192_8192/0/1711150462551?e=1776160800&v=beta&t=MjJcEQhtiDpx7fyF5hlrY_cPePlroGwUO3Qz2uoGgO8"
+          }
+        }
+      ]
+    },
+    "composeOptionType": "PREMIUM_INMAIL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAAEZnBtoBb1Us7ZKgHfOXAYT764pKcDQy848",
+        "firstName": "Songlin",
+        "lastName": "Yang",
+        "publicIdentifier": "songlin-yang-b8a69728b",
+        "linkedinUrl": "https://www.linkedin.com/in/songlin-yang-b8a69728b"
+      },
+      {
+        "id": "ACoAABQ5lJUBry2byQYf_TtxDF9Rha9l-RqYsaM",
+        "firstName": "Guang-He",
+        "lastName": "Lee",
+        "publicIdentifier": "guang-he-lee-64577895",
+        "linkedinUrl": "https://www.linkedin.com/in/guang-he-lee-64577895"
+      },
+      {
+        "id": "ACoAAAd0DPQBdeTMByESOMZUAv4m83l1dLKYAtk",
+        "firstName": "Hena",
+        "lastName": "Desai, CPA",
+        "publicIdentifier": "hena-desai",
+        "linkedinUrl": "https://www.linkedin.com/in/hena-desai"
+      },
+      {
+        "id": "ACoAAACQBzQB5nk5kOpFWQRtK4pv3RaL5q2G-pA",
+        "firstName": "Jonathan",
+        "lastName": "Lachman",
+        "publicIdentifier": "jonathan-lachman-4981b23",
+        "linkedinUrl": "https://www.linkedin.com/in/jonathan-lachman-4981b23"
+      },
+      {
+        "id": "ACoAABE9sVMBCH0i964WlvecDNyGKTviqyXKcTY",
+        "firstName": "Hannah",
+        "lastName": "T.",
+        "publicIdentifier": "hannahnth",
+        "linkedinUrl": "https://www.linkedin.com/in/hannahnth"
+      },
+      {
+        "id": "ACoAAF3SWDYB6aZAqtjbw1-LDNZ4qxxHLFKTL0g",
+        "firstName": "Md",
+        "lastName": "Mdamaz",
+        "publicIdentifier": "md-mdamaz-b5a19937b",
+        "linkedinUrl": "https://www.linkedin.com/in/md-mdamaz-b5a19937b"
+      },
+      {
+        "id": "ACoAADDB7DABJK3fhQa97pAxpbFcGbMtI2pA2Ek",
+        "firstName": "Ruila",
+        "lastName": "M.",
+        "publicIdentifier": "ruilama",
+        "linkedinUrl": "https://www.linkedin.com/in/ruilama"
+      },
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAABJF4mQBVJYIx7g-ASuPnmo5mH2mDuWdwQg",
+        "firstName": "Erika",
+        "lastName": "Byun",
+        "publicIdentifier": "erika-nakamatsu-byun",
+        "linkedinUrl": "https://www.linkedin.com/in/erika-nakamatsu-byun"
+      },
+      {
+        "id": "ACoAAAQ1QI4Bex6mqv5SgvahWcZuzAuWiTKciBo",
+        "firstName": "Bi",
+        "lastName": "Xue",
+        "publicIdentifier": "bi-xue-9527871b",
+        "linkedinUrl": "https://www.linkedin.com/in/bi-xue-9527871b"
+      },
+      {
+        "id": "ACoAAAF70jABH9DSpgp0gn2kmhMF2O2_dXo363Y",
+        "firstName": "Lauren Escher",
+        "lastName": "Lennon",
+        "publicIdentifier": "lauren-escher-lennon-0944058",
+        "linkedinUrl": "https://www.linkedin.com/in/lauren-escher-lennon-0944058"
+      },
+      {
+        "id": "ACoAAA13Ul0BhZG-E4cair_KcjJdZthak0VzVEE",
+        "firstName": "Erin",
+        "lastName": "(MacLean) Jenks",
+        "publicIdentifier": "erin-maclean-jenks-a517b263",
+        "linkedinUrl": "https://www.linkedin.com/in/erin-maclean-jenks-a517b263"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAAAAcKtUBhnEmIuzVht2H3oqhJ9tKrO4NQIY",
+        "firstName": "George",
+        "lastName": "Rider",
+        "publicIdentifier": "georgerider",
+        "linkedinUrl": "https://www.linkedin.com/in/georgerider"
+      },
+      {
+        "id": "ACoAABPg53YBHdOvmp7pU72eDhcho-7cnwyxk1o",
+        "firstName": "Pia",
+        "lastName": "Santos",
+        "publicIdentifier": "piafsantos",
+        "linkedinUrl": "https://www.linkedin.com/in/piafsantos"
+      },
+      {
+        "id": "ACoAAAji1bkB1eLX4z2Jb9-N2nMhEGNLWptSnqU",
+        "firstName": "Clare",
+        "lastName": "Birch",
+        "publicIdentifier": "clarebirch42",
+        "linkedinUrl": "https://www.linkedin.com/in/clarebirch42"
+      },
+      {
+        "id": "ACoAAA1wxloBc5C_1KaWax8G3IBmV9VeYo2q6jU",
+        "firstName": "Hasitha",
+        "lastName": "Verma",
+        "publicIdentifier": "hasitha-verma-6a262663",
+        "linkedinUrl": "https://www.linkedin.com/in/hasitha-verma-6a262663"
+      },
+      {
+        "id": "ACoAAAM8-CoB4EuoMEQ2LLngdqMnC4lLbEgxTy8",
+        "firstName": "Andrew",
+        "lastName": "Straub",
+        "publicIdentifier": "andrew-straub-52223b16",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-straub-52223b16"
+      },
+      {
+        "id": "ACoAAAPH3hkBD4YvYU1lCbTlnKlqFvJCZxL3KlQ",
+        "firstName": "Weiheng",
+        "lastName": "Zhang",
+        "publicIdentifier": "weiheng-zhang",
+        "linkedinUrl": "https://www.linkedin.com/in/weiheng-zhang"
+      },
+      {
+        "id": "ACoAAGKDsJgBWsokuuSZfKWRPVa7hBXeQTfrA0Q",
+        "firstName": "Nourhan",
+        "lastName": "Hany",
+        "position": "‏Freelance Graphic Designer‏ في ‏Freelancer.com‏",
+        "publicIdentifier": "nourhan-hany-1086283a1",
+        "linkedinUrl": "https://www.linkedin.com/in/nourhan-hany-1086283a1"
+      },
+      {
+        "id": "ACoAAGQAS5gB7czjKt2_ixWVG1rbgMjhyk7inx4",
+        "firstName": "Nate",
+        "lastName": "Lahey",
+        "position": "Air Specialist at Microsoft",
+        "publicIdentifier": "nate-lahey-aa0a563a9",
+        "linkedinUrl": "https://www.linkedin.com/in/nate-lahey-aa0a563a9"
+      },
+      {
+        "id": "ACoAAGDWIksBlJBQ6yLB1D8aji0XfjRiW84siqc",
+        "firstName": "Akinbola",
+        "lastName": "Lateef",
+        "position": "Thinker  at Thinking Machines Lab",
+        "publicIdentifier": "akinbola-lateef-94b110394",
+        "linkedinUrl": "https://www.linkedin.com/in/akinbola-lateef-94b110394"
+      },
+      {
+        "id": "ACoAAGEsn5kBB9DyTbYUN3URhyPX7aRsWlfpupg",
+        "firstName": "Hanane",
+        "lastName": "Abboud",
+        "position": "‏منشئ محتوى رقمي‏ في ‏Thinking Machines Lab‏",
+        "publicIdentifier": "hanane-abboud-b89ba4395",
+        "linkedinUrl": "https://www.linkedin.com/in/hanane-abboud-b89ba4395"
+      },
+      {
+        "id": "ACoAACA8zv0BTVWLSUHsPJrWsUI10jzn0F57pHo",
+        "firstName": "Damir",
+        "lastName": "Sartayev",
+        "position": "AI CTO & Founder | MY project LNN+LLM+QML=AGI | Quantum, Neuro-symbolic AI | Liquid Neural Networks | RWKV | Mamba(SSM)  | Pharmacy AI, Minerals AI | Full‑Stack AI (LLMs, Agents, Fine‑Tuning, RAG, Vision) | Q-Day Q-ark",
+        "publicIdentifier": "damir-q-day-q-ark",
+        "linkedinUrl": "https://www.linkedin.com/in/damir-q-day-q-ark"
+      },
+      {
+        "id": "ACoAADopuTsBh9lDxOJzJsV8jI_KfOrsc6Tu7aQ",
+        "firstName": "Aashitosh",
+        "lastName": "Swami",
+        "position": "Lab assistant",
+        "publicIdentifier": "aashitosh-swami-67796a232",
+        "linkedinUrl": "https://www.linkedin.com/in/aashitosh-swami-67796a232"
+      },
+      {
+        "id": "ACoAAGQmJecBBj5BzIeaidgEvD9pNT8ekbyvAA8",
+        "firstName": "Micky",
+        "lastName": "Mnaree",
+        "position": "Engineer at Thinking Machines Lab",
+        "publicIdentifier": "micky-mnaree-6078523aa",
+        "linkedinUrl": "https://www.linkedin.com/in/micky-mnaree-6078523aa"
+      },
+      {
+        "id": "ACoAAFUBvsYBMskyWP5r-Lf7ZUccZSuFy2nCqkA",
+        "firstName": "Ankit",
+        "lastName": "Baghel",
+        "position": "--DMLT lab technician\nb.sc chemistry chemical industry lab",
+        "publicIdentifier": "ankit-baghel-40675a339",
+        "linkedinUrl": "https://www.linkedin.com/in/ankit-baghel-40675a339"
+      },
+      {
+        "id": "ACoAAFrO2hYBQn9I3leFzBjeUmgehOiK_AGSCr8",
+        "firstName": "Muhammad",
+        "lastName": "Adam Usman",
+        "position": "Electrician at Thinking Machines Lab",
+        "publicIdentifier": "muhammad-adam-usman-472276366",
+        "linkedinUrl": "https://www.linkedin.com/in/muhammad-adam-usman-472276366"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAAM07-gBDGl4QBUZPpcmaHEPHyUNZClO4D0"
+    }
+  }
+}

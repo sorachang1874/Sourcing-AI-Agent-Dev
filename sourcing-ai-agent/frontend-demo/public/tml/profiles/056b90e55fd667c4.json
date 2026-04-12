@@ -1,0 +1,631 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAAk2AWUBM2DSfzo0Lr_Vftwv0KnvjJbJtLA",
+    "profile_url": "https://www.linkedin.com/in/ACwAAAk2AWUBM2DSfzo0Lr_Vftwv0KnvjJbJtLA"
+  },
+  "item": {
+    "id": "ACoAAAk2AWUBebVL-0D3gr9_kbKjgnzt2uxmBJE",
+    "publicIdentifier": "barret-zoph-65990543",
+    "linkedinUrl": "https://www.linkedin.com/in/barret-zoph-65990543",
+    "firstName": "Barret",
+    "lastName": "Zoph",
+    "emails": [
+      {
+        "email": "barret.zoph@openai.com",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://openai.com/",
+        "domain": "openai.com",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Research x Product @ OpenAI",
+    "openToWork": false,
+    "hiring": false,
+    "premium": true,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "154534245",
+    "registeredAt": "2011-11-26T23:35:21.843Z",
+    "topSkills": null,
+    "connectionsCount": 2331,
+    "followerCount": 5401,
+    "verified": true,
+    "about": "Lead the post-training research team at OpenAI.\n\nSee http://barretzoph.github.io/ for more details.",
+    "currentPosition": [
+      {
+        "companyId": "11130470",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/11130470/",
+        "companyName": "OpenAI",
+        "dateRange": {
+          "start": {
+            "month": 1,
+            "year": 2026,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "17971",
+        "companyId": "3084",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3084/",
+        "schoolName": "University of Southern California"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/C4E03AQGHWN0PwgUkCg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1555636548265?e=1776902400&v=beta&t=B45gtfq4AAjHemDp-YBk9AaUF5L3DBRqjJUKa2xuOuI",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4E03AQGHWN0PwgUkCg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1555636548265?e=1776902400&v=beta&t=B45gtfq4AAjHemDp-YBk9AaUF5L3DBRqjJUKa2xuOuI",
+          "width": 500,
+          "height": 500,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4E03AQGHWN0PwgUkCg/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1555636548346?e=1776902400&v=beta&t=1Gj5Il795NLWl_2yt_n5LRxPcl5UG95eBtqCPYusyiI",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4E03AQGHWN0PwgUkCg/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1555636548313?e=1776902400&v=beta&t=FKmvmpVdDmYVReuoWe-My8GOXLDMtHwdHKBgyGGxnwM",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4E03AQGHWN0PwgUkCg/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1555636548281?e=1776902400&v=beta&t=rDjwyq5kc5RDICBCQitl9bw_nqyf9XiIbzSDIF_qsEI",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/C4E03AQGHWN0PwgUkCg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1555636548265?e=1776902400&v=beta&t=B45gtfq4AAjHemDp-YBk9AaUF5L3DBRqjJUKa2xuOuI",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Research x Product @ OpenAI",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "VP, GM B2B",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "OpenAI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/openai/",
+        "companyId": "11130470",
+        "companyUniversalName": "openai",
+        "duration": "4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2026,
+          "text": "Jan 2026"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_200_200/B56ZT8EYB8HsAI-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=O6RSWlpQ5W4zNCOCTu621qCyTijLuXFJS4pz2_hBQfo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_100_100/B56ZT8EYB8HsAQ-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=y7RA89V9q8GlAjQ1oRU-jf_-n5zlSXRCnykXBIkgHfM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "CTO, Co-Founder",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyId": "105913171",
+        "duration": "1 yr 4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Oct",
+          "year": 2024,
+          "text": "Oct 2024"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2026,
+          "text": "Jan 2026"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "VP Research, Post-Training",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "OpenAI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/openai/",
+        "companyId": "11130470",
+        "companyUniversalName": "openai",
+        "duration": "2 yrs 2 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2022,
+          "text": "Sep 2022"
+        },
+        "endDate": {
+          "month": "Oct",
+          "year": 2024,
+          "text": "Oct 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_200_200/B56ZT8EYB8HsAI-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=O6RSWlpQ5W4zNCOCTu621qCyTijLuXFJS4pz2_hBQfo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_100_100/B56ZT8EYB8HsAQ-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=y7RA89V9q8GlAjQ1oRU-jf_-n5zlSXRCnykXBIkgHfM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Scientist",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Google",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1441/",
+        "companyId": "1441",
+        "duration": "6 yrs 8 mos",
+        "description": "Google Brain",
+        "skills": null,
+        "startDate": {
+          "year": 2016,
+          "text": "2016"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2022,
+          "text": "Aug 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_200_200/B4EZmhegXHGcAM-/0/1759350753990/google_logo?e=1776902400&v=beta&t=CTzyZ9kqXiycW6UU0lJPQmCNKxu5QeAaPL_y9ftsJX0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_100_100/B4EZmhegXHGcAU-/0/1759350753990/google_logo?e=1776902400&v=beta&t=LRCYpUl9rmgdri4awRP4FVlvccNARAtgcfqxtRHdedI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Computer Scientist",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Information Sciences Institute",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/15092/",
+        "companyId": "15092",
+        "duration": "6 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2016,
+          "text": "Jan 2016"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2016,
+          "text": "Jun 2016"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHYTeFo9SN7Ig/company-logo_400_400/company-logo_400_400/0/1694027982155/information_sciences_institute_logo?e=1776902400&v=beta&t=BJYEA2767MLDhL9U-NafUL-6mtKkS0LEqjswbmlrLME",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHYTeFo9SN7Ig/company-logo_400_400/company-logo_400_400/0/1694027982155/information_sciences_institute_logo?e=1776902400&v=beta&t=BJYEA2767MLDhL9U-NafUL-6mtKkS0LEqjswbmlrLME",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHYTeFo9SN7Ig/company-logo_200_200/company-logo_200_200/0/1694027982155/information_sciences_institute_logo?e=1776902400&v=beta&t=N2LBjB9vOjXvpAnk7UmHvIelrmIMpVaqS8hsM23ymRI",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHYTeFo9SN7Ig/company-logo_100_100/company-logo_100_100/0/1694027982155/information_sciences_institute_logo?e=1776902400&v=beta&t=20Wrmtfv3DlfKk_UZm5mcRIxLMniXYLaVaQjHZZfPjk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "University of Southern California",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3084/",
+        "schoolId": "3084",
+        "degree": "B.S.",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "insights": "Activities and societies: Computer Science Outstanding Student Award, Computer Science Award for Outstanding Research",
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHatTfEv4Af6w/company-logo_400_400/company-logo_400_400/0/1631312619853?e=1776902400&v=beta&t=acUDmvZaK8PKGwzBL2PDmP5MpB2WpNlxl9anjfWIfzY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHatTfEv4Af6w/company-logo_400_400/company-logo_400_400/0/1631312619853?e=1776902400&v=beta&t=acUDmvZaK8PKGwzBL2PDmP5MpB2WpNlxl9anjfWIfzY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHatTfEv4Af6w/company-logo_200_200/company-logo_200_200/0/1631312619853?e=1776902400&v=beta&t=MuIUkCOPJIvZPnVveULEAC7dDgT6APY_fBJS8--Oilo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHatTfEv4Af6w/company-logo_100_100/company-logo_100_100/0/1631312619853?e=1776902400&v=beta&t=PM65biH5xdj0HQ2A0YCEaQwUXIakNQ8TFCWVOBfvcN0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAAb8FywBjKK1SH8YvIyyNDCfvWfx4ybdx8k",
+        "firstName": "Brad",
+        "lastName": "Lightcap",
+        "publicIdentifier": "bradlightcap",
+        "linkedinUrl": "https://www.linkedin.com/in/bradlightcap"
+      },
+      {
+        "id": "ACoAAAeDr-YB_2H1X3T5tB3XAxEJyMCX8SH-KVk",
+        "firstName": "Rohan",
+        "lastName": "Sahai",
+        "publicIdentifier": "rohansahai",
+        "linkedinUrl": "https://www.linkedin.com/in/rohansahai"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABgwxtcBfqsJJUHPwsSPuBE4K9oKyRqUp5o",
+        "firstName": "Lia",
+        "lastName": "Guy",
+        "publicIdentifier": "aureliaguy",
+        "linkedinUrl": "https://www.linkedin.com/in/aureliaguy"
+      },
+      {
+        "id": "ACoAAACSCqgBRAWGhacJsL_r6in5F73T7gy8DQU",
+        "firstName": "Kevin",
+        "lastName": "Weil",
+        "publicIdentifier": "kevinweil",
+        "linkedinUrl": "https://www.linkedin.com/in/kevinweil"
+      },
+      {
+        "id": "ACoAAAAWldQBOsoCXLpqsc_2VwUTUy0CbOeaOjE",
+        "firstName": "Srinivas",
+        "lastName": "Narayanan",
+        "publicIdentifier": "srinivasnarayanan",
+        "linkedinUrl": "https://www.linkedin.com/in/srinivasnarayanan"
+      },
+      {
+        "id": "ACoAAAvkv_cBAZDOOuwXkXdX6YkkR1rcieZmJdM",
+        "firstName": "Jerry",
+        "lastName": "Tworek",
+        "publicIdentifier": "jerry-tworek-b5b9aa56",
+        "linkedinUrl": "https://www.linkedin.com/in/jerry-tworek-b5b9aa56"
+      },
+      {
+        "id": "ACoAABgMRVMBzBef3h9N2bu35njK02KWcNAG-4U",
+        "firstName": "Nick",
+        "lastName": "Turley",
+        "publicIdentifier": "nicholasturley",
+        "linkedinUrl": "https://www.linkedin.com/in/nicholasturley"
+      },
+      {
+        "id": "ACoAABhJGmgBbKoV1Xpmb7RL83_zMDGREzYTbxU",
+        "firstName": "Tarun",
+        "lastName": "Gogineni",
+        "publicIdentifier": "tarun-gogineni-488551b4",
+        "linkedinUrl": "https://www.linkedin.com/in/tarun-gogineni-488551b4"
+      },
+      {
+        "id": "ACoAAANpXxsBURwBgPnfNhADohyRTqLrxEWV2fw",
+        "firstName": "Peter",
+        "lastName": "Welinder",
+        "publicIdentifier": "welinder",
+        "linkedinUrl": "https://www.linkedin.com/in/welinder"
+      },
+      {
+        "id": "ACoAAABSm5EBI7wCtV9q32Z76FJl2Iegwmv828c",
+        "firstName": "Bob",
+        "lastName": "McGrew",
+        "publicIdentifier": "bobmcgrew",
+        "linkedinUrl": "https://www.linkedin.com/in/bobmcgrew"
+      },
+      {
+        "id": "ACoAACU1oh4Ba7q1vCyPWcqTAgTt1a0ozRM52xs",
+        "firstName": "Hongyu",
+        "lastName": "Ren",
+        "publicIdentifier": "hongyu-ren-566098155",
+        "linkedinUrl": "https://www.linkedin.com/in/hongyu-ren-566098155"
+      },
+      {
+        "id": "ACoAACK2_JgBKs3dACQfidU-FPLnI_WtOKAjdWs",
+        "firstName": "Karina",
+        "lastName": "Nguyen",
+        "publicIdentifier": "karinanguyen28",
+        "linkedinUrl": "https://www.linkedin.com/in/karinanguyen28"
+      },
+      {
+        "id": "ACoAAAChiQ8BdtOV7A0-Zp3ZiGjKgKEVwVfRvC8",
+        "firstName": "Julia",
+        "lastName": "Villagra ",
+        "publicIdentifier": "juliavillagra",
+        "linkedinUrl": "https://www.linkedin.com/in/juliavillagra"
+      },
+      {
+        "id": "ACoAACc82fIBGFpPeSnW2lbuMZYIZoqhFIMGiMs",
+        "firstName": "Wojciech",
+        "lastName": "Zaremba",
+        "publicIdentifier": "wojciech-zaremba-356568164",
+        "linkedinUrl": "https://www.linkedin.com/in/wojciech-zaremba-356568164"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAAACFbM8BJP_3CAVzYGvxIGrPJwno6hjA6Nc",
+        "firstName": "Sriya",
+        "lastName": "Santhanam",
+        "publicIdentifier": "sriya-santhanam-327b182",
+        "linkedinUrl": "https://www.linkedin.com/in/sriya-santhanam-327b182"
+      },
+      {
+        "id": "ACoAACJ8zCUBbkuAqIXwpRXQTGKlBhl11YSj1W0",
+        "firstName": "Isa",
+        "lastName": "Fulford",
+        "publicIdentifier": "isabella-fulford",
+        "linkedinUrl": "https://www.linkedin.com/in/isabella-fulford"
+      },
+      {
+        "id": "ACoAAA8ijoUBcueBk1ayCswWqZEO-R00jZBM8TQ",
+        "firstName": "Joanne",
+        "lastName": "Jang",
+        "publicIdentifier": "jangjoanne",
+        "linkedinUrl": "https://www.linkedin.com/in/jangjoanne"
+      },
+      {
+        "id": "ACoAAAR65JgB5MROOuq1aBTRfCsiW1UrmwPgLDo",
+        "firstName": "Christopher",
+        "lastName": "Berner",
+        "publicIdentifier": "cberner",
+        "linkedinUrl": "https://www.linkedin.com/in/cberner"
+      },
+      {
+        "id": "ACoAADf58usB4GhneLjoJgQOtTHwACWy1Jw9fjM",
+        "firstName": "Nathanyawat",
+        "lastName": "Sedthayutthaphong",
+        "position": "Digital Marketing Strategist, KOL & Affiliate Marketing",
+        "publicIdentifier": "nathanyawat-sedthayutthaphong-6b7618222",
+        "linkedinUrl": "https://www.linkedin.com/in/nathanyawat-sedthayutthaphong-6b7618222"
+      },
+      {
+        "id": "ACoAADAp-hYBWMvpxUj_xG72dBJ7FJha3QOFRy0",
+        "firstName": "Pakawadee",
+        "lastName": "Chanhom",
+        "position": "Marketing Executive",
+        "publicIdentifier": "pakawadee-ch",
+        "linkedinUrl": "https://www.linkedin.com/in/pakawadee-ch"
+      },
+      {
+        "id": "ACoAAES3pTQBYw6QYRv8LCjOnFsjLFjr26SiwoA",
+        "firstName": "Thidarach",
+        "lastName": "Wingpad",
+        "position": "KOL Specialist ",
+        "publicIdentifier": "thidarach-wingpad-530123282",
+        "linkedinUrl": "https://www.linkedin.com/in/thidarach-wingpad-530123282"
+      },
+      {
+        "id": "ACoAAC0EbZIBKYZxsZJzxJThE_37mYqc6cNL53I",
+        "firstName": "Thapanee",
+        "lastName": "Junhirun",
+        "position": "Design Manager at Inguskin",
+        "publicIdentifier": "thapanee-junhirun-72ab2a190",
+        "linkedinUrl": "https://www.linkedin.com/in/thapanee-junhirun-72ab2a190"
+      },
+      {
+        "id": "ACoAAEHy4RcBGunpe8cE5hOQbvPygAf2Xm5YH5U",
+        "firstName": "Nicha",
+        "lastName": "Maneesilasan",
+        "position": "Strategic Marketing l New Product Development l Product Specialist",
+        "publicIdentifier": "nicha-maneesilasan-9b366226a",
+        "linkedinUrl": "https://www.linkedin.com/in/nicha-maneesilasan-9b366226a"
+      },
+      {
+        "id": "ACoAAE38-8QBsW8Ue_Bjbb-JL_hoDYiXxuTmSI0",
+        "firstName": "Semita",
+        "lastName": "Seeruang",
+        "position": "Global Sourcing | NPD | BD",
+        "publicIdentifier": "semita-seeruang-598232306",
+        "linkedinUrl": "https://www.linkedin.com/in/semita-seeruang-598232306"
+      },
+      {
+        "id": "ACoAACts5NoB_O-T17Dn6we7AdDkCxxYC_xRZi8",
+        "firstName": "Chonramida",
+        "lastName": "Inbunchoed",
+        "position": "Sales Coordinator, Administrative Assistant, Sales Administrative, Marketing",
+        "publicIdentifier": "chonramida-inbunchoed-5b6baa183",
+        "linkedinUrl": "https://www.linkedin.com/in/chonramida-inbunchoed-5b6baa183"
+      },
+      {
+        "id": "ACoAACmrdgsBTdMh3AoAuDFnXx3qoPi-mQy1Mng",
+        "firstName": "Suphanimit",
+        "lastName": "Prathumsala",
+        "position": "Visual Branding Lover / FMCG",
+        "publicIdentifier": "suphanimit-prathumsala-40b165176",
+        "linkedinUrl": "https://www.linkedin.com/in/suphanimit-prathumsala-40b165176"
+      },
+      {
+        "id": "ACoAACHKI6wBEAi0z0uIbrOOxltv_d4LJdGQc8Y",
+        "firstName": "Sangkhae",
+        "lastName": "Pruepruk",
+        "position": "Regulatory affairs specialist",
+        "publicIdentifier": "sangkhae-pruepruk-664a28139",
+        "linkedinUrl": "https://www.linkedin.com/in/sangkhae-pruepruk-664a28139"
+      },
+      {
+        "id": "ACoAACz8MzIBafonO-j9vBCyGNJnkrSHcVKavv8",
+        "firstName": "Khuanruethai",
+        "lastName": "Tomduangkaew",
+        "position": "Cosmetic Scientist | I Provide R&D & NPD Consulting to Turn Your Cosmetic Ideas into Market-Ready Products",
+        "publicIdentifier": "khuanruethai-tomduangkaew-66a90a190",
+        "linkedinUrl": "https://www.linkedin.com/in/khuanruethai-tomduangkaew-66a90a190"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAAk2AWUBM2DSfzo0Lr_Vftwv0KnvjJbJtLA"
+    }
+  }
+}

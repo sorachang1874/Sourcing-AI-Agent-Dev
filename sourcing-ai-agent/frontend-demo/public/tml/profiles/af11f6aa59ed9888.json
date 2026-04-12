@@ -1,0 +1,395 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAFzBUR0BzQ98gmu_6yLjeAavB6YWWAziEqk",
+    "profile_url": "https://www.linkedin.com/in/ACwAAFzBUR0BzQ98gmu_6yLjeAavB6YWWAziEqk"
+  },
+  "item": {
+    "id": "ACoAAFzBUR0Bt1zRKAzI8OS7_g6ytwU9UvfJwnI",
+    "publicIdentifier": "lathika-gunasekaran-1651ab375",
+    "linkedinUrl": "https://www.linkedin.com/in/lathika-gunasekaran-1651ab375",
+    "firstName": "Lathika",
+    "lastName": "gunasekaran",
+    "emails": [
+      {
+        "email": "lathika.gunasekaran@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Digital Marketing Manager at Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Chennai, Tamil Nadu, India",
+      "countryCode": "IN",
+      "parsed": {
+        "text": "Chennai, India",
+        "countryCode": "IN",
+        "regionCode": null,
+        "country": "India",
+        "countryFull": "India",
+        "state": "Tamil Nadu",
+        "city": "Chennai"
+      }
+    },
+    "objectUrn": "1556173085",
+    "registeredAt": "2025-07-15T06:47:45.719Z",
+    "topSkills": null,
+    "connectionsCount": 0,
+    "followerCount": 1,
+    "verified": false,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": null,
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5603AQFTqc2XtGtAcg/profile-displayphoto-crop_800_800/B56ZjrqzsrHAAM-/0/1756300527712?e=1776902400&v=beta&t=gcAkUlf34Kydej7DOZ28q2xhQ9WmpfGiyk08xmL-ypc",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQFTqc2XtGtAcg/profile-displayphoto-crop_800_800/B56ZjrqzsrHAAM-/0/1756300527712?e=1776902400&v=beta&t=gcAkUlf34Kydej7DOZ28q2xhQ9WmpfGiyk08xmL-ypc",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQFTqc2XtGtAcg/profile-displayphoto-scale_400_400/B56ZjrqzsrHAAk-/0/1756300527802?e=1776902400&v=beta&t=q-KKGXSZoSQa6dfGzL4l9BUoHUYcTwKivYmRGipnudc",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQFTqc2XtGtAcg/profile-displayphoto-scale_200_200/B56ZjrqzsrHAAc-/0/1756300527801?e=1776902400&v=beta&t=IJ6UWj0mhQYHhG-AEIGJQmmJo8EBdaFEzypnXJRl_3o",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQFTqc2XtGtAcg/profile-displayphoto-scale_100_100/B56ZjrqzsrHAAg-/0/1756300527802?e=1776902400&v=beta&t=qr8x2dLUna541bScV6G_eVQmdPTW3ZSLQXiOIIxDMFk",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D5603AQFTqc2XtGtAcg/profile-displayphoto-crop_800_800/B56ZjrqzsrHAAM-/0/1756300527712?e=1776902400&v=beta&t=gcAkUlf34Kydej7DOZ28q2xhQ9WmpfGiyk08xmL-ypc",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Digital Marketing Manager at Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Digital Marketing Manager",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": null,
+        "description": null,
+        "skills": null,
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAABgwxtcBfqsJJUHPwsSPuBE4K9oKyRqUp5o",
+        "firstName": "Lia",
+        "lastName": "Guy",
+        "publicIdentifier": "aureliaguy",
+        "linkedinUrl": "https://www.linkedin.com/in/aureliaguy"
+      },
+      {
+        "id": "ACoAAF-wKU0B0ntoadXt7VUjWK9yj5o52dHzVKA",
+        "firstName": "Kaif",
+        "lastName": "Rehman",
+        "publicIdentifier": "kaif-rehman-72577b389",
+        "linkedinUrl": "https://www.linkedin.com/in/kaif-rehman-72577b389"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAAAJzsfoBp0MxssQYMgmy0ZNO2U3sA58ugwc",
+        "firstName": "Joshua",
+        "lastName": "Gross",
+        "publicIdentifier": "joshgross",
+        "linkedinUrl": "https://www.linkedin.com/in/joshgross"
+      },
+      {
+        "id": "ACoAAAOshwUBNNaU-8JRTNkhsmgKZnIXot9YbHk",
+        "firstName": "Ilya",
+        "lastName": "Sutskever",
+        "publicIdentifier": "ilya-sutskever",
+        "linkedinUrl": "https://www.linkedin.com/in/ilya-sutskever"
+      },
+      {
+        "id": "ACoAAAENQhgBH8wIeS6hMrUoWlbKk5L9GWNNQCE",
+        "firstName": "Andrii",
+        "lastName": "Grynenko",
+        "publicIdentifier": "andrii-grynenko-a48aab5",
+        "linkedinUrl": "https://www.linkedin.com/in/andrii-grynenko-a48aab5"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAAAAWldQBOsoCXLpqsc_2VwUTUy0CbOeaOjE",
+        "firstName": "Srinivas",
+        "lastName": "Narayanan",
+        "publicIdentifier": "srinivasnarayanan",
+        "linkedinUrl": "https://www.linkedin.com/in/srinivasnarayanan"
+      },
+      {
+        "id": "ACoAABEM7osBPXyGYep6aq2sLfhFwwdJ6wj2n4s",
+        "firstName": "Prafulla",
+        "lastName": "Dhariwal",
+        "publicIdentifier": "prafulladhariwal",
+        "linkedinUrl": "https://www.linkedin.com/in/prafulladhariwal"
+      },
+      {
+        "id": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+        "firstName": "Saurabh",
+        "lastName": "Garg",
+        "publicIdentifier": "saurabh-garg-b680b5b8",
+        "linkedinUrl": "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+      },
+      {
+        "id": "ACoAAAl87CYBWKLLyGNTbomy6oqIPv-5n34CXIY",
+        "firstName": "Andrew",
+        "lastName": "Tulloch",
+        "publicIdentifier": "andrew-tulloch-17238745",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-tulloch-17238745"
+      },
+      {
+        "id": "ACoAADwrCKUB0FU7B3O7AIg9j_wieI-QOvJrtEE",
+        "firstName": "Katy",
+        "lastName": "Liemandt",
+        "publicIdentifier": "katy-liemandt-399092242",
+        "linkedinUrl": "https://www.linkedin.com/in/katy-liemandt-399092242"
+      },
+      {
+        "id": "ACoAAADSAbIBAZnYtjjLeCsXLOP2JjyfXwYda0U",
+        "firstName": "Sam",
+        "lastName": "Altman",
+        "publicIdentifier": "sam-altman-financial-advisor",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-altman-financial-advisor"
+      },
+      {
+        "id": "ACoAABuhnI0BiTg8hQMSwyg8LxcrYYOowCSOSkM",
+        "firstName": "Brandon",
+        "lastName": "Trabucco",
+        "publicIdentifier": "brandontrabucco",
+        "linkedinUrl": "https://www.linkedin.com/in/brandontrabucco"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAABFmakQBEluVepxY639zEmykn0ExwFzLlFI",
+        "firstName": "Ashish",
+        "lastName": "Vaswani",
+        "publicIdentifier": "ashish-vaswani-99892181",
+        "linkedinUrl": "https://www.linkedin.com/in/ashish-vaswani-99892181"
+      },
+      {
+        "id": "ACoAABPg53YBHdOvmp7pU72eDhcho-7cnwyxk1o",
+        "firstName": "Pia",
+        "lastName": "Santos",
+        "publicIdentifier": "piafsantos",
+        "linkedinUrl": "https://www.linkedin.com/in/piafsantos"
+      },
+      {
+        "id": "ACoAAACFbM8BJP_3CAVzYGvxIGrPJwno6hjA6Nc",
+        "firstName": "Sriya",
+        "lastName": "Santhanam",
+        "publicIdentifier": "sriya-santhanam-327b182",
+        "linkedinUrl": "https://www.linkedin.com/in/sriya-santhanam-327b182"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAADI8OrIBKQ-D1XYb-k8_TEqJqTHafUyVCvE",
+        "firstName": "Parul",
+        "lastName": "Adwani",
+        "position": "Dozentin | Ernährungberaterin | Krankenschwester| MBA Gesundheitsmanagement",
+        "publicIdentifier": "paruladwani",
+        "linkedinUrl": "https://www.linkedin.com/in/paruladwani"
+      },
+      {
+        "id": "ACoAADWk7SIBphb5PM1E63e4UJRzfEF1sQ-ZmLI",
+        "firstName": "Marlon",
+        "lastName": "Bertzbach",
+        "position": "CrossFit Coach I Holistic Nutritionist I Athlete",
+        "publicIdentifier": "marlon-bertzbach-b424a9211",
+        "linkedinUrl": "https://www.linkedin.com/in/marlon-bertzbach-b424a9211"
+      },
+      {
+        "id": "ACoAADCwo9QBO0I_vzYcSR44usbtyY82gFOgjr0",
+        "firstName": "Sahar",
+        "lastName": "Cheshmeh",
+        "position": "PhD Candidate at Potsdam University",
+        "publicIdentifier": "sahar-cheshmeh-0186a51a9",
+        "linkedinUrl": "https://www.linkedin.com/in/sahar-cheshmeh-0186a51a9"
+      },
+      {
+        "id": "ACoAACXoHLUBBaCc71VYZMVxPBEfrDz3YsKkAIg",
+        "firstName": "Isabella",
+        "lastName": "Baum Martinez",
+        "position": "Sport Nutritionist & Nutritional Scientist | Health & Fitness Enthusiast | Former Corporate Health Consultant",
+        "publicIdentifier": "isabella-baum-martinez-531b99158",
+        "linkedinUrl": "https://www.linkedin.com/in/isabella-baum-martinez-531b99158"
+      },
+      {
+        "id": "ACoAABD2rygBgOTScohLgH2VFbmmFaJ4DF9zQKU",
+        "firstName": "John",
+        "lastName": "Njau",
+        "position": "Medical Practice Professional\nDietitian\nNutritionist",
+        "publicIdentifier": "john-njau-3a03907b",
+        "linkedinUrl": "https://www.linkedin.com/in/john-njau-3a03907b"
+      },
+      {
+        "id": "ACoAABjglWABcMBMQrdcrc_IQwWC8m4x_-imj_w",
+        "firstName": "Dana",
+        "lastName": "Nehmeh",
+        "position": "Product manager ",
+        "publicIdentifier": "dana-nehmeh-51493ab7",
+        "linkedinUrl": "https://www.linkedin.com/in/dana-nehmeh-51493ab7"
+      },
+      {
+        "id": "ACoAADMAYu4BPaMB57X05hSz7UTBQf9jjUmj8HU",
+        "firstName": "Anja",
+        "lastName": "Ebersbach",
+        "position": "Work(out) hard & be nice to people",
+        "publicIdentifier": "anja-ebersbach-6666871ba",
+        "linkedinUrl": "https://www.linkedin.com/in/anja-ebersbach-6666871ba"
+      },
+      {
+        "id": "ACoAAAxm2-gBYcUx3URNYh2y-8tma6TLv-ARc0I",
+        "firstName": "Camila",
+        "lastName": "Tardillo",
+        "position": "Nutritionist | CEO",
+        "publicIdentifier": "camila-tardillo",
+        "linkedinUrl": "https://www.linkedin.com/in/camila-tardillo"
+      },
+      {
+        "id": "ACoAACkCmigBixQ0tkH1NWzNdWCMSxAHJyY4Rhw",
+        "firstName": "Kalpana",
+        "lastName": "Bhattrai G",
+        "position": "Masters in Public Health,Berlin",
+        "publicIdentifier": "kalpana-bhattrai-g-thapa",
+        "linkedinUrl": "https://www.linkedin.com/in/kalpana-bhattrai-g-thapa"
+      },
+      {
+        "id": "ACoAAAJfjjcBcfFdJwgNcrZlgDy2sd0dSWD3aIc",
+        "firstName": "Stephen",
+        "lastName": "Conroy",
+        "position": "Clinical Nutritionist | Nutrition-life.com | Hormonal Therapy (infertility) | Meditation | Female Nutrition | Humanitarian work | Health Coaching | Adolescent and Athlete Nutrition | Health & Wellbeing",
+        "publicIdentifier": "stephen-conroy-13340211",
+        "linkedinUrl": "https://www.linkedin.com/in/stephen-conroy-13340211"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAFzBUR0BzQ98gmu_6yLjeAavB6YWWAziEqk"
+    }
+  }
+}

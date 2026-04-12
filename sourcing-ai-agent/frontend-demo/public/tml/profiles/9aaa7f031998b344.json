@@ -1,0 +1,917 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAAlGdRcB77VxzKK6J3oUFP0uqi60D7yjhdU",
+    "profile_url": "https://www.linkedin.com/in/ACwAAAlGdRcB77VxzKK6J3oUFP0uqi60D7yjhdU"
+  },
+  "item": {
+    "id": "ACoAAAlGdRcBC2EaV8AJ_1JEsUXvaIKAv-6pNKA",
+    "publicIdentifier": "shenxiu",
+    "linkedinUrl": "https://www.linkedin.com/in/shenxiu",
+    "firstName": "Shenxiu",
+    "lastName": "Liu",
+    "emails": [
+      {
+        "email": "shenxiu.liu@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Member of Technical Staff @ Thinking Machines Lab | ex-Meta | Stanford | Physics x Scaling x AI",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Mountain View, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "Mountain View, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "Mountain View"
+      }
+    },
+    "objectUrn": "155612439",
+    "registeredAt": "2011-12-02T16:15:36.385Z",
+    "topSkills": null,
+    "connectionsCount": 1221,
+    "followerCount": 1277,
+    "verified": true,
+    "about": "Senior Staff Engineer at Meta leading Monetization GenAI Foundation.\n\nI specialize in algorithm-system co-design for revenue-critical GenAI products. My work bridges RLHF strategy with large-scale infrastructure to align generative content with ads performance data. I led post-training systems for multi-modality and optimize inference on 20k+ GPU fleets, leveraging my computational physics background to solve fundamental numerical stability challenges in highly efficient RL.\n\nStanford Physics M.S. | Peking University B.S.",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 4,
+            "year": 2026,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "17926",
+        "companyId": "1792",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1792/",
+        "schoolName": "Stanford University"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": null,
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Member of Technical Staff @ Thinking Machines Lab | ex-Meta | Stanford | Physics x Scaling x AI",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco, CA",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "1 mo",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Apr",
+          "year": 2026,
+          "text": "Apr 2026"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior Staff Software Engineer, Monetization GenAI",
+        "location": "Menlo Park, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "3 yrs",
+        "description": "• RL System-Algorithm Co-design: Architected the post-training system for monetization GenAI, scaling FlowGRPO and GRPO algorithms. Diagnosed and resolved training/inference policy drifts, specifically mitigating stability bottlenecks in FlowGRPO to guarantee convergence and generation quality.\n\n• Foundation Model Pre-training: Led pre-training infrastructure for media foundation models (DiT). Developed stable FP8 training setups and high Model Flops Utilization (MFU) on 2k+ GPU clusters.\n\n• Inference Optimization: Spearheaded model distillation and quantization pipelines for commercial deployment. Achieved 3-8x fleet-wide efficiency gains on 20k+ GPUs by optimizing LLM/VLM serving stacks.\n\n• GenAI Creative Optimization Alignment: Pioneered the domain from 0 to 1, designed multi-objective RLHF pipelines to align generative creative with ads performance data (CTR/CVR), ensuring technical architecture directly drives business revenue growth.\n\n• Technical Leadership: Founded and scaled the Monetization GenAI foundation org (0 to 60+ engineers). Built the bridge between research and production, established org bench by mentoring several IC/EM leads in the org to the next level (Senior Staff, Senior Managers).",
+        "skills": [
+          "GenAI Inference",
+          "High Performance Computing (HPC)",
+          "Python",
+          "Technical Leadership",
+          "Reinforcement Learning"
+        ],
+        "experienceGroupId": "81a3150dbfd4036785ce4f62f688727329127ff6",
+        "startDate": {
+          "month": "May",
+          "year": 2023,
+          "text": "May 2023"
+        },
+        "endDate": {
+          "month": "Apr",
+          "year": 2026,
+          "text": "Apr 2026"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior Staff/Staff Software Engineer, Ads ML Platforms",
+        "location": "Sunnyvale, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "3 yrs 3 mos",
+        "description": "• Ads AutoML Platform: Led the strategic initiative to build Meta's next-generation AutoML ecosystem. Simplified ads modeling full-stack from hundreds of personalization models, laying the infrastructure groundwork for modern large-model pipelines.\n\n• Privacy-First Architecture: Designed privacy-enforced feature compilation and serving architectures, ensuring strict regulatory compliance with zero degradation in model performance.",
+        "skills": [
+          "Python"
+        ],
+        "experienceGroupId": "81a3150dbfd4036785ce4f62f688727329127ff6",
+        "startDate": {
+          "month": "Feb",
+          "year": 2020,
+          "text": "Feb 2020"
+        },
+        "endDate": {
+          "month": "Apr",
+          "year": 2023,
+          "text": "Apr 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior Software Engineer, Ads Ranking Infrastructure",
+        "location": "Menlo Park",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "3 yrs",
+        "description": "• Model-System Co-design: Architected \"Decoupled Deep Rec,\" a novel hybrid architecture bridging Two-Tower retrieval and DLRM ranking. Achieved 2% revenue lift while reducing CPU cost by 10%.\n\n• Extreme-Scale Serving: Engineered the predictor service supporting 100M+ QPS and 2k+ concurrent models. Solved critical P99 latency constraints for heavy multi-task models on CPU clusters.\n\n• Early Architecture Exploration: Prototyped early Multi-Task and sequential-learning RecSys. Identified the hard scalability ceilings of RNNs on CPU clusters, foreshadowing the industry's eventual shift to Transformer/GPU architectures.",
+        "skills": [
+          "Python",
+          "C++"
+        ],
+        "experienceGroupId": "81a3150dbfd4036785ce4f62f688727329127ff6",
+        "startDate": {
+          "month": "Mar",
+          "year": 2017,
+          "text": "Mar 2017"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2020,
+          "text": "Feb 2020"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Data Scientist Intern",
+        "location": "San Francisco, CA",
+        "employmentType": "Internship",
+        "workplaceType": "On-site",
+        "companyName": "Twitter",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/96622/",
+        "companyId": "96622",
+        "duration": "3 mos",
+        "description": "Ads Targeting and Prediction modeling",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2016,
+          "text": "Jun 2016"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2016,
+          "text": "Aug 2016"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQEJZABhJ-eE0g/company-logo_400_400/company-logo_400_400/0/1690242317195/twitter_logo?e=1776902400&v=beta&t=v1UiJouIeHZOwxTZcNZBqVwnhDB8_OXyoGWyqdW3DLQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEJZABhJ-eE0g/company-logo_400_400/company-logo_400_400/0/1690242317195/twitter_logo?e=1776902400&v=beta&t=v1UiJouIeHZOwxTZcNZBqVwnhDB8_OXyoGWyqdW3DLQ",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEJZABhJ-eE0g/company-logo_200_200/company-logo_200_200/0/1690242317195/twitter_logo?e=1776902400&v=beta&t=21hE24egqGYy3F-4IPD7RfkIhjO-WBeDsOAAaL72H5w",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEJZABhJ-eE0g/company-logo_100_100/company-logo_100_100/0/1690242317195/twitter_logo?e=1776902400&v=beta&t=4siCHaqQwjJ3_CILzf6sxKVHLUizNvZRdaC1XT2Egrs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Data Scientist Intern",
+        "location": "San Francisco, CA",
+        "employmentType": "Internship",
+        "workplaceType": "On-site",
+        "companyName": "Twitter",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/96622/",
+        "companyId": "96622",
+        "duration": "3 mos",
+        "description": "Ads Targeting and Prediction modeling",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2015,
+          "text": "Jun 2015"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2015,
+          "text": "Aug 2015"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQEJZABhJ-eE0g/company-logo_400_400/company-logo_400_400/0/1690242317195/twitter_logo?e=1776902400&v=beta&t=v1UiJouIeHZOwxTZcNZBqVwnhDB8_OXyoGWyqdW3DLQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEJZABhJ-eE0g/company-logo_400_400/company-logo_400_400/0/1690242317195/twitter_logo?e=1776902400&v=beta&t=v1UiJouIeHZOwxTZcNZBqVwnhDB8_OXyoGWyqdW3DLQ",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEJZABhJ-eE0g/company-logo_200_200/company-logo_200_200/0/1690242317195/twitter_logo?e=1776902400&v=beta&t=21hE24egqGYy3F-4IPD7RfkIhjO-WBeDsOAAaL72H5w",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEJZABhJ-eE0g/company-logo_100_100/company-logo_100_100/0/1690242317195/twitter_logo?e=1776902400&v=beta&t=4siCHaqQwjJ3_CILzf6sxKVHLUizNvZRdaC1XT2Egrs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Stanford University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1792/",
+        "schoolId": "1792",
+        "degree": "Master of Science - MS",
+        "fieldOfStudy": "Physics",
+        "skills": [],
+        "description": "Research in Computational Condensed Matter. Specialized in DMRG and QMC algorithms for solving strongly correlated systems, with a focus on numerical stability in high-dimensional linear algebra.\n\nSelected publications:\n* AI for Science: Pioneered unsupervised embedding techniques for materials discovery (PNAS, 2018, Atom2Vec: learning atoms for materials discovery, arXiv: 1807.05617).\n* High-Tc superconductivity: First numerical evidence for fluctuating stripes in the Hubbard model via large scale DMRG/DQMC (Science, 2017, Numerical evidence of fluctuating stripes in the normal state of high-Tc cuprate superconductors, arXiv: 1612.05211).\n\nSelected talks:\nAbsence of Superconductivity in Doping Kagome Quantum Spin Liquid (inspiring Phys. Rev. Lett. 119, 067002)",
+        "startDate": {
+          "year": 2013,
+          "text": "2013"
+        },
+        "endDate": {
+          "year": 2016,
+          "text": "2016"
+        },
+        "period": "2013 - 2016",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_400_400/company-logo_400_400/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=zzE-1MKqCLrmkqb1p2hJqhVuV2hbdZzC0j_ok6Kyhk8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_400_400/company-logo_400_400/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=zzE-1MKqCLrmkqb1p2hJqhVuV2hbdZzC0j_ok6Kyhk8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_200_200/company-logo_200_200/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=0xd9OiQTt31rPm8_wUnQNPsZKrh8XBXIidNxV9RaB5s",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_100_100/company-logo_100_100/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=9qvsDNg8-8GHe51pI3kr1K_DGeN_zXJEt0DlOSSFopY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Peking University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/20289/",
+        "schoolId": "20289",
+        "degree": "Bachelor of Science (B.S.)",
+        "fieldOfStudy": "Double Major in Physics and Mathematics",
+        "skills": [],
+        "description": "Undergrad study on physics and math, specialized in theoretical physics research.\n\nPublication: Thermodynamics of black hole horizons and Kerr/CFT correspondence (JHEP, 2012). arXiv: 1206.2015.",
+        "startDate": {
+          "year": 2009,
+          "text": "2009"
+        },
+        "endDate": {
+          "year": 2013,
+          "text": "2013"
+        },
+        "period": "2009 - 2013",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQFNJ0xtCpaTmA/company-logo_400_400/company-logo_400_400/0/1630659985593/peking_university_logo?e=1776902400&v=beta&t=tzWsCJkzrFTjS8-XTrasS49bBUqZTxxm9qz4Y-W-UEI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFNJ0xtCpaTmA/company-logo_400_400/company-logo_400_400/0/1630659985593/peking_university_logo?e=1776902400&v=beta&t=tzWsCJkzrFTjS8-XTrasS49bBUqZTxxm9qz4Y-W-UEI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFNJ0xtCpaTmA/company-logo_200_200/company-logo_200_200/0/1630659985593/peking_university_logo?e=1776902400&v=beta&t=GGCchHN0MhDF69ugXCZ_57G9SYP0XpXZfHVxS90uIdg",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFNJ0xtCpaTmA/company-logo_100_100/company-logo_100_100/0/1630659985593/peking_university_logo?e=1776902400&v=beta&t=6Epw2UUmAPAeqOOrlKudHnFnsFVCE8IuE-eKVpCxg2I",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "C++",
+        "positions": [
+          "Senior Software Engineer, Ads Ranking Infrastructure at Meta"
+        ],
+        "endorsements": "21 endorsements"
+      },
+      {
+        "name": "Python",
+        "positions": [
+          "3 experiences at Meta"
+        ],
+        "endorsements": "17 endorsements"
+      },
+      {
+        "name": "Linux",
+        "endorsements": "11 endorsements"
+      },
+      {
+        "name": "Scala",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "Java",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Matlab",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Reinforcement Learning",
+        "positions": [
+          "Senior Staff Software Engineer, Monetization GenAI at Meta"
+        ]
+      },
+      {
+        "name": "High Performance Computing (HPC)",
+        "positions": [
+          "Senior Staff Software Engineer, Monetization GenAI at Meta"
+        ]
+      },
+      {
+        "name": "Technical Leadership",
+        "positions": [
+          "Senior Staff Software Engineer, Monetization GenAI at Meta"
+        ]
+      },
+      {
+        "name": "GenAI Inference",
+        "positions": [
+          "Senior Staff Software Engineer, Monetization GenAI at Meta"
+        ]
+      },
+      {
+        "name": "Machine Learning",
+        "endorsements": "15 endorsements"
+      },
+      {
+        "name": "Scientific Computing",
+        "endorsements": "14 endorsements"
+      },
+      {
+        "name": "Natural Language Processing",
+        "endorsements": "7 endorsements"
+      },
+      {
+        "name": "Statistics",
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "Parallel Computing",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Haskell"
+      }
+    ],
+    "publications": [
+      {
+        "title": "Learning atoms for materials discovery",
+        "publishedAt": "PNAS · Jul 10, 2018",
+        "description": "Pioneered unsupervised embedding techniques for materials discovery.",
+        "link": "https://www.pnas.org/doi/full/10.1073/pnas.1801181115"
+      },
+      {
+        "title": "Numerical evidence of fluctuating stripes in the normal state of high-Tc cuprate superconductors",
+        "publishedAt": "Science · Dec 1, 2017",
+        "description": "First numerical evidence for fluctuating stripes in the Hubbard model via large scale DMRG/DQMC.",
+        "link": "https://www.science.org/doi/full/10.1126/science.aak9546"
+      },
+      {
+        "title": "Nature of a single doped hole in two-leg Hubbard and t-J ladders",
+        "publishedAt": "Physical Review B · Oct 15, 2016",
+        "description": null,
+        "link": "https://journals.aps.org/prb/abstract/10.1103/PhysRevB.94.155149"
+      },
+      {
+        "title": "Thermodynamics of black hole horizons and Kerr/CFT correspondence",
+        "publishedAt": "Journal of High Energy Physics · Nov 1, 2012",
+        "description": null,
+        "link": "https://link.springer.com/article/10.1007/JHEP11(2012)017"
+      },
+      {
+        "title": "Absence of Superconductivity in Doping Kagome Quantum Spin Liquid",
+        "publishedAt": "APS March Meeting 2017",
+        "description": null,
+        "link": "https://meetings.aps.org/Meeting/MAR17/Session/R48.3"
+      }
+    ],
+    "courses": [
+      {
+        "title": "Computer Graphics",
+        "number": "CS148",
+        "associatedWith": "Associated with Stanford University",
+        "associatedWithLink": "https://www.linkedin.com/company/1792/"
+      },
+      {
+        "title": "Computer Organization & Systems",
+        "number": "CS107",
+        "associatedWith": "Associated with Stanford University",
+        "associatedWithLink": "https://www.linkedin.com/company/1792/"
+      },
+      {
+        "title": "Convex Optimization I",
+        "number": "EE364A",
+        "associatedWith": "Associated with Stanford University",
+        "associatedWithLink": "https://www.linkedin.com/company/1792/"
+      },
+      {
+        "title": "Convolutional Neural Network in Image Recognition",
+        "number": "CS231N",
+        "associatedWith": "Associated with Stanford University",
+        "associatedWithLink": "https://www.linkedin.com/company/1792/"
+      },
+      {
+        "title": "Data Mining",
+        "number": "STATS202",
+        "associatedWith": "Associated with Stanford University",
+        "associatedWithLink": "https://www.linkedin.com/company/1792/"
+      },
+      {
+        "title": "Deep Learning in Natural Language Processing",
+        "number": "CS224D",
+        "associatedWith": "Associated with Stanford University",
+        "associatedWithLink": "https://www.linkedin.com/company/1792/"
+      },
+      {
+        "title": "Design and Analysis of Algorithms",
+        "number": "CS161",
+        "associatedWith": "Associated with Stanford University",
+        "associatedWithLink": "https://www.linkedin.com/company/1792/"
+      },
+      {
+        "title": "Introduction to parallel computing using MPI, openMP, and CUDA",
+        "number": "CME213",
+        "associatedWith": "Associated with Stanford University",
+        "associatedWithLink": "https://www.linkedin.com/company/1792/"
+      },
+      {
+        "title": "Machine Learning",
+        "number": "CS229",
+        "associatedWith": "Associated with Stanford University",
+        "associatedWithLink": "https://www.linkedin.com/company/1792/"
+      },
+      {
+        "title": "Mining Massive Dataset",
+        "number": "CS246",
+        "associatedWith": "Associated with Stanford University",
+        "associatedWithLink": "https://www.linkedin.com/company/1792/"
+      },
+      {
+        "title": "Mining Massive Dataset: Hadoop Labs",
+        "number": "CS246H",
+        "associatedWith": "Associated with Stanford University",
+        "associatedWithLink": "https://www.linkedin.com/company/1792/"
+      },
+      {
+        "title": "Mining Massive Dataset: Project",
+        "number": "CS341",
+        "associatedWith": "Associated with Stanford University",
+        "associatedWithLink": "https://www.linkedin.com/company/1792/"
+      },
+      {
+        "title": "Natural Language Processing",
+        "number": "CS224N",
+        "associatedWith": "Associated with Stanford University",
+        "associatedWithLink": "https://www.linkedin.com/company/1792/"
+      },
+      {
+        "title": "Probabilistic Graphical Model",
+        "number": "CS228",
+        "associatedWith": "Associated with Stanford University",
+        "associatedWithLink": "https://www.linkedin.com/company/1792/"
+      },
+      {
+        "title": "Programming Languages",
+        "number": "CS242",
+        "associatedWith": "Associated with Stanford University",
+        "associatedWithLink": "https://www.linkedin.com/company/1792/"
+      }
+    ],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [
+      {
+        "name": "Chinese",
+        "proficiency": "Native or bilingual proficiency"
+      },
+      {
+        "name": "English",
+        "proficiency": "Full professional proficiency"
+      }
+    ],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAAV6LZMBGKoZpYLrhPr0OW_UTiE6W-Vh1Ts",
+        "firstName": "Ning",
+        "lastName": "Tan",
+        "publicIdentifier": "ningtan2",
+        "linkedinUrl": "https://www.linkedin.com/in/ningtan2"
+      },
+      {
+        "id": "ACoAAAo2TREBLNtFR6ER7rbI2mCvu7jwBAUrpiU",
+        "firstName": "Elahe",
+        "lastName": "Dabir",
+        "publicIdentifier": "elahe-dabir-95546549",
+        "linkedinUrl": "https://www.linkedin.com/in/elahe-dabir-95546549"
+      },
+      {
+        "id": "ACoAABgYAiEBh5eP0Mg1d0MT9HQtDdktDvmE5-g",
+        "firstName": "Аnton",
+        "lastName": "Lunov",
+        "publicIdentifier": "аnton-lunov-51545bb3",
+        "linkedinUrl": "https://www.linkedin.com/in/аnton-lunov-51545bb3"
+      },
+      {
+        "id": "ACoAABioTpABeiPa0DD3uXjMCGrbz_0NE6TXgHE",
+        "firstName": "Yining",
+        "lastName": "Bao",
+        "publicIdentifier": "yining-bao-100660b6",
+        "linkedinUrl": "https://www.linkedin.com/in/yining-bao-100660b6"
+      },
+      {
+        "id": "ACoAABMHVzkBg3iMvr-gi5d3XkkN8Xi-MLFV8sM",
+        "firstName": "Minjie",
+        "lastName": "Fan",
+        "publicIdentifier": "minjie-fan-135aba8a",
+        "linkedinUrl": "https://www.linkedin.com/in/minjie-fan-135aba8a"
+      },
+      {
+        "id": "ACoAAANTl9IB4dTLqaHcSP7tc2A-t-CQzC0pnqI",
+        "firstName": "Lanbo",
+        "lastName": "Zhang",
+        "publicIdentifier": "lanbo-zhang-55683516",
+        "linkedinUrl": "https://www.linkedin.com/in/lanbo-zhang-55683516"
+      },
+      {
+        "id": "ACoAAAyWF4AB4qwxfQA0fh6ESlgSUQ6X4yaPWgU",
+        "firstName": "Ken",
+        "lastName": "Ling",
+        "publicIdentifier": "lingken",
+        "linkedinUrl": "https://www.linkedin.com/in/lingken"
+      },
+      {
+        "id": "ACoAAAS9jXUBRMi8exEJW2vByjLYKAHk1N7fVmQ",
+        "firstName": "Ziheng",
+        "lastName": "Wang",
+        "publicIdentifier": "zihengwang",
+        "linkedinUrl": "https://www.linkedin.com/in/zihengwang"
+      },
+      {
+        "id": "ACoAAAmSxhcBV3PSSQUjvvMSXazW4l0pQJTeq1M",
+        "firstName": "Andrew",
+        "lastName": "Comminos",
+        "publicIdentifier": "acomminos",
+        "linkedinUrl": "https://www.linkedin.com/in/acomminos"
+      },
+      {
+        "id": "ACoAAAOlnDABtY0i2u2s0W007O21ZpduS5yVpCs",
+        "firstName": "Konark",
+        "lastName": "Gill",
+        "publicIdentifier": "konark-gill-0405a818",
+        "linkedinUrl": "https://www.linkedin.com/in/konark-gill-0405a818"
+      },
+      {
+        "id": "ACoAAAqVf0gBo9c2Ct0MhvXir8CtGmWN4aj823s",
+        "firstName": "Surya",
+        "lastName": "Appini",
+        "publicIdentifier": "surya-appini",
+        "linkedinUrl": "https://www.linkedin.com/in/surya-appini"
+      },
+      {
+        "id": "ACoAABkyMzgBGOSoPeRC464mnZvSuuWxNn3o0kI",
+        "firstName": "Chunli",
+        "lastName": "Fu",
+        "publicIdentifier": "chunlifu",
+        "linkedinUrl": "https://www.linkedin.com/in/chunlifu"
+      },
+      {
+        "id": "ACoAAAUGnrMBqtvsuWLcECnPVE9N4IfSkS3Yi10",
+        "firstName": "Olive Wenqiong",
+        "lastName": "Guo",
+        "publicIdentifier": "olive-wenqiong-guo-3032a424",
+        "linkedinUrl": "https://www.linkedin.com/in/olive-wenqiong-guo-3032a424"
+      },
+      {
+        "id": "ACoAAAjmJUoB-wuNWbTS4G1cQE7pJ0-GqJBBEoQ",
+        "firstName": "Yanfei",
+        "lastName": "Wu",
+        "publicIdentifier": "yanfeiwu",
+        "linkedinUrl": "https://www.linkedin.com/in/yanfeiwu"
+      },
+      {
+        "id": "ACoAAA2xEOIBcHi-nWvRABpxe-upTadT7hP_OD8",
+        "firstName": "Yingying",
+        "lastName": "Bi",
+        "publicIdentifier": "yingyingbi",
+        "linkedinUrl": "https://www.linkedin.com/in/yingyingbi"
+      },
+      {
+        "id": "ACoAAANelUAB6-5Uc3XGJXcUW4Kti1x--oKsF4U",
+        "firstName": "Branislav",
+        "lastName": "Stojkovic",
+        "publicIdentifier": "branislav-stojkovic-314b2216",
+        "linkedinUrl": "https://www.linkedin.com/in/branislav-stojkovic-314b2216"
+      },
+      {
+        "id": "ACoAAAL_7VYBuIGDzRDydr261uxyJcOEMknr5Nk",
+        "firstName": "Debanik",
+        "lastName": "Lahiri",
+        "publicIdentifier": "debaniklahiri",
+        "linkedinUrl": "https://www.linkedin.com/in/debaniklahiri"
+      },
+      {
+        "id": "ACoAAANgS_cBO306BIWYOj9HUgwFHrRiEBX1SBQ",
+        "firstName": "Yimin",
+        "lastName": "Tan",
+        "publicIdentifier": "yimin-tan-307b7716",
+        "linkedinUrl": "https://www.linkedin.com/in/yimin-tan-307b7716"
+      },
+      {
+        "id": "ACoAAA1bipwB6WaPr5ybbkko67OPPefYzYlH7-8",
+        "firstName": "Bing",
+        "lastName": "Cai",
+        "publicIdentifier": "bing-cai-33807563",
+        "linkedinUrl": "https://www.linkedin.com/in/bing-cai-33807563"
+      },
+      {
+        "id": "ACoAAAnxWuMBdWNYMJWNPMdlgwUBhaGWDfzaUBI",
+        "firstName": "Qi",
+        "lastName": "Zeng",
+        "publicIdentifier": "qi-zeng-b43a4647",
+        "linkedinUrl": "https://www.linkedin.com/in/qi-zeng-b43a4647"
+      },
+      {
+        "id": "ACoAAGXmXPIBv0jmz9nhIfEBP8AjkYHX4jjnYy0",
+        "firstName": "Auwal",
+        "lastName": "Isa Aliyu",
+        "position": "Student at Stanford University",
+        "publicIdentifier": "auwal-isa-aliyu-5826593b8",
+        "linkedinUrl": "https://www.linkedin.com/in/auwal-isa-aliyu-5826593b8"
+      },
+      {
+        "id": "ACoAAGYS_cwBBUgLbNYzfNYXh9nc_C6WKaRcCqI",
+        "firstName": "Zahir",
+        "lastName": "Khan",
+        "position": "Student at Stanford University",
+        "publicIdentifier": "zahir-khan-06462a3b9",
+        "linkedinUrl": "https://www.linkedin.com/in/zahir-khan-06462a3b9"
+      },
+      {
+        "id": "ACoAAGXum8ABazRgR1tpI-lvbnVBjfa84vjVwWs",
+        "firstName": "Kashmir Book Promotion",
+        "lastName": "Trust",
+        "position": "Student at Stanford University",
+        "publicIdentifier": "kashmir-book-promotion-trust-22887a3b8",
+        "linkedinUrl": "https://www.linkedin.com/in/kashmir-book-promotion-trust-22887a3b8"
+      },
+      {
+        "id": "ACoAAGX31PQBvFinIGiCTw7oFhQJbkC9YLiUBYo",
+        "firstName": "Sara hamed",
+        "lastName": "undefined",
+        "position": "طالب في ‏Stanford University‏",
+        "publicIdentifier": "sara-hamed-undefined-bb0b0b3b8",
+        "linkedinUrl": "https://www.linkedin.com/in/sara-hamed-undefined-bb0b0b3b8"
+      },
+      {
+        "id": "ACoAAGX3s-0B8izf8zzKPmCb6B6uJvre0HqlXJo",
+        "firstName": "Glad",
+        "lastName": "Aniemeka",
+        "position": "Student at Stanford University",
+        "publicIdentifier": "glad-aniemeka-125b073b8",
+        "linkedinUrl": "https://www.linkedin.com/in/glad-aniemeka-125b073b8"
+      },
+      {
+        "id": "ACoAAGYVJ3EBsy7Ue9qvpHoLEscY81_4v8b9KGw",
+        "firstName": "Bobby Hayes",
+        "lastName": "undefined",
+        "position": "Student at Stanford University",
+        "publicIdentifier": "bobby-hayes-undefined-0956983b9",
+        "linkedinUrl": "https://www.linkedin.com/in/bobby-hayes-undefined-0956983b9"
+      },
+      {
+        "id": "ACoAAGX6QrgBpb22qBONcXs7UvI82GjDPv6mcJ0",
+        "firstName": "Nicolas",
+        "lastName": "Anelka",
+        "position": "Stanford University okulunda öğrenci",
+        "publicIdentifier": "nicolas-anelka-134b883b8",
+        "linkedinUrl": "https://www.linkedin.com/in/nicolas-anelka-134b883b8"
+      },
+      {
+        "id": "ACoAAGXq3S8Bn5v-wlm9HhLAb4AYNQVM274zops",
+        "firstName": "Favour",
+        "lastName": "Crystal",
+        "position": "Student at Stanford University",
+        "publicIdentifier": "favour-crystal-2137803b8",
+        "linkedinUrl": "https://www.linkedin.com/in/favour-crystal-2137803b8"
+      },
+      {
+        "id": "ACoAAGXvU-ABAA7dhg4BZv_S0GwWV6sbtczRJeE",
+        "firstName": "Sample",
+        "lastName": "ID",
+        "position": "Student at Stanford University",
+        "publicIdentifier": "sample-id-5688a13b8",
+        "linkedinUrl": "https://www.linkedin.com/in/sample-id-5688a13b8"
+      },
+      {
+        "id": "ACoAAGYHAZ0BWtPq57QA9w60rDzqVV1nnh7ZARw",
+        "firstName": "Kehinde",
+        "lastName": "Joseph",
+        "position": "Student at Stanford University",
+        "publicIdentifier": "kehinde-joseph-5b930b3b9",
+        "linkedinUrl": "https://www.linkedin.com/in/kehinde-joseph-5b930b3b9"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAAlGdRcB77VxzKK6J3oUFP0uqi60D7yjhdU"
+    }
+  }
+}

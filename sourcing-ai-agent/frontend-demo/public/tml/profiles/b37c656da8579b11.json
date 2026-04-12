@@ -1,0 +1,587 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAABVAP64BHt8eLDXb6FGQl5vvONTjL3d8pc8",
+    "profile_url": "https://www.linkedin.com/in/ACwAABVAP64BHt8eLDXb6FGQl5vvONTjL3d8pc8"
+  },
+  "item": {
+    "id": "ACoAABVAP64BY4RszeJt11vohsLM-gj1PiARl2o",
+    "publicIdentifier": "jiaming-cui-57a49a9b",
+    "linkedinUrl": "https://www.linkedin.com/in/jiaming-cui-57a49a9b",
+    "firstName": "Jiaming",
+    "lastName": "Cui",
+    "emails": [
+      {
+        "email": "jiaming.cui@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Pretraining @ Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco Bay Area",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "356532142",
+    "registeredAt": "2014-07-15T11:31:12.636Z",
+    "topSkills": null,
+    "connectionsCount": 285,
+    "followerCount": 295,
+    "verified": false,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 3,
+            "year": 2026,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "18494",
+        "companyId": "1503",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1503/",
+        "schoolName": "Massachusetts Institute of Technology"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5603AQG0R9NvTyCOMA/profile-displayphoto-shrink_800_800/B56ZQKE813GQAc-/0/1735335858710?e=1776902400&v=beta&t=u6s6Qsu0VCysAznYNjpC-mpQfk8TjISTzpcAXOT4tGY",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQG0R9NvTyCOMA/profile-displayphoto-shrink_800_800/B56ZQKE813GQAc-/0/1735335858710?e=1776902400&v=beta&t=u6s6Qsu0VCysAznYNjpC-mpQfk8TjISTzpcAXOT4tGY",
+          "width": 763,
+          "height": 763,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQG0R9NvTyCOMA/profile-displayphoto-shrink_400_400/B56ZQKE813GQAg-/0/1735335858710?e=1776902400&v=beta&t=Yca48Mm1o21r4P0A2fVi4Yn5L3RaqK5hV2-uIL-OE5M",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQG0R9NvTyCOMA/profile-displayphoto-shrink_200_200/B56ZQKE813GQAY-/0/1735335858678?e=1776902400&v=beta&t=907qKgl3M60Qy8CPzCp9bzu_qlBMCCoyjRYdD5Q2RwU",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQG0R9NvTyCOMA/profile-displayphoto-shrink_100_100/B56ZQKE813GQAU-/0/1735335858710?e=1776902400&v=beta&t=wezGQFUQ6vlyEzUK-8NpBSvYQdcnFxksYGRYGKVozSQ",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D5603AQG0R9NvTyCOMA/profile-displayphoto-shrink_800_800/B56ZQKE813GQAc-/0/1735335858710?e=1776902400&v=beta&t=u6s6Qsu0VCysAznYNjpC-mpQfk8TjISTzpcAXOT4tGY",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Pretraining @ Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "2 mos",
+        "description": "Pretraining",
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2026,
+          "text": "Mar 2026"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer",
+        "location": "Menlo Park, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "5 yrs 8 mos",
+        "description": "Nov 2024 - Feb 2026\nMSL Infra, PyTorch AI Acceleration Enablement\n- Large scale pre-training infra for next-gen foundation models\n- Training paradigm and algorithm research including matrix-based optimizers, optimization, large batch training \n\nJul 2020 - Nov 2024 \nApplied Privacy Tech\n- Privacy Preserving technologies. End-to-end encryption, anonymous credential, PII redaction.",
+        "skills": null,
+        "startDate": {
+          "month": "Jul",
+          "year": 2020,
+          "text": "Jul 2020"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2026,
+          "text": "Feb 2026"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer Intern",
+        "location": "Menlo Park, California, United States",
+        "employmentType": "Internship",
+        "workplaceType": null,
+        "companyName": "Facebook",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/76987811/",
+        "companyId": "76987811",
+        "duration": "3 mos",
+        "description": "Facebook Stories Product Infra ",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2019,
+          "text": "Jun 2019"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2019,
+          "text": "Aug 2019"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_200_200/company-logo_200_200/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=CL3OcEUIyBJFm9Wkw4iT9gJoWpsvGBIAhhNM0DjZx_A",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_100_100/company-logo_100_100/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=sZq9Sard1kGYVIprgBkNhUvJRTI7tf3pXOCP1bQBfpM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Massachusetts Institute of Technology",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1503/",
+        "schoolId": "1503",
+        "degree": "Bachelor's degree",
+        "fieldOfStudy": "Electrical Engineering and Computer Science (6-2)",
+        "skills": [],
+        "description": "Wellesley-MIT double degree program",
+        "startDate": {
+          "year": 2015,
+          "text": "2015"
+        },
+        "endDate": {
+          "year": 2020,
+          "text": "2020"
+        },
+        "period": "2015 - 2020",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_400_400/company-logo_400_400/0/1689799729035/mit_logo?e=1776902400&v=beta&t=u1PKvlsURdjuQj6vGwgPDc-3muz7cCQ6oGJISjoWshw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_400_400/company-logo_400_400/0/1689799729035/mit_logo?e=1776902400&v=beta&t=u1PKvlsURdjuQj6vGwgPDc-3muz7cCQ6oGJISjoWshw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_200_200/company-logo_200_200/0/1689799729035/mit_logo?e=1776902400&v=beta&t=AB2cY7dhuIbLPIWAjqEjazLVeMiSD5C3JNuYh9NjBw4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_100_100/company-logo_100_100/0/1689799729035/mit_logo?e=1776902400&v=beta&t=IuM-xZiymxMvWzGrHXnXupiD9lk70R68nAJaX2-9P8Y",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Wellesley College",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/13055/",
+        "schoolId": "13055",
+        "degree": "Bachelor's degree",
+        "fieldOfStudy": "Mathematics",
+        "skills": [],
+        "description": "Wellesley-MIT double degree program\nSumma Cum Laude",
+        "startDate": {
+          "year": 2015,
+          "text": "2015"
+        },
+        "endDate": {
+          "year": 2020,
+          "text": "2020"
+        },
+        "period": "2015 - 2020",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4D0BAQF7EpT5AJzINA/company-logo_400_400/company-logo_400_400/0/1694183788167?e=1776902400&v=beta&t=Y5sRAYOHFFBF9qbAOYiDgIM0Zt7Ntq1PDKKTGvndSnw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQF7EpT5AJzINA/company-logo_400_400/company-logo_400_400/0/1694183788167?e=1776902400&v=beta&t=Y5sRAYOHFFBF9qbAOYiDgIM0Zt7Ntq1PDKKTGvndSnw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQF7EpT5AJzINA/company-logo_200_200/company-logo_200_200/0/1694183788167?e=1776902400&v=beta&t=bLp81ai-hh5Jo3hL239BaS8Vj1xEEGDNQlQijR-YC9o",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQF7EpT5AJzINA/company-logo_100_100/company-logo_100_100/0/1694183788167?e=1776902400&v=beta&t=BaQKPCFNAXmwb66Zra18ivwlVkY2pNhopojeL1gwjcs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAACmzAtgBiDGd-HW1TzeGD6e3xWxnqDi9o-0",
+        "firstName": "Zitong",
+        "lastName": "Yang",
+        "publicIdentifier": "zitongyang",
+        "linkedinUrl": "https://www.linkedin.com/in/zitongyang"
+      },
+      {
+        "id": "ACoAAEZnBtoBb1Us7ZKgHfOXAYT764pKcDQy848",
+        "firstName": "Songlin",
+        "lastName": "Yang",
+        "publicIdentifier": "songlin-yang-b8a69728b",
+        "linkedinUrl": "https://www.linkedin.com/in/songlin-yang-b8a69728b"
+      },
+      {
+        "id": "ACoAABQ5lJUBry2byQYf_TtxDF9Rha9l-RqYsaM",
+        "firstName": "Guang-He",
+        "lastName": "Lee",
+        "publicIdentifier": "guang-he-lee-64577895",
+        "linkedinUrl": "https://www.linkedin.com/in/guang-he-lee-64577895"
+      },
+      {
+        "id": "ACoAAAQ4Q7kByw3YKf2rFlmWzRMF7P8Gw4S9PIU",
+        "firstName": "Yinghai",
+        "lastName": "L.",
+        "publicIdentifier": "yinghai83",
+        "linkedinUrl": "https://www.linkedin.com/in/yinghai83"
+      },
+      {
+        "id": "ACoAABGaEy8Bu1ycKB5WUvyRc69OERCzymW7mxY",
+        "firstName": "Jamie",
+        "lastName": "Cahill",
+        "publicIdentifier": "james-cahill-093a9582",
+        "linkedinUrl": "https://www.linkedin.com/in/james-cahill-093a9582"
+      },
+      {
+        "id": "ACoAACHgqNcBO7G9QHjfnTyp5v6rVbPMJ19f1dc",
+        "firstName": "Claire",
+        "lastName": "Fu",
+        "publicIdentifier": "clairecfu",
+        "linkedinUrl": "https://www.linkedin.com/in/clairecfu"
+      },
+      {
+        "id": "ACoAAAgB78IBFrSRvjrM16CT0N8_P9uNs_xP3cw",
+        "firstName": "Aurick",
+        "lastName": "Qiao",
+        "publicIdentifier": "aurickq",
+        "linkedinUrl": "https://www.linkedin.com/in/aurickq"
+      },
+      {
+        "id": "ACoAACA1ZlYBhPNODsf7Z3UNo1tLYMShFQ7OQJw",
+        "firstName": "Yujia",
+        "lastName": "Bao",
+        "publicIdentifier": "yujia-bao-506b76130",
+        "linkedinUrl": "https://www.linkedin.com/in/yujia-bao-506b76130"
+      },
+      {
+        "id": "ACoAACKNVUMBztbhQ3RUYQ-Mg89xUJ39N-XJpM4",
+        "firstName": "Long",
+        "lastName": "Lian",
+        "publicIdentifier": "longlian",
+        "linkedinUrl": "https://www.linkedin.com/in/longlian"
+      },
+      {
+        "id": "ACoAADgLvm4BAaa-N5zNQvfP5qFptuA8bvJs3nM",
+        "firstName": "Yifei",
+        "lastName": "Zhou",
+        "publicIdentifier": "yifei-zhou-57aa9b222",
+        "linkedinUrl": "https://www.linkedin.com/in/yifei-zhou-57aa9b222"
+      },
+      {
+        "id": "ACoAADDB7DABJK3fhQa97pAxpbFcGbMtI2pA2Ek",
+        "firstName": "Ruila",
+        "lastName": "M.",
+        "publicIdentifier": "ruilama",
+        "linkedinUrl": "https://www.linkedin.com/in/ruilama"
+      },
+      {
+        "id": "ACoAABoG0oUBl986ZaMrLUASG1NhDoJyVlav4Po",
+        "firstName": "Eric",
+        "lastName": "Zhang",
+        "publicIdentifier": "ekzhang",
+        "linkedinUrl": "https://www.linkedin.com/in/ekzhang"
+      },
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAAAd3c8cBXKnzqS80_HMaDIGNdqrXbaFbO5g",
+        "firstName": "James",
+        "lastName": "Sun",
+        "publicIdentifier": "james5un",
+        "linkedinUrl": "https://www.linkedin.com/in/james5un"
+      },
+      {
+        "id": "ACoAADCkfncB4P7VWZ-S1Ojv9-aHq_bFsA6LBQY",
+        "firstName": "Ziqiao",
+        "lastName": "Ma",
+        "publicIdentifier": "ziqiao-ma",
+        "linkedinUrl": "https://www.linkedin.com/in/ziqiao-ma"
+      },
+      {
+        "id": "ACoAAAQ1QI4Bex6mqv5SgvahWcZuzAuWiTKciBo",
+        "firstName": "Bi",
+        "lastName": "Xue",
+        "publicIdentifier": "bi-xue-9527871b",
+        "linkedinUrl": "https://www.linkedin.com/in/bi-xue-9527871b"
+      },
+      {
+        "id": "ACoAADYMzQABdXTSxolT2YjHmNBBSeT6YrGSQmQ",
+        "firstName": "Tarushii",
+        "lastName": "Goel",
+        "publicIdentifier": "tarushii-goel",
+        "linkedinUrl": "https://www.linkedin.com/in/tarushii-goel"
+      },
+      {
+        "id": "ACoAACy2BxwB9fCrfCBI06w0X-gHyQTFLJIpJGc",
+        "firstName": "Guangxuan",
+        "lastName": "X.",
+        "publicIdentifier": "xgx",
+        "linkedinUrl": "https://www.linkedin.com/in/xgx"
+      },
+      {
+        "id": "ACoAAB4qbUUBsc9H_NLZN2duLUOOyyFDm-k_ACo",
+        "firstName": "Riley",
+        "lastName": "Shanahan",
+        "publicIdentifier": "rileyshanny",
+        "linkedinUrl": "https://www.linkedin.com/in/rileyshanny"
+      },
+      {
+        "id": "ACoAAAeoHjYB_Lo5sUFlpZpz2L74oe9nEIKztQA",
+        "firstName": "Jenya",
+        "lastName": "L.",
+        "publicIdentifier": "jenya-l",
+        "linkedinUrl": "https://www.linkedin.com/in/jenya-l"
+      },
+      {
+        "id": "ACoAAAgEzzcBdF-3E3-POTgyPj8RSaHW2Fb-G_s",
+        "firstName": "Raffaele",
+        "lastName": "Grottola",
+        "position": "sociologo",
+        "publicIdentifier": "raffaele-grottola-84707a39",
+        "linkedinUrl": "https://www.linkedin.com/in/raffaele-grottola-84707a39"
+      },
+      {
+        "id": "ACoAAAYbw-sB3rn2RoOSLi6TpmwOyhHbMSP5XS4",
+        "firstName": "Patricio",
+        "lastName": "G.",
+        "position": "Sociólogo | Emprendedor | Transición energética y Sostenibilidad | Innovación | Real Estate |",
+        "publicIdentifier": "patricio-g-2b73a32a",
+        "linkedinUrl": "https://www.linkedin.com/in/patricio-g-2b73a32a"
+      },
+      {
+        "id": "ACoAAFDWGqMB9WmUod67N32tqVwCaikbERmF1XM",
+        "firstName": "Joseph",
+        "lastName": "Donnola",
+        "position": "Hair stylist presso Freelance (Self employed)",
+        "publicIdentifier": "joseph-donnola-08323731a",
+        "linkedinUrl": "https://www.linkedin.com/in/joseph-donnola-08323731a"
+      },
+      {
+        "id": "ACoAAEZQvg0BlYkU0abile4VaJRZXK3IoXnSYpA",
+        "firstName": "Lorenzo",
+        "lastName": "Verde",
+        "position": "European Project Designer | Polyglot | Experience in Sales and Marketing.",
+        "publicIdentifier": "lorenzo-verde-9a50b228b",
+        "linkedinUrl": "https://www.linkedin.com/in/lorenzo-verde-9a50b228b"
+      },
+      {
+        "id": "ACoAAAjU7tIBv8ozFouvwjG9qtdUl3rZ5RZEmE0",
+        "firstName": "vincenzo",
+        "lastName": "chiantia",
+        "position": "Sociologo",
+        "publicIdentifier": "vincenzo-chiantia-b8275741",
+        "linkedinUrl": "https://www.linkedin.com/in/vincenzo-chiantia-b8275741"
+      },
+      {
+        "id": "ACoAAC_tUuMBRPQPtL_8qQ-uvra4izX7bJ3FjZ8",
+        "firstName": "Vincenzo",
+        "lastName": "Latronico",
+        "position": "Fonico, musicista e sociologo",
+        "publicIdentifier": "vincenzo-latronico-56b3511a5",
+        "linkedinUrl": "https://www.linkedin.com/in/vincenzo-latronico-56b3511a5"
+      },
+      {
+        "id": "ACoAACMl_AMBRg_oyBwRmFs2ySoqN6AQiJeGDU8",
+        "firstName": "Andrea",
+        "lastName": "Lucantoni",
+        "position": "Psicologo, Sociologo, Mediatore sistemico familiare- mediatore  del conflitto. Comunicatore. Formatore",
+        "publicIdentifier": "andrea-lucantoni-a835a0145",
+        "linkedinUrl": "https://www.linkedin.com/in/andrea-lucantoni-a835a0145"
+      },
+      {
+        "id": "ACoAAAkDMIQBajU0dJ2cIklxju6NHdyZjMWi4z8",
+        "firstName": "Gippo",
+        "lastName": "Comini",
+        "position": "Sociologo",
+        "publicIdentifier": "gippo-comini-37077a42",
+        "linkedinUrl": "https://www.linkedin.com/in/gippo-comini-37077a42"
+      },
+      {
+        "id": "ACoAAD62pxEBjxVrPrBD9tSCT_hGIdN_ltSVuDo",
+        "firstName": "Flavio",
+        "lastName": "Nucci",
+        "position": "Sociologo Disability Manager ",
+        "publicIdentifier": "flavio-nucci-695447254",
+        "linkedinUrl": "https://www.linkedin.com/in/flavio-nucci-695447254"
+      },
+      {
+        "id": "ACoAAAILC8EBXYCXMt80oaEO1PFskl02X7u9oBo",
+        "firstName": "Alfredo",
+        "lastName": "Cattinelli",
+        "position": "Sociologo presso Indipendent",
+        "publicIdentifier": "alfredo-cattinelli-001591b",
+        "linkedinUrl": "https://www.linkedin.com/in/alfredo-cattinelli-001591b"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAABVAP64BHt8eLDXb6FGQl5vvONTjL3d8pc8"
+    }
+  }
+}
