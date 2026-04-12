@@ -7,6 +7,8 @@ from typing import Any
 from .confidence_policy import DEFAULT_HIGH_THRESHOLD, DEFAULT_MEDIUM_THRESHOLD
 from .domain import (
     Candidate,
+    FACET_ALIAS_MAP,
+    ROLE_BUCKET_ALIAS_MAP,
     JobRequest,
     candidate_profile_signal_text,
     candidate_searchable_text,
@@ -15,21 +17,34 @@ from .domain import (
     derive_candidate_role_bucket,
     normalize_requested_facet,
     normalize_requested_role_bucket,
+    sanitize_candidate_notes,
 )
+from .query_signal_knowledge import lookup_scope_signal
+from .request_normalization import resolve_request_intent_view
 
 
 SEARCH_FIELDS = {
-    "organization": 2,
     "role": 5,
     "team": 4,
     "focus_areas": 4,
     "derived_facets": 4,
+    "acquisition_signals": 4,
     "investment_involvement": 4,
     "education": 2,
     "work_history": 2,
     "notes": 3,
     "ethnicity_background": 1,
     "current_destination": 1,
+}
+
+ORGANIZATION_SEARCH_FIELDS = {
+    "organization_scope": 4,
+    "acquisition_scope": 4,
+}
+
+SUPPORTING_PROVENANCE_FIELDS = {
+    "acquisition_signals",
+    "acquisition_scope",
 }
 
 QUERY_STOPWORDS = {
@@ -174,6 +189,7 @@ def score_candidates(
     confidence_policy: dict[str, Any] | None = None,
     semantic_hits: dict[str, dict[str, Any]] | None = None,
 ) -> list[ScoredCandidate]:
+    intent_view = resolve_request_intent_view(request)
     scored: list[ScoredCandidate] = []
     for candidate in candidates:
         item = score_candidate(
@@ -182,6 +198,7 @@ def score_candidates(
             criteria_patterns=criteria_patterns,
             confidence_policy=confidence_policy,
             semantic_hit=(semantic_hits or {}).get(candidate.candidate_id),
+            intent_view=intent_view,
         )
         if item is not None:
             scored.append(item)
@@ -195,46 +212,57 @@ def score_candidate(
     criteria_patterns: list[dict[str, Any]] | None = None,
     confidence_policy: dict[str, Any] | None = None,
     semantic_hit: dict[str, Any] | None = None,
+    *,
+    intent_view: dict[str, Any] | None = None,
 ) -> ScoredCandidate | None:
-    if not candidate_matches_structured_filters(candidate, request):
+    intent_view = dict(intent_view or resolve_request_intent_view(request))
+    if not candidate_matches_structured_filters(candidate, request, intent_view=intent_view):
         return None
 
-    membership_categories, requested_role_categories = _requested_category_filters(request)
-    keywords = build_query_terms(request, criteria_patterns or [])
+    membership_categories, requested_role_categories = _requested_category_filters(request, intent_view=intent_view)
+    keywords = build_query_terms(request, criteria_patterns or [], intent_view=intent_view)
+    organization_keywords = build_organization_terms(request, intent_view=intent_view)
+    effective_employment_statuses = list(intent_view.get("employment_statuses") or [])
 
     score = 0.0
     matched_fields: list[dict[str, Any]] = []
-    search_fields = _search_fields_for_request(request)
-    for keyword in keywords:
-        variants = _keyword_variants(keyword, criteria_patterns or [])
-        normalized_variants = [_normalize(item) for item in variants if _normalize(item)]
-        if not normalized_variants:
-            continue
-        found = False
-        for field_name, weight in search_fields.items():
-            value = _candidate_field_value(candidate, field_name)
-            normalized_value = _normalize(value)
-            matched_variant = next((item for item in variants if _normalize(item) in normalized_value), "")
-            if matched_variant:
-                matched_fields.append(
-                    {
-                        "keyword": keyword,
-                        "matched_on": matched_variant,
-                        "field": field_name,
-                        "value": _shorten(value),
-                        "weight": weight,
-                    }
-                )
-                score += weight
-                found = True
-        if found:
-            score += 0.5
+    keyword_score, keyword_matches = _score_keyword_pool(
+        candidate,
+        keywords,
+        _search_fields_for_request(request, intent_view=intent_view),
+        criteria_patterns or [],
+    )
+    organization_score, organization_matches = _score_keyword_pool(
+        candidate,
+        organization_keywords,
+        ORGANIZATION_SEARCH_FIELDS,
+        criteria_patterns or [],
+    )
+    score += keyword_score + organization_score
+    matched_fields.extend(keyword_matches)
+    matched_fields.extend(organization_matches)
+
+    if matched_fields:
+        distinct_keywords = {str(item.get("keyword") or "").strip().lower() for item in matched_fields if str(item.get("keyword") or "").strip()}
+        high_signal_field_hits = sum(
+            1
+            for item in matched_fields
+            if str(item.get("field") or "") in {"organization", "role", "team", "focus_areas", "derived_facets"}
+        )
+        profile_signal_hits = sum(
+            1
+            for item in matched_fields
+            if str(item.get("field") or "") in {"education", "work_history", "notes"}
+        )
+        score += min(len(distinct_keywords), 8) * 0.75
+        score += min(high_signal_field_hits, 8) * 0.35
+        score += min(profile_signal_hits, 6) * 0.25
 
     if membership_categories and candidate.category in membership_categories:
         score += 1.5
     if requested_role_categories and _candidate_matches_requested_role_categories(candidate, requested_role_categories):
         score += 1.5
-    if request.employment_statuses and candidate.employment_status in request.employment_statuses:
+    if effective_employment_statuses and candidate.employment_status in effective_employment_statuses:
         score += 1.0
     if candidate.category == "employee" and candidate.employment_status == "current":
         score += 0.5
@@ -251,7 +279,7 @@ def score_candidate(
         score += semantic_score
         matched_fields.extend(list(semantic_hit.get("matched_fields") or []))
 
-    if keywords and not matched_fields:
+    if (keywords or organization_keywords) and not matched_fields:
         return None
 
     explanation = _build_explanation(candidate, matched_fields, semantic_hit)
@@ -298,60 +326,130 @@ def _extract_keywords_from_query(query: str) -> list[str]:
     return results
 
 
-def build_query_terms(request: JobRequest, criteria_patterns: list[dict[str, Any]] | None = None) -> list[str]:
+def build_query_terms(
+    request: JobRequest,
+    criteria_patterns: list[dict[str, Any]] | None = None,
+    *,
+    intent_view: dict[str, Any] | None = None,
+) -> list[str]:
+    intent_view = dict(intent_view or resolve_request_intent_view(request))
     natural_language_query = request.query or request.raw_user_request
-    keywords = request.keywords if request.keywords else _extract_keywords_from_query(natural_language_query)
+    keywords = list(intent_view.get("keywords") or request.keywords or [])
+    if not keywords:
+        keywords = _extract_keywords_from_query(natural_language_query)
     expanded: list[str] = []
     for keyword in (
         keywords
-        + request.organization_keywords
-        + request.must_have_keywords
-        + request.must_have_facets
-        + request.must_have_primary_role_buckets
+        + list(intent_view.get("must_have_keywords") or request.must_have_keywords)
+        + list(intent_view.get("must_have_facets") or request.must_have_facets)
+        + list(intent_view.get("must_have_primary_role_buckets") or request.must_have_primary_role_buckets)
     ):
         if _is_outreach_only_retrieval_term(keyword):
+            continue
+        if _is_parent_scope_keyword(keyword, request, intent_view=intent_view):
             continue
         expanded.extend(_keyword_variants(keyword, criteria_patterns or []))
     return _dedupe(expanded)
 
 
-def _search_fields_for_request(request: JobRequest) -> dict[str, float]:
-    if request.must_have_primary_role_buckets:
+def build_organization_terms(
+    request: JobRequest,
+    *,
+    intent_view: dict[str, Any] | None = None,
+) -> list[str]:
+    intent_view = dict(intent_view or resolve_request_intent_view(request))
+    return _dedupe(
+        [
+            str(item).strip()
+            for item in list(intent_view.get("organization_keywords") or request.organization_keywords or [])
+            if str(item).strip() and not _is_outreach_only_retrieval_term(str(item))
+        ]
+    )
+
+
+def _is_parent_scope_keyword(
+    keyword: str,
+    request: JobRequest,
+    *,
+    intent_view: dict[str, Any] | None = None,
+) -> bool:
+    intent_view = dict(intent_view or resolve_request_intent_view(request))
+    normalized_keyword = _normalize(keyword)
+    normalized_target = _normalize(str(intent_view.get("target_company") or request.target_company or ""))
+    if not normalized_keyword or not normalized_target or normalized_target not in normalized_keyword:
+        return False
+    organization_terms = {
+        _normalize(item)
+        for item in list(intent_view.get("organization_keywords") or request.organization_keywords or [])
+        if _normalize(str(item))
+    }
+    return normalized_keyword in organization_terms
+
+
+def _search_fields_for_request(
+    request: JobRequest,
+    *,
+    intent_view: dict[str, Any] | None = None,
+) -> dict[str, float]:
+    intent_view = dict(intent_view or resolve_request_intent_view(request))
+    if intent_view.get("must_have_primary_role_buckets"):
         return {field_name: weight for field_name, weight in SEARCH_FIELDS.items() if field_name != "notes"}
     return SEARCH_FIELDS
 
 
-def candidate_matches_structured_filters(candidate: Candidate, request: JobRequest) -> bool:
-    if request.target_company and _normalize(candidate.target_company) != _normalize(request.target_company):
+def candidate_matches_structured_filters(
+    candidate: Candidate,
+    request: JobRequest,
+    *,
+    intent_view: dict[str, Any] | None = None,
+) -> bool:
+    intent_view = dict(intent_view or resolve_request_intent_view(request))
+    effective_target_company = str(intent_view.get("target_company") or request.target_company or "").strip()
+    effective_employment_statuses = list(intent_view.get("employment_statuses") or request.employment_statuses or [])
+    effective_must_have_facets = list(intent_view.get("must_have_facets") or request.must_have_facets or [])
+    effective_role_buckets = list(
+        intent_view.get("must_have_primary_role_buckets") or request.must_have_primary_role_buckets or []
+    )
+    effective_organization_keywords = list(intent_view.get("organization_keywords") or request.organization_keywords or [])
+    effective_must_have_keywords = list(intent_view.get("must_have_keywords") or request.must_have_keywords or [])
+    if effective_target_company and _normalize(candidate.target_company) != _normalize(effective_target_company):
         return False
-    membership_categories, requested_role_categories = _requested_category_filters(request)
+    membership_categories, requested_role_categories = _requested_category_filters(request, intent_view=intent_view)
     if membership_categories and candidate.category not in membership_categories:
         return False
-    if request.employment_statuses and candidate.employment_status not in request.employment_statuses:
+    if effective_employment_statuses and candidate.employment_status not in effective_employment_statuses:
         return False
 
     searchable_blob = _normalize(_candidate_blob(candidate))
     candidate_facets = {_normalize(item) for item in derive_candidate_filter_facets(candidate)}
     if requested_role_categories and not _candidate_matches_requested_role_categories(candidate, requested_role_categories):
         return False
-    if candidate.category == "investor" and _is_direct_investment_search(request):
+    if candidate.category == "investor" and _is_direct_investment_search(request, intent_view=intent_view):
         involvement_label = _investment_label(candidate.investment_involvement)
         if involvement_label == "no":
             return False
 
-    if request.must_have_facets and not all(_normalize(facet) in candidate_facets for facet in request.must_have_facets):
+    if effective_must_have_facets and not all(_normalize(facet) in candidate_facets for facet in effective_must_have_facets):
         return False
-    if request.must_have_primary_role_buckets:
+    if effective_role_buckets:
         candidate_role_bucket = _normalize(derive_candidate_role_bucket(candidate))
-        if candidate_role_bucket not in {_normalize(item) for item in request.must_have_primary_role_buckets}:
+        requested_primary_buckets = {_normalize(item) for item in effective_role_buckets}
+        direct_role_blob = _normalize(" ".join([candidate.role, candidate.team]))
+        # Role-bucket inference is heuristic and enrichment can surface extra
+        # focus-area facets that should not override an explicit role title.
+        # Keep the hard primary-bucket filter, but allow a mismatch when the
+        # requested bucket is still directly supported by role/title text.
+        if candidate_role_bucket not in requested_primary_buckets and not any(
+            _role_text_supports_bucket(direct_role_blob, bucket) for bucket in requested_primary_buckets
+        ):
             return False
-    if request.organization_keywords:
-        org_blob = _normalize(" ".join([candidate.organization, candidate.role, candidate.team]))
-        if not any(_normalize(token) in org_blob for token in request.organization_keywords):
+    if effective_organization_keywords:
+        org_blob = _normalize(_candidate_organization_scope_text(candidate))
+        if not any(_normalize(token) in org_blob for token in effective_organization_keywords):
             return False
     must_have_keywords = [
         token
-        for token in request.must_have_keywords
+        for token in effective_must_have_keywords
         if not _is_outreach_only_retrieval_term(token)
     ]
     if must_have_keywords and not all(_normalize(token) in searchable_blob for token in must_have_keywords):
@@ -361,12 +459,17 @@ def candidate_matches_structured_filters(candidate: Candidate, request: JobReque
     return True
 
 
-def _requested_category_filters(request: JobRequest) -> tuple[list[str], list[str]]:
+def _requested_category_filters(
+    request: JobRequest,
+    *,
+    intent_view: dict[str, Any] | None = None,
+) -> tuple[list[str], list[str]]:
+    intent_view = dict(intent_view or resolve_request_intent_view(request))
     membership_categories: list[str] = []
     requested_role_categories: list[str] = []
     seen_membership: set[str] = set()
     seen_role_like: set[str] = set()
-    for raw_category in request.categories:
+    for raw_category in list(intent_view.get("categories") or request.categories or []):
         normalized_category = _normalize(raw_category)
         if not normalized_category:
             continue
@@ -387,6 +490,16 @@ def _requested_category_filters(request: JobRequest) -> tuple[list[str], list[st
     return membership_categories, requested_role_categories
 
 
+def _role_text_supports_bucket(role_text: str, bucket: str) -> bool:
+    normalized_role_text = _normalize(role_text)
+    normalized_bucket = _normalize(bucket)
+    if not normalized_role_text or not normalized_bucket:
+        return False
+    aliases = set(FACET_ALIAS_MAP.get(normalized_bucket, set())) | set(ROLE_BUCKET_ALIAS_MAP.get(normalized_bucket, set()))
+    aliases.add(normalized_bucket)
+    return any(_normalize(alias) in normalized_role_text for alias in aliases if _normalize(alias))
+
+
 def _candidate_matches_requested_role_categories(candidate: Candidate, requested_role_categories: list[str]) -> bool:
     if not requested_role_categories:
         return True
@@ -395,8 +508,13 @@ def _candidate_matches_requested_role_categories(candidate: Candidate, requested
     return any(role_like in candidate_facets or role_like == candidate_role_bucket for role_like in requested_role_categories)
 
 
-def _is_direct_investment_search(request: JobRequest) -> bool:
-    signal_text = " ".join(request.keywords + [request.query])
+def _is_direct_investment_search(
+    request: JobRequest,
+    *,
+    intent_view: dict[str, Any] | None = None,
+) -> bool:
+    intent_view = dict(intent_view or resolve_request_intent_view(request))
+    signal_text = " ".join(list(intent_view.get("keywords") or request.keywords or []) + [request.query])
     direct_terms = ["直接参与", "决策", "领投", "deal lead", "主导", "投资决策"]
     return any(term in signal_text for term in direct_terms)
 
@@ -439,6 +557,12 @@ def _candidate_field_value(candidate: Candidate, field_name: str) -> str:
         return " | ".join([derive_candidate_role_bucket(candidate)] + derive_candidate_facets(candidate))
     if field_name == "notes":
         return candidate_profile_signal_text(candidate, include_notes=True)
+    if field_name == "acquisition_signals":
+        return _candidate_acquisition_signal_text(candidate)
+    if field_name == "organization_scope":
+        return _candidate_organization_scope_text(candidate)
+    if field_name == "acquisition_scope":
+        return _candidate_acquisition_scope_text(candidate)
     return str(getattr(candidate, field_name) or "").strip()
 
 
@@ -458,10 +582,93 @@ def _dedupe(items: list[str]) -> list[str]:
     return results
 
 
+def _score_keyword_pool(
+    candidate: Candidate,
+    keywords: list[str],
+    field_weights: dict[str, float],
+    criteria_patterns: list[dict[str, Any]],
+) -> tuple[float, list[dict[str, Any]]]:
+    score = 0.0
+    matched_fields: list[dict[str, Any]] = []
+    for keyword in keywords:
+        variants = _keyword_variants(keyword, criteria_patterns or [])
+        if not any(_normalize(item) for item in variants):
+            continue
+        primary_matches: list[dict[str, Any]] = []
+        supporting_matches: list[dict[str, Any]] = []
+        for field_name, weight in field_weights.items():
+            value = _candidate_field_value(candidate, field_name)
+            normalized_value = _normalize(value)
+            if not normalized_value:
+                continue
+            matched_variant = next((item for item in variants if _normalize(item) in normalized_value), "")
+            if not matched_variant:
+                continue
+            exact_match = _normalize(matched_variant) == _normalize(keyword)
+            effective_weight = weight if exact_match else round(weight * 0.65, 2)
+            match_record = {
+                "keyword": keyword,
+                "matched_on": matched_variant,
+                "field": field_name,
+                "value": _shorten(value),
+                "weight": effective_weight,
+                "match_type": "exact" if exact_match else "alias",
+            }
+            if field_name in SUPPORTING_PROVENANCE_FIELDS:
+                supporting_matches.append(match_record)
+            else:
+                primary_matches.append(match_record)
+        if primary_matches:
+            matched_fields.extend(primary_matches)
+            score += sum(float(item.get("weight") or 0.0) for item in primary_matches)
+            for supporting in supporting_matches:
+                supporting_weight = _supporting_match_weight(
+                    keyword=keyword,
+                    match_type=str(supporting.get("match_type") or ""),
+                    matched_on=str(supporting.get("matched_on") or ""),
+                    base_weight=float(supporting.get("weight") or 0.0),
+                    has_primary_match=True,
+                )
+                if supporting_weight <= 0:
+                    continue
+                supporting["weight"] = supporting_weight
+                matched_fields.append(supporting)
+                score += supporting_weight
+            score += 0.5
+            continue
+        for supporting in supporting_matches:
+            supporting_weight = _supporting_match_weight(
+                keyword=keyword,
+                match_type=str(supporting.get("match_type") or ""),
+                matched_on=str(supporting.get("matched_on") or ""),
+                base_weight=float(supporting.get("weight") or 0.0),
+                has_primary_match=False,
+            )
+            if supporting_weight <= 0:
+                continue
+            supporting["weight"] = supporting_weight
+            matched_fields.append(supporting)
+            score += supporting_weight
+    return score, matched_fields
+
+
 def _keyword_variants(keyword: str, criteria_patterns: list[dict[str, Any]]) -> list[str]:
     variants = [keyword]
-    aliases = KEYWORD_ALIAS_MAP.get(_normalize(keyword), [])
-    variants.extend(aliases)
+    scope_signal = lookup_scope_signal(keyword)
+    if scope_signal:
+        variants.extend(
+            str(item).strip()
+            for item in (
+                [scope_signal.get("canonical_label")]
+                + list(scope_signal.get("aliases") or [])
+                + list(scope_signal.get("keyword_labels") or [])
+                + list(scope_signal.get("search_query_aliases") or [])
+            )
+            if str(item or "").strip()
+        )
+    else:
+        aliases = KEYWORD_ALIAS_MAP.get(_normalize(keyword), [])
+        variants.extend(aliases)
     for pattern in criteria_patterns:
         if pattern.get("pattern_type") != "alias":
             continue
@@ -478,6 +685,59 @@ def _shorten(value: str, limit: int = 120) -> str:
     if len(compact) <= limit:
         return compact
     return compact[: limit - 3] + "..."
+
+
+def _supporting_match_weight(
+    *,
+    keyword: str,
+    match_type: str,
+    matched_on: str,
+    base_weight: float,
+    has_primary_match: bool,
+) -> float:
+    if base_weight <= 0:
+        return 0.0
+    exact_match = str(match_type or "") == "exact" or _normalize(matched_on) == _normalize(keyword)
+    if has_primary_match:
+        multiplier = 0.2 if exact_match else 0.1
+        return round(base_weight * multiplier, 2)
+    if lookup_scope_signal(keyword):
+        return 0.0
+    multiplier = 0.12 if exact_match else 0.05
+    return round(base_weight * multiplier, 2)
+
+
+def _candidate_acquisition_signal_text(candidate: Candidate) -> str:
+    metadata = dict(candidate.metadata or {})
+    parts = [
+        str(metadata.get("seed_query") or "").strip(),
+        " | ".join(str(item).strip() for item in list(metadata.get("source_queries") or []) if str(item).strip()),
+        " | ".join(str(item).strip() for item in list(metadata.get("keywords") or []) if str(item).strip()),
+        sanitize_candidate_notes(candidate.notes),
+    ]
+    return " | ".join(part for part in parts if part)
+
+
+def _candidate_organization_scope_text(candidate: Candidate) -> str:
+    metadata = dict(candidate.metadata or {})
+    parts = [
+        candidate.organization,
+        candidate.role,
+        candidate.team,
+        str(metadata.get("current_company") or "").strip(),
+        " | ".join(str(item).strip() for item in list(metadata.get("scope_keywords") or []) if str(item).strip()),
+    ]
+    return " | ".join(part for part in parts if part)
+
+
+def _candidate_acquisition_scope_text(candidate: Candidate) -> str:
+    metadata = dict(candidate.metadata or {})
+    parts = [
+        str(metadata.get("seed_query") or "").strip(),
+        " | ".join(str(item).strip() for item in list(metadata.get("scope_keywords") or []) if str(item).strip()),
+        " | ".join(str(item).strip() for item in list(metadata.get("source_queries") or []) if str(item).strip()),
+    ]
+    return " | ".join(part for part in parts if part)
 
 
 def _confidence_assessment(

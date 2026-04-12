@@ -82,6 +82,27 @@
   - 让 plan/review/result 页面都能更自然地展示 rewrite 前后语义
   - 让 operator 更容易在 review 阶段调整 rewrite 后的 targeting 意图
 
+### 9. Add a scripted low-cost external-provider mode for large-org workflow testing
+
+- 当前 `SOURCING_EXTERNAL_PROVIDER_MODE=simulate|replay` 只能低成本测试 orchestration，不能真实模拟大组织 workflow 的长耗时、pending、分批 ready/fetch 与长尾失败。
+- 需要新增一层更高保真的 scripted mode，例如：
+  - `SOURCING_EXTERNAL_PROVIDER_MODE=scripted`
+  - 用 scenario 文件驱动 Harvest / search / model / semantic provider 的外部行为
+- scenario 至少应支持：
+  - 每个 search / harvest 任务 pending 几轮
+  - 哪一轮转为 ready
+  - 哪一轮允许 fetch
+  - 每次 fetch 返回多少结果、是否分批返回
+  - 哪些 query 只返回部分召回，哪些 query 命中同义 shard 或重复 shard
+  - 是否注入 `timeout` / `429` / `IncompleteRead` / 空结果 / 长尾卡顿
+  - 是否复用真实 fixture 作为返回体，验证真实召回质量与排序质量
+- 目标是让 Google 这类大组织 workflow 可以先在近零外部成本下复现：
+  - 长耗时 Harvest pending
+  - 分批搜索 ready/fetch
+  - 恢复 daemon 接管
+  - stage summary 推进
+  - preview / retrieval / resume 行为
+
 ## Resume Checklist
 
 切换账号之后，先做：

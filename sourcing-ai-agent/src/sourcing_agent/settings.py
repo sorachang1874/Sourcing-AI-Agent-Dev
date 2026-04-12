@@ -11,7 +11,7 @@ class QwenSettings:
     enabled: bool
     api_key: str = ""
     base_url: str = "https://dashscope.aliyuncs.com/api/v2/apps/protocols/compatible-mode/v1"
-    model: str = "qwen3.5-plus"
+    model: str = "qwen-flash"
     timeout_seconds: int = 45
 
 
@@ -150,7 +150,7 @@ def load_settings(project_root: str | Path) -> AppSettings:
     base_url = os.getenv("DASHSCOPE_BASE_URL") or str(
         qwen_payload.get("base_url", "https://dashscope.aliyuncs.com/api/v2/apps/protocols/compatible-mode/v1")
     ).strip()
-    model = os.getenv("DASHSCOPE_MODEL") or str(qwen_payload.get("model", "qwen3.5-plus")).strip()
+    model = os.getenv("DASHSCOPE_MODEL") or str(qwen_payload.get("model", "qwen-flash")).strip()
     timeout = os.getenv("DASHSCOPE_TIMEOUT_SECONDS") or qwen_payload.get("timeout_seconds", 45)
 
     try:

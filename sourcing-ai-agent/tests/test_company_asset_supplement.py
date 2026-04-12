@@ -278,6 +278,133 @@ class CompanyAssetSupplementTest(unittest.TestCase):
         self.assertEqual(captured["cost_policy"]["provider_people_search_min_expected_results"], 500)
         self.assertEqual(captured["cost_policy"]["provider_people_search_pages"], 20)
 
+    def test_rebuild_linkedin_stage_1_snapshot_merges_roster_and_search_seed(self) -> None:
+        manager = CompanyAssetSupplementManager(
+            runtime_dir=self.runtime_dir,
+            store=self.store,
+            settings=self.settings,
+            asset_completion_manager=CompanyAssetCompletionManager(
+                runtime_dir=self.runtime_dir,
+                store=self.store,
+                settings=self.settings,
+            ),
+        )
+        snapshot_dir = self.runtime_dir / "company_assets" / "acme" / "20260406T120000"
+        harvest_dir = snapshot_dir / "harvest_company_employees"
+        harvest_dir.mkdir(parents=True, exist_ok=True)
+        (harvest_dir / "harvest_company_employees_summary.json").write_text(
+            json.dumps(
+                {
+                    "company_identity": {
+                        "requested_name": "Acme",
+                        "canonical_name": "Acme",
+                        "company_key": "acme",
+                        "linkedin_slug": "acme",
+                        "linkedin_company_url": "https://www.linkedin.com/company/acme/",
+                    },
+                    "page_summaries": [],
+                    "accounts_used": ["harvest_company_employees"],
+                    "errors": [],
+                    "stop_reason": "completed",
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        (harvest_dir / "harvest_company_employees_merged.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "full_name": "Alice Current",
+                        "member_key": "alice-current",
+                        "headline": "Infra Engineer at Acme",
+                        "location": "San Francisco",
+                        "linkedin_url": "https://www.linkedin.com/in/alice-current/",
+                    }
+                ],
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        (harvest_dir / "harvest_company_employees_visible.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "full_name": "Alice Current",
+                        "member_key": "alice-current",
+                        "headline": "Infra Engineer at Acme",
+                        "location": "San Francisco",
+                        "linkedin_url": "https://www.linkedin.com/in/alice-current/",
+                    }
+                ],
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        (harvest_dir / "harvest_company_employees_headless.json").write_text(
+            json.dumps([], ensure_ascii=False, indent=2)
+        )
+        search_dir = snapshot_dir / "search_seed_discovery"
+        search_dir.mkdir(parents=True, exist_ok=True)
+        (search_dir / "summary.json").write_text(
+            json.dumps(
+                {
+                    "target_company": "Acme",
+                    "company_identity": {
+                        "requested_name": "Acme",
+                        "canonical_name": "Acme",
+                        "company_key": "acme",
+                        "linkedin_slug": "acme",
+                        "linkedin_company_url": "https://www.linkedin.com/company/acme/",
+                    },
+                    "query_summaries": [{"query": "__past_company_only__", "mode": "harvest_profile_search"}],
+                    "accounts_used": ["harvest_profile_search"],
+                    "errors": [],
+                    "stop_reason": "completed",
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        (search_dir / "entries.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "full_name": "Bob Former",
+                        "headline": "Former Staff Engineer at Acme",
+                        "profile_url": "https://www.linkedin.com/in/bob-former/",
+                        "employment_status": "former",
+                        "source_type": "harvest_profile_search",
+                        "source_query": "__past_company_only__",
+                    }
+                ],
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+
+        result = manager.supplement_snapshot(
+            target_company="Acme",
+            snapshot_id="20260406T120000",
+            rebuild_linkedin_stage_1=True,
+            build_artifacts=False,
+        )
+
+        self.assertEqual(result["status"], "completed")
+        rebuild = dict(result["linkedin_stage_1_rebuild"] or {})
+        self.assertEqual(rebuild["status"], "completed")
+        self.assertEqual(rebuild["roster_candidate_count"], 1)
+        self.assertEqual(rebuild["search_seed_candidate_count"], 1)
+        self.assertEqual(rebuild["candidate_count"], 2)
+        payload = json.loads((snapshot_dir / "candidate_documents.linkedin_stage_1.json").read_text())
+        self.assertEqual(int(payload["candidate_count"]), 2)
+        self.assertEqual(
+            set((payload.get("acquisition_sources") or {}).keys()),
+            {"roster_snapshot", "search_seed_snapshot"},
+        )
+        stored = self.store.list_candidates_for_company("Acme")
+        self.assertEqual(len(stored), 2)
+
     def test_repair_current_roster_profile_refs_restores_visible_roster_url(self) -> None:
         manager = CompanyAssetSupplementManager(
             runtime_dir=self.runtime_dir,
@@ -334,6 +461,80 @@ class CompanyAssetSupplementTest(unittest.TestCase):
         self.assertEqual(updated.linkedin_url, "https://www.linkedin.com/in/opaque-alice")
         self.assertEqual(updated.metadata.get("profile_url"), "https://www.linkedin.com/in/opaque-alice")
         self.assertIn("https://www.linkedin.com/in/alice-example", updated.metadata.get("more_profiles") or [])
+
+    def test_repair_current_roster_registry_aliases_reuses_historical_harvest_profiles(self) -> None:
+        manager = CompanyAssetSupplementManager(
+            runtime_dir=self.runtime_dir,
+            store=self.store,
+            settings=self.settings,
+            asset_completion_manager=CompanyAssetCompletionManager(
+                runtime_dir=self.runtime_dir,
+                store=self.store,
+                settings=self.settings,
+            ),
+        )
+        snapshot_dir = self.runtime_dir / "company_assets" / "acme" / "20260406T120000"
+        harvest_dir = snapshot_dir / "harvest_company_employees"
+        harvest_dir.mkdir(parents=True, exist_ok=True)
+        visible_path = harvest_dir / "harvest_company_employees_visible.json"
+        raw_member_url = "https://www.linkedin.com/in/ACwAAATEST123"
+        vanity_url = "https://www.linkedin.com/in/alice-example"
+        visible_path.write_text(
+            json.dumps(
+                [
+                    {
+                        "full_name": "Alice Example",
+                        "member_key": "opaque-alice",
+                        "linkedin_url": raw_member_url,
+                        "source_shard_id": "kw_infra",
+                    }
+                ],
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+
+        historical_snapshot_dir = self.runtime_dir / "company_assets" / "acme" / "20260405T120000"
+        historical_harvest_dir = historical_snapshot_dir / "harvest_profiles"
+        historical_harvest_dir.mkdir(parents=True, exist_ok=True)
+        raw_profile_path = historical_harvest_dir / "historical-alice.json"
+        raw_profile_path.write_text(
+            json.dumps(
+                {
+                    "_harvest_request": {
+                        "profile_url": raw_member_url,
+                    },
+                    "item": {
+                        "linkedinUrl": vanity_url,
+                        "publicIdentifier": "alice-example",
+                        "headline": "Infra Engineer at Acme",
+                    },
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+
+        result = manager.repair_current_roster_registry_aliases(
+            target_company="Acme",
+            snapshot_id="20260406T120000",
+        )
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["repaired_count"], 1)
+        registry_by_raw = self.store.get_linkedin_profile_registry(raw_member_url)
+        assert registry_by_raw is not None
+        self.assertEqual(registry_by_raw["status"], "fetched")
+        self.assertEqual(registry_by_raw["profile_url"], vanity_url)
+        self.assertEqual(registry_by_raw["raw_linkedin_url"], raw_member_url)
+        self.assertEqual(registry_by_raw["sanity_linkedin_url"], vanity_url)
+        self.assertEqual(Path(registry_by_raw["last_raw_path"]), raw_profile_path)
+        self.assertIn(raw_member_url, registry_by_raw.get("alias_urls") or [])
+        self.assertIn(vanity_url, registry_by_raw.get("alias_urls") or [])
+        registry_by_vanity = self.store.get_linkedin_profile_registry(vanity_url)
+        assert registry_by_vanity is not None
+        self.assertEqual(registry_by_vanity["profile_url"], vanity_url)
+        self.assertTrue(Path(result["summary_path"]).exists())
 
 
 if __name__ == "__main__":

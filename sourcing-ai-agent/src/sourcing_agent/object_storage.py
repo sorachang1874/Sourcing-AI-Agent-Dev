@@ -58,6 +58,8 @@ class ObjectStorageClient(Protocol):
 
     def has_object(self, object_key: str) -> bool: ...
 
+    def delete_object(self, object_key: str) -> dict: ...
+
     def object_url(self, object_key: str) -> str: ...
 
 
@@ -118,6 +120,23 @@ class FilesystemObjectStorageClient:
 
     def has_object(self, object_key: str) -> bool:
         return (self.root / _join_key(self.config.prefix, object_key)).exists()
+
+    def delete_object(self, object_key: str) -> dict:
+        target = self.root / _join_key(self.config.prefix, object_key)
+        if not target.exists():
+            return {
+                "status": "missing",
+                "provider": "filesystem",
+                "object_key": object_key,
+                "object_url": self.object_url(object_key),
+            }
+        target.unlink()
+        return {
+            "status": "deleted",
+            "provider": "filesystem",
+            "object_key": object_key,
+            "object_url": self.object_url(object_key),
+        }
 
     def object_url(self, object_key: str) -> str:
         return f"file://{(self.root / _join_key(self.config.prefix, object_key)).as_posix()}"
@@ -201,6 +220,25 @@ class S3CompatibleObjectStorageClient:
         if response.status_code in {200, 204}:
             return True
         raise ObjectStorageError(f"HEAD failed for {object_key}: {response.status_code} {response.text[:300]}")
+
+    def delete_object(self, object_key: str) -> dict:
+        url, signed_headers = self._signed_request(method="DELETE", object_key=object_key, payload=b"")
+        response = self._session().delete(url, headers=signed_headers, timeout=self.config.timeout_seconds)
+        if response.status_code == 404:
+            return {
+                "status": "missing",
+                "provider": "s3_compatible",
+                "object_key": object_key,
+                "object_url": self.object_url(object_key),
+            }
+        if response.status_code not in {200, 202, 204}:
+            raise ObjectStorageError(f"Delete failed for {object_key}: {response.status_code} {response.text[:300]}")
+        return {
+            "status": "deleted",
+            "provider": "s3_compatible",
+            "object_key": object_key,
+            "object_url": self.object_url(object_key),
+        }
 
     def object_url(self, object_key: str) -> str:
         return self._build_url(object_key)

@@ -11,6 +11,7 @@ from .domain import (
     SearchStrategyPlan,
 )
 from .model_provider import ModelClient
+from .request_normalization import resolve_request_intent_view
 
 MODEL_WRITTEN_SEARCH_PLANNING_MODES = {"llm_brief", "product_brief_model_assisted"}
 
@@ -49,10 +50,16 @@ def _deterministic_search_strategy(
     *,
     provider_name: str,
 ) -> SearchStrategyPlan:
-    company = request.target_company or "target company"
-    scope_terms = acquisition_strategy.company_scope[1:] or [company]
+    intent_view = resolve_request_intent_view(request)
+    company = str(intent_view.get("target_company") or request.target_company or "").strip() or "target company"
+    scope_terms = list(intent_view.get("organization_keywords") or acquisition_strategy.company_scope[1:] or [company])
     role_terms = list(acquisition_strategy.filter_hints.get("job_titles") or [])
-    keyword_terms = list(acquisition_strategy.filter_hints.get("keywords") or request.keywords or [])
+    keyword_terms = _dedupe(
+        list(acquisition_strategy.filter_hints.get("keywords") or [])
+        + list(intent_view.get("keywords") or [])
+        + list(intent_view.get("must_have_keywords") or [])
+        + list(intent_view.get("must_have_facets") or [])
+    )
     bundles: list[SearchQueryBundle] = []
 
     bundles.append(
@@ -87,7 +94,14 @@ def _deterministic_search_strategy(
             )
         )
 
-    text = f"{request.raw_user_request} {request.query}".lower()
+    text = " ".join(
+        [
+            str(request.raw_user_request or ""),
+            str(request.query or ""),
+            " ".join(scope_terms),
+            " ".join(keyword_terms),
+        ]
+    ).lower()
     if any(token in text for token in ["interview", "podcast", "youtube", "访谈", "播客", "采访"]):
         interview_queries = _dedupe(
             [

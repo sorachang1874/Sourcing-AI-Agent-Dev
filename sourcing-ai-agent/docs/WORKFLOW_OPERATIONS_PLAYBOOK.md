@@ -7,12 +7,39 @@
 
 与详细实现细节相比，这里更强调端到端可执行流程。
 
+如果当前目标是把现有资产恢复到服务器，而不是发起新的 live acquisition，请先看：
+
+- `docs/CANONICAL_CLOUD_BUNDLE_CATALOG.md`
+- `docs/SERVER_RUNTIME_BOOTSTRAP.md`
+
 ## 1. 快速启动
 
 ```bash
 cd "sourcing-ai-agent"
 PYTHONPATH=src python3 -m sourcing_agent.cli test-model
 ```
+
+若只是验证 workflow 编排、阶段推进、恢复链路，而不想真实消耗 Harvest / Search / model / semantic 成本，可先切低成本外部 provider 模式：
+
+```bash
+export SOURCING_EXTERNAL_PROVIDER_MODE=simulate
+```
+
+可选值：
+
+- `live`
+  - 默认值
+  - 真实调用 Harvest / Search / model / semantic provider
+- `replay`
+  - 只复用缓存，不做新的外部请求
+- `simulate`
+  - 完全不发外部请求，返回 workflow 可消费的模拟结果
+
+推荐用法：
+
+- 编排/恢复 smoke test：`simulate`
+- 缓存复用验证：`replay`
+- 真实召回验证：`live`
 
 建议常驻一个后台恢复器（非阻塞 workflow 场景）：
 
@@ -46,6 +73,12 @@ PYTHONPATH=src python3 -m sourcing_agent.cli run-worker-daemon-service --poll-se
 
 不推荐把“手工 execute-workflow 续跑”作为常规流程；它应只用于排障。
 
+补充：
+
+- `SOURCING_EXTERNAL_PROVIDER_MODE` 会统一影响高成本外部 provider，包括 Harvest / search / model / semantic
+- hosted workflow、SQLite、snapshot 落盘、progress / recovery / stage summaries 仍按真实路径运行
+- 因此它适合做“低成本端到端编排测试”，但不适合拿来评估真实召回覆盖率
+
 ## 2. CLI 标准交互
 
 ### 2.1 先做 plan（不执行真实采集）
@@ -57,9 +90,16 @@ PYTHONPATH=src python3 -m sourcing_agent.cli plan --file configs/demo_workflow_h
 重点看输出里的：
 
 - `request`（归一化后的请求）
+- `request_preview.intent_axes`（当前前后端共享的 effective intent contract）
 - `plan.acquisition_strategy`
 - `plan_review_gate`
 - `plan_review_session`
+
+补充：
+
+- 当前 execution 层已开始直接消费 `intent_axes` 对应的 effective intent，而不只是把它当展示字段
+- 也就是说，`request_preview.intent_axes` 与后续 planning/acquisition/retrieval 的关键判断不应再长期漂移成两套语义
+- execution 侧会进一步通过 `build_effective_request_payload(...)` 把这份 contract materialize 成 worker / retrieval 真正使用的 payload
 
 ### 2.2 review-plan（先 preview 再 apply）
 
@@ -91,6 +131,34 @@ PYTHONPATH=src python3 -m sourcing_agent.cli start-workflow --plan-review-id 12
 返回 `job_id` 后即进入追踪阶段。  
 如需同步阻塞执行，再显式加 `--blocking`。
 
+补充：
+
+- 本地 CLI 调试可以直接用 `start-workflow`
+- 云端默认仍建议通过 hosted `serve` 路径接收 `POST /api/workflows`，并常驻 `run-worker-daemon-service`
+
+### 2.4 Excel intake（手动上传联系人表）
+
+```bash
+PYTHONPATH=src python3 -m sourcing_agent.cli intake-excel --file <workbook.xlsx>
+```
+
+重点看返回里的：
+
+- `intake_id`
+- `schema_inference`
+- `summary.local_exact_hit_count`
+- `summary.manual_review_local_count`
+- `summary.fetched_direct_linkedin_count`
+- `summary.fetched_via_search_count`
+
+若存在 `manual_review_local` 或 `manual_review_search`，再继续：
+
+```bash
+PYTHONPATH=src python3 -m sourcing_agent.cli continue-excel-intake --file <review_decisions.json>
+```
+
+这条链路适合前端“上传 Excel -> 返回本地命中 / 待复核 / 新抓取结果”场景，不依赖主 query workflow。
+
 ## 3. 进度追踪与交互
 
 ### 3.1 CLI 侧
@@ -116,6 +184,17 @@ PYTHONPATH=src python3 -m sourcing_agent.cli show-trace --job-id <job_id>
 - `stage_1_preview`
 - `public_web_stage_2`
 - `stage_2_final`
+
+当前建议这样理解：
+
+- `linkedin_stage_1`
+  - LinkedIn current/former roster、profile detail baseline 已完成
+- `stage_1_preview`
+  - 基于 LinkedIn Stage 1 资产做规则/本地检索预览
+- `public_web_stage_2`
+  - public web / publication / exploration 等第二阶段 enrichment 已完成
+- `stage_2_final`
+  - 全链路结果已落盘，可供结果页直接消费
 
 如果需要做前端阶段卡片或漏斗图，优先直接读取：
 
@@ -178,6 +257,8 @@ PYTHONPATH=src python3 -m sourcing_agent.cli run-worker-daemon-once --job-id <jo
 ```
 
 然后再看 `show-progress` / `show-job`。
+
+这一步是排障手段，不应替代 hosted 常驻的 `serve + run-worker-daemon-service`。
 
 ### 5.2 大组织查询成本过高
 

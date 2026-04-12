@@ -21,9 +21,32 @@
       "properties": {
         "rewrite_id": { "type": "string" },
         "summary_label": { "type": "string" },
+        "policy_layer": { "type": "string" },
         "keywords": { "$ref": "#/$defs/StringArray" },
+        "must_have_facets": { "$ref": "#/$defs/StringArray" },
+        "must_have_primary_role_buckets": { "$ref": "#/$defs/StringArray" },
+        "must_have_keywords": { "$ref": "#/$defs/StringArray" },
         "targeting_terms": { "$ref": "#/$defs/StringArray" },
         "matched_terms": { "$ref": "#/$defs/StringArray" },
+        "request_patch": { "$ref": "#/$defs/JsonObject" },
+        "trigger_sources": { "$ref": "#/$defs/JsonObject" },
+        "additional_rewrites": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/IntentRewriteRule" }
+        },
+        "notes": { "type": "string" }
+      }
+    },
+    "IntentRewritePolicyCatalogEntry": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "rewrite_id": { "type": "string" },
+        "summary_label": { "type": "string" },
+        "policy_layer": { "type": "string" },
+        "trigger_sources": { "$ref": "#/$defs/JsonObject" },
+        "request_patch": { "$ref": "#/$defs/JsonObject" },
+        "targeting_terms": { "$ref": "#/$defs/StringArray" },
         "notes": { "type": "string" }
       }
     },
@@ -51,7 +74,11 @@
       "required": ["request"],
       "properties": {
         "request": { "$ref": "#/$defs/IntentRewriteEntry" },
-        "instruction": { "$ref": "#/$defs/IntentRewriteEntry" }
+        "instruction": { "$ref": "#/$defs/IntentRewriteEntry" },
+        "policy_catalog": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/IntentRewritePolicyCatalogEntry" }
+        }
       }
     },
     "IntentBrief": {
@@ -143,6 +170,7 @@
       ],
       "properties": {
         "request": { "$ref": "#/$defs/JsonObject" },
+        "request_preview": { "$ref": "#/$defs/JsonObject" },
         "plan": { "$ref": "#/$defs/SourcingPlanSummary" },
         "plan_review_gate": { "$ref": "#/$defs/PlanReviewGate" },
         "plan_review_session": { "$ref": "#/$defs/JsonObject" },
@@ -424,6 +452,7 @@
           "items": { "$ref": "#/$defs/JsonObject" }
         },
         "intent_rewrite": { "$ref": "#/$defs/IntentRewritePayload" },
+        "request_preview": { "$ref": "#/$defs/JsonObject" },
         "workflow_stage_summaries": { "$ref": "#/$defs/WorkflowStageSummariesPayload" }
       }
     },
@@ -444,6 +473,7 @@
         "job_id": { "type": "string" },
         "status": { "type": "string" },
         "request": { "$ref": "#/$defs/JsonObject" },
+        "request_preview": { "$ref": "#/$defs/JsonObject" },
         "plan": {
           "oneOf": [
             { "$ref": "#/$defs/SourcingPlanSummary" },
@@ -487,6 +517,7 @@
         "reason": { "type": "string" },
         "request_patch": { "$ref": "#/$defs/JsonObject" },
         "request": { "$ref": "#/$defs/JsonObject" },
+        "request_preview": { "$ref": "#/$defs/JsonObject" },
         "plan": {
           "oneOf": [
             { "$ref": "#/$defs/SourcingPlanSummary" },
@@ -508,6 +539,7 @@
         "rerun_job_id": { "type": "string" },
         "request_patch": { "$ref": "#/$defs/JsonObject" },
         "request": { "$ref": "#/$defs/JsonObject" },
+        "request_preview": { "$ref": "#/$defs/JsonObject" },
         "plan": {
           "oneOf": [
             { "$ref": "#/$defs/SourcingPlanSummary" },

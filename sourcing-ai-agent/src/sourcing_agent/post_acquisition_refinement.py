@@ -14,6 +14,11 @@ from .domain import (
 )
 from .model_provider import ModelClient
 from .query_intent_rewrite import interpret_query_intent_rewrite
+from .request_normalization import (
+    canonicalize_request_payload,
+    extract_query_signal_terms,
+    merge_unique_request_string_values,
+)
 
 
 _ALLOWED_PATCH_FIELDS = {
@@ -46,7 +51,7 @@ _KNOWN_FACETS = set(FACET_ALIAS_MAP.keys())
 _KNOWN_ROLE_BUCKETS = set(ROLE_BUCKET_PRIORITY)
 
 
-def parse_refinement_instruction(instruction: str) -> dict[str, Any]:
+def parse_refinement_instruction(instruction: str, *, target_company: str = "") -> dict[str, Any]:
     text = " ".join(str(instruction or "").strip().split())
     lower = text.lower()
     patch: dict[str, Any] = {}
@@ -86,6 +91,12 @@ def parse_refinement_instruction(instruction: str) -> dict[str, Any]:
     )
     include_classified = _classify_focus_terms(include_terms)
     _merge_patch_terms(patch, include_classified, include_mode=True)
+    _supplement_patch_query_signals(
+        patch,
+        terms=include_terms or ([text] if text and not _contains_exclude_prefix(text) else []),
+        include_mode=True,
+        target_company=target_company,
+    )
 
     exclude_terms = _parse_focus_terms(
         text,
@@ -101,6 +112,12 @@ def parse_refinement_instruction(instruction: str) -> dict[str, Any]:
     )
     exclude_classified = _classify_focus_terms(exclude_terms)
     _merge_patch_terms(patch, exclude_classified, include_mode=False)
+    _supplement_patch_query_signals(
+        patch,
+        terms=exclude_terms,
+        include_mode=False,
+        target_company=target_company,
+    )
 
     return patch
 
@@ -112,7 +129,10 @@ def compile_refinement_patch_from_instruction(
     model_client: ModelClient | None = None,
 ) -> dict[str, Any]:
     normalized_instruction = " ".join(str(instruction or "").strip().split())
-    deterministic_patch = normalize_refinement_patch(parse_refinement_instruction(normalized_instruction))
+    target_company = str(base_request.get("target_company") or "").strip()
+    deterministic_patch = normalize_refinement_patch(
+        parse_refinement_instruction(normalized_instruction, target_company=target_company)
+    )
     model_raw: dict[str, Any] = {}
     model_patch: dict[str, Any] = {}
     provider_name = ""
@@ -132,7 +152,13 @@ def compile_refinement_patch_from_instruction(
             )
         except Exception:
             model_raw = {}
-        model_patch = normalize_refinement_patch(model_raw)
+        model_patch = normalize_refinement_patch(
+            _rewrite_model_refinement_patch_candidate(
+                model_raw,
+                instruction=normalized_instruction,
+                target_company=target_company,
+            )
+        )
 
     merged_patch = dict(model_patch)
     supplemented_keys: list[str] = []
@@ -163,6 +189,23 @@ def normalize_refinement_patch(payload: dict[str, Any] | None) -> dict[str, Any]
     if isinstance(candidate.get("patch"), dict):
         candidate = dict(candidate.get("patch") or {})
     patch: dict[str, Any] = {}
+    keyword_values = merge_unique_request_string_values(
+        candidate.get("keywords"),
+        candidate.get("research_direction_keywords"),
+        candidate.get("technology_keywords"),
+        candidate.get("model_keywords"),
+        candidate.get("product_keywords"),
+    )
+    if keyword_values:
+        patch["keywords"] = keyword_values
+    organization_keyword_values = merge_unique_request_string_values(
+        candidate.get("organization_keywords"),
+        candidate.get("team_keywords"),
+        candidate.get("sub_org_keywords"),
+        candidate.get("project_keywords"),
+    )
+    if organization_keyword_values:
+        patch["organization_keywords"] = organization_keyword_values
     for raw_key, raw_value in candidate.items():
         key = _PATCH_FIELD_ALIASES.get(str(raw_key or "").strip(), str(raw_key or "").strip())
         if key not in _ALLOWED_PATCH_FIELDS:
@@ -208,7 +251,7 @@ def normalize_refinement_patch(payload: dict[str, Any] | None) -> dict[str, Any]
             continue
         values = _normalize_string_list(raw_value)
         if values:
-            patch[key] = values
+            patch[key] = merge_unique_request_string_values(patch.get(key), values)
     return patch
 
 
@@ -220,7 +263,7 @@ def apply_refinement_patch(base_request: dict[str, Any], patch: dict[str, Any]) 
             merged[key] = list(value)
         else:
             merged[key] = value
-    return merged
+    return canonicalize_request_payload(merged)
 
 
 def _parse_asset_view(lower: str) -> str:
@@ -304,12 +347,17 @@ def _classify_focus_terms(terms: list[str]) -> dict[str, list[str]]:
         if _is_non_filter_fragment(raw_term):
             continue
         rewrite = interpret_query_intent_rewrite(raw_term)
+        rewrite_matched = bool(rewrite)
         if rewrite:
-            for keyword in list(rewrite.get("keywords") or []):
-                value = str(keyword or "").strip()
-                if value and value not in classified["keywords"]:
-                    classified["keywords"].append(value)
-            continue
+            if str(rewrite.get("rewrite_id") or "").strip() == "greater_china_outreach":
+                for keyword in list(rewrite.get("keywords") or []):
+                    value = str(keyword or "").strip()
+                    if value and value not in classified["keywords"]:
+                        classified["keywords"].append(value)
+            for role_bucket in list(rewrite.get("must_have_primary_role_buckets") or []):
+                value = normalize_requested_role_bucket(str(role_bucket or "").strip())
+                if value in _KNOWN_ROLE_BUCKETS and value not in classified["must_have_primary_role_buckets"]:
+                    classified["must_have_primary_role_buckets"].append(value)
         categories, remainder = _extract_categories_from_term(raw_term)
         for category in categories:
             if category not in classified["categories"]:
@@ -326,6 +374,8 @@ def _classify_focus_terms(terms: list[str]) -> dict[str, list[str]]:
         if facet in _KNOWN_FACETS:
             if facet not in classified["must_have_facets"]:
                 classified["must_have_facets"].append(facet)
+            continue
+        if rewrite_matched:
             continue
         if normalized_remainder not in classified["keywords"]:
             classified["keywords"].append(normalized_remainder)
@@ -395,6 +445,126 @@ def _merge_patch_terms(patch: dict[str, Any], classified: dict[str, list[str]], 
         patch.setdefault("exclude_keywords", [])
         if item not in patch["exclude_keywords"]:
             patch["exclude_keywords"].append(item)
+
+
+def _supplement_patch_query_signals(
+    patch: dict[str, Any],
+    *,
+    terms: list[str],
+    include_mode: bool,
+    target_company: str,
+) -> None:
+    signal_text = " ".join(" ".join(str(item or "").split()).strip() for item in terms if str(item or "").strip())
+    if not signal_text:
+        return
+    extracted = extract_query_signal_terms(signal_text, target_company=target_company)
+    if include_mode:
+        if extracted["organization_keywords"]:
+            patch["organization_keywords"] = merge_unique_request_string_values(
+                patch.get("organization_keywords"),
+                extracted["organization_keywords"],
+                target_company=target_company,
+            )
+        if extracted["keywords"]:
+            patch["must_have_keywords"] = merge_unique_request_string_values(
+                patch.get("must_have_keywords"),
+                extracted["keywords"],
+                target_company=target_company,
+            )
+        return
+    negative_terms = merge_unique_request_string_values(
+        extracted["organization_keywords"],
+        extracted["keywords"],
+        target_company=target_company,
+    )
+    if negative_terms:
+        patch["exclude_keywords"] = merge_unique_request_string_values(
+            patch.get("exclude_keywords"),
+            negative_terms,
+            target_company=target_company,
+        )
+
+
+def _rewrite_model_refinement_patch_candidate(
+    payload: dict[str, Any] | None,
+    *,
+    instruction: str,
+    target_company: str,
+) -> dict[str, Any]:
+    candidate = dict(payload or {})
+    if isinstance(candidate.get("patch"), dict):
+        candidate = dict(candidate.get("patch") or {})
+    rewritten = dict(candidate)
+    rewritten["keywords"] = merge_unique_request_string_values(
+        candidate.get("keywords"),
+        candidate.get("research_direction_keywords"),
+        candidate.get("technology_keywords"),
+        candidate.get("model_keywords"),
+        candidate.get("product_keywords"),
+        target_company=target_company,
+    )
+    rewritten["organization_keywords"] = merge_unique_request_string_values(
+        candidate.get("organization_keywords"),
+        candidate.get("team_keywords"),
+        candidate.get("sub_org_keywords"),
+        candidate.get("project_keywords"),
+        target_company=target_company,
+    )
+
+    include_terms = _parse_focus_terms(
+        instruction,
+        prefixes=[
+            "只看",
+            "只保留",
+            "只要",
+            "聚焦",
+            "focus on",
+            "narrow to",
+            "only keep",
+            "only show",
+        ],
+    )
+    exclude_terms = _parse_focus_terms(
+        instruction,
+        prefixes=[
+            "排除",
+            "去掉",
+            "剔除",
+            "过滤掉",
+            "不要",
+            "exclude",
+            "without",
+        ],
+    )
+    _supplement_patch_query_signals(
+        rewritten,
+        terms=include_terms or ([instruction] if instruction and not _contains_exclude_prefix(instruction) else []),
+        include_mode=True,
+        target_company=target_company,
+    )
+    _supplement_patch_query_signals(
+        rewritten,
+        terms=exclude_terms,
+        include_mode=False,
+        target_company=target_company,
+    )
+    return rewritten
+
+
+def _contains_exclude_prefix(text: str) -> bool:
+    lower = str(text or "").lower()
+    return any(
+        prefix in lower
+        for prefix in [
+            "排除",
+            "去掉",
+            "剔除",
+            "过滤掉",
+            "不要",
+            "exclude",
+            "without",
+        ]
+    )
 
 
 def _normalize_string_list(value: Any) -> list[str]:

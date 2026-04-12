@@ -18,6 +18,7 @@ from .connectors import CompanyIdentity, RapidApiAccount, search_people_accounts
 from .domain import Candidate, EvidenceRecord, JobRequest, format_display_name, make_evidence_id, normalize_name_token
 from .harvest_connectors import HarvestProfileSearchConnector
 from .model_provider import DeterministicModelClient, ModelClient
+from .request_normalization import build_effective_request_payload
 from .search_provider import (
     BaseSearchProvider,
     DuckDuckGoHtmlSearchProvider,
@@ -205,6 +206,7 @@ class SearchSeedAcquirer:
         discovery_dir = snapshot_dir / "search_seed_discovery"
         discovery_dir.mkdir(parents=True, exist_ok=True)
         logger = asset_logger or AssetLogger(snapshot_dir)
+        effective_request_payload = build_effective_request_payload(request_payload or {}) if request_payload else {}
         effective_filter_hints = _normalize_harvest_company_filters(identity, filter_hints)
         provider_people_search_mode = str(cost_policy.get("provider_people_search_mode") or "fallback_only").strip().lower()
         provider_search_only = provider_people_search_mode in {"primary_only", "provider_only", "harvest_only"}
@@ -273,7 +275,7 @@ class SearchSeedAcquirer:
                         employment_status=employment_status,
                         worker_runtime=worker_runtime,
                         job_id=job_id,
-                        request_payload=request_payload or {},
+                        request_payload=effective_request_payload,
                         plan_payload=plan_payload or {},
                         runtime_mode=runtime_mode,
                         result_limit=result_limit,
@@ -298,7 +300,7 @@ class SearchSeedAcquirer:
                             employment_status=employment_status,
                             worker_runtime=worker_runtime,
                             job_id=job_id,
-                            request_payload=request_payload or {},
+                            request_payload=effective_request_payload,
                             plan_payload=plan_payload or {},
                             runtime_mode=runtime_mode,
                             result_limit=result_limit,
@@ -431,6 +433,7 @@ class SearchSeedAcquirer:
         prefetched_search_manifest_key: str = "",
     ) -> dict[str, Any]:
         query_text = str(query_spec["query"] or "").strip()
+        effective_request_payload = build_effective_request_payload(request_payload or {}) if request_payload else {}
         raw_search_path = discovery_dir / f"web_query_{index:02d}.html"
         lane_id = "public_media_specialist" if query_spec["source_family"] in {"public_interviews", "publication_and_blog"} else "search_planner"
         worker_handle = None
@@ -439,7 +442,7 @@ class SearchSeedAcquirer:
         if worker_runtime is not None and job_id:
             worker_handle = worker_runtime.begin_worker(
                 job_id=job_id,
-                request=JobRequest.from_payload(request_payload),
+                request=JobRequest.from_payload(effective_request_payload),
                 plan_payload=plan_payload,
                 runtime_mode=runtime_mode,
                 lane_id=lane_id,
@@ -454,7 +457,7 @@ class SearchSeedAcquirer:
                     "snapshot_dir": str(discovery_dir.parent),
                     "discovery_dir": str(discovery_dir),
                     "employment_status": employment_status,
-                    "request_payload": request_payload,
+                    "request_payload": effective_request_payload,
                     "plan_payload": plan_payload,
                     "runtime_mode": runtime_mode,
                     "result_limit": result_limit,

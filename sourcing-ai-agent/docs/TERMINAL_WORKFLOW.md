@@ -195,8 +195,13 @@ PYTHONPATH=src python3 -m sourcing_agent.cli review-plan \
 现在 `start-workflow` 默认是非阻塞模式：
 
 - 会立即返回 `job_id`
-- 默认自动启动一个 job-scoped recovery daemon
+- 在本地 CLI 调试下，默认会自动启动一个 job-scoped recovery daemon
 - 不再像旧版本那样把整条 workflow blocking 在当前终端
+
+补充：
+
+- 这是本地/单次调试的便捷路径
+- 云端默认仍应使用 hosted `serve + run-worker-daemon-service`
 
 直接按 `plan_review_id` 启动：
 
@@ -262,6 +267,26 @@ PYTHONPATH=src python3 -m sourcing_agent.cli show-scheduler --job-id <job_id>
   - 看系统把用户原话解释成了什么
 - `show-job`
   - 看最终结果、证据和可回放语义解释
+
+### Step 5.5: Excel intake 快速入口
+
+如果当前不是自然语言 query，而是用户上传了一份联系人表，可以直接走：
+
+```bash
+PYTHONPATH=src python3 -m sourcing_agent.cli intake-excel --file <workbook.xlsx>
+```
+
+若结果里有 `manual_review_local` 或 `manual_review_search`，再继续：
+
+```bash
+PYTHONPATH=src python3 -m sourcing_agent.cli continue-excel-intake --file <review_decisions.json>
+```
+
+这条链路会：
+
+- 先做 schema 识别
+- 再做本地 exact / near match
+- 最后决定直接复用、继续人工复核，还是触发新的 LinkedIn fetch/search
 
 ### Step 6: 看最终结果
 
@@ -454,7 +479,7 @@ PYTHONPATH=src python3 -m sourcing_agent.cli review-plan \
 PYTHONPATH=src python3 -m sourcing_agent.cli start-workflow --plan-review-id <review_id>
 ```
 
-如果你是通过 HTTP API 触发 workflow，`POST /api/workflows` 也会默认自动启动 job-scoped recovery。
+如果你是通过 HTTP API 触发 workflow，生产默认路径仍然应是 hosted `serve + run-worker-daemon-service`。
 
 如果你想单独跑一个全局 recovery daemon，仍然可以另开一个终端：
 
@@ -462,7 +487,7 @@ PYTHONPATH=src python3 -m sourcing_agent.cli start-workflow --plan-review-id <re
 PYTHONPATH=src python3 -m sourcing_agent.cli run-worker-daemon-service --poll-seconds 5
 ```
 
-但日常交互式单条 run，优先依赖默认的 job-scoped recovery，不要先开一个共享全局 daemon。
+但日常线上运行，不要把 job-scoped recovery 当成主要托管方式；它更适合本地单条调试。
 
 ## 7. 当前限制
 

@@ -5,6 +5,44 @@ from sourcing_agent.scoring import build_query_terms, candidate_matches_structur
 
 
 class ScoringOutreachTermTests(unittest.TestCase):
+    def test_scoring_prefers_intent_view_over_conflicting_flat_fields(self) -> None:
+        candidate = Candidate(
+            candidate_id="cand_intent_view",
+            name_en="Gemini PM",
+            display_name="Gemini PM",
+            category="employee",
+            target_company="Google",
+            organization="Google DeepMind",
+            employment_status="current",
+            role="Product Manager",
+            focus_areas="Gemini product",
+        )
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "找 Gemini 的产品经理",
+                "query": "Gemini product manager",
+                "target_company": "WrongCo",
+                "intent_axes": {
+                    "population_boundary": {
+                        "categories": ["employee"],
+                        "employment_statuses": ["current", "former"],
+                    },
+                    "scope_boundary": {
+                        "target_company": "Google",
+                        "organization_keywords": ["Google DeepMind", "Gemini"],
+                    },
+                    "thematic_constraints": {
+                        "must_have_primary_role_buckets": ["product_management"],
+                        "keywords": ["Gemini"],
+                    },
+                },
+            }
+        )
+
+        self.assertTrue(candidate_matches_structured_filters(candidate, request))
+        scored = score_candidates([candidate], request)
+        self.assertEqual(len(scored), 1)
+
     def test_build_query_terms_excludes_outreach_only_terms(self) -> None:
         request = JobRequest(
             target_company="Acme",
@@ -20,6 +58,20 @@ class ScoringOutreachTermTests(unittest.TestCase):
         self.assertNotIn("greater china experience", joined)
         self.assertNotIn("chinese bilingual outreach", joined)
         self.assertNotIn("greater_china_region_experience", joined)
+
+    def test_build_query_terms_excludes_organization_keywords_from_thematic_pool(self) -> None:
+        request = JobRequest(
+            target_company="Google",
+            keywords=["multimodal", "Veo", "Google DeepMind"],
+            organization_keywords=["Google DeepMind", "Nano Banana"],
+        )
+
+        terms = [str(item).strip().lower() for item in build_query_terms(request)]
+        joined = " ".join(terms)
+        self.assertIn("multimodal", joined)
+        self.assertIn("veo", joined)
+        self.assertNotIn("google deepmind", joined)
+        self.assertNotIn("nano banana", joined)
 
     def test_structured_filter_ignores_outreach_only_must_have_keywords(self) -> None:
         candidate = Candidate(
@@ -74,6 +126,98 @@ class ScoringOutreachTermTests(unittest.TestCase):
         scored = score_candidates([candidate], request)
         self.assertEqual(len(scored), 1)
         self.assertEqual(scored[0].candidate.candidate_id, "cand_2")
+
+    def test_scoring_uses_acquisition_provenance_and_scope_keywords(self) -> None:
+        candidate = Candidate(
+            candidate_id="cand_3",
+            name_en="Veo Builder",
+            display_name="Veo Builder",
+            category="employee",
+            target_company="Google",
+            organization="Google",
+            employment_status="current",
+            role="Research Scientist, Veo",
+            metadata={
+                "seed_query": "Veo",
+                "scope_keywords": ["Google DeepMind"],
+                "summary": "Builds Veo video generation systems.",
+            },
+            notes="Discovered from low-cost search seed acquisition. Query: Veo. Source: harvest_profile_search.",
+        )
+        request = JobRequest(
+            target_company="Google",
+            categories=["employee"],
+            employment_statuses=["current"],
+            organization_keywords=["Google DeepMind", "Veo"],
+            keywords=["Veo"],
+        )
+
+        self.assertTrue(candidate_matches_structured_filters(candidate, request))
+        scored = score_candidates([candidate], request)
+        self.assertEqual(len(scored), 1)
+        matched_fields = scored[0].matched_fields
+        self.assertTrue(any(str(item.get("field") or "") == "acquisition_signals" for item in matched_fields))
+        self.assertTrue(any(str(item.get("field") or "") == "organization_scope" for item in matched_fields))
+
+    def test_scope_keyword_does_not_match_generic_multimodal_aliases(self) -> None:
+        generic_candidate = Candidate(
+            candidate_id="cand_4",
+            name_en="Generic Multimodal",
+            display_name="Generic Multimodal",
+            category="employee",
+            target_company="Google",
+            organization="Google",
+            employment_status="current",
+            role="Research Scientist, Multimodal Systems",
+            focus_areas="Multimodal foundation models",
+        )
+        veo_candidate = Candidate(
+            candidate_id="cand_5",
+            name_en="Veo Lead",
+            display_name="Veo Lead",
+            category="employee",
+            target_company="Google",
+            organization="Google",
+            employment_status="current",
+            role="Research Engineer, Veo",
+            focus_areas="Veo video generation",
+        )
+        request = JobRequest(
+            target_company="Google",
+            categories=["employee"],
+            employment_statuses=["current"],
+            keywords=["multimodal", "Veo"],
+        )
+
+        scored = score_candidates([generic_candidate, veo_candidate], request)
+        self.assertEqual([item.candidate.candidate_id for item in scored[:2]], ["cand_5", "cand_4"])
+        generic_matched_keywords = {str(item.get("keyword") or "") for item in scored[1].matched_fields}
+        self.assertNotIn("Veo", generic_matched_keywords)
+
+    def test_scope_keyword_does_not_score_from_acquisition_only_signal(self) -> None:
+        candidate = Candidate(
+            candidate_id="cand_6",
+            name_en="Weak Veo Seed",
+            display_name="Weak Veo Seed",
+            category="employee",
+            target_company="Google",
+            organization="Google",
+            employment_status="current",
+            role="Research Scientist",
+            metadata={
+                "seed_query": "Veo",
+            },
+            notes="Discovered from low-cost search seed acquisition. Query: Veo. Source: harvest_profile_search.",
+        )
+        request = JobRequest(
+            target_company="Google",
+            categories=["employee"],
+            employment_statuses=["current"],
+            keywords=["Veo"],
+        )
+
+        scored = score_candidates([candidate], request)
+        self.assertEqual(scored, [])
 
 
 if __name__ == "__main__":
