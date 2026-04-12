@@ -12,7 +12,12 @@ import type {
   JsonObject,
   PlanResponse,
   ReviewInstructionCompileResponse,
+  RuntimeHealthResponse,
+  RuntimeMetricsResponse,
+  SystemProgressResponse,
   WorkflowStartResponse,
+  WorkflowStageSummariesPayload,
+  WorkflowStageSummaryItem,
 } from "./frontend_api_contract";
 
 export interface HookClientOptions extends SourcingAgentApiClientOptions {
@@ -47,6 +52,18 @@ export interface JobResultsHookOptions extends HookClientOptions {
   enabled?: boolean;
 }
 
+export interface SystemProgressHookOptions extends HookClientOptions {
+  enabled?: boolean;
+  pollIntervalMs?: number;
+  filters?: JsonObject;
+}
+
+export interface RuntimeStatusHookOptions extends HookClientOptions {
+  enabled?: boolean;
+  pollIntervalMs?: number;
+  filters?: JsonObject;
+}
+
 export interface WorkflowRunHookOptions extends JobProgressHookOptions {
   autoLoadResults?: boolean;
 }
@@ -57,8 +74,16 @@ export interface WorkflowRunState {
   startState: MutationHookState<WorkflowStartResponse>;
   progress: QueryHookState<JobProgressResponse>;
   results: QueryHookState<JobResultsResponse>;
+  stageSummaries: WorkflowStageSummaryItem[];
   reset: () => void;
 }
+
+export const WORKFLOW_STAGE_DISPLAY_LABELS: Record<string, string> = {
+  linkedin_stage_1: "LinkedIn Stage 1 completed",
+  stage_1_preview: "Stage 1 preview completed",
+  public_web_stage_2: "Public Web Stage 2 completed",
+  stage_2_final: "Stage 2 final analysis completed",
+};
 
 export function useSourcingPlan(options: HookClientOptions = {}): MutationHookState<PlanResponse> {
   return useJsonMutation((client, payload) => client.plan(payload), options);
@@ -278,6 +303,51 @@ export function useJobResults(
   };
 }
 
+export function useSystemProgress(
+  options: SystemProgressHookOptions = {},
+): QueryHookState<SystemProgressResponse> {
+  const { enabled = true, pollIntervalMs = 5000, filters = {}, ...clientOptions } = options;
+  return usePollingJsonQuery(
+    (client) => client.getSystemProgress(filters),
+    {
+      ...clientOptions,
+      enabled,
+      pollIntervalMs,
+      identityKey: JSON.stringify(filters),
+    },
+  );
+}
+
+export function useRuntimeMetrics(
+  options: RuntimeStatusHookOptions = {},
+): QueryHookState<RuntimeMetricsResponse> {
+  const { enabled = true, pollIntervalMs = 5000, filters = {}, ...clientOptions } = options;
+  return usePollingJsonQuery(
+    (client) => client.getRuntimeMetrics(filters),
+    {
+      ...clientOptions,
+      enabled,
+      pollIntervalMs,
+      identityKey: JSON.stringify(filters),
+    },
+  );
+}
+
+export function useRuntimeHealth(
+  options: RuntimeStatusHookOptions = {},
+): QueryHookState<RuntimeHealthResponse> {
+  const { enabled = true, pollIntervalMs = 5000, filters = {}, ...clientOptions } = options;
+  return usePollingJsonQuery(
+    (client) => client.getRuntimeHealth(filters),
+    {
+      ...clientOptions,
+      enabled,
+      pollIntervalMs,
+      identityKey: JSON.stringify(filters),
+    },
+  );
+}
+
 export function useWorkflowRun(options: WorkflowRunHookOptions = {}): WorkflowRunState {
   const startState = useStartWorkflow(options);
   const [jobId, setJobId] = useState<string | undefined>(undefined);
@@ -286,6 +356,7 @@ export function useWorkflowRun(options: WorkflowRunHookOptions = {}): WorkflowRu
     ...options,
     enabled: Boolean(jobId) && Boolean(options.autoLoadResults ?? true) && progress.data?.status === "completed",
   });
+  const stageSummaries = getOrderedWorkflowStageSummaries(results.data ?? progress.data);
 
   async function start(payload: JsonObject): Promise<WorkflowStartResponse | undefined> {
     results.reset();
@@ -311,8 +382,35 @@ export function useWorkflowRun(options: WorkflowRunHookOptions = {}): WorkflowRu
     startState,
     progress,
     results,
+    stageSummaries,
     reset,
   };
+}
+
+export function getOrderedWorkflowStageSummaries(
+  payload?: { workflow_stage_summaries?: WorkflowStageSummariesPayload },
+): WorkflowStageSummaryItem[] {
+  const stagePayload = payload?.workflow_stage_summaries;
+  if (!stagePayload) {
+    return [];
+  }
+  const orderedEntries = stagePayload.stage_order
+    .map((stageName) => {
+      const summary = stagePayload.summaries?.[stageName];
+      if (!summary) {
+        return undefined;
+      }
+      return summary.stage ? summary : { ...summary, stage: stageName };
+    })
+    .filter((item): item is WorkflowStageSummaryItem => Boolean(item));
+  return orderedEntries;
+}
+
+export function getWorkflowStageDisplayLabel(stageName?: string): string {
+  if (!stageName) {
+    return "Unknown workflow stage";
+  }
+  return WORKFLOW_STAGE_DISPLAY_LABELS[stageName] ?? stageName;
 }
 
 function useJsonMutation<T>(
@@ -372,6 +470,117 @@ function useJsonMutation<T>(
     error,
     lastUpdatedAt,
     run,
+    reset,
+  };
+}
+
+function usePollingJsonQuery<T>(
+  runner: (client: SourcingAgentApiClient) => Promise<T>,
+  options: HookClientOptions & {
+    enabled?: boolean;
+    pollIntervalMs?: number;
+    identityKey?: string;
+  },
+): QueryHookState<T> {
+  const [data, setData] = useState<T | undefined>(undefined);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<Error | undefined>(undefined);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<number | undefined>(undefined);
+  const dataRef = useRef<T | undefined>(undefined);
+  const requestIdRef = useRef(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const { enabled = true, pollIntervalMs = 5000, identityKey = "", ...clientOptions } = options;
+
+  function clearTimer() {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = undefined;
+    }
+  }
+
+  function reset() {
+    clearTimer();
+    requestIdRef.current += 1;
+    dataRef.current = undefined;
+    setData(undefined);
+    setLoading(false);
+    setRefreshing(false);
+    setError(undefined);
+    setLastUpdatedAt(undefined);
+  }
+
+  async function refresh(): Promise<T | undefined> {
+    const requestId = ++requestIdRef.current;
+    const previousData = dataRef.current;
+    setError(undefined);
+    setLoading((previous) => previous || !previousData);
+    setRefreshing(Boolean(previousData));
+    try {
+      const response = await runner(getApiClient(clientOptions));
+      if (requestId !== requestIdRef.current) {
+        return response;
+      }
+      dataRef.current = response;
+      setData(response);
+      setLoading(false);
+      setRefreshing(false);
+      setLastUpdatedAt(Date.now());
+      return response;
+    } catch (requestError) {
+      if (requestId !== requestIdRef.current) {
+        return undefined;
+      }
+      setError(asError(requestError));
+      setLoading(false);
+      setRefreshing(false);
+      return undefined;
+    }
+  }
+
+  useEffect(() => {
+    reset();
+  }, [options.client, options.baseUrl, options.fetchImpl, identityKey]);
+
+  useEffect(() => {
+    if (!enabled) {
+      clearTimer();
+      return;
+    }
+
+    let disposed = false;
+
+    async function tick() {
+      const response = await refresh();
+      if (disposed) {
+        return;
+      }
+      if (!response) {
+        timerRef.current = setTimeout(() => {
+          void tick();
+        }, pollIntervalMs);
+        return;
+      }
+      timerRef.current = setTimeout(() => {
+        void tick();
+      }, pollIntervalMs);
+    }
+
+    void tick();
+
+    return () => {
+      disposed = true;
+      clearTimer();
+    };
+  }, [enabled, pollIntervalMs, options.client, options.baseUrl, options.fetchImpl, identityKey]);
+
+  return {
+    data,
+    loading,
+    refreshing,
+    error,
+    lastUpdatedAt,
+    refresh,
     reset,
   };
 }

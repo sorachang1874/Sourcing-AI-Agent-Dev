@@ -1,8 +1,12 @@
 __pycache__/
 *.pyc
+.venv/
+.pytest_cache/
 runtime/*.db
 runtime/jobs/*.json
 runtime/bootstrap_summary.json
 runtime/secrets/
 runtime/company_assets/
+configs/live_smoke_*.json
+configs/live_test_*.json
 tests/__pycache__/

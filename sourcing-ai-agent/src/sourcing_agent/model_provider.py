@@ -1,19 +1,300 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import Any, Protocol
 from urllib import error, request
 import requests
 
 from .document_extraction import infer_structured_signals_from_payload
 from .domain import JobRequest
+from .query_intent_policy import build_supported_rewrite_policy_prompt_context
 from .settings import ModelProviderSettings, QwenSettings
+
+
+_OUTREACH_LAYER_PROMPT_TEMPLATE_VERSION = "outreach_layering_v3_explicit_greater_china_scope"
+
+
+def _external_provider_mode() -> str:
+    return str(os.getenv("SOURCING_EXTERNAL_PROVIDER_MODE") or "live").strip().lower() or "live"
+
+
+def _build_outreach_layer_system_prompt() -> str:
+    return (
+        "You are assigning a candidate to outreach layer 0/1/2/3 using only explicit public profile signals. "
+        "Please comprehensively evaluate name, education history, work history, and language signals from LinkedIn profile detail text. "
+        "请综合候选人的姓名、教育经历、工作经历、语言能力等公开信息，综合判断该候选人属于哪一层。 "
+        "Return strict JSON with keys final_layer,confidence_label,evidence_clues,rationale. "
+        "final_layer must be an integer 0..3. "
+        "Layer definitions: "
+        "0 = no sufficient outreach signal, "
+        "1 = weak name-only signal, "
+        "2 = broader Greater China region experience signal (Mainland China, Hong Kong, Macau, Taiwan, or Singapore), "
+        "3 = strongest signal with Mainland China experience and/or explicit Chinese language signal (Mandarin/Cantonese/Chinese language variants). "
+        "Important boundary: Layer 2 is broader than Mainland China and must NOT be interpreted as Mainland-only. "
+        "边界要求：Layer 2 是“广义 Greater China（中国大陆、香港、澳门、台湾、新加坡）经历”，不是狭义中国大陆经历。 "
+        "confidence_label must be one of high, medium, low. "
+        "evidence_clues must be an array of concise strings. "
+        "Do not infer or output ethnicity, nationality, religion, or other protected-attribute conclusions."
+    )
+
+
+def get_outreach_layer_prompt_template() -> dict[str, Any]:
+    return {
+        "version": _OUTREACH_LAYER_PROMPT_TEMPLATE_VERSION,
+        "system_prompt": _build_outreach_layer_system_prompt(),
+        "required_output_keys": ["final_layer", "confidence_label", "evidence_clues", "rationale"],
+    }
+
+
+def _with_supported_rewrite_policies(payload: dict[str, Any]) -> dict[str, Any]:
+    enriched = dict(payload or {})
+    enriched["supported_rewrite_policies"] = build_supported_rewrite_policy_prompt_context()
+    return enriched
+
+
+def _execution_preferences_schema_prompt() -> str:
+    return (
+        "execution_preferences must be an object and may contain only "
+        "acquisition_strategy_override, "
+        "use_company_employees_lane, "
+        "keyword_priority_only, "
+        "former_keyword_queries_only, "
+        "provider_people_search_query_strategy, "
+        "provider_people_search_max_queries, "
+        "large_org_keyword_probe_mode, "
+        "force_fresh_run, "
+        "allow_high_cost_sources, "
+        "precision_recall_bias, "
+        "confirmed_company_scope, "
+        "extra_source_families, "
+        "reuse_existing_roster, "
+        "run_former_search_seed. "
+        "acquisition_strategy_override is only the base roster strategy axis "
+        "(full_company_roster|scoped_search_roster|former_employee_search|investor_firm_roster). "
+        "Do not misuse acquisition_strategy_override as a proxy for keyword priority, company-employees lane choice, "
+        "former coverage, or people-search union strategy. "
+        "provider_people_search_query_strategy must be all_queries_union or first_hit. "
+        "provider_people_search_max_queries must be a small positive integer. "
+        "Omit uncertain fields from execution_preferences. "
+    )
+
+
+def _build_review_instruction_system_prompt() -> str:
+    return (
+        "You convert a natural-language sourcing plan review instruction into strict JSON. "
+        "Return strict JSON with a single top-level key decision. "
+        "Treat the instruction as four orthogonal control axes when possible: "
+        "population boundary, scope boundary, acquisition lane policy, and fallback policy. "
+        + _execution_preferences_schema_prompt()
+        + "Only include fields directly supported by the instruction and editable_fields. "
+        "Examples: "
+        "'keyword-first' -> keyword_priority_only=true. "
+        "'不要 company-employees' -> use_company_employees_lane=false. "
+        "'former 也要' -> run_former_search_seed=true when applicable. "
+        "'多 query 并集' -> provider_people_search_query_strategy=all_queries_union. "
+        "Do not output markdown."
+    )
+
+
+def _build_request_normalization_system_prompt() -> str:
+    return (
+        "You normalize a sourcing user request into strict JSON. "
+        "Return keys target_company,target_scope,categories,employment_statuses,keywords,must_have_keywords,"
+        "organization_keywords,must_have_facets,must_have_primary_role_buckets,retrieval_strategy,query,execution_preferences,scope_disambiguation. "
+        "You may also return optional list keys: team_keywords,sub_org_keywords,project_keywords,product_keywords,"
+        "model_keywords,research_direction_keywords,technology_keywords. "
+        "You may also return optional object key intent_axes. "
+        "All list fields must be arrays of concise strings. Use empty string or [] when uncertain. "
+        "If intent_axes is present, it may only contain the object keys "
+        "population_boundary,scope_boundary,acquisition_lane_policy,fallback_policy,thematic_constraints. "
+        "Represent the user's real intent with four orthogonal dimensions whenever possible: "
+        "population boundary (categories + employment_statuses), "
+        "scope boundary (target_company + organization_keywords + scope_disambiguation + confirmed_company_scope), "
+        "acquisition lane policy (acquisition_strategy_override + use_company_employees_lane + keyword_priority_only + former_keyword_queries_only + large_org_keyword_probe_mode), "
+        "and fallback policy (force_fresh_run + allow_high_cost_sources + provider_people_search_query_strategy + provider_people_search_max_queries + reuse_existing_roster + run_former_search_seed). "
+        + _execution_preferences_schema_prompt()
+        + "scope_disambiguation must be an object and may contain only inferred_scope,sub_org_candidates,confidence,rationale. "
+        "inferred_scope must be one of parent,sub_org_only,both,uncertain. "
+        "sub_org_candidates must be concise org/team/product labels. confidence must be 0..1. "
+        "Use scope_disambiguation when parent-company scope is ambiguous (for example Google vs DeepMind/Gemini/Veo). "
+        "When disambiguating Google vs Google DeepMind, remember LinkedIn profiles may list employer as Google even for DeepMind members; "
+        "treat this as an ambiguity signal and surface sub_org_candidates instead of collapsing too early. "
+        "For example, for Gemini-related requests, prefer target_company=Google and preserve Gemini / Google DeepMind as organization or scope clues when relevant. "
+        "Use the raw_user_request as the source of truth. fallback_request/current_request are hints only. "
+        "Do not invent lab/model/product names that are not in the user text unless they are high-confidence standard aliases. "
+        "If a term may be new or ambiguous (for example Avocado, TBD), keep the raw term in keywords and/or organization_keywords instead of dropping it, "
+        "and prefer uncertain scope over confident hallucination. "
+        "Prefer canonical organization names in target_company, team or sub-org names in organization_keywords, "
+        "and direction/topic/model/technology terms in keywords. "
+        "If a term is both a team/sub-org clue and an important retrieval/search constraint, it may appear in both organization_keywords and keywords. "
+        "Important extraction rule: only return atomic search/retrieval terms. "
+        "Never return wrapper phrases or narrative fragments such as '在Veo和Nano Banana团队', '参与Veo和Nano Banana', "
+        "'做Reasoning的人', or '负责多模态'; instead split them into the underlying org/product/topic terms such as "
+        "'Veo', 'Nano Banana', 'Reasoning', or 'multimodal'. "
+        "When the user asks for Product Manager / PM / 产品经理, prefer must_have_primary_role_buckets=['product_management'] "
+        "and avoid duplicate keyword noise such as returning both PM and Product Manager unless they add distinct meaning. "
+        "Populate product/model/research-direction optional keys whenever possible; if not found, return empty arrays. "
+        "categories should prefer employee, former_employee, investor, researcher, engineer. "
+        "employment_statuses should use current or former. "
+        "retrieval_strategy must be one of empty string, structured, hybrid, semantic. "
+        "Unless the user explicitly limits the scope, default employment_statuses to both current and former members. "
+        "If the user says 华人, 泛华人, or Chinese members, interpret that as public Greater China study/work experience "
+        "and Chinese or bilingual outreach relevance; do not output ethnicity, nationality, or protected-attribute labels. "
+        "The payload includes supported_rewrite_policies, a read-only catalog of supported shorthand policies with trigger_sources and request_patch; "
+        "use it as canonical rewrite metadata when it matches the user text, but do not force a policy that is unsupported by the request. "
+        "Few-shot examples: "
+        "Example 1 input: 给我Google做多模态（在Veo和Nano Banana团队）的人. "
+        "Example 1 output: "
+        "{\"target_company\":\"Google\",\"employment_statuses\":[\"current\",\"former\"],"
+        "\"organization_keywords\":[\"Google DeepMind\",\"Veo\",\"Nano Banana\"],"
+        "\"keywords\":[\"multimodal\",\"Veo\",\"Nano Banana\"],"
+        "\"must_have_facets\":[\"multimodal\"],"
+        "\"execution_preferences\":{\"keyword_priority_only\":true,\"provider_people_search_query_strategy\":\"all_queries_union\"},"
+        "\"scope_disambiguation\":{\"inferred_scope\":\"both\",\"sub_org_candidates\":[\"Google DeepMind\",\"Veo\",\"Nano Banana\"],\"confidence\":0.8}}. "
+        "Example 2 input: 我想找OpenAI在ChatGPT项目，做Reasoning的人. "
+        "Example 2 output: "
+        "{\"target_company\":\"OpenAI\",\"employment_statuses\":[\"current\",\"former\"],"
+        "\"organization_keywords\":[\"ChatGPT\"],"
+        "\"keywords\":[\"Reasoning\",\"ChatGPT\"],"
+        "\"product_keywords\":[\"ChatGPT\"],"
+        "\"research_direction_keywords\":[\"Reasoning\"]}. "
+        "Example 3 input: 给我 Meta TBD 的 infra 成员. "
+        "Example 3 output: "
+        "{\"target_company\":\"Meta\",\"employment_statuses\":[\"current\",\"former\"],"
+        "\"organization_keywords\":[\"TBD\"],"
+        "\"keywords\":[\"infra\",\"TBD\"],"
+        "\"scope_disambiguation\":{\"inferred_scope\":\"uncertain\",\"sub_org_candidates\":[\"TBD\"],\"confidence\":0.4}}."
+    )
+
+
+def _build_spreadsheet_contact_normalization_system_prompt() -> str:
+    return (
+        "You normalize a spreadsheet contact upload into strict JSON. "
+        "Return keys contacts_detected,selected_sheets,ignored_sheets,notes. "
+        "contacts_detected must be a boolean. "
+        "selected_sheets must be an array of objects with keys sheet_name,column_mapping,confidence_label,notes. "
+        "column_mapping must be an object containing only these optional keys: "
+        "name,company,title,linkedin_url,email. "
+        "Each column_mapping value must be the exact source header text from the sheet, or an empty string when missing. "
+        "confidence_label must be one of high, medium, low. "
+        "ignored_sheets must be an array of concise sheet names. "
+        "Infer the contact sheet and header mapping conservatively from headers and sample rows. "
+        "Do not invent columns that are not present. "
+        "If the workbook clearly contains people/contact rows, set contacts_detected=true."
+    )
+
+
+_SPREADSHEET_CONTACT_FIELD_ALIASES: dict[str, tuple[str, ...]] = {
+    "name": (
+        "name",
+        "full name",
+        "candidate",
+        "person",
+        "姓名",
+        "名字",
+    ),
+    "company": (
+        "company",
+        "organization",
+        "org",
+        "employer",
+        "firm",
+        "机构",
+        "公司",
+        "单位",
+    ),
+    "title": (
+        "title",
+        "job title",
+        "role",
+        "position",
+        "headline",
+        "职位",
+        "岗位",
+        "职务",
+    ),
+    "linkedin_url": (
+        "linkedin",
+        "linkedin url",
+        "linkedin profile",
+        "profile url",
+        "linkedin链接",
+        "linkedin 链接",
+        "领英",
+    ),
+    "email": (
+        "email",
+        "email address",
+        "mail",
+        "邮箱",
+        "电子邮箱",
+    ),
+}
+
+
+def _normalize_spreadsheet_header_token(value: Any) -> str:
+    normalized = " ".join(str(value or "").strip().lower().replace("_", " ").replace("-", " ").split())
+    if not normalized:
+        return ""
+    return normalized
+
+
+def _infer_spreadsheet_contact_schema(payload: dict[str, Any]) -> dict[str, Any]:
+    selected_sheets: list[dict[str, Any]] = []
+    ignored_sheets: list[str] = []
+    for raw_sheet in list(payload.get("sheets") or []):
+        if not isinstance(raw_sheet, dict):
+            continue
+        sheet_name = str(raw_sheet.get("sheet_name") or raw_sheet.get("name") or "").strip()
+        headers = [str(item or "").strip() for item in list(raw_sheet.get("headers") or []) if str(item or "").strip()]
+        if not sheet_name:
+            continue
+        header_lookup = {_normalize_spreadsheet_header_token(header): header for header in headers}
+        column_mapping: dict[str, str] = {}
+        matched_field_count = 0
+        for field_name, aliases in _SPREADSHEET_CONTACT_FIELD_ALIASES.items():
+            matched_header = ""
+            for alias in aliases:
+                normalized_alias = _normalize_spreadsheet_header_token(alias)
+                for normalized_header, source_header in header_lookup.items():
+                    if normalized_header == normalized_alias or normalized_alias in normalized_header:
+                        matched_header = source_header
+                        break
+                if matched_header:
+                    break
+            if matched_header:
+                matched_field_count += 1
+            column_mapping[field_name] = matched_header
+        contacts_detected = bool(column_mapping.get("name")) and bool(
+            column_mapping.get("company") or column_mapping.get("title") or column_mapping.get("linkedin_url")
+        )
+        if contacts_detected:
+            confidence_label = "high" if matched_field_count >= 4 else "medium"
+            selected_sheets.append(
+                {
+                    "sheet_name": sheet_name,
+                    "column_mapping": column_mapping,
+                    "confidence_label": confidence_label,
+                    "notes": "deterministic_header_match",
+                }
+            )
+        else:
+            ignored_sheets.append(sheet_name)
+    return {
+        "contacts_detected": bool(selected_sheets),
+        "selected_sheets": selected_sheets[:3],
+        "ignored_sheets": ignored_sheets[:8],
+        "notes": "Deterministic spreadsheet schema inference fallback.",
+    }
 
 
 class ModelClient(Protocol):
     def summarize(self, request: JobRequest, matches: list[dict], total_matches: int) -> str: ...
 
     def normalize_request(self, payload: dict[str, Any]) -> dict[str, Any]: ...
+
+    def normalize_spreadsheet_contacts(self, payload: dict[str, Any]) -> dict[str, Any]: ...
 
     def normalize_review_instruction(self, payload: dict[str, Any]) -> dict[str, Any]: ...
 
@@ -33,7 +314,11 @@ class ModelClient(Protocol):
 
     def synthesize_manual_review(self, payload: dict[str, Any]) -> dict[str, Any]: ...
 
+    def evaluate_outreach_profile(self, payload: dict[str, Any]) -> dict[str, Any]: ...
+
     def provider_name(self) -> str: ...
+
+    def supports_outreach_ai_verification(self) -> bool: ...
 
     def healthcheck(self) -> dict[str, Any]: ...
 
@@ -41,6 +326,9 @@ class ModelClient(Protocol):
 class DeterministicModelClient:
     def provider_name(self) -> str:
         return "deterministic"
+
+    def supports_outreach_ai_verification(self) -> bool:
+        return False
 
     def summarize(self, request: JobRequest, matches: list[dict], total_matches: int) -> str:
         if not matches:
@@ -53,6 +341,9 @@ class DeterministicModelClient:
 
     def normalize_request(self, payload: dict[str, Any]) -> dict[str, Any]:
         return {}
+
+    def normalize_spreadsheet_contacts(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return _infer_spreadsheet_contact_schema(payload)
 
     def normalize_review_instruction(self, payload: dict[str, Any]) -> dict[str, Any]:
         return {}
@@ -166,10 +457,41 @@ class DeterministicModelClient:
     def synthesize_manual_review(self, payload: dict[str, Any]) -> dict[str, Any]:
         return {}
 
+    def evaluate_outreach_profile(self, payload: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+        return {}
+
+
+class OfflineModelClient(DeterministicModelClient):
+    def __init__(self, *, mode: str) -> None:
+        normalized_mode = str(mode or "simulate").strip().lower() or "simulate"
+        self.mode = normalized_mode if normalized_mode in {"simulate", "replay"} else "simulate"
+
+    def provider_name(self) -> str:
+        return "offline_model"
+
+    def healthcheck(self) -> dict[str, Any]:
+        note = (
+            "Simulated model provider; no external model request will be sent."
+            if self.mode == "simulate"
+            else "Replay model provider; external model requests are disabled."
+        )
+        return {
+            "provider": self.provider_name(),
+            "status": "ready",
+            "provider_mode": self.mode,
+            "note": note,
+        }
+
 
 class QwenResponsesModelClient(DeterministicModelClient):
     def __init__(self, settings: QwenSettings) -> None:
         self.settings = settings
+
+    def provider_name(self) -> str:
+        return "qwen"
+
+    def supports_outreach_ai_verification(self) -> bool:
+        return True
 
     def summarize(self, request: JobRequest, matches: list[dict], total_matches: int) -> str:
         prompt = {
@@ -195,40 +517,23 @@ class QwenResponsesModelClient(DeterministicModelClient):
 
     def normalize_request(self, payload: dict[str, Any]) -> dict[str, Any]:
         response = self._safe_text_prompt(
-            "You normalize a sourcing user request into strict JSON. "
-            "Return keys target_company,target_scope,categories,employment_statuses,keywords,must_have_keywords,"
-            "organization_keywords,must_have_facets,must_have_primary_role_buckets,retrieval_strategy,query,execution_preferences. "
-            "All list fields must be arrays of concise strings. Use empty string or [] when uncertain. "
-            "execution_preferences must be an object and may contain only acquisition_strategy_override,"
-            "use_company_employees_lane,force_fresh_run,allow_high_cost_sources,precision_recall_bias,"
-            "confirmed_company_scope,extra_source_families. Omit uncertain fields from execution_preferences. "
-            "Prefer canonical organization names in target_company, team or sub-org names in organization_keywords, "
-            "and direction or topic terms in keywords. "
-            "categories should prefer employee, former_employee, investor, researcher, engineer. "
-            "employment_statuses should use current or former. "
-            "retrieval_strategy must be one of empty string, structured, hybrid, semantic. "
-            "Infer current employees when the user says 成员/team members without saying former. "
-            "If the user says 华人, 泛华人, or Chinese members, interpret that as public Greater China study/work experience "
-            "and Chinese or bilingual outreach relevance; do not output ethnicity, nationality, or protected-attribute labels.",
-            json.dumps(payload, ensure_ascii=False),
+            _build_request_normalization_system_prompt(),
+            json.dumps(_with_supported_rewrite_policies(payload), ensure_ascii=False),
         )
         parsed = _safe_json_object(response)
         return parsed if parsed else {}
 
+    def normalize_spreadsheet_contacts(self, payload: dict[str, Any]) -> dict[str, Any]:
+        response = self._safe_text_prompt(
+            _build_spreadsheet_contact_normalization_system_prompt(),
+            json.dumps(payload, ensure_ascii=False),
+        )
+        parsed = _safe_json_object(response)
+        return parsed if parsed else super().normalize_spreadsheet_contacts(payload)
+
     def normalize_review_instruction(self, payload: dict[str, Any]) -> dict[str, Any]:
         response = self._safe_text_prompt(
-            "You convert a natural-language sourcing plan review instruction into strict JSON. "
-            "Return strict JSON with a single top-level key decision. "
-            "decision may contain only these optional keys: "
-            "confirmed_company_scope (array of strings), "
-            "extra_source_families (array of strings), "
-            "allow_high_cost_sources (boolean), "
-            "precision_recall_bias (precision_first|recall_first|balanced), "
-            "acquisition_strategy_override (full_company_roster|scoped_search_roster|former_employee_search|investor_firm_roster), "
-            "use_company_employees_lane (boolean), "
-            "force_fresh_run (boolean). "
-            "Only include fields directly supported by the instruction and editable_fields. "
-            "Omit uncertain fields. Do not output markdown.",
+            _build_review_instruction_system_prompt(),
             json.dumps(payload, ensure_ascii=False),
         )
         parsed = _safe_json_object(response)
@@ -251,11 +556,21 @@ class QwenResponsesModelClient(DeterministicModelClient):
             "retrieval_strategy (structured|hybrid|semantic), "
             "top_k (integer), "
             "semantic_rerank_limit (integer). "
+            "You may also return optional list keys: team_keywords,sub_org_keywords,project_keywords,product_keywords,"
+            "model_keywords,research_direction_keywords,technology_keywords. "
+            "Use the raw instruction as the source of truth. base_request is context only. "
+            "Do not invent lab/model/product names that are not in the instruction unless they are high-confidence standard aliases. "
+            "If a term may be new or ambiguous (for example Avocado, TBD), keep the raw term in keywords and/or organization_keywords instead of dropping it. "
+            "Prefer canonical company names in target_company context, team/sub-org/project labels in organization_keywords, "
+            "and direction/topic/model/technology terms in keywords or the optional keyword-family fields. "
+            "If the instruction narrows scope to a subset, prefer preserving those terms rather than collapsing them away. "
             "Only include fields directly supported by the instruction. "
             "If the instruction uses shorthand like 华人 or Chinese members, rewrite it into public Greater China experience "
             "and Chinese or bilingual outreach keywords instead of identity labels. "
+            "The payload includes supported_rewrite_policies, a read-only catalog of supported shorthand policies with trigger_sources and request_patch; "
+            "use it as canonical rewrite metadata when the instruction clearly matches one of those policies. "
             "Omit uncertain fields. Do not output markdown.",
-            json.dumps(payload, ensure_ascii=False),
+            json.dumps(_with_supported_rewrite_policies(payload), ensure_ascii=False),
         )
         parsed = _safe_json_object(response)
         return parsed if parsed else {}
@@ -412,6 +727,19 @@ class QwenResponsesModelClient(DeterministicModelClient):
         parsed = _safe_json_object(response)
         return parsed if parsed else {}
 
+    def evaluate_outreach_profile(self, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            response = self._run_text_prompt(
+                _build_outreach_layer_system_prompt(),
+                json.dumps(payload, ensure_ascii=False),
+            )
+        except Exception as exc:
+            return {"error": str(exc)}
+        parsed = _safe_json_object(response)
+        if not parsed:
+            return {"error": "non_json_response", "raw_preview": response[:240]}
+        return _normalize_outreach_profile_response(parsed)
+
     def _run_text_prompt(self, system_prompt: str, user_prompt: str) -> str:
         input_text = f"System instruction:\n{system_prompt}\n\nUser input:\n{user_prompt}"
         return self._call_responses_api(input_text)
@@ -456,6 +784,9 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
     def provider_name(self) -> str:
         return self.settings.provider_name or "openai_compatible"
 
+    def supports_outreach_ai_verification(self) -> bool:
+        return True
+
     def summarize(self, request: JobRequest, matches: list[dict], total_matches: int) -> str:
         prompt = {
             "target_company": request.target_company,
@@ -481,41 +812,25 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
 
     def normalize_request(self, payload: dict[str, Any]) -> dict[str, Any]:
         response = self._safe_text_prompt(
-            "You normalize a sourcing user request into strict JSON. "
-            "Return keys target_company,target_scope,categories,employment_statuses,keywords,must_have_keywords,"
-            "organization_keywords,must_have_facets,must_have_primary_role_buckets,retrieval_strategy,query,execution_preferences. "
-            "All list fields must be arrays of concise strings. Use empty string or [] when uncertain. "
-            "execution_preferences must be an object and may contain only acquisition_strategy_override,"
-            "use_company_employees_lane,force_fresh_run,allow_high_cost_sources,precision_recall_bias,"
-            "confirmed_company_scope,extra_source_families. Omit uncertain fields from execution_preferences. "
-            "Prefer canonical organization names in target_company, team or sub-org names in organization_keywords, "
-            "and direction or topic terms in keywords. "
-            "categories should prefer employee, former_employee, investor, researcher, engineer. "
-            "employment_statuses should use current or former. "
-            "retrieval_strategy must be one of empty string, structured, hybrid, semantic. "
-            "Infer current employees when the user says 成员/team members without saying former. "
-            "If the user says 华人, 泛华人, or Chinese members, interpret that as public Greater China study/work experience "
-            "and Chinese or bilingual outreach relevance; do not output ethnicity, nationality, or protected-attribute labels.",
-            json.dumps(payload, ensure_ascii=False),
+            _build_request_normalization_system_prompt(),
+            json.dumps(_with_supported_rewrite_policies(payload), ensure_ascii=False),
             max_tokens=700,
         )
         parsed = _safe_json_object(response)
         return parsed if parsed else {}
 
+    def normalize_spreadsheet_contacts(self, payload: dict[str, Any]) -> dict[str, Any]:
+        response = self._safe_text_prompt(
+            _build_spreadsheet_contact_normalization_system_prompt(),
+            json.dumps(payload, ensure_ascii=False),
+            max_tokens=520,
+        )
+        parsed = _safe_json_object(response)
+        return parsed if parsed else super().normalize_spreadsheet_contacts(payload)
+
     def normalize_review_instruction(self, payload: dict[str, Any]) -> dict[str, Any]:
         response = self._safe_text_prompt(
-            "You convert a natural-language sourcing plan review instruction into strict JSON. "
-            "Return strict JSON with a single top-level key decision. "
-            "decision may contain only these optional keys: "
-            "confirmed_company_scope (array of strings), "
-            "extra_source_families (array of strings), "
-            "allow_high_cost_sources (boolean), "
-            "precision_recall_bias (precision_first|recall_first|balanced), "
-            "acquisition_strategy_override (full_company_roster|scoped_search_roster|former_employee_search|investor_firm_roster), "
-            "use_company_employees_lane (boolean), "
-            "force_fresh_run (boolean). "
-            "Only include fields directly supported by the instruction and editable_fields. "
-            "Omit uncertain fields. Do not output markdown.",
+            _build_review_instruction_system_prompt(),
             json.dumps(payload, ensure_ascii=False),
             max_tokens=500,
         )
@@ -539,11 +854,21 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
             "retrieval_strategy (structured|hybrid|semantic), "
             "top_k (integer), "
             "semantic_rerank_limit (integer). "
+            "You may also return optional list keys: team_keywords,sub_org_keywords,project_keywords,product_keywords,"
+            "model_keywords,research_direction_keywords,technology_keywords. "
+            "Use the raw instruction as the source of truth. base_request is context only. "
+            "Do not invent lab/model/product names that are not in the instruction unless they are high-confidence standard aliases. "
+            "If a term may be new or ambiguous (for example Avocado, TBD), keep the raw term in keywords and/or organization_keywords instead of dropping it. "
+            "Prefer canonical company names in target_company context, team/sub-org/project labels in organization_keywords, "
+            "and direction/topic/model/technology terms in keywords or the optional keyword-family fields. "
+            "If the instruction narrows scope to a subset, prefer preserving those terms rather than collapsing them away. "
             "Only include fields directly supported by the instruction. "
             "If the instruction uses shorthand like 华人 or Chinese members, rewrite it into public Greater China experience "
             "and Chinese or bilingual outreach keywords instead of identity labels. "
+            "The payload includes supported_rewrite_policies, a read-only catalog of supported shorthand policies with trigger_sources and request_patch; "
+            "use it as canonical rewrite metadata when the instruction clearly matches one of those policies. "
             "Omit uncertain fields. Do not output markdown.",
-            json.dumps(payload, ensure_ascii=False),
+            json.dumps(_with_supported_rewrite_policies(payload), ensure_ascii=False),
             max_tokens=520,
         )
         parsed = _safe_json_object(response)
@@ -689,6 +1014,20 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
         )
         parsed = _safe_json_object(response)
         return parsed if parsed else {}
+
+    def evaluate_outreach_profile(self, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            response = self._run_text_prompt(
+                _build_outreach_layer_system_prompt(),
+                json.dumps(payload, ensure_ascii=False),
+                max_tokens=360,
+            )
+        except Exception as exc:
+            return {"error": str(exc)}
+        parsed = _safe_json_object(response)
+        if not parsed:
+            return {"error": "non_json_response", "raw_preview": response[:240]}
+        return _normalize_outreach_profile_response(parsed)
 
     def healthcheck(self) -> dict[str, Any]:
         try:
@@ -839,12 +1178,44 @@ def _extract_openai_models(payload: dict[str, Any]) -> list[str]:
     return models
 
 
+def _normalize_outreach_profile_response(payload: dict[str, Any]) -> dict[str, Any]:
+    final_layer_raw = payload.get("final_layer")
+    try:
+        final_layer = int(final_layer_raw)
+    except (TypeError, ValueError):
+        # Backward compatibility for older boolean-based provider outputs
+        mainland_or_language = bool(payload.get("mainland_or_language_supported"))
+        greater_china = bool(payload.get("greater_china_experience_supported"))
+        name_signal = bool(payload.get("name_signal_supported"))
+        if mainland_or_language:
+            final_layer = 3
+        elif greater_china:
+            final_layer = 2
+        elif name_signal:
+            final_layer = 1
+        else:
+            final_layer = 0
+    final_layer = max(0, min(final_layer, 3))
+    confidence_label = str(payload.get("confidence_label") or "low").strip().lower()
+    if confidence_label not in {"high", "medium", "low"}:
+        confidence_label = "low"
+    return {
+        "final_layer": final_layer,
+        "confidence_label": confidence_label,
+        "evidence_clues": [str(item).strip() for item in list(payload.get("evidence_clues") or []) if str(item).strip()][:8],
+        "rationale": str(payload.get("rationale") or "").strip(),
+    }
+
+
 def build_model_client(
     model_settings: ModelProviderSettings | None = None,
     qwen_settings: QwenSettings | None = None,
 ) -> ModelClient:
-    if model_settings and model_settings.enabled:
-        return OpenAICompatibleChatModelClient(model_settings)
+    external_mode = _external_provider_mode()
+    if external_mode in {"simulate", "replay"}:
+        return OfflineModelClient(mode=external_mode)
     if qwen_settings and qwen_settings.enabled:
         return QwenResponsesModelClient(qwen_settings)
+    if model_settings and model_settings.enabled:
+        return OpenAICompatibleChatModelClient(model_settings)
     return DeterministicModelClient()

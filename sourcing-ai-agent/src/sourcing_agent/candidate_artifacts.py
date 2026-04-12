@@ -12,6 +12,8 @@ from .canonicalization import canonicalize_company_records
 from .domain import (
     Candidate,
     EvidenceRecord,
+    candidate_profile_signal_text,
+    candidate_searchable_text,
     derive_candidate_facets,
     derive_candidate_role_bucket,
     merge_candidate,
@@ -24,6 +26,9 @@ from .storage import SQLiteStore
 
 class CandidateArtifactError(RuntimeError):
     pass
+
+
+_LARGE_ORG_HISTORY_SNAPSHOT_MIN_CANDIDATES = 1000
 
 
 def materialize_company_candidate_view(
@@ -41,6 +46,10 @@ def materialize_company_candidate_view(
     candidate_aliases: dict[str, str] = {}
     identity_index: dict[str, str] = {}
     source_snapshots = _load_company_history_snapshots(snapshot_dir.parent, company_name)
+    source_snapshots, source_snapshot_selection = _select_source_snapshots_for_materialization(
+        source_snapshots,
+        current_snapshot_id=snapshot_dir.name,
+    )
     for source_snapshot in source_snapshots:
         for candidate in source_snapshot["candidates"]:
             _ingest_materialized_candidate(
@@ -90,6 +99,7 @@ def materialize_company_candidate_view(
         "candidates": materialized_candidates,
         "evidence": materialized_evidence,
         "source_snapshots": source_snapshots,
+        "source_snapshot_selection": source_snapshot_selection,
         "sqlite_candidate_count": len(sqlite_candidates),
         "sqlite_evidence_count": len(sqlite_evidence),
         "canonicalization": canonicalization_summary,
@@ -332,6 +342,51 @@ def _load_company_history_snapshots(company_dir: Path, target_company: str) -> l
             }
         )
     return snapshots
+
+
+def _select_source_snapshots_for_materialization(
+    source_snapshots: list[dict[str, Any]],
+    *,
+    current_snapshot_id: str,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    selection = {
+        "mode": "all_history_plus_sqlite",
+        "reason": "",
+        "selected_snapshot_ids": [str(item.get("snapshot_id") or "").strip() for item in source_snapshots],
+        "excluded_snapshot_ids": [],
+    }
+    if len(source_snapshots) <= 1:
+        return source_snapshots, selection
+
+    current_snapshot = next(
+        (item for item in source_snapshots if str(item.get("snapshot_id") or "").strip() == current_snapshot_id),
+        None,
+    )
+    if current_snapshot is None:
+        selection["reason"] = "current_snapshot_candidate_documents_missing"
+        return source_snapshots, selection
+
+    current_candidate_count = int(current_snapshot.get("candidate_count") or 0)
+    if current_candidate_count < _LARGE_ORG_HISTORY_SNAPSHOT_MIN_CANDIDATES:
+        return source_snapshots, selection
+
+    selected = [current_snapshot]
+    selection.update(
+        {
+            "mode": "current_snapshot_only_large_org",
+            "reason": (
+                "Current snapshot candidate_documents already cover a large organization; "
+                "skip older snapshot unions and rely on current snapshot plus SQLite to avoid dirty historical inflation."
+            ),
+            "selected_snapshot_ids": [current_snapshot_id],
+            "excluded_snapshot_ids": [
+                str(item.get("snapshot_id") or "").strip()
+                for item in source_snapshots
+                if str(item.get("snapshot_id") or "").strip() != current_snapshot_id
+            ],
+        }
+    )
+    return selected, selection
 
 
 def _candidate_from_payload(payload: dict[str, Any]) -> Candidate | None:
@@ -669,6 +724,29 @@ def _apply_authoritative_membership_fields(candidate: Candidate, authoritative: 
     for key in ["manual_review_links", "manual_review_artifact_root", "manual_review_signals", "profile_url", "public_identifier"]:
         if key in source_metadata:
             metadata[key] = source_metadata.get(key)
+    for key in [
+        "profile_account_id",
+        "profile_location",
+        "more_profiles",
+        "membership_claim_category",
+        "membership_claim_employment_status",
+        "raw_linkedin_url",
+        "sanity_linkedin_url",
+        "source_shards",
+        "source_jobs",
+        "headline",
+        "summary",
+        "about",
+        "location",
+        "languages",
+        "skills",
+    ]:
+        incoming_value = source_metadata.get(key)
+        if incoming_value in ("", None, [], {}):
+            continue
+        existing_value = metadata.get(key)
+        if existing_value in ("", None, [], {}):
+            metadata[key] = incoming_value
 
     record["metadata"] = metadata
     return Candidate(**record)
@@ -754,34 +832,16 @@ def _normalize_candidate(candidate: Candidate, evidence: list[dict[str, Any]]) -
 def _build_reusable_document(candidate: Candidate, evidence: list[dict[str, Any]], normalized: dict[str, Any]) -> dict[str, Any]:
     evidence_summaries = [str(item.get("summary") or "").strip() for item in evidence if str(item.get("summary") or "").strip()]
     evidence_titles = [str(item.get("title") or "").strip() for item in evidence if str(item.get("title") or "").strip()]
-    candidate_notes = sanitize_candidate_notes(candidate.notes)
-    profile_document = " | ".join(
-        part
-        for part in [
-            candidate.display_name,
-            candidate.role,
-            candidate.team,
-            candidate.focus_areas,
-            candidate.education,
-            candidate.work_history,
-            candidate_notes,
-        ]
-        if str(part or "").strip()
-    )
+    candidate_notes = candidate_profile_signal_text(candidate, include_notes=True)
+    profile_document = candidate_searchable_text(candidate, include_notes=True)
     evidence_document = " | ".join(evidence_summaries[:8] or evidence_titles[:8])
     semantic_document = " | ".join(
         part
         for part in [
-            candidate.display_name,
+            profile_document,
             normalized["status_bucket"],
             normalized["role_bucket"],
             " ".join(normalized["functional_facets"]),
-            candidate.role,
-            candidate.team,
-            candidate.focus_areas,
-            candidate.education,
-            candidate.work_history,
-            candidate_notes,
             evidence_document,
         ]
         if str(part or "").strip()
@@ -963,6 +1023,7 @@ def _build_artifact_view_payloads(
                 }
                 for item in materialized_view["source_snapshots"]
             ],
+            "source_snapshot_selection": dict(materialized_view.get("source_snapshot_selection") or {}),
             "sqlite_candidate_count": materialized_view["sqlite_candidate_count"],
             "sqlite_evidence_count": materialized_view["sqlite_evidence_count"],
         },
@@ -984,6 +1045,10 @@ def _build_artifact_view_payloads(
         "manual_review_backlog_count": len(manual_review_backlog),
         "profile_completion_backlog_count": len(profile_completion_backlog),
         "source_snapshot_count": len(materialized_view["source_snapshots"]),
+        "source_snapshot_selection_mode": str(
+            (materialized_view.get("source_snapshot_selection") or {}).get("mode") or "all_history_plus_sqlite"
+        ),
+        "source_snapshot_selection": dict(materialized_view.get("source_snapshot_selection") or {}),
         "sqlite_candidate_count": materialized_view["sqlite_candidate_count"],
         "sqlite_evidence_count": materialized_view["sqlite_evidence_count"],
         "created_at": _utc_now_iso(),

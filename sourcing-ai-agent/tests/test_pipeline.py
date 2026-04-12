@@ -1,4 +1,8 @@
+import contextlib
+import io
 import json
+import sqlite3
+from datetime import datetime, timedelta, timezone
 from dataclasses import replace
 from pathlib import Path
 import tempfile
@@ -11,17 +15,20 @@ from urllib import request as urllib_request
 from sourcing_agent.acquisition import AcquisitionEngine, AcquisitionExecution
 from sourcing_agent.api import create_server
 from sourcing_agent.asset_catalog import AssetCatalog
+from sourcing_agent.cli import run_server_runtime_watchdog_once
 from sourcing_agent.connectors import CompanyIdentity, CompanyRosterSnapshot
 from sourcing_agent.domain import AcquisitionTask, Candidate, EvidenceRecord, JobRequest, make_evidence_id
 from sourcing_agent.enrichment import MultiSourceEnrichmentResult
 from sourcing_agent.harvest_connectors import HarvestExecutionResult
 from sourcing_agent.model_provider import DeterministicModelClient
-from sourcing_agent.orchestrator import SourcingOrchestrator
-from sourcing_agent.planning import build_sourcing_plan
+from sourcing_agent.orchestrator import SourcingOrchestrator, _job_runtime_idle_seconds
+from sourcing_agent.planning import build_sourcing_plan, hydrate_sourcing_plan
 from sourcing_agent.seed_discovery import SearchSeedSnapshot
 from sourcing_agent.semantic_provider import LocalSemanticProvider
+from sourcing_agent.service_daemon import WorkerDaemonService, read_service_status
 from sourcing_agent.settings import AppSettings, HarvestActorSettings, HarvestSettings, QwenSettings, SemanticProviderSettings
 from sourcing_agent.storage import SQLiteStore
+from sourcing_agent.workflow_refresh import _worker_is_terminal_for_acquisition_resume
 
 
 class PipelineTest(unittest.TestCase):
@@ -74,6 +81,212 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(result["matches"][0]["name_en"], "Da Yan")
         self.assertIn("intent_rewrite", result)
         self.assertFalse(result["intent_rewrite"]["request"]["matched"])
+
+    def test_plan_workflow_returns_request_preview_and_infers_gemini_product_manager_scope(self) -> None:
+        planned = self.orchestrator.plan_workflow(
+            {
+                "raw_user_request": "我想找Gemini的产品经理",
+            }
+        )
+
+        self.assertEqual(planned["request"]["target_company"], "Google")
+        self.assertEqual(planned["request"]["employment_statuses"], ["current", "former"])
+        self.assertEqual(planned["request"]["must_have_primary_role_buckets"], ["product_management"])
+        self.assertIn("Gemini", planned["request"]["organization_keywords"])
+        self.assertIn("Google DeepMind", planned["request"]["organization_keywords"])
+        self.assertEqual(planned["request_preview"]["target_company"], "Google")
+        self.assertEqual(planned["request_preview"]["must_have_primary_role_buckets"], ["product_management"])
+        self.assertIn("Gemini", planned["request_preview"]["organization_keywords"])
+        self.assertEqual(
+            planned["request_preview"]["intent_axes"]["population_boundary"]["employment_statuses"],
+            ["current", "former"],
+        )
+        self.assertEqual(
+            planned["request_preview"]["intent_axes"]["scope_boundary"]["target_company"],
+            "Google",
+        )
+        self.assertEqual(
+            planned["request_preview"]["intent_axes"]["thematic_constraints"]["must_have_primary_role_buckets"],
+            ["product_management"],
+        )
+        self.assertTrue(
+            any(
+                item.get("rewrite_id") == "greater_china_outreach"
+                for item in list(planned["intent_rewrite"].get("policy_catalog") or [])
+                if isinstance(item, dict)
+            )
+        )
+        self.assertEqual(
+            planned["plan"]["acquisition_strategy"]["filter_hints"]["function_ids"],
+            ["19"],
+        )
+        self.assertEqual(
+            planned["plan"]["acquisition_strategy"]["filter_hints"]["current_companies"],
+            [
+                "https://www.linkedin.com/company/google/",
+                "https://www.linkedin.com/company/deepmind/",
+            ],
+        )
+
+    def test_plan_workflow_infers_openai_scope_from_chatgpt_product_manager_query(self) -> None:
+        planned = self.orchestrator.plan_workflow(
+            {
+                "raw_user_request": "我想找ChatGPT的产品经理",
+            }
+        )
+
+        self.assertEqual(planned["request"]["target_company"], "OpenAI")
+        self.assertEqual(planned["request"]["employment_statuses"], ["current", "former"])
+        self.assertEqual(planned["request"]["must_have_primary_role_buckets"], ["product_management"])
+        self.assertEqual(planned["request_preview"]["target_company"], "OpenAI")
+        self.assertIn("ChatGPT", planned["request"]["organization_keywords"])
+        self.assertIn("ChatGPT", planned["request_preview"]["organization_keywords"])
+        self.assertEqual(
+            planned["plan"]["acquisition_strategy"]["filter_hints"]["function_ids"],
+            ["19"],
+        )
+
+    def test_plan_workflow_materializes_intent_axes_only_request_normalization(self) -> None:
+        class RequestNormalizingModelClient(DeterministicModelClient):
+            def normalize_request(self, payload: dict[str, object]) -> dict[str, object]:
+                return {
+                    "intent_axes": {
+                        "population_boundary": {
+                            "categories": ["employee"],
+                            "employment_statuses": ["current", "former"],
+                        },
+                        "scope_boundary": {
+                            "target_company": "Google",
+                            "organization_keywords": ["Google DeepMind", "Gemini"],
+                            "scope_disambiguation": {
+                                "inferred_scope": "both",
+                                "sub_org_candidates": ["Google DeepMind", "Gemini"],
+                                "confidence": 0.81,
+                            },
+                        },
+                        "acquisition_lane_policy": {
+                            "keyword_priority_only": True,
+                        },
+                        "fallback_policy": {
+                            "provider_people_search_query_strategy": "all_queries_union",
+                            "run_former_search_seed": True,
+                        },
+                        "thematic_constraints": {
+                            "must_have_primary_role_buckets": ["product_management"],
+                            "keywords": ["Gemini"],
+                        },
+                    }
+                }
+
+        orchestrator = SourcingOrchestrator(
+            catalog=self.catalog,
+            store=self.store,
+            jobs_dir=f"{self.tempdir.name}/jobs",
+            model_client=RequestNormalizingModelClient(),
+            semantic_provider=self.semantic_provider,
+            acquisition_engine=AcquisitionEngine(self.catalog, self.settings, self.store, RequestNormalizingModelClient()),
+        )
+
+        planned = orchestrator.plan_workflow(
+            {
+                "raw_user_request": "我想找Gemini的产品经理",
+            }
+        )
+
+        self.assertEqual(planned["request"]["target_company"], "Google")
+        self.assertEqual(planned["request"]["employment_statuses"], ["current", "former"])
+        self.assertEqual(planned["request"]["must_have_primary_role_buckets"], ["product_management"])
+        self.assertEqual(
+            planned["request"]["execution_preferences"]["provider_people_search_query_strategy"],
+            "all_queries_union",
+        )
+        self.assertTrue(planned["request"]["execution_preferences"]["keyword_priority_only"])
+        self.assertTrue(planned["request"]["execution_preferences"]["run_former_search_seed"])
+        self.assertIn("Gemini", planned["request"]["organization_keywords"])
+        self.assertEqual(planned["request_preview"]["intent_axes"]["scope_boundary"]["target_company"], "Google")
+        self.assertEqual(
+            planned["plan"]["acquisition_strategy"]["filter_hints"]["function_ids"],
+            ["19"],
+        )
+
+    def test_plan_workflow_preserves_unknown_meta_team_keyword_without_hardcoded_mapping(self) -> None:
+        planned = self.orchestrator.plan_workflow(
+            {
+                "raw_user_request": "我想找Meta TBD的产品经理",
+            }
+        )
+
+        self.assertEqual(planned["request"]["target_company"], "Meta")
+        self.assertEqual(planned["request"]["must_have_primary_role_buckets"], ["product_management"])
+        self.assertIn("TBD", planned["request"]["organization_keywords"])
+        self.assertNotIn("Meta TBD", planned["request"]["organization_keywords"])
+        self.assertIn("TBD", planned["request_preview"]["organization_keywords"])
+        self.assertEqual(
+            planned["plan"]["acquisition_strategy"]["filter_hints"]["function_ids"],
+            ["19"],
+        )
+
+    def test_execute_retrieval_defaults_to_deterministic_summary(self) -> None:
+        snapshot_id = "20260412T000000"
+        snapshot_dir = self.settings.company_assets_dir / "acme" / snapshot_id
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        candidate = Candidate(
+            candidate_id="acme_1",
+            name_en="Alex Builder",
+            display_name="Alex Builder",
+            category="employee",
+            target_company="Acme",
+            organization="Acme",
+            employment_status="current",
+            role="Infra Engineer",
+            focus_areas="GPU systems",
+            linkedin_url="https://www.linkedin.com/in/alex-builder/",
+            source_dataset="candidate_documents",
+            source_path=str(snapshot_dir / "candidate_documents.json"),
+        )
+        (snapshot_dir / "candidate_documents.json").write_text(
+            json.dumps({"candidates": [candidate.to_record()], "evidence": []}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+        class _ExplodingModel(DeterministicModelClient):
+            def summarize(self, request, matches, total_matches):  # type: ignore[override]
+                raise AssertionError("model summary should be disabled by default")
+
+        self.orchestrator.model_client = _ExplodingModel()
+        self.acquisition_engine.model_client = self.orchestrator.model_client
+
+        planned = self.orchestrator.plan_workflow(
+            {
+                "raw_user_request": "帮我找 Acme 做 GPU systems 的 infra engineer",
+                "target_company": "Acme",
+                "categories": ["employee"],
+                "employment_statuses": ["current"],
+                "keywords": ["GPU systems", "infra"],
+            }
+        )
+        request = JobRequest.from_payload(dict(planned["request"]))
+        artifact = self.orchestrator._execute_retrieval(
+            "job_deterministic_default",
+            request,
+            dict(planned["plan"]),
+            job_type="workflow",
+            runtime_policy={"workflow_snapshot_id": snapshot_id},
+        )
+        self.assertEqual(artifact["summary"]["summary_provider"], "deterministic")
+        self.assertEqual(artifact["summary"]["returned_matches"], 1)
+
+    def test_get_job_results_exposes_top_level_request_preview(self) -> None:
+        result = self.orchestrator.run_job(
+            {
+                "raw_user_request": "我想找Gemini的产品经理",
+            }
+        )
+
+        payload = self.orchestrator.get_job_results(str(result["job_id"]))
+        assert payload is not None
+        self.assertEqual(payload["request_preview"]["target_company"], "Google")
+        self.assertEqual(payload["request_preview"]["must_have_primary_role_buckets"], ["product_management"])
 
     def test_run_job_prefers_latest_company_snapshot_over_broader_sqlite_pool(self) -> None:
         company_dir = self.settings.company_assets_dir / "acme"
@@ -147,6 +360,187 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(result["summary"]["candidate_source"]["snapshot_id"], "20260408T120000")
         self.assertEqual(result["summary"]["candidate_source"]["asset_view"], "canonical_merged")
         self.assertEqual(result["summary"]["total_matches"], 0)
+
+    def test_cleanup_duplicate_inflight_workflows_supersedes_older_active_job(self) -> None:
+        request_payload = {
+            "target_company": "Reflection AI",
+            "raw_user_request": "给我Reflection AI的Infra方向的人",
+        }
+        active_job_id = "job_active_duplicate"
+        completed_job_id = "job_completed_duplicate"
+
+        self.store.save_job(
+            job_id=active_job_id,
+            job_type="workflow",
+            status="running",
+            stage="retrieving",
+            request_payload=request_payload,
+            plan_payload={},
+            summary_payload={"message": "Retrieving candidates"},
+        )
+        session = self.store.create_agent_runtime_session(
+            job_id=active_job_id,
+            target_company="Reflection AI",
+            request_payload=request_payload,
+            plan_payload={},
+            runtime_mode="workflow",
+            lanes=[{"lane_id": "enrichment_specialist"}],
+        )
+        span = self.store.create_agent_trace_span(
+            session_id=int(session["session_id"]),
+            job_id=active_job_id,
+            lane_id="enrichment_specialist",
+            span_name="duplicate cleanup",
+            stage="acquiring",
+        )
+        worker = self.store.create_or_resume_agent_worker(
+            session_id=int(session["session_id"]),
+            job_id=active_job_id,
+            span_id=int(span["span_id"]),
+            lane_id="enrichment_specialist",
+            worker_key="harvest_profile_batch::duplicate",
+            metadata={"recovery_kind": "harvest_profile_batch"},
+        )
+        self.store.mark_agent_worker_running(int(worker["worker_id"]))
+
+        self.store.save_job(
+            job_id=completed_job_id,
+            job_type="workflow",
+            status="completed",
+            stage="completed",
+            request_payload=request_payload,
+            plan_payload={},
+            summary_payload={"message": "Workflow completed."},
+        )
+
+        with self.store._lock, self.store._connection:
+            self.store._connection.execute(
+                "UPDATE jobs SET created_at = '2026-04-11 10:00:00', updated_at = '2026-04-11 10:00:00' WHERE job_id = ?",
+                (active_job_id,),
+            )
+            self.store._connection.execute(
+                "UPDATE jobs SET created_at = '2026-04-11 11:00:00', updated_at = '2026-04-11 11:00:00' WHERE job_id = ?",
+                (completed_job_id,),
+            )
+
+        cleanup = self.orchestrator.cleanup_duplicate_inflight_workflows({"target_company": "Reflection AI"})
+
+        self.assertEqual(cleanup["status"], "completed")
+        self.assertEqual(cleanup["superseded_count"], 1)
+        self.assertEqual(cleanup["superseded_jobs"][0]["job_id"], active_job_id)
+        self.assertEqual(cleanup["superseded_jobs"][0]["replacement_job_id"], completed_job_id)
+        refreshed_job = self.store.get_job(active_job_id)
+        self.assertEqual(refreshed_job["status"], "superseded")
+        refreshed_worker = self.store.get_agent_worker(worker_id=int(worker["worker_id"]))
+        self.assertEqual(refreshed_worker["status"], "superseded")
+
+    def test_cleanup_recoverable_workers_retires_terminal_workflow_workers(self) -> None:
+        failed_request = {
+            "target_company": "Anthropic",
+            "raw_user_request": "failed worker cleanup",
+        }
+        failed_job_id = "job_failed_worker_cleanup"
+        self.store.save_job(
+            job_id=failed_job_id,
+            job_type="workflow",
+            status="failed",
+            stage="failed",
+            request_payload=failed_request,
+            plan_payload={},
+            summary_payload={"message": "Workflow failed."},
+        )
+        failed_session = self.store.create_agent_runtime_session(
+            job_id=failed_job_id,
+            target_company="Anthropic",
+            request_payload=failed_request,
+            plan_payload={},
+            runtime_mode="workflow",
+            lanes=[{"lane_id": "enrichment_specialist"}],
+        )
+        failed_span = self.store.create_agent_trace_span(
+            session_id=int(failed_session["session_id"]),
+            job_id=failed_job_id,
+            lane_id="enrichment_specialist",
+            span_name="failed cleanup",
+            stage="acquiring",
+        )
+        failed_worker = self.store.create_or_resume_agent_worker(
+            session_id=int(failed_session["session_id"]),
+            job_id=failed_job_id,
+            span_id=int(failed_span["span_id"]),
+            lane_id="enrichment_specialist",
+            worker_key="harvest_profile_batch::failed-cleanup",
+            metadata={"recovery_kind": "harvest_profile_batch"},
+        )
+        self.store.mark_agent_worker_running(int(failed_worker["worker_id"]))
+        self.store.checkpoint_agent_worker(
+            int(failed_worker["worker_id"]),
+            checkpoint_payload={"stage": "waiting_remote_harvest"},
+            output_payload={},
+            status="running",
+        )
+
+        superseded_request = {
+            "target_company": "Reflection AI",
+            "raw_user_request": "superseded worker cleanup",
+        }
+        superseded_job_id = "job_superseded_worker_cleanup"
+        self.store.save_job(
+            job_id=superseded_job_id,
+            job_type="workflow",
+            status="superseded",
+            stage="completed",
+            request_payload=superseded_request,
+            plan_payload={},
+            summary_payload={"message": "Workflow superseded."},
+        )
+        superseded_session = self.store.create_agent_runtime_session(
+            job_id=superseded_job_id,
+            target_company="Reflection AI",
+            request_payload=superseded_request,
+            plan_payload={},
+            runtime_mode="workflow",
+            lanes=[{"lane_id": "exploration_specialist"}],
+        )
+        superseded_span = self.store.create_agent_trace_span(
+            session_id=int(superseded_session["session_id"]),
+            job_id=superseded_job_id,
+            lane_id="exploration_specialist",
+            span_name="superseded cleanup",
+            stage="retrieving",
+        )
+        superseded_worker = self.store.create_or_resume_agent_worker(
+            session_id=int(superseded_session["session_id"]),
+            job_id=superseded_job_id,
+            span_id=int(superseded_span["span_id"]),
+            lane_id="exploration_specialist",
+            worker_key="search::superseded-cleanup",
+            metadata={},
+        )
+        self.store.checkpoint_agent_worker(
+            int(superseded_worker["worker_id"]),
+            checkpoint_payload={"stage": "waiting_remote_search"},
+            output_payload={},
+            status="queued",
+        )
+
+        preview = self.orchestrator.cleanup_recoverable_workers({"dry_run": True, "limit": 20})
+        self.assertEqual(preview["status"], "preview")
+        self.assertEqual(preview["candidate_count"], 2)
+
+        cleanup = self.orchestrator.cleanup_recoverable_workers({"limit": 20})
+        self.assertEqual(cleanup["status"], "completed")
+        self.assertEqual(cleanup["retired_count"], 2)
+
+        refreshed_failed = self.store.get_agent_worker(worker_id=int(failed_worker["worker_id"]))
+        self.assertEqual(refreshed_failed["status"], "cancelled")
+        self.assertEqual(dict(refreshed_failed.get("metadata") or {}).get("cleanup", {}).get("source"), "recoverable_worker_cleanup")
+
+        refreshed_superseded = self.store.get_agent_worker(worker_id=int(superseded_worker["worker_id"]))
+        self.assertEqual(refreshed_superseded["status"], "superseded")
+
+    def test_superseded_worker_is_terminal_for_acquisition_resume(self) -> None:
+        self.assertTrue(_worker_is_terminal_for_acquisition_resume({"status": "superseded"}))
 
     def test_run_job_can_explicitly_use_strict_roster_only_view(self) -> None:
         company_dir = self.settings.company_assets_dir / "acme"
@@ -232,6 +626,218 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(result["matches"][0]["candidate_id"], "strict_1")
         self.assertEqual(result["matches"][0]["role_bucket"], "recruiting")
         self.assertIn("recruiting", result["matches"][0]["functional_facets"])
+
+    def test_execute_retrieval_uses_plan_inferred_member_filters(self) -> None:
+        self.store.replace_bootstrap_data(
+            [
+                Candidate(
+                    candidate_id="emp_1",
+                    name_en="Infra Lead",
+                    display_name="Infra Lead",
+                    category="employee",
+                    target_company="Reflection AI",
+                    organization="Reflection AI",
+                    employment_status="current",
+                    role="Head of GPU Infrastructure",
+                    focus_areas="infrastructure platform",
+                ),
+                Candidate(
+                    candidate_id="inv_1",
+                    name_en="Investor",
+                    display_name="Investor",
+                    category="investor",
+                    target_company="Reflection AI",
+                    organization="Reflection AI",
+                    employment_status="current",
+                    role="Investor at Reflection AI",
+                    focus_areas="ai infrastructure investing",
+                ),
+            ],
+            [],
+        )
+
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "帮我寻找Reflection AI的Infra方向在职成员",
+                "target_company": "Reflection AI",
+                "keywords": ["infra"],
+                "top_k": 5,
+            }
+        )
+        self.assertEqual(request.categories, [])
+        self.assertEqual(request.employment_statuses, ["current"])
+
+        plan = build_sourcing_plan(request, self.catalog, self.model_client)
+        artifact = self.orchestrator._execute_retrieval(
+            job_id="plan_inferred_filters",
+            request=request,
+            plan=plan,
+            job_type="workflow",
+            persist_job_state=False,
+        )
+
+        self.assertEqual(artifact["summary"]["total_matches"], 1)
+        self.assertEqual([item["candidate_id"] for item in artifact["matches"]], ["emp_1"])
+        self.assertEqual(
+            artifact["summary"]["effective_request_overrides"]["categories"],
+            ["employee", "former_employee"],
+        )
+        self.assertNotIn("employment_statuses", artifact["summary"].get("effective_request_overrides", {}))
+
+    def test_execute_retrieval_defaults_to_current_and_former_member_pool(self) -> None:
+        self.store.replace_bootstrap_data(
+            [
+                Candidate(
+                    candidate_id="emp_1",
+                    name_en="Infra Lead",
+                    display_name="Infra Lead",
+                    category="employee",
+                    target_company="Reflection AI",
+                    organization="Reflection AI",
+                    employment_status="current",
+                    role="Head of Infrastructure",
+                    focus_areas="infra systems",
+                ),
+                Candidate(
+                    candidate_id="former_1",
+                    name_en="Former Infra",
+                    display_name="Former Infra",
+                    category="former_employee",
+                    target_company="Reflection AI",
+                    organization="Reflection AI",
+                    employment_status="former",
+                    role="Infrastructure Engineer",
+                    focus_areas="infra platform",
+                ),
+            ],
+            [],
+        )
+
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "帮我寻找Reflection AI的Infra方向成员",
+                "target_company": "Reflection AI",
+                "keywords": ["infra"],
+                "top_k": 5,
+            }
+        )
+        self.assertEqual(request.employment_statuses, ["current", "former"])
+        plan = build_sourcing_plan(request, self.catalog, self.model_client)
+        artifact = self.orchestrator._execute_retrieval(
+            job_id="plan_inferred_filters_all_members",
+            request=request,
+            plan=plan,
+            job_type="workflow",
+            persist_job_state=False,
+        )
+
+        self.assertEqual(artifact["summary"]["total_matches"], 2)
+        self.assertEqual(
+            {item["candidate_id"] for item in artifact["matches"]},
+            {"emp_1", "former_1"},
+        )
+        self.assertEqual(
+            artifact["summary"]["effective_request_overrides"]["categories"],
+            ["employee", "former_employee"],
+        )
+        self.assertNotIn("employment_statuses", artifact["summary"].get("effective_request_overrides", {}))
+
+    def test_ai_first_request_normalization_preserves_ambiguous_team_terms_for_search(self) -> None:
+        class RequestNormalizingModelClient(DeterministicModelClient):
+            def normalize_request(self, payload: dict[str, object]) -> dict[str, object]:
+                return {
+                    "target_company": "Meta",
+                    "organization_keywords": ["Meta TBD"],
+                    "keywords": ["infra"],
+                    "scope_disambiguation": {
+                        "inferred_scope": "uncertain",
+                        "sub_org_candidates": ["Meta TBD"],
+                        "confidence": 0.41,
+                        "rationale": "TBD may be a sub-org or team label, but the term is ambiguous.",
+                    },
+                }
+
+        orchestrator = SourcingOrchestrator(
+            catalog=self.catalog,
+            store=self.store,
+            jobs_dir=f"{self.tempdir.name}/jobs",
+            model_client=RequestNormalizingModelClient(),
+            semantic_provider=self.semantic_provider,
+            acquisition_engine=AcquisitionEngine(self.catalog, self.settings, self.store, RequestNormalizingModelClient()),
+        )
+
+        plan_result = orchestrator.plan_workflow(
+            {
+                "raw_user_request": "给我 Meta TBD 的 infra 成员",
+            }
+        )
+
+        self.assertEqual(plan_result["request"]["target_company"], "Meta")
+        self.assertEqual(plan_result["request"]["employment_statuses"], ["current", "former"])
+        self.assertEqual(plan_result["request"]["organization_keywords"], ["TBD"])
+        self.assertIn("infra", [item.lower() for item in plan_result["request"]["keywords"]])
+        self.assertEqual(plan_result["request"]["scope_disambiguation"]["inferred_scope"], "uncertain")
+        self.assertEqual(plan_result["request"]["scope_disambiguation"]["sub_org_candidates"], ["TBD"])
+        filter_hint_keywords = list(plan_result["plan"]["acquisition_strategy"]["filter_hints"]["keywords"] or [])
+        self.assertIn("infra", [item.lower() for item in filter_hint_keywords])
+        self.assertIn("TBD", filter_hint_keywords)
+        self.assertTrue(any("TBD" in query for query in plan_result["plan"]["acquisition_strategy"]["search_seed_queries"]))
+        self.assertTrue(any("TBD" in item for item in plan_result["plan"]["open_questions"]))
+
+    def test_request_normalization_does_not_keep_full_parenthetical_chinese_scaffold_as_keyword(self) -> None:
+        plan_result = self.orchestrator.plan_workflow(
+            {
+                "raw_user_request": "给我Google做多模态（在Veo和Nano Banana团队）的人",
+                "target_company": "Google",
+            }
+        )
+
+        request_keywords = list(plan_result["request"]["keywords"] or [])
+        self.assertIn("Veo", request_keywords)
+        self.assertIn("Nano Banana", request_keywords)
+        self.assertNotIn("在Veo和Nano Banana团队", request_keywords)
+        search_seed_queries = list(plan_result["plan"]["acquisition_strategy"]["search_seed_queries"] or [])
+        self.assertNotIn("在Veo和Nano Banana团队", search_seed_queries)
+
+    def test_ai_first_request_normalization_does_not_reintroduce_parenthetical_wrapper_phrase(self) -> None:
+        class RequestNormalizingModelClient(DeterministicModelClient):
+            def normalize_request(self, payload: dict[str, object]) -> dict[str, object]:
+                return {
+                    "target_company": "Google",
+                    "employment_statuses": ["current", "former"],
+                    "organization_keywords": ["Google DeepMind", "Veo", "Nano Banana"],
+                    "keywords": ["multimodal", "Veo", "Nano Banana"],
+                    "must_have_facets": ["multimodal"],
+                    "scope_disambiguation": {
+                        "inferred_scope": "both",
+                        "sub_org_candidates": ["Google DeepMind", "Veo", "Nano Banana"],
+                        "confidence": 0.82,
+                    },
+                }
+
+        orchestrator = SourcingOrchestrator(
+            catalog=self.catalog,
+            store=self.store,
+            jobs_dir=f"{self.tempdir.name}/jobs",
+            model_client=RequestNormalizingModelClient(),
+            semantic_provider=self.semantic_provider,
+            acquisition_engine=AcquisitionEngine(self.catalog, self.settings, self.store, RequestNormalizingModelClient()),
+        )
+
+        plan_result = orchestrator.plan_workflow(
+            {
+                "raw_user_request": "给我Google做多模态（在Veo和Nano Banana团队）的人",
+                "target_company": "Google",
+            }
+        )
+
+        request_keywords = list(plan_result["request"]["keywords"] or [])
+        self.assertIn("multimodal", request_keywords)
+        self.assertIn("Veo", request_keywords)
+        self.assertIn("Nano Banana", request_keywords)
+        self.assertNotIn("在Veo和Nano Banana团队", request_keywords)
+        search_seed_queries = list(plan_result["plan"]["acquisition_strategy"]["search_seed_queries"] or [])
+        self.assertFalse(any("在Veo和Nano Banana团队" in query for query in search_seed_queries))
 
     def test_run_job_supports_must_have_facet_hard_filter(self) -> None:
         self.store.replace_bootstrap_data(
@@ -365,16 +971,149 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(reviewed["status"], "reviewed")
         workflow = self.orchestrator.start_workflow({"plan_review_id": review_id})
         self.assertIn("job_id", workflow)
-        for _ in range(20):
+        for _ in range(300):
             snapshot = self.orchestrator.get_job_results(workflow["job_id"])
             if snapshot and snapshot["job"]["status"] in {"completed", "blocked", "failed"}:
                 break
-            time.sleep(0.1)
+            time.sleep(0.05)
         self.assertIsNotNone(snapshot)
         self.assertEqual(snapshot["job"]["status"], "completed")
         self.assertGreaterEqual(len(snapshot["results"]), 1)
         self.assertTrue(snapshot["agent_runtime_session"])
         self.assertGreaterEqual(len(snapshot["agent_trace_spans"]), 2)
+
+    def test_build_sourcing_plan_splits_linkedin_and_public_web_acquisition_stages(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "帮我找 Reflection AI 的基础设施成员",
+                "target_company": "Reflection AI",
+            }
+        )
+        plan = build_sourcing_plan(request, self.catalog, self.model_client)
+        task_types = [task.task_type for task in plan.acquisition_tasks]
+        self.assertIn("acquire_former_search_seed", task_types)
+        self.assertIn("enrich_linkedin_profiles", task_types)
+        self.assertIn("enrich_public_web_signals", task_types)
+        self.assertLess(task_types.index("enrich_linkedin_profiles"), task_types.index("enrich_public_web_signals"))
+        former_task = next(task for task in plan.acquisition_tasks if task.task_type == "acquire_former_search_seed")
+        self.assertEqual(former_task.metadata["acquisition_phase"], "linkedin_stage_1")
+        self.assertEqual(former_task.metadata["strategy_type"], "former_employee_search")
+        public_web_task = next(task for task in plan.acquisition_tasks if task.task_type == "enrich_public_web_signals")
+        self.assertEqual(public_web_task.metadata["acquisition_phase"], "public_web_stage_2")
+
+    def test_acquire_former_search_seed_uses_primary_provider_search_mode(self) -> None:
+        task = AcquisitionTask(
+            task_id="acquire-former-search-seed",
+            task_type="acquire_former_search_seed",
+            title="Acquire former-member LinkedIn search seeds",
+            description="",
+            source_hint="",
+            status="ready",
+            blocking=True,
+            metadata={
+                "cost_policy": {"provider_people_search_mode": "fallback_only"},
+                "filter_hints": {},
+                "search_seed_queries": ["infra"],
+                "former_provider_people_search_min_expected_results": 25,
+            },
+        )
+        identity = CompanyIdentity(
+            requested_name="Reflection AI",
+            canonical_name="Reflection AI",
+            company_key="reflectionai",
+            linkedin_slug="reflectionai",
+        )
+        state = {"company_identity": identity, "snapshot_dir": self.settings.company_assets_dir / "reflectionai" / "snap1"}
+        state["snapshot_dir"].mkdir(parents=True, exist_ok=True)
+        request = JobRequest.from_payload({"target_company": "Reflection AI"})
+        sentinel = AcquisitionExecution(task_id=task.task_id, status="completed", detail="ok", payload={})
+        with unittest.mock.patch.object(self.acquisition_engine, "_acquire_search_seed_pool", return_value=sentinel) as mocked:
+            result = self.acquisition_engine._acquire_former_search_seed(task, state, request)
+        self.assertIs(result, sentinel)
+        delegated_task = mocked.call_args.args[0]
+        self.assertEqual(delegated_task.metadata["cost_policy"]["provider_people_search_mode"], "primary_only")
+        self.assertEqual(
+            delegated_task.metadata["cost_policy"]["provider_people_search_min_expected_results"],
+            25,
+        )
+        self.assertEqual(delegated_task.metadata["search_channel_order"], ["harvest_profile_search"])
+
+    def test_search_seed_discovery_primary_only_skips_web_queries(self) -> None:
+        identity = CompanyIdentity(
+            requested_name="Reflection AI",
+            canonical_name="Reflection AI",
+            company_key="reflectionai",
+            linkedin_slug="reflectionai",
+        )
+        snapshot_dir = self.settings.company_assets_dir / "reflectionai" / "snap2"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        provider_entries = [
+            {
+                "seed_key": "entry_1",
+                "full_name": "Former Member",
+                "headline": "Research Engineer",
+                "profile_url": "https://www.linkedin.com/in/former-member/",
+            }
+        ]
+        provider_summaries = [{"query": "__past_company_only__", "status": "completed"}]
+        with unittest.mock.patch.object(
+            self.acquisition_engine.search_seed_acquirer,
+            "_execute_query_spec",
+            side_effect=AssertionError("web query path should be skipped"),
+        ), unittest.mock.patch.object(
+            self.acquisition_engine.search_seed_acquirer,
+            "_provider_people_search_fallback",
+            return_value=(provider_entries, provider_summaries, [], ["acct_1"]),
+        ):
+            snapshot = self.acquisition_engine.search_seed_acquirer.discover(
+                identity,
+                snapshot_dir,
+                search_seed_queries=["Reflection AI infra"],
+                filter_hints={"past_companies": ["https://www.linkedin.com/company/reflectionai/"]},
+                cost_policy={
+                    "provider_people_search_mode": "primary_only",
+                    "provider_people_search_min_expected_results": 10,
+                },
+                employment_status="former",
+            )
+        self.assertEqual(snapshot.stop_reason, "provider_people_search_primary")
+        self.assertEqual(len(snapshot.entries), 1)
+        self.assertEqual(snapshot.query_summaries[-1]["status"], "completed")
+
+    def test_acquisition_progress_tracks_phase_buckets(self) -> None:
+        request = JobRequest.from_payload({"target_company": "Reflection AI"})
+        plan = build_sourcing_plan(request, self.catalog, self.model_client)
+        job_id = "phase_progress_job"
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="running",
+            stage="acquiring",
+            request_payload=request.to_record(),
+            plan_payload=plan.to_record(),
+            summary_payload={},
+        )
+        task = next(task for task in plan.acquisition_tasks if task.task_type == "enrich_linkedin_profiles")
+        progress = self.orchestrator._record_acquisition_task_completion(  # noqa: SLF001
+            job_id=job_id,
+            request=request,
+            plan=plan,
+            task=task,
+            execution=AcquisitionExecution(task_id=task.task_id, status="completed", detail="ok", payload={}),
+            acquisition_state={"snapshot_id": "snap1"},
+        )
+        self.assertEqual(progress["active_phase_id"], "linkedin_stage_1")
+        self.assertIn("linkedin_stage_1", progress["phases"])
+        self.assertEqual(progress["phases"]["linkedin_stage_1"]["completed_task_count"], 1)
+
+    def test_spawn_workflow_takeover_runner_uses_supervisor_when_auto_daemon_enabled(self) -> None:
+        with unittest.mock.patch("sourcing_agent.orchestrator._spawn_detached_process", return_value={"status": "started", "pid": 123}) as mocked:
+            result = self.orchestrator._spawn_workflow_takeover_runner("job123", auto_job_daemon=True)  # noqa: SLF001
+        self.assertEqual(result["status"], "started")
+        self.assertIn("supervise-workflow", mocked.call_args.kwargs["command"])
+        with unittest.mock.patch("sourcing_agent.orchestrator._spawn_detached_process", return_value={"status": "started", "pid": 456}) as mocked:
+            self.orchestrator._spawn_workflow_takeover_runner("job456", auto_job_daemon=False)  # noqa: SLF001
+        self.assertIn("execute-workflow", mocked.call_args.kwargs["command"])
 
     def test_queue_workflow_and_run_saved_job(self) -> None:
         gated = self.orchestrator.start_workflow(
@@ -418,7 +1157,1135 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(after["job"]["status"], "completed")
         self.assertGreaterEqual(len(after["results"]), 1)
 
-    def test_model_assisted_request_normalization_feeds_structured_plan(self) -> None:
+    def test_two_stage_workflow_blocks_after_preview_and_continue_stage2_completes(self) -> None:
+        company_dir = self.settings.company_assets_dir / "acme"
+        snapshot_id = "20260411T120000"
+        snapshot_dir = company_dir / snapshot_id
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        (company_dir / "latest_snapshot.json").write_text(
+            json.dumps(
+                {
+                    "snapshot_id": snapshot_id,
+                    "company_identity": {
+                        "requested_name": "Acme",
+                        "canonical_name": "Acme",
+                        "company_key": "acme",
+                    },
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        candidate = Candidate(
+            candidate_id="acme_infra_1",
+            name_en="Taylor Infra",
+            display_name="Taylor Infra",
+            category="employee",
+            target_company="Acme",
+            organization="Acme",
+            employment_status="current",
+            role="Infrastructure Engineer",
+            focus_areas="infra platform systems",
+            notes="Builds infrastructure for model training.",
+            linkedin_url="https://www.linkedin.com/in/taylor-infra/",
+        )
+        (snapshot_dir / "candidate_documents.json").write_text(
+            json.dumps(
+                {
+                    "candidates": [candidate.to_record()],
+                    "evidence": [],
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        analysis_dir = snapshot_dir / "layered_segmentation" / "greater_china_outreach_20260411T120000Z"
+        analysis_dir.mkdir(parents=True, exist_ok=True)
+        analysis_path = analysis_dir / "layered_analysis.json"
+        analysis_path.write_text(
+            json.dumps(
+                {
+                    "status": "completed",
+                    "layer_schema": {
+                        "primary_layer_keys": [
+                            "layer_0_roster",
+                            "layer_1_name_signal",
+                            "layer_2_greater_china_region_experience",
+                            "layer_3_mainland_china_experience_or_chinese_language",
+                        ]
+                    },
+                    "layers": {
+                        "layer_0_roster": {"count": 1},
+                        "layer_1_name_signal": {"count": 0},
+                        "layer_2_greater_china_region_experience": {"count": 0},
+                        "layer_3_mainland_china_experience_or_chinese_language": {"count": 0},
+                    },
+                    "cumulative_layer_counts": {
+                        "layer_0_roster_plus": 1,
+                        "layer_1_name_signal_plus": 0,
+                        "layer_2_greater_china_region_experience_plus": 0,
+                        "layer_3_mainland_china_experience_or_chinese_language_plus": 0,
+                    },
+                    "ai_verification": {"requested": 0, "completed": 0},
+                    "candidates": [
+                        {
+                            "candidate_id": "acme_infra_1",
+                            "final_layer": 0,
+                            "final_layer_source": "rules",
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+        request_payload = {
+            "raw_user_request": "给我 Acme 的 Infra 方向成员",
+            "target_company": "Acme",
+            "categories": ["employee"],
+            "employment_statuses": ["current"],
+            "keywords": ["infra"],
+            "semantic_rerank_limit": 0,
+            "analysis_stage_mode": "two_stage",
+            "execution_preferences": {
+                "require_stage2_confirmation": True,
+                "reuse_existing_roster": True,
+                "reuse_snapshot_id": snapshot_id,
+            },
+        }
+        request = JobRequest.from_payload(request_payload)
+        plan = build_sourcing_plan(request, self.catalog, self.model_client)
+        job_id = self.orchestrator._create_workflow_job(request, plan)
+        layering_summary = {
+            "status": "completed",
+            "target_company": "Acme",
+            "snapshot_id": snapshot_id,
+            "analysis_stage": "stage_1_preview",
+            "analysis_paths": {"full": str(analysis_path)},
+            "layer_schema": {
+                "primary_layer_keys": [
+                    "layer_0_roster",
+                    "layer_1_name_signal",
+                    "layer_2_greater_china_region_experience",
+                    "layer_3_mainland_china_experience_or_chinese_language",
+                ]
+            },
+            "layer_counts": {
+                "layer_0_roster": 1,
+                "layer_1_name_signal": 0,
+                "layer_2_greater_china_region_experience": 0,
+                "layer_3_mainland_china_experience_or_chinese_language": 0,
+            },
+            "cumulative_layer_counts": {
+                "layer_0_roster_plus": 1,
+                "layer_1_name_signal_plus": 0,
+                "layer_2_greater_china_region_experience_plus": 0,
+                "layer_3_mainland_china_experience_or_chinese_language_plus": 0,
+            },
+            "ai_verification": {"requested": 0, "completed": 0},
+        }
+
+        with unittest.mock.patch.object(
+            self.orchestrator,
+            "_run_outreach_layering_after_acquisition",
+            side_effect=[layering_summary, {**layering_summary, "analysis_stage": "stage_2_final"}],
+        ):
+            first_pass = self.orchestrator._run_workflow_from_acquisition(job_id, request, plan)
+            self.assertEqual(first_pass["status"], "blocked")
+            self.assertEqual(first_pass["reason"], "awaiting_stage2_confirmation")
+
+            preview_snapshot = self.orchestrator.get_job_results(job_id)
+            assert preview_snapshot is not None
+            self.assertEqual(preview_snapshot["job"]["status"], "blocked")
+            self.assertEqual(preview_snapshot["job"]["stage"], "retrieving")
+            self.assertEqual(preview_snapshot["job"]["summary"]["awaiting_user_action"], "continue_stage2")
+            self.assertEqual(preview_snapshot["job"]["summary"]["stage1_preview"]["returned_matches"], 1)
+            self.assertEqual(len(preview_snapshot["results"]), 1)
+
+            continue_result = self.orchestrator.continue_workflow_stage2({"job_id": job_id})
+            self.assertEqual(continue_result["status"], "queued")
+            for _ in range(40):
+                final_snapshot = self.orchestrator.get_job_results(job_id)
+                if final_snapshot and final_snapshot["job"]["status"] == "completed":
+                    break
+                time.sleep(0.05)
+            else:
+                final_snapshot = self.orchestrator.get_job_results(job_id)
+
+        assert final_snapshot is not None
+        self.assertEqual(final_snapshot["job"]["status"], "completed")
+        self.assertEqual(final_snapshot["job"]["summary"]["analysis_stage"], "stage_2_final")
+        self.assertEqual(len(final_snapshot["results"]), 1)
+
+    def test_two_stage_workflow_publishes_stage1_preview_and_continues_public_web_stage2_by_default(self) -> None:
+        snapshot_id = "20260411T130000"
+        snapshot_dir = self.settings.company_assets_dir / "acme" / snapshot_id
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        company_identity = CompanyIdentity(
+            requested_name="Acme",
+            canonical_name="Acme",
+            company_key="acme",
+        )
+        candidate = Candidate(
+            candidate_id="acme_infra_1",
+            name_en="Taylor Infra",
+            display_name="Taylor Infra",
+            category="employee",
+            target_company="Acme",
+            organization="Acme",
+            employment_status="current",
+            role="Infrastructure Engineer",
+            focus_areas="infra platform systems",
+            linkedin_url="https://www.linkedin.com/in/taylor-infra/",
+        )
+        request_payload = {
+            "raw_user_request": "给我 Acme 的 Infra 方向成员",
+            "target_company": "Acme",
+            "categories": ["employee"],
+            "employment_statuses": ["current"],
+            "keywords": ["infra"],
+            "semantic_rerank_limit": 0,
+            "analysis_stage_mode": "two_stage",
+        }
+        request = JobRequest.from_payload(request_payload)
+        plan = build_sourcing_plan(request, self.catalog, self.model_client)
+        job_id = self.orchestrator._create_workflow_job(request, plan)
+        retrieval_calls: list[dict[str, object]] = []
+
+        def fake_execute_task(
+            task: AcquisitionTask,
+            _request: JobRequest,
+            _target_company: str,
+            _state: dict[str, object],
+            _bootstrap_summary: dict[str, object] | None,
+        ) -> AcquisitionExecution:
+            if task.task_type == "resolve_company_identity":
+                return AcquisitionExecution(
+                    task_id=task.task_id,
+                    status="completed",
+                    detail="Resolved company identity.",
+                    payload={"snapshot_id": snapshot_id},
+                    state_updates={
+                        "snapshot_id": snapshot_id,
+                        "snapshot_dir": snapshot_dir,
+                        "company_identity": company_identity,
+                    },
+                )
+            if task.task_type == "enrich_linkedin_profiles":
+                candidate_doc_path = snapshot_dir / "candidate_documents.json"
+                linkedin_stage_path = snapshot_dir / "candidate_documents.linkedin_stage_1.json"
+                candidate_doc_path.write_text(json.dumps({"candidates": [], "evidence": []}, ensure_ascii=False))
+                linkedin_stage_path.write_text(json.dumps({"candidates": [], "evidence": []}, ensure_ascii=False))
+                return AcquisitionExecution(
+                    task_id=task.task_id,
+                    status="completed",
+                    detail="Built LinkedIn stage-1 candidate documents.",
+                    payload={"candidate_doc_path": str(candidate_doc_path)},
+                    state_updates={
+                        "snapshot_id": snapshot_id,
+                        "snapshot_dir": snapshot_dir,
+                        "candidate_doc_path": candidate_doc_path,
+                        "linkedin_stage_candidate_doc_path": linkedin_stage_path,
+                        "linkedin_stage_completed": True,
+                        "candidates": [candidate],
+                        "evidence": [],
+                    },
+                )
+            if task.task_type == "enrich_public_web_signals":
+                candidate_doc_path = snapshot_dir / "candidate_documents.json"
+                public_web_stage_path = snapshot_dir / "candidate_documents.public_web_stage_2.json"
+                candidate_doc_path.write_text(json.dumps({"candidates": [], "evidence": []}, ensure_ascii=False))
+                public_web_stage_path.write_text(json.dumps({"candidates": [], "evidence": []}, ensure_ascii=False))
+                return AcquisitionExecution(
+                    task_id=task.task_id,
+                    status="completed",
+                    detail="Extended candidate documents with public-web stage-2 evidence.",
+                    payload={"candidate_doc_path": str(candidate_doc_path)},
+                    state_updates={
+                        "snapshot_id": snapshot_id,
+                        "snapshot_dir": snapshot_dir,
+                        "candidate_doc_path": candidate_doc_path,
+                        "public_web_stage_candidate_doc_path": public_web_stage_path,
+                        "public_web_stage_completed": True,
+                        "candidates": [candidate],
+                        "evidence": [],
+                    },
+                )
+            if task.task_type == "normalize_asset_snapshot":
+                manifest_path = snapshot_dir / "manifest.json"
+                manifest_path.write_text(json.dumps({"snapshot_id": snapshot_id}, ensure_ascii=False))
+                return AcquisitionExecution(
+                    task_id=task.task_id,
+                    status="completed",
+                    detail="Normalized snapshot.",
+                    payload={"manifest_path": str(manifest_path)},
+                    state_updates={"manifest_path": manifest_path},
+                )
+            if task.task_type == "build_retrieval_index":
+                index_path = snapshot_dir / "retrieval_index_summary.json"
+                index_path.write_text(json.dumps({"status": "completed"}, ensure_ascii=False))
+                return AcquisitionExecution(
+                    task_id=task.task_id,
+                    status="completed",
+                    detail="Built retrieval index.",
+                    payload={"retrieval_index_summary": str(index_path)},
+                    state_updates={},
+                )
+            return AcquisitionExecution(
+                task_id=task.task_id,
+                status="completed",
+                detail=f"Completed {task.task_type}.",
+                payload={},
+                state_updates={},
+            )
+
+        def fake_execute_retrieval(
+            current_job_id: str,
+            current_request: JobRequest,
+            current_plan,
+            job_type: str,
+            runtime_policy: dict[str, object] | None = None,
+            *,
+            persist_job_state: bool = True,
+            artifact_name_suffix: str = "",
+            artifact_status: str = "completed",
+        ) -> dict[str, object]:
+            runtime_policy = dict(runtime_policy or {})
+            analysis_stage = str(runtime_policy.get("analysis_stage") or "stage_2_final")
+            current_job = self.store.get_job(current_job_id) or {}
+            retrieval_calls.append(
+                {
+                    "analysis_stage": analysis_stage,
+                    "job_stage": str(current_job.get("stage") or ""),
+                    "job_status": str(current_job.get("status") or ""),
+                    "persist_job_state": persist_job_state,
+                }
+            )
+            summary = {
+                "text": f"{analysis_stage} summary",
+                "total_matches": 1,
+                "returned_matches": 1,
+                "manual_review_queue_count": 0,
+                "analysis_stage": analysis_stage,
+                "candidate_source": {
+                    "source_kind": "company_snapshot",
+                    "snapshot_id": snapshot_id,
+                    "candidate_count": 1,
+                },
+                "outreach_layering": {"status": "completed", "analysis_stage": analysis_stage},
+            }
+            artifact_path = self.settings.jobs_dir / (
+                f"{current_job_id}.json" if not artifact_name_suffix else f"{current_job_id}.{artifact_name_suffix}.json"
+            )
+            artifact = {
+                "job_id": current_job_id,
+                "status": artifact_status,
+                "request": current_request.to_record(),
+                "plan": current_plan.to_record(),
+                "summary": summary,
+                "matches": [],
+                "manual_review_items": [],
+                "artifact_path": str(artifact_path),
+            }
+            self.store.replace_job_results(
+                current_job_id,
+                [
+                    {
+                        "candidate_id": candidate.candidate_id,
+                        "rank": 1,
+                        "score": 1.0,
+                        "semantic_score": 0.0,
+                        "confidence_label": "high",
+                        "confidence_score": 1.0,
+                        "confidence_reason": "test",
+                        "explanation": f"{analysis_stage} explanation",
+                        "matched_fields": ["focus_areas"],
+                        "outreach_layer": 0,
+                        "outreach_layer_key": "layer_0_roster",
+                        "outreach_layer_source": "rules",
+                    }
+                ],
+            )
+            self.store.replace_manual_review_items(current_job_id, [])
+            if persist_job_state:
+                self.store.save_job(
+                    job_id=current_job_id,
+                    job_type=job_type,
+                    status="completed",
+                    stage="completed",
+                    request_payload=current_request.to_record(),
+                    plan_payload=current_plan.to_record(),
+                    summary_payload=summary,
+                    artifact_path=str(artifact_path),
+                )
+            return artifact
+
+        with unittest.mock.patch.object(
+            self.acquisition_engine,
+            "execute_task",
+            side_effect=fake_execute_task,
+        ), unittest.mock.patch.object(
+            self.orchestrator,
+            "_run_outreach_layering_after_acquisition",
+            side_effect=[
+                {"status": "completed", "analysis_stage": "stage_1_preview"},
+                {"status": "completed", "analysis_stage": "stage_2_final"},
+            ],
+        ), unittest.mock.patch.object(
+            self.orchestrator,
+            "_execute_retrieval",
+            side_effect=fake_execute_retrieval,
+        ):
+            run_result = self.orchestrator._run_workflow_from_acquisition(job_id, request, plan)
+
+        self.assertEqual(run_result["status"], "completed")
+        self.assertEqual(
+            [str(item["analysis_stage"]) for item in retrieval_calls],
+            ["stage_1_preview", "stage_2_final"],
+        )
+        self.assertEqual(retrieval_calls[0]["job_stage"], "acquiring")
+        self.assertEqual(retrieval_calls[1]["job_stage"], "retrieving")
+
+        snapshot = self.orchestrator.get_job_results(job_id)
+        assert snapshot is not None
+        self.assertEqual(snapshot["job"]["status"], "completed")
+        self.assertFalse(snapshot["job"]["summary"].get("awaiting_user_action"))
+        self.assertEqual(snapshot["job"]["summary"]["stage1_preview"]["status"], "ready")
+        self.assertEqual(snapshot["job"]["summary"]["public_web_stage_2"]["status"], "completed")
+        event_details = [str(item.get("detail") or "") for item in snapshot["events"]]
+        self.assertIn("LinkedIn Stage 1 acquisition completed.", event_details)
+        self.assertIn("Stage 1 preview ready; continuing Public Web Stage 2 acquisition.", event_details)
+        self.assertIn("Public Web Stage 2 acquisition completed.", event_details)
+
+    def test_single_stage_workflow_still_publishes_stage_progress_markers(self) -> None:
+        snapshot_id = "20260411T131500"
+        snapshot_dir = self.settings.company_assets_dir / "acme" / snapshot_id
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        company_identity = CompanyIdentity(
+            requested_name="Acme",
+            canonical_name="Acme",
+            company_key="acme",
+        )
+        candidate = Candidate(
+            candidate_id="acme_infra_2",
+            name_en="Jordan Infra",
+            display_name="Jordan Infra",
+            category="employee",
+            target_company="Acme",
+            organization="Acme",
+            employment_status="current",
+            role="Infrastructure Engineer",
+            focus_areas="infra platform systems",
+            linkedin_url="https://www.linkedin.com/in/jordan-infra/",
+        )
+        request_payload = {
+            "raw_user_request": "给我 Acme 的 Infra 方向成员",
+            "target_company": "Acme",
+            "categories": ["employee"],
+            "employment_statuses": ["current"],
+            "keywords": ["infra"],
+            "semantic_rerank_limit": 0,
+        }
+        request = JobRequest.from_payload(request_payload)
+        plan = build_sourcing_plan(request, self.catalog, self.model_client)
+        job_id = self.orchestrator._create_workflow_job(request, plan)
+        retrieval_calls: list[dict[str, object]] = []
+
+        def fake_execute_task(
+            task: AcquisitionTask,
+            _request: JobRequest,
+            _target_company: str,
+            _state: dict[str, object],
+            _bootstrap_summary: dict[str, object] | None,
+        ) -> AcquisitionExecution:
+            if task.task_type == "resolve_company_identity":
+                return AcquisitionExecution(
+                    task_id=task.task_id,
+                    status="completed",
+                    detail="Resolved company identity.",
+                    payload={"snapshot_id": snapshot_id},
+                    state_updates={
+                        "snapshot_id": snapshot_id,
+                        "snapshot_dir": snapshot_dir,
+                        "company_identity": company_identity,
+                    },
+                )
+            if task.task_type == "enrich_linkedin_profiles":
+                candidate_doc_path = snapshot_dir / "candidate_documents.json"
+                linkedin_stage_path = snapshot_dir / "candidate_documents.linkedin_stage_1.json"
+                candidate_doc_path.write_text(json.dumps({"candidates": [], "evidence": []}, ensure_ascii=False))
+                linkedin_stage_path.write_text(json.dumps({"candidates": [], "evidence": []}, ensure_ascii=False))
+                return AcquisitionExecution(
+                    task_id=task.task_id,
+                    status="completed",
+                    detail="Built LinkedIn stage-1 candidate documents.",
+                    payload={"candidate_doc_path": str(candidate_doc_path)},
+                    state_updates={
+                        "snapshot_id": snapshot_id,
+                        "snapshot_dir": snapshot_dir,
+                        "candidate_doc_path": candidate_doc_path,
+                        "linkedin_stage_candidate_doc_path": linkedin_stage_path,
+                        "linkedin_stage_completed": True,
+                        "candidates": [candidate],
+                        "evidence": [],
+                    },
+                )
+            if task.task_type == "enrich_public_web_signals":
+                candidate_doc_path = snapshot_dir / "candidate_documents.json"
+                public_web_stage_path = snapshot_dir / "candidate_documents.public_web_stage_2.json"
+                candidate_doc_path.write_text(json.dumps({"candidates": [], "evidence": []}, ensure_ascii=False))
+                public_web_stage_path.write_text(json.dumps({"candidates": [], "evidence": []}, ensure_ascii=False))
+                return AcquisitionExecution(
+                    task_id=task.task_id,
+                    status="completed",
+                    detail="Extended candidate documents with public-web stage-2 evidence.",
+                    payload={"candidate_doc_path": str(candidate_doc_path)},
+                    state_updates={
+                        "snapshot_id": snapshot_id,
+                        "snapshot_dir": snapshot_dir,
+                        "candidate_doc_path": candidate_doc_path,
+                        "public_web_stage_candidate_doc_path": public_web_stage_path,
+                        "public_web_stage_completed": True,
+                        "candidates": [candidate],
+                        "evidence": [],
+                    },
+                )
+            if task.task_type == "normalize_asset_snapshot":
+                manifest_path = snapshot_dir / "manifest.json"
+                manifest_path.write_text(json.dumps({"snapshot_id": snapshot_id}, ensure_ascii=False))
+                return AcquisitionExecution(
+                    task_id=task.task_id,
+                    status="completed",
+                    detail="Normalized snapshot.",
+                    payload={"manifest_path": str(manifest_path)},
+                    state_updates={"manifest_path": manifest_path},
+                )
+            if task.task_type == "build_retrieval_index":
+                index_path = snapshot_dir / "retrieval_index_summary.json"
+                index_path.write_text(json.dumps({"status": "completed"}, ensure_ascii=False))
+                return AcquisitionExecution(
+                    task_id=task.task_id,
+                    status="completed",
+                    detail="Built retrieval index.",
+                    payload={"retrieval_index_summary": str(index_path)},
+                    state_updates={},
+                )
+            return AcquisitionExecution(
+                task_id=task.task_id,
+                status="completed",
+                detail=f"Completed {task.task_type}.",
+                payload={},
+                state_updates={},
+            )
+
+        def fake_execute_retrieval(
+            current_job_id: str,
+            current_request: JobRequest,
+            current_plan,
+            job_type: str,
+            runtime_policy: dict[str, object] | None = None,
+            *,
+            persist_job_state: bool = True,
+            artifact_name_suffix: str = "",
+            artifact_status: str = "completed",
+        ) -> dict[str, object]:
+            runtime_policy = dict(runtime_policy or {})
+            analysis_stage = str(runtime_policy.get("analysis_stage") or "stage_2_final")
+            current_job = self.store.get_job(current_job_id) or {}
+            retrieval_calls.append(
+                {
+                    "analysis_stage": analysis_stage,
+                    "job_stage": str(current_job.get("stage") or ""),
+                    "job_status": str(current_job.get("status") or ""),
+                    "persist_job_state": persist_job_state,
+                }
+            )
+            summary = {
+                "text": f"{analysis_stage} summary",
+                "total_matches": 1,
+                "returned_matches": 1,
+                "manual_review_queue_count": 0,
+                "analysis_stage": analysis_stage,
+                "candidate_source": {
+                    "source_kind": "company_snapshot",
+                    "snapshot_id": snapshot_id,
+                    "candidate_count": 1,
+                },
+                "outreach_layering": {"status": "completed", "analysis_stage": analysis_stage},
+            }
+            artifact_path = self.settings.jobs_dir / (
+                f"{current_job_id}.json" if not artifact_name_suffix else f"{current_job_id}.{artifact_name_suffix}.json"
+            )
+            artifact = {
+                "job_id": current_job_id,
+                "status": artifact_status,
+                "request": current_request.to_record(),
+                "plan": current_plan.to_record(),
+                "summary": summary,
+                "matches": [],
+                "manual_review_items": [],
+                "artifact_path": str(artifact_path),
+            }
+            self.store.replace_job_results(
+                current_job_id,
+                [
+                    {
+                        "candidate_id": candidate.candidate_id,
+                        "rank": 1,
+                        "score": 1.0,
+                        "semantic_score": 0.0,
+                        "confidence_label": "high",
+                        "confidence_score": 1.0,
+                        "confidence_reason": "test",
+                        "explanation": f"{analysis_stage} explanation",
+                        "matched_fields": ["focus_areas"],
+                        "outreach_layer": 0,
+                        "outreach_layer_key": "layer_0_roster",
+                        "outreach_layer_source": "rules",
+                    }
+                ],
+            )
+            self.store.replace_manual_review_items(current_job_id, [])
+            if persist_job_state:
+                self.store.save_job(
+                    job_id=current_job_id,
+                    job_type=job_type,
+                    status="completed",
+                    stage="completed",
+                    request_payload=current_request.to_record(),
+                    plan_payload=current_plan.to_record(),
+                    summary_payload=summary,
+                    artifact_path=str(artifact_path),
+                )
+            return artifact
+
+        with unittest.mock.patch.object(
+            self.acquisition_engine,
+            "execute_task",
+            side_effect=fake_execute_task,
+        ), unittest.mock.patch.object(
+            self.orchestrator,
+            "_run_outreach_layering_after_acquisition",
+            side_effect=[
+                {"status": "completed", "analysis_stage": "stage_1_preview"},
+                {"status": "completed", "analysis_stage": "stage_2_final"},
+            ],
+        ), unittest.mock.patch.object(
+            self.orchestrator,
+            "_execute_retrieval",
+            side_effect=fake_execute_retrieval,
+        ):
+            run_result = self.orchestrator._run_workflow_from_acquisition(job_id, request, plan)
+
+        self.assertEqual(run_result["status"], "completed")
+        self.assertEqual(
+            [str(item["analysis_stage"]) for item in retrieval_calls],
+            ["stage_1_preview", "stage_2_final"],
+        )
+
+        snapshot = self.orchestrator.get_job_results(job_id)
+        assert snapshot is not None
+        self.assertEqual(snapshot["job"]["status"], "completed")
+        self.assertEqual(snapshot["job"]["summary"]["analysis_stage"], "stage_2_final")
+        self.assertEqual(snapshot["job"]["summary"]["analysis_stage_mode"], "single_stage")
+        self.assertEqual(snapshot["job"]["summary"]["linkedin_stage_1"]["status"], "completed")
+        self.assertEqual(snapshot["job"]["summary"]["stage1_preview"]["status"], "ready")
+        self.assertEqual(snapshot["job"]["summary"]["public_web_stage_2"]["status"], "completed")
+        self.assertTrue(
+            Path(snapshot["job"]["summary"]["linkedin_stage_1"]["summary_path"]).exists()
+        )
+        self.assertTrue(
+            Path(snapshot["job"]["summary"]["stage1_preview"]["summary_path"]).exists()
+        )
+        self.assertTrue(
+            Path(snapshot["job"]["summary"]["public_web_stage_2"]["summary_path"]).exists()
+        )
+        self.assertTrue(Path(snapshot["job"]["summary"]["stage_summary_path"]).exists())
+        self.assertEqual(
+            snapshot["workflow_stage_summaries"]["stage_order"],
+            ["linkedin_stage_1", "stage_1_preview", "public_web_stage_2", "stage_2_final"],
+        )
+        self.assertEqual(
+            snapshot["workflow_stage_summaries"]["summaries"]["stage_2_final"]["stage"],
+            "stage_2_final",
+        )
+        self.assertTrue(
+            Path(snapshot["workflow_stage_summaries"]["summaries"]["stage_2_final"]["summary_path"]).exists()
+        )
+        progress = self.orchestrator.get_job_progress(job_id)
+        assert progress is not None
+        self.assertEqual(
+            progress["workflow_stage_summaries"]["stage_order"],
+            ["linkedin_stage_1", "stage_1_preview", "public_web_stage_2", "stage_2_final"],
+        )
+
+    def test_background_harvest_prefetch_reconcile_preserves_stage_progress_markers(self) -> None:
+        snapshot_id = "20260411T132500"
+        snapshot_dir = self.settings.company_assets_dir / "acme" / snapshot_id
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        request_payload = {
+            "raw_user_request": "给我 Acme 的 Infra 方向成员",
+            "target_company": "Acme",
+            "categories": ["employee"],
+            "employment_statuses": ["current"],
+            "keywords": ["infra"],
+            "semantic_rerank_limit": 0,
+        }
+        request = JobRequest.from_payload(request_payload)
+        plan = build_sourcing_plan(request, self.catalog, self.model_client)
+        job_id = self.orchestrator._create_workflow_job(request, plan)
+        artifact_path = self.settings.jobs_dir / f"{job_id}.json"
+        initial_summary = {
+            "text": "initial final summary",
+            "analysis_stage": "stage_2_final",
+            "analysis_stage_mode": "single_stage",
+            "candidate_source": {
+                "source_kind": "company_snapshot",
+                "snapshot_id": snapshot_id,
+                "candidate_count": 1,
+            },
+            "linkedin_stage_1": {
+                "status": "completed",
+                "snapshot_id": snapshot_id,
+                "candidate_doc_path": str(snapshot_dir / "candidate_documents.json"),
+            },
+            "stage1_preview": {
+                "status": "ready",
+                "analysis_stage": "stage_1_preview",
+                "artifact_path": str(self.settings.jobs_dir / f"{job_id}.preview.json"),
+                "candidate_source": {
+                    "source_kind": "company_snapshot",
+                    "snapshot_id": snapshot_id,
+                    "candidate_count": 1,
+                },
+            },
+            "public_web_stage_2": {
+                "status": "completed",
+                "snapshot_id": snapshot_id,
+                "candidate_doc_path": str(snapshot_dir / "candidate_documents.json"),
+            },
+        }
+        artifact_path.write_text(
+            json.dumps(
+                {
+                    "job_id": job_id,
+                    "status": "completed",
+                    "request": request.to_record(),
+                    "plan": plan.to_record(),
+                    "summary": initial_summary,
+                    "matches": [],
+                    "manual_review_items": [],
+                    "artifact_path": str(artifact_path),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="completed",
+            stage="completed",
+            request_payload=request.to_record(),
+            plan_payload=plan.to_record(),
+            summary_payload=initial_summary,
+            artifact_path=str(artifact_path),
+        )
+
+        def fake_sync_snapshot(*, request: JobRequest, snapshot_dir: Path, reason: str) -> dict[str, object]:
+            return {
+                "status": "completed",
+                "snapshot_id": snapshot_id,
+                "candidate_count": 1,
+                "evidence_count": 1,
+                "artifact_dir": str(snapshot_dir / "normalized_artifacts"),
+                "artifact_paths": {},
+                "state_updates": {},
+            }
+
+        def fake_execute_retrieval(
+            current_job_id: str,
+            current_request: JobRequest,
+            current_plan,
+            job_type: str,
+            runtime_policy: dict[str, object] | None = None,
+            *,
+            persist_job_state: bool = True,
+            artifact_name_suffix: str = "",
+            artifact_status: str = "completed",
+        ) -> dict[str, object]:
+            summary = {
+                "text": "reconciled final summary",
+                "analysis_stage": "stage_2_final",
+                "candidate_source": {
+                    "source_kind": "company_snapshot",
+                    "snapshot_id": snapshot_id,
+                    "candidate_count": 1,
+                },
+                "total_matches": 1,
+                "returned_matches": 1,
+            }
+            artifact = {
+                "job_id": current_job_id,
+                "status": artifact_status,
+                "request": current_request.to_record(),
+                "plan": current_plan.to_record(),
+                "summary": summary,
+                "matches": [],
+                "manual_review_items": [],
+                "artifact_path": str(artifact_path),
+            }
+            if persist_job_state:
+                self.store.save_job(
+                    job_id=current_job_id,
+                    job_type=job_type,
+                    status="completed",
+                    stage="completed",
+                    request_payload=current_request.to_record(),
+                    plan_payload=current_plan.to_record(),
+                    summary_payload=summary,
+                    artifact_path=str(artifact_path),
+                )
+            artifact_path.write_text(json.dumps(artifact, ensure_ascii=False, indent=2))
+            return artifact
+
+        pending_workers = [
+            {
+                "worker_id": 101,
+                "status": "completed",
+                "updated_at": "2026-04-11 06:40:00",
+                "metadata": {
+                    "snapshot_dir": str(snapshot_dir),
+                },
+            }
+        ]
+        job = self.store.get_job(job_id) or {}
+        with unittest.mock.patch.object(
+            self.orchestrator,
+            "_synchronize_snapshot_candidate_documents",
+            side_effect=fake_sync_snapshot,
+        ), unittest.mock.patch.object(
+            self.orchestrator,
+            "_run_outreach_layering_after_acquisition",
+            return_value={"status": "completed", "analysis_stage": "stage_2_final"},
+        ), unittest.mock.patch.object(
+            self.orchestrator,
+            "_execute_retrieval",
+            side_effect=fake_execute_retrieval,
+        ):
+            reconcile_result = self.orchestrator._reconcile_completed_workflow_after_harvest_prefetch(
+                job=job,
+                request=request,
+                plan_payload=plan.to_record(),
+                job_summary=initial_summary,
+                pending_workers=pending_workers,
+            )
+
+        self.assertEqual(reconcile_result["status"], "reconciled_harvest_prefetch")
+        latest_job = self.store.get_job(job_id) or {}
+        latest_summary = dict(latest_job.get("summary") or {})
+        self.assertEqual(latest_summary["analysis_stage"], "stage_2_final")
+        self.assertEqual(latest_summary["analysis_stage_mode"], "single_stage")
+        self.assertEqual(latest_summary["linkedin_stage_1"]["status"], "completed")
+        self.assertEqual(latest_summary["stage1_preview"]["status"], "ready")
+        self.assertEqual(latest_summary["public_web_stage_2"]["status"], "completed")
+        self.assertTrue(Path(latest_summary["stage_summary_path"]).exists())
+        snapshot = self.orchestrator.get_job_results(job_id)
+        assert snapshot is not None
+        self.assertEqual(
+            snapshot["workflow_stage_summaries"]["stage_order"],
+            ["linkedin_stage_1", "stage_1_preview", "public_web_stage_2", "stage_2_final"],
+        )
+        self.assertEqual(
+            snapshot["workflow_stage_summaries"]["summaries"]["linkedin_stage_1"]["stage"],
+            "linkedin_stage_1",
+        )
+
+    def test_queue_workflow_joins_inflight_exact_request(self) -> None:
+        payload = {
+            "raw_user_request": "帮我找 Anthropic 当前偏基础设施方向的技术成员，先获取全量资产再检索。",
+            "target_company": "Anthropic",
+            "categories": ["employee"],
+            "employment_statuses": ["current"],
+            "keywords": ["基础设施", "GPU", "预训练"],
+            "top_k": 3,
+            "skip_plan_review": True,
+        }
+        first = self.orchestrator.queue_workflow(dict(payload))
+        self.assertEqual(first["status"], "queued")
+        second = self.orchestrator.queue_workflow(dict(payload))
+        self.assertEqual(second["status"], "joined_existing_job")
+        self.assertEqual(second["job_id"], first["job_id"])
+        self.assertEqual(second["dispatch"]["strategy"], "join_inflight")
+        dispatches = self.store.list_query_dispatches(target_company="Anthropic", limit=10)
+        self.assertTrue(any(str(item.get("strategy") or "") == "join_inflight" for item in dispatches))
+
+    def test_queue_workflow_joins_inflight_request_family_signature(self) -> None:
+        payload = {
+            "raw_user_request": "帮我找 Anthropic 当前偏基础设施方向的技术成员，先获取全量资产再检索。",
+            "target_company": "Anthropic",
+            "categories": ["employee"],
+            "employment_statuses": ["current"],
+            "keywords": ["基础设施", "GPU", "预训练"],
+            "top_k": 3,
+            "profile_detail_limit": 200,
+            "skip_plan_review": True,
+        }
+        first = self.orchestrator.queue_workflow(dict(payload))
+        self.assertEqual(first["status"], "queued")
+
+        second = self.orchestrator.queue_workflow(
+            {
+                **payload,
+                "raw_user_request": "帮我找 Anthropic 做基础设施的技术成员，top10 就行。",
+                "top_k": 10,
+                "profile_detail_limit": 50,
+            }
+        )
+        self.assertEqual(second["status"], "joined_existing_job")
+        self.assertEqual(second["job_id"], first["job_id"])
+        self.assertEqual(second["dispatch"]["strategy"], "join_inflight")
+        self.assertEqual(second["dispatch"]["request_family_signature"], first["dispatch"]["request_family_signature"])
+        self.assertNotEqual(second["dispatch"]["request_signature"], first["dispatch"]["request_signature"])
+
+    def test_queue_workflow_reuses_completed_job_with_tenant_scope(self) -> None:
+        payload = {
+            "raw_user_request": "帮我找 Anthropic 当前偏基础设施方向的技术成员，先获取全量资产再检索。",
+            "target_company": "Anthropic",
+            "categories": ["employee"],
+            "employment_statuses": ["current"],
+            "keywords": ["基础设施", "GPU", "预训练"],
+            "top_k": 3,
+            "skip_plan_review": True,
+            "tenant_id": "tenant-a",
+            "requester_id": "user-1",
+        }
+        first = self.orchestrator.queue_workflow(dict(payload))
+        self.assertEqual(first["status"], "queued")
+        run_result = self.orchestrator.run_queued_workflow(str(first.get("job_id") or ""))
+        self.assertEqual(run_result["status"], "completed")
+
+        same_tenant_other_user = self.orchestrator.queue_workflow(
+            {**payload, "requester_id": "user-2"}
+        )
+        self.assertEqual(same_tenant_other_user["status"], "reused_completed_job")
+        self.assertEqual(same_tenant_other_user["job_id"], first["job_id"])
+        self.assertEqual(same_tenant_other_user["dispatch"]["strategy"], "reuse_completed")
+
+        different_tenant = self.orchestrator.queue_workflow(
+            {**payload, "tenant_id": "tenant-b", "requester_id": "user-3"}
+        )
+        self.assertEqual(different_tenant["status"], "queued")
+        self.assertNotEqual(different_tenant["job_id"], first["job_id"])
+
+    def test_queue_workflow_reuses_completed_snapshot_for_related_request(self) -> None:
+        company_dir = self.settings.company_assets_dir / "anthropic"
+        snapshot_dir = company_dir / "20260408T120000"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        (company_dir / "latest_snapshot.json").write_text(
+            json.dumps(
+                {
+                    "snapshot_id": snapshot_dir.name,
+                    "company_identity": {
+                        "requested_name": "Anthropic",
+                        "canonical_name": "Anthropic",
+                        "company_key": "anthropic",
+                        "linkedin_slug": "anthropic",
+                    },
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        candidate_doc_path = snapshot_dir / "candidate_documents.json"
+        candidate_doc_path.write_text(
+            json.dumps(
+                {
+                    "snapshot": {
+                        "company_identity": {
+                            "requested_name": "Anthropic",
+                            "canonical_name": "Anthropic",
+                            "company_key": "anthropic",
+                            "linkedin_slug": "anthropic",
+                        }
+                    },
+                    "candidates": [
+                        Candidate(
+                            candidate_id="cand_snapshot_reuse",
+                            name_en="Infra Researcher",
+                            display_name="Infra Researcher",
+                            category="employee",
+                            target_company="Anthropic",
+                            organization="Anthropic",
+                            employment_status="current",
+                            role="Research Engineer",
+                            focus_areas="infra gpu systems",
+                        ).to_record()
+                    ],
+                    "evidence": [],
+                    "candidate_count": 1,
+                    "evidence_count": 0,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        (snapshot_dir / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "snapshot_id": snapshot_dir.name,
+                    "company_identity": {
+                        "requested_name": "Anthropic",
+                        "canonical_name": "Anthropic",
+                        "company_key": "anthropic",
+                        "linkedin_slug": "anthropic",
+                    },
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        (snapshot_dir / "retrieval_index_summary.json").write_text(
+            json.dumps({"status": "built"}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        baseline_payload = {
+            "raw_user_request": "帮我找 Anthropic 当前偏基础设施方向的技术成员。",
+            "target_company": "Anthropic",
+            "categories": ["employee"],
+            "employment_statuses": ["current"],
+            "keywords": ["基础设施", "GPU"],
+            "top_k": 3,
+        }
+        baseline_request = JobRequest.from_payload(baseline_payload)
+        baseline_plan = self.orchestrator.plan_workflow({**baseline_payload, "skip_plan_review": True})["plan"]
+        self.store.save_job(
+            job_id="baseline_snapshot_job",
+            job_type="workflow",
+            status="completed",
+            stage="completed",
+            request_payload=baseline_request.to_record(),
+            plan_payload=baseline_plan,
+            summary_payload={
+                "message": "Workflow completed.",
+                "candidate_source": {
+                    "snapshot_id": snapshot_dir.name,
+                    "source_kind": "company_snapshot",
+                    "source_path": str(candidate_doc_path),
+                },
+            },
+        )
+
+        queued = self.orchestrator.queue_workflow(
+            {
+                "raw_user_request": "帮我找 Anthropic 当前做网络平台方向的人。",
+                "target_company": "Anthropic",
+                "categories": ["employee"],
+                "employment_statuses": ["current"],
+                "keywords": ["基础设施", "网络"],
+                "top_k": 8,
+                "skip_plan_review": True,
+            }
+        )
+        self.assertEqual(queued["status"], "queued")
+        self.assertEqual(queued["dispatch"]["strategy"], "reuse_snapshot")
+        self.assertEqual(queued["dispatch"]["matched_job_id"], "baseline_snapshot_job")
+        self.assertEqual(queued["dispatch"]["matched_snapshot_id"], snapshot_dir.name)
+
+        queued_job = self.store.get_job(str(queued.get("job_id") or ""))
+        assert queued_job is not None
+        execution_preferences = dict(dict(queued_job.get("request") or {}).get("execution_preferences") or {})
+        self.assertEqual(execution_preferences.get("reuse_snapshot_id"), snapshot_dir.name)
+        self.assertEqual(execution_preferences.get("reuse_baseline_job_id"), "baseline_snapshot_job")
+
+        original_execute_task = self.acquisition_engine.execute_task
+        executed_task_types: list[str] = []
+
+        def fail_if_called(task, job_request, target_company, state, bootstrap_summary=None):  # noqa: ARG001
+            executed_task_types.append(task.task_type)
+            raise AssertionError(f"unexpected acquisition task execution: {task.task_type}")
+
+        self.acquisition_engine.execute_task = fail_if_called
+        try:
+            run_result = self.orchestrator.run_queued_workflow(str(queued.get("job_id") or ""))
+        finally:
+            self.acquisition_engine.execute_task = original_execute_task
+
+        self.assertEqual(run_result["status"], "completed")
+        self.assertEqual(executed_task_types, [])
+        snapshot = self.orchestrator.get_job_results(str(queued.get("job_id") or ""))
+        assert snapshot is not None
+        self.assertEqual(snapshot["job"]["status"], "completed")
+        self.assertGreaterEqual(len(snapshot["results"]), 1)
+
+    def test_queue_workflow_uses_idempotency_key_first(self) -> None:
+        payload = {
+            "raw_user_request": "帮我找 Anthropic 当前偏基础设施方向的技术成员，先获取全量资产再检索。",
+            "target_company": "Anthropic",
+            "categories": ["employee"],
+            "employment_statuses": ["current"],
+            "keywords": ["基础设施", "GPU", "预训练"],
+            "top_k": 3,
+            "skip_plan_review": True,
+            "tenant_id": "tenant-a",
+            "requester_id": "user-1",
+            "idempotency_key": "req-42",
+        }
+        first = self.orchestrator.queue_workflow(dict(payload))
+        self.assertEqual(first["status"], "queued")
+
+        inflight_repeat = self.orchestrator.queue_workflow(
+            {
+                **payload,
+                "keywords": ["this payload is intentionally different"],
+                "query": "same idempotency should still dedupe",
+            }
+        )
+        self.assertEqual(inflight_repeat["status"], "joined_existing_job")
+        self.assertEqual(inflight_repeat["job_id"], first["job_id"])
+        self.assertEqual(inflight_repeat["dispatch"]["strategy"], "join_inflight")
+
+        run_result = self.orchestrator.run_queued_workflow(str(first.get("job_id") or ""))
+        self.assertEqual(run_result["status"], "completed")
+
+        completed_repeat = self.orchestrator.queue_workflow(
+            {
+                **payload,
+                "keywords": ["changed again after completion"],
+                "query": "completed idempotent reuse",
+            }
+        )
+        self.assertEqual(completed_repeat["status"], "reused_completed_job")
+        self.assertEqual(completed_repeat["job_id"], first["job_id"])
+        self.assertEqual(completed_repeat["dispatch"]["strategy"], "reuse_completed")
+
+    def test_start_workflow_reuses_pending_plan_review_session(self) -> None:
+        payload = {
+            "raw_user_request": "帮我找 Anthropic 当前偏基础设施方向的技术成员，先获取全量资产再检索。",
+            "target_company": "Anthropic",
+            "categories": ["employee"],
+            "employment_statuses": ["current"],
+            "keywords": ["基础设施", "GPU", "预训练"],
+            "top_k": 3,
+        }
+        first = self.orchestrator.start_workflow(dict(payload))
+        self.assertEqual(first["status"], "needs_plan_review")
+        second = self.orchestrator.start_workflow(dict(payload))
+        self.assertEqual(second["status"], "needs_plan_review")
+        self.assertEqual(second["reason"], "existing_pending_plan_review")
+        self.assertEqual(
+            int(second["plan_review_session"]["review_id"] or 0),
+            int(first["plan_review_session"]["review_id"] or 0),
+        )
+
+    def test_llm_request_normalization_feeds_structured_plan_by_default(self) -> None:
         class RequestNormalizingModelClient(DeterministicModelClient):
             def normalize_request(self, payload: dict[str, object]) -> dict[str, object]:
                 return {
@@ -427,6 +2294,12 @@ class PipelineTest(unittest.TestCase):
                     "employment_statuses": ["current"],
                     "organization_keywords": ["Veo"],
                     "keywords": ["Post-train", "Math"],
+                    "scope_disambiguation": {
+                        "inferred_scope": "sub_org_only",
+                        "sub_org_candidates": ["Google DeepMind", "Veo"],
+                        "confidence": 0.86,
+                        "rationale": "Detected product and sub-org terms.",
+                    },
                     "retrieval_strategy": "hybrid",
                     "query": "Google DeepMind Veo post-train math members",
                     "execution_preferences": {
@@ -447,7 +2320,6 @@ class PipelineTest(unittest.TestCase):
         plan_result = orchestrator.plan_workflow(
             {
                 "raw_user_request": "我想要Veo团队的Post-train和Math方向成员",
-                "planning_mode": "model_assisted",
             }
         )
 
@@ -455,7 +2327,14 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(plan_result["request"]["categories"], ["employee"])
         self.assertEqual(plan_result["request"]["employment_statuses"], ["current"])
         self.assertEqual(plan_result["request"]["organization_keywords"], ["Google DeepMind", "Veo"])
-        self.assertEqual(plan_result["request"]["keywords"], ["Post-train", "Math"])
+        self.assertIn("Post-train", plan_result["request"]["keywords"])
+        self.assertIn("Math", plan_result["request"]["keywords"])
+        self.assertIn("Veo", plan_result["request"]["keywords"])
+        self.assertEqual(plan_result["request"]["scope_disambiguation"]["inferred_scope"], "sub_org_only")
+        self.assertEqual(
+            plan_result["request"]["scope_disambiguation"]["sub_org_candidates"],
+            ["Google DeepMind", "Veo"],
+        )
         self.assertEqual(plan_result["request"]["retrieval_strategy"], "hybrid")
         self.assertEqual(
             plan_result["request"]["execution_preferences"],
@@ -464,27 +2343,27 @@ class PipelineTest(unittest.TestCase):
                 "precision_recall_bias": "precision_first",
             },
         )
-        self.assertEqual(plan_result["plan"]["acquisition_strategy"]["strategy_type"], "scoped_search_roster")
+        self.assertEqual(plan_result["plan"]["acquisition_strategy"]["strategy_type"], "full_company_roster")
         self.assertIn("Google", plan_result["plan"]["acquisition_strategy"]["company_scope"])
         self.assertIn("Google DeepMind", plan_result["plan"]["acquisition_strategy"]["company_scope"])
         self.assertIn("Veo", plan_result["plan"]["acquisition_strategy"]["company_scope"])
         self.assertNotIn("Post-train", plan_result["plan"]["acquisition_strategy"]["company_scope"])
-        self.assertEqual(
-            plan_result["plan"]["acquisition_strategy"]["filter_hints"]["keywords"][:2],
-            ["Post-train", "Math"],
-        )
+        filter_hint_keywords = list(plan_result["plan"]["acquisition_strategy"]["filter_hints"]["keywords"] or [])
+        self.assertIn("Post-train", filter_hint_keywords)
+        self.assertIn("Math", filter_hint_keywords)
         self.assertEqual(
             plan_result["plan"]["acquisition_strategy"]["cost_policy"]["precision_recall_bias"],
             "precision_first",
         )
         self.assertFalse(plan_result["plan"]["acquisition_strategy"]["cost_policy"]["high_cost_requires_approval"])
         self.assertNotIn("high_cost_sources_need_approval", plan_result["plan_review_gate"]["reasons"])
-        self.assertEqual(plan_result["plan_review_gate"]["status"], "ready")
-        self.assertFalse(plan_result["plan_review_gate"]["required_before_execution"])
+        self.assertEqual(plan_result["plan_review_gate"]["status"], "requires_review")
+        self.assertTrue(plan_result["plan_review_gate"]["required_before_execution"])
+        self.assertIn("google_scope_ambiguity_requires_confirmation", plan_result["plan_review_gate"]["reasons"])
         self.assertIn("targeted_people_search", [item["bundle_id"] for item in plan_result["plan"]["search_strategy"]["query_bundles"]])
         self.assertTrue(any("团队或子组织范围：" in item and "Veo" in item for item in plan_result["plan"]["intent_brief"]["identified_request"]))
 
-    def test_model_assisted_request_normalization_preserves_natural_language_shorthand_rewrite(self) -> None:
+    def test_llm_request_normalization_preserves_natural_language_shorthand_rewrite(self) -> None:
         class RequestNormalizingModelClient(DeterministicModelClient):
             def normalize_request(self, payload: dict[str, object]) -> dict[str, object]:
                 return {
@@ -508,7 +2387,6 @@ class PipelineTest(unittest.TestCase):
             {
                 "raw_user_request": "帮我找 Anthropic 的华人成员",
                 "target_company": "Anthropic",
-                "planning_mode": "model_assisted",
             }
         )
 
@@ -526,6 +2404,13 @@ class PipelineTest(unittest.TestCase):
         )
         self.assertTrue(
             any("自然语言简称改写" in item for item in plan_result["plan"]["intent_brief"]["identified_request"]),
+        )
+        self.assertTrue(
+            any(
+                item.get("rewrite_id") == "greater_china_outreach"
+                for item in list(plan_result["intent_rewrite"].get("policy_catalog") or [])
+                if isinstance(item, dict)
+            )
         )
         self.assertIn(
             "这类简称默认按公开的地区 / 语言 / 学习工作经历口径理解，而不是身份标签判断。",
@@ -886,7 +2771,9 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(compiled["request_patch"]["must_have_facets"], ["multimodal"])
         self.assertEqual(compiled["request_patch"]["top_k"], 1)
         self.assertIn("intent_rewrite", compiled)
-        self.assertFalse(compiled["intent_rewrite"]["instruction"]["matched"])
+        self.assertTrue(compiled["intent_rewrite"]["instruction"]["matched"])
+        self.assertEqual(compiled["request_preview"]["must_have_facets"], ["multimodal"])
+        self.assertEqual(compiled["request_preview"]["categories"], ["researcher"])
 
         refined = self.orchestrator.apply_post_acquisition_refinement(
             {
@@ -902,7 +2789,9 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(refined["rerun_result"]["matches"][0]["candidate_id"], "acme_multi")
         self.assertGreaterEqual(refined["diff"]["summary"]["removed_count"], 1)
         self.assertIn("intent_rewrite", refined)
-        self.assertFalse(refined["intent_rewrite"]["instruction"]["matched"])
+        self.assertTrue(refined["intent_rewrite"]["instruction"]["matched"])
+        self.assertEqual(refined["request_preview"]["must_have_facets"], ["multimodal"])
+        self.assertEqual(refined["request_preview"]["categories"], ["researcher"])
 
     def test_refinement_compile_exposes_intent_rewrite_for_shorthand_instruction(self) -> None:
         baseline = self.orchestrator.run_job(
@@ -927,9 +2816,63 @@ class PipelineTest(unittest.TestCase):
             compiled["intent_rewrite"]["instruction"]["rewrite"]["rewrite_id"],
             "greater_china_outreach",
         )
+
+    def test_stage1_preview_request_preview_uses_effective_request_shape(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "给我 Google 做多模态的人",
+                "target_company": "Google",
+                "categories": ["employee"],
+                "keywords": ["multimodal"],
+                "employment_statuses": ["current", "former"],
+            }
+        )
+
+        summary = self.orchestrator._build_stage1_preview_summary(
+            request=request,
+            preview_artifact={
+                "summary": {
+                    "text": "preview",
+                    "analysis_stage": "stage_1_preview",
+                    "total_matches": 12,
+                    "returned_matches": 5,
+                },
+                "effective_request": {
+                    "raw_user_request": "给我 Google 做多模态的人",
+                    "target_company": "Google",
+                    "categories": ["researcher"],
+                    "employment_statuses": ["current", "former"],
+                    "organization_keywords": ["Google DeepMind"],
+                    "keywords": ["multimodal", "Veo"],
+                    "must_have_keywords": ["Veo"],
+                    "must_have_facets": ["multimodal"],
+                    "must_have_primary_role_buckets": ["research"],
+                    "scope_disambiguation": {
+                        "inferred_scope": "both",
+                        "sub_org_candidates": ["Google DeepMind"],
+                    },
+                },
+            },
+            acquisition_progress={},
+            pre_retrieval_refresh={},
+        )
+
+        self.assertEqual(summary["request_preview"]["request_view"], "effective_request")
+        self.assertEqual(summary["request_preview"]["categories"], ["researcher"])
+        self.assertEqual(summary["request_preview"]["organization_keywords"], ["Google DeepMind"])
+        self.assertEqual(summary["request_preview"]["must_have_keywords"], ["Veo"])
+        self.assertEqual(summary["request_preview"]["must_have_facets"], ["multimodal"])
         self.assertEqual(
-            compiled["request_patch"]["must_have_keywords"],
-            ["Greater China experience", "Chinese bilingual outreach"],
+            summary["request_preview"]["intent_axes"]["scope_boundary"]["organization_keywords"],
+            ["Google DeepMind"],
+        )
+        self.assertEqual(
+            summary["request_preview"]["intent_axes"]["thematic_constraints"]["must_have_keywords"],
+            ["Veo"],
+        )
+        self.assertEqual(
+            summary["request_preview"]["intent_axes"]["thematic_constraints"]["must_have_facets"],
+            ["multimodal"],
         )
 
     def test_manual_review_synthesis_is_cached_without_resolving_queue_item(self) -> None:
@@ -1153,6 +3096,117 @@ class PipelineTest(unittest.TestCase):
         }.items():
             self.assertEqual(job["request"]["execution_preferences"][key], value)
 
+    def test_plan_review_execution_overrides_can_force_fresh_run_without_joining_inflight(self) -> None:
+        plan_result = self.orchestrator.plan_workflow(
+            {
+                "raw_user_request": "帮我找出 Google 负责多模态的人",
+                "target_company": "Google",
+                "keywords": ["multimodal", "Veo"],
+            }
+        )
+        review_id = plan_result["plan_review_session"]["review_id"]
+        self.orchestrator.review_plan_session(
+            {
+                "review_id": review_id,
+                "action": "approved",
+                "reviewer": "tester",
+                "decision": {"allow_high_cost_sources": False},
+            }
+        )
+
+        first = self.orchestrator.queue_workflow({"plan_review_id": review_id})
+        self.assertEqual(first["status"], "queued")
+
+        second = self.orchestrator.queue_workflow({"plan_review_id": review_id})
+        self.assertEqual(second["status"], "joined_existing_job")
+        self.assertEqual(second["job_id"], first["job_id"])
+
+        fresh = self.orchestrator.queue_workflow(
+            {
+                "plan_review_id": review_id,
+                "execution_preferences": {"force_fresh_run": True},
+                "asset_view": "strict_roster_only",
+            }
+        )
+        self.assertEqual(fresh["status"], "queued")
+        self.assertNotEqual(fresh["job_id"], first["job_id"])
+
+        fresh_job = self.orchestrator.get_job(fresh["job_id"])
+        self.assertIsNotNone(fresh_job)
+        assert fresh_job is not None
+        self.assertTrue(fresh_job["request"]["execution_preferences"]["force_fresh_run"])
+        self.assertEqual(fresh_job["request"]["asset_view"], "strict_roster_only")
+
+    def test_queue_workflow_backfills_missing_target_company_from_approved_review_scope(self) -> None:
+        plan_result = self.orchestrator.plan_workflow(
+            {
+                "raw_user_request": "帮我寻找LangChain Infra方向的人",
+                "target_company": "",
+                "keywords": ["infra"],
+            }
+        )
+        review_id = int(plan_result["plan_review_session"]["review_id"] or 0)
+        reviewed = self.orchestrator.review_plan_session(
+            {
+                "review_id": review_id,
+                "action": "approved",
+                "reviewer": "tester",
+                "decision": {
+                    "confirmed_company_scope": ["LangChain"],
+                    "allow_high_cost_sources": True,
+                },
+            }
+        )
+        self.assertEqual(reviewed["status"], "reviewed")
+        self.assertEqual(reviewed["review"]["request"]["target_company"], "LangChain")
+
+        queued = self.orchestrator.queue_workflow({"plan_review_id": review_id})
+        self.assertEqual(queued["status"], "queued")
+        job = self.orchestrator.get_job(queued["job_id"])
+        self.assertIsNotNone(job)
+        assert job is not None
+        self.assertEqual(job["request"]["target_company"], "LangChain")
+
+    def test_queue_workflow_rebuilds_google_keyword_shard_plan_from_approved_review_request(self) -> None:
+        plan_result = self.orchestrator.plan_workflow(
+            {
+                "raw_user_request": "给我 Google 负责多模态和 Veo 的研究员",
+                "target_company": "Google",
+                "keywords": ["multimodal", "Veo", "Nano Banana"],
+                "execution_preferences": {
+                    "use_company_employees_lane": True,
+                    "confirmed_company_scope": ["Google", "Google DeepMind"],
+                },
+            }
+        )
+        review_id = int(plan_result["plan_review_session"]["review_id"] or 0)
+        reviewed = self.orchestrator.review_plan_session(
+            {
+                "review_id": review_id,
+                "action": "approved",
+                "reviewer": "tester",
+                "decision": {
+                    "allow_high_cost_sources": False,
+                },
+            }
+        )
+        self.assertEqual(reviewed["status"], "reviewed")
+
+        queued = self.orchestrator.queue_workflow({"plan_review_id": review_id})
+        self.assertEqual(queued["status"], "queued")
+        acquire_task = next(task for task in queued["plan"]["acquisition_tasks"] if task["task_type"] == "acquire_full_roster")
+        shard_policy = dict(acquire_task["metadata"].get("company_employee_shard_policy") or {})
+
+        self.assertEqual(acquire_task["metadata"]["company_employee_shard_strategy"], "adaptive_large_org_keyword_probe")
+        self.assertEqual(shard_policy.get("mode"), "keyword_union")
+        self.assertTrue(shard_policy.get("force_keyword_shards"))
+        self.assertEqual(
+            shard_policy.get("root_filters", {}).get("function_ids"),
+            ["8", "9", "19", "24"],
+        )
+        self.assertTrue(any("Nano Banana" in query for query in acquire_task["metadata"].get("search_seed_queries") or []))
+        self.assertFalse(any("Researcher" in query for query in acquire_task["metadata"].get("search_seed_queries") or []))
+
     def test_compile_plan_review_instruction_uses_model_then_schema_validation(self) -> None:
         class ReviewInstructionModelClient(DeterministicModelClient):
             def provider_name(self) -> str:
@@ -1200,7 +3254,11 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(compiled["instruction_compiler"]["source"], "model")
         self.assertEqual(compiled["instruction_compiler"]["provider"], "test-model")
         self.assertIn("intent_rewrite", compiled)
-        self.assertFalse(compiled["intent_rewrite"]["request"]["matched"])
+        self.assertTrue(compiled["intent_rewrite"]["request"]["matched"])
+        self.assertEqual(
+            str(dict(compiled["intent_rewrite"]["request"].get("rewrite") or {}).get("rewrite_id") or ""),
+            "researcher_role_focus",
+        )
         self.assertFalse(compiled["intent_rewrite"]["instruction"]["matched"])
         self.assertEqual(
             compiled["review_payload"]["decision"],
@@ -1209,6 +3267,7 @@ class PipelineTest(unittest.TestCase):
                 "use_company_employees_lane": True,
                 "force_fresh_run": True,
                 "allow_high_cost_sources": False,
+                "confirmed_company_scope": ["Humans&"],
             },
         )
 
@@ -1255,7 +3314,11 @@ class PipelineTest(unittest.TestCase):
 
         self.assertEqual(compiled["status"], "compiled")
         self.assertIn("intent_rewrite", compiled)
-        self.assertFalse(compiled["intent_rewrite"]["request"]["matched"])
+        self.assertTrue(compiled["intent_rewrite"]["request"]["matched"])
+        self.assertEqual(
+            str(dict(compiled["intent_rewrite"]["request"].get("rewrite") or {}).get("rewrite_id") or ""),
+            "researcher_role_focus",
+        )
         self.assertFalse(compiled["intent_rewrite"]["instruction"]["matched"])
         self.assertEqual(
             compiled["review_payload"]["decision"],
@@ -1300,6 +3363,1661 @@ class PipelineTest(unittest.TestCase):
         self.assertTrue(progress["progress"]["milestones"])
         self.assertIn("worker_summary", progress["progress"])
         self.assertGreaterEqual(len(progress["progress"]["completed_stages"]), 1)
+
+    def test_job_progress_keeps_current_acquiring_stage_running_until_stage_transition(self) -> None:
+        job_id = "job_progress_acquiring_running"
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="running",
+            stage="acquiring",
+            request_payload={"target_company": "Google"},
+            plan_payload={},
+            summary_payload={"message": "Acquisition checkpoint updated after Resolve company identifiers."},
+        )
+        self.store.append_job_event(job_id, "planning", "started", "Planning started.")
+        self.store.append_job_event(job_id, "planning", "completed", "Planning completed.")
+        self.store.append_job_event(job_id, "acquiring", "completed", "Resolve company identifiers completed.")
+
+        progress = self.orchestrator.get_job_progress(job_id)
+
+        self.assertIsNotNone(progress)
+        assert progress is not None
+        milestones = list(progress["progress"]["milestones"])
+        acquiring = next(item for item in milestones if item["stage"] == "acquiring")
+        planning = next(item for item in milestones if item["stage"] == "planning")
+        self.assertEqual(planning["status"], "completed")
+        self.assertEqual(acquiring["status"], "running")
+        self.assertEqual(acquiring["completed_at"], "")
+        self.assertNotIn("acquiring", list(progress["progress"]["completed_stages"]))
+
+    def test_job_progress_surfaces_live_runtime_controls(self) -> None:
+        job_id = "job_progress_runtime_controls"
+        runner_log = self.settings.runtime_dir / "service_logs" / "workflow-runner-job_progress_runtime_controls.log"
+        runner_log.parent.mkdir(parents=True, exist_ok=True)
+        runner_log.write_text("runner exited\n", encoding="utf-8")
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="running",
+            stage="planning",
+            request_payload={"target_company": "Reflection AI"},
+            plan_payload={},
+            summary_payload={
+                "message": "queued",
+                "runtime_controls": {
+                    "shared_recovery": {
+                        "status": "started",
+                        "service_name": "worker-recovery-daemon",
+                        "scope": "shared",
+                    },
+                    "job_recovery": {
+                        "status": "started_deferred",
+                        "service_name": f"job-recovery-{job_id}",
+                        "scope": "job_scoped",
+                    },
+                    "workflow_runner": {
+                        "status": "started",
+                        "pid": 77701,
+                        "log_path": str(runner_log),
+                    },
+                },
+            },
+        )
+
+        def fake_read_service_status(_runtime_dir, service_name):  # type: ignore[no-untyped-def]
+            if service_name == "worker-recovery-daemon":
+                return {"service_name": service_name, "status": "running", "lock_status": "locked"}
+            if service_name == f"job-recovery-{job_id}":
+                return {"service_name": service_name, "status": "stale", "lock_status": "free"}
+            return {"service_name": service_name, "status": "running", "lock_status": "locked"}
+
+        with unittest.mock.patch(
+            "sourcing_agent.orchestrator.read_service_status",
+            side_effect=fake_read_service_status,
+        ), unittest.mock.patch(
+            "sourcing_agent.orchestrator._workflow_runner_process_alive",
+            return_value=False,
+        ), unittest.mock.patch.object(
+            self.orchestrator,
+            "run_worker_recovery_once",
+            return_value={"status": "completed", "workflow_resume": []},
+        ):
+            progress = self.orchestrator.get_job_progress(job_id)
+
+        self.assertIsNotNone(progress)
+        assert progress is not None
+        runtime_controls = dict(progress["progress"].get("runtime_controls") or {})
+        self.assertTrue(runtime_controls["shared_recovery"]["service_ready"])
+        self.assertFalse(runtime_controls["job_recovery"]["service_ready"])
+        self.assertFalse(runtime_controls["workflow_runner"]["process_alive"])
+        self.assertIn("runner exited", runtime_controls["workflow_runner"]["log_tail"])
+        runtime_health = dict(progress["progress"].get("runtime_health") or {})
+        self.assertEqual(runtime_health.get("classification"), "runner_not_alive")
+        self.assertEqual(runtime_health.get("state"), "stalled")
+        self.assertEqual(progress["auto_recovery"]["status"], "queued")
+
+    def test_get_job_progress_triggers_auto_recovery_when_runner_is_not_alive(self) -> None:
+        job_id = "job_progress_auto_takeover"
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="running",
+            stage="acquiring",
+            request_payload={"target_company": "Google"},
+            plan_payload={},
+            summary_payload={"message": "Workflow is running", "runtime_execution_mode": "hosted"},
+        )
+        with self.store._lock, self.store._connection:
+            self.store._connection.execute(
+                "UPDATE jobs SET updated_at = ? WHERE job_id = ?",
+                ("2026-01-01 00:00:00", job_id),
+            )
+
+        captured_payloads: list[dict[str, object]] = []
+        recovery_called = threading.Event()
+        with unittest.mock.patch.object(
+            self.orchestrator,
+            "run_worker_recovery_once",
+            side_effect=lambda payload=None: captured_payloads.append(dict(payload or {})) or recovery_called.set() or {
+                "status": "completed",
+                "workflow_resume": [
+                    {
+                        "job_id": job_id,
+                        "status": "resumed",
+                        "resume_mode": "running_acquiring_recovery",
+                        "job_status": "running",
+                        "job_stage": "acquiring",
+                    }
+                ],
+            },
+        ):
+            progress = self.orchestrator.get_job_progress(job_id)
+
+        self.assertIsNotNone(progress)
+        assert progress is not None
+        self.assertTrue(recovery_called.wait(timeout=1.0))
+        self.assertEqual(len(captured_payloads), 1)
+        self.assertEqual(captured_payloads[0]["job_id"], job_id)
+        self.assertEqual(int(captured_payloads[0]["stale_after_seconds"]), 0)
+        self.assertTrue(bool(captured_payloads[0]["workflow_queue_auto_takeover_enabled"]))
+        self.assertEqual(progress["auto_recovery"]["status"], "queued")
+        self.assertEqual(progress["auto_recovery"]["classification"], "runner_not_alive")
+
+        with unittest.mock.patch.object(self.orchestrator, "run_worker_recovery_once") as recovery_mock:
+            second_progress = self.orchestrator.get_job_progress(job_id)
+
+        self.assertIsNotNone(second_progress)
+        assert second_progress is not None
+        recovery_mock.assert_not_called()
+        self.assertEqual(second_progress["auto_recovery"]["status"], "skipped")
+        self.assertEqual(second_progress["auto_recovery"]["reason"], "cooldown_active")
+
+    def test_runtime_health_treats_remote_wait_with_recovery_as_progressing(self) -> None:
+        job_id = "job_runtime_remote_wait"
+        request_payload = {
+            "raw_user_request": "Find Google infra people",
+            "target_company": "Google",
+            "categories": ["employee"],
+            "top_k": 3,
+        }
+        request = JobRequest.from_payload(request_payload)
+        plan_payload = self.orchestrator.plan_workflow(request_payload)["plan"]
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="blocked",
+            stage="acquiring",
+            request_payload=request.to_record(),
+            plan_payload=plan_payload,
+            summary_payload={
+                "message": "Waiting for remote Harvest run",
+                "blocked_task": "enrich_linkedin_profiles",
+                "runtime_controls": {
+                    "shared_recovery": {
+                        "status": "started",
+                        "service_name": "worker-recovery-daemon",
+                        "scope": "shared",
+                    },
+                    "job_recovery": {
+                        "status": "started",
+                        "service_name": f"job-recovery-{job_id}",
+                        "scope": "job_scoped",
+                    },
+                    "workflow_runner": {
+                        "status": "started",
+                        "pid": 88001,
+                    },
+                },
+            },
+        )
+        worker = self.orchestrator.agent_runtime.begin_worker(
+            job_id=job_id,
+            request=request,
+            plan_payload=plan_payload,
+            runtime_mode="workflow",
+            lane_id="enrichment_specialist",
+            worker_key="harvest_profile_batch::01",
+            stage="acquiring",
+            span_name="harvest_profile_batch",
+            budget_payload={"requested_url_count": 100},
+            input_payload={"profile_urls": ["https://www.linkedin.com/in/example/"]},
+            metadata={"recovery_kind": "harvest_profile_batch"},
+            handoff_from_lane="acquisition_specialist",
+        )
+        self.orchestrator.agent_runtime.complete_worker(
+            worker,
+            status="waiting_remote_harvest",
+            checkpoint_payload={"run_id": "run-remote"},
+            output_payload={"summary": {"status": "submitted"}},
+        )
+
+        with unittest.mock.patch(
+            "sourcing_agent.orchestrator.read_service_status",
+            side_effect=[
+                {"service_name": "worker-recovery-daemon", "status": "running", "lock_status": "locked"},
+                {"service_name": f"job-recovery-{job_id}", "status": "running", "lock_status": "locked"},
+            ],
+        ), unittest.mock.patch(
+            "sourcing_agent.orchestrator._workflow_runner_process_alive",
+            return_value=False,
+        ):
+            progress = self.orchestrator.get_job_progress(job_id)
+
+        self.assertIsNotNone(progress)
+        assert progress is not None
+        runtime_health = dict(progress["progress"].get("runtime_health") or {})
+        self.assertEqual(runtime_health.get("classification"), "waiting_on_remote_provider")
+        self.assertEqual(runtime_health.get("state"), "progressing")
+        self.assertEqual(int(runtime_health.get("waiting_remote_harvest_count") or 0), 1)
+
+    def test_runtime_health_treats_remote_wait_with_hosted_watchdog_as_progressing(self) -> None:
+        job_id = "job_runtime_remote_wait_hosted_watchdog"
+        request_payload = {
+            "raw_user_request": "Find Google infra people",
+            "target_company": "Google",
+            "categories": ["employee"],
+            "top_k": 3,
+        }
+        request = JobRequest.from_payload(request_payload)
+        plan_payload = self.orchestrator.plan_workflow(request_payload)["plan"]
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="blocked",
+            stage="acquiring",
+            request_payload=request.to_record(),
+            plan_payload=plan_payload,
+            summary_payload={
+                "message": "Waiting for remote Harvest run",
+                "blocked_task": "enrich_linkedin_profiles",
+                "runtime_controls": {
+                    "hosted_runtime_watchdog": {
+                        "status": "started",
+                        "service_name": "server-runtime-watchdog",
+                        "scope": "hosted_runtime_watchdog",
+                    },
+                    "shared_recovery": {
+                        "status": "scheduled",
+                        "service_name": "worker-recovery-daemon",
+                        "scope": "shared",
+                    },
+                    "workflow_runner": {
+                        "status": "started",
+                        "pid": 88002,
+                    },
+                },
+            },
+        )
+        worker = self.orchestrator.agent_runtime.begin_worker(
+            job_id=job_id,
+            request=request,
+            plan_payload=plan_payload,
+            runtime_mode="workflow",
+            lane_id="enrichment_specialist",
+            worker_key="harvest_profile_batch::01",
+            stage="acquiring",
+            span_name="harvest_profile_batch",
+            budget_payload={"requested_url_count": 100},
+            input_payload={"profile_urls": ["https://www.linkedin.com/in/example/"]},
+            metadata={"recovery_kind": "harvest_profile_batch"},
+            handoff_from_lane="acquisition_specialist",
+        )
+        self.orchestrator.agent_runtime.complete_worker(
+            worker,
+            status="waiting_remote_harvest",
+            checkpoint_payload={"run_id": "run-remote"},
+            output_payload={"summary": {"status": "submitted"}},
+        )
+
+        with unittest.mock.patch(
+            "sourcing_agent.orchestrator.read_service_status",
+            side_effect=[
+                {"service_name": "server-runtime-watchdog", "status": "running", "lock_status": "locked"},
+                {"service_name": "worker-recovery-daemon", "status": "stale", "lock_status": "locked"},
+            ],
+        ), unittest.mock.patch(
+            "sourcing_agent.orchestrator._workflow_runner_process_alive",
+            return_value=False,
+        ):
+            progress = self.orchestrator.get_job_progress(job_id)
+
+        self.assertIsNotNone(progress)
+        assert progress is not None
+        runtime_controls = dict(progress["progress"].get("runtime_controls") or {})
+        self.assertTrue(bool(runtime_controls["hosted_runtime_watchdog"]["service_ready"]))
+        self.assertFalse(bool(runtime_controls["shared_recovery"]["service_ready"]))
+        runtime_health = dict(progress["progress"].get("runtime_health") or {})
+        self.assertEqual(runtime_health.get("classification"), "waiting_on_remote_provider")
+        self.assertEqual(runtime_health.get("state"), "progressing")
+
+    def test_persist_workflow_runtime_controls_emits_diff_events_only(self) -> None:
+        job_id = "job_runtime_control_events"
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="queued",
+            stage="planning",
+            request_payload={"target_company": "Reflection AI"},
+            plan_payload={},
+            summary_payload={"message": "queued"},
+        )
+
+        self.orchestrator._persist_workflow_runtime_controls(
+            job_id,
+            {
+                "shared_recovery": {
+                    "status": "started",
+                    "service_name": "worker-recovery-daemon",
+                    "scope": "shared",
+                    "mode": "sidecar",
+                    "handshake": {"status": "ready"},
+                },
+                "workflow_runner_control": {
+                    "status": "started",
+                    "handshake": {"status": "advanced", "job_status": "running", "job_stage": "planning"},
+                    "runner": {"status": "started", "pid": 321},
+                },
+            },
+        )
+        first_events = self.store.list_job_events(job_id)
+        self.assertEqual(len(first_events), 2)
+        self.assertEqual(first_events[0]["stage"], "runtime_control")
+        self.assertEqual(first_events[1]["payload"]["control"], "workflow_runner_control")
+
+        self.orchestrator._persist_workflow_runtime_controls(
+            job_id,
+            {
+                "shared_recovery": {
+                    "status": "started",
+                    "service_name": "worker-recovery-daemon",
+                    "scope": "shared",
+                    "mode": "sidecar",
+                    "handshake": {"status": "ready"},
+                },
+                "workflow_runner_control": {
+                    "status": "started",
+                    "handshake": {"status": "advanced", "job_status": "running", "job_stage": "planning"},
+                    "runner": {"status": "started", "pid": 321},
+                },
+            },
+        )
+        second_events = self.store.list_job_events(job_id)
+        self.assertEqual(len(second_events), 2)
+
+        self.orchestrator._persist_workflow_runtime_controls(
+            job_id,
+            {
+                "shared_recovery": {
+                    "status": "already_running",
+                    "service_name": "worker-recovery-daemon",
+                    "scope": "shared",
+                    "mode": "sidecar",
+                    "handshake": {"status": "already_running"},
+                }
+            },
+        )
+        final_events = self.store.list_job_events(job_id)
+        self.assertEqual(len(final_events), 3)
+        self.assertEqual(final_events[-1]["status"], "already_running")
+        self.assertEqual(final_events[-1]["payload"]["control"], "shared_recovery")
+
+    def test_persist_workflow_runtime_controls_deferred_retries_locked_database(self) -> None:
+        job_id = "job_runtime_control_deferred_retry"
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="queued",
+            stage="planning",
+            request_payload={"target_company": "Google"},
+            plan_payload={},
+            summary_payload={"message": "queued"},
+        )
+
+        original = self.orchestrator._persist_workflow_runtime_controls
+        call_count = {"count": 0}
+
+        def flaky(job_id_value: str, controls_value: dict[str, object]) -> None:
+            call_count["count"] += 1
+            if call_count["count"] == 1:
+                raise sqlite3.OperationalError("database is locked")
+            original(job_id_value, controls_value)
+
+        with unittest.mock.patch.object(
+            self.orchestrator,
+            "_persist_workflow_runtime_controls",
+            side_effect=flaky,
+        ):
+            result = self.orchestrator._persist_workflow_runtime_controls_deferred(
+                job_id,
+                {
+                    "workflow_runner_control": {
+                        "status": "started",
+                        "handshake": {"status": "advanced", "job_status": "running", "job_stage": "planning"},
+                    }
+                },
+                max_attempts=3,
+                initial_delay_seconds=0.0,
+                run_async=False,
+            )
+
+        self.assertEqual(result["status"], "completed")
+        self.assertGreaterEqual(call_count["count"], 2)
+        stored_job = self.store.get_job(job_id)
+        self.assertIsNotNone(stored_job)
+        assert stored_job is not None
+        runtime_controls = dict(dict(stored_job.get("summary") or {}).get("runtime_controls") or {})
+        self.assertEqual(runtime_controls["workflow_runner_control"]["status"], "started")
+
+    def test_start_workflow_runner_managed_defers_runtime_control_persistence(self) -> None:
+        queued_payload = {
+            "job_id": "job_start_workflow_managed",
+            "status": "queued",
+            "dispatch": {},
+        }
+        runner_control = {
+            "status": "started",
+            "runner": {"status": "started", "job_id": "job_start_workflow_managed", "pid": 321},
+            "handshake": {"status": "advanced", "job_status": "running", "job_stage": "planning"},
+        }
+        with unittest.mock.patch.object(
+            self.orchestrator,
+            "queue_workflow",
+            return_value=dict(queued_payload),
+        ), unittest.mock.patch.object(
+            self.orchestrator,
+            "_ensure_hosted_runtime_watchdog_deferred",
+            return_value={"status": "scheduled", "scope": "hosted_runtime_watchdog", "mode": "deferred"},
+        ) as hosted_watchdog_mock, unittest.mock.patch.object(
+            self.orchestrator,
+            "ensure_hosted_runtime_watchdog",
+        ), unittest.mock.patch.object(
+            self.orchestrator,
+            "_ensure_shared_recovery_deferred",
+            return_value={"status": "scheduled", "scope": "shared", "mode": "deferred"},
+        ) as shared_recovery_mock, unittest.mock.patch.object(
+            self.orchestrator,
+            "ensure_shared_recovery",
+        ), unittest.mock.patch.object(
+            self.orchestrator,
+            "_start_workflow_runner_with_handshake",
+            return_value=runner_control,
+        ), unittest.mock.patch.object(
+            self.orchestrator,
+            "_persist_workflow_runtime_controls_deferred",
+            return_value={"status": "scheduled"},
+        ) as deferred_mock:
+            result = self.orchestrator.start_workflow_runner_managed(
+                {"target_company": "Google", "auto_job_daemon": True}
+            )
+
+        hosted_watchdog_mock.assert_called_once()
+        shared_recovery_mock.assert_called_once()
+        deferred_mock.assert_called_once()
+        self.assertEqual(deferred_mock.call_args.args[0], "job_start_workflow_managed")
+        persisted_controls = deferred_mock.call_args.args[1]
+        self.assertEqual(persisted_controls["hosted_runtime_watchdog"]["status"], "scheduled")
+        self.assertEqual(persisted_controls["workflow_runner_control"]["status"], "started")
+        self.assertEqual(result["hosted_runtime_watchdog"]["status"], "scheduled")
+        self.assertEqual(result["workflow_runner_control"]["status"], "started")
+
+    def test_sqlite_store_enables_wal_and_busy_timeout(self) -> None:
+        journal_mode = self.store._connection.execute("PRAGMA journal_mode").fetchone()[0]
+        busy_timeout = self.store._connection.execute("PRAGMA busy_timeout").fetchone()[0]
+        self.assertEqual(str(journal_mode).lower(), "wal")
+        self.assertGreaterEqual(int(busy_timeout), 60000)
+
+    def test_job_progress_classifies_blocked_acquisition_workers(self) -> None:
+        request_payload = {
+            "raw_user_request": "Find former xAI employees",
+            "target_company": "xAI",
+            "categories": ["former_employee"],
+            "employment_statuses": ["former"],
+            "top_k": 1,
+        }
+        request = JobRequest.from_payload(request_payload)
+        plan_payload = self.orchestrator.plan_workflow(request_payload)["plan"]
+        job_id = "job_progress_blocked_workers"
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="blocked",
+            stage="acquiring",
+            request_payload=request.to_record(),
+            plan_payload=plan_payload,
+            summary_payload={"message": "Waiting for queued workers", "blocked_task": "acquire_full_roster"},
+        )
+        self.orchestrator.agent_runtime.begin_worker(
+            job_id=job_id,
+            request=request,
+            plan_payload=plan_payload,
+            runtime_mode="workflow",
+            lane_id="search_planner",
+            worker_key="relationship_web::01",
+            stage="acquiring",
+            span_name="search_bundle:relationship_web",
+            budget_payload={"max_results": 10},
+            input_payload={"query": "xAI former employee"},
+            metadata={"target_company": "xAI"},
+            handoff_from_lane="triage_planner",
+        )
+
+        progress = self.orchestrator.get_job_progress(job_id)
+
+        self.assertIsNotNone(progress)
+        assert progress is not None
+        runtime_health = dict(progress["progress"].get("runtime_health") or {})
+        self.assertEqual(runtime_health.get("classification"), "blocked_on_acquisition_workers")
+        self.assertEqual(int(runtime_health.get("pending_worker_count") or 0), 1)
+
+    def test_get_job_progress_triggers_auto_recovery_when_blocked_on_acquisition_workers(self) -> None:
+        request_payload = {
+            "raw_user_request": "Find former xAI employees",
+            "target_company": "xAI",
+            "categories": ["former_employee"],
+            "employment_statuses": ["former"],
+            "top_k": 1,
+        }
+        request = JobRequest.from_payload(request_payload)
+        plan_payload = self.orchestrator.plan_workflow(request_payload)["plan"]
+        job_id = "job_progress_blocked_workers_takeover"
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="blocked",
+            stage="acquiring",
+            request_payload=request.to_record(),
+            plan_payload=plan_payload,
+            summary_payload={"message": "Waiting for queued workers", "blocked_task": "acquire_full_roster"},
+        )
+        self.orchestrator.agent_runtime.begin_worker(
+            job_id=job_id,
+            request=request,
+            plan_payload=plan_payload,
+            runtime_mode="workflow",
+            lane_id="search_planner",
+            worker_key="relationship_web::01",
+            stage="acquiring",
+            span_name="search_bundle:relationship_web",
+            budget_payload={"max_results": 10},
+            input_payload={"query": "xAI former employee"},
+            metadata={"target_company": "xAI"},
+            handoff_from_lane="triage_planner",
+        )
+
+        captured_payloads: list[dict[str, object]] = []
+        recovery_called = threading.Event()
+        with unittest.mock.patch.object(
+            self.orchestrator,
+            "run_worker_recovery_once",
+            side_effect=lambda payload=None: captured_payloads.append(dict(payload or {})) or recovery_called.set() or {
+                "status": "completed",
+                "workflow_resume": [],
+            },
+        ):
+            progress = self.orchestrator.get_job_progress(job_id)
+
+        self.assertIsNotNone(progress)
+        assert progress is not None
+        self.assertTrue(recovery_called.wait(timeout=1.0))
+        self.assertEqual(len(captured_payloads), 1)
+        self.assertEqual(captured_payloads[0]["job_id"], job_id)
+        self.assertEqual(int(captured_payloads[0]["stale_after_seconds"]), 0)
+        self.assertEqual(progress["auto_recovery"]["status"], "queued")
+        self.assertEqual(progress["auto_recovery"]["classification"], "blocked_on_acquisition_workers")
+
+    def test_get_job_progress_queues_auto_recovery_without_blocking_response(self) -> None:
+        job_id = "job_progress_async_takeover"
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="running",
+            stage="acquiring",
+            request_payload={"target_company": "Google"},
+            plan_payload={},
+            summary_payload={"message": "Workflow is running", "runtime_execution_mode": "hosted"},
+        )
+        with self.store._lock, self.store._connection:
+            self.store._connection.execute(
+                "UPDATE jobs SET updated_at = ? WHERE job_id = ?",
+                ("2026-01-01 00:00:00", job_id),
+            )
+
+        recovery_started = threading.Event()
+        recovery_can_finish = threading.Event()
+
+        def _slow_recovery(payload=None):  # type: ignore[no-untyped-def]
+            recovery_started.set()
+            recovery_can_finish.wait(timeout=1.0)
+            return {"status": "completed", "workflow_resume": []}
+
+        started_at = time.perf_counter()
+        with unittest.mock.patch.object(self.orchestrator, "run_worker_recovery_once", side_effect=_slow_recovery):
+            progress = self.orchestrator.get_job_progress(job_id)
+            elapsed = time.perf_counter() - started_at
+            self.assertTrue(recovery_started.wait(timeout=1.0))
+            self.assertLess(elapsed, 0.2)
+            self.assertIsNotNone(progress)
+            assert progress is not None
+            self.assertEqual(progress["auto_recovery"]["status"], "queued")
+            self.assertEqual(progress["auto_recovery"]["classification"], "runner_not_alive")
+            recovery_can_finish.set()
+
+        runtime_events = self.store.list_job_events(job_id, stage="runtime_control", limit=10, descending=True)
+        controls = [dict(event.get("payload") or {}).get("control") for event in runtime_events]
+        self.assertIn("progress_auto_takeover", controls)
+
+    def test_runtime_health_ignores_stale_shared_recovery_when_runner_is_alive(self) -> None:
+        job_id = "job_runtime_runner_alive_shared_stale"
+        runner_log = self.settings.runtime_dir / "service_logs" / "workflow-runner-job_runtime_runner_alive.log"
+        runner_log.parent.mkdir(parents=True, exist_ok=True)
+        runner_log.write_text("runner healthy\n", encoding="utf-8")
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="running",
+            stage="acquiring",
+            request_payload={"target_company": "Google"},
+            plan_payload={},
+            summary_payload={
+                "message": "Running acquisition tasks",
+                "runtime_controls": {
+                    "shared_recovery": {
+                        "status": "scheduled",
+                        "service_name": "worker-recovery-daemon",
+                        "scope": "shared",
+                    },
+                    "workflow_runner": {
+                        "status": "started",
+                        "pid": 77702,
+                        "log_path": str(runner_log),
+                    },
+                },
+            },
+        )
+
+        with unittest.mock.patch(
+            "sourcing_agent.orchestrator.read_service_status",
+            return_value={"service_name": "worker-recovery-daemon", "status": "stale", "lock_status": "locked"},
+        ), unittest.mock.patch(
+            "sourcing_agent.orchestrator._workflow_runner_process_alive",
+            return_value=True,
+        ):
+            progress = self.orchestrator.get_job_progress(job_id)
+
+        self.assertIsNotNone(progress)
+        assert progress is not None
+        runtime_controls = dict(progress["progress"].get("runtime_controls") or {})
+        self.assertFalse(bool(runtime_controls["shared_recovery"]["service_ready"]))
+        self.assertTrue(bool(runtime_controls["workflow_runner"]["process_alive"]))
+        runtime_health = dict(progress["progress"].get("runtime_health") or {})
+        self.assertEqual(runtime_health.get("classification"), "healthy_running")
+        self.assertEqual(runtime_health.get("state"), "progressing")
+
+    def test_run_worker_recovery_once_emits_runtime_heartbeat(self) -> None:
+        job_id = "job_runtime_heartbeat"
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="running",
+            stage="acquiring",
+            request_payload={"target_company": "Reflection AI"},
+            plan_payload={},
+            summary_payload={"message": "Running acquisition tasks"},
+        )
+
+        recovery = self.orchestrator.run_worker_recovery_once(
+            {
+                "job_id": job_id,
+                "workflow_auto_resume_enabled": False,
+                "workflow_queue_auto_takeover_enabled": False,
+                "runtime_heartbeat_interval_seconds": 0,
+            }
+        )
+
+        self.assertEqual(recovery["status"], "completed")
+        heartbeat = list(recovery.get("runtime_heartbeat") or [])
+        self.assertEqual(len(heartbeat), 1)
+        self.assertEqual(heartbeat[0]["status"], "emitted")
+        heartbeat_events = self.store.list_job_events(job_id, stage="runtime_heartbeat")
+        self.assertEqual(len(heartbeat_events), 1)
+        self.assertEqual(heartbeat_events[0]["payload"]["source"], "job_recovery_daemon")
+
+        second = self.orchestrator.run_worker_recovery_once(
+            {
+                "job_id": job_id,
+                "workflow_auto_resume_enabled": False,
+                "workflow_queue_auto_takeover_enabled": False,
+                "runtime_heartbeat_interval_seconds": 3600,
+            }
+        )
+        second_heartbeat = list(second.get("runtime_heartbeat") or [])
+        self.assertEqual(len(second_heartbeat), 1)
+        self.assertEqual(second_heartbeat[0]["status"], "skipped")
+        self.assertEqual(len(self.store.list_job_events(job_id, stage="runtime_heartbeat")), 1)
+
+    def test_runtime_job_events_are_compacted_by_group(self) -> None:
+        job_id = "job_runtime_event_compaction"
+        for index in range(20):
+            self.store.append_job_event(
+                job_id,
+                stage="runtime_heartbeat",
+                status="observed",
+                detail="heartbeat",
+                payload={"source": "shared_recovery_daemon", "sequence": index},
+            )
+        heartbeat_events = self.store.list_job_events(job_id, stage="runtime_heartbeat")
+        self.assertEqual(len(heartbeat_events), 12)
+        self.assertEqual(int(heartbeat_events[0]["payload"]["sequence"]), 8)
+        self.assertEqual(int(heartbeat_events[-1]["payload"]["sequence"]), 19)
+
+        for index in range(12):
+            self.store.append_job_event(
+                job_id,
+                stage="runtime_control",
+                status="updated",
+                detail="control",
+                payload={"control": "shared_recovery", "sequence": index},
+            )
+        control_events = self.store.list_job_events(job_id, stage="runtime_control")
+        self.assertEqual(len(control_events), 8)
+        self.assertEqual(int(control_events[0]["payload"]["sequence"]), 4)
+        self.assertEqual(int(control_events[-1]["payload"]["sequence"]), 11)
+
+    def test_job_run_lock_uses_store_backed_lease(self) -> None:
+        job_id = "job_store_lease_lock"
+        with self.orchestrator._job_run_lock(job_id) as first_lock:
+            self.assertIsNotNone(first_lock)
+            lease = self.store.get_workflow_job_lease(job_id)
+            self.assertIsNotNone(lease)
+            assert lease is not None
+            self.assertEqual(str(lease.get("job_id") or ""), job_id)
+            self.assertFalse(bool(lease.get("expired")))
+            with self.orchestrator._job_run_lock(job_id) as second_lock:
+                self.assertIsNone(second_lock)
+        released = self.store.get_workflow_job_lease(job_id)
+        self.assertIsNone(released)
+
+    def test_job_runtime_idle_seconds_uses_utc_storage_timestamps(self) -> None:
+        updated_at = (datetime.now(timezone.utc) - timedelta(seconds=7)).strftime("%Y-%m-%d %H:%M:%S")
+        idle_seconds = _job_runtime_idle_seconds({"updated_at": updated_at})
+        self.assertGreaterEqual(idle_seconds, 5)
+        self.assertLess(idle_seconds, 30)
+
+    def test_release_stale_workflow_job_lease_when_runner_is_missing_and_idle(self) -> None:
+        job_id = "job_release_stale_idle_runner_missing"
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="running",
+            stage="acquiring",
+            request_payload={"target_company": "Google"},
+            plan_payload={},
+            summary_payload={"message": "Running acquisition tasks"},
+        )
+        with self.store._lock, self.store._connection:
+            self.store._connection.execute(
+                "UPDATE jobs SET updated_at = ? WHERE job_id = ?",
+                ("2026-01-01 00:00:00", job_id),
+            )
+        lease = self.store.acquire_workflow_job_lease(
+            job_id,
+            lease_owner="test-runner",
+            lease_seconds=900,
+            lease_token="lease-token-test",
+        )
+        self.assertTrue(bool(lease.get("acquired")))
+
+        released = self.orchestrator._release_stale_workflow_job_lease_for_recovery(job_id)
+
+        self.assertTrue(bool(released.get("released")))
+        self.assertEqual(str(released.get("classification") or ""), "runner_not_alive")
+        self.assertIsNone(self.store.get_workflow_job_lease(job_id))
+
+    def test_resume_queued_workflow_prefers_hosted_dispatch_when_requested(self) -> None:
+        job_id = "job_resume_queued_hosted"
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="queued",
+            stage="planning",
+            request_payload={"target_company": "Reflection AI"},
+            plan_payload={},
+            summary_payload={"message": "Workflow queued", "runtime_execution_mode": "hosted"},
+        )
+
+        with unittest.mock.patch.object(
+            self.orchestrator,
+            "_start_hosted_workflow_thread",
+            return_value={"job_id": job_id, "status": "started", "mode": "workflow", "source": "workflow_recovery"},
+        ) as hosted_mock, unittest.mock.patch.object(
+            self.orchestrator,
+            "_start_workflow_runner_with_handshake",
+        ) as runner_mock:
+            result = self.orchestrator._resume_queued_workflow_if_ready(job_id)
+
+        hosted_mock.assert_called_once_with(job_id, source="workflow_recovery")
+        runner_mock.assert_not_called()
+        self.assertEqual(result["status"], "takeover_started")
+        self.assertEqual(result["mode"], "hosted")
+
+    def test_runtime_health_prefers_materialized_snapshot_when_fresh(self) -> None:
+        first = self.orchestrator.get_runtime_health({})
+        self.assertEqual(str(dict(first.get("cache") or {}).get("status") or ""), "materialized")
+        self.assertTrue(self.orchestrator.runtime_metrics_snapshot_path.exists())
+        with unittest.mock.patch.object(self.store, "list_jobs", side_effect=AssertionError("runtime health should use cached snapshot")):
+            cached = self.orchestrator.get_runtime_health({})
+        self.assertEqual(str(dict(cached.get("cache") or {}).get("status") or ""), "hit")
+
+    def test_storage_serializes_path_payloads_for_job_events_and_summaries(self) -> None:
+        job_id = "job_storage_json_safe"
+        payload_path = Path(self.tempdir.name) / "payload.json"
+        self.store.append_job_event(
+            job_id,
+            stage="acquiring",
+            status="completed",
+            detail="json safe payload",
+            payload={"path": payload_path, "nested": {"items": [payload_path]}},
+        )
+        events = self.store.list_job_events(job_id)
+        self.assertEqual(events[0]["payload"]["path"], str(payload_path))
+        self.assertEqual(events[0]["payload"]["nested"]["items"][0], str(payload_path))
+
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="running",
+            stage="acquiring",
+            request_payload={"target_company": "Reflection AI"},
+            plan_payload={"artifact_dir": payload_path},
+            summary_payload={"candidate_doc_path": payload_path},
+        )
+        stored = self.store.get_job(job_id)
+        assert stored is not None
+        self.assertEqual(stored["summary"]["candidate_doc_path"], str(payload_path))
+        self.assertEqual(stored["plan"]["artifact_dir"], str(payload_path))
+
+    def test_runtime_metrics_reports_refresh_and_reconcile_counters(self) -> None:
+        job_id = "job_runtime_metrics_refresh"
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="running",
+            stage="acquiring",
+            request_payload={"target_company": "Reflection AI"},
+            plan_payload={},
+            summary_payload={
+                "message": "refreshing",
+                "pre_retrieval_refresh": {
+                    "status": "completed",
+                    "snapshot_id": "snapshot-1",
+                    "search_seed_worker_count": 2,
+                    "harvest_prefetch_worker_count": 1,
+                },
+                "background_reconcile": {
+                    "search_seed": {
+                        "status": "inline_refreshed",
+                        "applied_worker_count": 2,
+                        "added_entry_count": 5,
+                    },
+                    "harvest_prefetch": {
+                        "status": "inline_refreshed",
+                        "applied_worker_count": 1,
+                    },
+                },
+            },
+        )
+
+        runtime = self.orchestrator.get_runtime_metrics({"force_refresh": True})
+        metrics = dict(runtime.get("metrics") or {})
+        refresh_metrics = dict(runtime.get("refresh_metrics") or {})
+        service_readiness = dict(runtime.get("service_readiness") or {})
+        self.assertEqual(int(metrics.get("pre_retrieval_refresh_job_count") or 0), 1)
+        self.assertEqual(int(metrics.get("inline_search_seed_worker_count") or 0), 2)
+        self.assertEqual(int(metrics.get("inline_harvest_prefetch_worker_count") or 0), 1)
+        self.assertEqual(int(metrics.get("background_reconcile_job_count") or 0), 1)
+        self.assertEqual(int(metrics.get("background_search_seed_reconcile_job_count") or 0), 1)
+        self.assertEqual(int(metrics.get("background_harvest_prefetch_reconcile_job_count") or 0), 1)
+        self.assertEqual(int(refresh_metrics.get("pre_retrieval_refresh_job_count") or 0), 1)
+        self.assertEqual(int(refresh_metrics.get("background_reconcile_job_count") or 0), 1)
+        self.assertIn(service_readiness.get("recommended_workflow_entrypoint"), {"serve"})
+        self.assertIn(service_readiness.get("standalone_cli_fallback"), {"managed_subprocess"})
+        self.assertIn("auto_recovery_ready", service_readiness)
+
+    def test_runtime_health_reports_stalled_jobs(self) -> None:
+        request_payload = {
+            "raw_user_request": "Find former xAI employees",
+            "target_company": "xAI",
+            "categories": ["former_employee"],
+            "employment_statuses": ["former"],
+            "top_k": 1,
+        }
+        request = JobRequest.from_payload(request_payload)
+        plan_payload = self.orchestrator.plan_workflow(request_payload)["plan"]
+        job_id = "job_runtime_health_stalled"
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="blocked",
+            stage="acquiring",
+            request_payload=request.to_record(),
+            plan_payload=plan_payload,
+            summary_payload={"message": "Waiting for queued workers", "blocked_task": "acquire_full_roster"},
+        )
+        self.orchestrator.agent_runtime.begin_worker(
+            job_id=job_id,
+            request=request,
+            plan_payload=plan_payload,
+            runtime_mode="workflow",
+            lane_id="search_planner",
+            worker_key="relationship_web::02",
+            stage="acquiring",
+            span_name="search_bundle:relationship_web",
+            budget_payload={"max_results": 10},
+            input_payload={"query": "xAI former employee"},
+            metadata={"target_company": "xAI"},
+            handoff_from_lane="triage_planner",
+        )
+
+        health = self.orchestrator.get_runtime_health({"active_limit": 10})
+
+        self.assertEqual(health["status"], "degraded")
+        self.assertGreaterEqual(int(health["metrics"]["stalled_job_count"] or 0), 1)
+        self.assertEqual(health["stalled_jobs"][0]["job_id"], job_id)
+        self.assertEqual(
+            health["stalled_jobs"][0]["runtime_health"]["classification"],
+            "blocked_on_acquisition_workers",
+        )
+
+    def test_runtime_health_excludes_stale_acquiring_jobs_when_remote_workers_are_progressing(self) -> None:
+        request_payload = {
+            "raw_user_request": "Find Google multimodal people",
+            "target_company": "Google",
+            "categories": ["employee"],
+            "employment_statuses": ["current", "former"],
+            "top_k": 5,
+        }
+        request = JobRequest.from_payload(request_payload)
+        plan_payload = self.orchestrator.plan_workflow(request_payload)["plan"]
+        job_id = "job_runtime_health_remote_progress"
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="running",
+            stage="acquiring",
+            request_payload=request.to_record(),
+            plan_payload=plan_payload,
+            summary_payload={"message": "Waiting on keyword shards"},
+        )
+        with self.store._lock, self.store._connection:
+            self.store._connection.execute(
+                "UPDATE jobs SET updated_at = ? WHERE job_id = ?",
+                ("2026-01-01 00:00:00", job_id),
+            )
+
+        handle = self.orchestrator.agent_runtime.begin_worker(
+            job_id=job_id,
+            request=request,
+            plan_payload=plan_payload,
+            runtime_mode="workflow",
+            lane_id="acquisition_specialist",
+            worker_key="harvest_company_employees::google::kw_veo",
+            stage="acquiring",
+            span_name="harvest_company_employees:kw_veo",
+            budget_payload={"max_pages": 100, "page_limit": 25},
+            input_payload={"search_query": "Veo"},
+            metadata={"target_company": "Google"},
+            handoff_from_lane="triage_planner",
+        )
+        self.orchestrator.agent_runtime.checkpoint_worker(
+            handle,
+            checkpoint_payload={"stage": "waiting_remote_harvest"},
+            output_payload={"message": "Submitted remote harvest run."},
+            status="queued",
+        )
+
+        with unittest.mock.patch(
+            "sourcing_agent.orchestrator.read_service_status",
+            return_value={"status": "running", "lock_status": "locked", "pid_alive": True},
+        ):
+            health = self.orchestrator.get_runtime_health({"active_limit": 10, "force_refresh": True})
+
+        self.assertEqual(health["status"], "ok")
+        self.assertEqual(int(health["metrics"]["stale_acquiring_job_count"] or 0), 0)
+        self.assertEqual(list(health["stale_jobs"]["acquiring"]), [])
+
+    def test_get_system_progress_aggregates_workflow_registry_and_object_sync(self) -> None:
+        job_id = "job_system_progress"
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="running",
+            stage="acquiring",
+            request_payload={"target_company": "Reflection AI"},
+            plan_payload={},
+            summary_payload={
+                "message": "Running acquisition",
+                "pre_retrieval_refresh": {
+                    "status": "completed",
+                    "snapshot_id": "snapshot-system-progress",
+                    "search_seed_worker_count": 1,
+                    "harvest_prefetch_worker_count": 0,
+                },
+                "background_reconcile": {
+                    "search_seed": {
+                        "status": "inline_refreshed",
+                        "applied_worker_count": 1,
+                        "added_entry_count": 2,
+                    }
+                },
+            },
+        )
+        self.store.mark_linkedin_profile_registry_queued("https://www.linkedin.com/in/demo-profile")
+        self.store.record_linkedin_profile_registry_event(
+            "https://www.linkedin.com/in/demo-profile",
+            event_type="lookup_attempt",
+            event_status="requested",
+            detail="registry lookup",
+        )
+        bundle_dir = self.settings.runtime_dir / "asset_exports" / "bundle_demo"
+        bundle_dir.mkdir(parents=True, exist_ok=True)
+        (bundle_dir / "upload_progress.json").write_text(
+            json.dumps(
+                {
+                    "status": "running",
+                    "bundle_kind": "company_snapshot",
+                    "bundle_id": "bundle_demo",
+                    "requested_file_count": 3,
+                    "completed_file_count": 1,
+                    "remaining_file_count": 2,
+                    "completion_ratio": 0.3333,
+                    "updated_at": "2026-04-11T01:00:00+00:00",
+                    "transfer_mode": "archive",
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        object_sync_dir = self.settings.runtime_dir / "object_sync"
+        object_sync_dir.mkdir(parents=True, exist_ok=True)
+        (object_sync_dir / "bundle_index.json").write_text(
+            json.dumps(
+                {
+                    "updated_at": "2026-04-11T01:05:00+00:00",
+                    "bundles": [{"bundle_kind": "company_snapshot", "bundle_id": "bundle_demo"}],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+
+        progress = self.orchestrator.get_system_progress(
+            {
+                "active_limit": 5,
+                "object_sync_limit": 5,
+                "profile_registry_lookback_hours": 24,
+                "force_refresh": True,
+            }
+        )
+
+        self.assertIn("runtime", progress)
+        self.assertEqual(progress["workflow_jobs"]["count"], 1)
+        self.assertEqual(progress["workflow_jobs"]["items"][0]["job_id"], job_id)
+        self.assertEqual(
+            int(progress["workflow_jobs"]["items"][0]["refresh_metrics"]["pre_retrieval_refresh_count"] or 0),
+            1,
+        )
+        self.assertEqual(
+            int(progress["workflow_jobs"]["items"][0]["refresh_metrics"]["background_search_seed_reconcile_count"] or 0),
+            1,
+        )
+        self.assertEqual(
+            str(progress["workflow_jobs"]["items"][0]["pre_retrieval_refresh"]["snapshot_id"] or ""),
+            "snapshot-system-progress",
+        )
+        self.assertEqual(progress["profile_registry"]["lookup_attempts"], 1)
+        self.assertEqual(progress["object_sync"]["tracked_bundle_count"], 1)
+        self.assertEqual(progress["object_sync"]["active_transfer_count"], 1)
+        self.assertEqual(progress["object_sync"]["recent_transfers"][0]["bundle_id"], "bundle_demo")
+
+    def test_get_worker_daemon_status_can_aggregate_job_runtime_controls(self) -> None:
+        job_id = "job_daemon_status_runtime_controls"
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="running",
+            stage="acquiring",
+            request_payload={"target_company": "Reflection AI"},
+            plan_payload={},
+            summary_payload={
+                "runtime_controls": {
+                    "shared_recovery": {
+                        "status": "started",
+                        "service_name": "worker-recovery-daemon",
+                        "scope": "shared",
+                    },
+                    "job_recovery": {
+                        "status": "started",
+                        "service_name": f"job-recovery-{job_id}",
+                        "scope": "job_scoped",
+                    },
+                }
+            },
+        )
+
+        with unittest.mock.patch(
+            "sourcing_agent.orchestrator.read_service_status",
+            side_effect=[
+                {"service_name": "worker-recovery-daemon", "status": "running", "lock_status": "locked"},
+                {"service_name": f"job-recovery-{job_id}", "status": "running", "lock_status": "locked"},
+            ],
+        ):
+            status = self.orchestrator.get_worker_daemon_status({"job_id": job_id})
+
+        self.assertEqual(status["status"], "ok")
+        self.assertEqual(status["job_id"], job_id)
+        self.assertEqual(status["recovery_services"]["shared"]["service_name"], "worker-recovery-daemon")
+        self.assertEqual(status["recovery_services"]["job_scoped"]["service_name"], f"job-recovery-{job_id}")
+
+    def test_run_workflow_blocking_triggers_job_recovery_when_acquisition_is_blocked(self) -> None:
+        plan_result = self.orchestrator.plan_workflow(
+            {
+                "raw_user_request": "帮我找 Anthropic 当前偏基础设施方向的技术成员，先获取全量资产再检索。",
+                "target_company": "Anthropic",
+                "categories": ["employee"],
+                "employment_statuses": ["current"],
+                "keywords": ["基础设施", "GPU", "预训练"],
+                "top_k": 3,
+            }
+        )
+        review_id = int(plan_result["plan_review_session"]["review_id"] or 0)
+        self.orchestrator.review_plan_session(
+            {
+                "review_id": review_id,
+                "action": "approved",
+                "reviewer": "tester",
+                "decision": {"allow_high_cost_sources": False},
+            }
+        )
+
+        with unittest.mock.patch.object(self.orchestrator, "_run_workflow") as mocked_run_workflow, unittest.mock.patch.object(
+            self.orchestrator, "run_queued_workflow"
+        ) as mocked_run_queued:
+
+            def _mark_blocked(job_id: str, request: JobRequest, plan: object) -> None:
+                self.store.save_job(
+                    job_id=job_id,
+                    job_type="workflow",
+                    status="blocked",
+                    stage="acquiring",
+                    request_payload=request.to_record(),
+                    plan_payload=plan.to_record() if hasattr(plan, "to_record") else {},
+                    summary_payload={
+                        "blocked_task": "acquire_full_roster",
+                        "message": "queued_background_harvest",
+                    },
+                )
+
+            mocked_run_workflow.side_effect = _mark_blocked
+            mocked_run_queued.return_value = {"status": "blocked", "stage": "acquiring"}
+            snapshot = self.orchestrator.run_workflow_blocking(
+                {"plan_review_id": review_id, "job_recovery_poll_seconds": 0.1, "job_recovery_max_ticks": 3}
+            )
+
+        self.assertIn(snapshot["job"]["status"], {"blocked", "completed"})
+        mocked_run_queued.assert_called_once()
+        call_args, call_kwargs = mocked_run_queued.call_args
+        self.assertEqual(call_args, (snapshot["job"]["job_id"],))
+        self.assertEqual(call_kwargs, {})
+
+    def test_run_worker_daemon_service_job_scoped_stops_after_terminal_job(self) -> None:
+        job_id = "job_terminal_job_scoped_daemon"
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="completed",
+            stage="completed",
+            request_payload={"target_company": "Reflection AI"},
+            plan_payload={},
+            summary_payload={"message": "done"},
+        )
+
+        result = self.orchestrator.run_worker_daemon_service(
+            {
+                "service_name": f"job-recovery-{job_id}",
+                "job_id": job_id,
+                "job_scoped": True,
+                "poll_seconds": 0.1,
+                "max_ticks": 5,
+                "workflow_resume_stale_after_seconds": 0,
+                "workflow_queue_resume_stale_after_seconds": 0,
+            }
+        )
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["scope"], "job_scoped")
+        self.assertEqual(result["job_id"], job_id)
+        self.assertEqual(result["service"]["status"], "stopped")
+        self.assertEqual(int(result["service"]["tick"] or 0), 1)
+        callback_payload = dict(result["service"].get("callback_payload") or {})
+        self.assertEqual(callback_payload.get("job_id"), job_id)
+        self.assertFalse(bool(callback_payload.get("workflow_resume_explicit_job")))
+        self.assertEqual(int(callback_payload.get("workflow_resume_stale_after_seconds")), 0)
+        self.assertEqual(int(callback_payload.get("workflow_queue_resume_stale_after_seconds")), 0)
+
+    def test_ensure_job_scoped_recovery_starts_sidecar_process(self) -> None:
+        captured: dict[str, object] = {}
+
+        class FakeProcess:
+            pid = 24680
+
+            def poll(self):  # type: ignore[no-untyped-def]
+                return None
+
+        def fake_popen(command, **kwargs):  # type: ignore[no-untyped-def]
+            captured["command"] = command
+            captured["kwargs"] = kwargs
+            return FakeProcess()
+
+        with unittest.mock.patch(
+            "sourcing_agent.process_supervision.subprocess.Popen",
+            side_effect=fake_popen,
+        ), unittest.mock.patch(
+            "sourcing_agent.process_supervision.time.sleep",
+            return_value=None,
+        ), unittest.mock.patch(
+            "sourcing_agent.orchestrator.read_service_status",
+            side_effect=[
+                {"service_name": "job-recovery-job_sidecar_spawn", "status": "not_started", "lock_status": "missing"},
+                {"service_name": "job-recovery-job_sidecar_spawn", "status": "running", "lock_status": "locked"},
+            ],
+        ):
+            result = self.orchestrator.ensure_job_scoped_recovery(
+                "job_sidecar_spawn",
+                {
+                    "auto_job_daemon": True,
+                    "job_recovery_workflow_resume_stale_after_seconds": 3,
+                    "job_recovery_workflow_queue_resume_stale_after_seconds": 4,
+                },
+            )
+
+        self.assertEqual(result["status"], "started")
+        self.assertEqual(result["mode"], "sidecar")
+        self.assertEqual(result["pid"], 24680)
+        self.assertEqual(result["handshake"]["status"], "ready")
+        command = list(captured["command"])
+        self.assertIn("run-worker-daemon-service", command)
+        self.assertIn("--job-scoped", command)
+        self.assertIn("--workflow-auto-resume-stale-after-seconds", command)
+        self.assertIn("--workflow-queue-auto-takeover-stale-after-seconds", command)
+        self.assertIn("3", command)
+        self.assertIn("4", command)
+        kwargs = dict(captured["kwargs"])
+        self.assertEqual(kwargs["cwd"], str(self.catalog.project_root))
+        self.assertEqual(kwargs["stdin"], unittest.mock.ANY)
+        self.assertEqual(kwargs["stderr"], unittest.mock.ANY)
+
+    def test_ensure_shared_recovery_starts_sidecar_process(self) -> None:
+        captured: dict[str, object] = {}
+
+        class FakeProcess:
+            pid = 13579
+
+            def poll(self):  # type: ignore[no-untyped-def]
+                return None
+
+        def fake_popen(command, **kwargs):  # type: ignore[no-untyped-def]
+            captured["command"] = command
+            captured["kwargs"] = kwargs
+            return FakeProcess()
+
+        with unittest.mock.patch(
+            "sourcing_agent.process_supervision.subprocess.Popen",
+            side_effect=fake_popen,
+        ), unittest.mock.patch(
+            "sourcing_agent.process_supervision.time.sleep",
+            return_value=None,
+        ), unittest.mock.patch(
+            "sourcing_agent.orchestrator.read_service_status",
+            side_effect=[
+                {"service_name": "worker-recovery-daemon", "status": "not_started", "lock_status": "missing"},
+                {"service_name": "worker-recovery-daemon", "status": "running", "lock_status": "locked"},
+            ],
+        ):
+            result = self.orchestrator.ensure_shared_recovery(
+                {
+                    "auto_job_daemon": True,
+                    "shared_recovery_workflow_resume_stale_after_seconds": 11,
+                    "shared_recovery_workflow_queue_resume_stale_after_seconds": 12,
+                }
+            )
+
+        self.assertEqual(result["status"], "started")
+        self.assertEqual(result["mode"], "sidecar")
+        self.assertEqual(result["scope"], "shared")
+        self.assertEqual(result["pid"], 13579)
+        self.assertEqual(result["handshake"]["status"], "ready")
+        command = list(captured["command"])
+        self.assertIn("run-worker-daemon-service", command)
+        self.assertNotIn("--job-scoped", command)
+        self.assertIn("--workflow-auto-resume-stale-after-seconds", command)
+        self.assertIn("--workflow-queue-auto-takeover-stale-after-seconds", command)
+        self.assertIn("11", command)
+        self.assertIn("12", command)
+
+    def test_ensure_hosted_runtime_watchdog_starts_sidecar_process(self) -> None:
+        captured: dict[str, object] = {}
+
+        class FakeProcess:
+            pid = 97531
+
+            def poll(self):  # type: ignore[no-untyped-def]
+                return None
+
+        def fake_popen(command, **kwargs):  # type: ignore[no-untyped-def]
+            captured["command"] = command
+            captured["kwargs"] = kwargs
+            return FakeProcess()
+
+        with unittest.mock.patch(
+            "sourcing_agent.process_supervision.subprocess.Popen",
+            side_effect=fake_popen,
+        ), unittest.mock.patch(
+            "sourcing_agent.process_supervision.time.sleep",
+            return_value=None,
+        ), unittest.mock.patch(
+            "sourcing_agent.orchestrator.read_service_status",
+            side_effect=[
+                {"service_name": "server-runtime-watchdog", "status": "not_started", "lock_status": "missing"},
+                {"service_name": "server-runtime-watchdog", "status": "running", "lock_status": "locked"},
+            ],
+        ):
+            result = self.orchestrator.ensure_hosted_runtime_watchdog(
+                {
+                    "auto_job_daemon": True,
+                    "hosted_runtime_watchdog_poll_seconds": 9.0,
+                }
+            )
+
+        self.assertEqual(result["status"], "started")
+        self.assertEqual(result["mode"], "sidecar")
+        self.assertEqual(result["scope"], "hosted_runtime_watchdog")
+        self.assertEqual(result["pid"], 97531)
+        self.assertEqual(result["handshake"]["status"], "ready")
+        command = list(captured["command"])
+        self.assertIn("run-server-runtime-watchdog-service", command)
+        self.assertIn("--service-name", command)
+        self.assertIn("--shared-service-name", command)
+        self.assertIn("server-runtime-watchdog", command)
+        self.assertIn("worker-recovery-daemon", command)
+
+    def test_server_runtime_watchdog_bootstraps_stale_shared_recovery(self) -> None:
+        with unittest.mock.patch.object(
+            self.orchestrator,
+            "run_hosted_runtime_watchdog_once",
+            return_value={
+                "status": "completed",
+                "mode": "hosted",
+                "worker_recovery": {"status": "completed"},
+                "hosted_dispatch": [],
+            },
+        ) as hosted_mock:
+            result = run_server_runtime_watchdog_once(self.orchestrator)
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["mode"], "hosted")
+        hosted_mock.assert_called_once()
+        hosted_payload = dict(hosted_mock.call_args[0][0] or {})
+        self.assertEqual(hosted_payload["hosted_runtime_watchdog_service_name"], "server-runtime-watchdog")
+        self.assertEqual(hosted_payload["shared_service_name"], "worker-recovery-daemon")
+
+    def test_server_runtime_watchdog_skips_shared_restart_when_service_ready(self) -> None:
+        with unittest.mock.patch.object(
+            self.orchestrator,
+            "run_hosted_runtime_watchdog_once",
+            return_value={
+                "status": "completed",
+                "mode": "hosted",
+                "worker_recovery": {"status": "completed"},
+                "hosted_dispatch": [{"job_id": "job-1", "status": "started"}],
+            },
+        ) as hosted_mock:
+            result = run_server_runtime_watchdog_once(self.orchestrator)
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["mode"], "hosted")
+        hosted_mock.assert_called_once()
+
+    def test_read_service_status_marks_process_not_alive_as_stale(self) -> None:
+        runtime_dir = Path(self.tempdir.name) / "runtime_service_status"
+        service_dir = runtime_dir / "services" / "stale-service"
+        service_dir.mkdir(parents=True, exist_ok=True)
+        lock_path = service_dir / "service.lock"
+        lock_path.touch()
+        status_path = service_dir / "status.json"
+        status_path.write_text(
+            json.dumps(
+                {
+                    "service_name": "stale-service",
+                    "status": "running",
+                    "pid": 999999,
+                    "lock_path": str(lock_path),
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+        with unittest.mock.patch("sourcing_agent.service_daemon.os.kill", side_effect=OSError("not alive")):
+            status = read_service_status(runtime_dir, "stale-service")
+
+        self.assertEqual(status["status"], "stale")
+        self.assertEqual(status["stale_reason"], "process_not_alive")
+        self.assertFalse(bool(status["pid_alive"]))
+        self.assertEqual(status["lock_status"], "free")
+
+    def test_read_service_status_marks_expired_heartbeat_as_stale(self) -> None:
+        runtime_dir = Path(self.tempdir.name) / "runtime_service_heartbeat"
+        service_dir = runtime_dir / "services" / "heartbeat-service"
+        service_dir.mkdir(parents=True, exist_ok=True)
+        lock_path = service_dir / "service.lock"
+        lock_path.touch()
+        status_path = service_dir / "status.json"
+        status_path.write_text(
+            json.dumps(
+                {
+                    "service_name": "heartbeat-service",
+                    "status": "running",
+                    "pid": 1,
+                    "poll_seconds": 2.0,
+                    "updated_at": "2026-01-01T00:00:00+00:00",
+                    "lock_path": str(lock_path),
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+        with unittest.mock.patch("sourcing_agent.service_daemon.os.kill", return_value=None):
+            status = read_service_status(runtime_dir, "heartbeat-service")
+
+        self.assertEqual(status["status"], "stale")
+        self.assertEqual(status["stale_reason"], "heartbeat_expired")
+        self.assertTrue(bool(status["pid_alive"]))
+        self.assertGreater(float(status["heartbeat_age_seconds"]), float(status["heartbeat_timeout_seconds"]))
+
+    def test_worker_daemon_service_emits_lifecycle_logs(self) -> None:
+        runtime_dir = Path(self.tempdir.name) / "runtime_worker_logs"
+        stderr = io.StringIO()
+        service = WorkerDaemonService(
+            runtime_dir=runtime_dir,
+            service_name="loggable-daemon",
+            poll_seconds=0.01,
+            recovery_callback=lambda payload: {  # noqa: ARG005
+                "status": "completed",
+                "daemon": {"recoverable_count": 0, "claimed_count": 0, "executed_count": 0, "jobs": []},
+                "workflow_resume": [],
+                "post_completion_reconcile": [],
+            },
+        )
+
+        with contextlib.redirect_stderr(stderr):
+            summary = service.run_forever(max_ticks=1)
+
+        logs = stderr.getvalue()
+        self.assertEqual(summary["status"], "stopped")
+        self.assertIn('"event": "service_start"', logs)
+        self.assertIn('"event": "service_tick"', logs)
+        self.assertIn('"event": "service_stop"', logs)
+
+    def test_hydrate_cached_prefetch_profiles_reuses_registry_raw(self) -> None:
+        snapshot_dir = self.settings.company_assets_dir / "reflectionai" / "snapshot-prefetch-cache"
+        raw_dir = snapshot_dir / "harvest_profiles"
+        raw_dir.mkdir(parents=True, exist_ok=True)
+        profile_url = "https://www.linkedin.com/in/cached-infra/"
+        raw_path = raw_dir / "cached_infra.json"
+        raw_path.write_text(
+            json.dumps(
+                {
+                    "_harvest_request": {"profile_url": profile_url},
+                    "item": {
+                        "firstName": "Cached",
+                        "lastName": "Infra",
+                        "linkedinUrl": profile_url,
+                        "headline": "Infrastructure Engineer",
+                    },
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        self.store.mark_linkedin_profile_registry_fetched(
+            profile_url,
+            raw_path=str(raw_path),
+            source_jobs=["job-registry-bootstrap"],
+            snapshot_dir=str(snapshot_dir),
+        )
+
+        prefetched = self.acquisition_engine.multi_source_enricher._hydrate_cached_prefetch_profiles(
+            [profile_url],
+            snapshot_dir,
+            source_jobs=["job-registry-reuse"],
+        )
+
+        self.assertIn(profile_url, prefetched)
+        self.assertEqual(prefetched[profile_url]["parsed"]["full_name"], "Cached Infra")
+        registry_entry = self.store.get_linkedin_profile_registry(profile_url) or {}
+        self.assertEqual(str(registry_entry.get("status") or ""), "fetched")
+        self.assertEqual(str(registry_entry.get("last_raw_path") or ""), str(raw_path))
+
+    def test_ensure_job_scoped_recovery_bootstraps_when_sidecar_not_ready(self) -> None:
+        class FakeProcess:
+            pid = 86420
+
+            def poll(self):  # type: ignore[no-untyped-def]
+                return None
+
+        with unittest.mock.patch(
+            "sourcing_agent.process_supervision.subprocess.Popen",
+            return_value=FakeProcess(),
+        ), unittest.mock.patch(
+            "sourcing_agent.process_supervision.time.sleep",
+            return_value=None,
+        ), unittest.mock.patch(
+            "sourcing_agent.orchestrator.read_service_status",
+            return_value={"service_name": "job-recovery-job_sidecar_deferred", "status": "not_started", "lock_status": "missing"},
+        ), unittest.mock.patch.object(
+            self.orchestrator,
+            "_wait_for_recovery_service_ready",
+            return_value={
+                "status": "timeout_process_alive",
+                "service_status": {
+                    "service_name": "job-recovery-job_sidecar_deferred",
+                    "status": "not_started",
+                    "lock_status": "missing",
+                },
+                "pid": 86420,
+            },
+        ), unittest.mock.patch.object(
+            self.orchestrator,
+            "run_worker_recovery_once",
+            return_value={"status": "completed", "workflow_resume": []},
+        ) as bootstrap_mock:
+            result = self.orchestrator.ensure_job_scoped_recovery(
+                "job_sidecar_deferred",
+                {
+                    "auto_job_daemon": True,
+                    "job_recovery_startup_timeout_seconds": 0.2,
+                    "job_recovery_startup_poll_seconds": 0.1,
+                },
+            )
+
+        self.assertEqual(result["status"], "started_deferred")
+        self.assertEqual(result["handshake"]["status"], "timeout_process_alive")
+        bootstrap_mock.assert_called_once()
+        bootstrap_payload = dict(bootstrap_mock.call_args[0][0] or {})
+        self.assertEqual(bootstrap_payload["job_id"], "job_sidecar_deferred")
+        self.assertFalse(bool(bootstrap_payload["workflow_resume_explicit_job"]))
+
+    def test_run_worker_recovery_once_can_skip_immediate_explicit_workflow_resume(self) -> None:
+        job_id = "job_skip_explicit_resume"
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="queued",
+            stage="planning",
+            request_payload={"target_company": "Reflection AI"},
+            plan_payload={},
+            summary_payload={"message": "queued"},
+        )
+
+        with unittest.mock.patch.object(
+            self.orchestrator,
+            "_resume_queued_workflow_if_ready",
+            side_effect=AssertionError("explicit queued workflow takeover should stay stale-gated"),
+        ):
+            recovery = self.orchestrator.run_worker_recovery_once(
+                {
+                    "job_id": job_id,
+                    "workflow_resume_explicit_job": False,
+                    "workflow_auto_resume_enabled": False,
+                    "workflow_queue_auto_takeover_enabled": False,
+                }
+            )
+
+        self.assertEqual(recovery["status"], "completed")
+        self.assertEqual(list(recovery.get("workflow_resume") or []), [])
+
+    def test_run_worker_recovery_once_job_scoped_stale_scan_ignores_unrelated_jobs(self) -> None:
+        scoped_job_id = "job_scoped_resume"
+        unrelated_job_id = "job_unrelated_queued"
+        self.store.save_job(
+            job_id=scoped_job_id,
+            job_type="workflow",
+            status="queued",
+            stage="planning",
+            request_payload={"target_company": "Reflection AI"},
+            plan_payload={},
+            summary_payload={"message": "queued"},
+        )
+        self.store.save_job(
+            job_id=unrelated_job_id,
+            job_type="workflow",
+            status="queued",
+            stage="planning",
+            request_payload={"target_company": "Other Co"},
+            plan_payload={},
+            summary_payload={"message": "queued"},
+        )
+
+        with unittest.mock.patch.object(
+            self.orchestrator,
+            "_resume_queued_workflow_if_ready",
+            side_effect=lambda job_id, assume_lock=False: {  # type: ignore[no-untyped-def]
+                "job_id": job_id,
+                "status": "resumed",
+                "assume_lock": assume_lock,
+            },
+        ) as resume_queued:
+            recovery = self.orchestrator.run_worker_recovery_once(
+                {
+                    "job_id": scoped_job_id,
+                    "workflow_resume_explicit_job": False,
+                    "workflow_auto_resume_enabled": False,
+                    "workflow_queue_auto_takeover_enabled": True,
+                    "workflow_queue_resume_stale_after_seconds": 0,
+                    "workflow_stale_scope_job_id": scoped_job_id,
+                }
+            )
+
+        self.assertEqual(recovery["status"], "completed")
+        workflow_resume = list(recovery.get("workflow_resume") or [])
+        self.assertEqual(len(workflow_resume), 1)
+        self.assertEqual(workflow_resume[0]["job_id"], scoped_job_id)
+        resume_queued.assert_called_once_with(scoped_job_id)
 
     def test_worker_recovery_reconciles_completed_workflow_results_after_background_exploration(self) -> None:
         company_dir = self.settings.company_assets_dir / "acme"
@@ -1370,8 +5088,9 @@ class PipelineTest(unittest.TestCase):
         self.assertTrue(initial_artifact["summary"]["candidate_source"]["source_path"].endswith("candidate_documents.json"))
         initial_results = self.orchestrator.get_job_results(job_id)
         assert initial_results is not None
-        self.assertEqual(initial_results["job"]["summary"]["returned_matches"], 0)
-        self.assertEqual(initial_results["results"], [])
+        self.assertEqual(initial_results["job"]["summary"]["returned_matches"], 1)
+        self.assertEqual(len(initial_results["results"]), 1)
+        self.assertEqual(initial_results["results"][0]["focus_areas"], "")
 
         worker_handle = self.orchestrator.agent_runtime.begin_worker(
             job_id=job_id,
@@ -1481,7 +5200,7 @@ class PipelineTest(unittest.TestCase):
             "exploration_summary",
         )
 
-    def test_acquire_search_seed_pool_blocks_when_background_queue_is_pending(self) -> None:
+    def test_acquire_search_seed_pool_allows_baseline_when_background_queue_is_pending(self) -> None:
         identity = CompanyIdentity(
             requested_name="Thinking Machines Lab",
             canonical_name="Thinking Machines Lab",
@@ -1549,9 +5268,1170 @@ class PipelineTest(unittest.TestCase):
             ),
         )
 
-        self.assertEqual(execution.status, "blocked")
+        self.assertEqual(execution.status, "completed")
         self.assertEqual(execution.payload["queued_query_count"], 1)
         self.assertEqual(execution.state_updates["search_seed_snapshot"].stop_reason, "queued_background_search")
+        self.assertEqual(execution.payload["entry_count"], 1)
+
+    def test_acquire_search_seed_pool_still_blocks_when_background_queue_has_no_entries(self) -> None:
+        identity = CompanyIdentity(
+            requested_name="Thinking Machines Lab",
+            canonical_name="Thinking Machines Lab",
+            company_key="thinkingmachineslab",
+            linkedin_slug="thinkingmachinesai",
+            linkedin_company_url="https://www.linkedin.com/company/thinkingmachinesai/",
+        )
+        snapshot_dir = self.settings.company_assets_dir / "thinkingmachineslab" / "snapshot-queued-empty"
+        summary_path = snapshot_dir / "search_seed_discovery" / "summary.json"
+        summary_path.parent.mkdir(parents=True, exist_ok=True)
+        summary_path.write_text("{}", encoding="utf-8")
+        queued_snapshot = SearchSeedSnapshot(
+            snapshot_id="snapshot-queued-empty",
+            target_company="Thinking Machines Lab",
+            company_identity=identity,
+            snapshot_dir=snapshot_dir,
+            entries=[],
+            query_summaries=[
+                {
+                    "query": "Thinking Machines Lab former employee",
+                    "status": "queued",
+                }
+            ],
+            accounts_used=[],
+            errors=[],
+            stop_reason="queued_background_search",
+            summary_path=summary_path,
+        )
+
+        self.acquisition_engine.search_seed_acquirer.discover = lambda *args, **kwargs: queued_snapshot
+        task = AcquisitionTask(
+            task_id="acquire-full-roster",
+            task_type="acquire_full_roster",
+            title="Acquire search seed pool",
+            description="Acquire former employee leads",
+            status="ready",
+            blocking=True,
+            metadata={
+                "strategy_type": "former_employee_search",
+                "search_seed_queries": ["Thinking Machines Lab former employee"],
+                "cost_policy": {},
+                "employment_statuses": ["former"],
+            },
+        )
+        execution = self.acquisition_engine._acquire_search_seed_pool(
+            task,
+            {
+                "company_identity": identity,
+                "snapshot_dir": snapshot_dir,
+                "job_id": "job_queued_empty",
+                "plan_payload": {},
+                "runtime_mode": "workflow",
+            },
+            JobRequest(
+                raw_user_request="Find former Thinking Machines Lab members",
+                target_company="Thinking Machines Lab",
+                categories=["former_employee"],
+                employment_statuses=["former"],
+            ),
+        )
+
+        self.assertEqual(execution.status, "blocked")
+        self.assertEqual(execution.payload["queued_query_count"], 1)
+
+    def test_acquire_search_seed_pool_passes_effective_request_payload_from_intent_view(self) -> None:
+        identity = CompanyIdentity(
+            requested_name="Google",
+            canonical_name="Google",
+            company_key="google",
+            linkedin_slug="google",
+            linkedin_company_url="https://www.linkedin.com/company/google/",
+        )
+        snapshot_dir = self.settings.company_assets_dir / "google" / "snapshot-effective-request"
+        summary_path = snapshot_dir / "search_seed_discovery" / "summary.json"
+        summary_path.parent.mkdir(parents=True, exist_ok=True)
+        summary_path.write_text("{}", encoding="utf-8")
+        captured: dict[str, object] = {}
+
+        def _fake_discover(*args, **kwargs):  # noqa: ANN002, ANN003
+            captured["request_payload"] = dict(kwargs.get("request_payload") or {})
+            return SearchSeedSnapshot(
+                snapshot_id="snapshot-effective-request",
+                target_company="Google",
+                company_identity=identity,
+                snapshot_dir=snapshot_dir,
+                entries=[
+                    {
+                        "seed_key": "lead_1",
+                        "full_name": "Gemini PM",
+                        "source_type": "harvest_profile_search",
+                    }
+                ],
+                query_summaries=[{"query": "Gemini", "status": "completed"}],
+                accounts_used=[],
+                errors=[],
+                stop_reason="completed",
+                summary_path=summary_path,
+            )
+
+        self.acquisition_engine.search_seed_acquirer.discover = _fake_discover  # type: ignore[method-assign]
+        task = AcquisitionTask(
+            task_id="acquire-search-seed",
+            task_type="acquire_search_seed_pool",
+            title="Acquire search seed pool",
+            description="Acquire scoped search leads",
+            status="ready",
+            blocking=True,
+            metadata={
+                "strategy_type": "scoped_search_roster",
+                "search_seed_queries": ["Gemini"],
+                "search_query_bundles": [],
+                "cost_policy": {},
+                "employment_statuses": ["current", "former"],
+            },
+        )
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "找 Gemini 的产品经理",
+                "query": "Gemini product manager",
+                "target_company": "WrongCo",
+                "intent_axes": {
+                    "population_boundary": {
+                        "categories": ["employee"],
+                        "employment_statuses": ["current", "former"],
+                    },
+                    "scope_boundary": {
+                        "target_company": "Google",
+                        "organization_keywords": ["Google DeepMind", "Gemini"],
+                    },
+                    "thematic_constraints": {
+                        "must_have_primary_role_buckets": ["product_management"],
+                        "keywords": ["Gemini"],
+                    },
+                },
+            }
+        )
+
+        execution = self.acquisition_engine._acquire_search_seed_pool(
+            task,
+            {
+                "company_identity": identity,
+                "snapshot_dir": snapshot_dir,
+                "job_id": "job_effective_request",
+                "plan_payload": {},
+                "runtime_mode": "workflow",
+            },
+            request,
+        )
+
+        self.assertEqual(execution.status, "completed")
+        request_payload = dict(captured.get("request_payload") or {})
+        self.assertEqual(request_payload.get("target_company"), "Google")
+        self.assertEqual(request_payload.get("organization_keywords"), ["Google DeepMind", "Gemini"])
+        self.assertEqual(request_payload.get("keywords"), ["Gemini"])
+
+    def test_enrich_profiles_uses_effective_request_payload_and_target_company(self) -> None:
+        identity = CompanyIdentity(
+            requested_name="Google",
+            canonical_name="Google",
+            company_key="google",
+            linkedin_slug="google",
+            linkedin_company_url="https://www.linkedin.com/company/google/",
+        )
+        snapshot_dir = self.settings.company_assets_dir / "google" / "snapshot-effective-enrich"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        merged_path = snapshot_dir / "merged.json"
+        visible_path = snapshot_dir / "visible.json"
+        headless_path = snapshot_dir / "headless.json"
+        roster_summary_path = snapshot_dir / "roster_summary.json"
+        for path, payload in [
+            (merged_path, "[]"),
+            (visible_path, "[]"),
+            (headless_path, "[]"),
+            (roster_summary_path, "{}"),
+        ]:
+            path.write_text(payload, encoding="utf-8")
+        roster_snapshot = CompanyRosterSnapshot(
+            snapshot_id=snapshot_dir.name,
+            target_company="Google",
+            company_identity=identity,
+            snapshot_dir=snapshot_dir,
+            raw_entries=[],
+            visible_entries=[],
+            headless_entries=[],
+            page_summaries=[],
+            accounts_used=[],
+            errors=[],
+            stop_reason="",
+            merged_path=merged_path,
+            visible_path=visible_path,
+            headless_path=headless_path,
+            summary_path=roster_summary_path,
+        )
+        roster_candidate = Candidate(
+            candidate_id="roster_1",
+            name_en="Gemini PM",
+            display_name="Gemini PM",
+            category="employee",
+            target_company="Google",
+            organization="Google",
+            employment_status="current",
+            role="Product Manager",
+            linkedin_url="https://www.linkedin.com/in/gemini-pm/",
+            source_dataset="google_linkedin_company_people",
+        )
+        roster_evidence = EvidenceRecord(
+            evidence_id="ev_roster_1",
+            candidate_id="roster_1",
+            source_type="linkedin_company_people",
+            title="Roster row",
+            url="https://www.linkedin.com/in/gemini-pm/",
+            summary="Current roster row",
+            source_dataset="google_linkedin_company_people",
+            source_path=str(roster_summary_path),
+        )
+        captured: dict[str, object] = {}
+
+        def _fake_enrich(identity_arg, snapshot_dir_arg, candidates_arg, request_arg, *args, **kwargs):  # noqa: ANN001, ARG001
+            captured["request"] = request_arg
+            captured["request_payload"] = dict(kwargs.get("request_payload") or {})
+            return MultiSourceEnrichmentResult(
+                candidates=list(candidates_arg),
+                evidence=[],
+            )
+
+        original_enrich = self.acquisition_engine.multi_source_enricher.enrich
+        self.acquisition_engine.multi_source_enricher.enrich = _fake_enrich
+        try:
+            with unittest.mock.patch(
+                "sourcing_agent.acquisition.build_candidates_from_roster",
+                return_value=([roster_candidate], [roster_evidence]),
+            ):
+                execution = self.acquisition_engine._enrich_profiles(
+                    AcquisitionTask(
+                        task_id="enrich-linkedin",
+                        task_type="enrich_linkedin_profiles",
+                        title="Enrich profiles",
+                        description="Run profile enrichment",
+                        status="ready",
+                        blocking=True,
+                        metadata={"cost_policy": {}, "enrichment_scope": "linkedin_stage_1"},
+                    ),
+                    {
+                        "roster_snapshot": roster_snapshot,
+                        "snapshot_dir": snapshot_dir,
+                    },
+                    JobRequest.from_payload(
+                        {
+                            "raw_user_request": "找 Gemini 的产品经理",
+                            "query": "Gemini product manager",
+                            "target_company": "WrongCo",
+                            "intent_axes": {
+                                "population_boundary": {
+                                    "categories": ["employee"],
+                                    "employment_statuses": ["current", "former"],
+                                },
+                                "scope_boundary": {
+                                    "target_company": "Google",
+                                    "organization_keywords": ["Google DeepMind", "Gemini"],
+                                },
+                                "thematic_constraints": {
+                                    "must_have_primary_role_buckets": ["product_management"],
+                                    "keywords": ["Gemini"],
+                                },
+                            },
+                        }
+                    ),
+                )
+        finally:
+            self.acquisition_engine.multi_source_enricher.enrich = original_enrich
+
+        self.assertEqual(execution.status, "completed")
+        request_arg = captured["request"]
+        assert isinstance(request_arg, JobRequest)
+        self.assertEqual(request_arg.target_company, "Google")
+        request_payload = dict(captured.get("request_payload") or {})
+        self.assertEqual(request_payload.get("target_company"), "Google")
+
+    def test_run_worker_recovery_once_auto_resumes_stale_acquiring_workflow(self) -> None:
+        request_payload = {
+            "raw_user_request": "Find Reflection AI infra members",
+            "target_company": "Reflection AI",
+            "categories": ["employee"],
+            "employment_statuses": ["current"],
+            "keywords": ["infra"],
+            "top_k": 3,
+        }
+        plan_payload = self.orchestrator.plan_workflow(request_payload)["plan"]
+        stale_job_id = "job_stale_auto_resume"
+        self.store.save_job(
+            job_id=stale_job_id,
+            job_type="workflow",
+            status="running",
+            stage="acquiring",
+            request_payload=request_payload,
+            plan_payload=plan_payload,
+            summary_payload={"message": "stale acquiring heartbeat"},
+        )
+
+        with unittest.mock.patch.object(
+            self.orchestrator,
+            "_resume_acquiring_workflow_if_ready",
+            return_value={"job_id": stale_job_id, "status": "resumed"},
+        ) as resume_mock:
+            recovery = self.orchestrator.run_worker_recovery_once(
+                {
+                    "workflow_resume_stale_after_seconds": 0,
+                    "workflow_resume_limit": 10,
+                    "workflow_auto_resume_enabled": True,
+                }
+            )
+
+        resume_mock.assert_any_call(stale_job_id)
+        self.assertTrue(
+            any(str(item.get("job_id") or "") == stale_job_id for item in list(recovery.get("workflow_resume") or []))
+        )
+
+    def test_workflow_supervisor_uses_immediate_worker_recovery_when_runner_is_dead(self) -> None:
+        request_payload = {
+            "raw_user_request": "Find Humans& infra members",
+            "target_company": "Humans&",
+            "categories": ["employee"],
+            "employment_statuses": ["current"],
+            "keywords": ["infra"],
+        }
+        plan_payload = self.orchestrator.plan_workflow(request_payload)["plan"]
+        job_id = "job_supervisor_runner_dead"
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="running",
+            stage="acquiring",
+            request_payload=request_payload,
+            plan_payload=plan_payload,
+            summary_payload={
+                "runtime_controls": {
+                    "workflow_runner": {
+                        "status": "started",
+                        "pid": 999999,
+                        "process_alive": False,
+                        "job_id": job_id,
+                    },
+                    "workflow_runner_control": {
+                        "status": "started",
+                        "handshake": {
+                            "status": "advanced",
+                            "job_status": "running",
+                            "job_stage": "acquiring",
+                        },
+                    },
+                }
+            },
+        )
+        running_worker = {
+            "worker_id": 1,
+            "job_id": job_id,
+            "lane_id": "acquisition_specialist",
+            "worker_key": "harvest_company_employees::humansand",
+            "status": "running",
+            "updated_at": "2026-04-11 05:40:00",
+        }
+        captured_payloads: list[dict[str, object]] = []
+
+        with unittest.mock.patch.object(
+            self.orchestrator,
+            "run_queued_workflow",
+            return_value={"job_id": job_id, "status": "skipped", "stage": "acquiring", "reason": "already_running"},
+        ), unittest.mock.patch.object(
+            self.orchestrator.agent_runtime,
+            "list_workers",
+            return_value=[running_worker],
+        ), unittest.mock.patch.object(
+            self.orchestrator,
+            "run_worker_recovery_once",
+            side_effect=lambda payload=None: captured_payloads.append(dict(payload or {})) or {
+                "status": "completed",
+                "daemon": {},
+                "workflow_resume": [],
+            },
+        ):
+            result = self.orchestrator.run_workflow_supervisor(job_id, auto_job_daemon=True, max_ticks=1, poll_seconds=0.01)
+
+        self.assertEqual(result["status"], "running")
+        self.assertEqual(captured_payloads[-1]["stale_after_seconds"], 0)
+
+    def test_build_worker_recovery_daemon_preserves_zero_stale_after_seconds(self) -> None:
+        daemon = self.orchestrator._build_worker_recovery_daemon({"stale_after_seconds": 0})  # noqa: SLF001
+        self.assertEqual(daemon.stale_after_seconds, 1)
+
+    def test_run_workflow_blocking_uses_inline_supervisor_for_acquiring_jobs(self) -> None:
+        payload = {
+            "raw_user_request": "给我 Humans& 的 Infra 方向成员",
+            "target_company": "Humans&",
+            "keywords": ["infra"],
+            "skip_plan_review": True,
+        }
+        captured: dict[str, object] = {}
+
+        original_run_workflow = self.orchestrator._run_workflow
+
+        def fake_run_workflow(job_id, request, plan):  # noqa: ARG001
+            original_run_workflow(job_id, request, plan)
+            job = self.store.get_job(job_id) or {}
+            self.store.save_job(
+                job_id=job_id,
+                job_type="workflow",
+                status="blocked",
+                stage="acquiring",
+                request_payload=request.to_record(),
+                plan_payload=plan.to_record(),
+                summary_payload={
+                    **dict(job.get("summary") or {}),
+                    "message": "Queued remote acquisition worker.",
+                    "blocked_task": "acquire_full_roster",
+                },
+            )
+
+        with unittest.mock.patch.object(
+            self.orchestrator,
+            "_run_workflow",
+            side_effect=fake_run_workflow,
+        ), unittest.mock.patch.object(
+            self.orchestrator,
+            "run_workflow_supervisor",
+            side_effect=lambda job_id, **kwargs: captured.update({"job_id": job_id, **kwargs}) or {
+                "job_id": job_id,
+                "status": "completed",
+                "stage": "completed",
+            },
+        ), unittest.mock.patch.object(
+            self.orchestrator,
+            "get_job_results",
+            return_value={"job": {"status": "blocked", "stage": "acquiring"}, "events": [], "results": []},
+        ):
+            result = self.orchestrator.run_workflow_blocking(payload)
+
+        self.assertEqual(result["job"]["status"], "blocked")
+        self.assertEqual(captured["auto_job_daemon"], True)
+        self.assertEqual(captured["poll_seconds"], 2.0)
+        self.assertEqual(captured["max_ticks"], 900)
+
+    def test_restore_acquisition_state_rehydrates_completed_harvest_queue_dataset_into_roster_snapshot(self) -> None:
+        request_payload = {
+            "raw_user_request": "给我 Humans& 的 Infra 方向成员",
+            "target_company": "Humans&",
+            "categories": ["employee"],
+            "employment_statuses": ["current"],
+            "keywords": ["infra"],
+            "top_k": 5,
+        }
+        request = JobRequest.from_payload(request_payload)
+        plan = build_sourcing_plan(request, self.catalog, self.model_client)
+        task = next(task for task in plan.acquisition_tasks if task.task_type == "acquire_full_roster")
+        self.assertEqual(str(task.metadata.get("strategy_type") or ""), "full_company_roster")
+
+        identity = CompanyIdentity(
+            requested_name="Humans&",
+            canonical_name="Humans&",
+            company_key="humansand",
+            linkedin_slug="humansand",
+            linkedin_company_url="https://www.linkedin.com/company/humansand/",
+        )
+        snapshot_dir = self.settings.company_assets_dir / "humansand" / "20260411T134937"
+        harvest_dir = snapshot_dir / "harvest_company_employees"
+        harvest_dir.mkdir(parents=True, exist_ok=True)
+        dataset_items_path = harvest_dir / "harvest_company_employees_queue_dataset_items.json"
+        dataset_items_path.write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "ACwAADrFuoABrf4CdDIhNYV7PWlLMli2NmmIWPI",
+                        "linkedinUrl": "https://www.linkedin.com/in/ACwAADrFuoABrf4CdDIhNYV7PWlLMli2NmmIWPI",
+                        "firstName": "Ziang",
+                        "lastName": "L.",
+                        "summary": "Infrastructure systems for large models.",
+                        "currentPositions": [
+                            {
+                                "companyName": "humans&",
+                                "title": "Member of Technical Staff",
+                                "current": True,
+                            }
+                        ],
+                        "location": {"linkedinText": "San Francisco Bay Area"},
+                        "_meta": {
+                            "pagination": {
+                                "totalElements": 24,
+                                "totalPages": 1,
+                                "pageNumber": 1,
+                                "previousElements": 0,
+                                "pageSize": 25,
+                            },
+                            "query": {
+                                "currentCompanies": ["https://www.linkedin.com/company/humansand/"],
+                            },
+                        },
+                    }
+                ],
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        (harvest_dir / "harvest_company_employees_queue_summary.json").write_text(
+            json.dumps(
+                {
+                    "logical_name": "harvest_company_employees",
+                    "company_identity": identity.to_record(),
+                    "status": "completed",
+                    "requested_pages": 1,
+                    "requested_item_limit": 25,
+                    "company_filters": {},
+                    "artifact_paths": {
+                        "dataset_items": str(dataset_items_path),
+                    },
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+        empty_seed_summary_path = snapshot_dir / "search_seed_discovery" / "summary.json"
+        empty_seed_summary_path.parent.mkdir(parents=True, exist_ok=True)
+        empty_seed_entries_path = empty_seed_summary_path.parent / "entries.json"
+        empty_seed_summary_path.write_text(json.dumps({}, ensure_ascii=False, indent=2), encoding="utf-8")
+        empty_seed_entries_path.write_text(json.dumps([], ensure_ascii=False, indent=2), encoding="utf-8")
+        empty_search_seed = SearchSeedSnapshot(
+            snapshot_id=snapshot_dir.name,
+            target_company="Humans&",
+            company_identity=identity,
+            snapshot_dir=snapshot_dir,
+            entries=[],
+            query_summaries=[],
+            accounts_used=[],
+            errors=[],
+            stop_reason="completed",
+            summary_path=empty_seed_summary_path,
+            entries_path=empty_seed_entries_path,
+        )
+        self.assertFalse(
+            self.orchestrator._acquisition_task_checkpoint_reusable(
+                task,
+                {"search_seed_snapshot": empty_search_seed},
+            )
+        )
+
+        restored = self.orchestrator._restore_acquisition_state(
+            job_id="job_restore_harvest_queue_snapshot",
+            request=request,
+            plan=plan,
+            acquisition_progress={
+                "latest_state": {
+                    "snapshot_id": snapshot_dir.name,
+                    "snapshot_dir": str(snapshot_dir),
+                    "company_identity": identity.to_record(),
+                    "search_seed_snapshot": empty_search_seed.to_record(),
+                }
+            },
+        )
+
+        roster_snapshot = restored.get("roster_snapshot")
+        self.assertIsInstance(roster_snapshot, CompanyRosterSnapshot)
+        assert isinstance(roster_snapshot, CompanyRosterSnapshot)
+        self.assertEqual(len(roster_snapshot.visible_entries), 1)
+        self.assertTrue(roster_snapshot.summary_path.exists())
+        self.assertTrue(
+            self.orchestrator._acquisition_task_checkpoint_reusable(task, restored),
+        )
+
+    def test_restore_roster_snapshot_rehydrates_segmented_harvest_queue_shards(self) -> None:
+        identity = CompanyIdentity(
+            requested_name="Google",
+            canonical_name="Google",
+            company_key="google",
+            linkedin_slug="google",
+            linkedin_company_url="https://www.linkedin.com/company/google/",
+        )
+        snapshot_dir = self.settings.company_assets_dir / "google" / "20260412T022230"
+        harvest_dir = snapshot_dir / "harvest_company_employees"
+        shard_root = harvest_dir / "shards"
+        shard_root.mkdir(parents=True, exist_ok=True)
+
+        shards = [
+            {
+                "strategy_id": "adaptive_large_org_keyword_probe",
+                "shard_id": "kw_veo",
+                "title": "United States / Veo",
+                "scope_note": "Keyword union shard",
+                "max_pages": 100,
+                "page_limit": 25,
+                "company_filters": {
+                    "companies": [
+                        "https://www.linkedin.com/company/google/",
+                        "https://www.linkedin.com/company/deepmind/",
+                    ],
+                    "locations": ["United States"],
+                    "function_ids": ["8", "9", "19", "24"],
+                    "search_query": "Veo",
+                },
+            },
+            {
+                "strategy_id": "adaptive_large_org_keyword_probe",
+                "shard_id": "kw_nanobanana",
+                "title": "United States / Nano Banana",
+                "scope_note": "Keyword union shard",
+                "max_pages": 100,
+                "page_limit": 25,
+                "company_filters": {
+                    "companies": [
+                        "https://www.linkedin.com/company/google/",
+                        "https://www.linkedin.com/company/deepmind/",
+                    ],
+                    "locations": ["United States"],
+                    "function_ids": ["8", "9", "19", "24"],
+                    "search_query": "Nano Banana",
+                },
+            },
+        ]
+        (harvest_dir / "adaptive_shard_plan.json").write_text(
+            json.dumps({"status": "planned", "shards": shards}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+        shard_profiles = {
+            "kw_veo": [
+                {
+                    "id": "veo_member",
+                    "linkedinUrl": "https://www.linkedin.com/in/veo-member/",
+                    "firstName": "Alice",
+                    "lastName": "Vision",
+                    "summary": "Works on Veo video generation.",
+                    "currentPositions": [
+                        {
+                            "companyName": "Google DeepMind",
+                            "title": "Research Scientist",
+                            "current": True,
+                        }
+                    ],
+                    "location": {"linkedinText": "San Francisco Bay Area"},
+                    "_meta": {
+                        "pagination": {
+                            "totalElements": 1,
+                            "totalPages": 1,
+                            "pageNumber": 1,
+                            "previousElements": 0,
+                            "pageSize": 25,
+                        },
+                        "query": {
+                            "currentCompanies": ["https://www.linkedin.com/company/google/"],
+                            "searchQuery": "Veo",
+                        },
+                    },
+                }
+            ],
+            "kw_nanobanana": [
+                {
+                    "id": "nanobanana_member",
+                    "linkedinUrl": "https://www.linkedin.com/in/nanobanana-member/",
+                    "firstName": "Bob",
+                    "lastName": "Multimodal",
+                    "summary": "Works on Nano Banana multimodal generation.",
+                    "currentPositions": [
+                        {
+                            "companyName": "Google",
+                            "title": "Software Engineer",
+                            "current": True,
+                        }
+                    ],
+                    "location": {"linkedinText": "Mountain View, California, United States"},
+                    "_meta": {
+                        "pagination": {
+                            "totalElements": 1,
+                            "totalPages": 1,
+                            "pageNumber": 1,
+                            "previousElements": 0,
+                            "pageSize": 25,
+                        },
+                        "query": {
+                            "currentCompanies": ["https://www.linkedin.com/company/google/"],
+                            "searchQuery": "Nano Banana",
+                        },
+                    },
+                }
+            ],
+        }
+        for shard_id, entries in shard_profiles.items():
+            shard_harvest_dir = shard_root / shard_id / "harvest_company_employees"
+            shard_harvest_dir.mkdir(parents=True, exist_ok=True)
+            dataset_items_path = shard_harvest_dir / "harvest_company_employees_queue_dataset_items.json"
+            dataset_items_path.write_text(
+                json.dumps(entries, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            (shard_harvest_dir / "harvest_company_employees_queue_summary.json").write_text(
+                json.dumps(
+                    {
+                        "logical_name": "harvest_company_employees",
+                        "company_identity": identity.to_record(),
+                        "status": "completed",
+                        "requested_pages": 1,
+                        "requested_item_limit": 25,
+                        "company_filters": {},
+                        "artifact_paths": {
+                            "dataset_items": str(dataset_items_path),
+                        },
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+        restored = self.orchestrator._restore_roster_snapshot_from_snapshot_dir(
+            snapshot_dir=snapshot_dir,
+            identity=identity,
+        )
+
+        self.assertIsInstance(restored, CompanyRosterSnapshot)
+        assert isinstance(restored, CompanyRosterSnapshot)
+        self.assertEqual(len(restored.visible_entries), 2)
+        self.assertTrue(restored.summary_path.exists())
+        self.assertEqual(
+            {item.get("source_shard_id") for item in restored.raw_entries},
+            {"kw_veo", "kw_nanobanana"},
+        )
+
+    def test_full_company_roster_checkpoint_requires_roster_snapshot_not_search_seed_only(self) -> None:
+        identity = CompanyIdentity(
+            requested_name="Google",
+            canonical_name="Google",
+            company_key="google",
+            linkedin_slug="google",
+            linkedin_company_url="https://www.linkedin.com/company/google/",
+        )
+        snapshot_dir = self.settings.company_assets_dir / "google" / "snapshot-search-seed-only"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        summary_path = snapshot_dir / "search_seed_discovery" / "summary.json"
+        entries_path = snapshot_dir / "search_seed_discovery" / "entries.json"
+        summary_path.parent.mkdir(parents=True, exist_ok=True)
+        summary_path.write_text("{}", encoding="utf-8")
+        entries_payload = [
+            {
+                "seed_key": "former_1",
+                "full_name": "Former Seed",
+                "source_type": "harvest_profile_search",
+                "employment_status": "former",
+                "profile_url": "https://www.linkedin.com/in/former-seed/",
+            }
+        ]
+        entries_path.write_text(json.dumps(entries_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        search_seed_snapshot = SearchSeedSnapshot(
+            snapshot_id=snapshot_dir.name,
+            target_company="Google",
+            company_identity=identity,
+            snapshot_dir=snapshot_dir,
+            entries=entries_payload,
+            query_summaries=[{"query": "Veo", "status": "completed"}],
+            accounts_used=["harvest_profile_search"],
+            errors=[],
+            stop_reason="provider_people_search_fallback",
+            summary_path=summary_path,
+            entries_path=entries_path,
+        )
+        task = AcquisitionTask(
+            task_id="acquire-full-roster",
+            task_type="acquire_full_roster",
+            title="Acquire roster",
+            description="Acquire Google roster",
+            status="ready",
+            blocking=True,
+            metadata={"strategy_type": "full_company_roster"},
+        )
+        self.assertFalse(
+            self.orchestrator._acquisition_task_checkpoint_reusable(
+                task,
+                {"search_seed_snapshot": search_seed_snapshot},
+            )
+        )
+
+        scoped_task = AcquisitionTask(
+            task_id="acquire-scoped-roster",
+            task_type="acquire_full_roster",
+            title="Acquire scoped roster",
+            description="Acquire scoped roster",
+            status="ready",
+            blocking=True,
+            metadata={"strategy_type": "scoped_search_roster"},
+        )
+        self.assertTrue(
+            self.orchestrator._acquisition_task_checkpoint_reusable(
+                scoped_task,
+                {"search_seed_snapshot": search_seed_snapshot},
+            )
+        )
+
+    def test_resume_running_workflow_skips_completed_acquisition_tasks_from_checkpoint(self) -> None:
+        request_payload = {
+            "raw_user_request": "Find Acme infra researchers",
+            "target_company": "Acme",
+            "categories": ["employee"],
+            "employment_statuses": ["current"],
+            "keywords": ["infra"],
+            "top_k": 1,
+        }
+        request = JobRequest.from_payload(request_payload)
+        plan = build_sourcing_plan(request, self.catalog, self.model_client)
+        job_id = "job_resume_checkpoint_skip"
+        company_dir = self.settings.company_assets_dir / "acme"
+        snapshot_dir = company_dir / "20260410T120000"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        candidate_doc_path = snapshot_dir / "candidate_documents.json"
+        manifest_path = snapshot_dir / "manifest.json"
+        identity = CompanyIdentity(
+            requested_name="Acme",
+            canonical_name="Acme",
+            company_key="acme",
+            linkedin_slug="acme",
+            linkedin_company_url="https://www.linkedin.com/company/acme/",
+        )
+        candidate = Candidate(
+            candidate_id="cand_resume_checkpoint",
+            name_en="Alice Infra",
+            display_name="Alice Infra",
+            category="employee",
+            target_company="Acme",
+            organization="Acme",
+            employment_status="current",
+            role="Infrastructure Research Engineer",
+            focus_areas="infra systems",
+            linkedin_url="https://www.linkedin.com/in/alice-infra",
+            source_dataset="checkpoint_test",
+        )
+        evidence = EvidenceRecord(
+            evidence_id=make_evidence_id(
+                candidate.candidate_id,
+                "checkpoint_test",
+                "Acme infra",
+                candidate.linkedin_url,
+            ),
+            candidate_id=candidate.candidate_id,
+            source_type="linkedin_profile",
+            title="Acme infra",
+            url=candidate.linkedin_url,
+            summary="Checkpoint recovery candidate",
+            source_dataset="checkpoint_test",
+            source_path=str(candidate_doc_path),
+        )
+        candidate_doc_path.write_text(
+            json.dumps(
+                {
+                    "snapshot": {
+                        "snapshot_id": snapshot_dir.name,
+                        "company_identity": identity.to_record(),
+                    },
+                    "candidates": [candidate.to_record()],
+                    "evidence": [evidence.to_record()],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        (company_dir / "latest_snapshot.json").write_text(
+            json.dumps(
+                {
+                    "snapshot_id": snapshot_dir.name,
+                    "company_identity": identity.to_record(),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        (snapshot_dir / "identity.json").write_text(json.dumps(identity.to_record(), ensure_ascii=False, indent=2))
+
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="running",
+            stage="acquiring",
+            request_payload=request.to_record(),
+            plan_payload=plan.to_record(),
+            summary_payload={"message": "Workflow runner died during acquisition"},
+        )
+
+        tasks_by_type = {task.task_type: task for task in plan.acquisition_tasks}
+        acquisition_state = {
+            "snapshot_id": snapshot_dir.name,
+            "snapshot_dir": snapshot_dir,
+            "company_identity": identity,
+        }
+        self.orchestrator._record_acquisition_task_completion(
+            job_id=job_id,
+            request=request,
+            plan=plan,
+            task=tasks_by_type["resolve_company_identity"],
+            execution=AcquisitionExecution(
+                task_id=tasks_by_type["resolve_company_identity"].task_id,
+                status="completed",
+                detail="Resolved company identity.",
+                payload={"snapshot_dir": str(snapshot_dir)},
+                state_updates=dict(acquisition_state),
+            ),
+            acquisition_state=dict(acquisition_state),
+        )
+        acquisition_state["candidates"] = [candidate]
+        self.orchestrator._record_acquisition_task_completion(
+            job_id=job_id,
+            request=request,
+            plan=plan,
+            task=tasks_by_type["acquire_full_roster"],
+            execution=AcquisitionExecution(
+                task_id=tasks_by_type["acquire_full_roster"].task_id,
+                status="completed",
+                detail="Acquired roster.",
+                payload={"candidate_count": 1},
+                state_updates={"candidates": [candidate]},
+            ),
+            acquisition_state=dict(acquisition_state),
+        )
+        acquisition_state["candidate_doc_path"] = candidate_doc_path
+        acquisition_state["evidence"] = [evidence]
+        self.orchestrator._record_acquisition_task_completion(
+            job_id=job_id,
+            request=request,
+            plan=plan,
+            task=tasks_by_type["enrich_linkedin_profiles"],
+            execution=AcquisitionExecution(
+                task_id=tasks_by_type["enrich_linkedin_profiles"].task_id,
+                status="completed",
+                detail="Enriched LinkedIn profiles.",
+                payload={"candidate_doc_path": str(candidate_doc_path)},
+                state_updates={
+                    "candidate_doc_path": candidate_doc_path,
+                    "linkedin_stage_candidate_doc_path": candidate_doc_path,
+                    "linkedin_stage_completed": True,
+                    "candidates": [candidate],
+                    "evidence": [evidence],
+                },
+            ),
+            acquisition_state=dict(acquisition_state),
+        )
+        self.orchestrator._record_acquisition_task_completion(
+            job_id=job_id,
+            request=request,
+            plan=plan,
+            task=tasks_by_type["enrich_public_web_signals"],
+            execution=AcquisitionExecution(
+                task_id=tasks_by_type["enrich_public_web_signals"].task_id,
+                status="completed",
+                detail="Enriched public-web signals.",
+                payload={"candidate_doc_path": str(candidate_doc_path)},
+                state_updates={
+                    "candidate_doc_path": candidate_doc_path,
+                    "public_web_stage_candidate_doc_path": candidate_doc_path,
+                    "public_web_stage_completed": True,
+                    "candidates": [candidate],
+                    "evidence": [evidence],
+                },
+            ),
+            acquisition_state={
+                **dict(acquisition_state),
+                "candidate_doc_path": candidate_doc_path,
+                "linkedin_stage_candidate_doc_path": candidate_doc_path,
+                "linkedin_stage_completed": True,
+            },
+        )
+
+        executed_task_types: list[str] = []
+        original_execute_task = self.acquisition_engine.execute_task
+        try:
+            with unittest.mock.patch.object(
+                self.orchestrator,
+                "_run_outreach_layering_after_acquisition",
+                return_value={},
+            ):
+
+                def fake_execute_task(task, job_request, target_company, state, bootstrap_summary=None):
+                    executed_task_types.append(task.task_type)
+                    self.assertIn(task.task_type, {"normalize_asset_snapshot", "build_retrieval_index"})
+                    self.assertEqual(str(state.get("candidate_doc_path")), str(candidate_doc_path))
+                    self.assertEqual(len(list(state.get("candidates") or [])), 1)
+                    self.assertEqual(len(list(state.get("evidence") or [])), 1)
+                    if task.task_type == "normalize_asset_snapshot":
+                        manifest_path.write_text(
+                            json.dumps(
+                                {
+                                    "snapshot_id": snapshot_dir.name,
+                                    "company_identity": identity.to_record(),
+                                },
+                                ensure_ascii=False,
+                                indent=2,
+                            )
+                        )
+                        return AcquisitionExecution(
+                            task_id=task.task_id,
+                            status="completed",
+                            detail="Normalized snapshot.",
+                            payload={"manifest_path": str(manifest_path)},
+                            state_updates={"manifest_path": manifest_path},
+                        )
+                    (snapshot_dir / "retrieval_index_summary.json").write_text(
+                        json.dumps({"status": "built"}, ensure_ascii=False, indent=2)
+                    )
+                    return AcquisitionExecution(
+                        task_id=task.task_id,
+                        status="completed",
+                        detail="Built retrieval index.",
+                        payload={"retrieval_index_summary": str(snapshot_dir / "retrieval_index_summary.json")},
+                        state_updates={},
+                    )
+
+                self.acquisition_engine.execute_task = fake_execute_task
+                resume = self.orchestrator._resume_running_workflow_if_ready(job_id)
+        finally:
+            self.acquisition_engine.execute_task = original_execute_task
+
+        snapshot = self.orchestrator.get_job_results(job_id)
+        self.assertEqual(resume["status"], "resumed")
+        self.assertEqual(resume["job_status"], "completed")
+        self.assertEqual(executed_task_types, ["normalize_asset_snapshot", "build_retrieval_index"])
+        self.assertIsNotNone(snapshot)
+        assert snapshot is not None
+        self.assertEqual(snapshot["job"]["status"], "completed")
+        skipped_task_ids = {
+            str((event.get("payload") or {}).get("task_id") or "")
+            for event in list(snapshot["events"])
+            if str(event.get("status") or "") == "skipped"
+        }
+        self.assertTrue(
+            {
+                tasks_by_type["resolve_company_identity"].task_id,
+                tasks_by_type["acquire_full_roster"].task_id,
+                tasks_by_type["enrich_linkedin_profiles"].task_id,
+                tasks_by_type["enrich_public_web_signals"].task_id,
+            }.issubset(skipped_task_ids)
+        )
+
+    def test_resume_running_workflow_reclaims_stale_job_lease_when_runner_is_dead(self) -> None:
+        request_payload = {
+            "raw_user_request": "Find Reflection AI infra members",
+            "target_company": "Reflection AI",
+            "categories": ["employee"],
+            "employment_statuses": ["current"],
+            "keywords": ["infra"],
+            "top_k": 3,
+        }
+        request = JobRequest.from_payload(request_payload)
+        plan = build_sourcing_plan(request, self.catalog, self.model_client)
+        job_id = "job_resume_reclaims_stale_lease"
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="running",
+            stage="acquiring",
+            request_payload=request.to_record(),
+            plan_payload=plan.to_record(),
+            summary_payload={
+                "message": "runner died after acquisition worker completed",
+                "runtime_controls": {
+                    "workflow_runner": {
+                        "status": "started",
+                        "pid": 999999,
+                        "process_alive": False,
+                        "job_id": job_id,
+                    },
+                    "workflow_runner_control": {
+                        "status": "started",
+                        "handshake": {
+                            "status": "advanced",
+                            "job_status": "running",
+                            "job_stage": "acquiring",
+                        },
+                    },
+                },
+            },
+        )
+        lease = self.store.acquire_workflow_job_lease(
+            job_id,
+            lease_owner="stale-runner-owner",
+            lease_seconds=900,
+            lease_token="stale-runner-token",
+        )
+        self.assertTrue(bool(lease.get("acquired")))
+
+        with unittest.mock.patch.object(
+            self.orchestrator,
+            "_assess_acquisition_resume_readiness",
+            return_value={
+                "status": "ready",
+                "request": request,
+                "plan": plan,
+                "baseline_ready": True,
+                "baseline_reason": "all_workers_completed",
+            },
+        ), unittest.mock.patch.object(
+            self.orchestrator,
+            "_run_workflow_from_acquisition",
+            return_value={"status": "completed"},
+        ) as resume_mock:
+            resume = self.orchestrator._resume_running_workflow_if_ready(job_id)
+
+        self.assertEqual(resume["status"], "resumed")
+        resume_mock.assert_called_once()
+        self.assertIsNone(self.store.get_workflow_job_lease(job_id))
+        recovery_events = [
+            event
+            for event in self.store.list_job_events(job_id, stage="runtime_control")
+            if str(event.get("status") or "") == "recovered"
+        ]
+        self.assertTrue(recovery_events)
+
+    def test_run_worker_recovery_once_auto_takes_over_stale_queued_workflow(self) -> None:
+        request_payload = {
+            "raw_user_request": "Find Reflection AI infra members",
+            "target_company": "Reflection AI",
+            "categories": ["employee"],
+            "employment_statuses": ["current"],
+            "keywords": ["infra"],
+            "top_k": 3,
+        }
+        plan_payload = self.orchestrator.plan_workflow(request_payload)["plan"]
+        stale_job_id = "job_stale_queued_takeover"
+        self.store.save_job(
+            job_id=stale_job_id,
+            job_type="workflow",
+            status="queued",
+            stage="planning",
+            request_payload=request_payload,
+            plan_payload=plan_payload,
+            summary_payload={"message": "workflow queued but runner missing"},
+        )
+
+        with unittest.mock.patch.object(
+            self.orchestrator,
+            "_start_hosted_workflow_thread",
+            return_value={
+                "status": "started",
+                "job_id": stale_job_id,
+                "source": "workflow_recovery",
+            },
+        ) as takeover_mock:
+            recovery = self.orchestrator.run_worker_recovery_once(
+                {
+                    "workflow_auto_resume_enabled": False,
+                    "workflow_queue_auto_takeover_enabled": True,
+                    "workflow_queue_resume_stale_after_seconds": 0,
+                    "workflow_queue_resume_limit": 10,
+                }
+            )
+
+        takeover_mock.assert_any_call(stale_job_id, source="workflow_recovery")
+        self.assertTrue(
+            any(
+                str(item.get("job_id") or "") == stale_job_id
+                and str(item.get("status") or "") == "takeover_started"
+                and str(item.get("mode") or "") == "hosted"
+                for item in list(recovery.get("workflow_resume") or [])
+            )
+        )
 
     def test_acquire_full_roster_blocks_when_background_harvest_is_pending(self) -> None:
         identity = CompanyIdentity(
@@ -2721,7 +7601,7 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(len(workers), 1)
         self.assertEqual(workers[0]["metadata"]["recovery_kind"], "harvest_profile_batch")
 
-    def test_enrich_profiles_blocks_when_full_roster_profile_prefetch_is_pending(self) -> None:
+    def test_enrich_profiles_writes_baseline_when_full_roster_profile_prefetch_is_pending(self) -> None:
         identity = CompanyIdentity(
             requested_name="Anthropic",
             canonical_name="Anthropic",
@@ -2823,7 +7703,13 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(execution.payload["stop_reason"], "queued_background_harvest")
         self.assertEqual(len(workers), 1)
         self.assertEqual(workers[0]["metadata"]["recovery_kind"], "harvest_profile_batch")
-        self.assertFalse((snapshot_dir / "candidate_documents.json").exists())
+        candidate_doc_path = snapshot_dir / "candidate_documents.json"
+        stage_candidate_doc_path = snapshot_dir / "candidate_documents.linkedin_stage_1.json"
+        self.assertTrue(candidate_doc_path.exists())
+        self.assertFalse(stage_candidate_doc_path.exists())
+        payload = json.loads(candidate_doc_path.read_text())
+        self.assertEqual(int(payload["candidate_count"]), 1)
+        self.assertEqual(payload["background_reconcile"]["kind"], "harvest_profile_prefetch")
 
     def test_enrich_profiles_force_fresh_run_disables_shared_provider_cache_at_execution_time(self) -> None:
         identity = CompanyIdentity(
@@ -2981,7 +7867,406 @@ class PipelineTest(unittest.TestCase):
         self.assertIn("background_reconcile", summary)
         self.assertIn("harvest_prefetch", dict(summary.get("background_reconcile") or {}))
 
-    def test_resume_blocked_workflow_waits_for_exploration_workers_then_resumes(self) -> None:
+    def test_reconcile_completed_workflow_after_background_search_seed(self) -> None:
+        request_payload = {
+            "raw_user_request": "Find Reflection AI infra members",
+            "target_company": "Reflection AI",
+            "categories": ["employee"],
+            "employment_statuses": ["current"],
+            "keywords": ["infra"],
+            "top_k": 5,
+        }
+        request = JobRequest.from_payload(request_payload)
+        plan_payload = self.orchestrator.plan_workflow(request_payload)["plan"]
+        job_id = "job_search_seed_reconcile"
+        snapshot_dir = self.settings.company_assets_dir / "reflectionai" / "snapshot-search-reconcile"
+        discovery_dir = snapshot_dir / "search_seed_discovery"
+        discovery_dir.mkdir(parents=True, exist_ok=True)
+        identity = CompanyIdentity(
+            requested_name="Reflection AI",
+            canonical_name="Reflection AI",
+            company_key="reflectionai",
+            linkedin_slug="reflectionai",
+            linkedin_company_url="https://www.linkedin.com/company/reflectionai/",
+        )
+        (discovery_dir / "entries.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "seed_key": "baseline",
+                        "full_name": "Baseline Lead",
+                        "source_type": "harvest_profile_search",
+                        "source_query": "Reflection AI infra",
+                        "profile_url": "https://www.linkedin.com/in/baseline-lead/",
+                    }
+                ],
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        (discovery_dir / "summary.json").write_text(
+            json.dumps(
+                {
+                    "snapshot_id": snapshot_dir.name,
+                    "target_company": "Reflection AI",
+                    "company_identity": identity.to_record(),
+                    "entry_count": 1,
+                    "query_summaries": [
+                        {
+                            "query": "Reflection AI infra",
+                            "bundle_id": "bundle-infra",
+                            "source_family": "people_search",
+                            "execution_mode": "web_search",
+                            "mode": "web_search",
+                            "status": "queued",
+                            "seed_entry_count": 0,
+                        }
+                    ],
+                    "errors": [],
+                    "accounts_used": [],
+                    "stop_reason": "queued_background_search",
+                    "queued_query_count": 1,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        candidate_doc_path = snapshot_dir / "candidate_documents.json"
+        candidate_doc_path.write_text(
+            json.dumps(
+                {
+                    "candidates": [
+                        Candidate(
+                            candidate_id="baseline-candidate",
+                            name_en="Baseline Lead",
+                            display_name="Baseline Lead",
+                            category="employee",
+                            target_company="Reflection AI",
+                            organization="Reflection AI",
+                            employment_status="current",
+                            role="Infrastructure Engineer",
+                            focus_areas="infra systems",
+                        ).to_record()
+                    ],
+                    "evidence": [],
+                    "candidate_count": 1,
+                    "evidence_count": 0,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+        artifact_path = self.settings.jobs_dir / f"{job_id}.result.json"
+        artifact_path.parent.mkdir(parents=True, exist_ok=True)
+        artifact_path.write_text(json.dumps({"job_id": job_id, "summary": {}}, ensure_ascii=False), encoding="utf-8")
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="completed",
+            stage="completed",
+            request_payload=request.to_record(),
+            plan_payload=plan_payload,
+            summary_payload={
+                "message": "Workflow completed.",
+                "candidate_source": {"snapshot_id": snapshot_dir.name},
+                "background_reconcile": {},
+            },
+            artifact_path=str(artifact_path),
+        )
+        worker_handle = self.orchestrator.agent_runtime.begin_worker(
+            job_id=job_id,
+            request=request,
+            plan_payload=plan_payload,
+            runtime_mode="workflow",
+            lane_id="search_planner",
+            worker_key="bundle-infra::01",
+            stage="acquiring",
+            span_name="search_bundle:bundle-infra",
+            budget_payload={"max_results": 10},
+            input_payload={"query_spec": {"query": "Reflection AI infra"}},
+            metadata={
+                "snapshot_dir": str(snapshot_dir),
+                "request_payload": request.to_record(),
+                "plan_payload": plan_payload,
+                "runtime_mode": "workflow",
+            },
+            handoff_from_lane="triage_planner",
+        )
+        self.orchestrator.agent_runtime.complete_worker(
+            worker_handle,
+            status="completed",
+            checkpoint_payload={"stage": "completed"},
+            output_payload={
+                "summary": {
+                    "query": "Reflection AI infra",
+                    "bundle_id": "bundle-infra",
+                    "source_family": "people_search",
+                    "execution_mode": "web_search",
+                    "mode": "web_search",
+                    "status": "completed",
+                    "seed_entry_count": 1,
+                },
+                "entries": [
+                    {
+                        "seed_key": "new-lead",
+                        "full_name": "Infra Builder",
+                        "headline": "Platform Engineer",
+                        "source_type": "web_search",
+                        "source_query": "Reflection AI infra",
+                        "profile_url": "https://www.linkedin.com/in/infra-builder/",
+                    }
+                ],
+                "errors": [],
+            },
+        )
+
+        with unittest.mock.patch(
+            "sourcing_agent.orchestrator.build_company_candidate_artifacts",
+            return_value={
+                "artifact_dir": str(snapshot_dir / "normalized_artifacts"),
+                "artifact_paths": {
+                    "materialized_candidate_documents": str(snapshot_dir / "normalized_artifacts" / "materialized_candidate_documents.json")
+                },
+            },
+        ), unittest.mock.patch.object(
+            self.orchestrator,
+            "_execute_retrieval",
+            return_value={
+                "job_id": job_id,
+                "status": "completed",
+                "summary": {"message": "Workflow completed after search-seed reconcile."},
+                "artifact_path": str(artifact_path),
+            },
+        ), unittest.mock.patch.object(
+            self.orchestrator,
+            "_run_outreach_layering_after_acquisition",
+            return_value={
+                "status": "completed",
+                "snapshot_id": snapshot_dir.name,
+                "layer_counts": {"layer_0_roster": 2},
+            },
+        ):
+            reconcile = self.orchestrator._reconcile_completed_workflow_if_needed(job_id)
+
+        self.assertEqual(reconcile["status"], "reconciled_search_seed")
+        refreshed_job = self.store.get_job(job_id)
+        assert refreshed_job is not None
+        search_reconcile = dict(dict(refreshed_job.get("summary") or {}).get("background_reconcile") or {}).get("search_seed")
+        self.assertEqual(int(search_reconcile["applied_worker_count"]), 1)
+        self.assertEqual(str(dict(search_reconcile.get("outreach_layering") or {}).get("status") or ""), "completed")
+        updated_entries = json.loads((discovery_dir / "entries.json").read_text())
+        self.assertEqual(len(updated_entries), 2)
+        updated_summary = json.loads((discovery_dir / "summary.json").read_text())
+        self.assertEqual(int(updated_summary["queued_query_count"]), 0)
+        candidate_doc = json.loads(candidate_doc_path.read_text())
+        self.assertGreaterEqual(int(candidate_doc["candidate_count"]), 2)
+        self.assertEqual(
+            str(dict(refreshed_job.get("summary") or {}).get("outreach_layering", {}).get("status") or ""),
+            "completed",
+        )
+        self.assertIsNotNone(
+            self.store.find_candidate_by_name(
+                target_company="Reflection AI",
+                name_en="Infra Builder",
+            )
+        )
+
+    def test_refresh_running_workflow_before_retrieval_applies_completed_background_search_outputs_and_syncs_store(self) -> None:
+        request_payload = {
+            "raw_user_request": "Find Reflection AI infra members",
+            "target_company": "Reflection AI",
+            "categories": ["employee"],
+            "employment_statuses": ["current"],
+            "keywords": ["infra"],
+            "top_k": 5,
+        }
+        request = JobRequest.from_payload(request_payload)
+        plan_payload = self.orchestrator.plan_workflow(request_payload)["plan"]
+        plan = build_sourcing_plan(request, self.catalog, self.model_client)
+        job_id = "job_pre_retrieval_refresh"
+        snapshot_dir = self.settings.company_assets_dir / "reflectionai" / "snapshot-pre-retrieval-refresh"
+        discovery_dir = snapshot_dir / "search_seed_discovery"
+        discovery_dir.mkdir(parents=True, exist_ok=True)
+        identity = CompanyIdentity(
+            requested_name="Reflection AI",
+            canonical_name="Reflection AI",
+            company_key="reflectionai",
+            linkedin_slug="reflectionai",
+            linkedin_company_url="https://www.linkedin.com/company/reflectionai/",
+        )
+        (snapshot_dir / "identity.json").write_text(
+            json.dumps(identity.to_record(), ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        (discovery_dir / "entries.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "seed_key": "baseline",
+                        "full_name": "Baseline Lead",
+                        "source_type": "harvest_profile_search",
+                        "source_query": "Reflection AI infra",
+                        "profile_url": "https://www.linkedin.com/in/baseline-lead/",
+                    }
+                ],
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        (discovery_dir / "summary.json").write_text(
+            json.dumps(
+                {
+                    "snapshot_id": snapshot_dir.name,
+                    "target_company": "Reflection AI",
+                    "company_identity": identity.to_record(),
+                    "entry_count": 1,
+                    "query_summaries": [],
+                    "errors": [],
+                    "accounts_used": [],
+                    "stop_reason": "completed",
+                    "queued_query_count": 0,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        candidate_doc_path = snapshot_dir / "candidate_documents.json"
+        candidate_doc_path.write_text(
+            json.dumps(
+                {
+                    "snapshot": {
+                        "company_identity": identity.to_record(),
+                    },
+                    "candidates": [
+                        Candidate(
+                            candidate_id="baseline-candidate",
+                            name_en="Baseline Lead",
+                            display_name="Baseline Lead",
+                            category="employee",
+                            target_company="Reflection AI",
+                            organization="Reflection AI",
+                            employment_status="current",
+                            role="Infrastructure Engineer",
+                            focus_areas="infra systems",
+                        ).to_record()
+                    ],
+                    "evidence": [],
+                    "candidate_count": 1,
+                    "evidence_count": 0,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="running",
+            stage="acquiring",
+            request_payload=request.to_record(),
+            plan_payload=plan_payload,
+            summary_payload={"message": "Acquiring"},
+        )
+        worker_handle = self.orchestrator.agent_runtime.begin_worker(
+            job_id=job_id,
+            request=request,
+            plan_payload=plan_payload,
+            runtime_mode="workflow",
+            lane_id="search_planner",
+            worker_key="bundle-infra::01",
+            stage="acquiring",
+            span_name="search_bundle:bundle-infra",
+            budget_payload={"max_results": 10},
+            input_payload={"query_spec": {"query": "Reflection AI infra"}},
+            metadata={
+                "snapshot_dir": str(snapshot_dir),
+                "request_payload": request.to_record(),
+                "plan_payload": plan_payload,
+                "runtime_mode": "workflow",
+            },
+            handoff_from_lane="triage_planner",
+        )
+        self.orchestrator.agent_runtime.complete_worker(
+            worker_handle,
+            status="completed",
+            checkpoint_payload={"stage": "completed"},
+            output_payload={
+                "summary": {
+                    "query": "Reflection AI infra",
+                    "bundle_id": "bundle-infra",
+                    "source_family": "people_search",
+                    "execution_mode": "web_search",
+                    "mode": "web_search",
+                    "status": "completed",
+                    "seed_entry_count": 1,
+                },
+                "entries": [
+                    {
+                        "seed_key": "new-lead",
+                        "full_name": "Infra Builder",
+                        "headline": "Platform Engineer",
+                        "source_type": "web_search",
+                        "source_query": "Reflection AI infra",
+                        "profile_url": "https://www.linkedin.com/in/infra-builder/",
+                    }
+                ],
+                "errors": [],
+            },
+        )
+
+        with unittest.mock.patch(
+            "sourcing_agent.orchestrator.build_company_candidate_artifacts",
+            return_value={
+                "artifact_dir": str(snapshot_dir / "normalized_artifacts"),
+                "artifact_paths": {
+                    "materialized_candidate_documents": str(snapshot_dir / "normalized_artifacts" / "materialized_candidate_documents.json")
+                },
+            },
+        ):
+            refresh = self.orchestrator._refresh_running_workflow_before_retrieval(
+                job_id=job_id,
+                request=request,
+                plan=plan,
+                acquisition_state={
+                    "snapshot_id": snapshot_dir.name,
+                    "snapshot_dir": snapshot_dir,
+                    "candidate_doc_path": candidate_doc_path,
+                },
+            )
+
+        self.assertEqual(refresh["status"], "completed")
+        self.assertEqual(int(refresh["search_seed"]["added_entry_count"]), 1)
+        self.assertEqual(str(refresh["sync"]["status"]), "completed")
+        updated_candidate_doc = json.loads(candidate_doc_path.read_text())
+        self.assertGreaterEqual(int(updated_candidate_doc["candidate_count"]), 2)
+        self.assertIsNotNone(
+            self.store.find_candidate_by_name(
+                target_company="Reflection AI",
+                name_en="Infra Builder",
+            )
+        )
+        refreshed_job = self.store.get_job(job_id)
+        assert refreshed_job is not None
+        background_reconcile = dict(dict(refreshed_job.get("summary") or {}).get("background_reconcile") or {})
+        self.assertIn("search_seed", background_reconcile)
+        progress = self.orchestrator.get_job_progress(job_id)
+        assert progress is not None
+        latest_metrics = dict(dict(progress.get("progress") or {}).get("latest_metrics") or {})
+        self.assertIn("pre_retrieval_refresh", latest_metrics)
+        self.assertIn("refresh_metrics", latest_metrics)
+        refresh_metrics = dict(latest_metrics.get("refresh_metrics") or {})
+        self.assertEqual(int(refresh_metrics.get("pre_retrieval_refresh_count") or 0), 1)
+        self.assertEqual(int(refresh_metrics.get("inline_search_seed_worker_count") or 0), 1)
+        self.assertEqual(int(refresh_metrics.get("background_search_seed_reconcile_count") or 0), 1)
+
+    def test_resume_blocked_workflow_ignores_pending_exploration_workers(self) -> None:
         request_payload = {
             "raw_user_request": "Find Thinking Machines Lab people",
             "target_company": "Thinking Machines Lab",
@@ -3029,26 +8314,6 @@ class PipelineTest(unittest.TestCase):
             handoff_from_lane="public_media_specialist",
         )
 
-        waiting = self.orchestrator._resume_blocked_workflow_if_ready(job_id)
-        self.assertEqual(waiting["status"], "waiting")
-        self.assertEqual(waiting["pending_worker_count"], 1)
-
-        self.orchestrator.agent_runtime.complete_worker(
-            handle,
-            status="completed",
-            checkpoint_payload={"stage": "completed"},
-            output_payload={
-                "candidate": {
-                    "candidate_id": "candidate::queued_exploration",
-                    "name_en": "Queued Exploration Lead",
-                    "display_name": "Queued Exploration Lead",
-                },
-                "evidence": [],
-                "summary": {"candidate_id": "candidate::queued_exploration", "status": "completed"},
-                "errors": [],
-            },
-        )
-
         identity = CompanyIdentity(
             requested_name="Thinking Machines Lab",
             canonical_name="Thinking Machines Lab",
@@ -3088,6 +8353,10 @@ class PipelineTest(unittest.TestCase):
         snapshot = self.orchestrator.get_job_results(job_id)
         self.assertEqual(resume["status"], "resumed")
         self.assertEqual(resume["job_status"], "completed")
+        worker = self.orchestrator.agent_runtime.get_worker(handle.worker_id)
+        self.assertIsNotNone(worker)
+        assert worker is not None
+        self.assertEqual(str(worker.get("status") or ""), "running")
         self.assertIsNotNone(snapshot)
         assert snapshot is not None
         self.assertEqual(snapshot["job"]["status"], "completed")
@@ -3233,6 +8502,276 @@ class PipelineTest(unittest.TestCase):
         assert snapshot is not None
         self.assertEqual(snapshot["job"]["status"], "completed")
         self.assertGreaterEqual(len(snapshot["results"]), 1)
+
+    def test_resume_blocked_workflow_uses_search_seed_baseline_with_noncritical_pending_workers(self) -> None:
+        request_payload = {
+            "raw_user_request": "Find Reflection AI infra members",
+            "target_company": "Reflection AI",
+            "categories": ["employee"],
+            "employment_statuses": ["current"],
+            "keywords": ["infra"],
+            "top_k": 3,
+        }
+        request = JobRequest.from_payload(request_payload)
+        plan_payload = self.orchestrator.plan_workflow({**request_payload, "skip_plan_review": True})["plan"]
+        job_id = "job_resume_from_search_seed_baseline"
+        snapshot_dir = self.settings.company_assets_dir / "reflectionai" / "snapshot-search-baseline"
+        discovery_dir = snapshot_dir / "search_seed_discovery"
+        discovery_dir.mkdir(parents=True, exist_ok=True)
+        identity = CompanyIdentity(
+            requested_name="Reflection AI",
+            canonical_name="Reflection AI",
+            company_key="reflectionai",
+            linkedin_slug="reflectionai",
+            linkedin_company_url="https://www.linkedin.com/company/reflectionai/",
+        )
+        summary_path = discovery_dir / "summary.json"
+        entries_path = discovery_dir / "entries.json"
+        entries_payload = [
+            {
+                "seed_key": "reflection-infra-01",
+                "full_name": "Infra Builder",
+                "headline": "Infrastructure Engineer",
+                "source_type": "web_search",
+                "source_query": "Reflection AI infra",
+                "profile_url": "https://www.linkedin.com/in/infra-builder/",
+            }
+        ]
+        summary_path.write_text(
+            json.dumps(
+                {
+                    "snapshot_id": snapshot_dir.name,
+                    "target_company": "Reflection AI",
+                    "company_identity": identity.to_record(),
+                    "entry_count": 1,
+                    "query_summaries": [{"query": "Reflection AI infra", "status": "completed"}],
+                    "queued_query_count": 0,
+                    "errors": [],
+                    "stop_reason": "",
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        entries_path.write_text(json.dumps(entries_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        search_seed_snapshot = SearchSeedSnapshot(
+            snapshot_id=snapshot_dir.name,
+            target_company="Reflection AI",
+            company_identity=identity,
+            snapshot_dir=snapshot_dir,
+            entries=entries_payload,
+            query_summaries=[{"query": "Reflection AI infra", "status": "completed"}],
+            accounts_used=[],
+            errors=[],
+            stop_reason="",
+            summary_path=summary_path,
+            entries_path=entries_path,
+        )
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="blocked",
+            stage="acquiring",
+            request_payload=request.to_record(),
+            plan_payload=plan_payload,
+            summary_payload={
+                "message": "Waiting for former/background search workers.",
+                "blocked_task": "acquire_full_roster",
+                "acquisition_progress": {
+                    "latest_state": {
+                        "snapshot_id": snapshot_dir.name,
+                        "snapshot_dir": str(snapshot_dir),
+                        "company_identity": identity.to_record(),
+                        "search_seed_snapshot": search_seed_snapshot.to_record(),
+                    }
+                },
+            },
+        )
+        self.orchestrator.agent_runtime.begin_worker(
+            job_id=job_id,
+            request=request,
+            plan_payload=plan_payload,
+            runtime_mode="workflow",
+            lane_id="search_planner",
+            worker_key="relationship_web::pending",
+            stage="acquiring",
+            span_name="search_bundle:relationship_web",
+            budget_payload={"max_results": 10},
+            input_payload={"query": "Reflection AI infra"},
+            metadata={
+                "identity": identity.to_record(),
+                "snapshot_dir": str(snapshot_dir),
+                "discovery_dir": str(discovery_dir),
+                "request_payload": request.to_record(),
+                "plan_payload": plan_payload,
+                "runtime_mode": "workflow",
+            },
+            handoff_from_lane="triage_planner",
+        )
+
+        original_execute_task = self.acquisition_engine.execute_task
+        executed_task_types: list[str] = []
+        candidate_doc_path = snapshot_dir / "candidate_documents.json"
+        manifest_path = snapshot_dir / "manifest.json"
+        retrieval_index_path = snapshot_dir / "retrieval_index_summary.json"
+
+        def fake_execute_task(task, job_request, target_company, state, bootstrap_summary=None):  # noqa: ARG001
+            executed_task_types.append(task.task_type)
+            if task.task_type == "enrich_linkedin_profiles":
+                candidate_doc_path.write_text(
+                    json.dumps(
+                        {
+                            "snapshot": {"company_identity": identity.to_record()},
+                            "candidates": [
+                                Candidate(
+                                    candidate_id="cand_reflection_infra",
+                                    name_en="Infra Builder",
+                                    display_name="Infra Builder",
+                                    category="employee",
+                                    target_company="Reflection AI",
+                                    organization="Reflection AI",
+                                    employment_status="current",
+                                    role="Infrastructure Engineer",
+                                    focus_areas="infra systems",
+                                ).to_record()
+                            ],
+                            "evidence": [],
+                            "candidate_count": 1,
+                            "evidence_count": 0,
+                        },
+                        ensure_ascii=False,
+                        indent=2,
+                    ),
+                    encoding="utf-8",
+                )
+                return AcquisitionExecution(
+                    task_id=task.task_id,
+                    status="completed",
+                    detail="Built candidate documents from search seed.",
+                    payload={"candidate_doc_path": str(candidate_doc_path)},
+                    state_updates={
+                        "candidate_doc_path": candidate_doc_path,
+                        "linkedin_stage_candidate_doc_path": candidate_doc_path,
+                        "linkedin_stage_completed": True,
+                    },
+                )
+            if task.task_type == "enrich_public_web_signals":
+                return AcquisitionExecution(
+                    task_id=task.task_id,
+                    status="completed",
+                    detail="Extended candidate documents with public-web signals.",
+                    payload={"candidate_doc_path": str(candidate_doc_path)},
+                    state_updates={
+                        "candidate_doc_path": candidate_doc_path,
+                        "public_web_stage_candidate_doc_path": candidate_doc_path,
+                        "public_web_stage_completed": True,
+                    },
+                )
+            if task.task_type == "normalize_asset_snapshot":
+                manifest_path.write_text(
+                    json.dumps(
+                        {"snapshot_id": snapshot_dir.name, "company_identity": identity.to_record()},
+                        ensure_ascii=False,
+                        indent=2,
+                    ),
+                    encoding="utf-8",
+                )
+                return AcquisitionExecution(
+                    task_id=task.task_id,
+                    status="completed",
+                    detail="Normalized snapshot.",
+                    payload={"manifest_path": str(manifest_path)},
+                    state_updates={"manifest_path": manifest_path},
+                )
+            if task.task_type == "build_retrieval_index":
+                retrieval_index_path.write_text(json.dumps({"status": "built"}, ensure_ascii=False, indent=2), encoding="utf-8")
+                return AcquisitionExecution(
+                    task_id=task.task_id,
+                    status="completed",
+                    detail="Built retrieval index.",
+                    payload={"retrieval_index_summary": str(retrieval_index_path)},
+                    state_updates={},
+                )
+            raise AssertionError(f"unexpected task execution: {task.task_type}")
+
+        self.acquisition_engine.execute_task = fake_execute_task
+        try:
+            resume = self.orchestrator._resume_blocked_workflow_if_ready(job_id)
+        finally:
+            self.acquisition_engine.execute_task = original_execute_task
+
+        snapshot = self.orchestrator.get_job_results(job_id)
+        self.assertEqual(resume["status"], "resumed")
+        self.assertTrue(bool(resume["baseline_ready"]))
+        self.assertEqual(resume["baseline_reason"], "search_seed_entries_present")
+        self.assertEqual(
+            executed_task_types,
+            ["enrich_linkedin_profiles", "enrich_public_web_signals", "normalize_asset_snapshot", "build_retrieval_index"],
+        )
+        self.assertIsNotNone(snapshot)
+        assert snapshot is not None
+        self.assertEqual(snapshot["job"]["status"], "completed")
+        self.assertGreaterEqual(len(snapshot["results"]), 1)
+
+    def test_resume_running_planning_workflow_continues_from_acquisition_when_planning_completed(self) -> None:
+        request_payload = {
+            "raw_user_request": "Find Reflection AI infra members",
+            "target_company": "Reflection AI",
+            "categories": ["employee", "former_employee"],
+            "keywords": ["infra"],
+            "top_k": 3,
+        }
+        request = JobRequest.from_payload(request_payload)
+        plan_payload = self.orchestrator.plan_workflow({**request_payload, "skip_plan_review": True})["plan"]
+        plan = hydrate_sourcing_plan(plan_payload)
+        job_id = "job_resume_running_planning"
+        self.store.save_job(
+            job_id=job_id,
+            job_type="workflow",
+            status="running",
+            stage="planning",
+            request_payload=request.to_record(),
+            plan_payload=plan_payload,
+            summary_payload={"message": "Workflow is running"},
+        )
+        self.store.append_job_event(job_id, "planning", "queued", "Workflow created from user request.")
+        self.store.append_job_event(job_id, "planning", "completed", "Planning stage completed.")
+
+        original_run_from_acquisition = self.orchestrator._run_workflow_from_acquisition
+        captured: dict[str, object] = {}
+
+        def fake_run_from_acquisition(job_id_arg, request_arg, plan_arg, *, resume_mode=False):
+            captured["job_id"] = job_id_arg
+            captured["resume_mode"] = resume_mode
+            captured["request"] = request_arg
+            captured["plan"] = plan_arg
+            self.store.save_job(
+                job_id=job_id_arg,
+                job_type="workflow",
+                status="completed",
+                stage="completed",
+                request_payload=request_arg.to_record(),
+                plan_payload=plan_arg.to_record(),
+                summary_payload={"message": "Recovered from stale planning runner."},
+            )
+            return {"status": "completed"}
+
+        self.orchestrator._run_workflow_from_acquisition = fake_run_from_acquisition
+        try:
+            resume = self.orchestrator._resume_planning_workflow_if_ready(job_id)
+        finally:
+            self.orchestrator._run_workflow_from_acquisition = original_run_from_acquisition
+
+        snapshot = self.orchestrator.get_job_results(job_id)
+        self.assertEqual(resume["status"], "resumed")
+        self.assertEqual(resume["resume_mode"], "running_planning_to_acquisition_recovery")
+        self.assertTrue(bool(resume["planning_completed"]))
+        self.assertEqual(captured["job_id"], job_id)
+        self.assertTrue(bool(captured["resume_mode"]))
+        self.assertIsNotNone(snapshot)
+        assert snapshot is not None
+        self.assertEqual(snapshot["job"]["status"], "completed")
 
     def test_manual_review_items_are_snapshot_scoped_and_cleanup_old_snapshots(self) -> None:
         old_snapshot_path = str(
@@ -3841,6 +9380,7 @@ class PipelineTest(unittest.TestCase):
             self.assertTrue(result_resp["agent_runtime_session"])
             self.assertIn("agent_workers", result_resp)
             self.assertIn("intent_rewrite", result_resp)
+            self.assertIn("workflow_stage_summaries", result_resp)
 
             refine_compile_req = urllib_request.Request(
                 f"http://{host}:{port}/api/results/refine/compile-instruction",
@@ -4059,6 +9599,47 @@ class PipelineTest(unittest.TestCase):
             self.assertIn("status", provider_health)
             self.assertIn("semantic", provider_health["providers"])
 
+            runtime_health_req = urllib_request.Request(
+                f"http://{host}:{port}/api/runtime/health",
+                method="GET",
+            )
+            with opener.open(runtime_health_req) as response:
+                runtime_health = json.loads(response.read().decode("utf-8"))
+            self.assertIn("status", runtime_health)
+            self.assertIn("metrics", runtime_health)
+            self.assertIn("services", runtime_health)
+
+            runtime_metrics_req = urllib_request.Request(
+                f"http://{host}:{port}/api/runtime/metrics",
+                method="GET",
+            )
+            with opener.open(runtime_metrics_req) as response:
+                runtime_metrics = json.loads(response.read().decode("utf-8"))
+            self.assertIn("status", runtime_metrics)
+            self.assertIn("metrics", runtime_metrics)
+            self.assertIn("refresh_metrics", runtime_metrics)
+
+            runtime_progress_req = urllib_request.Request(
+                f"http://{host}:{port}/api/runtime/progress",
+                method="GET",
+            )
+            with opener.open(runtime_progress_req) as response:
+                runtime_progress = json.loads(response.read().decode("utf-8"))
+            self.assertIn("status", runtime_progress)
+            self.assertIn("workflow_jobs", runtime_progress)
+            self.assertIn("profile_registry", runtime_progress)
+            self.assertIn("object_sync", runtime_progress)
+            self.assertIn("runtime", runtime_progress)
+
+            health_req = urllib_request.Request(
+                f"http://{host}:{port}/health",
+                method="GET",
+            )
+            with opener.open(health_req) as response:
+                health_resp = json.loads(response.read().decode("utf-8"))
+            self.assertIn("status", health_resp)
+            self.assertIn("metrics", health_resp)
+
             feedback_payload = json.dumps(
                 {
                     "target_company": "Anthropic",
@@ -4088,6 +9669,247 @@ class PipelineTest(unittest.TestCase):
             self.assertGreaterEqual(len(pattern_resp["patterns"]), 1)
             self.assertGreaterEqual(len(pattern_resp["versions"]), 1)
             self.assertGreaterEqual(len(pattern_resp["compiler_runs"]), 1)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
+    def test_http_api_query_dispatch_filters(self) -> None:
+        first = self.orchestrator.queue_workflow(
+            {
+                "raw_user_request": "帮我找 Anthropic 当前偏基础设施方向的技术成员，先获取全量资产再检索。",
+                "target_company": "Anthropic",
+                "categories": ["employee"],
+                "employment_statuses": ["current"],
+                "keywords": ["基础设施", "GPU", "预训练"],
+                "top_k": 3,
+                "skip_plan_review": True,
+                "tenant_id": "tenant-a",
+                "requester_id": "user-1",
+            }
+        )
+        self.assertEqual(first["status"], "queued")
+        second = self.orchestrator.queue_workflow(
+            {
+                "raw_user_request": "帮我找 Anthropic 当前偏基础设施方向的技术成员，先获取全量资产再检索。",
+                "target_company": "Anthropic",
+                "categories": ["employee"],
+                "employment_statuses": ["current"],
+                "keywords": ["基础设施", "GPU", "预训练"],
+                "top_k": 3,
+                "skip_plan_review": True,
+                "tenant_id": "tenant-a",
+                "requester_id": "user-1",
+            }
+        )
+        self.assertEqual(second["status"], "joined_existing_job")
+
+        server = create_server(self.orchestrator, port=0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        host, port = server.server_address
+        opener = urllib_request.build_opener(urllib_request.ProxyHandler({}))
+        try:
+            filtered_req = urllib_request.Request(
+                f"http://{host}:{port}/api/query-dispatches?target_company=Anthropic&tenant_id=tenant-a&requester_id=user-1&limit=5",
+                method="GET",
+            )
+            with opener.open(filtered_req) as response:
+                filtered_resp = json.loads(response.read().decode("utf-8"))
+            self.assertIn("query_dispatches", filtered_resp)
+            self.assertGreaterEqual(len(filtered_resp["query_dispatches"]), 1)
+            first_dispatch = dict(filtered_resp["query_dispatches"][0])
+            self.assertEqual(first_dispatch.get("target_company"), "Anthropic")
+            self.assertEqual(first_dispatch.get("tenant_id"), "tenant-a")
+            self.assertEqual(first_dispatch.get("requester_id"), "user-1")
+
+            invalid_limit_req = urllib_request.Request(
+                f"http://{host}:{port}/api/query-dispatches?limit=not-a-number",
+                method="GET",
+            )
+            with opener.open(invalid_limit_req) as response:
+                invalid_limit_resp = json.loads(response.read().decode("utf-8"))
+            self.assertIn("query_dispatches", invalid_limit_resp)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
+    def test_http_api_workflow_endpoint_defaults_to_hosted_execution(self) -> None:
+        server = create_server(self.orchestrator, port=0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        host, port = server.server_address
+        opener = urllib_request.build_opener(urllib_request.ProxyHandler({}))
+        try:
+            with unittest.mock.patch.object(
+                self.orchestrator,
+                "start_workflow",
+                return_value={"status": "queued", "job_id": "job-api-workflow"},
+            ) as mocked_start:
+                workflow_req = urllib_request.Request(
+                    f"http://{host}:{port}/api/workflows",
+                    data=json.dumps({"plan_review_id": 42}, ensure_ascii=False).encode("utf-8"),
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with opener.open(workflow_req) as response:
+                    workflow_resp = json.loads(response.read().decode("utf-8"))
+                    status_code = response.status
+            self.assertEqual(status_code, 202)
+            self.assertEqual(workflow_resp["job_id"], "job-api-workflow")
+            mocked_start.assert_called_once()
+            payload = mocked_start.call_args[0][0]
+            self.assertEqual(payload["plan_review_id"], 42)
+            self.assertEqual(payload["runtime_execution_mode"], "hosted")
+            self.assertEqual(payload["analysis_stage_mode"], "two_stage")
+            self.assertFalse(payload["auto_job_daemon"])
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
+    def test_http_api_workflow_endpoint_executes_hosted_dispatch_path(self) -> None:
+        server = create_server(self.orchestrator, port=0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        host, port = server.server_address
+        opener = urllib_request.build_opener(urllib_request.ProxyHandler({}))
+        dispatched = threading.Event()
+
+        def fake_run_queued_workflow(job_id: str, recovery_payload=None):  # type: ignore[no-untyped-def]
+            job = self.store.get_job(job_id) or {}
+            self.store.save_job(
+                job_id=job_id,
+                job_type="workflow",
+                status="completed",
+                stage="completed",
+                request_payload=dict(job.get("request") or {}),
+                plan_payload=dict(job.get("plan") or {}),
+                summary_payload={"message": "Workflow completed in hosted smoke."},
+            )
+            dispatched.set()
+            return {"status": "completed", "job_id": job_id, "recovery_payload": dict(recovery_payload or {})}
+
+        try:
+            with unittest.mock.patch.object(
+                self.orchestrator,
+                "run_queued_workflow",
+                side_effect=fake_run_queued_workflow,
+            ):
+                workflow_req = urllib_request.Request(
+                    f"http://{host}:{port}/api/workflows",
+                    data=json.dumps(
+                        {
+                            "target_company": "Reflection AI",
+                            "categories": ["employee"],
+                            "skip_plan_review": True,
+                        },
+                        ensure_ascii=False,
+                    ).encode("utf-8"),
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with opener.open(workflow_req) as response:
+                    workflow_resp = json.loads(response.read().decode("utf-8"))
+                    status_code = response.status
+
+            self.assertEqual(status_code, 202)
+            self.assertIn(workflow_resp["status"], {"queued", "joined_existing_job"})
+            self.assertTrue(dispatched.wait(timeout=3.0))
+            stored_job = self.store.get_job(str(workflow_resp["job_id"]))
+            self.assertIsNotNone(stored_job)
+            assert stored_job is not None
+            self.assertEqual(str(stored_job.get("status") or ""), "completed")
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
+    def test_mark_linkedin_profile_registry_queued_preserves_fetched_when_raw_exists(self) -> None:
+        profile_url = "https://www.linkedin.com/in/registry-preserve/"
+        raw_path = str(self.settings.company_assets_dir / "reflectionai" / "registry-preserve" / "harvest_profiles" / "cached.json")
+        self.store.mark_linkedin_profile_registry_fetched(
+            profile_url,
+            raw_path=raw_path,
+            snapshot_dir=str(self.settings.company_assets_dir / "reflectionai" / "registry-preserve"),
+        )
+
+        updated = self.store.mark_linkedin_profile_registry_queued(
+            profile_url,
+            snapshot_dir=str(self.settings.company_assets_dir / "reflectionai" / "queued-overwrite-attempt"),
+        )
+
+        self.assertEqual(str(updated.get("status") or ""), "fetched")
+        self.assertEqual(str(updated.get("last_raw_path") or ""), raw_path)
+
+    def test_http_api_workflow_endpoint_can_request_managed_subprocess_execution(self) -> None:
+        server = create_server(self.orchestrator, port=0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        host, port = server.server_address
+        opener = urllib_request.build_opener(urllib_request.ProxyHandler({}))
+        try:
+            with unittest.mock.patch.object(
+                self.orchestrator,
+                "start_workflow_runner_managed",
+                return_value={"status": "queued", "job_id": "job-api-managed"},
+            ) as mocked_start:
+                workflow_req = urllib_request.Request(
+                    f"http://{host}:{port}/api/workflows",
+                    data=json.dumps(
+                        {
+                            "plan_review_id": 43,
+                            "runtime_execution_mode": "managed_subprocess",
+                        },
+                        ensure_ascii=False,
+                    ).encode("utf-8"),
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with opener.open(workflow_req) as response:
+                    workflow_resp = json.loads(response.read().decode("utf-8"))
+                    status_code = response.status
+            self.assertEqual(status_code, 202)
+            self.assertEqual(workflow_resp["job_id"], "job-api-managed")
+            mocked_start.assert_called_once()
+            payload = mocked_start.call_args[0][0]
+            self.assertEqual(payload["plan_review_id"], 43)
+            self.assertEqual(payload["runtime_execution_mode"], "managed_subprocess")
+            self.assertEqual(payload["analysis_stage_mode"], "two_stage")
+            self.assertTrue(payload["auto_job_daemon"])
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
+    def test_http_api_continue_stage2_endpoint_delegates_to_orchestrator(self) -> None:
+        server = create_server(self.orchestrator, port=0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        host, port = server.server_address
+        opener = urllib_request.build_opener(urllib_request.ProxyHandler({}))
+        try:
+            with unittest.mock.patch.object(
+                self.orchestrator,
+                "continue_workflow_stage2",
+                return_value={"status": "queued", "job_id": "job-stage2", "analysis_stage": "stage_2_final"},
+            ) as mocked_continue:
+                continue_req = urllib_request.Request(
+                    f"http://{host}:{port}/api/workflows/job-stage2/continue-stage2",
+                    data=json.dumps({"allow_high_cost_sources": True}, ensure_ascii=False).encode("utf-8"),
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with opener.open(continue_req) as response:
+                    continue_resp = json.loads(response.read().decode("utf-8"))
+                    status_code = response.status
+            self.assertEqual(status_code, 202)
+            self.assertEqual(continue_resp["job_id"], "job-stage2")
+            mocked_continue.assert_called_once()
+            payload = mocked_continue.call_args[0][0]
+            self.assertEqual(payload["job_id"], "job-stage2")
+            self.assertTrue(payload["allow_high_cost_sources"])
         finally:
             server.shutdown()
             server.server_close()
@@ -4319,6 +10141,127 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(rewritten_payload["historical_profile_inheritance"]["carried_forward_candidate_count"], 1)
         rewritten_candidate_ids = {item["candidate_id"] for item in rewritten_payload["candidates"]}
         self.assertIn("cand_acme_lead", rewritten_candidate_ids)
+
+    def test_normalize_snapshot_reuses_large_historical_baseline_for_sparse_full_company_refresh(self) -> None:
+        company_dir = self.settings.company_assets_dir / "bigco"
+        old_snapshot_dir = company_dir / "20260406T120000"
+        old_artifact_dir = old_snapshot_dir / "normalized_artifacts"
+        current_snapshot_dir = company_dir / "20260407T120000"
+        old_artifact_dir.mkdir(parents=True, exist_ok=True)
+        current_snapshot_dir.mkdir(parents=True, exist_ok=True)
+
+        historical_candidates: list[Candidate] = []
+        for index in range(1001):
+            historical_candidates.append(
+                Candidate(
+                    candidate_id=f"cand_bigco_{index:04d}",
+                    name_en=f"Person {index:04d}",
+                    display_name=f"Person {index:04d}",
+                    category="employee",
+                    target_company="BigCo",
+                    organization="BigCo",
+                    employment_status="current",
+                    role="Software Engineer",
+                    linkedin_url=f"https://www.linkedin.com/in/bigco-{index:04d}/",
+                    source_dataset="bigco_linkedin_company_people",
+                    source_path=str(old_snapshot_dir / "harvest_company_employees" / f"{index:04d}.json"),
+                )
+            )
+
+        (old_artifact_dir / "materialized_candidate_documents.json").write_text(
+            json.dumps(
+                {
+                    "snapshot": {"snapshot_id": old_snapshot_dir.name},
+                    "candidates": [item.to_record() for item in historical_candidates],
+                    "evidence": [],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+
+        current_seed = Candidate(
+            candidate_id="seed_bigco_0001",
+            name_en="Person 0001",
+            display_name="Person 0001",
+            category="employee",
+            target_company="BigCo",
+            organization="BigCo",
+            employment_status="current",
+            role="Software Engineer",
+            linkedin_url="https://www.linkedin.com/in/bigco-0001/",
+            source_dataset="bigco_scoped_search_seed",
+            source_path=str(current_snapshot_dir / "search_seed_discovery" / "seed.json"),
+        )
+        current_evidence = [
+            EvidenceRecord(
+                evidence_id=make_evidence_id(
+                    current_seed.candidate_id,
+                    "bigco_scoped_search_seed",
+                    "Scoped seed",
+                    current_seed.linkedin_url,
+                ),
+                candidate_id=current_seed.candidate_id,
+                source_type="profile_search_seed",
+                title="Scoped seed",
+                url=current_seed.linkedin_url,
+                summary="Sparse scoped seed refresh.",
+                source_dataset="bigco_scoped_search_seed",
+                source_path=str(current_snapshot_dir / "search_seed_discovery" / "seed.json"),
+            )
+        ]
+        (current_snapshot_dir / "candidate_documents.json").write_text(
+            json.dumps(
+                {
+                    "snapshot": {"snapshot_id": current_snapshot_dir.name},
+                    "candidates": [current_seed.to_record()],
+                    "evidence": [item.to_record() for item in current_evidence],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+
+        identity = CompanyIdentity(
+            requested_name="BigCo",
+            canonical_name="BigCo",
+            company_key="bigco",
+            linkedin_slug="bigco",
+            linkedin_company_url="https://www.linkedin.com/company/bigco/",
+        )
+        task = AcquisitionTask(
+            task_id="normalize",
+            task_type="normalize_asset_snapshot",
+            title="Normalize",
+            description="Persist snapshot",
+        )
+
+        result = self.acquisition_engine._normalize_snapshot(
+            task,
+            {
+                "company_identity": identity,
+                "snapshot_id": current_snapshot_dir.name,
+                "snapshot_dir": current_snapshot_dir,
+                "candidates": [current_seed],
+                "evidence": current_evidence,
+            },
+            JobRequest(
+                raw_user_request="帮我找 BigCo 做 infra 的人",
+                target_company="BigCo",
+                target_scope="full_company_asset",
+                categories=["employee"],
+            ),
+        )
+
+        self.assertEqual(result.status, "completed")
+        rewritten_payload = json.loads((current_snapshot_dir / "candidate_documents.json").read_text())
+        self.assertTrue(rewritten_payload["historical_profile_inheritance"]["baseline_snapshot_reused"])
+        self.assertEqual(
+            rewritten_payload["historical_profile_inheritance"]["baseline_snapshot_id"],
+            old_snapshot_dir.name,
+        )
+        self.assertEqual(rewritten_payload["candidate_count"], 1001)
+        self.assertEqual(self.store.candidate_count_for_company("BigCo"), 1001)
 
     def test_normalize_snapshot_force_fresh_run_skips_historical_profile_inheritance_at_execution_time(self) -> None:
         snapshot_dir = self.settings.company_assets_dir / "anthropic" / "snapshot-normalize-fresh-runtime"

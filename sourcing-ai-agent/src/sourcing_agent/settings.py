@@ -11,7 +11,7 @@ class QwenSettings:
     enabled: bool
     api_key: str = ""
     base_url: str = "https://dashscope.aliyuncs.com/api/v2/apps/protocols/compatible-mode/v1"
-    model: str = "qwen3.5-plus"
+    model: str = "qwen-flash"
     timeout_seconds: int = 45
 
 
@@ -90,6 +90,9 @@ class ObjectStorageSettings:
     force_path_style: bool = True
     local_dir: str = ""
     max_workers: int = 8
+    multipart_threshold_bytes: int = 64 * 1024 * 1024
+    multipart_chunk_size_bytes: int = 64 * 1024 * 1024
+    multipart_max_workers: int = 4
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,7 +150,7 @@ def load_settings(project_root: str | Path) -> AppSettings:
     base_url = os.getenv("DASHSCOPE_BASE_URL") or str(
         qwen_payload.get("base_url", "https://dashscope.aliyuncs.com/api/v2/apps/protocols/compatible-mode/v1")
     ).strip()
-    model = os.getenv("DASHSCOPE_MODEL") or str(qwen_payload.get("model", "qwen3.5-plus")).strip()
+    model = os.getenv("DASHSCOPE_MODEL") or str(qwen_payload.get("model", "qwen-flash")).strip()
     timeout = os.getenv("DASHSCOPE_TIMEOUT_SECONDS") or qwen_payload.get("timeout_seconds", 45)
 
     try:
@@ -321,6 +324,27 @@ def load_settings(project_root: str | Path) -> AppSettings:
         object_storage_max_workers_value = int(object_storage_max_workers)
     except (TypeError, ValueError):
         object_storage_max_workers_value = 8
+    object_storage_multipart_threshold = os.getenv("OBJECT_STORAGE_MULTIPART_THRESHOLD_BYTES") or object_storage_payload.get(
+        "multipart_threshold_bytes", 64 * 1024 * 1024
+    )
+    try:
+        object_storage_multipart_threshold_value = int(object_storage_multipart_threshold)
+    except (TypeError, ValueError):
+        object_storage_multipart_threshold_value = 64 * 1024 * 1024
+    object_storage_multipart_chunk_size = os.getenv("OBJECT_STORAGE_MULTIPART_CHUNK_SIZE_BYTES") or object_storage_payload.get(
+        "multipart_chunk_size_bytes", 64 * 1024 * 1024
+    )
+    try:
+        object_storage_multipart_chunk_size_value = int(object_storage_multipart_chunk_size)
+    except (TypeError, ValueError):
+        object_storage_multipart_chunk_size_value = 64 * 1024 * 1024
+    object_storage_multipart_max_workers = os.getenv("OBJECT_STORAGE_MULTIPART_MAX_WORKERS") or object_storage_payload.get(
+        "multipart_max_workers", 4
+    )
+    try:
+        object_storage_multipart_max_workers_value = int(object_storage_multipart_max_workers)
+    except (TypeError, ValueError):
+        object_storage_multipart_max_workers_value = 4
     force_path_style_raw = os.getenv("OBJECT_STORAGE_FORCE_PATH_STYLE")
     if force_path_style_raw is None:
         object_storage_force_path_style = bool(object_storage_payload.get("force_path_style", True))
@@ -449,6 +473,9 @@ def load_settings(project_root: str | Path) -> AppSettings:
             force_path_style=object_storage_force_path_style,
             local_dir=object_storage_local_dir,
             max_workers=max(1, min(object_storage_max_workers_value, 64)),
+            multipart_threshold_bytes=max(5 * 1024 * 1024, object_storage_multipart_threshold_value),
+            multipart_chunk_size_bytes=max(5 * 1024 * 1024, object_storage_multipart_chunk_size_value),
+            multipart_max_workers=max(1, min(object_storage_multipart_max_workers_value, 16)),
         ),
         harvest=HarvestSettings(
             profile_scraper=_harvest_actor_settings(
@@ -457,7 +484,7 @@ def load_settings(project_root: str | Path) -> AppSettings:
                 timeout_env="HARVEST_PROFILE_TIMEOUT_SECONDS",
                 charge_env="HARVEST_PROFILE_MAX_TOTAL_CHARGE_USD",
                 items_env="HARVEST_PROFILE_MAX_PAID_ITEMS",
-                default_charge=1.0,
+                default_charge=5.0,
                 default_items=25,
                 default_mode="full",
                 default_collect_email=True,
@@ -468,7 +495,7 @@ def load_settings(project_root: str | Path) -> AppSettings:
                 timeout_env="HARVEST_SEARCH_TIMEOUT_SECONDS",
                 charge_env="HARVEST_SEARCH_MAX_TOTAL_CHARGE_USD",
                 items_env="HARVEST_SEARCH_MAX_PAID_ITEMS",
-                default_charge=0.10,
+                default_charge=1.0,
                 default_items=50,
                 default_mode="short",
             ),
@@ -478,7 +505,7 @@ def load_settings(project_root: str | Path) -> AppSettings:
                 timeout_env="HARVEST_COMPANY_TIMEOUT_SECONDS",
                 charge_env="HARVEST_COMPANY_MAX_TOTAL_CHARGE_USD",
                 items_env="HARVEST_COMPANY_MAX_PAID_ITEMS",
-                default_charge=0.10,
+                default_charge=5.0,
                 default_items=200,
                 default_mode="short",
             ),

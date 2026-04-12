@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -31,8 +32,30 @@ from .search_provider import (
 )
 from .worker_daemon import AutonomousWorkerDaemon
 
-_LANE_READY_POLL_MIN_INTERVAL_SECONDS = 15
-_LANE_FETCH_MIN_INTERVAL_SECONDS = 15
+def _env_int(name: str, default: int) -> int:
+    raw = str(os.getenv(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return default
+
+
+_LANE_READY_POLL_MIN_INTERVAL_SECONDS = max(
+    1,
+    _env_int(
+        "EXPLORATION_READY_POLL_MIN_INTERVAL_SECONDS",
+        _env_int("WEB_SEARCH_READY_POLL_MIN_INTERVAL_SECONDS", 15),
+    ),
+)
+_LANE_FETCH_MIN_INTERVAL_SECONDS = max(
+    1,
+    _env_int(
+        "EXPLORATION_FETCH_MIN_INTERVAL_SECONDS",
+        _env_int("WEB_SEARCH_FETCH_MIN_INTERVAL_SECONDS", 15),
+    ),
+)
 
 
 @dataclass(slots=True)
@@ -386,11 +409,19 @@ class ExploratoryWebEnricher:
             search_execution = None
             try:
                 if worker_handle and self.worker_runtime:
-                    query_prefetch = (
-                        dict(prefetched_queries.get(str(index)) or {})
-                        if int(checkpoint.get("active_query_index") or 0) != index
-                        else {}
+                    active_query_index = int(checkpoint.get("active_query_index") or 0)
+                    query_prefetch = dict(prefetched_queries.get(str(index)) or {})
+                    search_checkpoint = _resolve_worker_search_checkpoint(
+                        active_search_state=(
+                            dict(checkpoint.get("active_search_state") or {})
+                            if active_query_index == index
+                            else {}
+                        ),
+                        prefetched_search_state=dict(query_prefetch.get("search_state") or {}),
+                        prefetched_raw_path=str(query_prefetch.get("raw_path") or ""),
                     )
+                    if active_query_index == index and search_checkpoint:
+                        checkpoint["active_search_state"] = dict(search_checkpoint)
                     search_artifact_paths = {
                         str(key): dict(value)
                         for key, value in dict(checkpoint.get("search_artifact_paths") or {}).items()
@@ -433,13 +464,12 @@ class ExploratoryWebEnricher:
                         search_execution = self.search_provider.execute_with_checkpoint(
                             query_text,
                             max_results=10,
-                            checkpoint=(
-                                dict(checkpoint.get("active_search_state") or {})
-                                if int(checkpoint.get("active_query_index") or 0) == index
-                                else dict(query_prefetch.get("search_state") or {})
-                            ),
+                            checkpoint=search_checkpoint,
                         )
                         for artifact in list(search_execution.artifacts or []):
+                            artifact_label = str(getattr(artifact, "label", "artifact") or "artifact").strip()
+                            if _should_skip_worker_search_artifact(artifact_label, query_artifact_paths):
+                                continue
                             artifact_path = _write_search_execution_artifact(
                                 logger=logger,
                                 artifact=artifact,
@@ -452,7 +482,7 @@ class ExploratoryWebEnricher:
                                     "provider_name": search_execution.provider_name,
                                 },
                             )
-                            query_artifact_paths[str(getattr(artifact, "label", "artifact") or "artifact")] = str(artifact_path)
+                            query_artifact_paths[artifact_label or "artifact"] = str(artifact_path)
                         if query_artifact_paths:
                             search_artifact_paths[str(index)] = query_artifact_paths
                         checkpoint = {
@@ -778,6 +808,36 @@ def _prepare_batched_exploration_queries(
     batch_message = ""
     submitted_query_count = 0
 
+    def _write_manifest_snapshot() -> None:
+        if not manifest_entries and not artifact_paths:
+            return
+        root_artifact_paths = {
+            str(key): str(value)
+            for key, value in dict(artifact_paths).items()
+            if str(key).strip() and str(value).strip()
+        }
+        for entry in manifest_entries.values():
+            for key, value in dict(entry.get("artifact_paths") or {}).items():
+                normalized_key = str(key or "").strip()
+                normalized_value = str(value or "").strip()
+                if normalized_key and normalized_value and normalized_key not in root_artifact_paths:
+                    root_artifact_paths[normalized_key] = normalized_value
+        logger.write_json(
+            manifest_path,
+            {
+                "provider_name": provider_name,
+                "submitted_query_count": submitted_query_count,
+                "artifact_paths": root_artifact_paths,
+                "entries": [manifest_entries[key] for key in sorted(manifest_entries)],
+                "message": batch_message,
+                "updated_at": _batch_lane_timestamp(),
+            },
+            asset_type="exploration_search_batch_manifest",
+            source_kind="further_exploration",
+            is_raw_asset=False,
+            model_safe=False,
+        )
+
     if unresolved_requests:
         submit_batch = getattr(search_provider, "submit_batch_queries", None)
         if not callable(submit_batch):
@@ -840,6 +900,7 @@ def _prepare_batched_exploration_queries(
                     "raw_path": str(entry.get("raw_path") or ""),
                 }
                 spec["prefetched_search_queries"] = prefetched_queries
+        _write_manifest_snapshot()
 
     ready_errors = _refresh_batched_exploration_ready_cache(
         search_provider=search_provider,
@@ -860,33 +921,7 @@ def _prepare_batched_exploration_queries(
 
     if not manifest_entries and not artifact_paths:
         return [*ready_errors, *fetch_errors]
-
-    root_artifact_paths = {
-        str(key): str(value)
-        for key, value in dict(artifact_paths).items()
-        if str(key).strip() and str(value).strip()
-    }
-    for entry in manifest_entries.values():
-        for key, value in dict(entry.get("artifact_paths") or {}).items():
-            normalized_key = str(key or "").strip()
-            normalized_value = str(value or "").strip()
-            if normalized_key and normalized_value and normalized_key not in root_artifact_paths:
-                root_artifact_paths[normalized_key] = normalized_value
-    logger.write_json(
-        manifest_path,
-        {
-            "provider_name": provider_name,
-            "submitted_query_count": submitted_query_count,
-            "artifact_paths": root_artifact_paths,
-            "entries": [manifest_entries[key] for key in sorted(manifest_entries)],
-            "message": batch_message,
-            "updated_at": _batch_lane_timestamp(),
-        },
-        asset_type="exploration_search_batch_manifest",
-        source_kind="further_exploration",
-        is_raw_asset=False,
-        model_safe=False,
-    )
+    _write_manifest_snapshot()
     return [*ready_errors, *fetch_errors]
 
 
@@ -1316,6 +1351,53 @@ def _merge_prefetched_exploration_checkpoint(
                     updated["search_artifact_paths"] = search_artifact_paths
                 applied = True
     return updated, applied
+
+
+def _resolve_worker_search_checkpoint(
+    *,
+    active_search_state: dict[str, Any],
+    prefetched_search_state: dict[str, Any],
+    prefetched_raw_path: str,
+) -> dict[str, Any]:
+    active_state = dict(active_search_state or {})
+    prefetched_state = dict(prefetched_search_state or {})
+    if not prefetched_state:
+        return active_state
+    if not active_state:
+        return prefetched_state
+    active_task_id = str(active_state.get("task_id") or "").strip()
+    prefetched_task_id = str(prefetched_state.get("task_id") or "").strip()
+    if prefetched_task_id and active_task_id and prefetched_task_id != active_task_id:
+        return active_state
+    if str(prefetched_raw_path or "").strip():
+        return prefetched_state
+    if _search_state_priority(str(prefetched_state.get("status") or "")) >= _search_state_priority(
+        str(active_state.get("status") or "")
+    ):
+        return prefetched_state
+    return active_state
+
+
+def _search_state_priority(status: str) -> int:
+    normalized = str(status or "").strip().lower()
+    if normalized in {"completed", "fetched_cached"}:
+        return 50
+    if normalized == "ready_cached":
+        return 40
+    if normalized == "waiting_for_ready_cached":
+        return 30
+    if normalized == "waiting_for_ready":
+        return 20
+    if normalized == "submitted":
+        return 10
+    return 0
+
+
+def _should_skip_worker_search_artifact(artifact_label: str, query_artifact_paths: dict[str, Any]) -> bool:
+    normalized_label = str(artifact_label or "").strip().lower()
+    if normalized_label != "tasks_ready":
+        return False
+    return any(str(key or "").strip().lower().startswith("tasks_ready_batch") for key in dict(query_artifact_paths or {}).keys())
 
 
 def _batch_lane_timestamp(*, compact: bool = False) -> str:

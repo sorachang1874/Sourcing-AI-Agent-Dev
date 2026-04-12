@@ -1,0 +1,17 @@
+{
+  "review_id": 63,
+  "action": "approved",
+  "reviewer": "human_sim",
+  "notes": "Approved for live keyword-first execution. Use Google + Google DeepMind scope, run current and former, and allow high-cost provider budgets.",
+  "decision": {
+    "confirmed_company_scope": [
+      "Google",
+      "Google DeepMind"
+    ],
+    "allow_high_cost_sources": true,
+    "acquisition_strategy_override": "full_company_roster",
+    "use_company_employees_lane": true,
+    "run_former_search_seed": true,
+    "force_fresh_run": true
+  }
+}

@@ -4,7 +4,10 @@ from copy import deepcopy
 from typing import Any
 
 from .company_registry import normalize_company_key
-from .company_shard_planning import build_default_company_employee_shard_policy
+from .company_shard_planning import (
+    build_default_company_employee_shard_policy,
+    build_large_org_keyword_probe_shard_policy,
+)
 from .domain import JobRequest, SourcingPlan
 from .execution_preferences import merge_execution_preferences, normalize_execution_preferences
 from .planning import (
@@ -13,6 +16,8 @@ from .planning import (
     FULL_COMPANY_EMPLOYEES_LARGE_ORG_MAX_PAGES,
     FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
 )
+from .query_signal_knowledge import scope_review_hints
+from .request_normalization import materialize_request_payload
 
 
 def build_plan_review_gate(request: JobRequest, plan: SourcingPlan) -> dict[str, Any]:
@@ -27,6 +32,11 @@ def build_plan_review_gate(request: JobRequest, plan: SourcingPlan) -> dict[str,
         "precision_recall_bias",
         "acquisition_strategy_override",
         "use_company_employees_lane",
+        "keyword_priority_only",
+        "former_keyword_queries_only",
+        "provider_people_search_query_strategy",
+        "provider_people_search_max_queries",
+        "large_org_keyword_probe_mode",
         "force_fresh_run",
         "reuse_existing_roster",
         "run_former_search_seed",
@@ -38,6 +48,27 @@ def build_plan_review_gate(request: JobRequest, plan: SourcingPlan) -> dict[str,
     if confirmation_items:
         required_before_execution = True
         reasons.append("open_questions_present")
+    google_scope_signal = _resolve_google_scope_disambiguation(request)
+    if strategy_type == "full_company_roster" and bool(google_scope_signal.get("requires_confirmation")):
+        required_before_execution = True
+        reasons.append("google_scope_ambiguity_requires_confirmation")
+        signal_hints = [str(item).strip() for item in list(google_scope_signal.get("hints") or []) if str(item).strip()]
+        signal_source = str(google_scope_signal.get("source") or "rules").strip()
+        inferred_scope = str(google_scope_signal.get("inferred_scope") or "").strip()
+        confidence = google_scope_signal.get("confidence")
+        confidence_text = ""
+        if isinstance(confidence, (int, float)):
+            confidence_text = f" (confidence={float(confidence):.2f})"
+        recommendation = _google_scope_label(inferred_scope)
+        recommendation_text = f"，建议范围：{recommendation}" if recommendation else ""
+        confirmation_items.append(
+            "Google query 命中子组织/产品线索（"
+            + ", ".join(signal_hints[:4] or ["scope hints"])
+            + f"）{recommendation_text}。请确认覆盖范围：仅子组织、整个 Google，还是两者都要。"
+        )
+        suggested_actions.append(
+            f"当前 scope 判定来源：{signal_source}{confidence_text}。确认 company_scope 后再执行 full roster，可避免无效抓取与成本浪费。"
+        )
     if strategy_type == "former_employee_search":
         required_before_execution = True
         reasons.append("target_population_scope_should_be_confirmed")
@@ -81,6 +112,7 @@ def build_plan_review_gate(request: JobRequest, plan: SourcingPlan) -> dict[str,
         "default_extra_source_families": _default_extra_source_families(request, publication_families),
         "target_population": plan.acquisition_strategy.target_population,
         "strategy_type": strategy_type,
+        "scope_disambiguation": google_scope_signal if bool(google_scope_signal.get("triggered")) else {},
     }
 
 
@@ -131,12 +163,23 @@ def _build_execution_mode_hints(plan: SourcingPlan) -> dict[str, Any]:
             for item in list(policy.get("partition_rules") or [])
             if isinstance(item, dict)
         ]
+        keyword_shards = [
+            {
+                "rule_id": str(item.get("rule_id") or "").strip(),
+                "title": str(item.get("title") or item.get("rule_id") or "").strip(),
+                "include_patch": dict(item.get("include_patch") or {}),
+            }
+            for item in list(policy.get("keyword_shards") or [])
+            if isinstance(item, dict)
+        ]
         hints = {
             "adaptive_company_employee_shard_policy": {
                 "strategy_id": str(policy.get("strategy_id") or "").strip(),
+                "mode": str(policy.get("mode") or "").strip(),
                 "root_title": str(policy.get("root_title") or "").strip(),
                 "root_filters": dict(policy.get("root_filters") or {}),
                 "partition_rules": partition_rules,
+                "keyword_shards": keyword_shards,
                 "max_pages": int(policy.get("max_pages") or 0),
                 "page_limit": int(policy.get("page_limit") or 0),
                 "provider_result_cap": int(policy.get("provider_result_cap") or 0),
@@ -169,31 +212,54 @@ def apply_plan_review_decision(
     plan_payload: dict[str, Any],
     decision_payload: dict[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    updated_request = deepcopy(request_payload or {})
+    updated_request = materialize_request_payload(
+        deepcopy(request_payload or {}),
+        target_company=str((request_payload or {}).get("target_company") or "").strip(),
+    )
     updated_plan = deepcopy(plan_payload or {})
     decision = dict(decision_payload or {})
 
+    inferred_target_company = _infer_target_company_from_decision(
+        request_payload=updated_request,
+        plan_payload=updated_plan,
+        decision_payload=decision,
+    )
+    if inferred_target_company and not str(updated_request.get("target_company") or "").strip():
+        updated_request["target_company"] = inferred_target_company
+    if inferred_target_company:
+        acquisition_strategy = dict(updated_plan.get("acquisition_strategy") or {})
+        company_scope = [
+            str(item).strip()
+            for item in list(acquisition_strategy.get("company_scope") or [])
+            if str(item).strip()
+        ]
+        if not company_scope:
+            company_scope = [inferred_target_company]
+        elif not any(item.lower() == inferred_target_company.lower() for item in company_scope):
+            company_scope = [inferred_target_company, *company_scope]
+        acquisition_strategy["company_scope"] = company_scope
+
+        filter_hints = dict(acquisition_strategy.get("filter_hints") or {})
+        current_companies = [
+            str(item).strip()
+            for item in list(filter_hints.get("current_companies") or [])
+            if str(item).strip()
+        ]
+        if not current_companies:
+            current_companies = [inferred_target_company]
+        elif not any(item.lower() == inferred_target_company.lower() for item in current_companies):
+            current_companies = [inferred_target_company, *current_companies]
+        filter_hints["current_companies"] = current_companies
+        acquisition_strategy["filter_hints"] = filter_hints
+        updated_plan["acquisition_strategy"] = acquisition_strategy
+
+    target_company = str(updated_request.get("target_company") or inferred_target_company or "").strip()
+    decision_preferences = normalize_execution_preferences(decision, target_company=target_company)
+
     extra_source_families = _normalize_list(decision.get("extra_source_families"))
     confirmed_scope = _normalize_list(decision.get("confirmed_company_scope"))
-    allow_high_cost_sources = bool(decision.get("allow_high_cost_sources") or decision.get("high_cost_sources_approved"))
-    precision_recall_bias = str(decision.get("precision_recall_bias") or "").strip().lower()
-    acquisition_strategy_override = str(
-        decision.get("acquisition_strategy_override")
-        or decision.get("force_acquisition_strategy")
-        or ""
-    ).strip()
-    use_company_employees_lane = _coerce_bool(
-        decision,
-        "use_company_employees_lane",
-        "force_company_employees",
-        "allow_company_employee_api",
-    )
-    force_fresh_run = _coerce_bool(
-        decision,
-        "force_fresh_run",
-        "require_fresh_snapshot",
-        "disable_cached_roster_fallback",
-    )
+    allow_high_cost_sources = "allow_high_cost_sources" in decision_preferences
+    precision_recall_bias = str(decision_preferences.get("precision_recall_bias") or "").strip().lower()
 
     if extra_source_families:
         publication = dict(updated_plan.get("publication_coverage") or {})
@@ -242,20 +308,19 @@ def apply_plan_review_decision(
     if allow_high_cost_sources or precision_recall_bias:
         acquisition_strategy = dict(updated_plan.get("acquisition_strategy") or {})
         cost_policy = dict(acquisition_strategy.get("cost_policy") or {})
-        if allow_high_cost_sources:
-            cost_policy["high_cost_sources_approved"] = True
+        if "allow_high_cost_sources" in decision_preferences:
+            cost_policy["high_cost_requires_approval"] = False
+            cost_policy["high_cost_sources_approved"] = bool(decision_preferences.get("allow_high_cost_sources"))
         if precision_recall_bias:
             cost_policy["precision_recall_bias"] = precision_recall_bias
         acquisition_strategy["cost_policy"] = cost_policy
         updated_plan["acquisition_strategy"] = acquisition_strategy
 
-    if acquisition_strategy_override or use_company_employees_lane or force_fresh_run:
+    if decision_preferences:
         _apply_acquisition_review_preferences(
             updated_plan,
-            target_company=str(updated_request.get("target_company") or "").strip(),
-            strategy_override=acquisition_strategy_override,
-            use_company_employees_lane=use_company_employees_lane,
-            force_fresh_run=force_fresh_run,
+            target_company=target_company,
+            preferences=decision_preferences,
         )
 
     _sync_request_execution_preferences(updated_request, decision)
@@ -274,23 +339,26 @@ def _sync_task_metadata(plan_payload: dict[str, Any]) -> None:
     cost_policy = dict(acquisition_strategy.get("cost_policy") or {})
     company_scope = list(acquisition_strategy.get("company_scope") or [])
     target_company = str(company_scope[0] or "").strip() if company_scope else ""
+    if target_company and not str(plan_payload.get("target_company") or "").strip():
+        plan_payload["target_company"] = target_company
     filter_hints = dict(acquisition_strategy.get("filter_hints") or {})
     strategy_type = str(acquisition_strategy.get("strategy_type") or "").strip()
     search_channel_order = list(acquisition_strategy.get("search_channel_order") or [])
     search_seed_queries = list(acquisition_strategy.get("search_seed_queries") or [])
     max_pages = _default_review_full_roster_max_pages(target_company) if strategy_type == "full_company_roster" else 10
-    shard_policy = (
-        build_default_company_employee_shard_policy(
-            normalize_company_key(target_company),
-            max_pages=max_pages,
-            page_limit=FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
-        )
-        if strategy_type == "full_company_roster"
-        else {}
+    shard_policy = _build_review_company_shard_policy(
+        strategy_type=strategy_type,
+        target_company=target_company,
+        company_scope=company_scope,
+        filter_hints=filter_hints,
+        cost_policy=cost_policy,
+        max_pages=max_pages,
     )
     for task in plan_payload.get("acquisition_tasks") or []:
         if not isinstance(task, dict):
             continue
+        if target_company and str(task.get("status") or "").strip() == "needs_input":
+            task["status"] = "ready"
         metadata = dict(task.get("metadata") or {})
         metadata["strategy_type"] = strategy_type
         metadata["company_scope"] = company_scope
@@ -316,18 +384,171 @@ def _default_review_full_roster_max_pages(target_company: str) -> int:
     return FULL_COMPANY_EMPLOYEES_DEFAULT_MAX_PAGES
 
 
+def _build_review_company_shard_policy(
+    *,
+    strategy_type: str,
+    target_company: str,
+    company_scope: list[str],
+    filter_hints: dict[str, Any],
+    cost_policy: dict[str, Any],
+    max_pages: int,
+) -> dict[str, Any]:
+    if strategy_type != "full_company_roster":
+        return {}
+    company_key = normalize_company_key(target_company)
+    if bool(cost_policy.get("large_org_keyword_probe_mode")):
+        keyword_policy = build_large_org_keyword_probe_shard_policy(
+            company_key,
+            company_scope=list(company_scope or []),
+            keyword_hints=[str(item).strip() for item in list(filter_hints.get("keywords") or []) if str(item).strip()],
+            function_ids=[str(item).strip() for item in list(filter_hints.get("function_ids") or []) if str(item).strip()],
+            max_pages=max_pages,
+            page_limit=FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
+        )
+        if keyword_policy:
+            return keyword_policy
+    return build_default_company_employee_shard_policy(
+        company_key,
+        max_pages=max_pages,
+        page_limit=FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
+    )
+
+
+def _google_scope_ambiguity_hints(request: JobRequest) -> list[str]:
+    target_key = normalize_company_key(str(request.target_company or ""))
+    if target_key not in {"google", "alphabet"}:
+        return []
+    raw_hints = [
+        str(item).strip()
+        for item in list(request.organization_keywords or [])
+        if str(item).strip()
+        and str(item).strip().lower() not in {"google", "alphabet"}
+    ]
+    return scope_review_hints(str(request.target_company or ""), raw_hints)
+
+
+def _resolve_google_scope_disambiguation(request: JobRequest) -> dict[str, Any]:
+    target_key = normalize_company_key(str(request.target_company or ""))
+    if target_key not in {"google", "alphabet"}:
+        return {
+            "triggered": False,
+            "requires_confirmation": False,
+            "source": "",
+            "hints": [],
+            "inferred_scope": "",
+        }
+    confirmed_scope = [str(item).strip() for item in list(request.execution_preferences.get("confirmed_company_scope") or []) if str(item).strip()]
+    llm_scope = _normalize_google_scope_disambiguation(request.scope_disambiguation)
+    if llm_scope:
+        merged_hints = _normalize_list(
+            list(llm_scope.get("sub_org_candidates") or []) + _google_scope_ambiguity_hints(request)
+        )
+        inferred_scope = str(llm_scope.get("inferred_scope") or "").strip()
+        confidence = llm_scope.get("confidence")
+        triggered = bool(merged_hints) or inferred_scope in {"sub_org_only", "both", "uncertain"}
+        requires_confirmation = triggered and not confirmed_scope
+        if inferred_scope == "parent" and not merged_hints and isinstance(confidence, (int, float)) and float(confidence) >= 0.8:
+            requires_confirmation = False
+            triggered = False
+        return {
+            "triggered": bool(triggered),
+            "requires_confirmation": bool(requires_confirmation),
+            "source": "llm",
+            "hints": merged_hints,
+            "inferred_scope": inferred_scope,
+            "confidence": confidence,
+            "rationale": str(llm_scope.get("rationale") or "").strip(),
+            "confirmed_scope": confirmed_scope,
+        }
+
+    rule_hints = _google_scope_ambiguity_hints(request)
+    triggered = bool(rule_hints)
+    return {
+        "triggered": triggered,
+        "requires_confirmation": bool(triggered and not confirmed_scope),
+        "source": "rules" if triggered else "",
+        "hints": rule_hints,
+        "inferred_scope": "uncertain" if triggered else "",
+        "confidence": None,
+        "rationale": "",
+        "confirmed_scope": confirmed_scope,
+    }
+
+
+def _normalize_google_scope_disambiguation(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    inferred_scope = str(value.get("inferred_scope") or value.get("scope") or "").strip().lower()
+    aliases = {
+        "parent_company": "parent",
+        "parent_only": "parent",
+        "sub_org": "sub_org_only",
+        "suborg": "sub_org_only",
+        "suborg_only": "sub_org_only",
+        "both_parent_and_sub_org": "both",
+        "ambiguous": "uncertain",
+        "unknown": "uncertain",
+    }
+    inferred_scope = aliases.get(inferred_scope, inferred_scope)
+    if inferred_scope not in {"parent", "sub_org_only", "both", "uncertain"}:
+        inferred_scope = ""
+
+    raw_candidates = value.get("sub_org_candidates")
+    if isinstance(raw_candidates, str):
+        candidates = _normalize_list(raw_candidates.split(","))
+    elif isinstance(raw_candidates, (list, tuple, set)):
+        candidates = _normalize_list(list(raw_candidates))
+    else:
+        candidates = []
+
+    confidence = _coerce_confidence(value.get("confidence"))
+    if confidence is None:
+        confidence = _coerce_confidence(value.get("confidence_score"))
+    rationale = " ".join(str(value.get("rationale") or "").split()).strip()
+    if not inferred_scope and not candidates:
+        return {}
+    normalized: dict[str, Any] = {
+        "inferred_scope": inferred_scope,
+        "sub_org_candidates": candidates[:10],
+        "rationale": rationale[:600],
+    }
+    if confidence is not None:
+        normalized["confidence"] = confidence
+    return normalized
+
+
+def _coerce_confidence(value: Any) -> float | None:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    return max(0.0, min(round(parsed, 3), 1.0))
+
+
+def _google_scope_label(scope: str) -> str:
+    mapping = {
+        "parent": "整个 Google/Alphabet",
+        "sub_org_only": "仅命中的子组织范围",
+        "both": "Google/Alphabet + 命中的子组织",
+        "uncertain": "范围不确定，需要人工确认",
+    }
+    return str(mapping.get(str(scope or "").strip(), "")).strip()
+
+
 def _apply_acquisition_review_preferences(
     plan_payload: dict[str, Any],
     *,
     target_company: str,
-    strategy_override: str,
-    use_company_employees_lane: bool,
-    force_fresh_run: bool,
+    preferences: dict[str, Any],
 ) -> None:
     acquisition_strategy = dict(plan_payload.get("acquisition_strategy") or {})
     current_strategy = str(acquisition_strategy.get("strategy_type") or "").strip()
     desired_strategy = current_strategy
-    normalized_override = strategy_override.strip().lower()
+    normalized_override = str(preferences.get("acquisition_strategy_override") or "").strip().lower()
+    use_company_employees_lane_present = "use_company_employees_lane" in preferences
+    use_company_employees_lane = bool(preferences.get("use_company_employees_lane"))
+    force_fresh_run_present = "force_fresh_run" in preferences
+    force_fresh_run = bool(preferences.get("force_fresh_run"))
     if normalized_override in {
         "full_company_roster",
         "scoped_search_roster",
@@ -352,21 +573,50 @@ def _apply_acquisition_review_preferences(
         acquisition_strategy["roster_sources"] = ["funding_graph", "investor_firm_roster", "linkedin_people_search"]
 
     cost_policy = dict(acquisition_strategy.get("cost_policy") or {})
-    if use_company_employees_lane or desired_strategy == "full_company_roster":
+    if use_company_employees_lane_present:
+        cost_policy["allow_company_employee_api"] = use_company_employees_lane
+    elif desired_strategy == "full_company_roster":
         cost_policy["allow_company_employee_api"] = True
-    if force_fresh_run:
+    if force_fresh_run_present and force_fresh_run:
         cost_policy["allow_cached_roster_fallback"] = False
         cost_policy["allow_historical_profile_inheritance"] = False
         cost_policy["allow_shared_provider_cache"] = False
+    if "keyword_priority_only" in preferences:
+        cost_policy["keyword_priority_only"] = bool(preferences.get("keyword_priority_only"))
+    if "former_keyword_queries_only" in preferences:
+        cost_policy["former_keyword_queries_only"] = bool(preferences.get("former_keyword_queries_only"))
+    if "provider_people_search_query_strategy" in preferences:
+        cost_policy["provider_people_search_query_strategy"] = str(preferences.get("provider_people_search_query_strategy") or "").strip()
+    if "provider_people_search_max_queries" in preferences:
+        cost_policy["provider_people_search_max_queries"] = int(preferences.get("provider_people_search_max_queries") or 0)
+    if "large_org_keyword_probe_mode" in preferences:
+        cost_policy["large_org_keyword_probe_mode"] = bool(preferences.get("large_org_keyword_probe_mode"))
+    if "allow_high_cost_sources" in preferences:
+        cost_policy["high_cost_requires_approval"] = False
+        cost_policy["high_cost_sources_approved"] = bool(preferences.get("allow_high_cost_sources"))
+    if "precision_recall_bias" in preferences:
+        cost_policy["precision_recall_bias"] = str(preferences.get("precision_recall_bias") or "").strip()
     acquisition_strategy["cost_policy"] = cost_policy
 
     reasoning = list(acquisition_strategy.get("reasoning") or [])
-    if use_company_employees_lane:
+    if use_company_employees_lane_present and use_company_employees_lane:
         note = "Plan review forced the acquisition lane onto Harvest company-employees for a fresh full roster."
         if note not in reasoning:
             reasoning.append(note)
-    if force_fresh_run:
+    if use_company_employees_lane_present and not use_company_employees_lane:
+        note = "Plan review explicitly disabled Harvest company-employees and kept acquisition on keyword/search-led lanes."
+        if note not in reasoning:
+            reasoning.append(note)
+    if force_fresh_run_present and force_fresh_run:
         note = "Plan review requested a fresh live acquisition instead of falling back to cached roster snapshots."
+        if note not in reasoning:
+            reasoning.append(note)
+    if bool(preferences.get("keyword_priority_only")):
+        note = "Plan review prioritized keyword-first acquisition over broad roster expansion."
+        if note not in reasoning:
+            reasoning.append(note)
+    if str(preferences.get("provider_people_search_query_strategy") or "").strip().lower() == "all_queries_union":
+        note = "Plan review requested provider people-search to run all keyword queries and union-deduplicate the results."
         if note not in reasoning:
             reasoning.append(note)
     acquisition_strategy["reasoning"] = reasoning
@@ -432,3 +682,58 @@ def _coerce_bool(payload: dict[str, Any], *keys: str) -> bool:
         if normalized in {"0", "false", "no", "off", ""}:
             return False
     return False
+
+
+def _infer_target_company_from_decision(
+    *,
+    request_payload: dict[str, Any],
+    plan_payload: dict[str, Any],
+    decision_payload: dict[str, Any],
+) -> str:
+    effective_request_payload = materialize_request_payload(
+        request_payload,
+        target_company=str((request_payload or {}).get("target_company") or "").strip(),
+    )
+    existing = str(effective_request_payload.get("target_company") or "").strip()
+    if existing:
+        return existing
+
+    candidates: list[str] = []
+    for key in ("target_company", "company", "canonical_company", "company_name"):
+        value = str(decision_payload.get(key) or "").strip()
+        if value:
+            candidates.append(value)
+
+    scope_disambiguation = decision_payload.get("scope_disambiguation")
+    if isinstance(scope_disambiguation, dict):
+        for key in ("target_company", "canonical_company", "parent_company"):
+            value = str(scope_disambiguation.get(key) or "").strip()
+            if value:
+                candidates.append(value)
+
+    for scope_key in ("confirmed_company_scope", "confirmed_scope", "company_scope"):
+        for item in _normalize_list(decision_payload.get(scope_key)):
+            candidates.append(item)
+
+    acquisition_strategy = dict(plan_payload.get("acquisition_strategy") or {})
+    for item in list(acquisition_strategy.get("company_scope") or []):
+        value = str(item).strip()
+        if value:
+            candidates.append(value)
+    filter_hints = dict(acquisition_strategy.get("filter_hints") or {})
+    for item in list(filter_hints.get("current_companies") or []):
+        value = str(item).strip()
+        if value:
+            candidates.append(value)
+
+    seen: set[str] = set()
+    for candidate in candidates:
+        normalized = candidate.strip()
+        if not normalized:
+            continue
+        key = normalized.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        return normalized
+    return ""

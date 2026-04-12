@@ -14,6 +14,10 @@
 - [PROGRESS.md](PROGRESS.md)
 - [docs/INDEX.md](docs/INDEX.md)
 - [docs/FRONTEND_API_CONTRACT.md](docs/FRONTEND_API_CONTRACT.md)
+- [docs/WORKFLOW_OPERATIONS_PLAYBOOK.md](docs/WORKFLOW_OPERATIONS_PLAYBOOK.md)
+- [docs/CANONICAL_CLOUD_BUNDLE_CATALOG.md](docs/CANONICAL_CLOUD_BUNDLE_CATALOG.md)
+- [docs/HOSTED_DEPLOYMENT_AND_GITHUB_SCOPE.md](docs/HOSTED_DEPLOYMENT_AND_GITHUB_SCOPE.md)
+- [docs/GITHUB_DEV_DIFF_REVIEW_2026-04-10.md](docs/GITHUB_DEV_DIFF_REVIEW_2026-04-10.md)
 - [docs/THINKING_MACHINES_LAB_CANONICAL_ASSET.md](docs/THINKING_MACHINES_LAB_CANONICAL_ASSET.md)
 - [docs/THINKING_MACHINES_LAB_VALIDATION_2026-04-08.md](docs/THINKING_MACHINES_LAB_VALIDATION_2026-04-08.md)
 
@@ -22,8 +26,57 @@
 - [contracts/frontend_api_contract.ts](contracts/frontend_api_contract.ts)
 - [contracts/frontend_api_adapter.ts](contracts/frontend_api_adapter.ts)
 - [contracts/frontend_react_hooks.example.tsx](contracts/frontend_react_hooks.example.tsx)
+- [contracts/frontend_runtime_dashboard.example.tsx](contracts/frontend_runtime_dashboard.example.tsx)
 
 历史 handoff / retrospective / todo 文档仍保留，但已经在 [docs/INDEX.md](docs/INDEX.md) 中标记为 reference-only。
+
+## Provider Defaults
+
+- 默认低成本文本模型建议使用 `qwen-flash`
+- 若本地 `runtime/secrets/providers.local.json` 未显式覆盖，Qwen 默认模型现在也是 `qwen-flash`
+- 主模型健康检查可用：
+  - `PYTHONPATH=src python3 -m sourcing_agent.cli test-model`
+
+## External Provider Mode
+
+为避免在 workflow 编排测试时反复消耗外部 API，可以通过环境变量切换外部 provider 模式：
+
+- `SOURCING_EXTERNAL_PROVIDER_MODE=live`
+  - 默认模式
+  - 会真实调用 Harvest / Search / model / semantic provider
+- `SOURCING_EXTERNAL_PROVIDER_MODE=replay`
+  - 只复用本地/共享缓存
+  - 若缓存未命中，则返回空结果或离线占位结果
+  - 不发真实 Harvest / Search / model / semantic 请求
+- `SOURCING_EXTERNAL_PROVIDER_MODE=simulate`
+  - 完全不触发外部 Harvest / Search / model / semantic 请求
+  - 返回可被 workflow 消化的模拟结果，主要用于低成本 smoke test、调度/恢复测试、前后端联调
+
+示例：
+
+```bash
+cd "sourcing-ai-agent"
+SOURCING_EXTERNAL_PROVIDER_MODE=simulate PYTHONPATH=src python3 -m sourcing_agent.cli start-workflow --file configs/demo_workflow_humansand_coding_researchers.json
+```
+
+注意：
+
+- 这个模式现在会统一接管高成本外部 provider，包括 Harvest、search、model、semantic
+- SQLite、snapshot 落盘、workflow 编排、阶段推进、恢复逻辑仍会真实执行
+- `simulate/replay` 的目标是测试 orchestration，不是测试真实召回质量
+
+## Canonical Cloud Assets
+
+服务器恢复默认不应依赖 `company_handoff`，而应优先恢复：
+
+- 1 个全局 `sqlite_snapshot`
+- 每个 canonical company 1 个 `company_snapshot`
+
+当前推荐的 canonical bundle 清单、实际 bundle id、恢复顺序与去重规则见：
+
+- [docs/CANONICAL_CLOUD_BUNDLE_CATALOG.md](docs/CANONICAL_CLOUD_BUNDLE_CATALOG.md)
+
+这样可以让 hosted runtime 在启动后先复用已有 registry / snapshot / profile raw，而不是误触发新的大规模抓取。
 
 ## 当前目标
 
@@ -43,6 +96,10 @@
   - `planning_mode=heuristic` 走纯 deterministic planning
   - `planning_mode=model_assisted` 先让模型做请求归一化，再走 deterministic brief / intent / search planning
   - 若要实验模型直接写 brief / search planning，可使用更激进的 planning mode
+- 支持 `AI-first request normalization + effective intent contract`
+  - `request_preview.intent_axes` 现在不再只是前端 preview 字段
+  - execution 层会通过 `resolve_request_intent_view(...)` 与 `build_effective_request_payload(...)` 物化同一份 effective intent
+  - planning、plan review、acquisition、search seed discovery、scoring、semantic retrieval 现在共享同一套 `target_company / organization_keywords / employment_statuses / execution_preferences` 语义
 - 支持 `Plan Review Gate`
   - plan 阶段会生成 `plan_review_gate`
   - 对 scoped roster、investor firm roster、高成本 source 等场景要求先 review 再执行 workflow
@@ -96,6 +153,23 @@
     - `write-worker-daemon-systemd-unit` 可生成 systemd unit
     - `show-daemon-status` 可读取 `runtime/services/<service_name>/status.json`
 - 支持异步 workflow，显式区分 `planning`、`acquiring`、`retrieving`
+- 支持 staged workflow feedback：
+  - `GET /api/jobs/{job_id}/progress` 与 `GET /api/jobs/{job_id}/results` 现在都会返回 `workflow_stage_summaries`
+  - 当前稳定阶段顺序为：
+    - `linkedin_stage_1`
+    - `stage_1_preview`
+    - `public_web_stage_2`
+    - `stage_2_final`
+  - snapshot 内也会落盘到 `runtime/company_assets/{company}/{snapshot_id}/workflow_stage_summaries/`
+  - 前端无需再自行读取 snapshot 文件即可渲染阶段漏斗 / 阶段卡片
+- 支持 query dispatch 去重与分发：
+  - 对完全相同请求可 `join inflight`（加入在途）或 `reuse completed`（复用已完成结果）
+  - 支持 `requester_id / tenant_id / idempotency_key` 作用域隔离，避免多用户重复消耗
+  - 所有决策会落盘到 `query_dispatches`，并可通过 API 查询审计
+- 支持 `Excel contact intake`
+  - `intake-excel` 会先让模型识别工作表中的姓名、公司、职位、LinkedIn、邮箱等列
+  - 先做本地 exact / near match，再决定直接复用、进入 manual review，还是触发 LinkedIn profile fetch / search fallback
+  - intake 结果会落盘到 `runtime/excel_intake/{intake_id}/`，并支持 `continue-excel-intake` 继续处理人工复核行
 - acquisition runtime 已开始按 strategy 分叉执行：
   - `full_company_roster` 走 company roster connector
   - `scoped_search_roster / former_employee_search` 走低成本 search-seed discovery
@@ -207,10 +281,11 @@
 - 支持跨 snapshot 复用已拿到的 LinkedIn search/basic profile 资产，避免重复消耗 search 配额
 - 支持按 `target_company`、`categories`、`employment_statuses`、关键词等条件运行 retrieval job
 - 提供 retrieval strategy 抽象：`structured` / `hybrid` / `semantic`
-- 已落地第一版 semantic/vector retrieval：
-  - structured hard filters 之后，会进入本地 sparse-vector semantic retrieval
-  - 当前使用 candidate multi-field document 的稀疏向量相似度做 recall / rerank
-  - `hybrid` 现为 `hard filters + lexical/alias + semantic sparse-vector + confidence banding`
+- 已落地第一版规则优先 retrieval stack：
+  - `scoring.py` 默认负责 structured hard filters、lexical/alias 命中、confidence banding
+  - structured hard filters 之后，`semantic_retrieval.py` 默认走本地 sparse-vector semantic retrieval 做 recall / rerank
+  - 只有在 `allow_high_cost_sources=true` 且显式配置 external semantic provider 时，才会调用 embedding / rerank provider
+  - `hybrid` 当前等价于 `hard filters + lexical/alias + local sparse semantic + confidence banding`
 - 已补通用 `semantic provider` 抽象：
   - 默认 `LocalSemanticProvider` fallback
   - 已可切到 DashScope/Qwen 的 embedding + rerank
@@ -233,7 +308,9 @@
   - sync summary 会给出 progress / skipped_existing 统计
   - 本地会生成 `runtime/object_sync/bundle_index.json` 与 `runtime/object_sync/runs/*.json`
   - 云端会同步写入 `indexes/bundle_index.json` 与 `indexes/sync_runs/*.json`
-  - Thinking Machines Lab handoff bundle 已完成真实 `R2 upload -> R2 download -> local restore`
+  - 当前主路径按 `S3-compatible object storage` 设计
+  - 历史已验证 `R2 upload -> download -> local restore`
+  - 当前默认部署目标已切到阿里云 OSS
 - 已记录高质量 HarvestAPI 接入策略，供后续 Thinking Machines Lab 等小公司端到端验证使用：
   - intent-driven LinkedIn search，用于按用户意图定向检索在职 / 已离职 / 特定岗位人群
   - company employees actor，用于获取小中型公司的高质量 roster
@@ -293,10 +370,11 @@ sourcing-ai-agent/
 7. [docs/DATAFORSEO_PLAYBOOK.md](docs/DATAFORSEO_PLAYBOOK.md)
 8. [docs/TERMINAL_WORKFLOW.md](docs/TERMINAL_WORKFLOW.md)
 9. [docs/FRONTEND_API_CONTRACT.md](docs/FRONTEND_API_CONTRACT.md)
-10. [docs/QUERY_GUARDRAILS.md](docs/QUERY_GUARDRAILS.md)
-11. [docs/THINKING_MACHINES_LAB_CANONICAL_ASSET.md](docs/THINKING_MACHINES_LAB_CANONICAL_ASSET.md)
-12. [docs/THINKING_MACHINES_LAB_VALIDATION_2026-04-08.md](docs/THINKING_MACHINES_LAB_VALIDATION_2026-04-08.md)
-13. 需要追旧决策或恢复旧环境时，再看 `docs/` 下的 dated reference 文档
+10. [docs/HOSTED_DEPLOYMENT_AND_GITHUB_SCOPE.md](docs/HOSTED_DEPLOYMENT_AND_GITHUB_SCOPE.md)
+11. [docs/QUERY_GUARDRAILS.md](docs/QUERY_GUARDRAILS.md)
+12. [docs/THINKING_MACHINES_LAB_CANONICAL_ASSET.md](docs/THINKING_MACHINES_LAB_CANONICAL_ASSET.md)
+13. [docs/THINKING_MACHINES_LAB_VALIDATION_2026-04-08.md](docs/THINKING_MACHINES_LAB_VALIDATION_2026-04-08.md)
+14. 需要追旧决策或恢复旧环境时，再看 `docs/` 下的 dated reference 文档
 
 ## GitHub Sync Boundary
 
@@ -315,9 +393,51 @@ sourcing-ai-agent/
 
 如果后续要在新的电脑上继续做 live test，需要单独恢复 secrets，以及按需恢复高价值 runtime 资产。
 
+准备推送 GitHub 时，建议用下面的最小上传范围来降低部署成本：
+
+- 建议上传：
+  - `src/`
+  - `tests/`
+  - `docs/`
+  - `contracts/`
+  - `configs/*.example.json`
+  - `README.md` / `PROGRESS.md` / `pyproject.toml`
+- 不建议上传：
+  - `runtime/**`
+  - `runtime/secrets/**`
+  - `runtime/company_assets/**`
+  - `runtime/live_tests/**`
+  - `runtime/provider_cache/**`
+  - 本机环境目录（例如 `.venv/`、`node_modules/`、playwright browsers 缓存）
+  - 临时 live smoke 配置（`configs/live_smoke_*.json`、`configs/live_test_*.json`）
+
 跨设备恢复的详细设计见：
 
 [docs/CROSS_DEVICE_SYNC.md](docs/CROSS_DEVICE_SYNC.md)
+
+## Hosted 默认执行路径（云端）
+
+云端默认路径应是 `serve` 托管 workflow，而不是手工运行 detached 脚本去“补一把 execute-workflow”。
+
+推荐常驻进程：
+
+- API: `PYTHONPATH=src python3 -m sourcing_agent.cli serve --host 0.0.0.0 --port 8765`
+- Recovery daemon: `PYTHONPATH=src python3 -m sourcing_agent.cli run-worker-daemon-service --poll-seconds 5`
+
+推荐健康检查：
+
+- `GET /health`
+- `GET /api/providers/health`
+- `GET /api/workers/daemon/status`
+- `GET /api/runtime/health`
+
+前端只应该通过 API 消费 workflow 状态，不应直接读取 `runtime/company_assets/*` 或 `runtime/jobs/*` 文件。
+阶段反馈统一使用 `workflow_stage_summaries`（见 `progress/results` contract）。
+
+完整部署流程见：
+
+- [docs/SERVER_RUNTIME_BOOTSTRAP.md](docs/SERVER_RUNTIME_BOOTSTRAP.md)
+- [docs/WORKFLOW_OPERATIONS_PLAYBOOK.md](docs/WORKFLOW_OPERATIONS_PLAYBOOK.md)
 
 ## 快速开始
 
@@ -342,12 +462,11 @@ PYTHONPATH=src python3 -m sourcing_agent.cli show-scheduler --job-id <job_id>
 PYTHONPATH=src python3 -m sourcing_agent.cli show-recoverable-workers
 PYTHONPATH=src python3 -m sourcing_agent.cli show-daemon-status
 PYTHONPATH=src python3 -m sourcing_agent.cli export-company-snapshot-bundle --company thinkingmachineslab
-PYTHONPATH=src python3 -m sourcing_agent.cli export-company-handoff-bundle --company thinkingmachineslab
 PYTHONPATH=src python3 -m sourcing_agent.cli build-company-candidate-artifacts --company thinkingmachineslab
 PYTHONPATH=src python3 -m sourcing_agent.cli complete-company-assets --company thinkingmachineslab --profile-detail-limit 12 --exploration-limit 2
 PYTHONPATH=src python3 -m sourcing_agent.cli export-sqlite-snapshot
 PYTHONPATH=src python3 -m sourcing_agent.cli upload-asset-bundle --manifest runtime/asset_exports/<bundle>/bundle_manifest.json
-PYTHONPATH=src python3 -m sourcing_agent.cli download-asset-bundle --bundle-kind company_handoff --bundle-id <bundle_id> --output-dir /tmp/asset_imports
+PYTHONPATH=src python3 -m sourcing_agent.cli download-asset-bundle --bundle-kind company_snapshot --bundle-id <bundle_id> --output-dir /tmp/asset_imports
 PYTHONPATH=src python3 -m sourcing_agent.cli restore-asset-bundle --manifest runtime/asset_exports/<bundle>/bundle_manifest.json --target-runtime-dir /tmp/sourcing-agent-runtime
 PYTHONPATH=src python3 -m sourcing_agent.cli restore-sqlite-snapshot --manifest runtime/asset_exports/<sqlite_bundle>/bundle_manifest.json
 PYTHONPATH=src python3 -m sourcing_agent.cli interrupt-worker --worker-id <worker_id>
@@ -361,6 +480,15 @@ PYTHONPATH=src python3 -m sourcing_agent.cli test-model
 PYTHONPATH=src python3 -m sourcing_agent.cli configure-confidence-policy --file configs/confidence_policy_freeze.example.json
 PYTHONPATH=src python3 -m sourcing_agent.cli review-suggestion --file configs/suggestion_review_apply.example.json
 PYTHONPATH=src python3 -m sourcing_agent.cli serve --port 8765
+```
+
+云端部署时，优先使用这组最小命令，而不是一次性执行上面全部命令：
+
+```bash
+cd "sourcing-ai-agent"
+PYTHONPATH=src python3 -m sourcing_agent.cli test-model
+PYTHONPATH=src python3 -m sourcing_agent.cli serve --host 0.0.0.0 --port 8765
+PYTHONPATH=src python3 -m sourcing_agent.cli run-worker-daemon-service --poll-seconds 5
 ```
 
 ## 模型配置

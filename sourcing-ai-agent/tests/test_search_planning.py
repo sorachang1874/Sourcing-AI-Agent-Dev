@@ -42,3 +42,48 @@ class SearchPlanningTest(unittest.TestCase):
             any("paid" in rule.lower() or "LinkedIn URL" in rule for rule in search_plan.follow_up_rules),
             search_plan.follow_up_rules,
         )
+
+    def test_model_merge_dedupes_query_variants_by_signature(self) -> None:
+        class _FakeModelClient(DeterministicModelClient):
+            def provider_name(self) -> str:
+                return "openai"
+
+            def plan_search_strategy(self, request, context):  # noqa: ANN001, ANN202
+                return {
+                    "planner_mode": "model_assisted",
+                    "query_bundles": [
+                        {
+                            "bundle_id": "targeted_people_search",
+                            "source_family": "linkedin_people_search",
+                            "priority": "medium",
+                            "objective": "paid fallback",
+                            "execution_mode": "paid_fallback",
+                            "queries": [
+                                "Vision-language",
+                                "Vision Language",
+                                "vision_language",
+                                "Veo",
+                            ],
+                            "filters": {},
+                        }
+                    ],
+                    "follow_up_rules": [
+                        "Keep paid fallback as last resort.",
+                        "Keep paid fallback as last resort",
+                    ],
+                    "review_triggers": [],
+                }
+
+        request = JobRequest(
+            raw_user_request="给我 Google Veo 相关成员",
+            query="Google Veo members",
+            target_company="Google",
+            planning_mode="llm_brief",
+        )
+        retrieval_plan = RetrievalPlan(strategy="hybrid", reason="test")
+        strategy = compile_acquisition_strategy(request, ["employee"], ["current"], retrieval_plan)
+        publication = compile_publication_coverage_plan(request, strategy)
+        search_plan = compile_search_strategy(request, strategy, publication, _FakeModelClient())
+
+        bundle = next(item for item in search_plan.query_bundles if item.bundle_id == "targeted_people_search")
+        self.assertEqual(bundle.queries, ["Vision-language", "Veo"])

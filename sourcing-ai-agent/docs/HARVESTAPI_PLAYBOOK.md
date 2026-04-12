@@ -380,3 +380,17 @@ Anthropic 当前 snapshot 的 former enrich 已验证：
   - auth
   - actor payload
   - returned row count
+
+## 关键词 shard 去重与剪枝（2026-04-10 更新）
+
+为减少重复调用与成本，当前在 `profile-search` paid fallback 增加了两层防重：
+
+- 查询签名去重：
+  - `Vision-language` / `Vision Language` / `vision_language` 会视作同一 query。
+  - 统一按去空格/去连字符后的签名去重。
+- probe 驱动 overlap 剪枝：
+  - 对每个 query 先做 probe，抽取返回的 profile URL 样本集。
+  - 用 Jaccard overlap 评估与已保留 query 的重叠。
+  - 超过阈值（默认 `0.9`）则直接标记 `skipped_high_overlap`，不再跑 full fetch。
+
+结果：在 Google 这类大组织上，能明显减少“语义近似 query 重复抓取”。

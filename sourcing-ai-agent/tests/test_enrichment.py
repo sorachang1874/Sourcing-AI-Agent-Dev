@@ -1,6 +1,7 @@
 import json
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from sourcing_agent.asset_catalog import AssetCatalog
@@ -24,8 +25,6 @@ from sourcing_agent.enrichment import (
     extract_search_people_rows,
     parse_basic_linkedin_profile_payload,
 )
-
-
 class EnrichmentHelpersTest(unittest.TestCase):
     def test_extract_search_people_rows(self) -> None:
         payload = {
@@ -772,6 +771,300 @@ class EnrichmentHelpersTest(unittest.TestCase):
             self.assertEqual(candidate_map["kevinlu"].category, "employee")
             self.assertEqual(len(resolved_profiles), 1)
             self.assertEqual(len(evidence), 1)
+
+    def test_fetch_harvest_profiles_for_urls_splits_live_requests_into_micro_batches(self) -> None:
+        class _FakeProfileConnector:
+            def __init__(self) -> None:
+                self.batch_sizes: list[int] = []
+
+            def fetch_profiles_by_urls(
+                self,
+                profile_urls,
+                snapshot_dir,
+                asset_logger=None,
+                use_cache=True,
+                allow_shared_provider_cache=True,
+            ):
+                self.batch_sizes.append(len(profile_urls))
+                payloads = {}
+                for profile_url in profile_urls:
+                    slug = profile_url.rstrip("/").split("/")[-1]
+                    raw_path = snapshot_dir / "harvest_profiles" / f"{slug}.json"
+                    raw_path.parent.mkdir(parents=True, exist_ok=True)
+                    raw_path.write_text("{}")
+                    payloads[profile_url] = {
+                        "raw_path": raw_path,
+                        "account_id": "harvest_profile_scraper",
+                        "parsed": {
+                            "full_name": slug,
+                            "profile_url": profile_url,
+                        },
+                    }
+                return payloads
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            catalog = AssetCatalog(
+                project_root=root,
+                dev_root=root,
+                anthropic_root=root,
+                anthropic_workbook=root / "anthropic.xlsx",
+                anthropic_readme=root / "README.md",
+                anthropic_progress=root / "PROGRESS.md",
+                legacy_api_accounts=root / "api_accounts.json",
+                legacy_company_ids=root / "company_ids.json",
+                anthropic_publications=root / "publications.json",
+                scholar_scan_results=root / "scholar.json",
+                investor_members_json=root / "investor.json",
+                employee_scan_skill=root / "employee_skill.md",
+                investor_scan_skill=root / "investor_skill.md",
+                onepager_skill=root / "onepager_skill.md",
+            )
+            fake_profile_connector = _FakeProfileConnector()
+            enricher = MultiSourceEnricher(
+                catalog,
+                accounts=[],
+                harvest_profile_connector=fake_profile_connector,
+            )
+            profile_urls = [f"https://www.linkedin.com/in/micro-batch-{idx}/" for idx in range(205)]
+            fetched = enricher._fetch_harvest_profiles_for_urls(
+                profile_urls,
+                root,
+                asset_logger=AssetLogger(root),
+            )
+
+            self.assertEqual(len(fetched), 205)
+            self.assertEqual(fake_profile_connector.batch_sizes, [75, 75, 55])
+
+    def test_fetch_harvest_profiles_for_urls_does_not_head_of_line_block_on_contended_registry_urls(self) -> None:
+        class _FakeProfileConnector:
+            def __init__(self, events: list[str]) -> None:
+                self.events = events
+
+            def fetch_profiles_by_urls(
+                self,
+                profile_urls,
+                snapshot_dir,
+                asset_logger=None,
+                use_cache=True,
+                allow_shared_provider_cache=True,
+            ):
+                self.events.append("live_fetch")
+                payloads = {}
+                for profile_url in profile_urls:
+                    slug = profile_url.rstrip("/").split("/")[-1]
+                    raw_path = snapshot_dir / "harvest_profiles" / f"{slug}.json"
+                    raw_path.parent.mkdir(parents=True, exist_ok=True)
+                    raw_path.write_text("{}", encoding="utf-8")
+                    payloads[profile_url] = {
+                        "raw_path": raw_path,
+                        "account_id": "harvest_profile_scraper",
+                        "parsed": {
+                            "full_name": slug,
+                            "profile_url": profile_url,
+                        },
+                    }
+                return payloads
+
+        class _TrackingStore:
+            def __init__(self, queued_url: str, events: list[str]) -> None:
+                self.queued_url = queued_url
+                self.events = events
+                self.lookup_count = 0
+
+            def get_linkedin_profile_registry_bulk(self, profile_urls):
+                return {
+                    self.queued_url: {"status": "queued"},
+                }
+
+            def normalize_linkedin_profile_url(self, profile_url):
+                return str(profile_url or "").strip()
+
+            def get_linkedin_profile_registry(self, profile_url):
+                if str(profile_url or "").strip() == self.queued_url:
+                    self.lookup_count += 1
+                    self.events.append(f"queued_lookup_{self.lookup_count}")
+                    if self.lookup_count >= 2 and "live_fetch" not in self.events:
+                        raise AssertionError("contended registry wait happened before uncached live fetch")
+                    return {"status": "queued"}
+                return {}
+
+            def acquire_linkedin_profile_registry_lease(self, profile_url, lease_owner="", lease_seconds=0):
+                return {"acquired": True, "lease_owner": lease_owner, "lease_token": "token"}
+
+            def release_linkedin_profile_registry_lease(self, profile_url, lease_owner="", lease_token=""):
+                return {"released": True}
+
+            def record_linkedin_profile_registry_event(self, profile_url, **kwargs):
+                return {"profile_url": profile_url, **kwargs}
+
+            def mark_linkedin_profile_registry_queued(self, profile_url, **kwargs):
+                return {"profile_url": profile_url, **kwargs}
+
+            def mark_linkedin_profile_registry_fetched(self, profile_url, **kwargs):
+                return {"profile_url": profile_url, **kwargs}
+
+            def mark_linkedin_profile_registry_failed(self, profile_url, **kwargs):
+                return {"profile_url": profile_url, **kwargs}
+
+            def upsert_linkedin_profile_registry_sources(self, profile_url, **kwargs):
+                return {"profile_url": profile_url, **kwargs}
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            catalog = AssetCatalog(
+                project_root=root,
+                dev_root=root,
+                anthropic_root=root,
+                anthropic_workbook=root / "anthropic.xlsx",
+                anthropic_readme=root / "README.md",
+                anthropic_progress=root / "PROGRESS.md",
+                legacy_api_accounts=root / "api_accounts.json",
+                legacy_company_ids=root / "company_ids.json",
+                anthropic_publications=root / "publications.json",
+                scholar_scan_results=root / "scholar.json",
+                investor_members_json=root / "investor.json",
+                employee_scan_skill=root / "employee_skill.md",
+                investor_scan_skill=root / "investor_skill.md",
+                onepager_skill=root / "onepager_skill.md",
+            )
+            events: list[str] = []
+            queued_url = "https://www.linkedin.com/in/queued-profile/"
+            pending_url = "https://www.linkedin.com/in/pending-profile/"
+            enricher = MultiSourceEnricher(
+                catalog,
+                accounts=[],
+                harvest_profile_connector=_FakeProfileConnector(events),
+                store=_TrackingStore(queued_url, events),
+            )
+            monotonic_values = iter([0.0, 0.0, 0.1, 18.1, 18.1, 18.1])
+            with mock.patch("sourcing_agent.enrichment.time.monotonic", side_effect=lambda: next(monotonic_values)), mock.patch(
+                "sourcing_agent.enrichment.time.sleep",
+                return_value=None,
+            ):
+                fetched = enricher._fetch_harvest_profiles_for_urls(
+                    [queued_url, pending_url],
+                    root,
+                    asset_logger=AssetLogger(root),
+                )
+
+            self.assertIn("live_fetch", events)
+            self.assertIn(pending_url, fetched)
+            self.assertNotIn(queued_url, fetched)
+
+    def test_fetch_harvest_profiles_reuses_queued_registry_raw_without_live_fetch(self) -> None:
+        class _FailIfLiveFetchConnector:
+            def fetch_profiles_by_urls(
+                self,
+                profile_urls,
+                snapshot_dir,
+                asset_logger=None,
+                use_cache=True,
+                allow_shared_provider_cache=True,
+            ):
+                raise AssertionError("live fetch should not run when queued registry entry already has valid raw payload")
+
+        class _QueuedRawStore:
+            def __init__(self, profile_url: str, raw_path: Path) -> None:
+                self.profile_url = profile_url
+                self.raw_path = raw_path
+                self.fetched_marks: list[str] = []
+
+            def get_linkedin_profile_registry_bulk(self, profile_urls):
+                return {
+                    self.profile_url: {
+                        "status": "queued",
+                        "last_raw_path": str(self.raw_path),
+                    }
+                }
+
+            def normalize_linkedin_profile_url(self, profile_url):
+                return str(profile_url or "").strip()
+
+            def get_linkedin_profile_registry(self, profile_url):
+                if str(profile_url or "").strip() == self.profile_url:
+                    return {
+                        "status": "queued",
+                        "last_raw_path": str(self.raw_path),
+                    }
+                return {}
+
+            def acquire_linkedin_profile_registry_lease(self, profile_url, lease_owner="", lease_seconds=0):
+                return {"acquired": True, "lease_owner": lease_owner, "lease_token": "token"}
+
+            def release_linkedin_profile_registry_lease(self, profile_url, lease_owner="", lease_token=""):
+                return {"released": True}
+
+            def record_linkedin_profile_registry_event(self, profile_url, **kwargs):
+                return {"profile_url": profile_url, **kwargs}
+
+            def mark_linkedin_profile_registry_queued(self, profile_url, **kwargs):
+                return {"profile_url": profile_url, **kwargs}
+
+            def mark_linkedin_profile_registry_fetched(self, profile_url, **kwargs):
+                self.fetched_marks.append(str(profile_url or "").strip())
+                return {"profile_url": profile_url, **kwargs}
+
+            def mark_linkedin_profile_registry_failed(self, profile_url, **kwargs):
+                return {"profile_url": profile_url, **kwargs}
+
+            def upsert_linkedin_profile_registry_sources(self, profile_url, **kwargs):
+                return {"profile_url": profile_url, **kwargs}
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            raw_dir = root / "existing_snapshot" / "harvest_profiles"
+            raw_dir.mkdir(parents=True, exist_ok=True)
+            profile_url = "https://www.linkedin.com/in/cached-queued-profile/"
+            raw_path = raw_dir / "cached.json"
+            raw_path.write_text(
+                json.dumps(
+                    {
+                        "_harvest_request": {"profile_url": profile_url},
+                        "item": {
+                            "firstName": "Cached",
+                            "lastName": "Queued",
+                            "linkedinUrl": profile_url,
+                            "headline": "Infra Engineer",
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            catalog = AssetCatalog(
+                project_root=root,
+                dev_root=root,
+                anthropic_root=root,
+                anthropic_workbook=root / "anthropic.xlsx",
+                anthropic_readme=root / "README.md",
+                anthropic_progress=root / "PROGRESS.md",
+                legacy_api_accounts=root / "api_accounts.json",
+                legacy_company_ids=root / "company_ids.json",
+                anthropic_publications=root / "publications.json",
+                scholar_scan_results=root / "scholar.json",
+                investor_members_json=root / "investor.json",
+                employee_scan_skill=root / "employee_skill.md",
+                investor_scan_skill=root / "investor_skill.md",
+                onepager_skill=root / "onepager_skill.md",
+            )
+            store = _QueuedRawStore(profile_url, raw_path)
+            enricher = MultiSourceEnricher(
+                catalog,
+                accounts=[],
+                harvest_profile_connector=_FailIfLiveFetchConnector(),
+                store=store,
+            )
+
+            fetched = enricher._fetch_harvest_profiles_for_urls(
+                [profile_url],
+                root / "active_snapshot",
+                asset_logger=AssetLogger(root / "active_snapshot"),
+            )
+
+            self.assertIn(profile_url, fetched)
+            self.assertEqual(fetched[profile_url]["parsed"]["full_name"], "Cached Queued")
+            self.assertEqual(store.fetched_marks, [profile_url])
 
     def test_publication_lead_public_web_gate_requires_candidate_confirmation_for_paid_search(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

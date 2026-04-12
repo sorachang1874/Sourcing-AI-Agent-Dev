@@ -1,0 +1,17 @@
+{
+  "review_id": 62,
+  "action": "approved",
+  "reviewer": "human_sim",
+  "notes": "“Chinese”按公开经历/语言线索理解，不做身份标签。继续关键词优先执行，覆盖 Google + Google DeepMind，current+former 都要。",
+  "decision": {
+    "confirmed_company_scope": [
+      "Google",
+      "Google DeepMind"
+    ],
+    "allow_high_cost_sources": true,
+    "acquisition_strategy_override": "full_company_roster",
+    "use_company_employees_lane": true,
+    "run_former_search_seed": true,
+    "force_fresh_run": true
+  }
+}

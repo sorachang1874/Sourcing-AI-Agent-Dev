@@ -620,6 +620,84 @@ class CandidateArtifactsTest(unittest.TestCase):
         self.assertEqual(candidate.employment_status, "current")
         self.assertEqual(candidate.linkedin_url, "https://www.linkedin.com/in/deannagraham2023")
 
+    def test_materialized_view_limits_large_org_history_to_current_snapshot(self) -> None:
+        company_dir = self.runtime_dir / "company_assets" / "megacorp"
+        current_snapshot_dir = company_dir / "20260406T130000"
+        old_snapshot_dir = company_dir / "20260406T120000"
+        current_snapshot_dir.mkdir(parents=True, exist_ok=True)
+        old_snapshot_dir.mkdir(parents=True, exist_ok=True)
+        (company_dir / "latest_snapshot.json").write_text(
+            json.dumps(
+                {
+                    "snapshot_id": "20260406T130000",
+                    "company_identity": {
+                        "requested_name": "MegaCorp",
+                        "canonical_name": "MegaCorp",
+                        "company_key": "megacorp",
+                    },
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+
+        old_candidates = [
+            Candidate(
+                candidate_id=f"old_{index}",
+                name_en=f"Old Person {index}",
+                display_name=f"Old Person {index}",
+                category="employee",
+                target_company="MegaCorp",
+                employment_status="current",
+                linkedin_url=f"https://www.linkedin.com/in/old-person-{index}",
+                source_dataset="megacorp_old_snapshot",
+            ).to_record()
+            for index in range(1100)
+        ]
+        current_candidates = [
+            Candidate(
+                candidate_id=f"current_{index}",
+                name_en=f"Current Person {index}",
+                display_name=f"Current Person {index}",
+                category="employee",
+                target_company="MegaCorp",
+                employment_status="current",
+                linkedin_url=f"https://www.linkedin.com/in/current-person-{index}",
+                source_dataset="megacorp_current_snapshot",
+            ).to_record()
+            for index in range(1200)
+        ]
+        (old_snapshot_dir / "candidate_documents.json").write_text(
+            json.dumps({"candidates": old_candidates, "evidence": []}, ensure_ascii=False, indent=2)
+        )
+        (current_snapshot_dir / "candidate_documents.json").write_text(
+            json.dumps({"candidates": current_candidates, "evidence": []}, ensure_ascii=False, indent=2)
+        )
+
+        self.store.upsert_candidate(
+            Candidate(
+                candidate_id="sqlite_1",
+                name_en="SQLite Person",
+                display_name="SQLite Person",
+                category="employee",
+                target_company="MegaCorp",
+                employment_status="current",
+                linkedin_url="https://www.linkedin.com/in/sqlite-person",
+                source_dataset="megacorp_sqlite",
+            )
+        )
+
+        materialized_view = materialize_company_candidate_view(
+            runtime_dir=self.runtime_dir,
+            store=self.store,
+            target_company="MegaCorp",
+        )
+
+        self.assertEqual(len(materialized_view["source_snapshots"]), 1)
+        self.assertEqual(materialized_view["source_snapshots"][0]["snapshot_id"], "20260406T130000")
+        self.assertEqual(materialized_view["source_snapshot_selection"]["mode"], "current_snapshot_only_large_org")
+        self.assertEqual(len(materialized_view["candidates"]), 1201)
+
     def test_replace_company_data_tolerates_duplicate_evidence_ids_in_same_batch(self) -> None:
         candidate = Candidate(
             candidate_id="dup_evidence_candidate",

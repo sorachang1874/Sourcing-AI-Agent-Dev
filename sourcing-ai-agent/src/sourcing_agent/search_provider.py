@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from html import unescape
@@ -32,7 +33,23 @@ _SHARED_LIBRARY_PACKAGE_HINTS = {
     "libnspr4.so": "libnspr4",
     "libnss3.so": "libnss3",
 }
-_DEFAULT_LANE_FETCH_COOLDOWN_SECONDS = 15
+def _env_int(name: str, default: int) -> int:
+    raw = str(os.getenv(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return default
+
+
+_DEFAULT_LANE_READY_COOLDOWN_SECONDS = max(1, _env_int("WEB_SEARCH_READY_COOLDOWN_SECONDS", 15))
+_DEFAULT_LANE_FETCH_COOLDOWN_SECONDS = max(1, _env_int("WEB_SEARCH_FETCH_COOLDOWN_SECONDS", 15))
+_DEFAULT_DATAFORSEO_TASK_GET_BATCH_WORKERS = max(1, _env_int("DATAFORSEO_TASK_GET_BATCH_WORKERS", 8))
+
+
+def _external_provider_mode() -> str:
+    return str(os.getenv("SOURCING_EXTERNAL_PROVIDER_MODE") or "live").strip().lower() or "live"
 
 
 @dataclass(frozen=True, slots=True)
@@ -173,6 +190,182 @@ class BaseSearchProvider:
 
     def fetch_ready_batch(self, query_specs: list[dict[str, Any]]) -> SearchBatchFetchResult | None:
         return None
+
+
+class OfflineSearchProvider(BaseSearchProvider):
+    provider_name = "offline_search"
+
+    def __init__(self, *, mode: str) -> None:
+        normalized_mode = str(mode or "simulate").strip().lower() or "simulate"
+        self.mode = normalized_mode if normalized_mode in {"simulate", "replay"} else "simulate"
+
+    def _build_response(self, query_text: str) -> SearchResponse:
+        source_label = "simulated_search_provider" if self.mode == "simulate" else "replay_search_provider"
+        note = (
+            "Simulated search response; no external provider request was sent."
+            if self.mode == "simulate"
+            else "Replay search response returned without live provider access."
+        )
+        return SearchResponse(
+            provider_name=self.provider_name,
+            query_text=query_text,
+            results=[],
+            raw_payload={"provider_mode": self.mode, "results": []},
+            raw_format="json",
+            final_url="",
+            content_type="application/json",
+            metadata={"provider_mode": self.mode, "source_label": source_label, "note": note},
+        )
+
+    def search(self, query_text: str, *, max_results: int = 10, timeout: int | None = None) -> SearchResponse:  # noqa: ARG002
+        return self._build_response(query_text)
+
+    def execute_with_checkpoint(
+        self,
+        query_text: str,
+        *,
+        max_results: int = 10,
+        timeout: int | None = None,
+        checkpoint: dict[str, Any] | None = None,
+    ) -> SearchExecutionResult:
+        del max_results, timeout
+        response = self._build_response(query_text)
+        prior_checkpoint = dict(checkpoint or {})
+        return SearchExecutionResult(
+            provider_name=self.provider_name,
+            query_text=query_text,
+            response=response,
+            checkpoint={
+                **prior_checkpoint,
+                "provider_name": self.provider_name,
+                "status": "completed",
+                "provider_mode": self.mode,
+            },
+            message=response.metadata.get("note", ""),
+            artifacts=[
+                SearchExecutionArtifact(
+                    label=f"{self.mode}_search_execution",
+                    payload={"query_text": query_text, "provider_mode": self.mode, "results": []},
+                    metadata={"provider_mode": self.mode, "provider_name": self.provider_name},
+                )
+            ],
+        )
+
+    def submit_batch_queries(self, query_specs: list[dict[str, Any]]) -> SearchBatchSubmissionResult | None:
+        tasks: list[SearchBatchSubmissionTask] = []
+        for index, spec in enumerate(list(query_specs or []), start=1):
+            query_text = " ".join(str((spec or {}).get("query_text") or "").split()).strip()
+            if not query_text:
+                continue
+            task_key = str((spec or {}).get("task_key") or query_text).strip() or query_text
+            tasks.append(
+                SearchBatchSubmissionTask(
+                    task_key=task_key,
+                    query_text=query_text,
+                    checkpoint={
+                        "provider_name": self.provider_name,
+                        "provider_mode": self.mode,
+                        "task_id": f"{self.mode}_task_{index:04d}",
+                        "status": "submitted",
+                    },
+                    metadata={"provider_mode": self.mode},
+                )
+            )
+        if not tasks:
+            return None
+        return SearchBatchSubmissionResult(
+            provider_name=self.provider_name,
+            tasks=tasks,
+            artifacts=[
+                SearchExecutionArtifact(
+                    label=f"{self.mode}_search_batch_submit",
+                    payload={"provider_mode": self.mode, "task_count": len(tasks)},
+                    metadata={"provider_mode": self.mode, "provider_name": self.provider_name},
+                )
+            ],
+            message=(
+                "Simulated batch search submission completed without external requests."
+                if self.mode == "simulate"
+                else "Replay batch search submission completed without live provider access."
+            ),
+        )
+
+    def poll_ready_batch(self, query_specs: list[dict[str, Any]]) -> SearchBatchReadyResult | None:
+        tasks: list[SearchBatchReadyTask] = []
+        for spec in list(query_specs or []):
+            checkpoint = dict((spec or {}).get("checkpoint") or {})
+            query_text = str((spec or {}).get("query_text") or checkpoint.get("query_text") or "").strip()
+            task_key = str((spec or {}).get("task_key") or query_text or checkpoint.get("task_id") or "").strip()
+            task_id = str((spec or {}).get("task_id") or checkpoint.get("task_id") or "").strip()
+            if not task_key:
+                continue
+            tasks.append(
+                SearchBatchReadyTask(
+                    task_key=task_key,
+                    task_id=task_id or f"{self.mode}_task",
+                    query_text=query_text,
+                    checkpoint={
+                        **checkpoint,
+                        "provider_name": self.provider_name,
+                        "provider_mode": self.mode,
+                        "status": "ready_cached",
+                    },
+                    metadata={"ready": True, "provider_mode": self.mode},
+                )
+            )
+        if not tasks:
+            return None
+        return SearchBatchReadyResult(
+            provider_name=self.provider_name,
+            tasks=tasks,
+            artifacts=[
+                SearchExecutionArtifact(
+                    label=f"{self.mode}_search_batch_ready",
+                    payload={"provider_mode": self.mode, "task_count": len(tasks), "ready_count": len(tasks)},
+                    metadata={"provider_mode": self.mode, "provider_name": self.provider_name},
+                )
+            ],
+            message="All offline search tasks are ready.",
+        )
+
+    def fetch_ready_batch(self, query_specs: list[dict[str, Any]]) -> SearchBatchFetchResult | None:
+        tasks: list[SearchBatchFetchTask] = []
+        for spec in list(query_specs or []):
+            checkpoint = dict((spec or {}).get("checkpoint") or {})
+            query_text = str((spec or {}).get("query_text") or checkpoint.get("query_text") or "").strip()
+            task_key = str((spec or {}).get("task_key") or query_text or checkpoint.get("task_id") or "").strip()
+            task_id = str((spec or {}).get("task_id") or checkpoint.get("task_id") or "").strip()
+            if not task_key:
+                continue
+            tasks.append(
+                SearchBatchFetchTask(
+                    task_key=task_key,
+                    task_id=task_id or f"{self.mode}_task",
+                    query_text=query_text,
+                    response=self._build_response(query_text),
+                    checkpoint={
+                        **checkpoint,
+                        "provider_name": self.provider_name,
+                        "provider_mode": self.mode,
+                        "status": "fetched_cached",
+                    },
+                    metadata={"fetched": True, "provider_mode": self.mode},
+                )
+            )
+        if not tasks:
+            return None
+        return SearchBatchFetchResult(
+            provider_name=self.provider_name,
+            tasks=tasks,
+            artifacts=[
+                SearchExecutionArtifact(
+                    label=f"{self.mode}_search_batch_fetch",
+                    payload={"provider_mode": self.mode, "task_count": len(tasks)},
+                    metadata={"provider_mode": self.mode, "provider_name": self.provider_name},
+                )
+            ],
+            message="Offline search batch fetch completed.",
+        )
 
 
 class DuckDuckGoHtmlSearchProvider(BaseSearchProvider):
@@ -512,8 +705,22 @@ class DataForSeoGoogleOrganicSearchProvider(BaseSearchProvider):
 
         tasks: list[SearchBatchFetchTask] = []
         artifacts: list[SearchExecutionArtifact] = []
-        for index, spec in enumerate(normalized_specs, start=1):
+
+        def _fetch_task(index: int, spec: dict[str, Any]) -> tuple[int, dict[str, Any], dict[str, Any]]:
             payload = self.client.task_get_regular(str(spec["task_id"]))
+            return index, spec, payload
+
+        fetched_payloads: list[tuple[int, dict[str, Any], dict[str, Any]]] = []
+        max_workers = max(1, min(len(normalized_specs), _DEFAULT_DATAFORSEO_TASK_GET_BATCH_WORKERS))
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = {
+                pool.submit(_fetch_task, index, spec): index
+                for index, spec in enumerate(normalized_specs, start=1)
+            }
+            for future in as_completed(futures):
+                fetched_payloads.append(future.result())
+
+        for index, spec, payload in sorted(fetched_payloads, key=lambda item: item[0]):
             artifacts.append(
                 SearchExecutionArtifact(
                     label=f"task_get_batch_{index:02d}",
@@ -675,6 +882,39 @@ class DataForSeoGoogleOrganicSearchProvider(BaseSearchProvider):
                 ),
             )
 
+        ready_cooldown_seconds = max(
+            1,
+            int(existing.get("lane_ready_cooldown_seconds") or _DEFAULT_LANE_READY_COOLDOWN_SECONDS),
+        )
+        ready_poll_source = str(existing.get("ready_poll_source") or "").strip().lower()
+        if ready_poll_source == "lane_batch":
+            return SearchExecutionResult(
+                provider_name=self.provider_name,
+                query_text=query_text,
+                checkpoint={
+                    **self._overlay_ready_metadata(base_checkpoint, existing),
+                    "task_id": task_id,
+                    "status": "waiting_for_ready_cached",
+                    "lane_ready_cooldown_seconds": ready_cooldown_seconds,
+                },
+                pending=True,
+                message=f"Waiting for lane-level DataForSEO ready cache for task {task_id}.",
+            )
+        if _timestamp_within_seconds(str(existing.get("ready_attempted_at") or ""), ready_cooldown_seconds):
+            return SearchExecutionResult(
+                provider_name=self.provider_name,
+                query_text=query_text,
+                checkpoint={
+                    **self._overlay_ready_metadata(base_checkpoint, existing),
+                    "task_id": task_id,
+                    "status": "waiting_for_ready",
+                    "lane_ready_cooldown_seconds": ready_cooldown_seconds,
+                },
+                pending=True,
+                message=f"Waiting before next DataForSEO ready poll for task {task_id}.",
+            )
+
+        ready_attempted_at = datetime.now(timezone.utc).isoformat()
         ready_payload = self.client.tasks_ready()
         ready_ids = set(extract_google_organic_ready_task_ids(ready_payload))
         artifacts = [
@@ -692,6 +932,8 @@ class DataForSeoGoogleOrganicSearchProvider(BaseSearchProvider):
                     **base_checkpoint,
                     "task_id": task_id,
                     "status": "waiting_for_ready",
+                    "ready_attempted_at": ready_attempted_at,
+                    "lane_ready_cooldown_seconds": ready_cooldown_seconds,
                 },
                 pending=True,
                 message=f"Waiting for DataForSEO task {task_id} to become ready.",
@@ -932,6 +1174,9 @@ class SearchProviderChain(BaseSearchProvider):
 
 
 def build_search_provider(settings: SearchProviderSettings) -> BaseSearchProvider:
+    external_mode = _external_provider_mode()
+    if external_mode in {"simulate", "replay"}:
+        return SearchProviderChain([OfflineSearchProvider(mode=external_mode)])
     providers: list[BaseSearchProvider] = []
     provider_order = [str(item or "").strip().lower() for item in settings.provider_order if str(item or "").strip()]
     if settings.enable_bing_html and "bing_html" not in provider_order:

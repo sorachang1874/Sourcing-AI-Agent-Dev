@@ -5,7 +5,7 @@ from hashlib import sha1
 import re
 from typing import Any
 
-from .company_registry import infer_target_company_from_text
+from .company_registry import builtin_company_identity, infer_target_company_from_text
 from .execution_preferences import (
     apply_execution_preference_policy,
     infer_execution_preferences_from_text,
@@ -105,8 +105,11 @@ class JobRequest:
     organization_keywords: list[str] = field(default_factory=list)
     retrieval_strategy: str = ""
     planning_mode: str = "heuristic"
+    analysis_stage_mode: str = "single_stage"
     execution_preferences: dict[str, Any] = field(default_factory=dict)
-    semantic_rerank_limit: int = 15
+    scope_disambiguation: dict[str, Any] = field(default_factory=dict)
+    intent_axes: dict[str, Any] = field(default_factory=dict)
+    semantic_rerank_limit: int = 0
     top_k: int = 10
     slug_resolution_limit: int = 8
     profile_detail_limit: int = 5
@@ -118,6 +121,13 @@ class JobRequest:
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> "JobRequest":
         normalized_payload = apply_query_intent_rewrite(payload)
+        if isinstance(normalized_payload, dict) and isinstance(normalized_payload.get("intent_axes"), dict):
+            from .request_normalization import materialize_request_payload
+
+            normalized_payload = materialize_request_payload(
+                normalized_payload,
+                target_company=str(normalized_payload.get("target_company") or "").strip(),
+            )
         raw_user_request = _clean(normalized_payload.get("raw_user_request")) or _clean(normalized_payload.get("query"))
         target_company = _clean(normalized_payload.get("target_company"))
         if not target_company:
@@ -131,6 +141,9 @@ class JobRequest:
             explicit_execution_preferences,
             inferred_execution_preferences,
         )
+        normalized_employment_statuses = _normalize_list(normalized_payload.get("employment_statuses"))
+        if not normalized_employment_statuses:
+            normalized_employment_statuses = _infer_default_employment_statuses(raw_user_request)
         return cls(
             raw_user_request=raw_user_request,
             query=_clean(normalized_payload.get("query")),
@@ -138,7 +151,7 @@ class JobRequest:
             asset_view=_normalize_asset_view(normalized_payload.get("asset_view")),
             target_scope=_clean(normalized_payload.get("target_scope")) or "full_company_asset",
             categories=_normalize_list(normalized_payload.get("categories")),
-            employment_statuses=_normalize_list(normalized_payload.get("employment_statuses")),
+            employment_statuses=normalized_employment_statuses,
             keywords=_normalize_list(normalized_payload.get("keywords")),
             must_have_facets=normalize_requested_facets(
                 normalized_payload.get("must_have_facets")
@@ -155,6 +168,7 @@ class JobRequest:
             organization_keywords=_normalize_list(normalized_payload.get("organization_keywords")),
             retrieval_strategy=_clean(normalized_payload.get("retrieval_strategy")),
             planning_mode=_clean(normalized_payload.get("planning_mode")) or "heuristic",
+            analysis_stage_mode=_normalize_analysis_stage_mode(normalized_payload.get("analysis_stage_mode")),
             execution_preferences=apply_execution_preference_policy(
                 merged_execution_preferences,
                 raw_text=raw_user_request,
@@ -162,6 +176,13 @@ class JobRequest:
                 categories=_normalize_list(normalized_payload.get("categories")),
                 employment_statuses=_normalize_list(normalized_payload.get("employment_statuses")),
             ),
+            scope_disambiguation=_normalize_scope_disambiguation(
+                normalized_payload.get("scope_disambiguation"),
+                target_company=target_company,
+            ),
+            intent_axes=dict(normalized_payload.get("intent_axes") or {})
+            if isinstance(normalized_payload.get("intent_axes"), dict)
+            else {},
             semantic_rerank_limit=_normalize_semantic_limit(normalized_payload.get("semantic_rerank_limit")),
             top_k=_normalize_top_k(normalized_payload.get("top_k")),
             slug_resolution_limit=_normalize_small_limit(normalized_payload.get("slug_resolution_limit"), default=8, maximum=50),
@@ -190,6 +211,85 @@ def _normalize_list(value: Any) -> list[str]:
     return [_clean(item) for item in items if _clean(item)]
 
 
+def _infer_default_employment_statuses(raw_text: str) -> list[str]:
+    normalized = " ".join(str(raw_text or "").strip().split()).lower()
+    if not normalized:
+        return ["current", "former"]
+    has_current = any(token in normalized for token in ["在职", "当前", "现任", "current"])
+    has_former = any(token in normalized for token in ["离职", "former", "前员工", "前成员", "past"])
+    if has_current and not has_former:
+        return ["current"]
+    if has_former and not has_current:
+        return ["former"]
+    return ["current", "former"]
+
+
+def _normalize_scope_disambiguation(value: Any, *, target_company: str = "") -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    aliases = {
+        "parent_company": "parent",
+        "parent_only": "parent",
+        "sub_org": "sub_org_only",
+        "suborg": "sub_org_only",
+        "suborg_only": "sub_org_only",
+        "both_parent_and_sub_org": "both",
+        "all": "both",
+        "ambiguous": "uncertain",
+        "unknown": "uncertain",
+    }
+    allowed_scopes = {"parent", "sub_org_only", "both", "uncertain"}
+    normalized: dict[str, Any] = {}
+
+    inferred_scope = str(value.get("inferred_scope") or value.get("scope") or "").strip().lower()
+    inferred_scope = aliases.get(inferred_scope, inferred_scope)
+    if inferred_scope in allowed_scopes:
+        normalized["inferred_scope"] = inferred_scope
+
+    raw_candidates = value.get("sub_org_candidates")
+    if isinstance(raw_candidates, str):
+        candidate_items = re.split(r"[/,，、;\n]+", raw_candidates)
+    elif isinstance(raw_candidates, (list, tuple, set)):
+        candidate_items = [str(item or "") for item in raw_candidates]
+    else:
+        candidate_items = []
+    sub_org_candidates: list[str] = []
+    for item in candidate_items:
+        candidate = " ".join(str(item or "").split()).strip()
+        if target_company and candidate.lower().startswith(target_company.lower() + " "):
+            if builtin_company_identity(candidate)[1] is None:
+                stripped = candidate[len(target_company) :].strip(" \t\r\n-:/")
+                if stripped:
+                    candidate = stripped
+        if not candidate or candidate in sub_org_candidates:
+            continue
+        sub_org_candidates.append(candidate[:120])
+    if sub_org_candidates:
+        normalized["sub_org_candidates"] = sub_org_candidates[:10]
+
+    raw_confidence = value.get("confidence")
+    if raw_confidence is None:
+        raw_confidence = value.get("confidence_score")
+    try:
+        confidence = float(raw_confidence)
+    except (TypeError, ValueError):
+        confidence = None
+    if confidence is not None:
+        normalized["confidence"] = max(0.0, min(round(confidence, 3), 1.0))
+
+    rationale = " ".join(str(value.get("rationale") or "").split()).strip()
+    if rationale:
+        normalized["rationale"] = rationale[:600]
+
+    source = str(value.get("source") or "").strip().lower()
+    if source in {"llm", "rules", "hybrid"}:
+        normalized["source"] = source
+
+    if target_company:
+        normalized["target_company"] = str(target_company).strip()
+    return normalized
+
+
 def _normalize_top_k(value: Any) -> int:
     try:
         parsed = int(value)
@@ -202,8 +302,8 @@ def _normalize_semantic_limit(value: Any) -> int:
     try:
         parsed = int(value)
     except (TypeError, ValueError):
-        return 15
-    return max(1, min(parsed, 50))
+        return 0
+    return max(0, min(parsed, 50))
 
 
 def _normalize_small_limit(value: Any, default: int, maximum: int) -> int:
@@ -223,6 +323,15 @@ def _normalize_asset_view(value: Any) -> str:
     return "canonical_merged"
 
 
+def _normalize_analysis_stage_mode(value: Any) -> str:
+    normalized = _clean(value).lower()
+    if normalized in {"two_stage", "stage1_then_stage2", "preview_then_ai"}:
+        return "two_stage"
+    if normalized in {"single_stage", "single", "immediate"}:
+        return "single_stage"
+    return "single_stage"
+
+
 CATEGORY_PRIORITY = {
     "employee": 4,
     "former_employee": 4,
@@ -236,6 +345,7 @@ FACET_PRIORITY = [
     "leadership",
     "recruiting",
     "ops",
+    "product_management",
     "infra_systems",
     "research",
     "engineering",
@@ -249,6 +359,7 @@ FACET_ALIAS_MAP = {
     "leadership": {"leadership", "leader", "head", "director", "vp", "vice president", "chief"},
     "recruiting": {"recruiting", "recruiter", "talent", "talent acquisition"},
     "ops": {"ops", "operations", "business operations", "people operations", "programs", "chief of staff"},
+    "product_management": {"product_management", "product management", "product manager", "产品经理", "pm"},
     "infra_systems": {"infra_systems", "infra", "infrastructure", "systems", "platform", "distributed systems"},
     "research": {"research", "researcher", "scientist", "applied scientist"},
     "engineering": {"engineering", "engineer", "technical staff", "member of technical staff"},
@@ -257,6 +368,19 @@ FACET_ALIAS_MAP = {
     "training": {"training", "pretraining", "pre-training", "post-training", "reinforcement learning"},
     "inference": {"inference", "serving", "runtime", "decoding"},
     "data": {"data", "data systems", "data platform", "datasets"},
+    "greater_china_region_experience": {
+        "greater_china_region_experience",
+        "greater china experience",
+        "greater china region experience",
+        "greater china",
+        "china experience",
+    },
+    "mainland_china_experience_or_chinese_language": {
+        "mainland_china_experience_or_chinese_language",
+        "mainland or chinese language",
+        "mainland china experience",
+        "chinese language signal",
+    },
 }
 
 ROLE_BUCKET_ALIAS_MAP = {
@@ -265,6 +389,7 @@ ROLE_BUCKET_ALIAS_MAP = {
     "leadership": {"leader", "leaders", "head", "exec", "executive", "management"},
     "recruiting": {"recruiter", "talent", "talent acquisition", "sourcer"},
     "ops": {"operations", "operation", "bizops", "business operations", "people operations", "chief of staff"},
+    "product_management": {"product management", "product manager", "产品经理", "pm"},
     "infra_systems": {"infra", "infrastructure", "systems", "system", "platform", "distributed systems"},
     "research": {"researcher", "scientist", "applied scientist"},
     "engineering": {"engineer", "eng", "technical staff", "member of technical staff"},
@@ -345,10 +470,46 @@ def sanitize_candidate_notes(notes: str) -> str:
         part = re.sub(r"LinkedIn company roster baseline\.\s*", "", part, flags=re.IGNORECASE)
         part = re.sub(r"Location:\s*[^.|]+\.?\s*", "", part, flags=re.IGNORECASE)
         part = re.sub(r"Source account:\s*[^.|]+\.?\s*", "", part, flags=re.IGNORECASE)
+        if re.match(r"^\s*Discovered from low-cost search seed acquisition\b", part, flags=re.IGNORECASE):
+            continue
         part = " ".join(part.split()).strip(" .|;")
         if part:
             cleaned_parts.append(part)
     return " | ".join(cleaned_parts)
+
+
+def candidate_profile_signal_text(candidate: Candidate, *, include_notes: bool = True) -> str:
+    metadata = dict(candidate.metadata or {})
+    parts = _dedupe_preserve_order(
+        [
+            str(metadata.get("headline") or "").strip(),
+            str(metadata.get("summary") or "").strip(),
+            " / ".join(_normalize_metadata_text_list(metadata.get("languages"), limit=8)),
+            " / ".join(_normalize_metadata_text_list(metadata.get("skills"), limit=16)),
+            str(metadata.get("profile_location") or "").strip(),
+            sanitize_candidate_notes(candidate.notes) if include_notes else "",
+        ]
+    )
+    return " | ".join(parts)
+
+
+def candidate_searchable_text(candidate: Candidate, *, include_notes: bool = True) -> str:
+    parts = _dedupe_preserve_order(
+        [
+            candidate.display_name,
+            candidate.organization,
+            candidate.role,
+            candidate.team,
+            candidate.focus_areas,
+            candidate.investment_involvement,
+            candidate.education,
+            candidate.work_history,
+            candidate_profile_signal_text(candidate, include_notes=include_notes),
+            candidate.ethnicity_background,
+            candidate.current_destination,
+        ]
+    )
+    return " | ".join(parts)
 
 
 def normalize_requested_facet(value: str) -> str:
@@ -447,6 +608,8 @@ def derive_candidate_facets(candidate: Candidate) -> list[str]:
         ],
     ):
         facets.append("ops")
+    if _contains_any(text, ["product manager", "product management", "产品经理", "group product manager", "senior product manager"]):
+        facets.append("product_management")
     if _contains_any(
         text,
         [
@@ -481,6 +644,7 @@ def derive_candidate_facets(candidate: Candidate) -> list[str]:
         facets.append("inference")
     if _contains_any(text, ["data engineer", "data platform", "data infrastructure", "dataset", "data systems"]):
         facets.append("data")
+    facets.extend(_derive_outreach_layer_facets(candidate))
     return _dedupe_preserve_order(facets)
 
 
@@ -527,15 +691,55 @@ def _candidate_signal_text(candidate: Candidate, *, include_notes: bool) -> str:
             candidate.role,
             candidate.team,
             candidate.focus_areas,
+            candidate.education,
             candidate.work_history,
-            sanitize_candidate_notes(candidate.notes) if include_notes else "",
+            candidate_profile_signal_text(candidate, include_notes=include_notes),
         ]
         if _clean(part)
     ).lower()
 
 
+def _derive_outreach_layer_facets(candidate: Candidate) -> list[str]:
+    metadata = dict(candidate.metadata or {})
+    raw_layer = metadata.get("outreach_layer")
+    try:
+        layer = int(raw_layer)
+    except (TypeError, ValueError):
+        return []
+    if layer >= 3:
+        return ["mainland_china_experience_or_chinese_language", "greater_china_region_experience"]
+    if layer >= 2:
+        return ["greater_china_region_experience"]
+    return []
+
+
 def _contains_any(text: str, patterns: list[str]) -> bool:
     return any(pattern in text for pattern in patterns)
+
+
+def _normalize_metadata_text_list(value: Any, *, limit: int) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        items = [value]
+    elif isinstance(value, (list, tuple, set)):
+        items = list(value)
+    else:
+        items = [value]
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        candidate = _clean(item)
+        if not candidate and isinstance(item, dict):
+            candidate = _clean(item.get("name") or item.get("title") or item.get("value") or item.get("text"))
+        key = candidate.lower()
+        if not candidate or key in seen:
+            continue
+        seen.add(key)
+        normalized.append(candidate)
+        if len(normalized) >= limit:
+            break
+    return normalized
 
 
 def _dedupe_preserve_order(items: list[str]) -> list[str]:

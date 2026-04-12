@@ -1,5 +1,132 @@
 # Sourcing AI Agent Dev Progress
 
+## 2026-04-12
+
+### Canonical cloud bundle catalog 与 intent_axes 执行层下沉
+
+- 已把服务器恢复默认基线收敛为：
+  - 1 个全局 `sqlite_snapshot`
+  - 每个 canonical company 1 个 `company_snapshot`
+- 已新增 canonical bundle 清单文档：
+  - `docs/CANONICAL_CLOUD_BUNDLE_CATALOG.md`
+  - 记录实际 bundle id、恢复顺序、去重策略与 Google clean snapshot 替换说明
+- 已把 `intent_axes` 从展示层继续下沉到执行入口：
+  - `JobRequest.from_payload` 现在可直接 materialize `intent_axes`
+  - plan review instruction inference 会消费 `intent_axes`-only request payload
+  - review apply / target company backfill 也会先 materialize `intent_axes`
+- 已进一步把 planning/acquisition 内部消费切到统一 `intent_view`：
+  - retrieval strategy / structured filters / filter layers / criteria summary / open questions 不再各自散读老字段
+  - acquisition 对 `force_fresh_run / reuse_existing_roster / run_former_search_seed` 的判断也开始统一走 `intent_view`
+  - 修复了一个 request merge 回归：
+    - 模型直接返回的 `scope_disambiguation` 现在会被真正合入 request payload
+    - 不会再被后续规则推断静默覆盖
+- 已补回归测试，确保“模型只返回 intent_axes”时，planning / review / acquisition 仍能生成正确执行字段，而不只是 preview 好看。
+- 本地与 OSS 远端 canonical bundle index 当前都已收敛为：
+  - 7 个 `company_snapshot`
+  - 1 个 `sqlite_snapshot`
+  - legacy `company_handoff` 与旧 Google/SQLite bundle 已从索引删除
+
+### Effective request payload 贯通、规则检索语义澄清与 Excel intake 补档
+
+- 已把 `intent_axes -> intent_view -> effective request payload` 继续下沉到执行末端：
+  - `build_effective_request_payload(...)` 已进入 acquisition worker payload、search seed discovery、retrieval ranking
+  - `seed_discovery.py` 不再各自散读老扁平字段，而是消费统一 execution payload
+  - `scoring.py` 与 `semantic_retrieval.py` 也开始直接按 `intent_view` 解释 `target_company / organization_keywords / employment_statuses / must_have_*`
+- 已明确当前 retrieval 的真实形态，避免文档误导：
+  - 默认 final ranking 不是 LLM-driven rerank
+  - `scoring.py` 仍是规则/lexical/confidence 主链
+  - `semantic_retrieval.py` 默认走本地 sparse semantic
+  - external semantic provider 只在 `allow_high_cost_sources` 打开时参与
+- 已补回归测试，覆盖新的执行语义：
+  - `tests/test_planning_modules.py`
+  - `tests/test_pipeline.py`
+  - `tests/test_scoring.py`
+  - `tests/test_semantic_retrieval.py`
+- 已开始把 Excel intake 纳入当前文档口径：
+  - 当前支持 `intake-excel / continue-excel-intake`
+  - 上传表格后可先做 schema 识别、本地去重、manual review continuation，再决定是否触发新 LinkedIn fetch
+
+## 2026-04-11
+
+### Hosted 默认路径文档化、前端禁区明确化与 GitHub 上传边界收束
+
+- 已把云端默认执行路径明确为 `serve + run-worker-daemon-service`：
+  - README 新增 hosted 默认运行章节
+  - operations playbook 新增云端最小启动组合与健康检查
+  - 强调“手工 execute-workflow 续跑”只用于排障，不作为常规运行方式
+- 已补前端边界，避免直接读 runtime 文件：
+  - `docs/FRONTEND_API_CONTRACT.md` 明确前端只消费 API contract
+  - 明确禁止把 `runtime/company_assets/*`、`runtime/jobs/*` 作为前端主数据源
+  - 阶段反馈统一以 `workflow_stage_summaries` 为准
+- 已新增集中指南：
+  - `docs/HOSTED_DEPLOYMENT_AND_GITHUB_SCOPE.md`
+  - 汇总云端启动、前端禁区、GitHub 上传范围、上线前检查
+- 已在文档索引与 README 文档地图挂载新入口：
+  - `docs/INDEX.md`
+  - `README.md`
+- 已补 GitHub 推送边界说明（降部署成本）：
+  - 建议提交 `src/tests/docs/contracts/configs-example/README/PROGRESS`
+  - 不提交 `runtime/**`、`secrets/**`、raw assets 与本机缓存
+  - 明确临时 live smoke 配置不应作为默认提交资产
+
+### 两阶段工作流阶段总结透传、真实 smoke test 收敛与前端契约补齐
+
+- 已把阶段性 workflow summary 固化为稳定返回结构：
+  - `workflow_stage_summaries`
+  - 同时出现在：
+    - `GET /api/jobs/{job_id}/progress`
+    - `GET /api/jobs/{job_id}/results`
+  - 当前固定阶段顺序：
+    - `linkedin_stage_1`
+    - `stage_1_preview`
+    - `public_web_stage_2`
+    - `stage_2_final`
+- snapshot 侧现也会同步落盘阶段总结文件：
+  - `runtime/company_assets/{company}/{snapshot_id}/workflow_stage_summaries/*.json`
+  - 这样前端不必直接读 snapshot 文件，但运维/离线调试仍可审计
+- 已修复一个关键回归点：
+  - 后台 harvest/search reconcile 之前会覆盖或丢失阶段 marker
+  - 现在 `linkedin_stage_1 / stage1_preview / public_web_stage_2 / analysis_stage_mode` 会在 reconcile 后保留
+- 已完成真实 live smoke test 验证：
+  - Humans& 任务已在“不手动 execute-workflow”的情况下端到端完成
+  - 最新稳定样例：
+    - `job_id=b752d176a669`
+    - `snapshot_id=20260411T145117`
+- 前端 contract/example 已同步更新：
+  - `contracts/frontend_api_contract.ts`
+  - `contracts/frontend_api_contract.schema.json`
+  - `contracts/frontend_api_adapter.ts`
+  - `contracts/frontend_react_hooks.example.tsx`
+  - 现在前端可直接拿 typed `workflow_stage_summaries`，并使用 stage helper 渲染阶段卡片
+- 定向回归测试已通过：
+  - `single_stage_workflow_still_publishes_stage_progress_markers`
+  - `background_harvest_prefetch_reconcile_preserves_stage_progress_markers`
+  - `two_stage_workflow_publishes_stage1_preview_and_continues_public_web_stage2_by_default`
+  - `http_api_smoke`
+
+## 2026-04-10
+
+### GitHub Dev 差异审阅、操作教程补齐与推送准备
+
+- 已完成本地工作区相对 `origin/dev` 的结构化审阅，并沉淀为可复盘文档：
+  - `docs/GITHUB_DEV_DIFF_REVIEW_2026-04-10.md`
+  - 覆盖 workflow orchestration、acquisition/harvest、profile registry、query rewrite、frontend contract 五大变更面
+- 已补“当前怎么调用 + 怎么追踪进度 + 怎么恢复执行”的实操教程：
+  - `docs/WORKFLOW_OPERATIONS_PLAYBOOK.md`
+  - 统一说明 CLI 与 API 的标准调用路径：
+    - `plan -> review-plan -> start-workflow -> show-progress/show-workers -> show-job/show-trace`
+  - 补充 query dispatch 去重策略与高成本 query 的 plan-only 审查建议
+- 已将上述新文档挂到 canonical 入口：
+  - `docs/INDEX.md`
+  - `README.md`（子项目文档地图）
+- 已对 Google keyword-first 路径做参数层修正（plan-only 复核通过）：
+  - 关键词提取扩大到 `Veo / Nano Banana / vision-language / video generation / multimodality`
+  - `keyword_priority_only` 下的 `search_seed_queries` 改为方向词优先，不再回落到泛化 `... Research Researcher` 模板
+  - large-org keyword 模式下避免把 `job_titles` 强塞进 former profile-search 过滤，降低误收敛风险
+- 当前推送前状态：
+  - 文档入口、进度文档、变更评审文档已补齐
+  - 代码侧已有较大规模改动，建议以 PR 方式先推送到 `dev`，通过 CI 与人工 review 后再合并
+
 ## 2026-04-08
 
 ### Canonical Asset Views、Facet Hard Filters 与文档体系收束
@@ -838,3 +965,13 @@
     - 历史 `api_accounts.json`
     - SQLite / cache / Python 临时文件
   - 当前结论是可以先整理成 publish-ready monorepo，但不能把现有目录原样直接推到 GitHub
+- 2026-04-10（并行与恢复稳定性更新）：
+  - 修复 workflow 恢复门控：`run_queued_workflow` 与 daemon 恢复现在都覆盖 `running+acquiring`，不再只支持 `blocked+acquiring`。
+  - 修复 Harvest company filter 归一化误改写：避免把 `past_companies=[google, deepmind]` 错误写成 `[google, google]`。
+  - 同义 query 泛化去重：`-`/空格/下划线变体统一签名，避免 `Vision-language` 与 `Vision Language` 重复执行。
+  - `company-employees` shard worker 改为并行提交，减少 current roster 侧串行等待。
+  - former 与 current 采集并行化：
+    - current roster queued 时并行触发 former seed。
+    - 非 queued 同步路径也并行启动 former，并在 enrichment 前 join。
+  - former queued 后自动阻塞等待恢复，以保证后续会进入增量 enrichment，而不是“former 到了但没有再吃进召回”。
+  - paid fallback 增加 probe overlap 剪枝：高重叠 query 标记 `skipped_high_overlap`，降低大组织重复调用成本。

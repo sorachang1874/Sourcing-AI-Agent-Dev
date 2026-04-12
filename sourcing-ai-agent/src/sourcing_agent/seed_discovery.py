@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from hashlib import sha1
 from html import unescape
 import json
+import os
 from pathlib import Path
 import re
 from typing import Any
@@ -17,6 +18,7 @@ from .connectors import CompanyIdentity, RapidApiAccount, search_people_accounts
 from .domain import Candidate, EvidenceRecord, JobRequest, format_display_name, make_evidence_id, normalize_name_token
 from .harvest_connectors import HarvestProfileSearchConnector
 from .model_provider import DeterministicModelClient, ModelClient
+from .request_normalization import build_effective_request_payload
 from .search_provider import (
     BaseSearchProvider,
     DuckDuckGoHtmlSearchProvider,
@@ -27,8 +29,30 @@ from .search_provider import (
 )
 from .worker_daemon import AutonomousWorkerDaemon
 
-_LANE_READY_POLL_MIN_INTERVAL_SECONDS = 15
-_LANE_FETCH_MIN_INTERVAL_SECONDS = 15
+def _env_int(name: str, default: int) -> int:
+    raw = str(os.getenv(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return default
+
+
+_LANE_READY_POLL_MIN_INTERVAL_SECONDS = max(
+    1,
+    _env_int(
+        "SEED_DISCOVERY_READY_POLL_MIN_INTERVAL_SECONDS",
+        _env_int("WEB_SEARCH_READY_POLL_MIN_INTERVAL_SECONDS", 15),
+    ),
+)
+_LANE_FETCH_MIN_INTERVAL_SECONDS = max(
+    1,
+    _env_int(
+        "SEED_DISCOVERY_FETCH_MIN_INTERVAL_SECONDS",
+        _env_int("WEB_SEARCH_FETCH_MIN_INTERVAL_SECONDS", 15),
+    ),
+)
 
 
 @dataclass(slots=True)
@@ -43,6 +67,7 @@ class SearchSeedSnapshot:
     errors: list[str]
     stop_reason: str
     summary_path: Path
+    entries_path: Path | None = None
 
     def to_record(self) -> dict[str, Any]:
         return {
@@ -56,6 +81,7 @@ class SearchSeedSnapshot:
             "errors": self.errors,
             "stop_reason": self.stop_reason,
             "summary_path": str(self.summary_path),
+            "entries_path": str(self.entries_path) if isinstance(self.entries_path, Path) else "",
         }
 
 
@@ -180,7 +206,11 @@ class SearchSeedAcquirer:
         discovery_dir = snapshot_dir / "search_seed_discovery"
         discovery_dir.mkdir(parents=True, exist_ok=True)
         logger = asset_logger or AssetLogger(snapshot_dir)
+        effective_request_payload = build_effective_request_payload(request_payload or {}) if request_payload else {}
         effective_filter_hints = _normalize_harvest_company_filters(identity, filter_hints)
+        provider_people_search_mode = str(cost_policy.get("provider_people_search_mode") or "fallback_only").strip().lower()
+        provider_search_only = provider_people_search_mode in {"primary_only", "provider_only", "harvest_only"}
+        provider_search_primary = provider_people_search_mode in {"primary", "always", "primary_only", "provider_only", "harvest_only"}
 
         entries: list[dict[str, Any]] = []
         query_summaries: list[dict[str, Any]] = []
@@ -193,7 +223,7 @@ class SearchSeedAcquirer:
         parallel_limit = max(1, min(int(cost_policy.get("parallel_search_workers", 3) or 3), len(compiled_queries) or 1))
         result_limit = max(1, min(int(cost_policy.get("public_media_results_per_query", 10) or 10), 25))
         worker_results: list[dict[str, Any]] = []
-        pending_specs = [
+        pending_specs = [] if provider_search_only else [
             {
                 "index": index,
                 "query_spec": query_spec,
@@ -245,7 +275,7 @@ class SearchSeedAcquirer:
                         employment_status=employment_status,
                         worker_runtime=worker_runtime,
                         job_id=job_id,
-                        request_payload=request_payload or {},
+                        request_payload=effective_request_payload,
                         plan_payload=plan_payload or {},
                         runtime_mode=runtime_mode,
                         result_limit=result_limit,
@@ -270,7 +300,7 @@ class SearchSeedAcquirer:
                             employment_status=employment_status,
                             worker_runtime=worker_runtime,
                             job_id=job_id,
-                            request_payload=request_payload or {},
+                            request_payload=effective_request_payload,
                             plan_payload=plan_payload or {},
                             runtime_mode=runtime_mode,
                             result_limit=result_limit,
@@ -298,12 +328,15 @@ class SearchSeedAcquirer:
 
         entries = _dedupe_seed_entries(entries)
         paid_queries = [item["query"] for item in compiled_queries if item["execution_mode"] == "paid_fallback"] or list(search_seed_queries)
-        if (
-            not queued_background_search
-            and len(entries) < web_result_target
-            and (self.accounts or (self.harvest_search_connector and self.harvest_search_connector.settings.enabled))
-            and cost_policy.get("provider_people_search_mode") == "fallback_only"
-        ):
+        provider_available = bool(
+            self.accounts or (self.harvest_search_connector and self.harvest_search_connector.settings.enabled)
+        )
+        should_run_provider_people_search = False
+        if provider_search_primary:
+            should_run_provider_people_search = True
+        elif provider_available and len(entries) < web_result_target and provider_people_search_mode == "fallback_only":
+            should_run_provider_people_search = True
+        if should_run_provider_people_search:
             needed = max(web_result_target - len(entries), 0)
             provider_limit = max(needed, web_result_target)
             provider_entries, provider_summaries, provider_errors, provider_accounts = self._provider_people_search_fallback(
@@ -321,9 +354,18 @@ class SearchSeedAcquirer:
             query_summaries.extend(provider_summaries)
             errors.extend(provider_errors)
             accounts_used.extend(provider_accounts)
-            if provider_entries:
-                stop_reason = "provider_people_search_fallback"
+            if provider_entries and not queued_background_search:
+                stop_reason = "provider_people_search_primary" if provider_search_primary else "provider_people_search_fallback"
 
+        entries_path = discovery_dir / "entries.json"
+        logger.write_json(
+            entries_path,
+            entries,
+            asset_type="search_seed_entries",
+            source_kind="search_seed_discovery",
+            is_raw_asset=False,
+            model_safe=True,
+        )
         summary_path = discovery_dir / "summary.json"
         summary_payload = {
             "snapshot_id": snapshot_dir.name,
@@ -366,6 +408,7 @@ class SearchSeedAcquirer:
             errors=errors,
             stop_reason=stop_reason,
             summary_path=summary_path,
+            entries_path=entries_path,
         )
 
     def _execute_query_spec(
@@ -390,6 +433,7 @@ class SearchSeedAcquirer:
         prefetched_search_manifest_key: str = "",
     ) -> dict[str, Any]:
         query_text = str(query_spec["query"] or "").strip()
+        effective_request_payload = build_effective_request_payload(request_payload or {}) if request_payload else {}
         raw_search_path = discovery_dir / f"web_query_{index:02d}.html"
         lane_id = "public_media_specialist" if query_spec["source_family"] in {"public_interviews", "publication_and_blog"} else "search_planner"
         worker_handle = None
@@ -398,7 +442,7 @@ class SearchSeedAcquirer:
         if worker_runtime is not None and job_id:
             worker_handle = worker_runtime.begin_worker(
                 job_id=job_id,
-                request=JobRequest.from_payload(request_payload),
+                request=JobRequest.from_payload(effective_request_payload),
                 plan_payload=plan_payload,
                 runtime_mode=runtime_mode,
                 lane_id=lane_id,
@@ -413,7 +457,7 @@ class SearchSeedAcquirer:
                     "snapshot_dir": str(discovery_dir.parent),
                     "discovery_dir": str(discovery_dir),
                     "employment_status": employment_status,
-                    "request_payload": request_payload,
+                    "request_payload": effective_request_payload,
                     "plan_payload": plan_payload,
                     "runtime_mode": runtime_mode,
                     "result_limit": result_limit,
@@ -828,23 +872,125 @@ class SearchSeedAcquirer:
         errors: list[str] = []
         accounts_used: list[str] = []
         page_count = int(cost_policy.get("provider_people_search_pages", 2 if employment_status == "former" else 1) or 1)
+        query_strategy = str(cost_policy.get("provider_people_search_query_strategy") or "all_queries_union").strip().lower()
+        stop_after_first_hit = query_strategy in {"first_hit", "first_nonempty", "first_non_empty", "first_match"}
+        try:
+            max_query_count = int(cost_policy.get("provider_people_search_max_queries") or 0)
+        except (TypeError, ValueError):
+            max_query_count = 0
+        if max_query_count < 0:
+            max_query_count = 0
         paid_queries = list(search_seed_queries)
-        if employment_status == "former" and list(filter_hints.get("past_companies") or []):
+        if (
+            employment_status == "former"
+            and list(filter_hints.get("past_companies") or [])
+            and not bool(cost_policy.get("former_keyword_queries_only"))
+        ):
             paid_queries = ["", *paid_queries]
         deduped_queries: list[str] = []
         seen_queries: set[str] = set()
         for item in paid_queries:
             key = str(item or "")
-            if key in seen_queries:
+            signature = _search_query_signature(key) or "__empty__"
+            if signature in seen_queries:
                 continue
-            seen_queries.add(key)
+            seen_queries.add(signature)
             deduped_queries.append(key)
+        if max_query_count > 0:
+            deduped_queries = deduped_queries[:max_query_count]
 
-        for index, query_text in enumerate(deduped_queries, start=1):
-            summary_query = query_text or "__past_company_only__"
-            if self.harvest_search_connector and self.harvest_search_connector.settings.enabled:
-                harvest_plan = self._resolve_harvest_search_execution_plan(
+        precomputed_harvest_plans: dict[str, dict[str, Any]] = {}
+        if (
+            deduped_queries
+            and self.harvest_search_connector
+            and self.harvest_search_connector.settings.enabled
+            and not stop_after_first_hit
+            and bool(cost_policy.get("provider_people_search_overlap_pruning", True))
+        ):
+            try:
+                overlap_threshold = float(cost_policy.get("provider_people_search_overlap_threshold") or 0.9)
+            except (TypeError, ValueError):
+                overlap_threshold = 0.9
+            overlap_threshold = max(0.0, min(1.0, overlap_threshold))
+            try:
+                min_probe_rows = int(cost_policy.get("provider_people_search_overlap_min_probe_rows") or 10)
+            except (TypeError, ValueError):
+                min_probe_rows = 10
+            min_probe_rows = max(1, min_probe_rows)
+            kept_queries: list[str] = []
+            kept_probe_sets: list[set[str]] = []
+            for query_text in deduped_queries:
+                summary_query = query_text or "__past_company_only__"
+                effective_query_text = _normalize_harvest_query_text(
                     query_text=query_text,
+                    filter_hints=filter_hints,
+                    identity=identity,
+                )
+                probe_plan = self._resolve_harvest_search_execution_plan(
+                    query_text=effective_query_text,
+                    filter_hints=filter_hints,
+                    employment_status=employment_status,
+                    discovery_dir=discovery_dir,
+                    asset_logger=asset_logger,
+                    requested_limit=max(26, int(limit or 25)),
+                    requested_pages=max(2, int(page_count or 1)),
+                    allow_shared_provider_cache=bool(cost_policy.get("allow_shared_provider_cache", True)),
+                )
+                probe_plan = dict(probe_plan or {})
+                probe_plan["effective_query_text"] = effective_query_text
+                precomputed_harvest_plans[query_text] = probe_plan
+                probe_profiles = _extract_harvest_profile_urls_from_result(dict(probe_plan.get("initial_result") or {}))
+                max_overlap = 0.0
+                overlap_with_query = ""
+                if probe_profiles and len(probe_profiles) >= min_probe_rows:
+                    for kept_query, kept_profiles in zip(kept_queries, kept_probe_sets):
+                        if not kept_profiles:
+                            continue
+                        overlap = _jaccard_overlap_ratio(probe_profiles, kept_profiles)
+                        if overlap > max_overlap:
+                            max_overlap = overlap
+                            overlap_with_query = kept_query or "__past_company_only__"
+                if max_overlap >= overlap_threshold and overlap_with_query:
+                    query_summaries.append(
+                        {
+                            "query": summary_query,
+                            "effective_query_text": effective_query_text,
+                            "mode": "harvest_profile_search",
+                            "status": "skipped_high_overlap",
+                            "overlap_ratio": round(max_overlap, 4),
+                            "overlap_with_query": overlap_with_query,
+                            "probe_profile_count": len(probe_profiles),
+                            "probe": {
+                                key: value
+                                for key, value in probe_plan.items()
+                                if key != "initial_result"
+                            },
+                        }
+                    )
+                    continue
+                kept_queries.append(query_text)
+                kept_probe_sets.append(probe_profiles)
+            deduped_queries = kept_queries
+
+        def _run_harvest_query(
+            summary_query: str,
+            query_text: str,
+            *,
+            precomputed_plan: dict[str, Any] | None = None,
+        ) -> dict[str, Any]:
+            if not (self.harvest_search_connector and self.harvest_search_connector.settings.enabled):
+                return {"query_entries": [], "query_summary": None, "account_used": ""}
+            harvest_plan = dict(precomputed_plan or {})
+            effective_query_text = str(harvest_plan.get("effective_query_text") or "").strip()
+            if not effective_query_text:
+                effective_query_text = _normalize_harvest_query_text(
+                    query_text=query_text,
+                    filter_hints=filter_hints,
+                    identity=identity,
+                )
+            if not harvest_plan:
+                harvest_plan = self._resolve_harvest_search_execution_plan(
+                    query_text=effective_query_text,
                     filter_hints=filter_hints,
                     employment_status=employment_status,
                     discovery_dir=discovery_dir,
@@ -853,66 +999,123 @@ class SearchSeedAcquirer:
                     requested_pages=page_count,
                     allow_shared_provider_cache=bool(cost_policy.get("allow_shared_provider_cache", True)),
                 )
-                harvest_result = harvest_plan.get("initial_result")
-                if harvest_result is None:
-                    harvest_result = self.harvest_search_connector.search_profiles(
-                        query_text=query_text,
-                        filter_hints=filter_hints,
-                        employment_status=employment_status,
-                        discovery_dir=discovery_dir,
-                        asset_logger=asset_logger,
-                        limit=int(harvest_plan.get("effective_limit") or limit),
-                        pages=int(harvest_plan.get("effective_pages") or page_count),
-                        allow_shared_provider_cache=bool(cost_policy.get("allow_shared_provider_cache", True)),
+            harvest_result = harvest_plan.get("initial_result")
+            if harvest_result is None:
+                harvest_result = self.harvest_search_connector.search_profiles(
+                    query_text=effective_query_text,
+                    filter_hints=filter_hints,
+                    employment_status=employment_status,
+                    discovery_dir=discovery_dir,
+                    asset_logger=asset_logger,
+                    limit=int(harvest_plan.get("effective_limit") or limit),
+                    pages=int(harvest_plan.get("effective_pages") or page_count),
+                    allow_shared_provider_cache=bool(cost_policy.get("allow_shared_provider_cache", True)),
+                    auto_probe=False,
+                )
+            if harvest_result is None:
+                return {"query_entries": [], "query_summary": None, "account_used": ""}
+
+            rows = list(harvest_result.get("rows") or [])
+            effective_limit = max(1, int(harvest_plan.get("effective_limit") or limit))
+            query_entries: list[dict[str, Any]] = []
+            for row in rows[:effective_limit]:
+                entry = {
+                    "seed_key": _seed_key(str(row.get("full_name") or ""), str(row.get("profile_url") or summary_query)),
+                    "full_name": str(row.get("full_name") or "").strip(),
+                    "headline": str(row.get("headline") or "").strip(),
+                    "location": str(row.get("location") or "").strip(),
+                    "source_type": "harvest_profile_search",
+                    "source_query": summary_query,
+                    "profile_url": str(row.get("profile_url") or "").strip(),
+                    "slug": str(row.get("username") or "").strip() or extract_linkedin_slug(str(row.get("profile_url") or "")),
+                    "employment_status": employment_status,
+                    "target_company": identity.canonical_name,
+                    "metadata": {
+                        "provider_account_id": "harvest_profile_search",
+                        "current_company": str(row.get("current_company") or "").strip(),
+                        "scope_keywords": list(filter_hints.get("scope_keywords") or []),
+                    },
+                }
+                if entry["full_name"]:
+                    query_entries.append(entry)
+            query_summary = {
+                "query": summary_query,
+                "effective_query_text": effective_query_text,
+                "mode": "harvest_profile_search",
+                "raw_path": str(harvest_result.get("raw_path") or ""),
+                "account_id": "harvest_profile_search",
+                "requested_limit": max(1, int(limit or 25)),
+                "requested_pages": max(1, int(page_count or 1)),
+                "effective_limit": effective_limit,
+                "effective_pages": max(1, int(harvest_plan.get("effective_pages") or page_count)),
+                "pagination": dict(harvest_result.get("pagination") or {}),
+                "probe": {
+                    key: value
+                    for key, value in dict(harvest_plan).items()
+                    if key != "initial_result"
+                },
+                "seed_entry_count": len(query_entries),
+            }
+            return {
+                "query_entries": query_entries,
+                "query_summary": query_summary,
+                "account_used": "harvest_profile_search" if query_entries else "",
+            }
+
+        parallel_harvest_results: dict[int, dict[str, Any]] = {}
+        if (
+            deduped_queries
+            and not stop_after_first_hit
+            and self.harvest_search_connector
+            and self.harvest_search_connector.settings.enabled
+        ):
+            try:
+                configured_parallel_workers = int(cost_policy.get("provider_people_search_parallel_queries") or 4)
+            except (TypeError, ValueError):
+                configured_parallel_workers = 4
+            parallel_query_workers = max(
+                1,
+                min(
+                    len(deduped_queries),
+                    configured_parallel_workers,
+                ),
+            )
+            with ThreadPoolExecutor(max_workers=parallel_query_workers) as executor:
+                futures = [
+                    executor.submit(
+                        _run_harvest_query,
+                        query_text or "__past_company_only__",
+                        query_text,
+                        precomputed_plan=dict(precomputed_harvest_plans.get(query_text) or {}),
                     )
-                if harvest_result is not None:
-                    rows = list(harvest_result.get("rows") or [])
-                    effective_limit = max(1, int(harvest_plan.get("effective_limit") or limit))
-                    query_entries: list[dict[str, Any]] = []
-                    for row in rows[:effective_limit]:
-                        entry = {
-                            "seed_key": _seed_key(str(row.get("full_name") or ""), str(row.get("profile_url") or summary_query)),
-                            "full_name": str(row.get("full_name") or "").strip(),
-                            "headline": str(row.get("headline") or "").strip(),
-                            "location": str(row.get("location") or "").strip(),
-                            "source_type": "harvest_profile_search",
-                            "source_query": summary_query,
-                            "profile_url": str(row.get("profile_url") or "").strip(),
-                            "slug": str(row.get("username") or "").strip() or extract_linkedin_slug(str(row.get("profile_url") or "")),
-                            "employment_status": employment_status,
-                            "target_company": identity.canonical_name,
-                            "metadata": {
-                                "provider_account_id": "harvest_profile_search",
-                                "current_company": str(row.get("current_company") or "").strip(),
-                                "scope_keywords": list(filter_hints.get("scope_keywords") or []),
-                            },
-                        }
-                        if entry["full_name"]:
-                            query_entries.append(entry)
-                            entries.append(entry)
-                    query_summaries.append(
-                        {
-                            "query": summary_query,
-                            "mode": "harvest_profile_search",
-                            "raw_path": str(harvest_result.get("raw_path") or ""),
-                            "account_id": "harvest_profile_search",
-                            "requested_limit": max(1, int(limit or 25)),
-                            "requested_pages": max(1, int(page_count or 1)),
-                            "effective_limit": effective_limit,
-                            "effective_pages": max(1, int(harvest_plan.get("effective_pages") or page_count)),
-                            "pagination": dict(harvest_result.get("pagination") or {}),
-                            "probe": {
-                                key: value
-                                for key, value in dict(harvest_plan).items()
-                                if key != "initial_result"
-                            },
-                            "seed_entry_count": len(query_entries),
-                        }
+                    for query_text in deduped_queries
+                ]
+                for index, future in enumerate(futures, start=1):
+                    parallel_harvest_results[index] = dict(future.result() or {})
+
+        for index, query_text in enumerate(deduped_queries, start=1):
+            summary_query = query_text or "__past_company_only__"
+            if self.harvest_search_connector and self.harvest_search_connector.settings.enabled:
+                harvest_payload = (
+                    dict(parallel_harvest_results.get(index) or {})
+                    if not stop_after_first_hit and parallel_harvest_results
+                    else _run_harvest_query(
+                        summary_query,
+                        query_text,
+                        precomputed_plan=dict(precomputed_harvest_plans.get(query_text) or {}),
                     )
-                    if query_entries:
-                        if "harvest_profile_search" not in accounts_used:
-                            accounts_used.append("harvest_profile_search")
-                        break
+                )
+                query_entries = list(harvest_payload.get("query_entries") or [])
+                query_summary = dict(harvest_payload.get("query_summary") or {})
+                account_used = str(harvest_payload.get("account_used") or "").strip()
+                if query_entries:
+                    entries.extend(query_entries)
+                if query_summary:
+                    query_summaries.append(query_summary)
+                if account_used and account_used not in accounts_used:
+                    accounts_used.append(account_used)
+                if query_entries and stop_after_first_hit:
+                    break
             if not query_text:
                 continue
             payload, account, provider_errors = self._search_people(query_text, limit=min(limit, 25))
@@ -971,7 +1174,7 @@ class SearchSeedAcquirer:
                     "seed_entry_count": len(query_entries),
                 }
             )
-            if entries:
+            if query_entries and stop_after_first_hit:
                 break
         return entries, query_summaries, errors, accounts_used
 
@@ -1022,6 +1225,7 @@ class SearchSeedAcquirer:
             limit=25,
             pages=1,
             allow_shared_provider_cache=allow_shared_provider_cache,
+            auto_probe=False,
         )
         plan["probe_performed"] = True
         if probe_result is None:
@@ -1113,6 +1317,36 @@ def _prepare_batched_search_seed_queries(
     batch_message = ""
     submitted_query_count = 0
 
+    def _write_manifest_snapshot() -> None:
+        if not manifest_entries and not artifact_paths:
+            return
+        root_artifact_paths = {
+            str(key): str(value)
+            for key, value in dict(artifact_paths).items()
+            if str(key).strip() and str(value).strip()
+        }
+        for entry in manifest_entries.values():
+            for key, value in dict(entry.get("artifact_paths") or {}).items():
+                normalized_key = str(key or "").strip()
+                normalized_value = str(value or "").strip()
+                if normalized_key and normalized_value and normalized_key not in root_artifact_paths:
+                    root_artifact_paths[normalized_key] = normalized_value
+        logger.write_json(
+            manifest_path,
+            {
+                "provider_name": provider_name,
+                "submitted_query_count": submitted_query_count,
+                "artifact_paths": root_artifact_paths,
+                "entries": [manifest_entries[key] for key in sorted(manifest_entries)],
+                "message": batch_message,
+                "updated_at": _batch_lane_timestamp(),
+            },
+            asset_type="web_search_batch_manifest",
+            source_kind="search_seed_discovery",
+            is_raw_asset=False,
+            model_safe=False,
+        )
+
     if unresolved_requests:
         submit_batch = getattr(search_provider, "submit_batch_queries", None)
         if not callable(submit_batch):
@@ -1163,6 +1397,7 @@ def _prepare_batched_search_seed_queries(
                 spec["prefetched_search_artifact_paths"] = dict(entry["artifact_paths"] or {})
                 spec["prefetched_search_manifest_path"] = str(manifest_path)
                 spec["prefetched_search_manifest_key"] = task_key
+        _write_manifest_snapshot()
 
     ready_errors = _refresh_batched_search_seed_ready_cache(
         search_provider=search_provider,
@@ -1183,33 +1418,7 @@ def _prepare_batched_search_seed_queries(
 
     if not manifest_entries and not artifact_paths:
         return [*ready_errors, *fetch_errors]
-
-    root_artifact_paths = {
-        str(key): str(value)
-        for key, value in dict(artifact_paths).items()
-        if str(key).strip() and str(value).strip()
-    }
-    for entry in manifest_entries.values():
-        for key, value in dict(entry.get("artifact_paths") or {}).items():
-            normalized_key = str(key or "").strip()
-            normalized_value = str(value or "").strip()
-            if normalized_key and normalized_value and normalized_key not in root_artifact_paths:
-                root_artifact_paths[normalized_key] = normalized_value
-    logger.write_json(
-        manifest_path,
-        {
-            "provider_name": provider_name,
-            "submitted_query_count": submitted_query_count,
-            "artifact_paths": root_artifact_paths,
-            "entries": [manifest_entries[key] for key in sorted(manifest_entries)],
-            "message": batch_message,
-            "updated_at": _batch_lane_timestamp(),
-        },
-        asset_type="web_search_batch_manifest",
-        source_kind="search_seed_discovery",
-        is_raw_asset=False,
-        model_safe=False,
-    )
+    _write_manifest_snapshot()
     return [*ready_errors, *fetch_errors]
 
 
@@ -1904,6 +2113,8 @@ def _normalize_harvest_company_filters(identity: CompanyIdentity, filter_hints: 
     }
     company_url = str(identity.linkedin_company_url or "").strip()
     if not company_url:
+        for key, values in list(normalized.items()):
+            normalized[key] = _dedupe_filter_values(values, company_filter=key in _HARVEST_COMPANY_FILTER_KEYS)
         return normalized
 
     target_tokens = {
@@ -1913,20 +2124,93 @@ def _normalize_harvest_company_filters(identity: CompanyIdentity, filter_hints: 
         _normalize_company_filter_token(identity.linkedin_slug),
         _normalize_company_filter_token(company_url),
     }
-    target_tokens.update(_normalize_company_filter_token(alias) for alias in identity.aliases if alias)
     target_tokens.discard("")
     if not target_tokens:
+        for key, values in list(normalized.items()):
+            normalized[key] = _dedupe_filter_values(values, company_filter=key in _HARVEST_COMPANY_FILTER_KEYS)
         return normalized
 
-    for key in ["current_companies", "past_companies", "exclude_current_companies", "exclude_past_companies"]:
+    for key in _HARVEST_COMPANY_FILTER_KEYS:
         values = list(normalized.get(key) or [])
         if not values:
             continue
-        normalized[key] = [
+        rewritten_values = [
             company_url if _normalize_company_filter_token(value) in target_tokens else value
             for value in values
         ]
+        normalized[key] = _dedupe_filter_values(rewritten_values, company_filter=True)
+    for key, values in list(normalized.items()):
+        if key in _HARVEST_COMPANY_FILTER_KEYS:
+            continue
+        normalized[key] = _dedupe_filter_values(values, company_filter=False)
     return normalized
+
+
+def _normalize_harvest_query_text(
+    *,
+    query_text: str,
+    filter_hints: dict[str, list[str]],
+    identity: CompanyIdentity,
+) -> str:
+    normalized_query = " ".join(str(query_text or "").split()).strip()
+    if not normalized_query:
+        return ""
+
+    stripped_query = normalized_query
+    for token in _harvest_blocked_query_tokens(filter_hints=filter_hints, identity=identity):
+        stripped_query = re.sub(re.escape(token), " ", stripped_query, flags=re.IGNORECASE)
+    stripped_query = re.sub(
+        r"\b(linkedin|employee|employees|former|current|member|members|team|teams)\b",
+        " ",
+        stripped_query,
+        flags=re.IGNORECASE,
+    )
+    stripped_query = " ".join(stripped_query.split())
+    if stripped_query:
+        return stripped_query
+
+    keyword_values = [str(item).strip() for item in list(filter_hints.get("keywords") or []) if str(item).strip()]
+    if keyword_values:
+        return " ".join(keyword_values[:2])
+    return normalized_query
+
+
+def _harvest_blocked_query_tokens(*, filter_hints: dict[str, list[str]], identity: CompanyIdentity) -> list[str]:
+    blocked: list[str] = []
+    seen: set[str] = set()
+
+    def _add(value: str) -> None:
+        token = " ".join(str(value or "").split()).strip()
+        if not token:
+            return
+        lowered = token.lower()
+        if lowered in seen:
+            return
+        seen.add(lowered)
+        blocked.append(token)
+
+    _add(identity.canonical_name)
+    _add(identity.requested_name)
+    _add(identity.linkedin_slug)
+    for alias in list(identity.aliases or []):
+        _add(str(alias or ""))
+    for key in ["current_companies", "past_companies", "exclude_current_companies", "exclude_past_companies"]:
+        for value in list(filter_hints.get(key) or []):
+            _add(_company_filter_search_label(str(value or "")))
+    for value in list(filter_hints.get("job_titles") or []):
+        _add(str(value or ""))
+    return blocked
+
+
+def _company_filter_search_label(value: str) -> str:
+    raw = unescape(str(value or "")).strip()
+    if not raw:
+        return ""
+    match = re.search(r"linkedin\.com/company/([^/?#]+)", raw, flags=re.IGNORECASE)
+    if match:
+        raw = str(match.group(1) or "").strip()
+    raw = raw.replace("-", " ").replace("_", " ")
+    return " ".join(raw.split())
 
 
 def _normalize_company_filter_token(value: str) -> str:
@@ -1937,6 +2221,60 @@ def _normalize_company_filter_token(value: str) -> str:
     if match:
         return re.sub(r"[^a-z0-9]+", "", str(match.group(1) or "").lower())
     return re.sub(r"[^a-z0-9]+", "", raw)
+
+
+_HARVEST_COMPANY_FILTER_KEYS = {
+    "current_companies",
+    "past_companies",
+    "exclude_current_companies",
+    "exclude_past_companies",
+}
+
+
+def _dedupe_filter_values(values: list[str], *, company_filter: bool) -> list[str]:
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        normalized = str(value or "").strip()
+        if not normalized:
+            continue
+        key = _normalize_company_filter_token(normalized) if company_filter else " ".join(normalized.lower().split())
+        if not key:
+            key = normalized.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(normalized)
+    return deduped
+
+
+def _search_query_signature(value: str) -> str:
+    normalized = " ".join(str(value or "").lower().split()).strip()
+    if not normalized:
+        return ""
+    compact = re.sub(r"[\s\-_]+", "", normalized)
+    alnum = re.sub(r"[^0-9a-z]+", "", compact)
+    return alnum or compact
+
+
+def _extract_harvest_profile_urls_from_result(result: dict[str, Any]) -> set[str]:
+    rows = list(dict(result or {}).get("rows") or [])
+    urls: set[str] = set()
+    for row in rows:
+        url = str(dict(row or {}).get("profile_url") or "").strip().lower()
+        if not url:
+            continue
+        urls.add(url.rstrip("/"))
+    return urls
+
+
+def _jaccard_overlap_ratio(left: set[str], right: set[str]) -> float:
+    if not left or not right:
+        return 0.0
+    union = left.union(right)
+    if not union:
+        return 0.0
+    return float(len(left.intersection(right)) / len(union))
 
 
 def _compile_query_specs(search_seed_queries: list[str], query_bundles: list[dict[str, Any]]) -> list[dict[str, str]]:
@@ -1970,7 +2308,8 @@ def _compile_query_specs(search_seed_queries: list[str], query_bundles: list[dic
     deduped: list[dict[str, str]] = []
     seen: set[tuple[str, str]] = set()
     for item in specs:
-        key = (item["execution_mode"], item["query"].lower())
+        query_signature = _search_query_signature(item["query"]) or item["query"].lower()
+        key = (item["execution_mode"], query_signature)
         if key in seen:
             continue
         seen.add(key)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 import json
@@ -34,10 +35,17 @@ from .harvest_connectors import (
     write_harvest_execution_artifact,
 )
 from .model_provider import ModelClient
+from .request_normalization import build_effective_request_payload, resolve_request_intent_view
 from .search_provider import SearchProviderError, build_search_provider
 from .seed_discovery import SearchSeedAcquirer, SearchSeedSnapshot, build_candidates_from_seed_snapshot
 from .settings import AppSettings
 from .storage import SQLiteStore
+
+_FULL_ROSTER_BASELINE_REUSE_MIN_CANDIDATES = 1000
+_FULL_ROSTER_BASELINE_REUSE_CURRENT_RATIO_THRESHOLD = 0.6
+_FULL_ROSTER_BASELINE_REUSE_MIN_CURRENT_COUNT = 250
+_FULL_ROSTER_BASELINE_REUSE_REFERENCE_DISTANCE_RATIO = 0.45
+_FULL_ROSTER_BASELINE_REUSE_REFERENCE_DISTANCE_FLOOR = 250
 
 
 @dataclass(slots=True)
@@ -60,6 +68,13 @@ def _effective_cost_policy(
         effective["allow_historical_profile_inheritance"] = False
         effective["allow_shared_provider_cache"] = False
     return effective
+
+
+def _effective_request_payload(job_request: JobRequest | dict[str, Any]) -> dict[str, Any]:
+    if isinstance(job_request, JobRequest):
+        intent_view = resolve_request_intent_view(job_request)
+        return build_effective_request_payload(job_request, intent_view=intent_view)
+    return build_effective_request_payload(job_request)
 
 
 class AcquisitionEngine:
@@ -104,6 +119,7 @@ class AcquisitionEngine:
             model_client,
             search_provider=search_provider,
             worker_runtime=worker_runtime,
+            store=self.store,
         )
 
     def _resolve_harvest_settings(self, actor_settings: Any, legacy_harvest_token: str) -> Any:
@@ -171,9 +187,11 @@ class AcquisitionEngine:
             if strategy_type == "investor_firm_roster":
                 return self._acquire_investor_firm_roster(task, state, job_request)
             return self._acquire_full_roster(task, state, job_request)
+        if task.task_type == "acquire_former_search_seed":
+            return self._acquire_former_search_seed(task, state, job_request)
         if company_key == "anthropic" and strategy_type != "investor_firm_roster" and use_local_anthropic_assets:
             return self._anthropic_local_asset_task(task, bootstrap_summary or {}, state)
-        if task.task_type == "enrich_profiles_multisource":
+        if task.task_type in {"enrich_profiles_multisource", "enrich_linkedin_profiles", "enrich_public_web_signals"}:
             return self._enrich_profiles(task, state, job_request)
         if task.task_type == "normalize_asset_snapshot":
             return self._normalize_snapshot(task, state, job_request)
@@ -187,7 +205,8 @@ class AcquisitionEngine:
         )
 
     def _should_use_local_anthropic_assets(self, job_request: JobRequest) -> bool:
-        execution_preferences = dict(job_request.execution_preferences or {})
+        intent_view = resolve_request_intent_view(job_request)
+        execution_preferences = dict(intent_view.get("execution_preferences") or {})
         if bool(execution_preferences.get("allow_local_bootstrap_fallback")):
             return True
         return not bool(execution_preferences.get("force_fresh_run"))
@@ -311,6 +330,8 @@ class AcquisitionEngine:
                 payload={},
             )
         cost_policy = _effective_cost_policy(task.metadata.get("cost_policy"), job_request)
+        intent_view = resolve_request_intent_view(job_request)
+        effective_execution_preferences = dict(intent_view.get("execution_preferences") or {})
         max_pages = int(task.metadata.get("max_pages", 10) or 10)
         page_limit = int(task.metadata.get("page_limit", 50) or 50)
         company_employee_shards = _normalize_company_employee_shards(task.metadata.get("company_employee_shards"))
@@ -321,9 +342,54 @@ class AcquisitionEngine:
         allow_cached_roster_fallback = bool(cost_policy.get("allow_cached_roster_fallback", True))
         allow_shared_provider_cache = bool(cost_policy.get("allow_shared_provider_cache", True))
         reuse_existing_roster = bool(
-            job_request.execution_preferences.get("reuse_existing_roster") or task.metadata.get("reuse_existing_roster")
+            effective_execution_preferences.get("reuse_existing_roster") or task.metadata.get("reuse_existing_roster")
         )
         acquisition_mode = "live_roster_acquisition"
+        explicitly_requested_former_seed = "run_former_search_seed" in effective_execution_preferences
+        should_run_former_search_seed = self._should_run_default_former_search_seed(task, job_request)
+        former_parallel_executor: ThreadPoolExecutor | None = None
+        former_parallel_future = None
+
+        def _start_parallel_former_search_seed_if_needed() -> None:
+            nonlocal former_parallel_executor, former_parallel_future
+            if not should_run_former_search_seed:
+                return
+            if former_parallel_future is not None:
+                return
+            if self.worker_runtime is not None and job_id:
+                return
+            former_parallel_executor = ThreadPoolExecutor(max_workers=1)
+            former_parallel_future = former_parallel_executor.submit(
+                self._acquire_default_former_search_seed,
+                task,
+                state,
+                job_request,
+                identity,
+            )
+
+        def _shutdown_parallel_former(wait: bool) -> None:
+            nonlocal former_parallel_executor, former_parallel_future
+            if former_parallel_executor is None:
+                return
+            former_parallel_executor.shutdown(wait=wait)
+            former_parallel_executor = None
+            former_parallel_future = None
+
+        def _kickoff_former_search_seed_for_background_roster() -> tuple[SearchSeedSnapshot | None, str, str, str]:
+            if not should_run_former_search_seed:
+                return None, "", "", "skipped"
+            try:
+                former_execution = self._acquire_default_former_search_seed(task, state, job_request, identity)
+            except Exception as exc:
+                return None, "", str(exc), "failed"
+            former_snapshot = former_execution.state_updates.get("search_seed_snapshot")
+            return (
+                former_snapshot if isinstance(former_snapshot, SearchSeedSnapshot) else None,
+                str(former_execution.detail or ""),
+                str(former_execution.detail or "") if former_execution.status == "blocked" else "",
+                str(former_execution.status or ""),
+            )
+
         try:
             if reuse_existing_roster:
                 cached_snapshot = self._load_cached_roster_snapshot(identity, exclude_snapshot_dir=snapshot_dir)
@@ -371,26 +437,45 @@ class AcquisitionEngine:
                             allow_shared_provider_cache=allow_shared_provider_cache,
                         )
                         if int(shard_worker_summary.get("queued_count") or 0) > 0:
+                            (
+                                former_search_seed_snapshot,
+                                former_search_detail,
+                                former_search_error,
+                                former_search_status,
+                            ) = _kickoff_former_search_seed_for_background_roster()
+                            payload: dict[str, Any] = {
+                                "queued_harvest_worker_count": int(shard_worker_summary.get("queued_count") or 0),
+                                "completed_harvest_worker_count": int(
+                                    shard_worker_summary.get("completed_count") or 0
+                                ),
+                                "shard_count": int(shard_worker_summary.get("shard_count") or 0),
+                                "stop_reason": "queued_background_harvest_shards",
+                                "harvest_workers": list(shard_worker_summary.get("queued_summaries") or []),
+                                "completed_harvest_workers": list(
+                                    shard_worker_summary.get("completed_summaries") or []
+                                ),
+                                "former_search_seed_status": former_search_status,
+                            }
+                            if former_search_detail:
+                                payload["former_search_seed_detail"] = former_search_detail
+                            if former_search_error:
+                                payload["former_search_seed_error"] = former_search_error
+                            state_updates: dict[str, Any] = {}
+                            if isinstance(former_search_seed_snapshot, SearchSeedSnapshot):
+                                payload["former_search_seed_snapshot"] = former_search_seed_snapshot.to_record()
+                                payload["former_search_seed_entry_count"] = len(former_search_seed_snapshot.entries)
+                                state_updates["search_seed_snapshot"] = former_search_seed_snapshot
                             return AcquisitionExecution(
                                 task_id=task.task_id,
                                 status="blocked",
                                 detail=(
                                     "Roster acquisition queued background segmented Harvest company-employees runs; "
-                                    "resume after worker recovery completes remote dataset fetch."
+                                    "former seed discovery started in parallel. Resume after worker recovery completes remote dataset fetch."
                                 ),
-                                payload={
-                                    "queued_harvest_worker_count": int(shard_worker_summary.get("queued_count") or 0),
-                                    "completed_harvest_worker_count": int(
-                                        shard_worker_summary.get("completed_count") or 0
-                                    ),
-                                    "shard_count": int(shard_worker_summary.get("shard_count") or 0),
-                                    "stop_reason": "queued_background_harvest_shards",
-                                    "harvest_workers": list(shard_worker_summary.get("queued_summaries") or []),
-                                    "completed_harvest_workers": list(
-                                        shard_worker_summary.get("completed_summaries") or []
-                                    ),
-                                },
+                                payload=payload,
+                                state_updates=state_updates,
                             )
+                    _start_parallel_former_search_seed_if_needed()
                     snapshot = self._fetch_segmented_harvest_company_roster(
                         identity=identity,
                         snapshot_dir=snapshot_dir,
@@ -411,18 +496,36 @@ class AcquisitionEngine:
                     )
                     if str(harvest_worker.get("worker_status") or "") == "queued":
                         summary = dict(harvest_worker.get("summary") or {})
+                        (
+                            former_search_seed_snapshot,
+                            former_search_detail,
+                            former_search_error,
+                            former_search_status,
+                        ) = _kickoff_former_search_seed_for_background_roster()
+                        payload: dict[str, Any] = {
+                            "queued_harvest_worker_count": 1,
+                            "stop_reason": "queued_background_harvest",
+                            "harvest_worker": summary,
+                            "former_search_seed_status": former_search_status,
+                        }
+                        if former_search_detail:
+                            payload["former_search_seed_detail"] = former_search_detail
+                        if former_search_error:
+                            payload["former_search_seed_error"] = former_search_error
+                        state_updates: dict[str, Any] = {}
+                        if isinstance(former_search_seed_snapshot, SearchSeedSnapshot):
+                            payload["former_search_seed_snapshot"] = former_search_seed_snapshot.to_record()
+                            payload["former_search_seed_entry_count"] = len(former_search_seed_snapshot.entries)
+                            state_updates["search_seed_snapshot"] = former_search_seed_snapshot
                         return AcquisitionExecution(
                             task_id=task.task_id,
                             status="blocked",
                             detail=(
                                 "Roster acquisition queued a background Harvest company-employees run; "
-                                "resume after worker recovery completes remote dataset fetch."
+                                "former seed discovery started in parallel. Resume after worker recovery completes remote dataset fetch."
                             ),
-                            payload={
-                                "queued_harvest_worker_count": 1,
-                                "stop_reason": "queued_background_harvest",
-                                "harvest_worker": summary,
-                            },
+                            payload=payload,
+                            state_updates=state_updates,
                         )
                     snapshot = self.harvest_company_connector.fetch_company_roster(
                         identity,
@@ -433,6 +536,7 @@ class AcquisitionEngine:
                         allow_shared_provider_cache=allow_shared_provider_cache,
                     )
                 else:
+                    _start_parallel_former_search_seed_if_needed()
                     snapshot = self.harvest_company_connector.fetch_company_roster(
                         identity,
                         snapshot_dir,
@@ -442,6 +546,7 @@ class AcquisitionEngine:
                         allow_shared_provider_cache=allow_shared_provider_cache,
                     )
             else:
+                _start_parallel_former_search_seed_if_needed()
                 snapshot = self.roster_connector.fetch_company_roster(
                     identity,
                     snapshot_dir,
@@ -450,6 +555,7 @@ class AcquisitionEngine:
                     page_limit=page_limit,
                 )
         except Exception as exc:
+            _shutdown_parallel_former(wait=False)
             cached_snapshot = self._load_cached_roster_snapshot(identity, exclude_snapshot_dir=snapshot_dir) if allow_cached_roster_fallback else None
             if cached_snapshot is not None:
                 self._write_latest_snapshot_pointer(identity, cached_snapshot.snapshot_id, cached_snapshot.snapshot_dir)
@@ -479,6 +585,7 @@ class AcquisitionEngine:
             )
 
         if not snapshot.visible_entries:
+            _shutdown_parallel_former(wait=False)
             cached_snapshot = self._load_cached_roster_snapshot(identity, exclude_snapshot_dir=snapshot_dir) if allow_cached_roster_fallback else None
             if cached_snapshot is not None:
                 self._write_latest_snapshot_pointer(identity, cached_snapshot.snapshot_id, cached_snapshot.snapshot_dir)
@@ -513,23 +620,39 @@ class AcquisitionEngine:
         former_search_seed_snapshot = None
         former_search_detail = ""
         former_search_error = ""
-        explicitly_requested_former_seed = "run_former_search_seed" in dict(job_request.execution_preferences or {})
-        if self._should_run_default_former_search_seed(task, job_request):
-            former_execution = self._acquire_default_former_search_seed(task, state, job_request, identity)
+        if should_run_former_search_seed:
+            if former_parallel_future is not None:
+                try:
+                    former_execution = former_parallel_future.result()
+                finally:
+                    _shutdown_parallel_former(wait=False)
+            else:
+                former_execution = self._acquire_default_former_search_seed(task, state, job_request, identity)
             former_search_seed_snapshot = former_execution.state_updates.get("search_seed_snapshot")
             former_search_detail = former_execution.detail
             if former_execution.status == "blocked":
                 former_search_error = former_execution.detail
-                if explicitly_requested_former_seed:
+                former_payload = dict(former_execution.payload or {})
+                former_stop_reason = str(former_payload.get("stop_reason") or "").strip()
+                former_queued_query_count = int(former_payload.get("queued_query_count") or 0)
+                should_wait_for_former_background = former_stop_reason == "queued_background_search" or former_queued_query_count > 0
+                if explicitly_requested_former_seed or should_wait_for_former_background:
+                    waiting_reason = (
+                        "Former search queued background tasks and will auto-resume to run incremental enrichment on newly discovered URLs."
+                        if should_wait_for_former_background and not explicitly_requested_former_seed
+                        else former_execution.detail
+                    )
                     return AcquisitionExecution(
                         task_id=task.task_id,
                         status="blocked",
-                        detail=former_execution.detail,
+                        detail=waiting_reason,
                         payload={
                             **snapshot.to_record(),
                             "acquisition_mode": acquisition_mode,
                             "former_search_seed_status": "blocked",
                             "former_search_seed_detail": former_search_detail,
+                            "former_search_seed_stop_reason": former_stop_reason,
+                            "former_search_seed_queued_query_count": former_queued_query_count,
                         },
                         state_updates={
                             "roster_snapshot": snapshot,
@@ -565,6 +688,7 @@ class AcquisitionEngine:
         if former_search_detail:
             payload["former_search_seed_detail"] = former_search_detail
 
+        _shutdown_parallel_former(wait=False)
         return AcquisitionExecution(
             task_id=task.task_id,
             status="completed",
@@ -617,7 +741,7 @@ class AcquisitionEngine:
             employment_status=employment_status,
             worker_runtime=self.worker_runtime,
             job_id=str(state.get("job_id") or ""),
-            request_payload=job_request.to_record(),
+            request_payload=_effective_request_payload(job_request),
             plan_payload=dict(state.get("plan_payload") or {}),
             runtime_mode=str(state.get("runtime_mode") or "workflow"),
         )
@@ -625,6 +749,24 @@ class AcquisitionEngine:
             [item for item in list(snapshot.query_summaries or []) if str(item.get("status") or "") == "queued"]
         )
         if snapshot.stop_reason == "queued_background_search" or queued_query_count > 0:
+            payload = {
+                **snapshot.to_record(),
+                "strategy_type": task.metadata.get("strategy_type", ""),
+                "cost_policy": cost_policy,
+                "queued_query_count": queued_query_count,
+            }
+            if snapshot.entries:
+                return AcquisitionExecution(
+                    task_id=task.task_id,
+                    status="completed",
+                    detail=(
+                        f"Recovered {len(snapshot.entries)} search-seed candidates while "
+                        f"{queued_query_count} background web searches continue; downstream enrichment can proceed "
+                        "and completed workers will reconcile later."
+                    ),
+                    payload=payload,
+                    state_updates={"search_seed_snapshot": snapshot},
+                )
             return AcquisitionExecution(
                 task_id=task.task_id,
                 status="blocked",
@@ -632,12 +774,7 @@ class AcquisitionEngine:
                     f"Search-seed acquisition queued {queued_query_count} background web searches; "
                     "resume the worker daemon to finish remote task_get before fallback or downstream enrichment."
                 ),
-                payload={
-                    **snapshot.to_record(),
-                    "strategy_type": task.metadata.get("strategy_type", ""),
-                    "cost_policy": cost_policy,
-                    "queued_query_count": queued_query_count,
-                },
+                payload=payload,
                 state_updates={"search_seed_snapshot": snapshot},
             )
         if not snapshot.entries:
@@ -664,12 +801,67 @@ class AcquisitionEngine:
             state_updates={"search_seed_snapshot": snapshot},
         )
 
+    def _acquire_former_search_seed(
+        self,
+        task: AcquisitionTask,
+        state: dict[str, Any],
+        job_request: JobRequest,
+    ) -> AcquisitionExecution:
+        identity = state.get("company_identity")
+        snapshot_dir = state.get("snapshot_dir")
+        if not isinstance(identity, CompanyIdentity) or not isinstance(snapshot_dir, Path):
+            return AcquisitionExecution(
+                task_id=task.task_id,
+                status="blocked",
+                detail="Company identity must be resolved before former-member LinkedIn search can run.",
+                payload={},
+            )
+        filter_hints = _build_former_filter_hints(
+            identity=identity,
+            base_filter_hints=dict(task.metadata.get("filter_hints") or {}),
+        )
+        cost_policy = _effective_cost_policy(task.metadata.get("cost_policy"), job_request)
+        former_cost_policy = {
+            **cost_policy,
+            "provider_people_search_mode": "primary_only",
+            "provider_people_search_min_expected_results": int(
+                task.metadata.get("former_provider_people_search_min_expected_results") or 50
+            ),
+        }
+        explicit_task = AcquisitionTask(
+            task_id=task.task_id,
+            task_type="acquire_search_seed_pool",
+            title=task.title,
+            description=task.description,
+            source_hint=task.source_hint,
+            status="ready",
+            blocking=task.blocking,
+            metadata={
+                **dict(task.metadata or {}),
+                "strategy_type": "former_employee_search",
+                "employment_statuses": ["former"],
+                "search_channel_order": ["harvest_profile_search"],
+                "search_query_bundles": [],
+                "filter_hints": filter_hints,
+                "cost_policy": former_cost_policy,
+            },
+        )
+        return self._acquire_search_seed_pool(explicit_task, state, job_request)
+
     def _enrich_profiles(self, task: AcquisitionTask, state: dict[str, Any], job_request: JobRequest) -> AcquisitionExecution:
         snapshot = state.get("roster_snapshot")
         search_seed_snapshot = state.get("search_seed_snapshot")
         snapshot_dir = state.get("snapshot_dir")
         strategy_type = str(task.metadata.get("strategy_type") or "")
         cost_policy = _effective_cost_policy(task.metadata.get("cost_policy"), job_request)
+        enrichment_scope = str(task.metadata.get("enrichment_scope") or "").strip().lower()
+        if not enrichment_scope:
+            if task.task_type == "enrich_linkedin_profiles":
+                enrichment_scope = "linkedin_stage_1"
+            elif task.task_type == "enrich_public_web_signals":
+                enrichment_scope = "public_web_stage_2"
+            else:
+                enrichment_scope = "full"
         if not isinstance(snapshot_dir, Path):
             return AcquisitionExecution(
                 task_id=task.task_id,
@@ -677,12 +869,75 @@ class AcquisitionEngine:
                 detail="Snapshot directory must exist before profile enrichment.",
                 payload={},
             )
+        effective_request_payload = _effective_request_payload(job_request)
+        effective_target_company = str(effective_request_payload.get("target_company") or job_request.target_company or "").strip()
+
+        def _stage_request() -> JobRequest:
+            base_payload = dict(effective_request_payload)
+            if enrichment_scope == "linkedin_stage_1":
+                base_payload.update(
+                    {
+                        "slug_resolution_limit": int(task.metadata.get("slug_resolution_limit", job_request.slug_resolution_limit) or 0),
+                        "profile_detail_limit": int(task.metadata.get("profile_detail_limit", job_request.profile_detail_limit) or 0),
+                        "publication_scan_limit": 0,
+                        "publication_lead_limit": 0,
+                        "exploration_limit": 0,
+                        "scholar_coauthor_follow_up_limit": 0,
+                    }
+                )
+                return JobRequest.from_payload(base_payload)
+            if enrichment_scope == "public_web_stage_2":
+                base_payload.update(
+                    {
+                        "slug_resolution_limit": 0,
+                        "profile_detail_limit": 0,
+                        "publication_scan_limit": int(task.metadata.get("publication_scan_limit", job_request.publication_scan_limit) or 0),
+                        "publication_lead_limit": int(task.metadata.get("publication_lead_limit", job_request.publication_lead_limit) or 0),
+                        "exploration_limit": int(task.metadata.get("exploration_limit", job_request.exploration_limit) or 0),
+                        "scholar_coauthor_follow_up_limit": int(
+                            task.metadata.get("scholar_coauthor_follow_up_limit", job_request.scholar_coauthor_follow_up_limit) or 0
+                        ),
+                    }
+                )
+                return JobRequest.from_payload(base_payload)
+            base_payload.update(
+                {
+                    "slug_resolution_limit": int(task.metadata.get("slug_resolution_limit", job_request.slug_resolution_limit) or 0),
+                    "profile_detail_limit": int(task.metadata.get("profile_detail_limit", job_request.profile_detail_limit) or 0),
+                    "publication_scan_limit": int(task.metadata.get("publication_scan_limit", job_request.publication_scan_limit) or 0),
+                    "publication_lead_limit": int(task.metadata.get("publication_lead_limit", job_request.publication_lead_limit) or 0),
+                    "exploration_limit": int(task.metadata.get("exploration_limit", job_request.exploration_limit) or 0),
+                    "scholar_coauthor_follow_up_limit": int(
+                        task.metadata.get("scholar_coauthor_follow_up_limit", job_request.scholar_coauthor_follow_up_limit) or 0
+                    ),
+                }
+            )
+            return JobRequest.from_payload(base_payload)
 
         canonicalization_summary: dict[str, Any] = {}
         source_snapshots: dict[str, Any] = {}
-        if isinstance(snapshot, CompanyRosterSnapshot) or isinstance(search_seed_snapshot, SearchSeedSnapshot):
-            candidates = []
-            evidence = []
+        candidates: list[Candidate] = []
+        evidence: list[EvidenceRecord] = []
+        reuse_existing_stage_candidates = (
+            enrichment_scope == "public_web_stage_2"
+            and (
+                list(state.get("candidates") or [])
+                or isinstance(state.get("candidate_doc_path"), Path)
+            )
+        )
+        if strategy_type == "investor_firm_roster" and state.get("candidates"):
+            candidates = list(state.get("candidates") or [])
+            evidence = list(state.get("evidence") or [])
+        elif reuse_existing_stage_candidates:
+            candidates = list(state.get("candidates") or [])
+            evidence = list(state.get("evidence") or [])
+            candidate_doc_path = state.get("candidate_doc_path")
+            if isinstance(candidate_doc_path, Path):
+                source_snapshots["candidate_documents"] = {
+                    "candidate_doc_path": str(candidate_doc_path),
+                    "enrichment_scope": "linkedin_stage_1",
+                }
+        elif isinstance(snapshot, CompanyRosterSnapshot) or isinstance(search_seed_snapshot, SearchSeedSnapshot):
             if isinstance(snapshot, CompanyRosterSnapshot):
                 roster_candidates, roster_evidence = build_candidates_from_roster(snapshot)
                 candidates.extend(roster_candidates)
@@ -695,9 +950,6 @@ class AcquisitionEngine:
                 source_snapshots["search_seed_snapshot"] = search_seed_snapshot.to_record()
             if len(candidates) > 1:
                 candidates, evidence, canonicalization_summary = canonicalize_company_records(candidates, evidence)
-        elif strategy_type == "investor_firm_roster" and state.get("candidates"):
-            candidates = list(state.get("candidates") or [])
-            evidence = list(state.get("evidence") or [])
         else:
             return AcquisitionExecution(
                 task_id=task.task_id,
@@ -710,20 +962,16 @@ class AcquisitionEngine:
                 task_id=task.task_id,
                 status="blocked",
                 detail="Acquisition returned no candidates that could be normalized into candidate documents.",
-                payload=(
-                    source_snapshots
-                    if source_snapshots
-                    else {"strategy_type": strategy_type}
-                ),
+                payload=source_snapshots if source_snapshots else {"strategy_type": strategy_type, "enrichment_scope": enrichment_scope},
             )
 
+        logger = AssetLogger(snapshot_dir)
         if strategy_type == "investor_firm_roster":
-            logger = AssetLogger(snapshot_dir)
             candidate_doc_path = snapshot_dir / "candidate_documents.json"
             logger.write_json(
                 candidate_doc_path,
                 {
-                    "target_company": job_request.target_company,
+                    "target_company": effective_target_company,
                     "strategy_type": strategy_type,
                     "candidate_count": len(candidates),
                     "evidence_count": len(evidence),
@@ -740,9 +988,7 @@ class AcquisitionEngine:
             return AcquisitionExecution(
                 task_id=task.task_id,
                 status="completed",
-                detail=(
-                    f"Prepared {len(candidates)} investor-firm candidate documents from tiered firm roster assets."
-                ),
+                detail=f"Prepared {len(candidates)} investor-firm candidate documents from tiered firm roster assets.",
                 payload={
                     "candidate_count": len(candidates),
                     "evidence_count": len(evidence),
@@ -756,22 +1002,25 @@ class AcquisitionEngine:
                 },
             )
 
-        enrichment_request = JobRequest(
-            raw_user_request=job_request.raw_user_request,
-            query=job_request.query,
-            target_company=job_request.target_company,
-            slug_resolution_limit=int(task.metadata.get("slug_resolution_limit", job_request.slug_resolution_limit) or 0),
-            profile_detail_limit=int(task.metadata.get("profile_detail_limit", job_request.profile_detail_limit) or 0),
-            publication_scan_limit=int(task.metadata.get("publication_scan_limit", job_request.publication_scan_limit) or 0),
-            publication_lead_limit=int(task.metadata.get("publication_lead_limit", job_request.publication_lead_limit) or 0),
-            exploration_limit=int(task.metadata.get("exploration_limit", job_request.exploration_limit) or 0),
-            scholar_coauthor_follow_up_limit=int(
-                task.metadata.get("scholar_coauthor_follow_up_limit", job_request.scholar_coauthor_follow_up_limit) or 0
-            ),
+        enrichment_request = _stage_request()
+        downstream_request_payload = dict(effective_request_payload)
+        enrichment_identity = (
+            snapshot.company_identity
+            if isinstance(snapshot, CompanyRosterSnapshot)
+            else (
+                search_seed_snapshot.company_identity
+                if isinstance(search_seed_snapshot, SearchSeedSnapshot)
+                else state.get("company_identity")
+            )
         )
-        enrichment_identity = snapshot.company_identity if isinstance(snapshot, CompanyRosterSnapshot) else search_seed_snapshot.company_identity
-        logger = AssetLogger(snapshot_dir)
-        full_roster_profile_prefetch = bool(task.metadata.get("full_roster_profile_prefetch"))
+        if not isinstance(enrichment_identity, CompanyIdentity):
+            return AcquisitionExecution(
+                task_id=task.task_id,
+                status="blocked",
+                detail="Company identity must be available before enrichment can continue.",
+                payload={"enrichment_scope": enrichment_scope},
+            )
+        full_roster_profile_prefetch = bool(task.metadata.get("full_roster_profile_prefetch")) and enrichment_scope != "public_web_stage_2"
         enrichment = self.multi_source_enricher.enrich(
             enrichment_identity,
             snapshot_dir,
@@ -779,68 +1028,186 @@ class AcquisitionEngine:
             enrichment_request,
             asset_logger=logger,
             job_id=str(state.get("job_id") or ""),
-            request_payload=job_request.to_record(),
+            request_payload=downstream_request_payload,
             plan_payload=dict(state.get("plan_payload") or {}),
             runtime_mode=str(state.get("runtime_mode") or "workflow"),
             parallel_exploration_workers=int(cost_policy.get("parallel_exploration_workers", 2) or 2),
             cost_policy=cost_policy,
             full_roster_profile_prefetch=full_roster_profile_prefetch,
+            enrichment_scope=enrichment_scope,
         )
+
+        stage_source_kind = (
+            "linkedin_profile_enrichment"
+            if enrichment_scope == "linkedin_stage_1"
+            else (
+                "public_web_enrichment"
+                if enrichment_scope == "public_web_stage_2"
+                else "multisource_enrichment"
+            )
+        )
+        stage_mode = (
+            "linkedin_stage_1"
+            if enrichment_scope == "linkedin_stage_1"
+            else (
+                "linkedin_plus_public_web"
+                if enrichment_scope == "public_web_stage_2"
+                else "roster_plus_multisource"
+            )
+        )
+        stage_archive_path = (
+            snapshot_dir / "candidate_documents.linkedin_stage_1.json"
+            if enrichment_scope == "linkedin_stage_1"
+            else (
+                snapshot_dir / "candidate_documents.public_web_stage_2.json"
+                if enrichment_scope == "public_web_stage_2"
+                else None
+            )
+        )
+        candidate_doc_path = snapshot_dir / "candidate_documents.json"
+
+        def _write_candidate_documents(
+            *,
+            stage_candidates: list[Candidate],
+            stage_evidence: list[EvidenceRecord],
+            stage_enrichment: Any,
+            write_stage_archive: bool = True,
+        ) -> None:
+            payload = {
+                "snapshot": source_snapshots.get("roster_snapshot") or source_snapshots.get("search_seed_snapshot") or {},
+                "acquisition_sources": source_snapshots,
+                "candidates": [candidate.to_record() for candidate in stage_candidates],
+                "evidence": [item.to_record() for item in stage_evidence],
+                "candidate_count": len(stage_candidates),
+                "evidence_count": len(stage_evidence),
+                "enrichment_mode": stage_mode,
+                "enrichment_scope": enrichment_scope,
+                "acquisition_canonicalization": canonicalization_summary,
+                "enrichment_summary": stage_enrichment.to_record(),
+                "acquisition_stage": {
+                    "phase": str(task.metadata.get("acquisition_phase") or ""),
+                    "phase_title": str(task.metadata.get("acquisition_phase_title") or ""),
+                    "task_id": task.task_id,
+                    "task_type": task.task_type,
+                },
+            }
+            if int(getattr(stage_enrichment, "queued_harvest_worker_count", 0) or 0) > 0:
+                payload["background_reconcile"] = {
+                    "kind": "harvest_profile_prefetch",
+                    "queued_harvest_worker_count": int(getattr(stage_enrichment, "queued_harvest_worker_count", 0) or 0),
+                    "stop_reason": str(getattr(stage_enrichment, "stop_reason", "") or ""),
+                }
+            elif int(getattr(stage_enrichment, "queued_exploration_count", 0) or 0) > 0:
+                payload["background_reconcile"] = {
+                    "kind": "public_web_exploration",
+                    "queued_exploration_count": int(getattr(stage_enrichment, "queued_exploration_count", 0) or 0),
+                    "stop_reason": str(getattr(stage_enrichment, "stop_reason", "") or ""),
+                }
+            if enrichment_scope == "linkedin_stage_1":
+                payload["next_connectors"] = {
+                    "profile_detail_accounts": [account.account_id for account in profile_detail_accounts(self.accounts)],
+                    "note": "LinkedIn stage-1 baseline is ready and can power deterministic layering or retrieval preview.",
+                }
+            elif enrichment_scope == "public_web_stage_2":
+                payload["next_connectors"] = {
+                    "note": "Public-web stage-2 enrichment extended the LinkedIn baseline with publications, coauthor, and exploration evidence.",
+                }
+            logger.write_json(
+                candidate_doc_path,
+                payload,
+                asset_type="candidate_documents",
+                source_kind=stage_source_kind,
+                is_raw_asset=False,
+                model_safe=True,
+            )
+            if write_stage_archive and isinstance(stage_archive_path, Path):
+                logger.write_json(
+                    stage_archive_path,
+                    payload,
+                    asset_type="candidate_documents",
+                    source_kind=stage_source_kind,
+                    is_raw_asset=False,
+                    model_safe=True,
+                )
+
+        state_updates: dict[str, Any] = {}
         if full_roster_profile_prefetch and int(getattr(enrichment, "queued_harvest_worker_count", 0) or 0) > 0:
+            candidates = enrichment.candidates
+            _write_candidate_documents(
+                stage_candidates=candidates,
+                stage_evidence=evidence,
+                stage_enrichment=enrichment,
+                write_stage_archive=False,
+            )
+            state_updates = {
+                "candidates": candidates,
+                "evidence": evidence,
+                "candidate_doc_path": candidate_doc_path,
+            }
             return AcquisitionExecution(
                 task_id=task.task_id,
                 status="blocked",
                 detail=(
-                    "Profile enrichment queued background Harvest profile prefetch work; "
-                    "resume after worker recovery completes remote dataset fetch."
+                    f"Built {len(candidates)} interim {str(task.metadata.get('acquisition_phase_title') or 'LinkedIn stage')} candidate documents while "
+                    f"{int(getattr(enrichment, 'queued_harvest_worker_count', 0) or 0)} background Harvest profile "
+                    "prefetch workers continue; Stage 1 will complete after background profile detail is reconciled."
                 ),
                 payload={
                     "candidate_count": len(candidates),
+                    "evidence_count": len(evidence),
+                    "candidate_doc_path": str(candidate_doc_path),
+                    "stage_archive_path": "",
                     "artifact_paths": enrichment.artifact_paths,
                     "queued_harvest_worker_count": int(getattr(enrichment, "queued_harvest_worker_count", 0) or 0),
                     "stop_reason": str(getattr(enrichment, "stop_reason", "") or ""),
+                    "enrichment_mode": stage_mode,
+                    "enrichment_scope": enrichment_scope,
+                    "resolved_profile_count": len(enrichment.resolved_profiles),
+                    "publication_match_count": len(enrichment.publication_matches),
+                    "lead_candidate_count": len(enrichment.lead_candidates),
+                    "acquisition_canonicalization": canonicalization_summary,
                 },
+                state_updates=state_updates,
             )
+
         candidates = enrichment.candidates
         evidence.extend(enrichment.evidence)
+        _write_candidate_documents(stage_candidates=candidates, stage_evidence=evidence, stage_enrichment=enrichment)
+        state_updates = {
+            "candidates": candidates,
+            "evidence": evidence,
+            "candidate_doc_path": candidate_doc_path,
+        }
+        if enrichment_scope == "linkedin_stage_1":
+            state_updates["linkedin_stage_candidate_doc_path"] = stage_archive_path
+            state_updates["linkedin_stage_completed"] = True
+        elif enrichment_scope == "public_web_stage_2":
+            state_updates["public_web_stage_candidate_doc_path"] = stage_archive_path
+            state_updates["public_web_stage_completed"] = True
 
-        candidate_doc_path = snapshot_dir / "candidate_documents.json"
-        logger.write_json(
-            candidate_doc_path,
-            {
-                "snapshot": source_snapshots.get("roster_snapshot") or source_snapshots.get("search_seed_snapshot") or {},
-                "acquisition_sources": source_snapshots,
-                "candidates": [candidate.to_record() for candidate in candidates],
-                "evidence": [item.to_record() for item in evidence],
-                "enrichment_mode": "roster_plus_multisource",
-                "acquisition_canonicalization": canonicalization_summary,
-                "enrichment_summary": enrichment.to_record(),
-                "next_connectors": {
-                    "profile_detail_accounts": [account.account_id for account in profile_detail_accounts(self.accounts)],
-                    "note": (
-                        "Roster baseline is normalized. Remaining adapters should focus on broader company search, "
-                        "higher-recall slug discovery, and cloud persistence for high-value LinkedIn profile assets."
-                    ),
-                },
-            },
-            asset_type="candidate_documents",
-            source_kind="multisource_enrichment",
-            is_raw_asset=False,
-            model_safe=True,
+        detail_prefix = (
+            "Built LinkedIn stage-1 candidate documents."
+            if enrichment_scope == "linkedin_stage_1"
+            else (
+                "Extended candidate documents with public-web stage-2 evidence."
+                if enrichment_scope == "public_web_stage_2"
+                else "Built candidate documents from roster + multisource enrichment."
+            )
         )
-
         return AcquisitionExecution(
             task_id=task.task_id,
             status="completed",
             detail=(
-                f"Built {len(candidates)} candidate documents from roster + multisource enrichment. "
-                f"Resolved {len(enrichment.resolved_profiles)} profile details and matched {len(enrichment.publication_matches)} publications."
+                f"{detail_prefix} Resolved {len(enrichment.resolved_profiles)} profile details and "
+                f"matched {len(enrichment.publication_matches)} publications."
             ),
             payload={
                 "candidate_count": len(candidates),
                 "evidence_count": len(evidence),
                 "candidate_doc_path": str(candidate_doc_path),
-                "enrichment_mode": "roster_plus_multisource",
+                "stage_archive_path": str(stage_archive_path or ""),
+                "enrichment_mode": stage_mode,
+                "enrichment_scope": enrichment_scope,
                 "resolved_profile_count": len(enrichment.resolved_profiles),
                 "publication_match_count": len(enrichment.publication_matches),
                 "lead_candidate_count": len(enrichment.lead_candidates),
@@ -850,18 +1217,16 @@ class AcquisitionEngine:
                 "queued_exploration_count": int(getattr(enrichment, "queued_exploration_count", 0) or 0),
                 "stop_reason": str(getattr(enrichment, "stop_reason", "") or ""),
             },
-            state_updates={
-                "candidates": candidates,
-                "evidence": evidence,
-                "candidate_doc_path": candidate_doc_path,
-            },
+            state_updates=state_updates,
         )
 
     def _should_run_default_former_search_seed(self, task: AcquisitionTask, job_request: JobRequest) -> bool:
         if str(task.metadata.get("strategy_type") or "") != "full_company_roster":
             return False
-        if "run_former_search_seed" in dict(job_request.execution_preferences or {}):
-            return bool(job_request.execution_preferences.get("run_former_search_seed"))
+        intent_view = resolve_request_intent_view(job_request)
+        effective_execution_preferences = dict(intent_view.get("execution_preferences") or {})
+        if "run_former_search_seed" in effective_execution_preferences:
+            return bool(effective_execution_preferences.get("run_former_search_seed"))
         if not bool(task.metadata.get("include_former_search_seed")):
             return False
         cost_policy = _effective_cost_policy(task.metadata.get("cost_policy"), job_request)
@@ -888,6 +1253,14 @@ class AcquisitionEngine:
                 task.metadata.get("former_provider_people_search_min_expected_results") or 50
             ),
         }
+        former_search_seed_queries: list[str] = []
+        if bool(former_cost_policy.get("large_org_keyword_probe_mode")):
+            former_search_seed_queries = [
+                str(item).strip()
+                for item in list(task.metadata.get("search_seed_queries") or [])
+                if str(item).strip()
+            ]
+            former_search_seed_queries = list(dict.fromkeys(former_search_seed_queries))
         former_task = AcquisitionTask(
             task_id=f"{task.task_id}-former-search-seed",
             task_type="acquire_search_seed_pool",
@@ -899,7 +1272,7 @@ class AcquisitionEngine:
             metadata={
                 "strategy_type": "former_employee_search",
                 "employment_statuses": ["former"],
-                "search_seed_queries": [],
+                "search_seed_queries": former_search_seed_queries,
                 "search_query_bundles": [],
                 "filter_hints": filter_hints,
                 "cost_policy": former_cost_policy,
@@ -1004,11 +1377,12 @@ class AcquisitionEngine:
         if self.worker_runtime is None or not job_id:
             return {"worker_status": "skipped"}
 
+        effective_request_payload = build_effective_request_payload(request_payload)
         normalized_company_filters = dict(company_filters or {})
         effective_root_snapshot_dir = Path(root_snapshot_dir) if root_snapshot_dir is not None else snapshot_dir
         worker_handle = self.worker_runtime.begin_worker(
             job_id=job_id,
-            request=JobRequest.from_payload(request_payload),
+            request=JobRequest.from_payload(effective_request_payload),
             plan_payload=plan_payload,
             runtime_mode=runtime_mode,
             lane_id="acquisition_specialist",
@@ -1030,7 +1404,7 @@ class AcquisitionEngine:
                 "company_filters": normalized_company_filters,
                 "worker_key_suffix": str(worker_key_suffix or ""),
                 "span_name_suffix": str(span_name_suffix or ""),
-                "request_payload": request_payload,
+                "request_payload": effective_request_payload,
                 "plan_payload": plan_payload,
                 "runtime_mode": runtime_mode,
                 "allow_shared_provider_cache": allow_shared_provider_cache,
@@ -1147,39 +1521,79 @@ class AcquisitionEngine:
         shard_root = snapshot_dir / "harvest_company_employees" / "shards"
         shard_root.mkdir(parents=True, exist_ok=True)
 
-        queued_summaries: list[dict[str, Any]] = []
-        completed_summaries: list[dict[str, Any]] = []
-        for shard in shards:
+        shard_specs: list[dict[str, Any]] = []
+        for index, shard in enumerate(shards, start=1):
             shard_id = _normalize_shard_id(str(shard.get("shard_id") or "shard"))
             shard_title = str(shard.get("title") or "").strip()
             shard_snapshot_dir = shard_root / shard_id
             shard_snapshot_dir.mkdir(parents=True, exist_ok=True)
+            shard_specs.append(
+                {
+                    "index": index,
+                    "shard": dict(shard),
+                    "shard_id": shard_id,
+                    "shard_title": shard_title,
+                    "shard_snapshot_dir": shard_snapshot_dir,
+                }
+            )
+
+        def _run_shard(spec: dict[str, Any]) -> dict[str, Any]:
+            shard_payload = dict(spec.get("shard") or {})
             worker_result = self._execute_harvest_company_roster_worker(
                 identity=identity,
-                snapshot_dir=shard_snapshot_dir,
-                max_pages=int(shard.get("max_pages") or 1),
-                page_limit=int(shard.get("page_limit") or 25),
+                snapshot_dir=Path(spec["shard_snapshot_dir"]),
+                max_pages=int(shard_payload.get("max_pages") or 1),
+                page_limit=int(shard_payload.get("page_limit") or 25),
                 job_id=job_id,
                 request_payload=request_payload,
                 plan_payload=plan_payload,
                 runtime_mode=runtime_mode,
                 allow_shared_provider_cache=allow_shared_provider_cache,
-                company_filters=dict(shard.get("company_filters") or {}),
-                worker_key_suffix=f"::{shard_id}",
-                span_name_suffix=f":{shard_id}",
+                company_filters=dict(shard_payload.get("company_filters") or {}),
+                worker_key_suffix=f"::{spec['shard_id']}",
+                span_name_suffix=f":{spec['shard_id']}",
                 root_snapshot_dir=snapshot_dir,
             )
             summary = {
                 **dict(worker_result.get("summary") or {}),
-                "shard_id": shard_id,
-                "title": shard_title,
-                "strategy_id": str(shard.get("strategy_id") or "").strip(),
-                "scope_note": str(shard.get("scope_note") or "").strip(),
-                "company_filters": dict(shard.get("company_filters") or {}),
-                "snapshot_dir": str(shard_snapshot_dir),
+                "shard_id": spec["shard_id"],
+                "title": spec["shard_title"],
+                "strategy_id": str(shard_payload.get("strategy_id") or "").strip(),
+                "scope_note": str(shard_payload.get("scope_note") or "").strip(),
+                "company_filters": dict(shard_payload.get("company_filters") or {}),
+                "snapshot_dir": str(spec["shard_snapshot_dir"]),
                 "root_snapshot_dir": str(snapshot_dir),
             }
-            if str(worker_result.get("worker_status") or "") == "queued":
+            return {
+                "index": int(spec.get("index") or 0),
+                "worker_status": str(worker_result.get("worker_status") or ""),
+                "summary": summary,
+            }
+
+        shard_results_by_index: dict[int, dict[str, Any]] = {}
+        if shard_specs:
+            parallel_workers = max(1, min(len(shard_specs), 8))
+            if parallel_workers == 1:
+                for spec in shard_specs:
+                    result = _run_shard(spec)
+                    shard_results_by_index[int(result.get("index") or 0)] = result
+            else:
+                with ThreadPoolExecutor(max_workers=parallel_workers) as executor:
+                    future_map = {
+                        executor.submit(_run_shard, spec): int(spec.get("index") or 0)
+                        for spec in shard_specs
+                    }
+                    for future in as_completed(future_map):
+                        result = dict(future.result() or {})
+                        index = int(result.get("index") or future_map.get(future) or 0)
+                        shard_results_by_index[index] = result
+
+        queued_summaries: list[dict[str, Any]] = []
+        completed_summaries: list[dict[str, Any]] = []
+        for spec in sorted(shard_specs, key=lambda item: int(item.get("index") or 0)):
+            result = dict(shard_results_by_index.get(int(spec.get("index") or 0)) or {})
+            summary = dict(result.get("summary") or {})
+            if str(result.get("worker_status") or "") == "queued":
                 queued_summaries.append(summary)
             else:
                 completed_summaries.append(summary)
@@ -1212,19 +1626,61 @@ class AcquisitionEngine:
         errors: list[str] = []
         seen_keys: set[str] = set()
 
-        for shard in shards:
+        shard_specs: list[dict[str, Any]] = []
+        for index, shard in enumerate(shards, start=1):
             shard_id = str(shard.get("shard_id") or "shard").strip() or "shard"
             shard_snapshot_dir = shard_root / shard_id
             shard_snapshot_dir.mkdir(parents=True, exist_ok=True)
+            shard_specs.append(
+                {
+                    "index": index,
+                    "shard": dict(shard),
+                    "shard_id": shard_id,
+                    "shard_snapshot_dir": shard_snapshot_dir,
+                }
+            )
+
+        def _fetch_shard(spec: dict[str, Any]) -> dict[str, Any]:
+            shard = dict(spec.get("shard") or {})
             shard_snapshot = self.harvest_company_connector.fetch_company_roster(
                 identity,
-                shard_snapshot_dir,
-                asset_logger=logger,
+                Path(spec["shard_snapshot_dir"]),
                 max_pages=int(shard.get("max_pages") or 1),
                 page_limit=int(shard.get("page_limit") or 25),
                 company_filters=dict(shard.get("company_filters") or {}),
                 allow_shared_provider_cache=allow_shared_provider_cache,
             )
+            return {
+                "index": int(spec.get("index") or 0),
+                "shard": shard,
+                "shard_id": str(spec.get("shard_id") or ""),
+                "snapshot": shard_snapshot,
+            }
+
+        fetched_shards_by_index: dict[int, dict[str, Any]] = {}
+        if shard_specs:
+            parallel_workers = max(1, min(len(shard_specs), 8))
+            if parallel_workers == 1:
+                for spec in shard_specs:
+                    result = _fetch_shard(spec)
+                    fetched_shards_by_index[int(result.get("index") or 0)] = result
+            else:
+                with ThreadPoolExecutor(max_workers=parallel_workers) as executor:
+                    future_map = {
+                        executor.submit(_fetch_shard, spec): int(spec.get("index") or 0)
+                        for spec in shard_specs
+                    }
+                    for future in as_completed(future_map):
+                        result = dict(future.result() or {})
+                        index = int(result.get("index") or future_map.get(future) or 0)
+                        fetched_shards_by_index[index] = result
+
+        for spec in sorted(shard_specs, key=lambda item: int(item.get("index") or 0)):
+            shard = dict(spec.get("shard") or {})
+            shard_id = str(spec.get("shard_id") or "shard").strip() or "shard"
+            shard_snapshot = dict(fetched_shards_by_index.get(int(spec.get("index") or 0)) or {}).get("snapshot")
+            if not isinstance(shard_snapshot, CompanyRosterSnapshot):
+                continue
             unique_count = 0
             duplicate_count = 0
             for entry in shard_snapshot.raw_entries:
@@ -1467,6 +1923,7 @@ class AcquisitionEngine:
                     snapshot_dir,
                     candidates,
                     evidence,
+                    job_request=job_request,
                 )
             else:
                 inheritance_summary = _profile_inheritance_summary()
@@ -1777,6 +2234,8 @@ def _inherit_historical_profile_captures(
     snapshot_dir: Path,
     candidates: list[Candidate],
     evidence: list[EvidenceRecord],
+    *,
+    job_request: JobRequest | None = None,
 ) -> tuple[list[Candidate], list[EvidenceRecord], dict[str, Any]]:
     company_dir = snapshot_dir.parent
     historical_sources: list[dict[str, Any]] = []
@@ -1824,6 +2283,42 @@ def _inherit_historical_profile_captures(
 
     if not historical_sources:
         return list(candidates), list(evidence), _profile_inheritance_summary()
+
+    baseline_source, baseline_summary = _select_full_roster_baseline_source(
+        historical_sources=historical_sources,
+        current_candidates=candidates,
+        job_request=job_request,
+    )
+    if baseline_source is not None:
+        baseline_candidates = list(baseline_source.get("candidates") or [])
+        baseline_evidence = list(baseline_source.get("evidence") or [])
+        merged_evidence_by_key: dict[tuple[str, str, str, str], EvidenceRecord] = {
+            _evidence_dedupe_key(item): item for item in [*baseline_evidence, *evidence]
+        }
+        summary = _profile_inheritance_summary(
+            history_source_count=len(historical_sources),
+            history_candidate_count=sum(int(item.get("candidate_count") or 0) for item in historical_sources),
+            matched_candidate_count=_count_historical_candidate_matches(candidates, baseline_candidates),
+            inherited_candidate_count=0,
+            inherited_evidence_count=max(len(merged_evidence_by_key) - len(evidence), 0),
+            inherited_membership_review_count=0,
+            carried_forward_candidate_count=len(baseline_candidates),
+            history_sources=[
+                {
+                    "snapshot_id": str(item.get("snapshot_id") or ""),
+                    "source_type": str(item.get("source_type") or ""),
+                    "candidate_count": int(item.get("candidate_count") or 0),
+                    "evidence_count": int(item.get("evidence_count") or 0),
+                }
+                for item in historical_sources
+            ],
+        )
+        summary.update(baseline_summary)
+        merged_evidence = sorted(
+            merged_evidence_by_key.values(),
+            key=lambda item: (item.candidate_id, item.source_type, item.title, item.url or item.source_path),
+        )
+        return list(baseline_candidates) + list(candidates), merged_evidence, summary
 
     match_index: dict[str, list[int]] = {}
     historical_candidates: list[Candidate] = []
@@ -1965,6 +2460,127 @@ def _profile_inheritance_summary(
         "carried_forward_candidate_count": carried_forward_candidate_count,
         "history_sources": list(history_sources or []),
     }
+
+
+def _select_full_roster_baseline_source(
+    *,
+    historical_sources: list[dict[str, Any]],
+    current_candidates: list[Candidate],
+    job_request: JobRequest | None,
+) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    if job_request is None:
+        return None, {"baseline_snapshot_reused": False, "baseline_reason": "job_request_missing"}
+    if str(job_request.target_scope or "").strip().lower() != "full_company_asset":
+        return None, {"baseline_snapshot_reused": False, "baseline_reason": "target_scope_not_full_company_asset"}
+    intent_view = resolve_request_intent_view(job_request)
+    if bool(dict(intent_view.get("execution_preferences") or {}).get("force_fresh_run")):
+        return None, {"baseline_snapshot_reused": False, "baseline_reason": "force_fresh_run"}
+
+    current_candidate_count = len(current_candidates)
+    if current_candidate_count >= _FULL_ROSTER_BASELINE_REUSE_MIN_CANDIDATES:
+        return None, {
+            "baseline_snapshot_reused": False,
+            "baseline_reason": "current_snapshot_already_large_enough",
+            "current_candidate_count": current_candidate_count,
+        }
+
+    sqlite_source = next(
+        (item for item in historical_sources if str(item.get("snapshot_id") or "").strip() == "sqlite"),
+        None,
+    )
+    reference_candidate_count = int((sqlite_source or {}).get("candidate_count") or 0)
+    if reference_candidate_count < _FULL_ROSTER_BASELINE_REUSE_MIN_CANDIDATES:
+        reference_candidate_count = max(
+            (int(item.get("candidate_count") or 0) for item in historical_sources),
+            default=0,
+        )
+    if reference_candidate_count < _FULL_ROSTER_BASELINE_REUSE_MIN_CANDIDATES:
+        return None, {
+            "baseline_snapshot_reused": False,
+            "baseline_reason": "no_large_historical_baseline_available",
+            "current_candidate_count": current_candidate_count,
+        }
+
+    sparse_threshold = max(
+        _FULL_ROSTER_BASELINE_REUSE_MIN_CURRENT_COUNT,
+        max(
+            1,
+            int(reference_candidate_count * _FULL_ROSTER_BASELINE_REUSE_CURRENT_RATIO_THRESHOLD),
+        ),
+    )
+    if current_candidate_count >= sparse_threshold:
+        return None, {
+            "baseline_snapshot_reused": False,
+            "baseline_reason": "current_snapshot_not_sparse_enough",
+            "current_candidate_count": current_candidate_count,
+            "reference_candidate_count": reference_candidate_count,
+        }
+
+    max_distance = max(
+        _FULL_ROSTER_BASELINE_REUSE_REFERENCE_DISTANCE_FLOOR,
+        int(reference_candidate_count * _FULL_ROSTER_BASELINE_REUSE_REFERENCE_DISTANCE_RATIO),
+    )
+    reusable_sources: list[dict[str, Any]] = []
+    for source in historical_sources:
+        source_count = int(source.get("candidate_count") or 0)
+        if source_count < _FULL_ROSTER_BASELINE_REUSE_MIN_CANDIDATES:
+            continue
+        source_snapshot_id = str(source.get("snapshot_id") or "").strip()
+        if source_snapshot_id != "sqlite" and abs(source_count - reference_candidate_count) > max_distance:
+            continue
+        reusable_sources.append(source)
+
+    if not reusable_sources:
+        return None, {
+            "baseline_snapshot_reused": False,
+            "baseline_reason": "no_reusable_baseline_selected",
+            "current_candidate_count": current_candidate_count,
+            "reference_candidate_count": reference_candidate_count,
+        }
+
+    non_sqlite_sources = [
+        item for item in reusable_sources if str(item.get("snapshot_id") or "").strip() != "sqlite"
+    ]
+    candidate_sources = non_sqlite_sources or reusable_sources
+    minimum_distance = min(
+        abs(int(item.get("candidate_count") or 0) - reference_candidate_count)
+        for item in candidate_sources
+    )
+    tied_sources = [
+        item
+        for item in candidate_sources
+        if abs(int(item.get("candidate_count") or 0) - reference_candidate_count) == minimum_distance
+    ]
+    selected = max(tied_sources, key=lambda item: str(item.get("snapshot_id") or ""))
+    return selected, {
+        "baseline_snapshot_reused": True,
+        "baseline_snapshot_id": str(selected.get("snapshot_id") or ""),
+        "baseline_source_type": str(selected.get("source_type") or ""),
+        "baseline_candidate_count": int(selected.get("candidate_count") or 0),
+        "baseline_reason": (
+            "Current scoped snapshot is sparse relative to the reusable full-company baseline; "
+            "reuse the closest historical baseline before canonicalization."
+        ),
+        "current_candidate_count": current_candidate_count,
+        "reference_candidate_count": reference_candidate_count,
+    }
+
+
+def _count_historical_candidate_matches(
+    candidates: list[Candidate],
+    historical_candidates: list[Candidate],
+) -> int:
+    if not candidates or not historical_candidates:
+        return 0
+    match_index: dict[str, list[int]] = {}
+    for index, candidate in enumerate(historical_candidates):
+        for key in _candidate_match_keys(candidate):
+            match_index.setdefault(key, []).append(index)
+    matched = 0
+    for candidate in candidates:
+        if _match_historical_candidates(candidate, historical_candidates, match_index):
+            matched += 1
+    return matched
 
 
 def _load_snapshot_candidate_payload(payload_path: Path, target_company: str) -> tuple[list[Candidate], list[EvidenceRecord]]:
@@ -2519,9 +3135,25 @@ def _build_former_filter_hints(
     }
     company_reference = str(identity.linkedin_company_url or identity.canonical_name or identity.requested_name).strip()
     former_filter_hints: dict[str, list[str]] = {}
-    if company_reference:
-        former_filter_hints["past_companies"] = [company_reference]
-    for key in ["scope_keywords", "job_titles", "keywords", "locations", "exclude_locations"]:
+    company_candidates: list[str] = []
+    for key in ["past_companies", "current_companies"]:
+        for item in list(base.get(key) or []):
+            normalized = str(item).strip()
+            if normalized and normalized not in company_candidates:
+                company_candidates.append(normalized)
+    if not company_candidates and company_reference:
+        company_candidates = [company_reference]
+    if company_candidates:
+        former_filter_hints["past_companies"] = company_candidates
+    for key in [
+        "scope_keywords",
+        "job_titles",
+        "keywords",
+        "locations",
+        "exclude_locations",
+        "function_ids",
+        "exclude_function_ids",
+    ]:
         values = list(base.get(key) or [])
         if values:
             former_filter_hints[key] = values
@@ -2543,6 +3175,7 @@ def _normalize_company_employee_shards(value: Any) -> list[dict[str, Any]]:
         company_filters = dict(item.get("company_filters") or {})
         normalized_filters: dict[str, list[str] | str] = {}
         for key in [
+            "companies",
             "locations",
             "exclude_locations",
             "function_ids",
@@ -2683,6 +3316,7 @@ def _extract_domain_hint(snippet: str) -> str:
 
 
 def _build_investor_firm_plan(target_company: str, candidates: list[Candidate], job_request: JobRequest) -> dict[str, Any]:
+    intent_view = resolve_request_intent_view(job_request)
     grouped: dict[str, list[Candidate]] = {}
     for candidate in candidates:
         grouped.setdefault(candidate.organization or "Unknown Firm", []).append(candidate)
@@ -2714,7 +3348,7 @@ def _build_investor_firm_plan(target_company: str, candidates: list[Candidate], 
             f"Full investor-firm roster for institutions connected to {target_company}, followed by later filtering "
             "for role, involvement, and other sourcing criteria."
         ),
-        "keywords": list(job_request.keywords or []),
+        "keywords": list(intent_view.get("keywords") or []),
         "firms": firms,
         "tier_summary": {
             "tier_1": sum(1 for firm in firms if firm["tier"] == "tier_1"),

@@ -1,21 +1,42 @@
 import type {
   InstructionCompiler,
   IntentBrief,
+  IntentRewritePolicyCatalogEntry,
   IntentRewriteEntry,
   IntentRewritePayload,
   JsonObject,
   JobProgressResponse,
   JobResultsResponse,
+  JobRuntimeHealth,
   MatchResult,
   PlanResponse,
   PlanReviewGate,
+  ProgressMetrics,
+  QueryDispatchListResponse,
+  QueryDispatchRecord,
+  RecoveryControlSummary,
+  RefreshMetricsSummary,
   RefinementApplyResponse,
   RefinementCompileResponse,
   RetrievalJobResponse,
   ReviewInstructionCompileResponse,
   ReviewPlanApplyResponse,
+  RuntimeHealthResponse,
+  RuntimeHealthServicesSummary,
+  RuntimeJobRecoveryItem,
+  RuntimeMetricsResponse,
+  RuntimeRecoverableWorkerItem,
+  RuntimeRecoverableWorkersSummary,
+  RuntimeRefreshMetricsSummary,
+  RuntimeStaleJobItem,
+  RuntimeStaleJobsSummary,
+  RuntimeServicesSummary,
+  ServiceStatusPayload,
+  SystemProgressResponse,
   SourcingPlanSummary,
   WorkflowStartResponse,
+  WorkflowStageSummariesPayload,
+  WorkflowStageSummaryItem,
   WorkerLaneSummary,
   WorkerSummary,
 } from "./frontend_api_contract";
@@ -89,12 +110,32 @@ export class SourcingAgentApiClient {
     return this.get(`/api/jobs/${encodeURIComponent(jobId)}/results`, mapJobResultsResponse);
   }
 
+  async getSystemProgress(filters: JsonObject = {}): Promise<SystemProgressResponse> {
+    const query = buildQueryString(filters);
+    return this.get(`/api/runtime/progress${query}`, mapSystemProgressResponse);
+  }
+
+  async getRuntimeMetrics(filters: JsonObject = {}): Promise<RuntimeMetricsResponse> {
+    const query = buildQueryString(filters);
+    return this.get(`/api/runtime/metrics${query}`, mapRuntimeMetricsResponse);
+  }
+
+  async getRuntimeHealth(filters: JsonObject = {}): Promise<RuntimeHealthResponse> {
+    const query = buildQueryString(filters);
+    return this.get(`/api/runtime/health${query}`, mapRuntimeHealthResponse);
+  }
+
   async compileRefinement(payload: JsonObject): Promise<RefinementCompileResponse> {
     return this.post("/api/results/refine/compile-instruction", payload, mapRefinementCompileResponse);
   }
 
   async applyRefinement(payload: JsonObject): Promise<RefinementApplyResponse> {
     return this.post("/api/results/refine", payload, mapRefinementApplyResponse);
+  }
+
+  async listQueryDispatches(filters: JsonObject = {}): Promise<QueryDispatchListResponse> {
+    const query = buildQueryString(filters);
+    return this.get(`/api/query-dispatches${query}`, mapQueryDispatchListResponse);
   }
 
   private async get<T>(path: string, mapper: (payload: unknown) => T): Promise<T> {
@@ -130,6 +171,7 @@ export function mapPlanResponse(payload: unknown): PlanResponse {
   return {
     ...(source as JsonObject),
     request: asJsonObject(source.request),
+    request_preview: source.request_preview ? asJsonObject(source.request_preview) : undefined,
     plan: mapSourcingPlanSummary(source.plan),
     plan_review_gate: mapPlanReviewGate(source.plan_review_gate),
     plan_review_session: asJsonObject(source.plan_review_session),
@@ -180,6 +222,7 @@ export function mapWorkflowStartResponse(payload: unknown): WorkflowStartRespons
     plan_review_gate: source.plan_review_gate ? mapPlanReviewGate(source.plan_review_gate) : undefined,
     reason: asOptionalString(source.reason),
     intent_rewrite: source.intent_rewrite ? mapIntentRewritePayload(source.intent_rewrite) : undefined,
+    dispatch: source.dispatch ? mapQueryDispatchRecord(source.dispatch) : undefined,
     criteria_version_id: asOptionalNumber(source.criteria_version_id),
     criteria_compiler_run_id: asOptionalNumber(source.criteria_compiler_run_id),
     criteria_request_signature: asOptionalString(source.criteria_request_signature),
@@ -199,6 +242,9 @@ export function mapJobProgressResponse(payload: unknown): JobProgressResponse {
     blocked_task: asOptionalString(source.blocked_task),
     current_message: asOptionalString(source.current_message),
     progress: mapProgressPayload(source.progress),
+    workflow_stage_summaries: source.workflow_stage_summaries
+      ? mapWorkflowStageSummariesPayload(source.workflow_stage_summaries)
+      : undefined,
   };
 }
 
@@ -214,6 +260,231 @@ export function mapJobResultsResponse(payload: unknown): JobResultsResponse {
     agent_trace_spans: asObjectArray(source.agent_trace_spans),
     agent_workers: asObjectArray(source.agent_workers),
     intent_rewrite: mapIntentRewritePayload(source.intent_rewrite),
+    request_preview: source.request_preview ? asJsonObject(source.request_preview) : undefined,
+    workflow_stage_summaries: source.workflow_stage_summaries
+      ? mapWorkflowStageSummariesPayload(source.workflow_stage_summaries)
+      : undefined,
+  };
+}
+
+export function mapSystemProgressResponse(payload: unknown): SystemProgressResponse {
+  const source = asObject(payload, "SystemProgressResponse");
+  const workflowJobs = asObject(source.workflow_jobs ?? {}, "SystemProgressResponse.workflow_jobs");
+  const objectSync = asObject(source.object_sync ?? {}, "SystemProgressResponse.object_sync");
+  return {
+    ...(source as JsonObject),
+    status: asString(source.status),
+    observed_at: asOptionalString(source.observed_at),
+    runtime: source.runtime ? mapRuntimeMetricsResponse(source.runtime) : mapRuntimeMetricsResponse({}),
+    workflow_jobs: {
+      ...(workflowJobs as JsonObject),
+      count: asOptionalNumber(workflowJobs.count) ?? 0,
+      items: asArray(workflowJobs.items).map((item) => {
+        const entry = asObject(item, "SystemProgressWorkflowItem");
+        return {
+          ...(entry as JsonObject),
+          job_id: asString(entry.job_id),
+          target_company: asOptionalString(entry.target_company),
+          status: asOptionalString(entry.status),
+          stage: asOptionalString(entry.stage),
+          updated_at: asOptionalString(entry.updated_at),
+          runtime_health: entry.runtime_health ? mapJobRuntimeHealth(entry.runtime_health) : undefined,
+          counters: asRecordOfNumber(entry.counters),
+          latest_metrics: entry.latest_metrics ? mapProgressMetrics(entry.latest_metrics) : undefined,
+          refresh_metrics: entry.refresh_metrics ? mapRefreshMetricsSummary(entry.refresh_metrics) : undefined,
+          pre_retrieval_refresh: entry.pre_retrieval_refresh ? asJsonObject(entry.pre_retrieval_refresh) : undefined,
+          background_reconcile: entry.background_reconcile ? asJsonObject(entry.background_reconcile) : undefined,
+        };
+      }),
+    },
+    profile_registry: source.profile_registry ? asJsonObject(source.profile_registry) : {},
+    object_sync: {
+      ...(objectSync as JsonObject),
+      tracked_bundle_count: asOptionalNumber(objectSync.tracked_bundle_count),
+      bundle_index_updated_at: asOptionalString(objectSync.bundle_index_updated_at),
+      active_transfer_count: asOptionalNumber(objectSync.active_transfer_count),
+      status_counts: asRecordOfNumber(objectSync.status_counts),
+      recent_transfers: asArray(objectSync.recent_transfers).map((item) => {
+        const entry = asObject(item, "ObjectSyncTransferProgressItem");
+        return {
+          ...(entry as JsonObject),
+          bundle_id: asOptionalString(entry.bundle_id),
+          bundle_kind: asOptionalString(entry.bundle_kind),
+          direction: asOptionalString(entry.direction),
+          status: asOptionalString(entry.status),
+          updated_at: asOptionalString(entry.updated_at),
+          completion_ratio: asOptionalNumber(entry.completion_ratio),
+          requested_file_count: asOptionalNumber(entry.requested_file_count),
+          completed_file_count: asOptionalNumber(entry.completed_file_count),
+          remaining_file_count: asOptionalNumber(entry.remaining_file_count),
+          transfer_mode: asOptionalString(entry.transfer_mode),
+          bundle_dir: asOptionalString(entry.bundle_dir),
+          progress_path: asOptionalString(entry.progress_path),
+          archive: entry.archive ? asJsonObject(entry.archive) : undefined,
+        };
+      }),
+    },
+  };
+}
+
+export function mapRuntimeMetricsResponse(payload: unknown): RuntimeMetricsResponse {
+  const source = asObject(payload, "RuntimeMetricsResponse");
+  return {
+    ...(source as JsonObject),
+    status: asOptionalString(source.status) ?? "",
+    observed_at: asOptionalString(source.observed_at),
+    metrics: source.metrics ? asJsonObject(source.metrics) : {},
+    refresh_metrics: source.refresh_metrics ? mapRuntimeRefreshMetricsSummary(source.refresh_metrics) : undefined,
+    services: source.services ? mapRuntimeServicesSummary(source.services) : undefined,
+  };
+}
+
+export function mapRuntimeHealthResponse(payload: unknown): RuntimeHealthResponse {
+  const source = asObject(payload, "RuntimeHealthResponse");
+  return {
+    ...(source as JsonObject),
+    status: asOptionalString(source.status) ?? "",
+    observed_at: asOptionalString(source.observed_at),
+    providers: source.providers ? asJsonObject(source.providers) : undefined,
+    services: source.services ? mapRuntimeHealthServicesSummary(source.services) : undefined,
+    metrics: source.metrics ? asJsonObject(source.metrics) : undefined,
+    stalled_jobs: asArray(source.stalled_jobs).map((item) => {
+      const entry = asObject(item, "RuntimeHealthResponse.stalled_jobs");
+      return {
+        ...(entry as JsonObject),
+        job_id: asOptionalString(entry.job_id),
+        status: asOptionalString(entry.status),
+        stage: asOptionalString(entry.stage),
+        updated_at: asOptionalString(entry.updated_at),
+        runtime_health: entry.runtime_health ? mapJobRuntimeHealth(entry.runtime_health) : undefined,
+      };
+    }),
+    stale_jobs: source.stale_jobs ? mapRuntimeStaleJobsSummary(source.stale_jobs) : undefined,
+    recoverable_workers: source.recoverable_workers
+      ? mapRuntimeRecoverableWorkersSummary(source.recoverable_workers)
+      : undefined,
+  };
+}
+
+export function mapRuntimeRefreshMetricsSummary(payload: unknown): RuntimeRefreshMetricsSummary {
+  const source = asObject(payload, "RuntimeRefreshMetricsSummary");
+  return {
+    ...(source as JsonObject),
+    pre_retrieval_refresh_job_count: asOptionalNumber(source.pre_retrieval_refresh_job_count),
+    inline_search_seed_worker_count: asOptionalNumber(source.inline_search_seed_worker_count),
+    inline_harvest_prefetch_worker_count: asOptionalNumber(source.inline_harvest_prefetch_worker_count),
+    background_reconcile_job_count: asOptionalNumber(source.background_reconcile_job_count),
+    background_search_seed_reconcile_job_count: asOptionalNumber(source.background_search_seed_reconcile_job_count),
+    background_harvest_prefetch_reconcile_job_count: asOptionalNumber(
+      source.background_harvest_prefetch_reconcile_job_count,
+    ),
+  };
+}
+
+export function mapRuntimeServicesSummary(payload: unknown): RuntimeServicesSummary {
+  const source = asObject(payload, "RuntimeServicesSummary");
+  return {
+    ...(source as JsonObject),
+    shared_recovery: source.shared_recovery ? mapServiceStatusPayload(source.shared_recovery) : undefined,
+    tracked_job_recovery_count: asOptionalNumber(source.tracked_job_recovery_count),
+  };
+}
+
+export function mapRuntimeHealthServicesSummary(payload: unknown): RuntimeHealthServicesSummary {
+  const source = asObject(payload, "RuntimeHealthServicesSummary");
+  return {
+    ...(source as JsonObject),
+    shared_recovery: source.shared_recovery ? mapServiceStatusPayload(source.shared_recovery) : undefined,
+    job_recoveries: asArray(source.job_recoveries).map(mapRuntimeJobRecoveryItem),
+  };
+}
+
+export function mapRuntimeJobRecoveryItem(payload: unknown): RuntimeJobRecoveryItem {
+  const source = asObject(payload, "RuntimeJobRecoveryItem");
+  return {
+    ...(source as JsonObject),
+    job_id: asOptionalString(source.job_id),
+    status: asOptionalString(source.status),
+    stage: asOptionalString(source.stage),
+    job_recovery: source.job_recovery ? mapRecoveryControlSummary(source.job_recovery) : undefined,
+  };
+}
+
+export function mapRuntimeStaleJobsSummary(payload: unknown): RuntimeStaleJobsSummary {
+  const source = asObject(payload, "RuntimeStaleJobsSummary");
+  return {
+    ...(source as JsonObject),
+    acquiring: asArray(source.acquiring).map(mapRuntimeStaleJobItem),
+    queued: asArray(source.queued).map(mapRuntimeStaleJobItem),
+  };
+}
+
+export function mapRuntimeStaleJobItem(payload: unknown): RuntimeStaleJobItem {
+  const source = asObject(payload, "RuntimeStaleJobItem");
+  return {
+    ...(source as JsonObject),
+    job_id: asOptionalString(source.job_id),
+    status: asOptionalString(source.status),
+    stage: asOptionalString(source.stage),
+    updated_at: asOptionalString(source.updated_at),
+  };
+}
+
+export function mapRuntimeRecoverableWorkersSummary(payload: unknown): RuntimeRecoverableWorkersSummary {
+  const source = asObject(payload, "RuntimeRecoverableWorkersSummary");
+  return {
+    ...(source as JsonObject),
+    count: asOptionalNumber(source.count),
+    sample: asArray(source.sample).map(mapRuntimeRecoverableWorkerItem),
+  };
+}
+
+export function mapRuntimeRecoverableWorkerItem(payload: unknown): RuntimeRecoverableWorkerItem {
+  const source = asObject(payload, "RuntimeRecoverableWorkerItem");
+  return {
+    ...(source as JsonObject),
+    worker_id: asOptionalNumber(source.worker_id),
+    job_id: asOptionalString(source.job_id),
+    lane_id: asOptionalString(source.lane_id),
+    status: asOptionalString(source.status),
+  };
+}
+
+export function mapServiceStatusPayload(payload: unknown): ServiceStatusPayload {
+  const source = asObject(payload, "ServiceStatusPayload");
+  return {
+    ...(source as JsonObject),
+    status: asOptionalString(source.status),
+    lock_status: asOptionalString(source.lock_status),
+    pid: asOptionalNumber(source.pid),
+    started_at: asOptionalString(source.started_at),
+    updated_at: asOptionalString(source.updated_at),
+    heartbeat_at: asOptionalString(source.heartbeat_at),
+    detail: asOptionalString(source.detail),
+  };
+}
+
+export function mapRecoveryControlSummary(payload: unknown): RecoveryControlSummary {
+  const source = asObject(payload, "RecoveryControlSummary");
+  return {
+    ...(source as JsonObject),
+    status: asOptionalString(source.status),
+    service_name: asOptionalString(source.service_name),
+    service_ready: asOptionalBoolean(source.service_ready),
+    service_status: source.service_status ? mapServiceStatusPayload(source.service_status) : undefined,
+  };
+}
+
+export function mapJobRuntimeHealth(payload: unknown): JobRuntimeHealth {
+  const source = asObject(payload, "JobRuntimeHealth");
+  return {
+    ...(source as JsonObject),
+    state: asOptionalString(source.state),
+    classification: asOptionalString(source.classification),
+    detail: asOptionalString(source.detail),
+    blocked_task: asOptionalString(source.blocked_task),
+    pending_worker_count: asOptionalNumber(source.pending_worker_count),
+    active_worker_count: asOptionalNumber(source.active_worker_count),
   };
 }
 
@@ -224,6 +495,7 @@ export function mapRetrievalJobResponse(payload: unknown): RetrievalJobResponse 
     job_id: asString(source.job_id),
     status: asString(source.status),
     request: asJsonObject(source.request),
+    request_preview: source.request_preview ? asJsonObject(source.request_preview) : undefined,
     plan: mapSourcingPlanSummary(source.plan),
     intent_rewrite: mapIntentRewritePayload(source.intent_rewrite),
     summary: asJsonObject(source.summary),
@@ -251,6 +523,7 @@ export function mapRefinementCompileResponse(payload: unknown): RefinementCompil
     reason: asOptionalString(source.reason),
     request_patch: source.request_patch ? asJsonObject(source.request_patch) : undefined,
     request: source.request ? asJsonObject(source.request) : undefined,
+    request_preview: source.request_preview ? asJsonObject(source.request_preview) : undefined,
     plan: source.plan ? mapSourcingPlanSummary(source.plan) : undefined,
     instruction_compiler: source.instruction_compiler
       ? mapInstructionCompiler(source.instruction_compiler)
@@ -271,6 +544,7 @@ export function mapRefinementApplyResponse(payload: unknown): RefinementApplyRes
     rerun_job_id: asOptionalString(source.rerun_job_id),
     request_patch: source.request_patch ? asJsonObject(source.request_patch) : undefined,
     request: source.request ? asJsonObject(source.request) : undefined,
+    request_preview: source.request_preview ? asJsonObject(source.request_preview) : undefined,
     plan: source.plan ? mapSourcingPlanSummary(source.plan) : undefined,
     instruction_compiler: source.instruction_compiler
       ? mapInstructionCompiler(source.instruction_compiler)
@@ -288,6 +562,9 @@ export function mapIntentRewritePayload(payload: unknown): IntentRewritePayload 
   return {
     request: mapIntentRewriteEntry(source.request),
     instruction: source.instruction ? mapIntentRewriteEntry(source.instruction) : undefined,
+    policy_catalog: source.policy_catalog
+      ? asArray(source.policy_catalog).map((item) => mapIntentRewritePolicyCatalogEntry(item))
+      : undefined,
   };
 }
 
@@ -306,9 +583,32 @@ export function mapIntentRewriteRule(payload: unknown) {
     ...(source as JsonObject),
     rewrite_id: asOptionalString(source.rewrite_id),
     summary_label: asOptionalString(source.summary_label),
+    policy_layer: asOptionalString(source.policy_layer),
     keywords: asOptionalStringArray(source.keywords),
+    must_have_facets: asOptionalStringArray(source.must_have_facets),
+    must_have_primary_role_buckets: asOptionalStringArray(source.must_have_primary_role_buckets),
+    must_have_keywords: asOptionalStringArray(source.must_have_keywords),
     targeting_terms: asOptionalStringArray(source.targeting_terms),
     matched_terms: asOptionalStringArray(source.matched_terms),
+    request_patch: source.request_patch ? asJsonObject(source.request_patch) : undefined,
+    trigger_sources: source.trigger_sources ? asJsonObject(source.trigger_sources) : undefined,
+    additional_rewrites: source.additional_rewrites
+      ? asArray(source.additional_rewrites).map((item) => mapIntentRewriteRule(item))
+      : undefined,
+    notes: asOptionalString(source.notes),
+  };
+}
+
+export function mapIntentRewritePolicyCatalogEntry(payload: unknown): IntentRewritePolicyCatalogEntry {
+  const source = asObject(payload, "IntentRewritePolicyCatalogEntry");
+  return {
+    ...(source as JsonObject),
+    rewrite_id: asOptionalString(source.rewrite_id),
+    summary_label: asOptionalString(source.summary_label),
+    policy_layer: asOptionalString(source.policy_layer),
+    trigger_sources: source.trigger_sources ? asJsonObject(source.trigger_sources) : undefined,
+    request_patch: source.request_patch ? asJsonObject(source.request_patch) : undefined,
+    targeting_terms: asOptionalStringArray(source.targeting_terms),
     notes: asOptionalString(source.notes),
   };
 }
@@ -390,8 +690,61 @@ export function mapProgressPayload(payload: unknown): JobProgressResponse["progr
     timing: source.timing ? asJsonObject(source.timing) : {},
     latest_event: source.latest_event ? asJsonObject(source.latest_event) : undefined,
     worker_summary: mapWorkerSummary(source.worker_summary),
-    latest_metrics: source.latest_metrics ? asJsonObject(source.latest_metrics) : undefined,
+    latest_metrics: source.latest_metrics ? mapProgressMetrics(source.latest_metrics) : undefined,
     counters: asRecordOfNumber(source.counters),
+  };
+}
+
+export function mapWorkflowStageSummariesPayload(payload: unknown): WorkflowStageSummariesPayload {
+  const source = asObject(payload, "WorkflowStageSummariesPayload");
+  return {
+    ...(source as JsonObject),
+    directory: asOptionalString(source.directory),
+    stage_order: asOptionalStringArray(source.stage_order),
+    summaries: asRecordOfMappedObject(source.summaries, mapWorkflowStageSummaryItem),
+  };
+}
+
+export function mapWorkflowStageSummaryItem(payload: unknown): WorkflowStageSummaryItem {
+  const source = asObject(payload, "WorkflowStageSummaryItem");
+  return {
+    ...(source as JsonObject),
+    stage: asOptionalString(source.stage),
+    status: asOptionalString(source.status),
+    summary_path: asOptionalString(source.summary_path),
+  };
+}
+
+export function mapProgressMetrics(payload: unknown): ProgressMetrics {
+  const source = asObject(payload, "ProgressMetrics");
+  return {
+    ...(source as JsonObject),
+    refresh_metrics: source.refresh_metrics ? mapRefreshMetricsSummary(source.refresh_metrics) : undefined,
+    pre_retrieval_refresh: source.pre_retrieval_refresh ? asJsonObject(source.pre_retrieval_refresh) : undefined,
+    background_reconcile: source.background_reconcile ? asJsonObject(source.background_reconcile) : undefined,
+  };
+}
+
+export function mapRefreshMetricsSummary(payload: unknown): RefreshMetricsSummary {
+  const source = asObject(payload, "RefreshMetricsSummary");
+  return {
+    ...(source as JsonObject),
+    pre_retrieval_refresh_count: asOptionalNumber(source.pre_retrieval_refresh_count),
+    pre_retrieval_refresh_status: asOptionalString(source.pre_retrieval_refresh_status),
+    inline_search_seed_worker_count: asOptionalNumber(source.inline_search_seed_worker_count),
+    inline_harvest_prefetch_worker_count: asOptionalNumber(source.inline_harvest_prefetch_worker_count),
+    pre_retrieval_refresh_snapshot_id: asOptionalString(source.pre_retrieval_refresh_snapshot_id),
+    background_reconcile_count: asOptionalNumber(source.background_reconcile_count),
+    background_search_seed_reconcile_count: asOptionalNumber(source.background_search_seed_reconcile_count),
+    background_search_seed_reconcile_status: asOptionalString(source.background_search_seed_reconcile_status),
+    background_search_seed_worker_count: asOptionalNumber(source.background_search_seed_worker_count),
+    background_search_seed_added_entry_count: asOptionalNumber(source.background_search_seed_added_entry_count),
+    background_harvest_prefetch_reconcile_count: asOptionalNumber(source.background_harvest_prefetch_reconcile_count),
+    background_harvest_prefetch_reconcile_status: asOptionalString(source.background_harvest_prefetch_reconcile_status),
+    background_harvest_prefetch_worker_count: asOptionalNumber(source.background_harvest_prefetch_worker_count),
+    background_exploration_reconcile_count: asOptionalNumber(source.background_exploration_reconcile_count),
+    background_exploration_reconcile_status: asOptionalString(source.background_exploration_reconcile_status),
+    background_exploration_worker_count: asOptionalNumber(source.background_exploration_worker_count),
   };
 }
 
@@ -464,6 +817,35 @@ export function mapMatchResult(payload: unknown): MatchResult {
   };
 }
 
+export function mapQueryDispatchListResponse(payload: unknown): QueryDispatchListResponse {
+  const source = asObject(payload, "QueryDispatchListResponse");
+  return {
+    ...(source as JsonObject),
+    query_dispatches: asArray(source.query_dispatches).map(mapQueryDispatchRecord),
+  };
+}
+
+export function mapQueryDispatchRecord(payload: unknown): QueryDispatchRecord {
+  const source = asObject(payload, "QueryDispatchRecord");
+  return {
+    ...(source as JsonObject),
+    dispatch_id: asOptionalNumber(source.dispatch_id),
+    target_company: asOptionalString(source.target_company),
+    request_signature: asOptionalString(source.request_signature),
+    request_family_signature: asOptionalString(source.request_family_signature),
+    requester_id: asOptionalString(source.requester_id),
+    tenant_id: asOptionalString(source.tenant_id),
+    idempotency_key: asOptionalString(source.idempotency_key),
+    strategy: asOptionalString(source.strategy),
+    status: asOptionalString(source.status),
+    source_job_id: asOptionalString(source.source_job_id),
+    created_job_id: asOptionalString(source.created_job_id),
+    payload: source.payload ? asJsonObject(source.payload) : undefined,
+    created_at: asOptionalString(source.created_at),
+    updated_at: asOptionalString(source.updated_at),
+  };
+}
+
 async function parseResponse<T>(response: Response, mapper: (payload: unknown) => T): Promise<T> {
   const bodyText = await response.text();
   const payload = bodyText ? safeJsonParse(bodyText) : {};
@@ -492,6 +874,32 @@ function buildUrl(baseUrl: string, path: string): string {
     return path;
   }
   return `${baseUrl}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+function buildQueryString(params: JsonObject): string {
+  const searchParams = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === null || value === undefined) {
+      continue;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        if (isQueryParamPrimitive(item)) {
+          searchParams.append(key, String(item));
+        }
+      }
+      continue;
+    }
+    if (isQueryParamPrimitive(value)) {
+      searchParams.set(key, String(value));
+    }
+  }
+  const encoded = searchParams.toString();
+  return encoded ? `?${encoded}` : "";
+}
+
+function isQueryParamPrimitive(value: unknown): value is string | number | boolean {
+  return typeof value === "string" || typeof value === "number" || typeof value === "boolean";
 }
 
 function normalizeBaseUrl(value: string): string {
@@ -562,6 +970,24 @@ function asRecordOfNumber(value: unknown): Record<string, number> {
   for (const [key, item] of Object.entries(source)) {
     if (typeof item === "number" && Number.isFinite(item)) {
       result[key] = item;
+    }
+  }
+  return result;
+}
+
+function asRecordOfMappedObject<T extends JsonObject>(
+  value: unknown,
+  mapper: (value: unknown) => T,
+): Record<string, T> {
+  const source = value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+  const result: Record<string, T> = {};
+  for (const [key, item] of Object.entries(source)) {
+    try {
+      result[key] = mapper(item);
+    } catch {
+      continue;
     }
   }
   return result;

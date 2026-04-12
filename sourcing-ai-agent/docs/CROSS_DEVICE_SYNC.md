@@ -210,6 +210,17 @@ sourcing-ai-agent-dev/
 - retrieval result artifact
 - retrospective 使用到的 supporting raw asset
 
+当前 server/bootstrap 推荐的 canonical durable set 是：
+
+- 一份全局 `sqlite_snapshot`
+- 每个 canonical company 一份 `company_snapshot`
+
+不再推荐默认依赖 `company_handoff` 做服务器恢复，因为它更重，也更容易把历史测试态运行文件一起带回。
+
+实际 bundle id 清单见：
+
+- `docs/CANONICAL_CLOUD_BUNDLE_CATALOG.md`
+
 默认不建议同步：
 
 - `.db-journal`
@@ -311,44 +322,56 @@ sourcing-ai-agent-dev/
 cd "sourcing-ai-agent"
 
 PYTHONPATH=src python3 -m sourcing_agent.cli export-company-snapshot-bundle --company thinkingmachineslab
-PYTHONPATH=src python3 -m sourcing_agent.cli export-company-handoff-bundle --company thinkingmachineslab
 PYTHONPATH=src python3 -m sourcing_agent.cli export-sqlite-snapshot
 PYTHONPATH=src python3 -m sourcing_agent.cli upload-asset-bundle --manifest runtime/asset_exports/<bundle>/bundle_manifest.json
-PYTHONPATH=src python3 -m sourcing_agent.cli download-asset-bundle --bundle-kind company_handoff --bundle-id <bundle_id> --output-dir /tmp/asset_imports
+PYTHONPATH=src python3 -m sourcing_agent.cli download-asset-bundle --bundle-kind company_snapshot --bundle-id <bundle_id> --output-dir /tmp/asset_imports
 PYTHONPATH=src python3 -m sourcing_agent.cli restore-asset-bundle --manifest runtime/asset_exports/<bundle>/bundle_manifest.json --target-runtime-dir /tmp/sourcing-agent-runtime
 PYTHONPATH=src python3 -m sourcing_agent.cli restore-sqlite-snapshot --manifest runtime/asset_exports/<sqlite_bundle>/bundle_manifest.json
 ```
 
-## Current Thinking Machines Lab Example
+## Canonical Restore Example
 
-这轮已经实际导出并验证：
+当前更推荐直接按 canonical bundle 恢复，而不是依赖 handoff bundle。
 
-- handoff bundle:
-  - `runtime/asset_exports/company_handoff_thinkingmachineslab_20260406t172703_20260406T125539Z/`
-  - `569` files
-  - `29346219` bytes
-- sqlite snapshot:
-  - `runtime/asset_exports/sqlite_snapshot_sourcing_agent_db_20260406T125538Z/`
-- restore smoke test:
-  - `/tmp/sourcing-agent-restore-smoke`
-- object storage upload/download smoke test:
+推荐入口：
+
+- `docs/CANONICAL_CLOUD_BUNDLE_CATALOG.md`
+- `runtime/object_sync/bundle_index.json`
+- 云端 `indexes/bundle_index.json`
+
+恢复顺序：
+
+1. 先恢复 `sqlite_snapshot`
+2. 再恢复需要的 `company_snapshot`
+3. 校验 `latest_snapshot.json / asset_registry.json / candidate_documents.json`
+4. 最后启动 hosted runtime
   - 当前默认 filesystem backend:
     - `runtime/object_store/sourcing-ai-agent-dev/`
   - Thinking Machines Lab handoff bundle 已成功 upload + download
   - SQLite snapshot 已成功 upload
 
-## Real Cloud R2 Validation
+## Real Cloud S3-Compatible Validation
 
-当前已完成真实 Cloudflare R2 live 验证：
+当前已完成真实 `S3-compatible object storage` live 验证。
 
-- `sqlite_snapshot` 已成功上传到 R2
-- 同一 bundle 已成功从 R2 下载回来
+当前推荐默认目标：
+
+- 阿里云 OSS
+
+历史兼容性验证：
+
+- Cloudflare R2
+
+已验证能力包括：
+
+- `sqlite_snapshot` 上传
+- bundle 下载与本地恢复
 
 这说明当前 `s3_compatible` provider 对以下要素已经有效：
 
 - endpoint
 - SigV4 signing
-- `region=auto`
+- provider-specific region config
 - Access Key ID / Secret Access Key
 
 当前仍待优化的一点：

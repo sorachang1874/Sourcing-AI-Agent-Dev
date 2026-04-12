@@ -1,15 +1,26 @@
 from __future__ import annotations
 
 from .domain import AcquisitionStrategyPlan, JobRequest, PublicationCoveragePlan, PublicationSourcePlan
+from .request_normalization import resolve_request_intent_view
 
 
 def compile_publication_coverage_plan(
     request: JobRequest,
     acquisition_strategy: AcquisitionStrategyPlan,
 ) -> PublicationCoveragePlan:
-    text = " ".join([request.raw_user_request, request.query]).lower()
-    company = request.target_company or "target company"
-    scope_terms = acquisition_strategy.company_scope[1:] or [company]
+    intent_view = resolve_request_intent_view(request)
+    text = " ".join(
+        [
+            str(request.raw_user_request or ""),
+            str(request.query or ""),
+            " ".join(list(intent_view.get("organization_keywords") or [])),
+            " ".join(list(intent_view.get("keywords") or [])),
+            " ".join(list(intent_view.get("must_have_keywords") or [])),
+            " ".join(list(intent_view.get("must_have_facets") or [])),
+        ]
+    ).lower()
+    company = str(intent_view.get("target_company") or request.target_company or "").strip() or "target company"
+    scope_terms = _dedupe(list(intent_view.get("organization_keywords") or []) + list(acquisition_strategy.company_scope[1:] or [company]))
 
     source_families = [
         PublicationSourcePlan(
@@ -61,7 +72,9 @@ def compile_publication_coverage_plan(
         )
 
     seed_queries = _dedupe(
-        [f"{company} publication"] + [f"{term} author acknowledgement" for term in scope_terms[:3]] + [f"{term} contributor" for term in scope_terms[:2]]
+        [f"{company} publication"]
+        + [f"{term} author acknowledgement" for term in scope_terms[:3]]
+        + [f"{term} contributor" for term in scope_terms[:3]]
     )
     extraction_strategy = [
         "Use deterministic parsers for structured author lists and metadata.",

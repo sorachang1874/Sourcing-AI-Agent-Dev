@@ -3,8 +3,13 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from .execution_preferences import (
+    infer_execution_preferences_from_text,
+    normalize_execution_preferences,
+)
 from .model_provider import ModelClient
 from .query_intent_rewrite import interpret_query_intent_rewrite
+from .request_normalization import materialize_request_payload
 
 
 _SOURCE_FAMILY_ALIASES: dict[str, str] = {
@@ -29,6 +34,11 @@ _ALLOWED_DECISION_FIELDS = {
     "precision_recall_bias",
     "acquisition_strategy_override",
     "use_company_employees_lane",
+    "keyword_priority_only",
+    "former_keyword_queries_only",
+    "provider_people_search_query_strategy",
+    "provider_people_search_max_queries",
+    "large_org_keyword_probe_mode",
     "force_fresh_run",
     "reuse_existing_roster",
     "run_former_search_seed",
@@ -41,6 +51,15 @@ _DECISION_FIELD_ALIASES = {
     "high_cost_sources_approved": "allow_high_cost_sources",
     "force_company_employees": "use_company_employees_lane",
     "allow_company_employee_api": "use_company_employees_lane",
+    "keyword_first": "keyword_priority_only",
+    "keyword_priority": "keyword_priority_only",
+    "former_search_queries_only": "former_keyword_queries_only",
+    "former_keyword_only": "former_keyword_queries_only",
+    "people_search_query_strategy": "provider_people_search_query_strategy",
+    "provider_people_query_strategy": "provider_people_search_query_strategy",
+    "people_search_max_queries": "provider_people_search_max_queries",
+    "provider_people_query_max": "provider_people_search_max_queries",
+    "large_org_keyword_probe": "large_org_keyword_probe_mode",
     "require_fresh_snapshot": "force_fresh_run",
     "disable_cached_roster_fallback": "force_fresh_run",
     "reuse_cached_roster": "reuse_existing_roster",
@@ -63,44 +82,7 @@ def parse_review_instruction(
     target_company: str = "",
 ) -> dict[str, Any]:
     text = " ".join(str(instruction or "").strip().split())
-    lower = text.lower()
-    decision: dict[str, Any] = {}
-
-    strategy = _parse_acquisition_strategy(lower)
-    if strategy:
-        decision["acquisition_strategy_override"] = strategy
-
-    if _mentions_company_employees_lane(lower):
-        decision["use_company_employees_lane"] = True
-
-    if _mentions_force_fresh_run(lower):
-        decision["force_fresh_run"] = True
-
-    reuse_existing_roster = _parse_reuse_existing_roster(lower)
-    if reuse_existing_roster:
-        decision["reuse_existing_roster"] = True
-
-    run_former_search_seed = _parse_run_former_search_seed(lower)
-    if run_former_search_seed is not None:
-        decision["run_former_search_seed"] = run_former_search_seed
-
-    allow_high_cost = _parse_allow_high_cost(lower)
-    if allow_high_cost is not None:
-        decision["allow_high_cost_sources"] = allow_high_cost
-
-    precision_recall_bias = _parse_precision_recall_bias(lower)
-    if precision_recall_bias:
-        decision["precision_recall_bias"] = precision_recall_bias
-
-    extra_source_families = _parse_extra_source_families(lower)
-    if extra_source_families:
-        decision["extra_source_families"] = extra_source_families
-
-    confirmed_scope = _parse_confirmed_scope(text, lower, target_company=target_company)
-    if confirmed_scope:
-        decision["confirmed_company_scope"] = confirmed_scope
-
-    return decision
+    return infer_execution_preferences_from_text(text, target_company=target_company)
 
 
 def compile_review_payload_from_instruction(
@@ -118,6 +100,10 @@ def compile_review_payload_from_instruction(
 ) -> dict[str, Any]:
     normalized_instruction = " ".join(str(instruction or "").strip().split())
     allowed_fields = _resolve_allowed_fields(gate_payload)
+    effective_request_payload = materialize_request_payload(
+        request_payload,
+        target_company=target_company,
+    )
     deterministic_decision = normalize_review_decision(
         parse_review_instruction(normalized_instruction, target_company=target_company),
         target_company=target_company,
@@ -135,7 +121,7 @@ def compile_review_payload_from_instruction(
                         "instruction": str(instruction or "").strip(),
                         "normalized_instruction": normalized_instruction,
                         "target_company": target_company,
-                        "request": dict(request_payload or {}),
+                        "request": dict(effective_request_payload or {}),
                         "plan": dict(plan_payload or {}),
                         "gate": dict(gate_payload or {}),
                         "editable_fields": sorted(allowed_fields),
@@ -164,12 +150,12 @@ def compile_review_payload_from_instruction(
         instruction=normalized_instruction,
         target_company=target_company,
         allowed_fields=allowed_fields,
-        request_payload=request_payload,
+        request_payload=effective_request_payload,
         plan_payload=plan_payload,
     )
     compiler_source = "model" if model_decision else "deterministic"
     request_intent_rewrite = interpret_query_intent_rewrite(
-        str((request_payload or {}).get("raw_user_request") or (request_payload or {}).get("query") or "")
+        str((effective_request_payload or {}).get("raw_user_request") or (effective_request_payload or {}).get("query") or "")
     )
     instruction_intent_rewrite = interpret_query_intent_rewrite(normalized_instruction)
     review_payload = build_review_payload_from_instruction(
@@ -244,37 +230,12 @@ def normalize_review_decision(
         for field in effective_allowed_fields
         if _DECISION_FIELD_ALIASES.get(field, field) in _ALLOWED_DECISION_FIELDS
     }
-    decision: dict[str, Any] = {}
-    for raw_key, raw_value in candidate.items():
-        key = _DECISION_FIELD_ALIASES.get(str(raw_key or "").strip(), str(raw_key or "").strip())
-        if key not in _ALLOWED_DECISION_FIELDS or key not in normalized_allowed_fields:
-            continue
-        if key in {"confirmed_company_scope", "extra_source_families"}:
-            items = _normalize_string_list(raw_value, key=key, target_company=target_company)
-            if items:
-                decision[key] = items
-            continue
-        if key in {
-            "allow_high_cost_sources",
-            "use_company_employees_lane",
-            "force_fresh_run",
-            "reuse_existing_roster",
-            "run_former_search_seed",
-        }:
-            value = _coerce_bool(raw_value)
-            if value is not None:
-                decision[key] = value
-            continue
-        if key == "precision_recall_bias":
-            value = _normalize_precision_recall_bias(raw_value)
-            if value:
-                decision[key] = value
-            continue
-        if key == "acquisition_strategy_override":
-            value = _normalize_acquisition_strategy(raw_value)
-            if value:
-                decision[key] = value
-    return decision
+    normalized = normalize_execution_preferences(candidate, target_company=target_company)
+    return {
+        key: value
+        for key, value in normalized.items()
+        if key in _ALLOWED_DECISION_FIELDS and key in normalized_allowed_fields
+    }
 
 
 def _parse_acquisition_strategy(lower: str) -> str:
@@ -595,6 +556,7 @@ def _should_infer_company_employees_lane(
     if strategy != "full_company_roster":
         return False
     request = dict(request_payload or {})
+    request = materialize_request_payload(request, target_company=target_company)
     plan = dict(plan_payload or {})
     plan_strategy = str(dict(plan.get("acquisition_strategy") or {}).get("strategy_type") or "").strip().lower()
     employment_statuses = [str(item).strip().lower() for item in list(request.get("employment_statuses") or []) if str(item).strip()]

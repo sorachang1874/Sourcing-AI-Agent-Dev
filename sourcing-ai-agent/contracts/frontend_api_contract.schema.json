@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sourcing-ai-agent.local/contracts/frontend_api_contract.schema.json",
   "title": "Sourcing AI Agent Frontend API Contract Bundle",
-  "description": "Use $defs/PlanResponse, $defs/ReviewInstructionCompileResponse, $defs/WorkflowStartResponse, $defs/JobProgressResponse, $defs/JobResultsResponse, $defs/RetrievalJobResponse, or $defs/RefinementCompileResponse.",
+  "description": "Use $defs/PlanResponse, $defs/ReviewInstructionCompileResponse, $defs/WorkflowStartResponse, $defs/QueryDispatchListResponse, $defs/JobProgressResponse, $defs/JobResultsResponse, $defs/RetrievalJobResponse, or $defs/RefinementCompileResponse.",
   "type": "object",
   "$defs": {
     "JsonObject": {
@@ -21,9 +21,32 @@
       "properties": {
         "rewrite_id": { "type": "string" },
         "summary_label": { "type": "string" },
+        "policy_layer": { "type": "string" },
         "keywords": { "$ref": "#/$defs/StringArray" },
+        "must_have_facets": { "$ref": "#/$defs/StringArray" },
+        "must_have_primary_role_buckets": { "$ref": "#/$defs/StringArray" },
+        "must_have_keywords": { "$ref": "#/$defs/StringArray" },
         "targeting_terms": { "$ref": "#/$defs/StringArray" },
         "matched_terms": { "$ref": "#/$defs/StringArray" },
+        "request_patch": { "$ref": "#/$defs/JsonObject" },
+        "trigger_sources": { "$ref": "#/$defs/JsonObject" },
+        "additional_rewrites": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/IntentRewriteRule" }
+        },
+        "notes": { "type": "string" }
+      }
+    },
+    "IntentRewritePolicyCatalogEntry": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "rewrite_id": { "type": "string" },
+        "summary_label": { "type": "string" },
+        "policy_layer": { "type": "string" },
+        "trigger_sources": { "$ref": "#/$defs/JsonObject" },
+        "request_patch": { "$ref": "#/$defs/JsonObject" },
+        "targeting_terms": { "$ref": "#/$defs/StringArray" },
         "notes": { "type": "string" }
       }
     },
@@ -51,7 +74,11 @@
       "required": ["request"],
       "properties": {
         "request": { "$ref": "#/$defs/IntentRewriteEntry" },
-        "instruction": { "$ref": "#/$defs/IntentRewriteEntry" }
+        "instruction": { "$ref": "#/$defs/IntentRewriteEntry" },
+        "policy_catalog": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/IntentRewritePolicyCatalogEntry" }
+        }
       }
     },
     "IntentBrief": {
@@ -143,6 +170,7 @@
       ],
       "properties": {
         "request": { "$ref": "#/$defs/JsonObject" },
+        "request_preview": { "$ref": "#/$defs/JsonObject" },
         "plan": { "$ref": "#/$defs/SourcingPlanSummary" },
         "plan_review_gate": { "$ref": "#/$defs/PlanReviewGate" },
         "plan_review_session": { "$ref": "#/$defs/JsonObject" },
@@ -192,9 +220,41 @@
         "plan_review_gate": { "$ref": "#/$defs/PlanReviewGate" },
         "reason": { "type": "string" },
         "intent_rewrite": { "$ref": "#/$defs/IntentRewritePayload" },
+        "dispatch": { "$ref": "#/$defs/QueryDispatchRecord" },
         "criteria_version_id": { "type": "integer" },
         "criteria_compiler_run_id": { "type": "integer" },
         "criteria_request_signature": { "type": "string" }
+      }
+    },
+    "QueryDispatchRecord": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "dispatch_id": { "type": "integer" },
+        "target_company": { "type": "string" },
+        "request_signature": { "type": "string" },
+        "request_family_signature": { "type": "string" },
+        "requester_id": { "type": "string" },
+        "tenant_id": { "type": "string" },
+        "idempotency_key": { "type": "string" },
+        "strategy": { "type": "string" },
+        "status": { "type": "string" },
+        "source_job_id": { "type": "string" },
+        "created_job_id": { "type": "string" },
+        "payload": { "$ref": "#/$defs/JsonObject" },
+        "created_at": { "type": "string" },
+        "updated_at": { "type": "string" }
+      }
+    },
+    "QueryDispatchListResponse": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["query_dispatches"],
+      "properties": {
+        "query_dispatches": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/QueryDispatchRecord" }
+        }
       }
     },
     "JobMilestone": {
@@ -278,6 +338,28 @@
         }
       }
     },
+    "WorkflowStageSummaryItem": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "stage": { "type": "string" },
+        "status": { "type": "string" },
+        "summary_path": { "type": "string" }
+      }
+    },
+    "WorkflowStageSummariesPayload": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["stage_order", "summaries"],
+      "properties": {
+        "directory": { "type": "string" },
+        "stage_order": { "$ref": "#/$defs/StringArray" },
+        "summaries": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/WorkflowStageSummaryItem" }
+        }
+      }
+    },
     "JobProgressResponse": {
       "type": "object",
       "additionalProperties": true,
@@ -291,7 +373,8 @@
         "elapsed_seconds": { "type": "integer" },
         "blocked_task": { "type": "string" },
         "current_message": { "type": "string" },
-        "progress": { "$ref": "#/$defs/ProgressPayload" }
+        "progress": { "$ref": "#/$defs/ProgressPayload" },
+        "workflow_stage_summaries": { "$ref": "#/$defs/WorkflowStageSummariesPayload" }
       }
     },
     "MatchResult": {
@@ -368,7 +451,9 @@
           "type": "array",
           "items": { "$ref": "#/$defs/JsonObject" }
         },
-        "intent_rewrite": { "$ref": "#/$defs/IntentRewritePayload" }
+        "intent_rewrite": { "$ref": "#/$defs/IntentRewritePayload" },
+        "request_preview": { "$ref": "#/$defs/JsonObject" },
+        "workflow_stage_summaries": { "$ref": "#/$defs/WorkflowStageSummariesPayload" }
       }
     },
     "RetrievalJobResponse": {
@@ -388,6 +473,7 @@
         "job_id": { "type": "string" },
         "status": { "type": "string" },
         "request": { "$ref": "#/$defs/JsonObject" },
+        "request_preview": { "$ref": "#/$defs/JsonObject" },
         "plan": {
           "oneOf": [
             { "$ref": "#/$defs/SourcingPlanSummary" },
@@ -431,6 +517,7 @@
         "reason": { "type": "string" },
         "request_patch": { "$ref": "#/$defs/JsonObject" },
         "request": { "$ref": "#/$defs/JsonObject" },
+        "request_preview": { "$ref": "#/$defs/JsonObject" },
         "plan": {
           "oneOf": [
             { "$ref": "#/$defs/SourcingPlanSummary" },
@@ -452,6 +539,7 @@
         "rerun_job_id": { "type": "string" },
         "request_patch": { "$ref": "#/$defs/JsonObject" },
         "request": { "$ref": "#/$defs/JsonObject" },
+        "request_preview": { "$ref": "#/$defs/JsonObject" },
         "plan": {
           "oneOf": [
             { "$ref": "#/$defs/SourcingPlanSummary" },
