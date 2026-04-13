@@ -10,8 +10,15 @@ import threading
 from typing import Any
 from urllib import parse
 
+from .company_registry import normalize_company_key
 from .domain import Candidate, EvidenceRecord, JobRequest, normalize_candidate
-from .request_matching import MATCH_THRESHOLD, request_family_score, request_family_signature, request_signature
+from .request_matching import (
+    MATCH_THRESHOLD,
+    build_request_family_match_explanation,
+    request_family_score,
+    request_family_signature,
+    request_signature,
+)
 from .worker_scheduler import effective_worker_status, wait_stage
 
 
@@ -452,6 +459,69 @@ class SQLiteStore:
                     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
                 );
 
+                CREATE TABLE IF NOT EXISTS organization_asset_registry (
+                    registry_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    target_company TEXT NOT NULL,
+                    company_key TEXT,
+                    snapshot_id TEXT NOT NULL,
+                    asset_view TEXT NOT NULL DEFAULT 'canonical_merged',
+                    status TEXT NOT NULL DEFAULT 'ready',
+                    authoritative INTEGER NOT NULL DEFAULT 0,
+                    candidate_count INTEGER NOT NULL DEFAULT 0,
+                    evidence_count INTEGER NOT NULL DEFAULT 0,
+                    profile_detail_count INTEGER NOT NULL DEFAULT 0,
+                    explicit_profile_capture_count INTEGER NOT NULL DEFAULT 0,
+                    missing_linkedin_count INTEGER NOT NULL DEFAULT 0,
+                    manual_review_backlog_count INTEGER NOT NULL DEFAULT 0,
+                    profile_completion_backlog_count INTEGER NOT NULL DEFAULT 0,
+                    source_snapshot_count INTEGER NOT NULL DEFAULT 0,
+                    completeness_score REAL NOT NULL DEFAULT 0,
+                    completeness_band TEXT NOT NULL DEFAULT 'low',
+                    current_lane_coverage_json TEXT NOT NULL DEFAULT '{}',
+                    former_lane_coverage_json TEXT NOT NULL DEFAULT '{}',
+                    current_lane_effective_candidate_count INTEGER NOT NULL DEFAULT 0,
+                    former_lane_effective_candidate_count INTEGER NOT NULL DEFAULT 0,
+                    current_lane_effective_ready INTEGER NOT NULL DEFAULT 0,
+                    former_lane_effective_ready INTEGER NOT NULL DEFAULT 0,
+                    source_snapshot_selection_json TEXT NOT NULL DEFAULT '{}',
+                    selected_snapshot_ids_json TEXT NOT NULL DEFAULT '[]',
+                    source_path TEXT,
+                    source_job_id TEXT,
+                    summary_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(target_company, snapshot_id, asset_view)
+                );
+
+                CREATE TABLE IF NOT EXISTS acquisition_shard_registry (
+                    shard_key TEXT PRIMARY KEY,
+                    target_company TEXT NOT NULL,
+                    company_key TEXT,
+                    snapshot_id TEXT NOT NULL,
+                    asset_view TEXT NOT NULL DEFAULT 'canonical_merged',
+                    lane TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'completed',
+                    employment_scope TEXT NOT NULL DEFAULT 'all',
+                    strategy_type TEXT,
+                    shard_id TEXT,
+                    shard_title TEXT,
+                    search_query TEXT,
+                    query_signature TEXT,
+                    company_scope_json TEXT NOT NULL DEFAULT '[]',
+                    locations_json TEXT NOT NULL DEFAULT '[]',
+                    function_ids_json TEXT NOT NULL DEFAULT '[]',
+                    result_count INTEGER NOT NULL DEFAULT 0,
+                    estimated_total_count INTEGER NOT NULL DEFAULT 0,
+                    provider_cap_hit INTEGER NOT NULL DEFAULT 0,
+                    source_path TEXT,
+                    source_job_id TEXT,
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    first_seen_at TEXT,
+                    last_completed_at TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
                 CREATE INDEX IF NOT EXISTS idx_candidates_target_company
                     ON candidates (target_company, category, employment_status);
 
@@ -523,6 +593,12 @@ class SQLiteStore:
 
                 CREATE INDEX IF NOT EXISTS idx_linkedin_profile_registry_event_profile
                     ON linkedin_profile_registry_events (profile_url_key, created_at);
+
+                CREATE INDEX IF NOT EXISTS idx_organization_asset_registry_company
+                    ON organization_asset_registry (target_company, asset_view, authoritative, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_acquisition_shard_registry_company
+                    ON acquisition_shard_registry (target_company, snapshot_id, lane, employment_scope, updated_at);
                 """
             )
             self._ensure_column("jobs", "job_type", "TEXT NOT NULL DEFAULT 'retrieval'")
@@ -620,6 +696,50 @@ class SQLiteStore:
             self._ensure_column("linkedin_profile_registry", "last_failed_at", "TEXT")
             self._ensure_column("linkedin_profile_registry", "source_shards_json", "TEXT NOT NULL DEFAULT '[]'")
             self._ensure_column("linkedin_profile_registry", "source_jobs_json", "TEXT NOT NULL DEFAULT '[]'")
+            self._ensure_column("organization_asset_registry", "company_key", "TEXT")
+            self._ensure_column("organization_asset_registry", "status", "TEXT NOT NULL DEFAULT 'ready'")
+            self._ensure_column("organization_asset_registry", "authoritative", "INTEGER NOT NULL DEFAULT 0")
+            self._ensure_column("organization_asset_registry", "candidate_count", "INTEGER NOT NULL DEFAULT 0")
+            self._ensure_column("organization_asset_registry", "evidence_count", "INTEGER NOT NULL DEFAULT 0")
+            self._ensure_column("organization_asset_registry", "profile_detail_count", "INTEGER NOT NULL DEFAULT 0")
+            self._ensure_column("organization_asset_registry", "explicit_profile_capture_count", "INTEGER NOT NULL DEFAULT 0")
+            self._ensure_column("organization_asset_registry", "missing_linkedin_count", "INTEGER NOT NULL DEFAULT 0")
+            self._ensure_column("organization_asset_registry", "manual_review_backlog_count", "INTEGER NOT NULL DEFAULT 0")
+            self._ensure_column("organization_asset_registry", "profile_completion_backlog_count", "INTEGER NOT NULL DEFAULT 0")
+            self._ensure_column("organization_asset_registry", "source_snapshot_count", "INTEGER NOT NULL DEFAULT 0")
+            self._ensure_column("organization_asset_registry", "completeness_score", "REAL NOT NULL DEFAULT 0")
+            self._ensure_column("organization_asset_registry", "completeness_band", "TEXT NOT NULL DEFAULT 'low'")
+            self._ensure_column("organization_asset_registry", "current_lane_coverage_json", "TEXT NOT NULL DEFAULT '{}'")
+            self._ensure_column("organization_asset_registry", "former_lane_coverage_json", "TEXT NOT NULL DEFAULT '{}'")
+            self._ensure_column("organization_asset_registry", "current_lane_effective_candidate_count", "INTEGER NOT NULL DEFAULT 0")
+            self._ensure_column("organization_asset_registry", "former_lane_effective_candidate_count", "INTEGER NOT NULL DEFAULT 0")
+            self._ensure_column("organization_asset_registry", "current_lane_effective_ready", "INTEGER NOT NULL DEFAULT 0")
+            self._ensure_column("organization_asset_registry", "former_lane_effective_ready", "INTEGER NOT NULL DEFAULT 0")
+            self._ensure_column("organization_asset_registry", "source_snapshot_selection_json", "TEXT NOT NULL DEFAULT '{}'")
+            self._ensure_column("organization_asset_registry", "selected_snapshot_ids_json", "TEXT NOT NULL DEFAULT '[]'")
+            self._ensure_column("organization_asset_registry", "source_path", "TEXT")
+            self._ensure_column("organization_asset_registry", "source_job_id", "TEXT")
+            self._ensure_column("organization_asset_registry", "summary_json", "TEXT NOT NULL DEFAULT '{}'")
+            self._ensure_column("acquisition_shard_registry", "company_key", "TEXT")
+            self._ensure_column("acquisition_shard_registry", "asset_view", "TEXT NOT NULL DEFAULT 'canonical_merged'")
+            self._ensure_column("acquisition_shard_registry", "status", "TEXT NOT NULL DEFAULT 'completed'")
+            self._ensure_column("acquisition_shard_registry", "employment_scope", "TEXT NOT NULL DEFAULT 'all'")
+            self._ensure_column("acquisition_shard_registry", "strategy_type", "TEXT")
+            self._ensure_column("acquisition_shard_registry", "shard_id", "TEXT")
+            self._ensure_column("acquisition_shard_registry", "shard_title", "TEXT")
+            self._ensure_column("acquisition_shard_registry", "search_query", "TEXT")
+            self._ensure_column("acquisition_shard_registry", "query_signature", "TEXT")
+            self._ensure_column("acquisition_shard_registry", "company_scope_json", "TEXT NOT NULL DEFAULT '[]'")
+            self._ensure_column("acquisition_shard_registry", "locations_json", "TEXT NOT NULL DEFAULT '[]'")
+            self._ensure_column("acquisition_shard_registry", "function_ids_json", "TEXT NOT NULL DEFAULT '[]'")
+            self._ensure_column("acquisition_shard_registry", "result_count", "INTEGER NOT NULL DEFAULT 0")
+            self._ensure_column("acquisition_shard_registry", "estimated_total_count", "INTEGER NOT NULL DEFAULT 0")
+            self._ensure_column("acquisition_shard_registry", "provider_cap_hit", "INTEGER NOT NULL DEFAULT 0")
+            self._ensure_column("acquisition_shard_registry", "source_path", "TEXT")
+            self._ensure_column("acquisition_shard_registry", "source_job_id", "TEXT")
+            self._ensure_column("acquisition_shard_registry", "metadata_json", "TEXT NOT NULL DEFAULT '{}'")
+            self._ensure_column("acquisition_shard_registry", "first_seen_at", "TEXT")
+            self._ensure_column("acquisition_shard_registry", "last_completed_at", "TEXT")
             self._connection.execute(
                 """
                 CREATE INDEX IF NOT EXISTS idx_jobs_request_signature_status
@@ -660,6 +780,18 @@ class SQLiteStore:
                 """
                 CREATE INDEX IF NOT EXISTS idx_query_dispatches_idempotency
                 ON query_dispatches (idempotency_key, tenant_id, requester_id, created_at)
+                """
+            )
+            self._connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_organization_asset_registry_company
+                ON organization_asset_registry (target_company, asset_view, authoritative, updated_at)
+                """
+            )
+            self._connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_acquisition_shard_registry_company
+                ON acquisition_shard_registry (target_company, snapshot_id, lane, employment_scope, updated_at)
                 """
             )
         self._backfill_job_request_signatures()
@@ -2460,16 +2592,23 @@ class SQLiteStore:
             )
             if fallback is None:
                 return None
+            fallback_match = request_family_score(request_payload, fallback.get("request") or {})
             fallback["baseline_match"] = {
                 "selected_via": "latest_company_fallback",
-                "family_score": float(best_match.get("score") or 0.0),
-                "exact_request_match": bool(best_match.get("exact_request_match")),
-                "exact_family_match": bool(best_match.get("exact_family_match")),
+                "family_score": float(fallback_match.get("score") or 0.0),
+                "exact_request_match": bool(fallback_match.get("exact_request_match")),
+                "exact_family_match": bool(fallback_match.get("exact_family_match")),
                 "request_signature": request_signature(request_payload),
                 "request_family_signature": request_family_signature(request_payload),
                 "matched_request_signature": request_signature(fallback.get("request") or {}),
                 "matched_request_family_signature": request_family_signature(fallback.get("request") or {}),
-                "reasons": list(best_match.get("reasons") or []),
+                "reasons": list(fallback_match.get("reasons") or []),
+                "request_family_match_explanation": build_request_family_match_explanation(
+                    request_payload,
+                    fallback.get("request") or {},
+                    match=fallback_match,
+                    selection_mode="latest_company_fallback",
+                ),
             }
             return fallback
 
@@ -2483,6 +2622,12 @@ class SQLiteStore:
             "matched_request_signature": request_signature(best_job.get("request") or {}),
             "matched_request_family_signature": request_family_signature(best_job.get("request") or {}),
             "reasons": list(best_match.get("reasons") or []),
+            "request_family_match_explanation": build_request_family_match_explanation(
+                request_payload,
+                best_job.get("request") or {},
+                match=best_match,
+                selection_mode="request_family_score",
+            ),
         }
         return best_job
 
@@ -2870,6 +3015,400 @@ class SQLiteStore:
                 (*params, max(1, int(limit or 100))),
             ).fetchall()
         return [self._query_dispatch_from_row(row) for row in rows]
+
+    def upsert_organization_asset_registry(
+        self,
+        payload: dict[str, Any],
+        *,
+        authoritative: bool = False,
+    ) -> dict[str, Any]:
+        normalized_target_company = str(payload.get("target_company") or "").strip()
+        snapshot_id = str(payload.get("snapshot_id") or "").strip()
+        asset_view = str(payload.get("asset_view") or "canonical_merged").strip() or "canonical_merged"
+        if not normalized_target_company or not snapshot_id:
+            return {}
+        if authoritative:
+            with self._lock, self._connection:
+                self._connection.execute(
+                    """
+                    UPDATE organization_asset_registry
+                    SET authoritative = 0, updated_at = CURRENT_TIMESTAMP
+                    WHERE lower(target_company) = lower(?) AND asset_view = ?
+                    """,
+                    (normalized_target_company, asset_view),
+                )
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO organization_asset_registry (
+                    target_company, company_key, snapshot_id, asset_view, status, authoritative,
+                    candidate_count, evidence_count, profile_detail_count, explicit_profile_capture_count,
+                    missing_linkedin_count, manual_review_backlog_count, profile_completion_backlog_count,
+                    source_snapshot_count, completeness_score, completeness_band,
+                    current_lane_coverage_json, former_lane_coverage_json,
+                    current_lane_effective_candidate_count, former_lane_effective_candidate_count,
+                    current_lane_effective_ready, former_lane_effective_ready,
+                    source_snapshot_selection_json, selected_snapshot_ids_json,
+                    source_path, source_job_id, summary_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(target_company, snapshot_id, asset_view) DO UPDATE SET
+                    company_key = excluded.company_key,
+                    status = excluded.status,
+                    authoritative = CASE
+                        WHEN excluded.authoritative = 1 THEN 1
+                        ELSE organization_asset_registry.authoritative
+                    END,
+                    candidate_count = excluded.candidate_count,
+                    evidence_count = excluded.evidence_count,
+                    profile_detail_count = excluded.profile_detail_count,
+                    explicit_profile_capture_count = excluded.explicit_profile_capture_count,
+                    missing_linkedin_count = excluded.missing_linkedin_count,
+                    manual_review_backlog_count = excluded.manual_review_backlog_count,
+                    profile_completion_backlog_count = excluded.profile_completion_backlog_count,
+                    source_snapshot_count = excluded.source_snapshot_count,
+                    completeness_score = excluded.completeness_score,
+                    completeness_band = excluded.completeness_band,
+                    current_lane_coverage_json = excluded.current_lane_coverage_json,
+                    former_lane_coverage_json = excluded.former_lane_coverage_json,
+                    current_lane_effective_candidate_count = excluded.current_lane_effective_candidate_count,
+                    former_lane_effective_candidate_count = excluded.former_lane_effective_candidate_count,
+                    current_lane_effective_ready = excluded.current_lane_effective_ready,
+                    former_lane_effective_ready = excluded.former_lane_effective_ready,
+                    source_snapshot_selection_json = excluded.source_snapshot_selection_json,
+                    selected_snapshot_ids_json = excluded.selected_snapshot_ids_json,
+                    source_path = excluded.source_path,
+                    source_job_id = excluded.source_job_id,
+                    summary_json = excluded.summary_json,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (
+                    normalized_target_company,
+                    str(payload.get("company_key") or "").strip(),
+                    snapshot_id,
+                    asset_view,
+                    str(payload.get("status") or "ready").strip() or "ready",
+                    1 if authoritative or bool(payload.get("authoritative")) else 0,
+                    int(payload.get("candidate_count") or 0),
+                    int(payload.get("evidence_count") or 0),
+                    int(payload.get("profile_detail_count") or 0),
+                    int(payload.get("explicit_profile_capture_count") or 0),
+                    int(payload.get("missing_linkedin_count") or 0),
+                    int(payload.get("manual_review_backlog_count") or 0),
+                    int(payload.get("profile_completion_backlog_count") or 0),
+                    int(payload.get("source_snapshot_count") or 0),
+                    float(payload.get("completeness_score") or 0.0),
+                    str(payload.get("completeness_band") or "low").strip() or "low",
+                    json.dumps(_json_safe_payload(payload.get("current_lane_coverage") or {}), ensure_ascii=False),
+                    json.dumps(_json_safe_payload(payload.get("former_lane_coverage") or {}), ensure_ascii=False),
+                    int(payload.get("current_lane_effective_candidate_count") or 0),
+                    int(payload.get("former_lane_effective_candidate_count") or 0),
+                    1 if bool(payload.get("current_lane_effective_ready")) else 0,
+                    1 if bool(payload.get("former_lane_effective_ready")) else 0,
+                    json.dumps(_json_safe_payload(payload.get("source_snapshot_selection") or {}), ensure_ascii=False),
+                    json.dumps(_json_safe_payload(payload.get("selected_snapshot_ids") or []), ensure_ascii=False),
+                    str(payload.get("source_path") or "").strip(),
+                    str(payload.get("source_job_id") or "").strip(),
+                    json.dumps(_json_safe_payload(payload.get("summary") or {}), ensure_ascii=False),
+                ),
+            )
+            row = self._connection.execute(
+                """
+                SELECT * FROM organization_asset_registry
+                WHERE lower(target_company) = lower(?) AND snapshot_id = ? AND asset_view = ?
+                LIMIT 1
+                """,
+                (normalized_target_company, snapshot_id, asset_view),
+            ).fetchone()
+        return self._organization_asset_registry_from_row(row)
+
+    def get_authoritative_organization_asset_registry(
+        self,
+        *,
+        target_company: str,
+        asset_view: str = "canonical_merged",
+    ) -> dict[str, Any]:
+        normalized_target_company = str(target_company or "").strip()
+        if not normalized_target_company:
+            return {}
+        with self._lock:
+            row = self._connection.execute(
+                """
+                SELECT * FROM organization_asset_registry
+                WHERE lower(target_company) = lower(?) AND asset_view = ?
+                ORDER BY authoritative DESC, updated_at DESC, registry_id DESC
+                LIMIT 1
+                """,
+                (normalized_target_company, str(asset_view or "canonical_merged").strip() or "canonical_merged"),
+            ).fetchone()
+        return self._organization_asset_registry_from_row(row)
+
+    def list_organization_asset_registry(
+        self,
+        *,
+        target_company: str = "",
+        asset_view: str = "",
+        authoritative_only: bool = False,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if target_company:
+            clauses.append("lower(target_company) = lower(?)")
+            params.append(target_company)
+        if asset_view:
+            clauses.append("asset_view = ?")
+            params.append(asset_view)
+        if authoritative_only:
+            clauses.append("authoritative = 1")
+        where_clause = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        with self._lock:
+            rows = self._connection.execute(
+                f"""
+                SELECT * FROM organization_asset_registry
+                {where_clause}
+                ORDER BY authoritative DESC, updated_at DESC, registry_id DESC
+                LIMIT ?
+                """,
+                (*params, max(1, int(limit or 100))),
+            ).fetchall()
+        return [self._organization_asset_registry_from_row(row) for row in rows]
+
+    def canonicalize_organization_asset_registry_target_company(
+        self,
+        *,
+        target_company: str,
+        company_key: str = "",
+        asset_view: str = "",
+    ) -> dict[str, Any]:
+        normalized_target_company = str(target_company or "").strip()
+        normalized_company_key = str(company_key or "").strip() or normalize_company_key(normalized_target_company)
+        normalized_asset_view = str(asset_view or "").strip()
+        if not normalized_target_company:
+            return {"updated_rows": 0, "deleted_rows": 0, "merged_groups": 0}
+
+        clauses = ["(lower(target_company) = lower(?)"]
+        params: list[Any] = [normalized_target_company]
+        if normalized_company_key:
+            clauses.append(" OR company_key = ?")
+            params.append(normalized_company_key)
+        clauses.append(")")
+        if normalized_asset_view:
+            clauses.append("AND asset_view = ?")
+            params.append(normalized_asset_view)
+        where_clause = " ".join(clauses)
+
+        def _row_sort_key(row: sqlite3.Row) -> tuple[int, int, str, int]:
+            return (
+                int(row["authoritative"] or 0),
+                int(row["candidate_count"] or 0),
+                str(row["updated_at"] or ""),
+                int(row["registry_id"] or 0),
+            )
+
+        updated_rows = 0
+        deleted_rows = 0
+        merged_groups = 0
+        with self._lock, self._connection:
+            rows = self._connection.execute(
+                f"""
+                SELECT * FROM organization_asset_registry
+                WHERE {where_clause}
+                ORDER BY snapshot_id, asset_view, registry_id DESC
+                """,
+                params,
+            ).fetchall()
+            grouped: dict[tuple[str, str], list[sqlite3.Row]] = {}
+            for row in rows:
+                key = (str(row["snapshot_id"] or ""), str(row["asset_view"] or "canonical_merged"))
+                grouped.setdefault(key, []).append(row)
+            for (_, asset_view_value), group_rows in grouped.items():
+                if not group_rows:
+                    continue
+                keeper = max(
+                    group_rows,
+                    key=lambda row: (
+                        1 if str(row["target_company"] or "") == normalized_target_company else 0,
+                        *_row_sort_key(row),
+                    ),
+                )
+                keeper_id = int(keeper["registry_id"])
+                authoritative = any(int(row["authoritative"] or 0) for row in group_rows)
+                if str(keeper["target_company"] or "") != normalized_target_company or authoritative != bool(keeper["authoritative"]):
+                    self._connection.execute(
+                        """
+                        UPDATE organization_asset_registry
+                        SET target_company = ?, authoritative = ?, updated_at = CURRENT_TIMESTAMP
+                        WHERE registry_id = ?
+                        """,
+                        (normalized_target_company, 1 if authoritative else 0, keeper_id),
+                    )
+                    updated_rows += 1
+                extra_ids = [int(row["registry_id"]) for row in group_rows if int(row["registry_id"]) != keeper_id]
+                if extra_ids:
+                    placeholders = ",".join("?" for _ in extra_ids)
+                    self._connection.execute(
+                        f"DELETE FROM organization_asset_registry WHERE registry_id IN ({placeholders})",
+                        extra_ids,
+                    )
+                    deleted_rows += len(extra_ids)
+                    merged_groups += 1
+            if normalized_asset_view and any(
+                int(row["authoritative"] or 0) for row in rows
+            ):
+                authoritative_row = self._connection.execute(
+                    """
+                    SELECT registry_id FROM organization_asset_registry
+                    WHERE lower(target_company) = lower(?) AND asset_view = ? AND authoritative = 1
+                    ORDER BY updated_at DESC, registry_id DESC
+                    LIMIT 1
+                    """,
+                    (normalized_target_company, normalized_asset_view),
+                ).fetchone()
+                authoritative_id = int(authoritative_row["registry_id"]) if authoritative_row else 0
+                if authoritative_id:
+                    self._connection.execute(
+                        """
+                        UPDATE organization_asset_registry
+                        SET authoritative = CASE WHEN registry_id = ? THEN 1 ELSE 0 END,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE lower(target_company) = lower(?) AND asset_view = ?
+                        """,
+                        (authoritative_id, normalized_target_company, normalized_asset_view),
+                    )
+        return {
+            "target_company": normalized_target_company,
+            "asset_view": normalized_asset_view or "",
+            "updated_rows": updated_rows,
+            "deleted_rows": deleted_rows,
+            "merged_groups": merged_groups,
+        }
+
+    def upsert_acquisition_shard_registry(self, payload: dict[str, Any]) -> dict[str, Any]:
+        shard_key = str(payload.get("shard_key") or "").strip()
+        target_company = str(payload.get("target_company") or "").strip()
+        snapshot_id = str(payload.get("snapshot_id") or "").strip()
+        if not shard_key or not target_company or not snapshot_id:
+            return {}
+        status = str(payload.get("status") or "completed").strip() or "completed"
+        completed_at = datetime.now(timezone.utc).isoformat(timespec="seconds") if status.startswith("completed") else ""
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO acquisition_shard_registry (
+                    shard_key, target_company, company_key, snapshot_id, asset_view, lane, status, employment_scope,
+                    strategy_type, shard_id, shard_title, search_query, query_signature,
+                    company_scope_json, locations_json, function_ids_json,
+                    result_count, estimated_total_count, provider_cap_hit,
+                    source_path, source_job_id, metadata_json, first_seen_at, last_completed_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), ?)
+                ON CONFLICT(shard_key) DO UPDATE SET
+                    target_company = excluded.target_company,
+                    company_key = excluded.company_key,
+                    snapshot_id = excluded.snapshot_id,
+                    asset_view = excluded.asset_view,
+                    lane = excluded.lane,
+                    status = excluded.status,
+                    employment_scope = excluded.employment_scope,
+                    strategy_type = excluded.strategy_type,
+                    shard_id = excluded.shard_id,
+                    shard_title = excluded.shard_title,
+                    search_query = excluded.search_query,
+                    query_signature = excluded.query_signature,
+                    company_scope_json = excluded.company_scope_json,
+                    locations_json = excluded.locations_json,
+                    function_ids_json = excluded.function_ids_json,
+                    result_count = excluded.result_count,
+                    estimated_total_count = excluded.estimated_total_count,
+                    provider_cap_hit = excluded.provider_cap_hit,
+                    source_path = excluded.source_path,
+                    source_job_id = excluded.source_job_id,
+                    metadata_json = excluded.metadata_json,
+                    last_completed_at = CASE
+                        WHEN excluded.last_completed_at <> '' THEN excluded.last_completed_at
+                        ELSE acquisition_shard_registry.last_completed_at
+                    END,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (
+                    shard_key,
+                    target_company,
+                    str(payload.get("company_key") or "").strip(),
+                    snapshot_id,
+                    str(payload.get("asset_view") or "canonical_merged").strip() or "canonical_merged",
+                    str(payload.get("lane") or "").strip(),
+                    status,
+                    str(payload.get("employment_scope") or "all").strip() or "all",
+                    str(payload.get("strategy_type") or "").strip(),
+                    str(payload.get("shard_id") or "").strip(),
+                    str(payload.get("shard_title") or "").strip(),
+                    str(payload.get("search_query") or "").strip(),
+                    str(payload.get("query_signature") or "").strip(),
+                    json.dumps(_json_safe_payload(payload.get("company_scope") or []), ensure_ascii=False),
+                    json.dumps(_json_safe_payload(payload.get("locations") or []), ensure_ascii=False),
+                    json.dumps(_json_safe_payload(payload.get("function_ids") or []), ensure_ascii=False),
+                    int(payload.get("result_count") or 0),
+                    int(payload.get("estimated_total_count") or 0),
+                    1 if bool(payload.get("provider_cap_hit")) else 0,
+                    str(payload.get("source_path") or "").strip(),
+                    str(payload.get("source_job_id") or "").strip(),
+                    json.dumps(_json_safe_payload(payload.get("metadata") or {}), ensure_ascii=False),
+                    str(payload.get("first_seen_at") or "").strip(),
+                    completed_at,
+                ),
+            )
+            row = self._connection.execute(
+                """
+                SELECT * FROM acquisition_shard_registry
+                WHERE shard_key = ?
+                LIMIT 1
+                """,
+                (shard_key,),
+            ).fetchone()
+        return self._acquisition_shard_registry_from_row(row)
+
+    def list_acquisition_shard_registry(
+        self,
+        *,
+        target_company: str = "",
+        snapshot_ids: list[str] | None = None,
+        lane: str = "",
+        employment_scope: str = "",
+        statuses: list[str] | None = None,
+        limit: int = 1000,
+    ) -> list[dict[str, Any]]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if target_company:
+            clauses.append("lower(target_company) = lower(?)")
+            params.append(target_company)
+        normalized_snapshot_ids = [str(item).strip() for item in list(snapshot_ids or []) if str(item).strip()]
+        if normalized_snapshot_ids:
+            placeholders = ",".join("?" for _ in normalized_snapshot_ids)
+            clauses.append(f"snapshot_id IN ({placeholders})")
+            params.extend(normalized_snapshot_ids)
+        if lane:
+            clauses.append("lane = ?")
+            params.append(lane)
+        if employment_scope:
+            clauses.append("employment_scope = ?")
+            params.append(employment_scope)
+        normalized_statuses = [str(item).strip() for item in list(statuses or []) if str(item).strip()]
+        if normalized_statuses:
+            placeholders = ",".join("?" for _ in normalized_statuses)
+            clauses.append(f"status IN ({placeholders})")
+            params.extend(normalized_statuses)
+        where_clause = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        with self._lock:
+            rows = self._connection.execute(
+                f"""
+                SELECT * FROM acquisition_shard_registry
+                {where_clause}
+                ORDER BY updated_at DESC, shard_key DESC
+                LIMIT ?
+                """,
+                (*params, max(1, int(limit or 1000))),
+            ).fetchall()
+        return [self._acquisition_shard_registry_from_row(row) for row in rows]
 
     def normalize_linkedin_profile_url(self, profile_url: str) -> str:
         return _normalize_linkedin_profile_url_key(profile_url)
@@ -4722,6 +5261,119 @@ class SQLiteStore:
             "source_job_id": str(row["source_job_id"] or ""),
             "created_job_id": str(row["created_job_id"] or ""),
             "payload": payload,
+            "created_at": str(row["created_at"] or ""),
+            "updated_at": str(row["updated_at"] or ""),
+        }
+
+    def _organization_asset_registry_from_row(self, row: sqlite3.Row | None) -> dict[str, Any]:
+        if row is None:
+            return {}
+        source_snapshot_selection = {}
+        selected_snapshot_ids = []
+        summary = {}
+        current_lane_coverage = {}
+        former_lane_coverage = {}
+        try:
+            source_snapshot_selection = dict(json.loads(row["source_snapshot_selection_json"] or "{}"))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            source_snapshot_selection = {}
+        try:
+            selected_snapshot_ids = list(json.loads(row["selected_snapshot_ids_json"] or "[]"))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            selected_snapshot_ids = []
+        try:
+            summary = dict(json.loads(row["summary_json"] or "{}"))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            summary = {}
+        try:
+            current_lane_coverage = dict(json.loads(row["current_lane_coverage_json"] or "{}"))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            current_lane_coverage = {}
+        try:
+            former_lane_coverage = dict(json.loads(row["former_lane_coverage_json"] or "{}"))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            former_lane_coverage = {}
+        return {
+            "registry_id": int(row["registry_id"] or 0),
+            "target_company": str(row["target_company"] or ""),
+            "company_key": str(row["company_key"] or ""),
+            "snapshot_id": str(row["snapshot_id"] or ""),
+            "asset_view": str(row["asset_view"] or ""),
+            "status": str(row["status"] or ""),
+            "authoritative": bool(row["authoritative"]),
+            "candidate_count": int(row["candidate_count"] or 0),
+            "evidence_count": int(row["evidence_count"] or 0),
+            "profile_detail_count": int(row["profile_detail_count"] or 0),
+            "explicit_profile_capture_count": int(row["explicit_profile_capture_count"] or 0),
+            "missing_linkedin_count": int(row["missing_linkedin_count"] or 0),
+            "manual_review_backlog_count": int(row["manual_review_backlog_count"] or 0),
+            "profile_completion_backlog_count": int(row["profile_completion_backlog_count"] or 0),
+            "source_snapshot_count": int(row["source_snapshot_count"] or 0),
+            "completeness_score": float(row["completeness_score"] or 0.0),
+            "completeness_band": str(row["completeness_band"] or ""),
+            "current_lane_coverage": current_lane_coverage,
+            "former_lane_coverage": former_lane_coverage,
+            "current_lane_effective_candidate_count": int(row["current_lane_effective_candidate_count"] or 0),
+            "former_lane_effective_candidate_count": int(row["former_lane_effective_candidate_count"] or 0),
+            "current_lane_effective_ready": bool(row["current_lane_effective_ready"]),
+            "former_lane_effective_ready": bool(row["former_lane_effective_ready"]),
+            "source_snapshot_selection": source_snapshot_selection,
+            "selected_snapshot_ids": [str(item).strip() for item in selected_snapshot_ids if str(item).strip()],
+            "source_path": str(row["source_path"] or ""),
+            "source_job_id": str(row["source_job_id"] or ""),
+            "summary": summary,
+            "created_at": str(row["created_at"] or ""),
+            "updated_at": str(row["updated_at"] or ""),
+        }
+
+    def _acquisition_shard_registry_from_row(self, row: sqlite3.Row | None) -> dict[str, Any]:
+        if row is None:
+            return {}
+        company_scope = []
+        locations = []
+        function_ids = []
+        metadata = {}
+        try:
+            company_scope = list(json.loads(row["company_scope_json"] or "[]"))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            company_scope = []
+        try:
+            locations = list(json.loads(row["locations_json"] or "[]"))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            locations = []
+        try:
+            function_ids = list(json.loads(row["function_ids_json"] or "[]"))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            function_ids = []
+        try:
+            metadata = dict(json.loads(row["metadata_json"] or "{}"))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            metadata = {}
+        return {
+            "shard_key": str(row["shard_key"] or ""),
+            "target_company": str(row["target_company"] or ""),
+            "company_key": str(row["company_key"] or ""),
+            "snapshot_id": str(row["snapshot_id"] or ""),
+            "asset_view": str(row["asset_view"] or ""),
+            "lane": str(row["lane"] or ""),
+            "status": str(row["status"] or ""),
+            "employment_scope": str(row["employment_scope"] or ""),
+            "strategy_type": str(row["strategy_type"] or ""),
+            "shard_id": str(row["shard_id"] or ""),
+            "shard_title": str(row["shard_title"] or ""),
+            "search_query": str(row["search_query"] or ""),
+            "query_signature": str(row["query_signature"] or ""),
+            "company_scope": [str(item).strip() for item in company_scope if str(item).strip()],
+            "locations": [str(item).strip() for item in locations if str(item).strip()],
+            "function_ids": [str(item).strip() for item in function_ids if str(item).strip()],
+            "result_count": int(row["result_count"] or 0),
+            "estimated_total_count": int(row["estimated_total_count"] or 0),
+            "provider_cap_hit": bool(row["provider_cap_hit"]),
+            "source_path": str(row["source_path"] or ""),
+            "source_job_id": str(row["source_job_id"] or ""),
+            "metadata": metadata,
+            "first_seen_at": str(row["first_seen_at"] or ""),
+            "last_completed_at": str(row["last_completed_at"] or ""),
             "created_at": str(row["created_at"] or ""),
             "updated_at": str(row["updated_at"] or ""),
         }

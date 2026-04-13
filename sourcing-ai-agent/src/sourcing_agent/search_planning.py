@@ -53,6 +53,7 @@ def _deterministic_search_strategy(
     intent_view = resolve_request_intent_view(request)
     company = str(intent_view.get("target_company") or request.target_company or "").strip() or "target company"
     scope_terms = list(intent_view.get("organization_keywords") or acquisition_strategy.company_scope[1:] or [company])
+    distinct_scope_terms = _scope_terms_distinct_from_company(scope_terms, company)
     role_terms = list(acquisition_strategy.filter_hints.get("job_titles") or [])
     keyword_terms = _dedupe(
         list(acquisition_strategy.filter_hints.get("keywords") or [])
@@ -73,7 +74,7 @@ def _deterministic_search_strategy(
                 [
                     " ".join(part for part in [company, *keyword_terms[:2], role_terms[0] if role_terms else "employee"] if part).strip(),
                     f'{company} {" ".join(keyword_terms[:2]).strip()} LinkedIn'.strip(),
-                    f'{company} {" ".join(scope_terms[:2]).strip()} team'.strip(),
+                    f'{company} {" ".join(distinct_scope_terms[:2]).strip()} team'.strip() if distinct_scope_terms else f"{company} team",
                 ]
             ),
             filters={"scope_terms": scope_terms, "role_terms": role_terms, "keyword_terms": keyword_terms},
@@ -217,3 +218,16 @@ def _query_signature(value: str) -> str:
     compact = re.sub(r"[\s\-_]+", "", normalized)
     alnum = re.sub(r"[^0-9a-z]+", "", compact)
     return alnum or compact
+
+
+def _scope_terms_distinct_from_company(scope_terms: list[Any], company: str) -> list[str]:
+    company_signature = _query_signature(company)
+    distinct_terms: list[str] = []
+    for item in list(scope_terms or []):
+        value = " ".join(str(item or "").split()).strip()
+        if not value:
+            continue
+        if _query_signature(value) == company_signature:
+            continue
+        distinct_terms.append(value)
+    return _dedupe(distinct_terms)

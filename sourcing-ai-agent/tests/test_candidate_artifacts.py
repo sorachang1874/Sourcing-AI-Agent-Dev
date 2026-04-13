@@ -7,6 +7,7 @@ from sourcing_agent.candidate_artifacts import (
     build_company_candidate_artifacts,
     load_company_snapshot_candidate_documents,
     materialize_company_candidate_view,
+    repair_missing_company_candidate_artifacts,
 )
 from sourcing_agent.domain import Candidate, EvidenceRecord, make_evidence_id
 from sourcing_agent.storage import SQLiteStore
@@ -743,6 +744,157 @@ class CandidateArtifactsTest(unittest.TestCase):
         self.assertEqual(len(stored_evidence), 1)
         self.assertEqual(stored_evidence[0]["evidence_id"], duplicate_evidence_id)
         self.assertEqual(stored_evidence[0]["summary"], "Duplicate profile detail capture from resume replay.")
+
+    def test_repair_missing_company_candidate_artifacts_builds_normalized_payload_and_refreshes_registry(self) -> None:
+        snapshot_dir = self.runtime_dir / "company_assets" / "acme" / "20260406T120000"
+        candidate = Candidate(
+            candidate_id="legacy_1",
+            name_en="Legacy Former",
+            display_name="Legacy Former",
+            category="former_employee",
+            target_company="Acme",
+            organization="Acme",
+            employment_status="former",
+            role="Infra Engineer",
+            linkedin_url="https://www.linkedin.com/in/legacy-former/",
+            education="Stanford",
+            work_history="Acme | AnotherCo",
+            source_dataset="legacy_snapshot",
+        )
+        evidence = {
+            "evidence_id": make_evidence_id(
+                "legacy_1",
+                "legacy_snapshot",
+                "Legacy root snapshot",
+                "https://www.linkedin.com/in/legacy-former/",
+            ),
+            "candidate_id": "legacy_1",
+            "source_type": "linkedin_profile_detail",
+            "title": "Legacy root snapshot",
+            "url": "https://www.linkedin.com/in/legacy-former/",
+            "summary": "Recovered from a legacy root candidate snapshot.",
+            "source_dataset": "legacy_snapshot",
+            "source_path": str(snapshot_dir / "candidate_documents.json"),
+            "metadata": {"profile_url": "https://www.linkedin.com/in/legacy-former/"},
+        }
+        (snapshot_dir / "candidate_documents.json").write_text(
+            json.dumps(
+                {
+                    "snapshot": {
+                        "snapshot_id": "20260406T120000",
+                        "company_identity": {
+                            "requested_name": "Acme",
+                            "canonical_name": "Acme",
+                            "company_key": "acme",
+                        },
+                    },
+                    "candidates": [candidate.to_record()],
+                    "evidence": [evidence],
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+        result = repair_missing_company_candidate_artifacts(
+            runtime_dir=self.runtime_dir,
+            store=self.store,
+            companies=["Acme"],
+            snapshot_id="20260406T120000",
+        )
+
+        normalized_dir = snapshot_dir / "normalized_artifacts"
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["repaired_snapshot_count"], 1)
+        self.assertTrue((normalized_dir / "materialized_candidate_documents.json").exists())
+        self.assertTrue((normalized_dir / "artifact_summary.json").exists())
+        self.assertTrue((normalized_dir / "organization_completeness_ledger.json").exists())
+        authoritative = self.store.get_authoritative_organization_asset_registry(
+            target_company="Acme",
+            asset_view="canonical_merged",
+        )
+        self.assertEqual(str(authoritative.get("snapshot_id") or ""), "20260406T120000")
+        self.assertGreaterEqual(int(authoritative.get("candidate_count") or 0), 1)
+
+    def test_repair_missing_company_candidate_artifacts_uses_company_key_for_alias_directories(self) -> None:
+        company_dir = self.runtime_dir / "company_assets" / "humansand"
+        snapshot_dir = company_dir / "20260408T204924"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        (company_dir / "latest_snapshot.json").write_text(
+            json.dumps(
+                {
+                    "snapshot_id": "20260408T204924",
+                    "company_identity": {
+                        "requested_name": "Humans&",
+                        "canonical_name": "humans&",
+                        "company_key": "humansand",
+                        "aliases": ["humansand"],
+                    },
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        (snapshot_dir / "identity.json").write_text(
+            json.dumps(
+                {
+                    "requested_name": "Humans&",
+                    "canonical_name": "humans&",
+                    "company_key": "humansand",
+                    "aliases": ["humansand"],
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        candidate = Candidate(
+            candidate_id="humansand_legacy_1",
+            name_en="Casey Example",
+            display_name="Casey Example",
+            category="employee",
+            target_company="humans&",
+            organization="humans&",
+            employment_status="current",
+            role="Infra Engineer",
+            linkedin_url="https://www.linkedin.com/in/casey-example/",
+            source_dataset="humansand_legacy_snapshot",
+        )
+        (snapshot_dir / "candidate_documents.json").write_text(
+            json.dumps(
+                {
+                    "snapshot": {
+                        "snapshot_id": "20260408T204924",
+                        "company_identity": {
+                            "requested_name": "Humans&",
+                            "canonical_name": "humans&",
+                            "company_key": "humansand",
+                            "aliases": ["humansand"],
+                        },
+                    },
+                    "candidates": [candidate.to_record()],
+                    "evidence": [],
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+        result = repair_missing_company_candidate_artifacts(
+            runtime_dir=self.runtime_dir,
+            store=self.store,
+            companies=["Humans&"],
+            snapshot_id="20260408T204924",
+        )
+
+        normalized_dir = snapshot_dir / "normalized_artifacts"
+        self.assertEqual(result["status"], "completed")
+        self.assertTrue((normalized_dir / "materialized_candidate_documents.json").exists())
+        self.assertTrue((normalized_dir / "artifact_summary.json").exists())
+        self.assertTrue((normalized_dir / "organization_completeness_ledger.json").exists())
 
 
 if __name__ == "__main__":

@@ -84,6 +84,30 @@ _INTENT_AXIS_EXECUTION_PREFERENCE_KEYS = {
     "run_former_search_seed",
 }
 
+_DIRECTIONAL_QUERY_HINT_TERMS = {
+    "方向",
+    "方向的",
+    "方向上",
+    "方向相关",
+    "主题",
+    "topic",
+    "topics",
+    "thematic",
+    "focus",
+    "focused",
+    "focus area",
+    "focus areas",
+    "track",
+    "tracks",
+    "area",
+    "areas",
+    "working on",
+    "work on",
+    "负责",
+    "参与",
+    "相关",
+}
+
 
 def _expand_parenthetical_signal_terms(value: str) -> list[str]:
     text = " ".join(str(value or "").split()).strip()
@@ -591,6 +615,43 @@ def _remove_role_abbreviation_noise(
     return filtered
 
 
+def _resolve_primary_role_bucket_mode(
+    *,
+    request: JobRequest,
+    categories: list[str],
+    keywords: list[str],
+    must_have_keywords: list[str],
+    must_have_primary_role_buckets: list[str],
+) -> str:
+    if not list(must_have_primary_role_buckets or []):
+        return "hard"
+    text = " ".join(
+        item
+        for item in [
+            str(request.raw_user_request or "").strip().lower(),
+            str(request.query or "").strip().lower(),
+        ]
+        if item
+    )
+    if not text:
+        return "hard"
+    topical_terms = merge_unique_request_string_values(keywords, must_have_keywords)
+    if not topical_terms:
+        return "hard"
+    if any(token in text for token in _DIRECTIONAL_QUERY_HINT_TERMS):
+        return "soft"
+    normalized_categories = {
+        " ".join(str(item or "").lower().split())
+        for item in list(categories or [])
+        if str(item or "").strip()
+    }
+    if len(normalized_categories) >= 2 and normalized_categories.intersection(
+        {"researcher", "engineer", "product manager", "product_management"}
+    ):
+        return "soft"
+    return "hard"
+
+
 def build_request_preview_payload(
     *,
     request: JobRequest | dict[str, Any],
@@ -598,6 +659,7 @@ def build_request_preview_payload(
 ) -> dict[str, Any]:
     requested = _coerce_job_request(request)
     effective = _coerce_job_request(effective_request or requested.to_record())
+    preview_intent_view = resolve_request_intent_view(effective)
 
     preview = {
         "request_view": "effective_request" if _request_preview_changed(requested, effective) else "normalized_request",
@@ -607,13 +669,16 @@ def build_request_preview_payload(
         "target_scope": str(effective.target_scope or requested.target_scope or "").strip(),
         "asset_view": str(effective.asset_view or requested.asset_view or "").strip(),
         "retrieval_strategy": str(effective.retrieval_strategy or requested.retrieval_strategy or "").strip(),
-        "categories": list(effective.categories or []),
-        "employment_statuses": list(effective.employment_statuses or []),
-        "organization_keywords": list(effective.organization_keywords or []),
-        "keywords": list(effective.keywords or []),
-        "must_have_keywords": list(effective.must_have_keywords or []),
-        "must_have_facets": list(effective.must_have_facets or []),
-        "must_have_primary_role_buckets": list(effective.must_have_primary_role_buckets or []),
+        "categories": list(preview_intent_view.get("categories") or effective.categories or []),
+        "employment_statuses": list(preview_intent_view.get("employment_statuses") or effective.employment_statuses or []),
+        "organization_keywords": list(preview_intent_view.get("organization_keywords") or effective.organization_keywords or []),
+        "keywords": list(preview_intent_view.get("keywords") or effective.keywords or []),
+        "must_have_keywords": list(preview_intent_view.get("must_have_keywords") or effective.must_have_keywords or []),
+        "must_have_facets": list(preview_intent_view.get("must_have_facets") or effective.must_have_facets or []),
+        "must_have_primary_role_buckets": list(
+            preview_intent_view.get("must_have_primary_role_buckets") or effective.must_have_primary_role_buckets or []
+        ),
+        "primary_role_bucket_mode": str(preview_intent_view.get("primary_role_bucket_mode") or "hard"),
         "intent_axes": build_request_intent_axes_payload(request=effective),
     }
     scope_disambiguation = dict(effective.scope_disambiguation or {})
@@ -665,6 +730,13 @@ def build_request_intent_axes_payload(
         "must_have_keywords": list(normalized.must_have_keywords or []),
         "must_have_facets": list(normalized.must_have_facets or []),
         "must_have_primary_role_buckets": list(normalized.must_have_primary_role_buckets or []),
+        "primary_role_bucket_mode": _resolve_primary_role_bucket_mode(
+            request=normalized,
+            categories=list(normalized.categories or []),
+            keywords=list(normalized.keywords or []),
+            must_have_keywords=list(normalized.must_have_keywords or []),
+            must_have_primary_role_buckets=list(normalized.must_have_primary_role_buckets or []),
+        ),
     }
     axes = {
         "population_boundary": _merge_intent_axis_payload(
@@ -732,6 +804,16 @@ def resolve_request_intent_view(
         thematic_constraints.get("must_have_primary_role_buckets") or normalized.must_have_primary_role_buckets,
         target_company=target_company,
     )
+    primary_role_bucket_mode = str(
+        thematic_constraints.get("primary_role_bucket_mode")
+        or _resolve_primary_role_bucket_mode(
+            request=normalized,
+            categories=categories,
+            keywords=keywords,
+            must_have_keywords=must_have_keywords,
+            must_have_primary_role_buckets=must_have_primary_role_buckets,
+        )
+    ).strip() or "hard"
     execution_preference_patch: dict[str, Any] = {}
     confirmed_company_scope = merge_unique_request_string_values(
         scope_boundary.get("confirmed_company_scope"),
@@ -763,6 +845,7 @@ def resolve_request_intent_view(
         "must_have_keywords": must_have_keywords,
         "must_have_facets": must_have_facets,
         "must_have_primary_role_buckets": must_have_primary_role_buckets,
+        "primary_role_bucket_mode": primary_role_bucket_mode,
         "scope_disambiguation": dict(scope_boundary.get("scope_disambiguation") or normalized.scope_disambiguation or {}),
         "acquisition_lane_policy": acquisition_lane_policy,
         "fallback_policy": fallback_policy,

@@ -1,7 +1,9 @@
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from sourcing_agent.asset_logger import AssetLogger
 from sourcing_agent.connectors import CompanyIdentity, RapidApiAccount, resolve_company_identity
@@ -282,6 +284,144 @@ class SeedDiscoveryTest(unittest.TestCase):
             self.assertEqual(len(snapshot.entries), 1)
             self.assertEqual(snapshot.entries[0]["full_name"], "Former Example")
 
+    def test_provider_people_search_fallback_skips_live_rapidapi_in_simulate_mode(self) -> None:
+        identity = CompanyIdentity(
+            requested_name="Thinking Machines Lab",
+            canonical_name="Thinking Machines Lab",
+            company_key="thinkingmachineslab",
+            linkedin_slug="thinkingmachinesai",
+            linkedin_company_url="https://www.linkedin.com/company/thinkingmachinesai/",
+        )
+        fake_account = RapidApiAccount(
+            account_id="search_1",
+            source="rapidapi",
+            provider="fake",
+            host="search/people",
+            base_url="https://example.com",
+            api_key="token",
+            endpoint_search="/search/people",
+        )
+        with tempfile.TemporaryDirectory() as tempdir, mock.patch.dict(
+            os.environ,
+            {"SOURCING_EXTERNAL_PROVIDER_MODE": "simulate"},
+            clear=False,
+        ), mock.patch(
+            "sourcing_agent.seed_discovery.request.urlopen",
+            side_effect=AssertionError("live provider should not be called in simulate mode"),
+        ):
+            acquirer = SearchSeedAcquirer([fake_account])
+            entries, summaries, errors, accounts = acquirer._provider_people_search_fallback(
+                identity=identity,
+                discovery_dir=Path(tempdir),
+                asset_logger=AssetLogger(Path(tempdir)),
+                search_seed_queries=["Thinking Machines Lab former employee"],
+                filter_hints={"past_companies": ["https://www.linkedin.com/company/thinkingmachinesai/"]},
+                employment_status="former",
+                limit=25,
+                cost_policy={},
+            )
+            self.assertEqual(entries, [])
+            self.assertEqual(errors, [])
+            self.assertEqual(accounts, [])
+            self.assertEqual(len(summaries), 0)
+
+    def test_discover_uses_intent_view_queries_and_filters_when_task_metadata_is_sparse(self) -> None:
+        class _FakeSettings:
+            enabled = True
+            max_paid_items = 100
+
+        class _FakeHarvestConnector:
+            settings = _FakeSettings()
+
+            def __init__(self) -> None:
+                self.calls: list[dict[str, object]] = []
+
+            def search_profiles(self, **kwargs):
+                self.calls.append(
+                    {
+                        "query_text": kwargs.get("query_text", ""),
+                        "filter_hints": dict(kwargs.get("filter_hints") or {}),
+                    }
+                )
+                return {
+                    "raw_path": Path(kwargs["discovery_dir"]) / "fake_harvest.json",
+                    "rows": [
+                        {
+                            "full_name": "Former Example",
+                            "headline": "Pretraining Researcher at NewCo",
+                            "location": "San Francisco",
+                            "profile_url": "https://www.linkedin.com/in/former-example/",
+                            "username": "former-example",
+                            "current_company": "NewCo",
+                        }
+                    ],
+                    "payload": {},
+                }
+
+        class _NoopSearchProvider:
+            def search(self, query, max_results=10):  # noqa: ARG002
+                return SearchResponse(provider_name="noop", results=[])
+
+        identity = CompanyIdentity(
+            requested_name="Thinking Machines Lab",
+            canonical_name="Thinking Machines Lab",
+            company_key="thinkingmachineslab",
+            linkedin_slug="thinkingmachinesai",
+            linkedin_company_url="https://www.linkedin.com/company/thinkingmachinesai/",
+        )
+        with tempfile.TemporaryDirectory() as tempdir:
+            snapshot_dir = Path(tempdir) / "thinkingmachineslab" / "snapshot-01"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            harvest_connector = _FakeHarvestConnector()
+            acquirer = SearchSeedAcquirer(
+                [],
+                harvest_search_connector=harvest_connector,
+                search_provider=_NoopSearchProvider(),
+            )
+            snapshot = acquirer.discover(
+                identity,
+                snapshot_dir,
+                asset_logger=AssetLogger(snapshot_dir),
+                search_seed_queries=[],
+                query_bundles=[],
+                filter_hints={},
+                cost_policy={
+                    "provider_people_search_mode": "fallback_only",
+                    "provider_people_search_min_expected_results": 1,
+                    "provider_people_search_pages": 1,
+                },
+                employment_status="former",
+                worker_runtime=None,
+                job_id="",
+                request_payload={"target_company": "Thinking Machines Lab"},
+                plan_payload={},
+                runtime_mode="maintenance",
+                intent_view={
+                    "target_company": "Thinking Machines Lab",
+                    "search_seed_queries": ["Pretraining"],
+                    "filter_hints": {
+                        "past_companies": ["https://www.linkedin.com/company/thinkingmachinesai/"],
+                    },
+                    "search_query_bundles": [
+                        {
+                            "bundle_id": "former_pretraining",
+                            "label": "Pretraining",
+                            "source_family": "former_employee_search",
+                            "execution_mode": "paid_fallback",
+                            "queries": ["Pretraining"],
+                        }
+                    ],
+                },
+            )
+            self.assertEqual(snapshot.stop_reason, "provider_people_search_fallback")
+            self.assertEqual(len(snapshot.entries), 1)
+            self.assertEqual(snapshot.entries[0]["full_name"], "Former Example")
+            self.assertEqual(harvest_connector.calls[0]["query_text"], "")
+            self.assertEqual(
+                harvest_connector.calls[0]["filter_hints"].get("past_companies"),
+                ["https://www.linkedin.com/company/thinkingmachinesai/"],
+            )
+
     def test_former_paid_fallback_probes_then_expands_to_provider_total(self) -> None:
         class _FakeSettings:
             enabled = True
@@ -502,6 +642,117 @@ class SeedDiscoveryTest(unittest.TestCase):
         self.assertTrue(any(item["source_query"] == "multimodal Veo" for item in entries))
         self.assertTrue(any(item["source_query"] == "Nano Banana" for item in entries))
         self.assertGreaterEqual(len(summaries), 2)
+
+    def test_paid_fallback_prefers_filter_keywords_for_current_scoped_search(self) -> None:
+        class _FakeSettings:
+            enabled = True
+            max_paid_items = 25
+
+        class _FakeHarvestConnector:
+            settings = _FakeSettings()
+
+            def __init__(self) -> None:
+                self.queries: list[str] = []
+                self.filters: list[dict[str, list[str]]] = []
+                self.tempdir = Path(".")
+
+            def search_profiles(self, **kwargs):
+                query_text = str(kwargs.get("query_text") or "").strip()
+                self.queries.append(query_text)
+                self.filters.append(dict(kwargs.get("filter_hints") or {}))
+                return {
+                    "raw_path": self.tempdir / f"{query_text or 'blank'}.json",
+                    "rows": [
+                        {
+                            "full_name": "Reasoning Person",
+                            "headline": "Research Scientist",
+                            "location": "United States",
+                            "profile_url": "https://www.linkedin.com/in/reasoning-person/",
+                            "username": "reasoning-person",
+                            "current_company": "OpenAI",
+                        }
+                    ],
+                }
+
+        identity = CompanyIdentity(
+            requested_name="OpenAI",
+            canonical_name="OpenAI",
+            company_key="openai",
+            linkedin_slug="openai",
+            linkedin_company_url="https://www.linkedin.com/company/openai/",
+        )
+        with tempfile.TemporaryDirectory() as tempdir:
+            fake = _FakeHarvestConnector()
+            fake.tempdir = Path(tempdir)
+            acquirer = SearchSeedAcquirer([], harvest_search_connector=fake)
+            entries, summaries, errors, accounts = acquirer._provider_people_search_fallback(
+                identity=identity,
+                discovery_dir=Path(tempdir),
+                asset_logger=None,
+                search_seed_queries=["OpenAI Reasoning research Researcher"],
+                filter_hints={
+                    "current_companies": ["https://www.linkedin.com/company/openai/"],
+                    "job_titles": ["Researcher"],
+                    "keywords": ["Reasoning", "research"],
+                },
+                employment_status="current",
+                limit=25,
+                cost_policy={"provider_people_search_query_strategy": "all_queries_union"},
+            )
+
+        self.assertEqual(errors, [])
+        self.assertEqual(accounts, ["harvest_profile_search"])
+        self.assertEqual(fake.queries, ["Reasoning"])
+        self.assertEqual(
+            fake.filters[0]["current_companies"],
+            ["https://www.linkedin.com/company/openai/"],
+        )
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(summaries[0]["effective_query_text"], "Reasoning")
+
+    def test_provider_people_search_dedupes_keyword_alias_family(self) -> None:
+        class _FakeSettings:
+            enabled = True
+            max_paid_items = 25
+
+        class _FakeHarvestConnector:
+            settings = _FakeSettings()
+
+            def __init__(self) -> None:
+                self.queries: list[str] = []
+                self.tempdir = Path(".")
+
+            def search_profiles(self, **kwargs):
+                query_text = str(kwargs.get("query_text") or "").strip()
+                self.queries.append(query_text)
+                return {
+                    "raw_path": self.tempdir / f"{query_text or 'blank'}.json",
+                    "rows": [],
+                }
+
+        identity = CompanyIdentity(
+            requested_name="OpenAI",
+            canonical_name="OpenAI",
+            company_key="openai",
+            linkedin_slug="openai",
+            linkedin_company_url="https://www.linkedin.com/company/openai/",
+        )
+        with tempfile.TemporaryDirectory() as tempdir:
+            fake = _FakeHarvestConnector()
+            fake.tempdir = Path(tempdir)
+            acquirer = SearchSeedAcquirer([], harvest_search_connector=fake)
+            acquirer._provider_people_search_fallback(
+                identity=identity,
+                discovery_dir=Path(tempdir),
+                asset_logger=None,
+                search_seed_queries=["Reasoning", "Reasoning model"],
+                filter_hints={"current_companies": ["https://www.linkedin.com/company/openai/"]},
+                employment_status="current",
+                limit=25,
+                cost_policy={"provider_people_search_query_strategy": "all_queries_union"},
+            )
+
+        self.assertEqual(fake.queries, ["Reasoning"])
 
     def test_paid_fallback_first_hit_strategy_stops_after_first_harvest_match(self) -> None:
         class _FakeSettings:

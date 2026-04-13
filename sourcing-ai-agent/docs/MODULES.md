@@ -153,6 +153,7 @@ User Request
   - `export-sqlite-snapshot`
   - `upload-asset-bundle`
   - `download-asset-bundle`
+  - `import-cloud-assets`
   - `restore-asset-bundle`
   - `restore-sqlite-snapshot`
 - bundle 当前以文件系统目录形式保存：
@@ -160,6 +161,9 @@ User Request
   - `export_summary.json`
   - `payload/<runtime_relative_path>`
 - 设计目标是先把高价值 runtime 资产标准化为 portable bundle，后续再叠加 object storage uploader/downloader
+- 当前默认恢复基线：
+  - `import-cloud-assets` 恢复 `sqlite_snapshot + canonical company_snapshot`
+  - `download-asset-bundle + restore-*` 仅保留为排障链路
 
 ### `object_storage.py`
 
@@ -403,9 +407,9 @@ User Request
   - `show-recoverable-workers`
   - `show-daemon-status`
   - `interrupt-worker`
-  - `run-worker-daemon-once`
-  - `run-worker-daemon`
-  - `run-worker-daemon-service`
+  - `run-worker-daemon-once`（一次性排障）
+  - `run-worker-daemon`（低层调试/排障）
+  - `run-worker-daemon-service`（hosted 常规路径）
   - `write-worker-daemon-systemd-unit`
   - `record-feedback`
   - `review-suggestion`

@@ -100,6 +100,8 @@ PYTHONPATH=src python3 -m sourcing_agent.cli plan --file configs/demo_workflow_h
 - 当前 execution 层已开始直接消费 `intent_axes` 对应的 effective intent，而不只是把它当展示字段
 - 也就是说，`request_preview.intent_axes` 与后续 planning/acquisition/retrieval 的关键判断不应再长期漂移成两套语义
 - execution 侧会进一步通过 `build_effective_request_payload(...)` 把这份 contract materialize 成 worker / retrieval 真正使用的 payload
+- `plan` / `start-workflow` 响应里的顶层 `request` 也不再只是“原始归一化 request”
+- 当 acquisition strategy 已经把 query 扩成更真实的 execution keywords 时，例如 `Pre-train` / `Vision-language`，返回给前端的 `request.keywords` 与 `request_preview.keywords` 会一起对齐到 execution-aligned request
 
 ### 2.2 review-plan（先 preview 再 apply）
 
@@ -231,6 +233,17 @@ PYTHONPATH=src python3 -m sourcing_agent.cli show-trace --job-id <job_id>
 
 - 在途同请求：`join_inflight`
 - 已完成同请求：`reuse_completed`
+- 已完成同公司 snapshot：`reuse_snapshot`
+
+当前将 request normalization 明确分成两层：
+
+- `ingress_normalization`
+  - 请求入口的 LLM/rules 混合归一。
+  - 负责从原始 query 提取 `target_company / keywords / organization_keywords / facets / role buckets / execution_preferences`。
+- `dispatch_matching_normalization`
+  - dispatch 去重阶段的 deterministic 归一。
+  - 基于 prepared/effective request 生成 signature、family score，并决定 `join_inflight / reuse_completed / reuse_snapshot / new_job`。
+  - 这一层不重新调用模型。
 
 建议前端带上：
 
@@ -239,6 +252,11 @@ PYTHONPATH=src python3 -m sourcing_agent.cli show-trace --job-id <job_id>
 - `idempotency_key`
 
 这样可以避免重复请求导致的额外 API 成本，并支持多用户隔离。
+
+补充语义：
+
+- 对“小型组织 + 已完成 full-company snapshot”的情况，即使新 query 的方向词变了，只要仍属于 `full_company_asset` 语义，也会优先复用已有 snapshot，而不是重新触发 Harvest company/search。
+- 对大组织或 scoped/keyword-first snapshot，仍主要依赖 `request_family_score` 与 request family overlap 决定是否复用。
 
 ## 5. 典型阻塞与恢复
 

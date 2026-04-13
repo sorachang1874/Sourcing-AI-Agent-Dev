@@ -249,6 +249,38 @@ class CliWorkflowRunnerTest(unittest.TestCase):
         orchestrator.ingest_excel_contacts.assert_called_once_with({"file_path": str(workbook_path)})
         print_mock.assert_called_once()
 
+    def test_repair_company_candidate_artifacts_command_delegates_to_repair_helper(self) -> None:
+        catalog = SimpleNamespace(project_root=Path("/tmp/project"))
+        settings = SimpleNamespace(runtime_dir=Path("/tmp/project/runtime"), db_path=Path("/tmp/project/runtime/sourcing_agent.db"))
+        store = mock.Mock()
+
+        with mock.patch.object(cli.AssetCatalog, "discover", return_value=catalog), mock.patch.object(
+            cli,
+            "load_settings",
+            return_value=settings,
+        ), mock.patch.object(
+            cli,
+            "SQLiteStore",
+            return_value=store,
+        ), mock.patch.object(
+            cli,
+            "repair_missing_company_candidate_artifacts",
+            return_value={"status": "completed", "repaired_snapshot_count": 1},
+        ) as repair_mock, mock.patch.object(
+            cli.sys,
+            "argv",
+            ["cli", "repair-company-candidate-artifacts", "--company", "Acme", "--snapshot-id", "20260406T120000"],
+        ), mock.patch("builtins.print") as print_mock:
+            cli.main()
+
+        repair_mock.assert_called_once_with(
+            runtime_dir=settings.runtime_dir,
+            store=store,
+            companies=["Acme"],
+            snapshot_id="20260406T120000",
+        )
+        print_mock.assert_called_once()
+
     def test_continue_excel_intake_command_delegates_to_orchestrator(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             payload_path = Path(tempdir) / "continue.json"

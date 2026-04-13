@@ -37,6 +37,7 @@ def materialize_company_candidate_view(
     store: SQLiteStore,
     target_company: str,
     snapshot_id: str = "",
+    preferred_source_snapshot_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     company_key, snapshot_dir, identity_payload = _resolve_company_snapshot(runtime_dir, target_company, snapshot_id=snapshot_id)
     company_name = str(identity_payload.get("canonical_name") or target_company).strip() or target_company
@@ -49,6 +50,7 @@ def materialize_company_candidate_view(
     source_snapshots, source_snapshot_selection = _select_source_snapshots_for_materialization(
         source_snapshots,
         current_snapshot_id=snapshot_dir.name,
+        preferred_source_snapshot_ids=preferred_source_snapshot_ids,
     )
     for source_snapshot in source_snapshots:
         for candidate in source_snapshot["candidates"]:
@@ -113,12 +115,14 @@ def build_company_candidate_artifacts(
     target_company: str,
     snapshot_id: str = "",
     output_dir: str | Path | None = None,
+    preferred_source_snapshot_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     materialized_view = materialize_company_candidate_view(
         runtime_dir=runtime_dir,
         store=store,
         target_company=target_company,
         snapshot_id=snapshot_id,
+        preferred_source_snapshot_ids=preferred_source_snapshot_ids,
     )
     snapshot_dir = Path(materialized_view["snapshot_dir"])
     artifact_dir = Path(output_dir) if output_dir else (snapshot_dir / "normalized_artifacts")
@@ -183,6 +187,57 @@ def build_company_candidate_artifacts(
         model_safe=True,
     )
     merged_view_result["artifact_paths"]["artifact_summary"] = str(summary_path)
+    try:
+        from .asset_reuse_planning import (
+            build_organization_asset_registry_record,
+            ensure_acquisition_shard_registry_for_snapshot,
+            upsert_organization_asset_registry_with_guard,
+        )
+        from .organization_assets import (
+            ensure_acquisition_shard_bundles_for_snapshot,
+            ensure_organization_completeness_ledger,
+        )
+
+        registry_target_company = (
+            str(materialized_view.get("company_key") or "").strip()
+            or snapshot_dir.parent.name
+            or materialized_view["target_company"]
+        )
+        registry_record = build_organization_asset_registry_record(
+            target_company=materialized_view["target_company"],
+            company_key=str(materialized_view.get("company_key") or ""),
+            snapshot_id=snapshot_dir.name,
+            asset_view="canonical_merged",
+            summary=merged_view_result["summary"],
+            source_path=str(summary_path),
+            authoritative=True,
+        )
+        upsert_organization_asset_registry_with_guard(
+            store=store,
+            candidate_record=registry_record,
+        )
+        ensure_acquisition_shard_registry_for_snapshot(
+            runtime_dir=runtime_dir,
+            store=store,
+            target_company=registry_target_company,
+            snapshot_id=snapshot_dir.name,
+        )
+        ensure_acquisition_shard_bundles_for_snapshot(
+            runtime_dir=runtime_dir,
+            store=store,
+            target_company=registry_target_company,
+            snapshot_id=snapshot_dir.name,
+            asset_view="canonical_merged",
+        )
+        ensure_organization_completeness_ledger(
+            runtime_dir=runtime_dir,
+            store=store,
+            target_company=registry_target_company,
+            snapshot_id=snapshot_dir.name,
+            asset_view="canonical_merged",
+        )
+    except Exception:
+        pass
     return {
         "status": "built",
         "target_company": materialized_view["target_company"],
@@ -202,6 +257,180 @@ def build_company_candidate_artifacts(
                 "summary": strict_view_result["summary"],
             },
         },
+    }
+
+
+def repair_missing_company_candidate_artifacts(
+    *,
+    runtime_dir: str | Path,
+    store: SQLiteStore,
+    companies: list[str] | None = None,
+    snapshot_id: str = "",
+) -> dict[str, Any]:
+    from .asset_reuse_planning import backfill_organization_asset_registry_for_company
+    from .organization_assets import ensure_organization_completeness_ledger
+
+    runtime_root = Path(runtime_dir)
+    company_assets_dir = runtime_root / "company_assets"
+    requested_companies = [_normalize_key(item) for item in list(companies or []) if str(item or "").strip()]
+    requested_snapshot_id = str(snapshot_id or "").strip()
+    if not company_assets_dir.exists():
+        return {
+            "status": "missing_runtime_company_assets",
+            "runtime_dir": str(runtime_root),
+            "scanned_snapshot_count": 0,
+            "repair_candidate_count": 0,
+            "repaired_snapshot_count": 0,
+            "skipped_existing_count": 0,
+            "missing_candidate_documents_count": 0,
+            "registry_refresh_count": 0,
+            "errors": [],
+            "companies": [],
+        }
+
+    scanned_snapshot_count = 0
+    repair_candidate_count = 0
+    repaired_snapshot_count = 0
+    ledger_refresh_only_count = 0
+    skipped_existing_count = 0
+    missing_candidate_documents_count = 0
+    registry_refresh_count = 0
+    errors: list[dict[str, Any]] = []
+    company_summaries: list[dict[str, Any]] = []
+
+    for company_dir in sorted(path for path in company_assets_dir.iterdir() if path.is_dir()):
+        latest_payload = _load_company_snapshot_json(company_dir / "latest_snapshot.json")
+        preview_identity = dict(latest_payload.get("company_identity") or {})
+        if requested_companies:
+            if not any(_score_company_snapshot_dir_match(company_dir, preview_identity, item) > 0 for item in requested_companies):
+                continue
+
+        company_summary = {
+            "company_dir": company_dir.name,
+            "repaired_snapshots": [],
+            "ledger_refreshed_snapshots": [],
+            "skipped_existing_snapshots": [],
+            "missing_candidate_document_snapshots": [],
+            "registry_refresh": {},
+        }
+        for candidate_snapshot_dir in sorted(path for path in company_dir.iterdir() if path.is_dir()):
+            if requested_snapshot_id and candidate_snapshot_dir.name != requested_snapshot_id:
+                continue
+            scanned_snapshot_count += 1
+            candidate_doc_path = candidate_snapshot_dir / "candidate_documents.json"
+            normalized_dir = candidate_snapshot_dir / "normalized_artifacts"
+            materialized_path = normalized_dir / "materialized_candidate_documents.json"
+            artifact_summary_path = normalized_dir / "artifact_summary.json"
+            ledger_path = normalized_dir / "organization_completeness_ledger.json"
+            if not candidate_doc_path.exists():
+                missing_candidate_documents_count += 1
+                company_summary["missing_candidate_document_snapshots"].append(candidate_snapshot_dir.name)
+                continue
+            needs_artifact_repair = not materialized_path.exists() or not artifact_summary_path.exists()
+            needs_ledger_refresh = not ledger_path.exists()
+            if not needs_artifact_repair and not needs_ledger_refresh:
+                skipped_existing_count += 1
+                company_summary["skipped_existing_snapshots"].append(candidate_snapshot_dir.name)
+                continue
+            repair_candidate_count += 1
+            try:
+                identity_payload = _load_company_snapshot_identity(
+                    candidate_snapshot_dir,
+                    fallback_payload=latest_payload,
+                )
+                target_company = (
+                    str(identity_payload.get("canonical_name") or "").strip()
+                    or str(identity_payload.get("requested_name") or "").strip()
+                    or str(identity_payload.get("company_key") or "").strip()
+                    or company_dir.name
+                )
+                registry_target_company = (
+                    str(identity_payload.get("company_key") or "").strip()
+                    or company_dir.name
+                    or target_company
+                )
+                artifact_result: dict[str, Any] = {}
+                if needs_artifact_repair:
+                    artifact_result = build_company_candidate_artifacts(
+                        runtime_dir=runtime_root,
+                        store=store,
+                        target_company=target_company,
+                        snapshot_id=candidate_snapshot_dir.name,
+                    )
+                ledger_result = ensure_organization_completeness_ledger(
+                    runtime_dir=runtime_root,
+                    store=store,
+                    target_company=registry_target_company,
+                    snapshot_id=candidate_snapshot_dir.name,
+                    asset_view="canonical_merged",
+                )
+                snapshot_summary = {
+                    "snapshot_id": candidate_snapshot_dir.name,
+                    "target_company": str(artifact_result.get("target_company") or target_company),
+                    "artifact_dir": str(artifact_result.get("artifact_dir") or normalized_dir),
+                    "artifact_paths": dict(artifact_result.get("artifact_paths") or {}),
+                    "candidate_count": int(dict(artifact_result.get("summary") or {}).get("candidate_count") or 0),
+                    "ledger_path": str(ledger_result.get("ledger_path") or ""),
+                }
+                if needs_artifact_repair:
+                    repaired_snapshot_count += 1
+                    company_summary["repaired_snapshots"].append(snapshot_summary)
+                else:
+                    ledger_refresh_only_count += 1
+                    company_summary["ledger_refreshed_snapshots"].append(snapshot_summary)
+            except Exception as exc:
+                errors.append(
+                    {
+                        "company_dir": company_dir.name,
+                        "snapshot_id": candidate_snapshot_dir.name,
+                        "error": str(exc),
+                    }
+                )
+        touched_snapshots = list(company_summary.get("repaired_snapshots") or [])
+        if touched_snapshots:
+            try:
+                refresh_result = backfill_organization_asset_registry_for_company(
+                    runtime_dir=runtime_root,
+                    store=store,
+                    target_company=company_dir.name,
+                    asset_view="canonical_merged",
+                )
+                registry_refresh_count += 1
+            except Exception as exc:
+                refresh_result = {
+                    "status": "failed",
+                    "error": str(exc),
+                }
+                errors.append(
+                    {
+                        "company_dir": company_dir.name,
+                        "snapshot_id": "",
+                        "error": f"organization registry refresh failed: {exc}",
+                    }
+                )
+            company_summary["registry_refresh"] = refresh_result
+        if (
+            company_summary["repaired_snapshots"]
+            or company_summary["ledger_refreshed_snapshots"]
+            or company_summary["skipped_existing_snapshots"]
+            or company_summary["missing_candidate_document_snapshots"]
+        ):
+            company_summaries.append(company_summary)
+
+    return {
+        "status": "completed_with_errors" if errors else "completed",
+        "runtime_dir": str(runtime_root),
+        "company_filters": [str(item or "").strip() for item in list(companies or []) if str(item or "").strip()],
+        "snapshot_filter": requested_snapshot_id,
+        "scanned_snapshot_count": scanned_snapshot_count,
+        "repair_candidate_count": repair_candidate_count,
+        "repaired_snapshot_count": repaired_snapshot_count,
+        "ledger_refresh_only_count": ledger_refresh_only_count,
+        "skipped_existing_count": skipped_existing_count,
+        "missing_candidate_documents_count": missing_candidate_documents_count,
+        "registry_refresh_count": registry_refresh_count,
+        "errors": errors,
+        "companies": company_summaries,
     }
 
 
@@ -348,6 +577,7 @@ def _select_source_snapshots_for_materialization(
     source_snapshots: list[dict[str, Any]],
     *,
     current_snapshot_id: str,
+    preferred_source_snapshot_ids: list[str] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     selection = {
         "mode": "all_history_plus_sqlite",
@@ -365,6 +595,39 @@ def _select_source_snapshots_for_materialization(
     if current_snapshot is None:
         selection["reason"] = "current_snapshot_candidate_documents_missing"
         return source_snapshots, selection
+
+    preferred_ids = [
+        str(item or "").strip()
+        for item in list(preferred_source_snapshot_ids or [])
+        if str(item or "").strip()
+    ]
+    if preferred_ids:
+        source_index = {
+            str(item.get("snapshot_id") or "").strip(): item
+            for item in source_snapshots
+            if str(item.get("snapshot_id") or "").strip()
+        }
+        selected_ids: list[str] = []
+        for snapshot_ref in [current_snapshot_id, *preferred_ids]:
+            if snapshot_ref in source_index and snapshot_ref not in selected_ids:
+                selected_ids.append(snapshot_ref)
+        if selected_ids:
+            selection.update(
+                {
+                    "mode": "preferred_snapshot_subset",
+                    "reason": (
+                        "Explicit preferred baseline snapshots were requested for incremental materialization; "
+                        "preserve current snapshot plus selected historical baselines."
+                    ),
+                    "selected_snapshot_ids": selected_ids,
+                    "excluded_snapshot_ids": [
+                        str(item.get("snapshot_id") or "").strip()
+                        for item in source_snapshots
+                        if str(item.get("snapshot_id") or "").strip() not in selected_ids
+                    ],
+                }
+            )
+            return [source_index[snapshot_ref] for snapshot_ref in selected_ids], selection
 
     current_candidate_count = int(current_snapshot.get("candidate_count") or 0)
     if current_candidate_count < _LARGE_ORG_HISTORY_SNAPSHOT_MIN_CANDIDATES:
@@ -1176,6 +1439,9 @@ def _load_company_snapshot_identity(snapshot_dir: Path, *, fallback_payload: dic
 def _score_company_snapshot_dir_match(company_dir: Path, identity_payload: dict[str, Any], normalized_target: str) -> int:
     if not normalized_target:
         return 0
+    company_dir_key = _normalize_key(company_dir.name)
+    if company_dir_key and company_dir_key == normalized_target:
+        return 98
     for field in ("requested_name", "canonical_name"):
         value = _normalize_key(str(identity_payload.get(field) or ""))
         if value and value == normalized_target:

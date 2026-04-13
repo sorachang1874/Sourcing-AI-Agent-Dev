@@ -247,7 +247,10 @@ def _semantic_fields_for_request(
 ) -> list[str]:
     intent_view = dict(intent_view or resolve_request_intent_view(request))
     fields = list(semantic_fields or SEMANTIC_FIELD_WEIGHTS.keys())
-    if intent_view.get("must_have_primary_role_buckets"):
+    if (
+        intent_view.get("must_have_primary_role_buckets")
+        and str(intent_view.get("primary_role_bucket_mode") or "hard").strip().lower() == "hard"
+    ):
         return [field_name for field_name in fields if field_name != "notes"]
     return fields
 
@@ -376,13 +379,44 @@ def _text_features(value: str) -> list[str]:
     if not compact:
         return []
     tokens = re.findall(r"[\u4e00-\u9fff]{2,}|[a-z0-9\+]{2,}", compact)
-    features: list[str] = list(tokens)
-    joined = "".join(tokens)
-    if 4 <= len(joined) <= 32:
-        features.append(joined)
-    if 4 <= len(joined) <= 18:
-        features.extend(joined[index : index + 3] for index in range(0, len(joined) - 2))
+    features: list[str] = []
+    for token in tokens:
+        features.extend(_semantic_token_variants(token))
+    if len(tokens) > 1:
+        joined = "".join(tokens)
+        if 4 <= len(joined) <= 32:
+            features.extend(_semantic_token_variants(joined))
+        for index in range(0, len(tokens) - 1):
+            window = "".join(tokens[index : index + 2])
+            if 4 <= len(window) <= 32:
+                features.extend(_semantic_token_variants(window))
     return _dedupe(features)
+
+
+def _semantic_token_variants(token: str) -> list[str]:
+    normalized = str(token or "").strip().lower()
+    if not normalized:
+        return []
+    variants = [normalized]
+    if re.fullmatch(r"[a-z0-9\+]{4,}", normalized):
+        for suffix, replacement in [
+            ("ings", ""),
+            ("ing", ""),
+            ("ers", ""),
+            ("er", ""),
+            ("ied", "y"),
+            ("ies", "y"),
+            ("ed", ""),
+            ("es", ""),
+            ("s", ""),
+        ]:
+            if not normalized.endswith(suffix):
+                continue
+            candidate = normalized[: -len(suffix)] + replacement if suffix else normalized
+            if len(candidate) >= 4:
+                variants.append(candidate)
+            break
+    return variants
 
 
 def _shorten(value: str, limit: int = 120) -> str:

@@ -12,6 +12,8 @@
 .codex
 .codex/
 TemporaryData/
+example_excel_data/
+sourcing-ai-agent/.vendor/
 sourcing-ai-agent/configs/live_queue_smoke_tml_former.json
 sourcing-ai-agent/configs/plan_review_tml_full_roster_approve_20260407.json
 
