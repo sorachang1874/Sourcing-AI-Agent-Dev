@@ -209,6 +209,7 @@ def hydrate_sourcing_plan(payload: dict[str, object]) -> SourcingPlan:
             review_triggers=list(search_payload.get("review_triggers") or []),
         ),
         acquisition_tasks=acquisition_tasks,
+        asset_reuse_plan=dict(payload.get("asset_reuse_plan") or {}),
         intent_brief=IntentPlanBrief(
             identified_request=list((payload.get("intent_brief") or {}).get("identified_request") or []),
             target_output=list((payload.get("intent_brief") or {}).get("target_output") or []),
@@ -484,13 +485,19 @@ def _build_retrieval_plan(
     effective_employment_statuses = list(intent_view.get("employment_statuses") or [])
     effective_must_have_facets = list(intent_view.get("must_have_facets") or [])
     effective_role_buckets = list(intent_view.get("must_have_primary_role_buckets") or [])
+    primary_role_bucket_mode = str(intent_view.get("primary_role_bucket_mode") or "hard").strip().lower() or "hard"
     effective_organization_keywords = list(intent_view.get("organization_keywords") or [])
     if effective_employment_statuses:
         structured_filters.append(f"employment_statuses={effective_employment_statuses}")
     if effective_must_have_facets:
         structured_filters.append(f"must_have_facets={effective_must_have_facets}")
     if effective_role_buckets:
-        structured_filters.append(f"must_have_primary_role_buckets={effective_role_buckets}")
+        filter_key = (
+            "must_have_primary_role_buckets"
+            if primary_role_bucket_mode == "hard"
+            else "soft_primary_role_buckets"
+        )
+        structured_filters.append(f"{filter_key}={effective_role_buckets}")
     if effective_organization_keywords:
         structured_filters.append(f"organization_keywords={effective_organization_keywords}")
 
@@ -534,6 +541,11 @@ def _build_acquisition_tasks(
         employment_statuses=employment_statuses,
         acquisition_strategy=acquisition_strategy,
         execution_preferences=effective_execution_preferences,
+    )
+    task_intent_view = _build_task_intent_view_metadata(
+        intent_view=intent_view,
+        acquisition_strategy=acquisition_strategy,
+        search_strategy=search_strategy,
     )
     company_employee_shard_policy = _default_full_company_roster_shard_policy(
         target_company=effective_target_company,
@@ -585,6 +597,17 @@ def _build_acquisition_tasks(
                 "company_employee_shard_policy": company_employee_shard_policy,
                 "company_employee_shard_strategy": str(company_employee_shard_policy.get("strategy_id") or "").strip(),
                 "include_former_search_seed": include_former_search_seed,
+                "intent_view": _task_intent_view_with_overrides(
+                    task_intent_view,
+                    max_pages=roster_max_pages,
+                    page_limit=FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
+                    company_employee_shards=[],
+                    company_employee_shard_policy=company_employee_shard_policy,
+                    company_employee_shard_strategy=str(company_employee_shard_policy.get("strategy_id") or "").strip(),
+                    include_former_search_seed=include_former_search_seed,
+                    acquisition_phase="linkedin_stage_1",
+                    acquisition_phase_title="LinkedIn Stage 1",
+                ),
                 **linkedin_stage_metadata,
             },
         ),
@@ -608,6 +631,15 @@ def _build_acquisition_tasks(
                     "filter_hints": acquisition_strategy.filter_hints,
                     "cost_policy": acquisition_strategy.cost_policy,
                     "former_provider_people_search_min_expected_results": 50,
+                    "intent_view": _task_intent_view_with_overrides(
+                        task_intent_view,
+                        strategy_type="former_employee_search",
+                        employment_statuses=["former"],
+                        search_channel_order=["harvest_profile_search"],
+                        former_provider_people_search_min_expected_results=50,
+                        acquisition_phase="linkedin_stage_1",
+                        acquisition_phase_title="LinkedIn Stage 1",
+                    ),
                     **linkedin_stage_metadata,
                 },
             )
@@ -631,6 +663,16 @@ def _build_acquisition_tasks(
                     "full_roster_profile_prefetch": acquisition_strategy.strategy_type == "full_company_roster",
                     "reuse_existing_roster": bool(effective_execution_preferences.get("reuse_existing_roster")),
                     "enrichment_scope": "linkedin_stage_1",
+                    "intent_view": _task_intent_view_with_overrides(
+                        task_intent_view,
+                        slug_resolution_limit=request.slug_resolution_limit,
+                        profile_detail_limit=request.profile_detail_limit,
+                        full_roster_profile_prefetch=acquisition_strategy.strategy_type == "full_company_roster",
+                        reuse_existing_roster=bool(effective_execution_preferences.get("reuse_existing_roster")),
+                        enrichment_scope="linkedin_stage_1",
+                        acquisition_phase="linkedin_stage_1",
+                        acquisition_phase_title="LinkedIn Stage 1",
+                    ),
                     **linkedin_stage_metadata,
                 },
             ),
@@ -653,6 +695,18 @@ def _build_acquisition_tasks(
                     "exploration_limit": request.exploration_limit,
                     "scholar_coauthor_follow_up_limit": request.scholar_coauthor_follow_up_limit,
                     "enrichment_scope": "public_web_stage_2",
+                    "intent_view": _task_intent_view_with_overrides(
+                        task_intent_view,
+                        publication_source_families=[item.family for item in publication_coverage.source_families],
+                        publication_extraction_strategy=publication_coverage.extraction_strategy,
+                        publication_scan_limit=request.publication_scan_limit,
+                        publication_lead_limit=request.publication_lead_limit,
+                        exploration_limit=request.exploration_limit,
+                        scholar_coauthor_follow_up_limit=request.scholar_coauthor_follow_up_limit,
+                        enrichment_scope="public_web_stage_2",
+                        acquisition_phase="public_web_stage_2",
+                        acquisition_phase_title="Public Web Stage 2",
+                    ),
                     **public_web_stage_metadata,
                 },
             ),
@@ -681,6 +735,78 @@ def _build_acquisition_tasks(
         ]
     )
     return tasks
+
+
+def _build_task_intent_view_metadata(
+    *,
+    intent_view: dict[str, Any],
+    acquisition_strategy: AcquisitionStrategyPlan,
+    search_strategy: SearchStrategyPlan | None = None,
+) -> dict[str, Any]:
+    return {
+        "target_company": str(intent_view.get("target_company") or "").strip(),
+        "categories": list(intent_view.get("categories") or []),
+        "employment_statuses": list(intent_view.get("employment_statuses") or []),
+        "organization_keywords": list(intent_view.get("organization_keywords") or []),
+        "keywords": list(intent_view.get("keywords") or []),
+        "must_have_keywords": list(intent_view.get("must_have_keywords") or []),
+        "must_have_facets": list(intent_view.get("must_have_facets") or []),
+        "must_have_primary_role_buckets": list(intent_view.get("must_have_primary_role_buckets") or []),
+        "primary_role_bucket_mode": str(intent_view.get("primary_role_bucket_mode") or "hard").strip() or "hard",
+        "scope_disambiguation": dict(intent_view.get("scope_disambiguation") or {}),
+        "execution_preferences": dict(intent_view.get("execution_preferences") or {}),
+        "company_scope": list(acquisition_strategy.company_scope or []),
+        "filter_hints": dict(acquisition_strategy.filter_hints or {}),
+        "filter_keywords": list(acquisition_strategy.filter_hints.get("keywords") or []),
+        "function_ids": list(acquisition_strategy.filter_hints.get("function_ids") or []),
+        "search_seed_queries": list(acquisition_strategy.search_seed_queries or []),
+        "search_query_bundles": [bundle.to_record() for bundle in list(search_strategy.query_bundles or [])]
+        if isinstance(search_strategy, SearchStrategyPlan)
+        else [],
+        "strategy_type": str(acquisition_strategy.strategy_type or "").strip(),
+        "search_channel_order": list(acquisition_strategy.search_channel_order or []),
+        "cost_policy": dict(acquisition_strategy.cost_policy or {}),
+    }
+
+
+def _clone_task_intent_view_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "target_company": str(metadata.get("target_company") or "").strip(),
+        "categories": list(metadata.get("categories") or []),
+        "employment_statuses": list(metadata.get("employment_statuses") or []),
+        "organization_keywords": list(metadata.get("organization_keywords") or []),
+        "keywords": list(metadata.get("keywords") or []),
+        "must_have_keywords": list(metadata.get("must_have_keywords") or []),
+        "must_have_facets": list(metadata.get("must_have_facets") or []),
+        "must_have_primary_role_buckets": list(metadata.get("must_have_primary_role_buckets") or []),
+        "primary_role_bucket_mode": str(metadata.get("primary_role_bucket_mode") or "hard").strip() or "hard",
+        "scope_disambiguation": dict(metadata.get("scope_disambiguation") or {}),
+        "execution_preferences": dict(metadata.get("execution_preferences") or {}),
+        "company_scope": list(metadata.get("company_scope") or []),
+        "filter_hints": dict(metadata.get("filter_hints") or {}),
+        "filter_keywords": list(metadata.get("filter_keywords") or []),
+        "function_ids": list(metadata.get("function_ids") or []),
+        "search_seed_queries": list(metadata.get("search_seed_queries") or []),
+        "search_query_bundles": [dict(item) for item in list(metadata.get("search_query_bundles") or []) if isinstance(item, dict)],
+        "strategy_type": str(metadata.get("strategy_type") or "").strip(),
+        "search_channel_order": [str(item).strip() for item in list(metadata.get("search_channel_order") or []) if str(item).strip()],
+        "cost_policy": dict(metadata.get("cost_policy") or {}),
+    }
+
+
+def _task_intent_view_with_overrides(metadata: dict[str, Any], **overrides: Any) -> dict[str, Any]:
+    cloned = _clone_task_intent_view_metadata(metadata)
+    for key, value in overrides.items():
+        if isinstance(value, dict):
+            cloned[key] = dict(value)
+        elif isinstance(value, list):
+            cloned[key] = [
+                dict(item) if isinstance(item, dict) else item
+                for item in value
+            ]
+        elif value is not None:
+            cloned[key] = value
+    return cloned
 
 
 def _default_full_company_roster_max_pages(
@@ -730,11 +856,14 @@ def _should_include_default_former_search_seed(
     acquisition_strategy: AcquisitionStrategyPlan,
     execution_preferences: dict[str, Any] | None = None,
 ) -> bool:
-    if acquisition_strategy.strategy_type != "full_company_roster":
+    if acquisition_strategy.strategy_type not in {"full_company_roster", "scoped_search_roster"}:
         return False
     preferences = dict(execution_preferences or {})
     if "run_former_search_seed" in preferences:
         return bool(preferences.get("run_former_search_seed"))
+    normalized_statuses = {str(item or "").strip().lower() for item in list(employment_statuses or []) if str(item or "").strip()}
+    if acquisition_strategy.strategy_type == "scoped_search_roster" and "former" not in normalized_statuses:
+        return False
     normalized_categories = {str(item or "").strip().lower() for item in categories if str(item or "").strip()}
     if "investor" in normalized_categories:
         return False
@@ -806,7 +935,12 @@ def _criteria_summary(
     if intent_view.get("must_have_facets"):
         segments.append(f"must_have_facets={intent_view['must_have_facets']}")
     if intent_view.get("must_have_primary_role_buckets"):
-        segments.append(f"must_have_primary_role_buckets={intent_view['must_have_primary_role_buckets']}")
+        role_bucket_key = (
+            "must_have_primary_role_buckets"
+            if str(intent_view.get("primary_role_bucket_mode") or "hard").strip().lower() == "hard"
+            else "soft_primary_role_buckets"
+        )
+        segments.append(f"{role_bucket_key}={intent_view['must_have_primary_role_buckets']}")
     if intent_view.get("must_have_keywords"):
         segments.append(f"must_have={intent_view['must_have_keywords']}")
     if request.exclude_keywords:
@@ -886,6 +1020,7 @@ def _build_filter_layers(
     effective_employment_statuses = list(intent_view.get("employment_statuses") or [])
     effective_must_have_facets = list(intent_view.get("must_have_facets") or [])
     effective_role_buckets = list(intent_view.get("must_have_primary_role_buckets") or [])
+    primary_role_bucket_mode = str(intent_view.get("primary_role_bucket_mode") or "hard").strip().lower() or "hard"
     effective_must_have_keywords = list(intent_view.get("must_have_keywords") or [])
     effective_organization_keywords = list(intent_view.get("organization_keywords") or [])
     effective_keywords = list(intent_view.get("keywords") or [])
@@ -900,7 +1035,8 @@ def _build_filter_layers(
                 "categories": categories,
                 "employment_statuses": effective_employment_statuses,
                 "must_have_facets": effective_must_have_facets,
-                "must_have_primary_role_buckets": effective_role_buckets,
+                "must_have_primary_role_buckets": effective_role_buckets if primary_role_bucket_mode == "hard" else [],
+                "soft_primary_role_buckets": effective_role_buckets if primary_role_bucket_mode != "hard" else [],
             },
         },
         {
@@ -909,7 +1045,8 @@ def _build_filter_layers(
             "description": "Apply must-have, exclude, and organization filters before recall-heavy ranking.",
             "criteria": {
                 "must_have_facets": effective_must_have_facets,
-                "must_have_primary_role_buckets": effective_role_buckets,
+                "must_have_primary_role_buckets": effective_role_buckets if primary_role_bucket_mode == "hard" else [],
+                "soft_primary_role_buckets": effective_role_buckets if primary_role_bucket_mode != "hard" else [],
                 "must_have_keywords": effective_must_have_keywords,
                 "exclude_keywords": request.exclude_keywords,
                 "organization_keywords": effective_organization_keywords,
@@ -919,7 +1056,10 @@ def _build_filter_layers(
             "layer_id": "lexical_alias_recall",
             "kind": "lexical_recall",
             "description": "Use keyword, alias, and deterministic pattern matching to form the initial recall set.",
-            "criteria": {"keywords": effective_keywords},
+            "criteria": {
+                "keywords": effective_keywords,
+                "soft_primary_role_buckets": effective_role_buckets if primary_role_bucket_mode != "hard" else [],
+            },
         },
     ]
     if strategy in {"hybrid", "semantic"}:

@@ -9,6 +9,12 @@
 
 目标不是穷举所有内部字段，而是定义一套前端可稳定依赖的 contract。
 
+补充约定：
+
+- `request` 表示当前后端准备真正执行的 execution-aligned request，而不只是最初的归一化输入
+- `request_preview` 应被视为 `request` 的可解释展示层，两者在 `keywords / organization_keywords / employment_statuses / intent_axes` 上应保持同一语义
+- 如果 planning / acquisition strategy 扩展了执行关键词，例如把用户 query 补成 `Pre-train`、`Vision-language` 这类真实 shard / provider keyword，前端应直接信任返回的 `request` / `request_preview`，而不是自己从原始 query 再做一轮猜测
+
 仓库内对应的共享类型资产：
 
 - `contracts/frontend_api_contract.ts`
@@ -332,12 +338,14 @@ export function SourcingConsole() {
 - `plan_review_session`
 - `intent_rewrite`
 - `dispatch`
+- `dispatch.request_family_match_explanation`
 
 推荐做法：
 
 - workflow 创建成功后，把 `job_id` 和当前缓存的 `intent_rewrite` 绑定
 - 若 `POST /api/workflows` 自身也返回了 `intent_rewrite`，以后者为准
 - 若 `status` 为 `joined_existing_job` 或 `reused_completed_job`，直接复用 `dispatch.matched_job_id` 对应结果，不要再提示“新任务已创建”
+- 若 `dispatch.strategy == reuse_snapshot`，前端可直接展示 `dispatch.request_family_match_explanation`，告诉用户这是 exact/family 命中还是同公司 snapshot 复用
 
 可选的请求控制字段（都在 `POST /api/workflows` payload 顶层）：
 
@@ -351,6 +359,14 @@ export function SourcingConsole() {
   - 是否允许加入在途任务（默认 `true`）
 - `allow_result_reuse`
   - 是否允许复用已完成结果（默认 `true`）
+
+请求归一语义：
+
+- `ingress_normalization`
+  - 请求入口的 LLM/rules 混合归一，负责把原始 query 提炼成结构化 request。
+- `dispatch_matching_normalization`
+  - dispatch 阶段的 deterministic 归一，负责 request signature / family score / snapshot reuse。
+  - 这一层不重新调用模型。
 
 ### 4.4 Progress Page
 
@@ -553,6 +569,7 @@ type WorkflowUiState = {
 - `query_dispatches[].status`
 - `query_dispatches[].source_job_id`
 - `query_dispatches[].created_job_id`
+- `query_dispatches[].request_family_match_explanation`
 
 ### `GET /api/jobs/{job_id}/progress`
 

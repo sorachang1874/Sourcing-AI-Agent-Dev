@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+from .asset_reuse_planning import _sync_task_intent_view_from_metadata
 from .company_registry import normalize_company_key
 from .company_shard_planning import (
     build_default_company_employee_shard_policy,
@@ -366,6 +367,15 @@ def _sync_task_metadata(plan_payload: dict[str, Any]) -> None:
         metadata["cost_policy"] = cost_policy
         metadata["search_channel_order"] = search_channel_order
         metadata["search_seed_queries"] = search_seed_queries
+        metadata["search_query_bundles"] = [
+            dict(item)
+            for item in list(
+                metadata.get("search_query_bundles")
+                or dict(metadata.get("intent_view") or {}).get("search_query_bundles")
+                or []
+            )
+            if isinstance(item, dict)
+        ]
         if str(task.get("task_type") or "") == "acquire_full_roster":
             metadata["max_pages"] = max_pages
             metadata["page_limit"] = FULL_COMPANY_EMPLOYEES_PAGE_LIMIT
@@ -374,7 +384,7 @@ def _sync_task_metadata(plan_payload: dict[str, Any]) -> None:
             metadata["company_employee_shard_strategy"] = str(shard_policy.get("strategy_id") or "").strip()
         if str(task.get("task_type") or "") == "enrich_profiles_multisource":
             metadata["publication_source_families"] = publication_families
-        task["metadata"] = metadata
+        task["metadata"] = _sync_task_intent_view_from_metadata(metadata)
 
 
 def _default_review_full_roster_max_pages(target_company: str) -> int:
@@ -594,6 +604,25 @@ def _apply_acquisition_review_preferences(
     if "allow_high_cost_sources" in preferences:
         cost_policy["high_cost_requires_approval"] = False
         cost_policy["high_cost_sources_approved"] = bool(preferences.get("allow_high_cost_sources"))
+    strategy_for_provider = str(acquisition_strategy.get("strategy_type") or desired_strategy or current_strategy).strip().lower()
+    explicit_high_cost_preference = "allow_high_cost_sources" in preferences
+    if strategy_for_provider == "scoped_search_roster":
+        if "former_keyword_queries_only" not in preferences:
+            cost_policy["former_keyword_queries_only"] = True
+        if bool(cost_policy.get("high_cost_sources_approved")):
+            cost_policy["provider_people_search_mode"] = "primary_only"
+            try:
+                current_min_expected = int(cost_policy.get("provider_people_search_min_expected_results") or 0)
+            except (TypeError, ValueError):
+                current_min_expected = 0
+            try:
+                current_pages = int(cost_policy.get("provider_people_search_pages") or 0)
+            except (TypeError, ValueError):
+                current_pages = 0
+            cost_policy["provider_people_search_min_expected_results"] = max(current_min_expected, 50)
+            cost_policy["provider_people_search_pages"] = max(current_pages, 2)
+        elif explicit_high_cost_preference and not bool(preferences.get("allow_high_cost_sources")):
+            cost_policy["provider_people_search_mode"] = "disabled"
     if "precision_recall_bias" in preferences:
         cost_policy["precision_recall_bias"] = str(preferences.get("precision_recall_bias") or "").strip()
     acquisition_strategy["cost_policy"] = cost_policy

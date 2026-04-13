@@ -283,8 +283,16 @@ sourcing-ai-agent-dev/
 - `export-sqlite-snapshot`
 - `upload-asset-bundle`
 - `download-asset-bundle`
+- `import-cloud-assets`
 - `restore-asset-bundle`
 - `restore-sqlite-snapshot`
+
+默认服务器恢复入口已经收敛到：
+
+- `import-cloud-assets --bundle-kind sqlite_snapshot ...`
+- `import-cloud-assets --bundle-kind company_snapshot ...`
+
+其余 `download-asset-bundle / restore-*` 保留为排障或离线拆解 bundle 的低层工具。
 
 当前 object sync 附加元数据也已实现：
 
@@ -324,10 +332,15 @@ cd "sourcing-ai-agent"
 PYTHONPATH=src python3 -m sourcing_agent.cli export-company-snapshot-bundle --company thinkingmachineslab
 PYTHONPATH=src python3 -m sourcing_agent.cli export-sqlite-snapshot
 PYTHONPATH=src python3 -m sourcing_agent.cli upload-asset-bundle --manifest runtime/asset_exports/<bundle>/bundle_manifest.json
-PYTHONPATH=src python3 -m sourcing_agent.cli download-asset-bundle --bundle-kind company_snapshot --bundle-id <bundle_id> --output-dir /tmp/asset_imports
-PYTHONPATH=src python3 -m sourcing_agent.cli restore-asset-bundle --manifest runtime/asset_exports/<bundle>/bundle_manifest.json --target-runtime-dir /tmp/sourcing-agent-runtime
-PYTHONPATH=src python3 -m sourcing_agent.cli restore-sqlite-snapshot --manifest runtime/asset_exports/<sqlite_bundle>/bundle_manifest.json
+PYTHONPATH=src python3 -m sourcing_agent.cli import-cloud-assets --bundle-kind sqlite_snapshot --bundle-id <sqlite_bundle_id> --output-dir /tmp/asset_imports
+PYTHONPATH=src python3 -m sourcing_agent.cli import-cloud-assets --bundle-kind company_snapshot --bundle-id <bundle_id> --output-dir /tmp/asset_imports
 ```
+
+如需底层排障，仍可单独使用：
+
+- `download-asset-bundle`
+- `restore-asset-bundle`
+- `restore-sqlite-snapshot`
 
 ## Canonical Restore Example
 
@@ -345,6 +358,12 @@ PYTHONPATH=src python3 -m sourcing_agent.cli restore-sqlite-snapshot --manifest 
 2. 再恢复需要的 `company_snapshot`
 3. 校验 `latest_snapshot.json / asset_registry.json / candidate_documents.json`
 4. 最后启动 hosted runtime
+
+其中 `company_snapshot` 默认应通过 `import-cloud-assets` 导入，这样会在 restore 后自动补：
+
+- candidate artifact repair
+- organization asset registry warmup
+- linkedin profile registry backfill
   - 当前默认 filesystem backend:
     - `runtime/object_store/sourcing-ai-agent-dev/`
   - Thinking Machines Lab handoff bundle 已成功 upload + download
@@ -475,6 +494,6 @@ PYTHONPATH=src python3 -m sourcing_agent.cli restore-sqlite-snapshot --manifest 
 下一步最合理的实现切入点是：
 
 1. `asset_bundle_manifest` 规范
-2. `export-asset-bundle / restore-asset-bundle`
+2. `export-asset-bundle / import-cloud-assets`
 3. 云端 object storage prefix 约定
 4. exported SQLite snapshot 机制

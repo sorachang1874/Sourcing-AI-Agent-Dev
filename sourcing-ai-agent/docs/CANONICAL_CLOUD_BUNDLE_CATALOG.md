@@ -22,7 +22,7 @@
 
 | Kind | Bundle ID | Notes |
 | --- | --- | --- |
-| `sqlite_snapshot` | `sqlite_snapshot_sourcing_agent_db_20260412T071012Z` | 全局 SQLite 状态，包含 query dispatch、registry、workflow/job state、shared reuse metadata。 |
+| `sqlite_snapshot` | `sqlite_snapshot_sourcing_agent_db_20260412T071012Z` | 当前云端已完成同步的全局 SQLite 状态，包含 query dispatch、registry、workflow/job state、shared reuse metadata。下一版 `sqlite_snapshot_sourcing_agent_db_20260413T061157Z` 正在上传。 |
 
 ### Company snapshots
 
@@ -32,6 +32,7 @@
 | `google` | `20260412T022230` | `company_snapshot_google_20260412t022230_20260412T070953Z` | 已修正内部 `latest_snapshot.json` 指向 clean Google snapshot。 |
 | `humansand` | `20260411T132527` | `company_snapshot_humansand_20260411t132527_20260411T121114Z` | `Humans&` 的 canonical company key。 |
 | `langchain` | `20260410T045101` | `company_snapshot_langchain_20260410t045101_20260410T175508Z` | LangChain canonical snapshot。 |
+| `openai` | `20260413T140350` | `company_snapshot_openai_20260413t140350_20260413T061157Z` | OpenAI Reasoning hosted rerun 后的 canonical snapshot；已包含 current + former scoped-search 合并后的 130 条 Stage 1 候选。 |
 | `reflectionai` | `20260411T195205` | `company_snapshot_reflectionai_20260411t195205_20260411T121115Z` | Reflection AI canonical snapshot。 |
 | `thinkingmachineslab` | `20260407T181912` | `company_snapshot_thinkingmachineslab_20260407t181912_20260410T175539Z` | Thinking Machines Lab canonical snapshot。 |
 | `xai` | `20260411T114556` | `company_snapshot_xai_20260411t114556_20260411T121115Z` | xAI canonical snapshot。 |
@@ -50,13 +51,10 @@
 ### 1. Restore SQLite first
 
 ```bash
-PYTHONPATH=src python3 -m sourcing_agent.cli download-asset-bundle \
+PYTHONPATH=src python3 -m sourcing_agent.cli import-cloud-assets \
   --bundle-kind sqlite_snapshot \
   --bundle-id sqlite_snapshot_sourcing_agent_db_20260412T071012Z \
   --output-dir runtime/asset_imports
-
-PYTHONPATH=src python3 -m sourcing_agent.cli restore-sqlite-snapshot \
-  --manifest runtime/asset_imports/sqlite_snapshot_sourcing_agent_db_20260412T071012Z/bundle_manifest.json
 ```
 
 ### 2. Restore company snapshots
@@ -66,14 +64,23 @@ PYTHONPATH=src python3 -m sourcing_agent.cli restore-sqlite-snapshot \
 示例：
 
 ```bash
-PYTHONPATH=src python3 -m sourcing_agent.cli download-asset-bundle \
+PYTHONPATH=src python3 -m sourcing_agent.cli import-cloud-assets \
   --bundle-kind company_snapshot \
   --bundle-id company_snapshot_google_20260412t022230_20260412T070953Z \
   --output-dir runtime/asset_imports
+```
 
-PYTHONPATH=src python3 -m sourcing_agent.cli restore-asset-bundle \
-  --manifest runtime/asset_imports/company_snapshot_google_20260412t022230_20260412T070953Z/bundle_manifest.json \
-  --target-runtime-dir runtime
+`company_snapshot` 导入后会自动执行：
+
+- candidate artifact repair
+- organization asset registry warmup
+- linkedin profile registry backfill
+
+如果 bundle 已经下载到本地，也可以直接用 manifest：
+
+```bash
+PYTHONPATH=src python3 -m sourcing_agent.cli import-cloud-assets \
+  --manifest runtime/asset_imports/company_snapshot_google_20260412t022230_20260412T070953Z/bundle_manifest.json
 ```
 
 ### 3. Verify before serving

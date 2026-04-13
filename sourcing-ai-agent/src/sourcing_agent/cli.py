@@ -15,8 +15,10 @@ from .acquisition import AcquisitionEngine
 from .agent_runtime import AgentRuntimeCoordinator
 from .api import create_server
 from .asset_catalog import AssetCatalog
+from .asset_reuse_planning import backfill_organization_asset_registry_for_company
 from .asset_sync import AssetBundleManager
-from .candidate_artifacts import build_company_candidate_artifacts
+from .candidate_artifacts import build_company_candidate_artifacts, repair_missing_company_candidate_artifacts
+from .cloud_asset_import import import_cloud_assets
 from .company_asset_completion import CompanyAssetCompletionManager
 from .company_asset_supplement import CompanyAssetSupplementManager
 from .model_provider import OpenAICompatibleChatModelClient, QwenResponsesModelClient, build_model_client
@@ -418,6 +420,14 @@ def main() -> None:
     cleanup_duplicates_parser.add_argument("--target-company", default="", help="Optional target company filter")
     cleanup_duplicates_parser.add_argument("--active-limit", type=int, default=200, help="Max active jobs to inspect")
 
+    cleanup_blocked_residue_parser = subparsers.add_parser(
+        "cleanup-blocked-workflow-residue",
+        help="Supersede blocked/acquiring workflow residue when a newer same-family workflow already completed",
+    )
+    cleanup_blocked_residue_parser.add_argument("--target-company", default="", help="Optional target company filter")
+    cleanup_blocked_residue_parser.add_argument("--active-limit", type=int, default=200, help="Max blocked jobs to inspect")
+    cleanup_blocked_residue_parser.add_argument("--dry-run", action="store_true", help="Preview cleanup candidates without changing state")
+
     supersede_jobs_parser = subparsers.add_parser(
         "supersede-workflow-jobs",
         help="Force-supersede specific workflow jobs and retire their workers",
@@ -653,6 +663,38 @@ def main() -> None:
     backfill_registry_parser.add_argument("--progress-interval", type=int, default=200, help="Emit progress every N processed files")
     backfill_registry_parser.add_argument("--no-resume", action="store_true", help="Do not resume from prior checkpoint")
 
+    backfill_org_asset_registry_parser = subparsers.add_parser(
+        "backfill-organization-asset-registry",
+        help="Backfill organization_asset_registry from historical normalized company artifacts",
+    )
+    backfill_org_asset_registry_parser.add_argument(
+        "--company",
+        action="append",
+        default=[],
+        help="Company key or canonical name; repeatable",
+    )
+    backfill_org_asset_registry_parser.add_argument(
+        "--asset-view",
+        choices=["canonical_merged", "strict_roster_only"],
+        default="canonical_merged",
+        help="Organization asset view to register",
+    )
+    repair_candidate_artifacts_parser = subparsers.add_parser(
+        "repair-company-candidate-artifacts",
+        help="Repair legacy snapshots that have root candidate_documents.json but missing normalized candidate artifacts",
+    )
+    repair_candidate_artifacts_parser.add_argument(
+        "--company",
+        action="append",
+        default=[],
+        help="Optional company key or canonical name filter; repeatable",
+    )
+    repair_candidate_artifacts_parser.add_argument(
+        "--snapshot-id",
+        default="",
+        help="Optional snapshot id filter",
+    )
+
     profile_registry_metrics_parser = subparsers.add_parser("show-linkedin-profile-registry-metrics", help="Show profile registry cache/retry/queue metrics")
     profile_registry_metrics_parser.add_argument("--lookback-hours", type=int, default=24, help="Metrics lookback window in hours; 0 means all history")
 
@@ -686,6 +728,30 @@ def main() -> None:
     restore_sqlite_parser.add_argument("--backup-dir", default="", help="Optional backup directory")
     restore_sqlite_parser.add_argument("--no-backup", action="store_true", help="Overwrite without backing up current DB")
 
+    import_cloud_assets_parser = subparsers.add_parser(
+        "import-cloud-assets",
+        help="Download/restore a cloud asset bundle and automatically repair runtime registries for imported company snapshots",
+    )
+    import_cloud_assets_parser.add_argument("--manifest", default="", help="Optional local bundle_manifest.json path")
+    import_cloud_assets_parser.add_argument("--bundle-kind", default="", help="Bundle kind used when downloading from object storage")
+    import_cloud_assets_parser.add_argument("--bundle-id", default="", help="Bundle id used when downloading from object storage")
+    import_cloud_assets_parser.add_argument("--output-dir", default="", help="Optional download directory used with --bundle-kind/--bundle-id")
+    import_cloud_assets_parser.add_argument("--max-workers", type=int, default=0, help="Optional concurrent download worker count; 0 uses config default")
+    import_cloud_assets_parser.add_argument("--no-resume", action="store_true", help="Disable download resume when fetching the remote bundle")
+    import_cloud_assets_parser.add_argument("--target-runtime-dir", default="", help="Optional runtime dir override for runtime bundle restore")
+    import_cloud_assets_parser.add_argument("--target-db-path", default="", help="Optional DB path override for sqlite restore or post-import registry repair")
+    import_cloud_assets_parser.add_argument("--backup-dir", default="", help="Optional backup directory for sqlite restore")
+    import_cloud_assets_parser.add_argument("--no-backup", action="store_true", help="Overwrite sqlite target without backup")
+    import_cloud_assets_parser.add_argument("--conflict", choices=["skip", "overwrite", "error"], default="skip", help="How to handle existing runtime files during runtime bundle restore")
+    import_cloud_assets_parser.add_argument("--company", action="append", default=[], help="Optional imported company scope override; repeatable")
+    import_cloud_assets_parser.add_argument("--snapshot-id", default="", help="Optional imported snapshot id override")
+    import_cloud_assets_parser.add_argument("--asset-view", choices=["canonical_merged", "strict_roster_only"], default="canonical_merged", help="Asset view used when warming organization registries")
+    import_cloud_assets_parser.add_argument("--skip-artifact-repair", action="store_true", help="Skip candidate artifact repair after runtime bundle restore")
+    import_cloud_assets_parser.add_argument("--skip-org-warmup", action="store_true", help="Skip organization registry warmup after runtime bundle restore")
+    import_cloud_assets_parser.add_argument("--skip-profile-registry-backfill", action="store_true", help="Skip linkedin profile registry backfill after runtime bundle restore")
+    import_cloud_assets_parser.add_argument("--profile-progress-interval", type=int, default=200, help="Progress interval used by profile registry backfill")
+    import_cloud_assets_parser.add_argument("--profile-no-resume", action="store_true", help="Do not resume prior linkedin profile registry backfill checkpoints")
+
     subparsers.add_parser(
         "test-model",
         help="Run provider healthcheck. For low-cost workflow smoke tests, set SOURCING_EXTERNAL_PROVIDER_MODE=simulate or replay to disable Harvest/Search/model/semantic live calls.",
@@ -701,7 +767,12 @@ def main() -> None:
     serve_parser.add_argument("--runtime-watchdog-poll-seconds", type=float, default=15.0, help="Poll interval for the server-side recovery watchdog")
 
     args = parser.parse_args()
-    if args.command in {"backfill-linkedin-profile-registry", "show-linkedin-profile-registry-metrics"}:
+    if args.command in {
+        "backfill-linkedin-profile-registry",
+        "backfill-organization-asset-registry",
+        "repair-company-candidate-artifacts",
+        "show-linkedin-profile-registry-metrics",
+    }:
         catalog = AssetCatalog.discover()
         settings = load_settings(catalog.project_root)
         store = SQLiteStore(settings.db_path)
@@ -723,6 +794,41 @@ def main() -> None:
             )
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return
+        if args.command == "backfill-organization-asset-registry":
+            companies = [str(item or "").strip() for item in list(args.company or []) if str(item or "").strip()]
+            if not companies:
+                raise SystemExit("backfill-organization-asset-registry requires at least one --company")
+            results = []
+            for company in companies:
+                results.append(
+                    backfill_organization_asset_registry_for_company(
+                        runtime_dir=settings.runtime_dir,
+                        store=store,
+                        target_company=company,
+                        asset_view=str(args.asset_view or "canonical_merged"),
+                    )
+                )
+            print(
+                json.dumps(
+                    {
+                        "asset_view": str(args.asset_view or "canonical_merged"),
+                        "results": results,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+            return
+        if args.command == "repair-company-candidate-artifacts":
+            companies = [str(item or "").strip() for item in list(args.company or []) if str(item or "").strip()]
+            result = repair_missing_company_candidate_artifacts(
+                runtime_dir=settings.runtime_dir,
+                store=store,
+                companies=companies or None,
+                snapshot_id=str(args.snapshot_id or "").strip(),
+            )
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return
         if args.command == "show-linkedin-profile-registry-metrics":
             metrics = store.get_linkedin_profile_registry_metrics(lookback_hours=max(0, int(args.lookback_hours or 0)))
             print(json.dumps(metrics, ensure_ascii=False, indent=2))
@@ -741,6 +847,7 @@ def main() -> None:
         "delete-asset-bundle",
         "download-asset-bundle",
         "restore-sqlite-snapshot",
+        "import-cloud-assets",
     }:
         bundle_manager = build_asset_bundle_manager()
         if args.command == "export-company-snapshot-bundle":
@@ -967,6 +1074,40 @@ def main() -> None:
                         output_dir=args.output_dir or None,
                         max_workers=args.max_workers or None,
                         resume=not args.no_resume,
+                    ),
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+            return
+        if args.command == "import-cloud-assets":
+            storage_client = None
+            if not str(args.manifest or "").strip():
+                storage_client = build_object_storage()
+            print(
+                json.dumps(
+                    import_cloud_assets(
+                        bundle_manager=bundle_manager,
+                        manifest_path=str(args.manifest or "").strip(),
+                        bundle_kind=str(args.bundle_kind or "").strip(),
+                        bundle_id=str(args.bundle_id or "").strip(),
+                        storage_client=storage_client,
+                        output_dir=args.output_dir or None,
+                        max_workers=args.max_workers or None,
+                        resume=not bool(args.no_resume),
+                        target_runtime_dir=args.target_runtime_dir or None,
+                        conflict=str(args.conflict or "skip"),
+                        target_db_path=args.target_db_path or None,
+                        backup_current_db=not bool(args.no_backup),
+                        backup_dir=args.backup_dir or None,
+                        companies=[str(item or "").strip() for item in list(args.company or []) if str(item or "").strip()],
+                        snapshot_id=str(args.snapshot_id or "").strip(),
+                        asset_view=str(args.asset_view or "canonical_merged"),
+                        run_artifact_repair=not bool(args.skip_artifact_repair),
+                        run_org_warmup=not bool(args.skip_org_warmup),
+                        run_profile_registry_backfill=not bool(args.skip_profile_registry_backfill),
+                        profile_registry_resume=not bool(args.profile_no_resume),
+                        profile_progress_interval=max(1, int(args.profile_progress_interval or 1)),
                     ),
                     ensure_ascii=False,
                     indent=2,
@@ -1267,6 +1408,22 @@ def main() -> None:
         )
         return
 
+    if args.command == "cleanup-blocked-workflow-residue":
+        print(
+            json.dumps(
+                orchestrator.cleanup_blocked_workflow_residue(
+                    {
+                        "target_company": args.target_company,
+                        "active_limit": args.active_limit,
+                        "dry_run": args.dry_run,
+                    }
+                ),
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return
+
     if args.command == "supersede-workflow-jobs":
         print(
             json.dumps(
@@ -1501,6 +1658,7 @@ def main() -> None:
                 orchestrator,
                 poll_seconds=float(args.runtime_watchdog_poll_seconds or 15.0),
             )
+        orchestrator.start_background_organization_asset_warmup()
         server = create_server(orchestrator, host=args.host, port=args.port)
         print(f"Serving on http://{args.host}:{args.port}")
         try:

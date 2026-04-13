@@ -72,6 +72,26 @@ SOURCING_EXTERNAL_PROVIDER_MODE=simulate PYTHONPATH=src python3 -m sourcing_agen
 - 1 个全局 `sqlite_snapshot`
 - 每个 canonical company 1 个 `company_snapshot`
 
+推荐直接使用统一导入命令，而不是手工串 `download-asset-bundle -> restore-* -> backfill-*`：
+
+```bash
+PYTHONPATH=src python3 -m sourcing_agent.cli import-cloud-assets \
+  --bundle-kind sqlite_snapshot \
+  --bundle-id <sqlite_bundle_id> \
+  --output-dir runtime/asset_imports
+
+PYTHONPATH=src python3 -m sourcing_agent.cli import-cloud-assets \
+  --bundle-kind company_snapshot \
+  --bundle-id <company_snapshot_bundle_id> \
+  --output-dir runtime/asset_imports
+```
+
+对于 `company_snapshot`，这个命令会在 restore 后自动补：
+
+- candidate artifact repair
+- organization asset registry warmup
+- linkedin profile registry backfill
+
 当前推荐的 canonical bundle 清单、实际 bundle id、恢复顺序与去重规则见：
 
 - [docs/CANONICAL_CLOUD_BUNDLE_CATALOG.md](docs/CANONICAL_CLOUD_BUNDLE_CATALOG.md)
@@ -100,6 +120,8 @@ SOURCING_EXTERNAL_PROVIDER_MODE=simulate PYTHONPATH=src python3 -m sourcing_agen
   - `request_preview.intent_axes` 现在不再只是前端 preview 字段
   - execution 层会通过 `resolve_request_intent_view(...)` 与 `build_effective_request_payload(...)` 物化同一份 effective intent
   - planning、plan review、acquisition、search seed discovery、scoring、semantic retrieval 现在共享同一套 `target_company / organization_keywords / employment_statuses / execution_preferences` 语义
+  - `plan_workflow / start_workflow` 返回的 `request` 与 `request_preview` 现在也会对齐 execution 语义
+  - 如果 acquisition strategy 扩展了真正执行用的关键词，例如 `Pre-train`，前端看到的 `request.keywords` / `request_preview.keywords` 会同步反映，而不再只停留在原始归一化结果
 - 支持 `Plan Review Gate`
   - plan 阶段会生成 `plan_review_gate`
   - 对 scoped roster、investor firm roster、高成本 source 等场景要求先 review 再执行 workflow
@@ -147,7 +169,7 @@ SOURCING_EXTERNAL_PROVIDER_MODE=simulate PYTHONPATH=src python3 -m sourcing_agen
   - 已补跨进程常驻恢复器能力：
     - worker 通过 SQLite lease 协调跨进程 claim / release
     - `stale running` worker 会被降级为可恢复态重新进入 scheduler
-    - 可通过独立 CLI 进程运行 `run-worker-daemon` 持续恢复 backlog
+    - 低层 `run-worker-daemon` / `run-worker-daemon-once` 仍可单独执行，但仅建议用于排障
   - 已补系统级常驻服务壳层：
     - `run-worker-daemon-service` 提供单实例锁、心跳状态和优雅退出
     - `write-worker-daemon-systemd-unit` 可生成 systemd unit
@@ -164,8 +186,13 @@ SOURCING_EXTERNAL_PROVIDER_MODE=simulate PYTHONPATH=src python3 -m sourcing_agen
   - 前端无需再自行读取 snapshot 文件即可渲染阶段漏斗 / 阶段卡片
 - 支持 query dispatch 去重与分发：
   - 对完全相同请求可 `join inflight`（加入在途）或 `reuse completed`（复用已完成结果）
+  - 现明确区分两层 request normalization：
+    - `ingress_normalization`：请求入口的 LLM/rules 混合归一，负责把原始 query 转成结构化 intent、关键词、scope、角色与执行偏好
+    - `dispatch_matching_normalization`：dispatch 去重阶段的 deterministic 归一，只基于 prepared/effective request 做 signature / family score / snapshot reuse 判断，不再重新调用模型
   - 支持 `requester_id / tenant_id / idempotency_key` 作用域隔离，避免多用户重复消耗
   - 所有决策会落盘到 `query_dispatches`，并可通过 API 查询审计
+  - `dispatch` / `query_dispatches` 会返回 `request_family_match_explanation`，用于解释是 exact match、family match，还是同公司 snapshot 复用
+  - 对“已有全量本地资产的小型组织”，若请求仍是 `full_company_asset` 语义，即使 query 主题词变化导致 family score 偏低，也会优先复用同公司已完成 snapshot，而不是重新触发 Harvest company/search
 - 支持 `Excel contact intake`
   - `intake-excel` 会先让模型识别工作表中的姓名、公司、职位、LinkedIn、邮箱等列
   - 先做本地 exact / near match，再决定直接复用、进入 manual review，还是触发 LinkedIn profile fetch / search fallback
@@ -466,13 +493,15 @@ PYTHONPATH=src python3 -m sourcing_agent.cli build-company-candidate-artifacts -
 PYTHONPATH=src python3 -m sourcing_agent.cli complete-company-assets --company thinkingmachineslab --profile-detail-limit 12 --exploration-limit 2
 PYTHONPATH=src python3 -m sourcing_agent.cli export-sqlite-snapshot
 PYTHONPATH=src python3 -m sourcing_agent.cli upload-asset-bundle --manifest runtime/asset_exports/<bundle>/bundle_manifest.json
-PYTHONPATH=src python3 -m sourcing_agent.cli download-asset-bundle --bundle-kind company_snapshot --bundle-id <bundle_id> --output-dir /tmp/asset_imports
-PYTHONPATH=src python3 -m sourcing_agent.cli restore-asset-bundle --manifest runtime/asset_exports/<bundle>/bundle_manifest.json --target-runtime-dir /tmp/sourcing-agent-runtime
-PYTHONPATH=src python3 -m sourcing_agent.cli restore-sqlite-snapshot --manifest runtime/asset_exports/<sqlite_bundle>/bundle_manifest.json
+PYTHONPATH=src python3 -m sourcing_agent.cli import-cloud-assets --bundle-kind sqlite_snapshot --bundle-id <sqlite_bundle_id> --output-dir /tmp/asset_imports
+PYTHONPATH=src python3 -m sourcing_agent.cli import-cloud-assets --bundle-kind company_snapshot --bundle-id <bundle_id> --output-dir /tmp/asset_imports
+PYTHONPATH=src python3 -m sourcing_agent.cli download-asset-bundle --bundle-kind company_snapshot --bundle-id <bundle_id> --output-dir /tmp/asset_imports  # 仅排障
+PYTHONPATH=src python3 -m sourcing_agent.cli restore-asset-bundle --manifest runtime/asset_exports/<bundle>/bundle_manifest.json --target-runtime-dir /tmp/sourcing-agent-runtime  # 仅排障
+PYTHONPATH=src python3 -m sourcing_agent.cli restore-sqlite-snapshot --manifest runtime/asset_exports/<sqlite_bundle>/bundle_manifest.json  # 仅排障
 PYTHONPATH=src python3 -m sourcing_agent.cli interrupt-worker --worker-id <worker_id>
-PYTHONPATH=src python3 -m sourcing_agent.cli run-worker-daemon-once
-PYTHONPATH=src python3 -m sourcing_agent.cli run-worker-daemon --poll-seconds 5
-PYTHONPATH=src python3 -m sourcing_agent.cli run-worker-daemon-service --poll-seconds 5
+PYTHONPATH=src python3 -m sourcing_agent.cli run-worker-daemon-once  # 仅排障
+PYTHONPATH=src python3 -m sourcing_agent.cli run-worker-daemon --poll-seconds 5  # 仅排障
+PYTHONPATH=src python3 -m sourcing_agent.cli run-worker-daemon-service --poll-seconds 5  # hosted 常规路径
 PYTHONPATH=src python3 -m sourcing_agent.cli write-worker-daemon-systemd-unit
 PYTHONPATH=src python3 -m sourcing_agent.cli show-manual-review --target-company Anthropic
 PYTHONPATH=src python3 -m sourcing_agent.cli review-manual-item --file configs/manual_review_resolve.example.json

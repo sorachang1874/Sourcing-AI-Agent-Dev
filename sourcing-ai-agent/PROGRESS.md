@@ -1,5 +1,43 @@
 # Sourcing AI Agent Dev Progress
 
+## 2026-04-13
+
+### OpenAI hosted rerun 跑通、search-seed lane merge 修复与云端 canonical bundle 补齐
+
+- 已修复一个直接影响 hosted live run 的 acquisition 状态问题：
+  - `scoped_search_roster` 的 current lane 与 former lane 之前共用单个 `search_seed_snapshot`
+  - former lane 会覆盖 current lane，导致 `95 + 44` 最终只剩 `80`
+  - 现已改成：
+    - current/former search-seed snapshot 合并
+    - 合并结果写回 `search_seed_discovery/entries.json + summary.json`
+    - hosted recovery / restore 看到的也是同一份 merged snapshot
+- 已补定向回归测试：
+  - former search-seed merge
+  - 方向型 scoped search 在模型弱化时仍保留 `functionIds=[24,8]`
+  - 不回退到 `job_titles`
+- 已完成一条真实 hosted OpenAI workflow 复跑：
+  - `job_id=49044c9afdd2`
+  - `snapshot_id=20260413T140350`
+  - 不再手动 `execute-workflow`
+  - 自动完成：
+    - `linkedin_stage_1`
+    - `stage_1_preview`
+    - `public_web_stage_2`
+    - `stage_2_final`
+- 这次 OpenAI hosted rerun 的关键结果：
+  - current lane `94`
+  - former lane `44`
+  - merged stage-1 candidate base `130`
+  - stage-1 preview `36 matches`
+  - final `40 matches`
+- 已导出并开始同步新的 canonical cloud bundle：
+  - `company_snapshot_openai_20260413t140350_20260413T061157Z`
+  - `sqlite_snapshot_sourcing_agent_db_20260413T061157Z`
+- 文档口径已继续统一：
+  - 服务器恢复默认只认 `import-cloud-assets`
+  - hosted 默认执行路径只认 `serve + run-worker-daemon-service`
+  - `download-asset-bundle + restore-*`、`execute-workflow` 退回为排障动作
+
 ## 2026-04-12
 
 ### Canonical cloud bundle catalog 与 intent_axes 执行层下沉
@@ -21,6 +59,10 @@
     - 模型直接返回的 `scope_disambiguation` 现在会被真正合入 request payload
     - 不会再被后续规则推断静默覆盖
 - 已补回归测试，确保“模型只返回 intent_axes”时，planning / review / acquisition 仍能生成正确执行字段，而不只是 preview 好看。
+- 已修一处 preview / request 漂移：
+  - 过去 `request_preview.keywords` 可能缺少 acquisition strategy 真正执行的扩展关键词
+  - 现在 `plan_workflow / start_workflow` 返回的 `request` 与 `request_preview` 都会对齐 execution-aligned request
+  - 例如 Google `multimodal + Pre-train` 这类 query，会明确把 `Pre-train` 反映到返回 payload，而不再只存在于内部 `filter_hints.keywords`
 - 本地与 OSS 远端 canonical bundle index 当前都已收敛为：
   - 7 个 `company_snapshot`
   - 1 个 `sqlite_snapshot`

@@ -52,6 +52,7 @@ def read_service_status(runtime_dir: str | Path, service_name: str = "worker-rec
     payload["heartbeat_timeout_seconds"] = heartbeat_timeout_seconds
     payload.setdefault("service_name", service_name)
     payload.setdefault("status_path", str(status_path))
+    payload = _decorate_service_activity_status(payload)
     if str(payload.get("status") or "") in {"starting", "running", "stopping"} and (
         lock_status != "locked"
         or (heartbeat_age_seconds is not None and heartbeat_age_seconds > heartbeat_timeout_seconds)
@@ -606,3 +607,65 @@ def _summarize_service_log_payload(summary: dict[str, Any] | None) -> dict[str, 
         "workflow_resume_count": len(workflow_resume),
         "post_completion_reconcile_count": len(post_completion_reconcile),
     }
+
+
+def _decorate_service_activity_status(payload: dict[str, Any]) -> dict[str, Any]:
+    decorated = dict(payload or {})
+    last_summary = _summary_dict(decorated.get("last_summary"))
+    raw_last_nonempty_summary = _summary_dict(decorated.get("last_nonempty_summary"))
+    last_nonempty_tick = int(decorated.get("last_nonempty_tick") or 0)
+    last_nonempty_at = str(decorated.get("last_nonempty_at") or "")
+    current_has_activity = _service_summary_has_activity(last_summary)
+    last_activity_age_seconds = _heartbeat_age_seconds(last_nonempty_at)
+    last_activity_window_seconds = _activity_summary_recency_window_seconds(decorated.get("poll_seconds"))
+    historical_last_activity = (
+        bool(raw_last_nonempty_summary)
+        and not current_has_activity
+        and (
+            last_activity_age_seconds is None
+            or last_activity_age_seconds > last_activity_window_seconds
+        )
+    )
+
+    decorated["current_activity_summary"] = last_summary if current_has_activity else {}
+    decorated["current_activity_has_work"] = current_has_activity
+    decorated["activity_summary_window_seconds"] = last_activity_window_seconds
+    if last_activity_age_seconds is not None:
+        decorated["last_activity_age_seconds"] = last_activity_age_seconds
+
+    if historical_last_activity:
+        decorated["historical_last_nonempty_summary"] = raw_last_nonempty_summary
+        decorated["historical_last_nonempty_tick"] = last_nonempty_tick
+        decorated["historical_last_nonempty_at"] = last_nonempty_at
+        decorated["last_nonempty_summary"] = {}
+        decorated["last_nonempty_tick"] = 0
+        decorated["last_nonempty_at"] = ""
+        decorated["last_nonempty_summary_is_historical"] = True
+        decorated["activity_summary"] = {}
+        decorated["activity_summary_source"] = "none"
+    else:
+        decorated.setdefault("historical_last_nonempty_summary", {})
+        decorated.setdefault("historical_last_nonempty_tick", 0)
+        decorated.setdefault("historical_last_nonempty_at", "")
+        decorated["last_nonempty_summary"] = raw_last_nonempty_summary
+        decorated["last_nonempty_tick"] = last_nonempty_tick
+        decorated["last_nonempty_at"] = last_nonempty_at
+        decorated["last_nonempty_summary_is_historical"] = False
+        if current_has_activity:
+            decorated["activity_summary"] = last_summary
+            decorated["activity_summary_source"] = "current"
+        elif raw_last_nonempty_summary:
+            decorated["activity_summary"] = raw_last_nonempty_summary
+            decorated["activity_summary_source"] = "recent"
+        else:
+            decorated["activity_summary"] = {}
+            decorated["activity_summary_source"] = "none"
+    return decorated
+
+
+def _summary_dict(value: Any) -> dict[str, Any]:
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def _activity_summary_recency_window_seconds(poll_seconds: Any) -> float:
+    return max(60.0, _heartbeat_timeout_seconds(poll_seconds) * 3.0)

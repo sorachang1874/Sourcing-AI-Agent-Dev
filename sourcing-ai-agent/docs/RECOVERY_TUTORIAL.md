@@ -95,27 +95,28 @@ PYTHONPATH=src python3 -m sourcing_agent.cli restore-asset-bundle \
   --target-runtime-dir ./runtime
 ```
 
-如果云端 object storage 已配置，并且 bundle 已上传：
+如果云端 object storage 已配置，并且 bundle 已上传，当前默认恢复路径应优先使用 `import-cloud-assets`：
 
 ```bash
-PYTHONPATH=src python3 -m sourcing_agent.cli download-asset-bundle \
-  --bundle-kind company_handoff \
-  --bundle-id company_handoff_thinkingmachineslab_20260406t172703_20260406T125539Z \
+PYTHONPATH=src python3 -m sourcing_agent.cli import-cloud-assets \
+  --bundle-kind sqlite_snapshot \
+  --bundle-id <sqlite_bundle_id> \
   --output-dir ./runtime/asset_imports
 
-PYTHONPATH=src python3 -m sourcing_agent.cli restore-asset-bundle \
-  --manifest ./runtime/asset_imports/company_handoff_thinkingmachineslab_20260406t172703_20260406T125539Z/bundle_manifest.json \
-  --target-runtime-dir ./runtime
+PYTHONPATH=src python3 -m sourcing_agent.cli import-cloud-assets \
+  --bundle-kind company_snapshot \
+  --bundle-id <company_snapshot_bundle_id> \
+  --output-dir ./runtime/asset_imports
 ```
 
-重复执行同一个 `download-asset-bundle` 命令时，当前默认会 resume：
+如需底层排障，才建议拆成 `download-asset-bundle + restore-*`。重复执行同一个 `download-asset-bundle` 命令时，当前默认会 resume：
 
 - 已存在且匹配 manifest 的 payload 会被跳过
 - 中断后重跑会优先补剩余缺口
 
 ### 4. Restore SQLite if needed
 
-如果你需要恢复 DB：
+如果你已经手工拿到了本地 sqlite bundle，才需要直接调用：
 
 ```bash
 PYTHONPATH=src python3 -m sourcing_agent.cli restore-sqlite-snapshot \
@@ -327,5 +328,6 @@ workflow 恢复逻辑新增了对 `running + acquiring` 的续跑支持，不再
 因此当你看到 job 卡在 `running/acquiring` 时，恢复动作和排查顺序与 `blocked/acquiring` 基本一致：
 
 1. `show-workers` 看是否还有 pending worker。
-2. 若无 pending，执行 `execute-workflow` 或 `run-worker-daemon-once` 触发续跑。
-3. 观察 `show-progress` 是否进入 `retrieving/completed`。
+2. 若无 pending，先看 hosted 常驻 `serve + run-worker-daemon-service` 是否仍在。
+3. 只有确认 hosted 常驻没有自动接管时，才把 `execute-workflow` 作为排障动作。
+4. 观察 `show-progress` 是否进入 `retrieving/completed`。

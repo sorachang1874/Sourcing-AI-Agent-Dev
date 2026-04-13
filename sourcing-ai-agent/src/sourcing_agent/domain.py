@@ -875,6 +875,7 @@ class SourcingPlan:
     publication_coverage: PublicationCoveragePlan
     search_strategy: SearchStrategyPlan
     acquisition_tasks: list[AcquisitionTask]
+    asset_reuse_plan: dict[str, Any] = field(default_factory=dict)
     intent_brief: IntentPlanBrief = field(default_factory=IntentPlanBrief)
     assumptions: list[str] = field(default_factory=list)
     open_questions: list[str] = field(default_factory=list)

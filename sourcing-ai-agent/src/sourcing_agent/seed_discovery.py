@@ -18,7 +18,8 @@ from .connectors import CompanyIdentity, RapidApiAccount, search_people_accounts
 from .domain import Candidate, EvidenceRecord, JobRequest, format_display_name, make_evidence_id, normalize_name_token
 from .harvest_connectors import HarvestProfileSearchConnector
 from .model_provider import DeterministicModelClient, ModelClient
-from .request_normalization import build_effective_request_payload
+from .query_signal_knowledge import canonicalize_scope_signal_label
+from .request_normalization import build_effective_request_payload, resolve_request_intent_view
 from .search_provider import (
     BaseSearchProvider,
     DuckDuckGoHtmlSearchProvider,
@@ -37,6 +38,10 @@ def _env_int(name: str, default: int) -> int:
         return int(raw)
     except (TypeError, ValueError):
         return default
+
+
+def _external_provider_mode() -> str:
+    return str(os.getenv("SOURCING_EXTERNAL_PROVIDER_MODE") or "live").strip().lower() or "live"
 
 
 _LANE_READY_POLL_MIN_INTERVAL_SECONDS = max(
@@ -98,6 +103,12 @@ class SearchSeedAcquirer:
         self.model_client = model_client or DeterministicModelClient()
         self.harvest_search_connector = harvest_search_connector
         self.search_provider = search_provider or DuckDuckGoHtmlSearchProvider()
+
+    def _rapidapi_people_search_enabled(self) -> bool:
+        return _external_provider_mode() == "live" and bool(self.accounts)
+
+    def _harvest_people_search_enabled(self) -> bool:
+        return bool(self.harvest_search_connector and self.harvest_search_connector.settings.enabled)
 
     def refresh_background_search_workers(self, workers: list[dict[str, Any]]) -> dict[str, Any]:
         grouped_specs: dict[Path, list[dict[str, Any]]] = {}
@@ -202,12 +213,44 @@ class SearchSeedAcquirer:
         request_payload: dict[str, Any] | None = None,
         plan_payload: dict[str, Any] | None = None,
         runtime_mode: str = "workflow",
+        intent_view: dict[str, Any] | None = None,
+        delta_execution_plan: dict[str, Any] | None = None,
+        lane_context: dict[str, Any] | None = None,
     ) -> SearchSeedSnapshot:
         discovery_dir = snapshot_dir / "search_seed_discovery"
         discovery_dir.mkdir(parents=True, exist_ok=True)
         logger = asset_logger or AssetLogger(snapshot_dir)
-        effective_request_payload = build_effective_request_payload(request_payload or {}) if request_payload else {}
-        effective_filter_hints = _normalize_harvest_company_filters(identity, filter_hints)
+        resolved_intent_view = dict(
+            intent_view
+            or resolve_request_intent_view(request_payload or {})
+            or {}
+        )
+        effective_request_payload = build_effective_request_payload(
+            request_payload or {"target_company": identity.canonical_name},
+            intent_view=resolved_intent_view,
+        )
+        resolved_filter_hints = _resolve_discovery_filter_hints(
+            filter_hints=filter_hints,
+            intent_view=resolved_intent_view,
+        )
+        effective_filter_hints = _normalize_harvest_company_filters(identity, resolved_filter_hints)
+        resolved_search_seed_queries = _resolve_discovery_search_seed_queries(
+            search_seed_queries=search_seed_queries,
+            query_bundles=query_bundles or [],
+            intent_view=resolved_intent_view,
+        )
+        effective_search_seed_queries = _resolve_effective_search_seed_queries(
+            search_seed_queries=resolved_search_seed_queries,
+            delta_execution_plan=delta_execution_plan,
+        )
+        resolved_query_bundles = _resolve_discovery_query_bundles(
+            query_bundles=query_bundles or [],
+            intent_view=resolved_intent_view,
+        )
+        effective_query_bundles = _filter_query_bundles_for_delta(
+            resolved_query_bundles,
+            allowed_queries=effective_search_seed_queries,
+        )
         provider_people_search_mode = str(cost_policy.get("provider_people_search_mode") or "fallback_only").strip().lower()
         provider_search_only = provider_people_search_mode in {"primary_only", "provider_only", "harvest_only"}
         provider_search_primary = provider_people_search_mode in {"primary", "always", "primary_only", "provider_only", "harvest_only"}
@@ -218,7 +261,7 @@ class SearchSeedAcquirer:
         errors: list[str] = []
         stop_reason = "completed"
 
-        compiled_queries = _compile_query_specs(search_seed_queries, query_bundles or [])
+        compiled_queries = _compile_query_specs(effective_search_seed_queries, effective_query_bundles)
         web_result_target = int(cost_policy.get("provider_people_search_min_expected_results", 10) or 10)
         parallel_limit = max(1, min(int(cost_policy.get("parallel_search_workers", 3) or 3), len(compiled_queries) or 1))
         result_limit = max(1, min(int(cost_policy.get("public_media_results_per_query", 10) or 10), 25))
@@ -327,9 +370,14 @@ class SearchSeedAcquirer:
             stop_reason = "queued_background_search"
 
         entries = _dedupe_seed_entries(entries)
-        paid_queries = [item["query"] for item in compiled_queries if item["execution_mode"] == "paid_fallback"] or list(search_seed_queries)
+        paid_queries = _resolve_provider_people_search_queries(
+            identity=identity,
+            filter_hints=effective_filter_hints,
+            search_seed_queries=[item["query"] for item in compiled_queries if item["execution_mode"] == "paid_fallback"]
+            or list(effective_search_seed_queries),
+        )
         provider_available = bool(
-            self.accounts or (self.harvest_search_connector and self.harvest_search_connector.settings.enabled)
+            self._rapidapi_people_search_enabled() or self._harvest_people_search_enabled()
         )
         should_run_provider_people_search = False
         if provider_search_primary:
@@ -372,8 +420,10 @@ class SearchSeedAcquirer:
             "target_company": identity.canonical_name,
             "company_identity": identity.to_record(),
             "entry_count": len(entries),
-            "search_seed_queries": search_seed_queries,
-            "requested_filter_hints": filter_hints,
+            "search_seed_queries": effective_search_seed_queries,
+            "requested_search_seed_queries": resolved_search_seed_queries,
+            "effective_query_bundles": effective_query_bundles,
+            "requested_filter_hints": resolved_filter_hints,
             "effective_filter_hints": effective_filter_hints,
             "query_summaries": query_summaries,
             "accounts_used": accounts_used,
@@ -381,6 +431,9 @@ class SearchSeedAcquirer:
             "stop_reason": stop_reason,
             "queued_query_count": queued_query_count,
             "cost_policy": cost_policy,
+            "intent_view": resolved_intent_view,
+            "delta_execution_plan": dict(delta_execution_plan or {}),
+            "lane_context": dict(lane_context or {}),
             "worker_daemon": {
                 "cycles": int(daemon_summary.get("cycles") or 0),
                 "retried": list(daemon_summary.get("retried") or []),
@@ -880,7 +933,11 @@ class SearchSeedAcquirer:
             max_query_count = 0
         if max_query_count < 0:
             max_query_count = 0
-        paid_queries = list(search_seed_queries)
+        paid_queries = _resolve_provider_people_search_queries(
+            identity=identity,
+            filter_hints=filter_hints,
+            search_seed_queries=search_seed_queries,
+        )
         if (
             employment_status == "former"
             and list(filter_hints.get("past_companies") or [])
@@ -902,8 +959,7 @@ class SearchSeedAcquirer:
         precomputed_harvest_plans: dict[str, dict[str, Any]] = {}
         if (
             deduped_queries
-            and self.harvest_search_connector
-            and self.harvest_search_connector.settings.enabled
+            and self._harvest_people_search_enabled()
             and not stop_after_first_hit
             and bool(cost_policy.get("provider_people_search_overlap_pruning", True))
         ):
@@ -978,7 +1034,7 @@ class SearchSeedAcquirer:
             *,
             precomputed_plan: dict[str, Any] | None = None,
         ) -> dict[str, Any]:
-            if not (self.harvest_search_connector and self.harvest_search_connector.settings.enabled):
+            if not self._harvest_people_search_enabled():
                 return {"query_entries": [], "query_summary": None, "account_used": ""}
             harvest_plan = dict(precomputed_plan or {})
             effective_query_text = str(harvest_plan.get("effective_query_text") or "").strip()
@@ -1066,8 +1122,7 @@ class SearchSeedAcquirer:
         if (
             deduped_queries
             and not stop_after_first_hit
-            and self.harvest_search_connector
-            and self.harvest_search_connector.settings.enabled
+            and self._harvest_people_search_enabled()
         ):
             try:
                 configured_parallel_workers = int(cost_policy.get("provider_people_search_parallel_queries") or 4)
@@ -1095,7 +1150,7 @@ class SearchSeedAcquirer:
 
         for index, query_text in enumerate(deduped_queries, start=1):
             summary_query = query_text or "__past_company_only__"
-            if self.harvest_search_connector and self.harvest_search_connector.settings.enabled:
+            if self._harvest_people_search_enabled():
                 harvest_payload = (
                     dict(parallel_harvest_results.get(index) or {})
                     if not stop_after_first_hit and parallel_harvest_results
@@ -1116,6 +1171,8 @@ class SearchSeedAcquirer:
                     accounts_used.append(account_used)
                 if query_entries and stop_after_first_hit:
                     break
+            if not self._rapidapi_people_search_enabled():
+                continue
             if not query_text:
                 continue
             payload, account, provider_errors = self._search_people(query_text, limit=min(limit, 25))
@@ -1207,13 +1264,20 @@ class SearchSeedAcquirer:
         }
         if self.harvest_search_connector is None or not self.harvest_search_connector.settings.enabled:
             return plan
-        if str(employment_status or "").strip().lower() != "former":
-            return plan
-        if not list(filter_hints.get("past_companies") or []):
+        company_scoped_search = bool(
+            list(filter_hints.get("past_companies") or [])
+            or list(filter_hints.get("current_companies") or [])
+        )
+        if not company_scoped_search:
             return plan
         requested_limit_value = int(plan["requested_limit"])
         requested_pages_value = int(plan["requested_pages"])
-        should_probe = requested_limit_value > 25 or requested_pages_value > 1 or not str(query_text or "").strip()
+        former_past_company_scan = (
+            str(employment_status or "").strip().lower() == "former"
+            and bool(list(filter_hints.get("past_companies") or []))
+            and not str(query_text or "").strip()
+        )
+        should_probe = requested_limit_value > 25 or requested_pages_value > 1 or former_past_company_scan
         if not should_probe:
             return plan
         probe_result = self.harvest_search_connector.search_profiles(
@@ -1249,6 +1313,8 @@ class SearchSeedAcquirer:
         return plan
 
     def _search_people(self, query_text: str, *, limit: int) -> tuple[dict[str, Any] | None, RapidApiAccount | None, list[str]]:
+        if not self._rapidapi_people_search_enabled():
+            return None, None, []
         errors_seen: list[str] = []
         for account in self.accounts:
             if account.account_id in self._exhausted_account_ids:
@@ -2175,6 +2241,97 @@ def _normalize_harvest_query_text(
     return normalized_query
 
 
+_GENERIC_PROVIDER_QUERY_TERMS = {
+    "research",
+    "researcher",
+    "researchers",
+    "employee",
+    "employees",
+    "member",
+    "members",
+    "team",
+    "teams",
+    "current",
+    "former",
+    "people",
+    "person",
+}
+
+_PROVIDER_QUERY_CANONICAL_ALIASES = {
+    "reasoning model": "Reasoning",
+    "reasoning models": "Reasoning",
+    "chain of thought": "Chain-of-thought",
+    "chain-of-thought": "Chain-of-thought",
+    "inference time compute": "Inference-time compute",
+    "inference-time compute": "Inference-time compute",
+    "post train": "Post-train",
+    "post-training": "Post-train",
+    "pre train": "Pre-train",
+    "pre-training": "Pre-train",
+    "vision language": "Vision-language",
+    "vision-language": "Vision-language",
+    "multimodality": "Multimodal",
+    "video-generation": "Video generation",
+    "infrastructure": "Infra",
+}
+
+
+def _resolve_provider_people_search_queries(
+    *,
+    identity: CompanyIdentity,
+    filter_hints: dict[str, list[str]],
+    search_seed_queries: list[str],
+) -> list[str]:
+    queries: list[str] = []
+    seen: set[str] = set()
+
+    def _add(value: str) -> None:
+        cleaned = _clean_provider_query_text(value)
+        if not cleaned:
+            return
+        signature = _provider_query_family_key(cleaned)
+        if signature in seen:
+            return
+        seen.add(signature)
+        queries.append(cleaned)
+
+    for value in list(filter_hints.get("keywords") or []):
+        _add(str(value or ""))
+    for value in list(filter_hints.get("scope_keywords") or []):
+        _add(str(value or ""))
+    for value in list(search_seed_queries or []):
+        normalized = _normalize_harvest_query_text(
+            query_text=str(value or ""),
+            filter_hints=filter_hints,
+            identity=identity,
+        )
+        _add(normalized)
+    return queries
+
+
+def _clean_provider_query_text(value: str) -> str:
+    normalized = " ".join(str(value or "").split()).strip()
+    if not normalized:
+        return ""
+    stripped = re.sub(
+        r"\b(" + "|".join(re.escape(token) for token in sorted(_GENERIC_PROVIDER_QUERY_TERMS)) + r")\b",
+        " ",
+        normalized,
+        flags=re.IGNORECASE,
+    )
+    stripped = " ".join(stripped.split())
+    return stripped
+
+
+def _provider_query_family_key(value: str) -> str:
+    normalized = " ".join(str(value or "").split()).strip()
+    if not normalized:
+        return ""
+    scoped = canonicalize_scope_signal_label(normalized)
+    canonical = _PROVIDER_QUERY_CANONICAL_ALIASES.get(normalized.lower(), scoped or normalized)
+    return _search_query_signature(canonical) or canonical.lower()
+
+
 def _harvest_blocked_query_tokens(*, filter_hints: dict[str, list[str]], identity: CompanyIdentity) -> list[str]:
     blocked: list[str] = []
     seen: set[str] = set()
@@ -2315,6 +2472,126 @@ def _compile_query_specs(search_seed_queries: list[str], query_bundles: list[dic
         seen.add(key)
         deduped.append(item)
     return deduped
+
+
+def _resolve_effective_search_seed_queries(
+    *,
+    search_seed_queries: list[str],
+    delta_execution_plan: dict[str, Any] | None,
+) -> list[str]:
+    delta_queries = [
+        " ".join(str(item or "").split()).strip()
+        for item in list(dict(delta_execution_plan or {}).get("missing_profile_search_queries") or [])
+        if " ".join(str(item or "").split()).strip()
+    ]
+    source = delta_queries or list(search_seed_queries or [])
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for item in source:
+        normalized = " ".join(str(item or "").split()).strip()
+        if not normalized:
+            continue
+        signature = _search_query_signature(normalized) or normalized.lower()
+        if signature in seen:
+            continue
+        seen.add(signature)
+        deduped.append(normalized)
+    return deduped
+
+
+def _resolve_discovery_filter_hints(
+    *,
+    filter_hints: dict[str, list[str]] | None,
+    intent_view: dict[str, Any] | None,
+) -> dict[str, list[str]]:
+    explicit = {
+        str(key): [str(item).strip() for item in list(values or []) if str(item).strip()]
+        for key, values in dict(filter_hints or {}).items()
+        if str(key).strip()
+    }
+    if explicit:
+        return explicit
+    return {
+        str(key): [str(item).strip() for item in list(values or []) if str(item).strip()]
+        for key, values in dict(dict(intent_view or {}).get("filter_hints") or {}).items()
+        if str(key).strip()
+    }
+
+
+def _resolve_discovery_query_bundles(
+    *,
+    query_bundles: list[dict[str, Any]] | None,
+    intent_view: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    explicit = [dict(item) for item in list(query_bundles or []) if isinstance(item, dict)]
+    if explicit:
+        return explicit
+    return [dict(item) for item in list(dict(intent_view or {}).get("search_query_bundles") or []) if isinstance(item, dict)]
+
+
+def _resolve_discovery_search_seed_queries(
+    *,
+    search_seed_queries: list[str] | None,
+    query_bundles: list[dict[str, Any]] | None,
+    intent_view: dict[str, Any] | None,
+) -> list[str]:
+    explicit_queries = [
+        " ".join(str(item or "").split()).strip()
+        for item in list(search_seed_queries or [])
+        if " ".join(str(item or "").split()).strip()
+    ]
+    if explicit_queries:
+        return explicit_queries
+    bundled_queries: list[str] = []
+    for bundle in list(query_bundles or []):
+        if not isinstance(bundle, dict):
+            continue
+        for query in list(bundle.get("queries") or []):
+            normalized = " ".join(str(query or "").split()).strip()
+            if normalized:
+                bundled_queries.append(normalized)
+    if bundled_queries:
+        return bundled_queries
+    return [
+        " ".join(str(item or "").split()).strip()
+        for item in list(dict(intent_view or {}).get("search_seed_queries") or [])
+        if " ".join(str(item or "").split()).strip()
+    ]
+
+
+def _filter_query_bundles_for_delta(
+    query_bundles: list[dict[str, Any]],
+    *,
+    allowed_queries: list[str],
+) -> list[dict[str, Any]]:
+    allowed_signatures = {
+        _search_query_signature(query) or " ".join(str(query or "").lower().split())
+        for query in list(allowed_queries or [])
+        if str(query or "").strip()
+    }
+    if not allowed_signatures:
+        return [dict(bundle or {}) for bundle in list(query_bundles or []) if isinstance(bundle, dict)]
+    filtered: list[dict[str, Any]] = []
+    for bundle in list(query_bundles or []):
+        if not isinstance(bundle, dict):
+            continue
+        queries = []
+        for query in list(bundle.get("queries") or []):
+            normalized = " ".join(str(query or "").split()).strip()
+            if not normalized:
+                continue
+            signature = _search_query_signature(normalized) or normalized.lower()
+            if signature in allowed_signatures:
+                queries.append(normalized)
+        if not queries:
+            continue
+        filtered.append(
+            {
+                **dict(bundle),
+                "queries": queries,
+            }
+        )
+    return filtered
 
 
 def infer_public_names_from_result_title(title: str, identity: CompanyIdentity) -> list[str]:

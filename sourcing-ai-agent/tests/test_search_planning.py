@@ -43,6 +43,33 @@ class SearchPlanningTest(unittest.TestCase):
             search_plan.follow_up_rules,
         )
 
+    def test_relationship_bundle_dedupes_company_scope_terms(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "我想要OpenAI做Reasoning方向的人",
+                "query": "OpenAI Reasoning方向的人",
+                "target_company": "OpenAI",
+                "categories": ["researcher", "engineer"],
+                "employment_statuses": ["current", "former"],
+                "keywords": ["Reasoning"],
+                "must_have_facets": ["reasoning"],
+                "must_have_primary_role_buckets": ["research"],
+                "primary_role_bucket_mode": "soft",
+                "execution_preferences": {
+                    "keyword_priority_only": True,
+                    "provider_people_search_query_strategy": "all_queries_union",
+                },
+            }
+        )
+        retrieval_plan = RetrievalPlan(strategy="hybrid", reason="test")
+        strategy = compile_acquisition_strategy(request, ["researcher", "engineer"], ["current", "former"], retrieval_plan)
+        publication = compile_publication_coverage_plan(request, strategy)
+        search_plan = compile_search_strategy(request, strategy, publication, DeterministicModelClient())
+
+        relationship_bundle = next(item for item in search_plan.query_bundles if item.bundle_id == "relationship_web")
+        self.assertIn("OpenAI team", relationship_bundle.queries)
+        self.assertNotIn("OpenAI OpenAI team", relationship_bundle.queries)
+
     def test_model_merge_dedupes_query_variants_by_signature(self) -> None:
         class _FakeModelClient(DeterministicModelClient):
             def provider_name(self) -> str:
