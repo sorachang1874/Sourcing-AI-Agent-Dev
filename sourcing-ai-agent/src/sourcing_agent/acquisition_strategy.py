@@ -23,7 +23,6 @@ from .query_signal_knowledge import (
     role_bucket_role_hints,
     role_buckets_from_text,
     scope_signal_keyword_labels,
-    scope_signal_search_query_aliases,
 )
 from .request_normalization import resolve_request_intent_view
 
@@ -78,20 +77,6 @@ ACQUISITION_KEYWORD_EXCLUSION_KEYS = {
     "mainland or chinese language",
 }
 
-KEYWORD_PRIORITY_SEARCH_QUERY_ALIASES = {
-    "multimodal": ["Multimodal", "Multimodality"],
-    "visionlanguage": ["Vision-language", "Vision Language"],
-    "videogeneration": ["Video generation"],
-    "reasoning": ["Reasoning", "Reasoning model"],
-    "chainofthought": ["Chain-of-thought"],
-    "inferencetimecompute": ["Inference-time compute"],
-    "rlhf": ["RLHF", "Reinforcement Learning from Human Feedback"],
-    "alignment": ["Alignment"],
-    "infrastructure": ["Infrastructure", "Infra"],
-    "agentic": ["Agentic"],
-    "agents": ["Agents"],
-}
-
 KEYWORD_PRIORITY_SKIP_KEYS = {
     "research",
     "researcher",
@@ -100,6 +85,27 @@ KEYWORD_PRIORITY_SKIP_KEYS = {
     "engineering",
     "engineer",
 }
+
+_DIRECTIONAL_SCOPE_HINT_TERMS = (
+    "方向",
+    "方向的",
+    "方向上",
+    "topic",
+    "topics",
+    "focus",
+    "focused",
+    "focus area",
+    "focus areas",
+    "track",
+    "tracks",
+    "area",
+    "areas",
+    "working on",
+    "work on",
+    "负责",
+    "参与",
+    "相关",
+)
 
 
 def compile_acquisition_strategy(
@@ -128,6 +134,8 @@ def compile_acquisition_strategy(
     effective_must_have_keywords = list(intent_view.get("must_have_keywords") or [])
     effective_must_have_facets = list(intent_view.get("must_have_facets") or [])
     effective_role_buckets = list(intent_view.get("must_have_primary_role_buckets") or [])
+    category_role_buckets = normalize_requested_role_buckets(effective_categories)
+    primary_role_bucket_mode = str(intent_view.get("primary_role_bucket_mode") or "hard").strip().lower() or "hard"
     execution_preferences = dict(intent_view.get("execution_preferences") or {})
     scope_hints = _merge_scope_hints(
         inferred=_infer_scope_hints(text),
@@ -150,13 +158,15 @@ def compile_acquisition_strategy(
     )
     role_hints = _infer_role_hints(
         text,
-        effective_role_buckets,
+        [*category_role_buckets, *(effective_role_buckets if primary_role_bucket_mode == "hard" else [])],
         effective_must_have_facets,
     )
     function_ids = _infer_function_ids(
         text,
-        effective_role_buckets,
+        [*category_role_buckets, *effective_role_buckets],
         effective_must_have_facets,
+        categories=effective_categories,
+        keyword_hints=effective_keywords + effective_must_have_keywords,
     )
     keyword_hints = _infer_keyword_hints(
         text,
@@ -422,13 +432,55 @@ def _infer_role_hints(text: str, requested_role_buckets: list[str], requested_fa
     return role_bucket_role_hints(all_buckets)[:5]
 
 
-def _infer_function_ids(text: str, requested_role_buckets: list[str], requested_facets: list[str]) -> list[str]:
+def _infer_function_ids(
+    text: str,
+    requested_role_buckets: list[str],
+    requested_facets: list[str],
+    *,
+    categories: list[str] | None = None,
+    keyword_hints: list[str] | None = None,
+) -> list[str]:
     normalized_requested_buckets = normalize_requested_role_buckets(requested_role_buckets) + [
         normalize_requested_role_bucket(item) for item in requested_facets
     ]
     matched_buckets = role_buckets_from_text(text)
     all_buckets = list(dict.fromkeys([*normalized_requested_buckets, *matched_buckets]))
-    return role_bucket_function_ids(all_buckets)[:4]
+    function_ids = role_bucket_function_ids(all_buckets)[:4]
+    if _should_expand_directional_function_ids(
+        text=text,
+        function_ids=function_ids,
+        categories=categories or [],
+        keyword_hints=keyword_hints or [],
+    ):
+        function_ids = list(dict.fromkeys([*function_ids, "24", "8"]))
+    return function_ids[:4]
+
+
+def _should_expand_directional_function_ids(
+    *,
+    text: str,
+    function_ids: list[str],
+    categories: list[str],
+    keyword_hints: list[str],
+) -> bool:
+    if not keyword_hints:
+        return False
+    normalized_text = " ".join(str(text or "").lower().split()).strip()
+    if not normalized_text:
+        return False
+    if not any(token in normalized_text for token in _DIRECTIONAL_SCOPE_HINT_TERMS):
+        return False
+    normalized_categories = {
+        str(item or "").strip().lower()
+        for item in list(categories or [])
+        if str(item or "").strip()
+    }
+    if normalized_categories and not normalized_categories.issubset({"employee", "former_employee"}):
+        return False
+    normalized_function_ids = {str(item or "").strip() for item in list(function_ids or []) if str(item or "").strip()}
+    if normalized_function_ids and not normalized_function_ids.issubset({"24", "8"}):
+        return False
+    return True
 
 
 def _infer_keyword_hints(text: str, explicit_keywords: list[str]) -> list[str]:
@@ -501,17 +553,14 @@ def _keyword_priority_focus_queries(keyword_hints: list[str]) -> list[str]:
         canonical_key = _canonical_keyword_key(label)
         if not canonical_key or canonical_key in KEYWORD_PRIORITY_SKIP_KEYS:
             continue
-        alias_key = "".join(ch for ch in canonical_key.lower() if ch.isalnum())
-        alias_queries = scope_signal_search_query_aliases(label) or KEYWORD_PRIORITY_SEARCH_QUERY_ALIASES.get(alias_key) or [label]
-        for query in alias_queries:
-            normalized = " ".join(str(query or "").split()).strip()
-            if not normalized:
-                continue
-            dedupe_key = _search_query_dedupe_key(normalized)
-            if dedupe_key in seen:
-                continue
-            seen.add(dedupe_key)
-            queries.append(normalized)
+        normalized = " ".join(str(label or "").split()).strip()
+        if not normalized:
+            continue
+        dedupe_key = _search_query_dedupe_key(normalized)
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        queries.append(normalized)
     return queries
 
 
@@ -662,7 +711,7 @@ def _build_filter_hints(
         filters["function_ids"] = list(function_ids)
     if company_scope[1:]:
         filters["scope_keywords"] = company_scope[1:]
-    if role_hints and not (large_org_keyword_probe_mode and keyword_hints):
+    if role_hints and not function_ids and not (large_org_keyword_probe_mode and keyword_hints):
         filters["job_titles"] = role_hints
     if keyword_hints:
         filters["keywords"] = keyword_hints
@@ -936,7 +985,44 @@ def _build_cost_policy(
             policy["provider_people_search_max_queries"] = max(1, int(execution_preferences.get("provider_people_search_max_queries") or 1))
         except (TypeError, ValueError):
             pass
+    _apply_scoped_search_provider_policy(
+        policy,
+        strategy_type=strategy_type,
+        execution_preferences=execution_preferences,
+    )
     return policy
+
+
+def _apply_scoped_search_provider_policy(
+    policy: dict[str, object],
+    *,
+    strategy_type: str,
+    execution_preferences: dict[str, object],
+) -> None:
+    if strategy_type != "scoped_search_roster":
+        return
+    if "former_keyword_queries_only" not in execution_preferences:
+        policy["former_keyword_queries_only"] = True
+    explicit_high_cost_preference = "allow_high_cost_sources" in execution_preferences
+    high_cost_approved = bool(
+        execution_preferences.get("allow_high_cost_sources")
+        or policy.get("high_cost_sources_approved")
+    )
+    if high_cost_approved:
+        policy["provider_people_search_mode"] = "primary_only"
+        try:
+            current_min_expected = int(policy.get("provider_people_search_min_expected_results") or 0)
+        except (TypeError, ValueError):
+            current_min_expected = 0
+        try:
+            current_pages = int(policy.get("provider_people_search_pages") or 0)
+        except (TypeError, ValueError):
+            current_pages = 0
+        policy["provider_people_search_min_expected_results"] = max(current_min_expected, 50)
+        policy["provider_people_search_pages"] = max(current_pages, 2)
+        return
+    if explicit_high_cost_preference and not bool(execution_preferences.get("allow_high_cost_sources")):
+        policy["provider_people_search_mode"] = "disabled"
 
 
 def _should_enable_large_org_keyword_probe_mode(

@@ -163,7 +163,12 @@
 - 当前还已接入 object storage sync：
   - `upload-asset-bundle`
   - `download-asset-bundle`
+  - `import-cloud-assets`
   - `restore-sqlite-snapshot`
+- 当前默认 server/cloud 恢复入口已收敛为：
+  - `import-cloud-assets` 先恢复 `sqlite_snapshot`
+  - 再恢复 canonical `company_snapshot`
+- `download-asset-bundle + restore-*` 现在只保留为低层排障路径
 - 这一层不直接把业务逻辑绑死到某个云厂商；先以 bundle 为边界，再通过 object storage provider 上传/下载
 
 ### `object_storage.py`

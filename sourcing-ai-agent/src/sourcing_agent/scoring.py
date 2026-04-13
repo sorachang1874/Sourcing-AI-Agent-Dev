@@ -81,6 +81,14 @@ KEYWORD_ALIAS_MAP = {
     "训练": ["training", "trainer", "pretraining", "pre-training"],
     "训练系统": ["training systems", "training infrastructure", "training platform"],
     "预训练": ["pretraining", "pre-training"],
+    "pre-train": ["pretrain", "pre-training", "pretraining", "pre-trained", "pretrained", "model pretraining"],
+    "pretrain": ["pre-train", "pre-training", "pretraining", "pre-trained", "pretrained", "model pretraining"],
+    "pre-training": ["pre-train", "pretrain", "pretraining", "pre-trained", "pretrained", "model pretraining"],
+    "pretraining": ["pre-train", "pretrain", "pre-training", "pre-trained", "pretrained", "model pretraining"],
+    "post-train": ["posttrain", "post-training", "posttraining", "post-trained", "posttrained", "model posttraining"],
+    "posttrain": ["post-train", "post-training", "posttraining", "post-trained", "posttrained", "model posttraining"],
+    "post-training": ["post-train", "posttrain", "posttraining", "post-trained", "posttrained", "model posttraining"],
+    "posttraining": ["post-train", "posttrain", "post-training", "post-trained", "posttrained", "model posttraining"],
     "推理": ["inference", "serving", "runtime"],
     "研究": ["research", "scientist", "applied scientist"],
     "安全": ["safety", "alignment", "security"],
@@ -392,7 +400,10 @@ def _search_fields_for_request(
     intent_view: dict[str, Any] | None = None,
 ) -> dict[str, float]:
     intent_view = dict(intent_view or resolve_request_intent_view(request))
-    if intent_view.get("must_have_primary_role_buckets"):
+    if (
+        intent_view.get("must_have_primary_role_buckets")
+        and str(intent_view.get("primary_role_bucket_mode") or "hard").strip().lower() == "hard"
+    ):
         return {field_name: weight for field_name, weight in SEARCH_FIELDS.items() if field_name != "notes"}
     return SEARCH_FIELDS
 
@@ -410,6 +421,7 @@ def candidate_matches_structured_filters(
     effective_role_buckets = list(
         intent_view.get("must_have_primary_role_buckets") or request.must_have_primary_role_buckets or []
     )
+    primary_role_bucket_mode = str(intent_view.get("primary_role_bucket_mode") or "hard").strip().lower() or "hard"
     effective_organization_keywords = list(intent_view.get("organization_keywords") or request.organization_keywords or [])
     effective_must_have_keywords = list(intent_view.get("must_have_keywords") or request.must_have_keywords or [])
     if effective_target_company and _normalize(candidate.target_company) != _normalize(effective_target_company):
@@ -431,7 +443,7 @@ def candidate_matches_structured_filters(
 
     if effective_must_have_facets and not all(_normalize(facet) in candidate_facets for facet in effective_must_have_facets):
         return False
-    if effective_role_buckets:
+    if effective_role_buckets and primary_role_bucket_mode == "hard":
         candidate_role_bucket = _normalize(derive_candidate_role_bucket(candidate))
         requested_primary_buckets = {_normalize(item) for item in effective_role_buckets}
         direct_role_blob = _normalize(" ".join([candidate.role, candidate.team]))
@@ -452,7 +464,14 @@ def candidate_matches_structured_filters(
         for token in effective_must_have_keywords
         if not _is_outreach_only_retrieval_term(token)
     ]
-    if must_have_keywords and not all(_normalize(token) in searchable_blob for token in must_have_keywords):
+    must_have_keyword_groups = [
+        [variant for variant in _keyword_variants(token, []) if _normalize(variant)]
+        for token in must_have_keywords
+    ]
+    if must_have_keyword_groups and not all(
+        any(_normalize(variant) in searchable_blob for variant in variants)
+        for variants in must_have_keyword_groups
+    ):
         return False
     if request.exclude_keywords and any(_normalize(token) in searchable_blob for token in request.exclude_keywords):
         return False

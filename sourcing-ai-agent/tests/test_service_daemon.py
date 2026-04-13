@@ -3,6 +3,7 @@ import threading
 import time
 import unittest
 from unittest import mock
+import json
 from pathlib import Path
 
 from sourcing_agent.service_daemon import SingleInstanceError, WorkerDaemonService, read_service_status, render_systemd_unit
@@ -233,6 +234,9 @@ class ServiceDaemonTest(unittest.TestCase):
         self.assertEqual(summary["last_nonempty_summary"]["daemon"]["executed_count"], 1)
         self.assertEqual(summary["last_nonempty_tick"], 1)
         self.assertTrue(summary["last_nonempty_at"])
+        self.assertEqual(summary["activity_summary_source"], "recent")
+        self.assertEqual(summary["activity_summary"]["daemon"]["claimed_count"], 1)
+        self.assertFalse(summary["last_nonempty_summary_is_historical"])
 
         cumulative = summary["cumulative_summary"]
         self.assertEqual(cumulative["tick_count"], 2)
@@ -301,6 +305,52 @@ class ServiceDaemonTest(unittest.TestCase):
 
         self.assertEqual(status["status"], "running")
         self.assertEqual(status["lock_status"], "locked")
+
+    def test_read_service_status_moves_stale_last_nonempty_summary_to_historical_fields(self) -> None:
+        state_dir = self.runtime_dir / "services" / "worker-recovery-daemon"
+        state_dir.mkdir(parents=True, exist_ok=True)
+        status_path = state_dir / "status.json"
+        status_payload = {
+            "service_name": "worker-recovery-daemon",
+            "status": "running",
+            "status_path": str(status_path),
+            "lock_path": str(state_dir / "service.lock"),
+            "poll_seconds": 5.0,
+            "updated_at": "2026-04-13T02:00:00+00:00",
+            "last_summary": {"status": "completed", "daemon": {"claimed_count": 0, "executed_count": 0}},
+            "last_nonempty_summary": {
+                "status": "completed",
+                "daemon": {"claimed_count": 1, "executed_count": 1},
+                "workflow_resume": [{"job_id": "job-1", "status": "resumed"}],
+            },
+            "last_nonempty_tick": 12,
+            "last_nonempty_at": "2026-04-13T00:00:00+00:00",
+            "cumulative_summary": {
+                "tick_count": 12,
+                "active_tick_count": 1,
+                "total_claimed_count": 1,
+                "total_executed_count": 1,
+                "max_recoverable_count": 1,
+                "workflow_resume_status_counts": {"resumed": 1},
+                "job_totals": {},
+            },
+        }
+        status_path.write_text(json.dumps(status_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        with mock.patch("sourcing_agent.service_daemon._heartbeat_age_seconds") as age_mock:
+            def _fake_age(value):  # noqa: ANN001
+                if str(value or "") == "2026-04-13T00:00:00+00:00":
+                    return 7200.0
+                return 1.0
+            age_mock.side_effect = _fake_age
+            status = read_service_status(self.runtime_dir, "worker-recovery-daemon")
+
+        self.assertEqual(status["last_nonempty_summary"], {})
+        self.assertEqual(status["activity_summary"], {})
+        self.assertEqual(status["activity_summary_source"], "none")
+        self.assertTrue(status["last_nonempty_summary_is_historical"])
+        self.assertEqual(status["historical_last_nonempty_tick"], 12)
+        self.assertEqual(status["historical_last_nonempty_summary"]["daemon"]["claimed_count"], 1)
 
     def test_service_skips_idle_sleep_when_previous_tick_had_activity(self) -> None:
         callbacks = iter(

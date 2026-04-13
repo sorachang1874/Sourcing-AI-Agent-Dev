@@ -173,29 +173,37 @@ mkdir -p runtime/secrets runtime/asset_imports runtime/vendor
 
 不要把 `company_handoff` 当成默认 server bootstrap 入口，因为它更重，也更容易把历史测试态文件一起带回。
 
+默认推荐直接使用统一导入命令 `import-cloud-assets`，而不是手工串联 `download-asset-bundle -> restore-* -> backfill-*`。
+
 先恢复 SQLite：
 
 ```bash
-PYTHONPATH=src python3 -m sourcing_agent.cli download-asset-bundle \
+PYTHONPATH=src python3 -m sourcing_agent.cli import-cloud-assets \
   --bundle-kind sqlite_snapshot \
   --bundle-id <sqlite_bundle_id> \
   --output-dir runtime/asset_imports
-
-PYTHONPATH=src python3 -m sourcing_agent.cli restore-sqlite-snapshot \
-  --manifest runtime/asset_imports/<sqlite_bundle_id>/bundle_manifest.json
 ```
 
 再恢复公司 snapshot：
 
 ```bash
-PYTHONPATH=src python3 -m sourcing_agent.cli download-asset-bundle \
+PYTHONPATH=src python3 -m sourcing_agent.cli import-cloud-assets \
   --bundle-kind company_snapshot \
   --bundle-id <company_snapshot_bundle_id> \
   --output-dir runtime/asset_imports
+```
 
-PYTHONPATH=src python3 -m sourcing_agent.cli restore-asset-bundle \
-  --manifest runtime/asset_imports/<company_snapshot_bundle_id>/bundle_manifest.json \
-  --target-runtime-dir runtime
+对于 `company_snapshot`，`import-cloud-assets` 会在 restore 后自动执行：
+
+- candidate artifact repair
+- organization asset registry warmup
+- linkedin profile registry backfill
+
+如果你已经手工下载好了 bundle，也可以直接给本地 manifest：
+
+```bash
+PYTHONPATH=src python3 -m sourcing_agent.cli import-cloud-assets \
+  --manifest runtime/asset_imports/<company_snapshot_bundle_id>/bundle_manifest.json
 ```
 
 如果要恢复全套 canonical 资产，请直接按 `docs/CANONICAL_CLOUD_BUNDLE_CATALOG.md` 里的 bundle id 顺序执行。

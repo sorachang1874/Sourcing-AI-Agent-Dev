@@ -233,6 +233,7 @@ class CompanyAssetCompletionManager:
         profile_limit: int = 12,
         only_missing_profile_detail: bool = True,
         force_refresh: bool = False,
+        allow_live_refetch_for_unmatched: bool = True,
         build_artifacts: bool = True,
     ) -> dict[str, Any]:
         company_key, snapshot_dir, identity_payload = _resolve_company_snapshot(self.runtime_dir, target_company, snapshot_id=snapshot_id)
@@ -274,6 +275,7 @@ class CompanyAssetCompletionManager:
             logger=logger,
             candidates=targets,
             force_refresh=force_refresh,
+            allow_live_refetch_for_unmatched=allow_live_refetch_for_unmatched,
         )
 
         artifact_result = {}
@@ -297,6 +299,7 @@ class CompanyAssetCompletionManager:
             "employment_scope": scope_key,
             "profile_mode": mode_key,
             "force_refresh": bool(force_refresh),
+            "allow_live_refetch_for_unmatched": bool(allow_live_refetch_for_unmatched),
             "target_candidate_count": len(targets),
             "result": result,
             "artifact_result": artifact_result,
@@ -320,6 +323,7 @@ class CompanyAssetCompletionManager:
         logger: AssetLogger,
         candidates: list[Candidate],
         force_refresh: bool = False,
+        allow_live_refetch_for_unmatched: bool = True,
     ) -> dict[str, Any]:
         provider_enabled = bool(getattr(getattr(self.harvest_profile_connector, "settings", None), "enabled", True))
         if not candidates:
@@ -424,17 +428,19 @@ class CompanyAssetCompletionManager:
                 normalized_url = str(profile_url or "").strip()
                 if normalized_url and normalized_url not in refresh_requested_urls:
                     refresh_requested_urls.append(normalized_url)
-        refreshed_profiles, refresh_errors = self._fetch_profile_batches(
-            refresh_requested_urls,
-            snapshot_dir=snapshot_dir,
-            logger=logger,
-            use_cache=False,
-            source_shards_by_url={
-                profile_url: sorted(list(source_shards_by_url.get(profile_url) or set()))
-                for profile_url in refresh_requested_urls
-            },
-        )
-        errors.extend(refresh_errors)
+        refreshed_profiles: dict[str, dict[str, Any]] = {}
+        if allow_live_refetch_for_unmatched and refresh_requested_urls:
+            refreshed_profiles, refresh_errors = self._fetch_profile_batches(
+                refresh_requested_urls,
+                snapshot_dir=snapshot_dir,
+                logger=logger,
+                use_cache=False,
+                source_shards_by_url={
+                    profile_url: sorted(list(source_shards_by_url.get(profile_url) or set()))
+                    for profile_url in refresh_requested_urls
+                },
+            )
+            errors.extend(refresh_errors)
 
         final_skipped_candidates: list[dict[str, Any]] = []
         for candidate in candidates:

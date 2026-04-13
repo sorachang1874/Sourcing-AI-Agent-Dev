@@ -22,6 +22,8 @@ EXECUTION_PREFERENCE_FIELDS = {
     "run_former_search_seed",
     "reuse_snapshot_id",
     "reuse_baseline_job_id",
+    "delta_baseline_snapshot_id",
+    "delta_baseline_snapshot_ids",
 }
 
 EXECUTION_PREFERENCE_ALIASES = {
@@ -93,7 +95,7 @@ def normalize_execution_preferences(
         key = EXECUTION_PREFERENCE_ALIASES.get(str(raw_key or "").strip(), str(raw_key or "").strip())
         if key not in EXECUTION_PREFERENCE_FIELDS:
             continue
-        if key in {"confirmed_company_scope", "extra_source_families"}:
+        if key in {"confirmed_company_scope", "extra_source_families", "delta_baseline_snapshot_ids"}:
             items = _normalize_string_list(raw_value, key=key, target_company=target_company)
             if items:
                 normalized[key] = items
@@ -113,7 +115,7 @@ def normalize_execution_preferences(
             if value is not None:
                 normalized[key] = value
             continue
-        if key in {"reuse_snapshot_id", "reuse_baseline_job_id"}:
+        if key in {"reuse_snapshot_id", "reuse_baseline_job_id", "delta_baseline_snapshot_id"}:
             value = str(raw_value or "").strip()
             if value:
                 normalized[key] = value[:120]

@@ -240,11 +240,17 @@ class SnapshotMaterializer:
                 "reason": "normalization_not_completed",
                 "detail": str(normalization_execution.detail or ""),
             }
+        preferred_source_snapshot_ids = [
+            str(item or "").strip()
+            for item in list(dict(request.execution_preferences or {}).get("delta_baseline_snapshot_ids") or [])
+            if str(item or "").strip()
+        ]
         artifact_build = build_company_candidate_artifacts(
             runtime_dir=self.runtime_dir,
             store=self.store,
             target_company=request.target_company,
             snapshot_id=snapshot_dir.name,
+            preferred_source_snapshot_ids=preferred_source_snapshot_ids or None,
         )
         return {
             "status": "completed",
