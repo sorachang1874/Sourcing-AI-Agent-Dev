@@ -1,0 +1,148 @@
+{
+  "snapshot_id": "20260407T181912",
+  "company_identity": {
+    "requested_name": "Thinking Machines Lab",
+    "canonical_name": "Thinking Machines Lab",
+    "company_key": "thinkingmachineslab",
+    "linkedin_slug": "thinkingmachinesai",
+    "linkedin_company_url": "https://www.linkedin.com/company/thinkingmachinesai/",
+    "domain": "",
+    "aliases": [],
+    "resolver": "heuristic",
+    "confidence": "medium",
+    "notes": "",
+    "local_asset_available": false,
+    "metadata": {}
+  },
+  "candidate_count": 182,
+  "evidence_count": 379,
+  "normalization_scope": {
+    "mode": "company"
+  },
+  "historical_profile_inheritance": {
+    "history_source_count": 17,
+    "history_candidate_count": 768,
+    "matched_candidate_count": 182,
+    "inherited_candidate_count": 2,
+    "inherited_evidence_count": 21,
+    "inherited_membership_review_count": 2,
+    "carried_forward_candidate_count": 9,
+    "history_sources": [
+      {
+        "snapshot_id": "sqlite",
+        "source_type": "sqlite",
+        "candidate_count": 182,
+        "evidence_count": 384
+      },
+      {
+        "snapshot_id": "20260406T160415",
+        "source_type": "candidate_documents",
+        "candidate_count": 25,
+        "evidence_count": 25
+      },
+      {
+        "snapshot_id": "20260406T160749",
+        "source_type": "candidate_documents",
+        "candidate_count": 25,
+        "evidence_count": 25
+      },
+      {
+        "snapshot_id": "20260406T163521",
+        "source_type": "candidate_documents",
+        "candidate_count": 25,
+        "evidence_count": 25
+      },
+      {
+        "snapshot_id": "20260406T163803",
+        "source_type": "candidate_documents",
+        "candidate_count": 25,
+        "evidence_count": 25
+      },
+      {
+        "snapshot_id": "20260406T164229",
+        "source_type": "candidate_documents",
+        "candidate_count": 25,
+        "evidence_count": 25
+      },
+      {
+        "snapshot_id": "20260406T164412",
+        "source_type": "candidate_documents",
+        "candidate_count": 25,
+        "evidence_count": 25
+      },
+      {
+        "snapshot_id": "20260406T164704",
+        "source_type": "candidate_documents",
+        "candidate_count": 25,
+        "evidence_count": 25
+      },
+      {
+        "snapshot_id": "20260406T165131",
+        "source_type": "candidate_documents",
+        "candidate_count": 25,
+        "evidence_count": 38
+      },
+      {
+        "snapshot_id": "20260406T165348",
+        "source_type": "candidate_documents",
+        "candidate_count": 25,
+        "evidence_count": 38
+      },
+      {
+        "snapshot_id": "20260406T170942",
+        "source_type": "candidate_documents",
+        "candidate_count": 29,
+        "evidence_count": 38
+      },
+      {
+        "snapshot_id": "20260406T172037",
+        "source_type": "candidate_documents",
+        "candidate_count": 29,
+        "evidence_count": 38
+      },
+      {
+        "snapshot_id": "20260406T172439",
+        "source_type": "candidate_documents",
+        "candidate_count": 29,
+        "evidence_count": 38
+      },
+      {
+        "snapshot_id": "20260406T172703",
+        "source_type": "materialized_candidate_documents",
+        "candidate_count": 55,
+        "evidence_count": 105
+      },
+      {
+        "snapshot_id": "20260406T174915",
+        "source_type": "candidate_documents",
+        "candidate_count": 10,
+        "evidence_count": 10
+      },
+      {
+        "snapshot_id": "20260406T175245",
+        "source_type": "candidate_documents",
+        "candidate_count": 25,
+        "evidence_count": 25
+      },
+      {
+        "snapshot_id": "20260407T154715",
+        "source_type": "materialized_candidate_documents",
+        "candidate_count": 184,
+        "evidence_count": 375
+      }
+    ]
+  },
+  "canonicalization": {
+    "input_candidate_count": 191,
+    "canonical_candidate_count": 182,
+    "input_evidence_count": 398,
+    "canonical_evidence_count": 379,
+    "merged_candidate_count": 9,
+    "name_merge_count": 0
+  },
+  "storage": {
+    "execution": "local_runtime",
+    "candidate_store": "/home/sorachang/projects/Sourcing AI Agent Dev/sourcing-ai-agent/runtime/sourcing_agent.db",
+    "future_cloud_direction": "Persist high-value LinkedIn profile assets and final result artifacts to cloud object storage or a managed document store while keeping transient workflow logs local."
+  }
+}

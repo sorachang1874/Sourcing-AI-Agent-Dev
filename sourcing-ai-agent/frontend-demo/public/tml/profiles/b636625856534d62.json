@@ -1,0 +1,718 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAADwrCKUBgLSgDCIAuVxN_Q9OKEx93Ts2mQE",
+    "profile_url": "https://www.linkedin.com/in/ACwAADwrCKUBgLSgDCIAuVxN_Q9OKEx93Ts2mQE"
+  },
+  "item": {
+    "id": "ACoAADwrCKUB0FU7B3O7AIg9j_wieI-QOvJrtEE",
+    "publicIdentifier": "katy-liemandt-399092242",
+    "linkedinUrl": "https://www.linkedin.com/in/katy-liemandt-399092242",
+    "firstName": "Katy",
+    "lastName": "Liemandt",
+    "emails": [
+      {
+        "email": "katy.liemandt@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "TML | San Francisco",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "1009453221",
+    "registeredAt": "2022-06-13T20:27:25.262Z",
+    "topSkills": null,
+    "connectionsCount": 198,
+    "followerCount": 238,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 6,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "17829",
+        "companyId": "16237",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/16237/",
+        "schoolName": "California State University, Los Angeles"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5603AQEGmbvGjAZvqA/profile-displayphoto-crop_800_800/B56Zp_Q2IhKEAI-/0/1763071714520?e=1776902400&v=beta&t=l_0SZsO9pTg3s-asjomIKTLVEFZn-GCG862ciaORcQM",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQEGmbvGjAZvqA/profile-displayphoto-crop_800_800/B56Zp_Q2IhKEAI-/0/1763071714520?e=1776902400&v=beta&t=l_0SZsO9pTg3s-asjomIKTLVEFZn-GCG862ciaORcQM",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQEGmbvGjAZvqA/profile-displayphoto-scale_400_400/B56Zp_Q2IhKEAg-/0/1763071714637?e=1776902400&v=beta&t=2L93SqMWS0YQUeIn08PsbJbH451cABpQs55r-YEWI68",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQEGmbvGjAZvqA/profile-displayphoto-scale_200_200/B56Zp_Q2IhKEAY-/0/1763071714637?e=1776902400&v=beta&t=PyinidIHym8dSycUCJBRK5_IbVJ02-cPO8d1uTCfi64",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQEGmbvGjAZvqA/profile-displayphoto-scale_100_100/B56Zp_Q2IhKEAc-/0/1763071714637?e=1776902400&v=beta&t=zugG9qmZBrZZqgYBDnlxVfzOtzHWPVxMeaEpgMpvTvw",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5616AQFtVkFTuWlAZw/profile-displaybackgroundimage-shrink_350_1400/B56ZxElcrgKEAY-/0/1770677193786?e=1776902400&v=beta&t=bVYhoVD7iNNsCa7Mwd88ZulvAG3Wdi6NQR0KQfkujXI",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5616AQFtVkFTuWlAZw/profile-displaybackgroundimage-shrink_350_1400/B56ZxElcrgKEAY-/0/1770677193786?e=1776902400&v=beta&t=bVYhoVD7iNNsCa7Mwd88ZulvAG3Wdi6NQR0KQfkujXI",
+          "width": 1400,
+          "height": 350,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5616AQFtVkFTuWlAZw/profile-displaybackgroundimage-shrink_200_800/B56ZxElcrgKEAU-/0/1770677193786?e=1776902400&v=beta&t=7P5oBTdGxVJpwo0qItB_s7bNMXBkPSkPNFkhY7XfFL0",
+          "width": 800,
+          "height": 200,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "photo": "https://media.licdn.com/dms/image/v2/D5603AQEGmbvGjAZvqA/profile-displayphoto-crop_800_800/B56Zp_Q2IhKEAI-/0/1763071714520?e=1776902400&v=beta&t=l_0SZsO9pTg3s-asjomIKTLVEFZn-GCG862ciaORcQM",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "TML | San Francisco",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Operational Staff",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "11 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2025,
+          "text": "Jun 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Event Sales Manager",
+        "location": "San Francisco, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Quince & Co",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/76174011/",
+        "companyId": "76174011",
+        "duration": "1 yr 5 mos",
+        "description": null,
+        "skills": [
+          "Food and Beverage Operations",
+          "Event Planning",
+          "Hospitality Industry",
+          "Event Production"
+        ],
+        "experienceGroupId": "daa492840faf836a79d3f380a32b2487b8d95d31",
+        "startDate": {
+          "month": "Jan",
+          "year": 2024,
+          "text": "Jan 2024"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2025,
+          "text": "May 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHI61-7YfVyqw/company-logo_400_400/company-logo_400_400/0/1729295722854/quinceco_logo?e=1776902400&v=beta&t=iq4gaOtxEiUe_qpLlmgZTlCVLhHKvWgzH5wieqZHL3g",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHI61-7YfVyqw/company-logo_400_400/company-logo_400_400/0/1729295722854/quinceco_logo?e=1776902400&v=beta&t=iq4gaOtxEiUe_qpLlmgZTlCVLhHKvWgzH5wieqZHL3g",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHI61-7YfVyqw/company-logo_200_200/company-logo_200_200/0/1729295722854/quinceco_logo?e=1776902400&v=beta&t=ryGmFB9nU4appVIVXBkw6jg_NJrls71TwTwh-Cjmqas",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHI61-7YfVyqw/company-logo_100_100/company-logo_100_100/0/1729295722854/quinceco_logo?e=1776902400&v=beta&t=hPFNLgPgT4VNhtYGsDJXolMtUdmWrXzStU5IVh0iP4I",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Event Assistant",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Quince & Co",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/76174011/",
+        "companyId": "76174011",
+        "duration": "9 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "daa492840faf836a79d3f380a32b2487b8d95d31",
+        "startDate": {
+          "month": "May",
+          "year": 2023,
+          "text": "May 2023"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2024,
+          "text": "Jan 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHI61-7YfVyqw/company-logo_400_400/company-logo_400_400/0/1729295722854/quinceco_logo?e=1776902400&v=beta&t=iq4gaOtxEiUe_qpLlmgZTlCVLhHKvWgzH5wieqZHL3g",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHI61-7YfVyqw/company-logo_400_400/company-logo_400_400/0/1729295722854/quinceco_logo?e=1776902400&v=beta&t=iq4gaOtxEiUe_qpLlmgZTlCVLhHKvWgzH5wieqZHL3g",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHI61-7YfVyqw/company-logo_200_200/company-logo_200_200/0/1729295722854/quinceco_logo?e=1776902400&v=beta&t=ryGmFB9nU4appVIVXBkw6jg_NJrls71TwTwh-Cjmqas",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHI61-7YfVyqw/company-logo_100_100/company-logo_100_100/0/1729295722854/quinceco_logo?e=1776902400&v=beta&t=hPFNLgPgT4VNhtYGsDJXolMtUdmWrXzStU5IVh0iP4I",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Lead Host",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Quince & Co",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/76174011/",
+        "companyId": "76174011",
+        "duration": "9 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "daa492840faf836a79d3f380a32b2487b8d95d31",
+        "startDate": {
+          "month": "Sep",
+          "year": 2022,
+          "text": "Sep 2022"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2023,
+          "text": "May 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHI61-7YfVyqw/company-logo_400_400/company-logo_400_400/0/1729295722854/quinceco_logo?e=1776902400&v=beta&t=iq4gaOtxEiUe_qpLlmgZTlCVLhHKvWgzH5wieqZHL3g",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHI61-7YfVyqw/company-logo_400_400/company-logo_400_400/0/1729295722854/quinceco_logo?e=1776902400&v=beta&t=iq4gaOtxEiUe_qpLlmgZTlCVLhHKvWgzH5wieqZHL3g",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHI61-7YfVyqw/company-logo_200_200/company-logo_200_200/0/1729295722854/quinceco_logo?e=1776902400&v=beta&t=ryGmFB9nU4appVIVXBkw6jg_NJrls71TwTwh-Cjmqas",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHI61-7YfVyqw/company-logo_100_100/company-logo_100_100/0/1729295722854/quinceco_logo?e=1776902400&v=beta&t=hPFNLgPgT4VNhtYGsDJXolMtUdmWrXzStU5IVh0iP4I",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "California State University, Los Angeles",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/16237/",
+        "schoolId": "16237",
+        "degree": "Bachelor's degree",
+        "fieldOfStudy": "Sociology",
+        "skills": [],
+        "startDate": null,
+        "endDate": {
+          "month": "May",
+          "year": 2022,
+          "text": "May 2022"
+        },
+        "period": "May 2022",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQETdOa5cBtuUg/company-logo_400_400/B56Znp2DbiI0AY-/0/1760564885893/california_state_university_los_angeles_logo?e=1776902400&v=beta&t=0nf2KlPE2C0EF3F5tbQhpMygrYnU_MiHiA5lIQ0JQiE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQETdOa5cBtuUg/company-logo_400_400/B56Znp2DbiI0AY-/0/1760564885893/california_state_university_los_angeles_logo?e=1776902400&v=beta&t=0nf2KlPE2C0EF3F5tbQhpMygrYnU_MiHiA5lIQ0JQiE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQETdOa5cBtuUg/company-logo_200_200/B56Znp2DbiI0AI-/0/1760564885893/california_state_university_los_angeles_logo?e=1776902400&v=beta&t=telsh4ZkRSLH2aiIu4rsy9XjYMY_DEL8CqwWWU1u8Mc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQETdOa5cBtuUg/company-logo_100_100/B56Znp2DbiI0AQ-/0/1760564885893/california_state_university_los_angeles_logo?e=1776902400&v=beta&t=NFdIZ3aOnKMZkQWRuROaEuR-0rqh8kWIsodVFNPdvYo",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Coordinated"
+      },
+      {
+        "name": "Coordination Skills"
+      },
+      {
+        "name": "Analytical Skills"
+      },
+      {
+        "name": "Communication"
+      },
+      {
+        "name": "Coordinating Tasks"
+      },
+      {
+        "name": "Food and Beverage Operations",
+        "positions": [
+          "Event Sales Manager at Quince & Co"
+        ]
+      },
+      {
+        "name": "Hospitality Industry",
+        "positions": [
+          "Event Sales Manager at Quince & Co"
+        ]
+      },
+      {
+        "name": "Event Production",
+        "positions": [
+          "Event Sales Manager at Quince & Co"
+        ]
+      },
+      {
+        "name": "Contractual Agreements"
+      },
+      {
+        "name": "Technical Support"
+      },
+      {
+        "name": "Development & implementation of marketing plans"
+      },
+      {
+        "name": "Report Preparation"
+      },
+      {
+        "name": "Building Business Relationships"
+      },
+      {
+        "name": "Guest Service"
+      },
+      {
+        "name": "Exceed Sales Goals"
+      },
+      {
+        "name": "Proposal Preparation"
+      },
+      {
+        "name": "Executing Events"
+      },
+      {
+        "name": "Event Planning",
+        "positions": [
+          "Event Sales Manager at Quince & Co"
+        ]
+      },
+      {
+        "name": "Reporting & Analysis"
+      },
+      {
+        "name": "Market Research Project Management"
+      },
+      {
+        "name": "Nonprofit Organizations"
+      },
+      {
+        "name": "Client Relations"
+      },
+      {
+        "name": "Time Management"
+      },
+      {
+        "name": "Guest Experience"
+      },
+      {
+        "name": "Managing Accounts (Accounting)"
+      },
+      {
+        "name": "Private Dining"
+      },
+      {
+        "name": "Microsoft Office"
+      },
+      {
+        "name": "Kitchenware"
+      },
+      {
+        "name": "Contract Negotiation"
+      },
+      {
+        "name": "Customer Relationship Management (CRM)"
+      },
+      {
+        "name": "Sales"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAABQ5lJUBry2byQYf_TtxDF9Rha9l-RqYsaM",
+        "firstName": "Guang-He",
+        "lastName": "Lee",
+        "publicIdentifier": "guang-he-lee-64577895",
+        "linkedinUrl": "https://www.linkedin.com/in/guang-he-lee-64577895"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAAACQBzQB5nk5kOpFWQRtK4pv3RaL5q2G-pA",
+        "firstName": "Jonathan",
+        "lastName": "Lachman",
+        "publicIdentifier": "jonathan-lachman-4981b23",
+        "linkedinUrl": "https://www.linkedin.com/in/jonathan-lachman-4981b23"
+      },
+      {
+        "id": "ACoAABMugyUBsZ9MwIVIzmOSzlvmO6TOFL-mfAU",
+        "firstName": "Chih-Kuan (Jason)",
+        "lastName": "Yeh",
+        "publicIdentifier": "chih-kuan-jason-yeh-8859378b",
+        "linkedinUrl": "https://www.linkedin.com/in/chih-kuan-jason-yeh-8859378b"
+      },
+      {
+        "id": "ACoAAAbBBJsBnpIQdOsJB5IMpR7ePIGOlRam73w",
+        "firstName": "Mario",
+        "lastName": "Saltarelli",
+        "publicIdentifier": "msaltarelli",
+        "linkedinUrl": "https://www.linkedin.com/in/msaltarelli"
+      },
+      {
+        "id": "ACoAACaOARIBRO2EEH12QWQO29L__oI3N2K4u14",
+        "firstName": "Mingjie",
+        "lastName": "Sun",
+        "publicIdentifier": "mingjie-sun-06a761160",
+        "linkedinUrl": "https://www.linkedin.com/in/mingjie-sun-06a761160"
+      },
+      {
+        "id": "ACoAABE9sVMBCH0i964WlvecDNyGKTviqyXKcTY",
+        "firstName": "Hannah",
+        "lastName": "T.",
+        "publicIdentifier": "hannahnth",
+        "linkedinUrl": "https://www.linkedin.com/in/hannahnth"
+      },
+      {
+        "id": "ACoAACm7XfIB5EjqiHQv8SJP7Y18c3jLrmpNWZI",
+        "firstName": "Caroline",
+        "lastName": "Ricksen",
+        "publicIdentifier": "caroline-ricksen-702588176",
+        "linkedinUrl": "https://www.linkedin.com/in/caroline-ricksen-702588176"
+      },
+      {
+        "id": "ACoAAAENQhgBH8wIeS6hMrUoWlbKk5L9GWNNQCE",
+        "firstName": "Andrii",
+        "lastName": "Grynenko",
+        "publicIdentifier": "andrii-grynenko-a48aab5",
+        "linkedinUrl": "https://www.linkedin.com/in/andrii-grynenko-a48aab5"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAADDB7DABJK3fhQa97pAxpbFcGbMtI2pA2Ek",
+        "firstName": "Ruila",
+        "lastName": "M.",
+        "publicIdentifier": "ruilama",
+        "linkedinUrl": "https://www.linkedin.com/in/ruilama"
+      },
+      {
+        "id": "ACoAAA_4_bgBYB9NTIqXzrC7wV6IBsO8eVjnmR8",
+        "firstName": "Anthony",
+        "lastName": "Bertolli",
+        "publicIdentifier": "anthony-bertolli-9348b275",
+        "linkedinUrl": "https://www.linkedin.com/in/anthony-bertolli-9348b275"
+      },
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAABV61Q0BF3ER-196Zc9GK5TviMrbbIlVGqg",
+        "firstName": "Samuel",
+        "lastName": "Schoenholz",
+        "publicIdentifier": "samuel-schoenholz-379830a0",
+        "linkedinUrl": "https://www.linkedin.com/in/samuel-schoenholz-379830a0"
+      },
+      {
+        "id": "ACoAABJF4mQBVJYIx7g-ASuPnmo5mH2mDuWdwQg",
+        "firstName": "Erika",
+        "lastName": "Byun",
+        "publicIdentifier": "erika-nakamatsu-byun",
+        "linkedinUrl": "https://www.linkedin.com/in/erika-nakamatsu-byun"
+      },
+      {
+        "id": "ACoAABhIg7YBYN2NPIu8voYj5D7JQVZGxonqHvc",
+        "firstName": "Ruiqi",
+        "lastName": "Zhong",
+        "publicIdentifier": "ruiqi-zhong-09a533b4",
+        "linkedinUrl": "https://www.linkedin.com/in/ruiqi-zhong-09a533b4"
+      },
+      {
+        "id": "ACoAABkCmhgBEZD-1dT72hHwDMgnT5V9--6efaY",
+        "firstName": "Paul",
+        "lastName": "Baldi",
+        "publicIdentifier": "paul-baldi-734634b8",
+        "linkedinUrl": "https://www.linkedin.com/in/paul-baldi-734634b8"
+      },
+      {
+        "id": "ACoAACSaSrMBQijzSghK2a9tnHXPufvT1ILGIyY",
+        "firstName": "Camille",
+        "lastName": "Roché",
+        "publicIdentifier": "camilleroche11",
+        "linkedinUrl": "https://www.linkedin.com/in/camilleroche11"
+      },
+      {
+        "id": "ACoAAAji1bkB1eLX4z2Jb9-N2nMhEGNLWptSnqU",
+        "firstName": "Clare",
+        "lastName": "Birch",
+        "publicIdentifier": "clarebirch42",
+        "linkedinUrl": "https://www.linkedin.com/in/clarebirch42"
+      },
+      {
+        "id": "ACoAAEj87qMBijMewiHUvoo8EV6lKi4VkEOlPcQ",
+        "firstName": "Abbass",
+        "lastName": "Alhusseini",
+        "position": "Architekt l Wettbewerbsarchitekt ",
+        "publicIdentifier": "abbass-alhusseini-42b1172a2",
+        "linkedinUrl": "https://www.linkedin.com/in/abbass-alhusseini-42b1172a2"
+      },
+      {
+        "id": "ACoAAA9mNg8BhV5J54yQWM9EK6MZVYUePl35Uxw",
+        "firstName": "Jon",
+        "lastName": "Prengel",
+        "position": "Architekt",
+        "publicIdentifier": "jon-prengel-01363472",
+        "linkedinUrl": "https://www.linkedin.com/in/jon-prengel-01363472"
+      },
+      {
+        "id": "ACoAAEgoBhIByXRTM1ieX1BpsXyYauc4cyCGA8s",
+        "firstName": "Yvonne",
+        "lastName": "Ahlers",
+        "position": "Architektin und Geschäftsführende Gesellschafterin bei MAB Bau & Planungs GmbH",
+        "publicIdentifier": "yvonne-ahlers-72a508299",
+        "linkedinUrl": "https://www.linkedin.com/in/yvonne-ahlers-72a508299"
+      },
+      {
+        "id": "ACoAACS1ijEBZWjGcs0P8oXWcUT3EEgzBaZHI7s",
+        "firstName": "Teresa",
+        "lastName": "Burmester",
+        "position": "Landschaftsarchitektin,  lichtelandschaften PartGmbB",
+        "publicIdentifier": "teresa-burmester-49530a152",
+        "linkedinUrl": "https://www.linkedin.com/in/teresa-burmester-49530a152"
+      },
+      {
+        "id": "ACoAABQPmQkBLULTNO6pw7Ue8NKBnl3CZO59XDE",
+        "firstName": "Natalie",
+        "lastName": "Heger",
+        "position": "Architektin ",
+        "publicIdentifier": "natalie-heger-37587094",
+        "linkedinUrl": "https://www.linkedin.com/in/natalie-heger-37587094"
+      },
+      {
+        "id": "ACoAACTjdBYBUBqBcVIJBKVk2QUQtB7CNX2c-L0",
+        "firstName": "Christopher Charles ",
+        "lastName": "Gallinari",
+        "position": "M.Sc Architekt",
+        "publicIdentifier": "christopher-charles-gallinari-87231b153",
+        "linkedinUrl": "https://www.linkedin.com/in/christopher-charles-gallinari-87231b153"
+      },
+      {
+        "id": "ACoAABJE68YBfVbNfzKVpL4m2_esk07RViwaxK0",
+        "firstName": "Marc",
+        "lastName": "Wimmers",
+        "position": "Architekt Prokurist bei Architekten Theiss Planungsgesellschaft mbH",
+        "publicIdentifier": "marc-wimmers-68679486",
+        "linkedinUrl": "https://www.linkedin.com/in/marc-wimmers-68679486"
+      },
+      {
+        "id": "ACoAABiy-m8BItnJvS_e3_bjuV0PHGtejrjrnZA",
+        "firstName": "Abdelrahman",
+        "lastName": "Gamil",
+        "position": "Architekt",
+        "publicIdentifier": "abdelrahmaangs",
+        "linkedinUrl": "https://www.linkedin.com/in/abdelrahmaangs"
+      },
+      {
+        "id": "ACoAAEI7vUkBtYfI6oQLP8BD3_Jkte2XWPt395A",
+        "firstName": "Mustafa",
+        "lastName": "Kılıç",
+        "position": "Architekt 🇩🇪",
+        "publicIdentifier": "mustafa-kılıç-149186270",
+        "linkedinUrl": "https://www.linkedin.com/in/mustafa-kılıç-149186270"
+      },
+      {
+        "id": "ACoAAFDiYyYBVqfaGEOySenu5gUNQTlvus57NV4",
+        "firstName": "Klaus",
+        "lastName": "Leber",
+        "position": "Architekt BDA",
+        "publicIdentifier": "klaus-leber-ab256431a",
+        "linkedinUrl": "https://www.linkedin.com/in/klaus-leber-ab256431a"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAADwrCKUBgLSgDCIAuVxN_Q9OKEx93Ts2mQE"
+    }
+  }
+}

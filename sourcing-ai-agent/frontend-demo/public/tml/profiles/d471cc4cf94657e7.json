@@ -1,0 +1,1261 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAABlmzjQByJgyN8Q2Dm6gezOdjCEOMUpzPwQ",
+    "profile_url": "https://www.linkedin.com/in/ACwAABlmzjQByJgyN8Q2Dm6gezOdjCEOMUpzPwQ"
+  },
+  "item": {
+    "id": "ACoAABlmzjQBVjoKjtvMYsc1vU9b107j_fam1Xs",
+    "publicIdentifier": "james-alcorn-b04880ba",
+    "linkedinUrl": "https://www.linkedin.com/in/james-alcorn-b04880ba",
+    "firstName": "James",
+    "lastName": "Alcorn",
+    "emails": [
+      {
+        "email": "james.alcorn@lsvp.com",
+        "deliverable": true,
+        "catchAllDomain": false,
+        "validEmailServer": true,
+        "free": false,
+        "status": "valid",
+        "qualityScore": 90
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://lsvp.com/",
+        "domain": "lsvp.com",
+        "validEmailServer": true
+      },
+      {
+        "url": "https://judgmentlabs.ai",
+        "domain": "judgmentlabs.ai"
+      },
+      {
+        "url": "https://periodic.com",
+        "domain": "periodic.com"
+      },
+      {
+        "url": "https://www.reflection.ai/",
+        "domain": "reflection.ai"
+      }
+    ],
+    "headline": "Partner at Lightspeed",
+    "openToWork": false,
+    "hiring": false,
+    "premium": true,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco Bay Area",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "426167860",
+    "registeredAt": "2015-06-10T12:23:56.618Z",
+    "topSkills": null,
+    "connectionsCount": 4187,
+    "followerCount": 4879,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "30258",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/30258/",
+        "companyName": "Lightspeed",
+        "dateRange": {
+          "start": {
+            "month": null,
+            "year": 2024,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "17939",
+        "companyId": "2517",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2517/",
+        "schoolName": "University of California, Berkeley"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/C5603AQEqyMuYk0NZPw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1656365113682?e=1776902400&v=beta&t=ZoneYACkB5IG5HVMDXKW2znHas60jLw_mgsxeUd2Mu4",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQEqyMuYk0NZPw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1656365113682?e=1776902400&v=beta&t=ZoneYACkB5IG5HVMDXKW2znHas60jLw_mgsxeUd2Mu4",
+          "width": 637,
+          "height": 637,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQEqyMuYk0NZPw/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1656365113682?e=1776902400&v=beta&t=rFzIy9H8lNWEiDoYQSrGaGEEzBsJIJp6ksAMTVxvkwA",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQEqyMuYk0NZPw/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1656365113682?e=1776902400&v=beta&t=502RP7ETXFtMjeHBF019ID3dhWgDAb24ZxF5cSO9z3Q",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQEqyMuYk0NZPw/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1656365113682?e=1776902400&v=beta&t=COVqTq0Jz-noeI5m2k8wExAx0ryYxDO7Y54M9zikGng",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/C5603AQEqyMuYk0NZPw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1656365113682?e=1776902400&v=beta&t=ZoneYACkB5IG5HVMDXKW2znHas60jLw_mgsxeUd2Mu4",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Partner at Lightspeed",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Partner",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Lightspeed",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/lightspeed-venture-partners/",
+        "companyId": "30258",
+        "companyUniversalName": "lightspeed-venture-partners",
+        "duration": "2 yrs 4 mos",
+        "description": "Angel to Factory, Coactive, Augmental, Morph Labs, Sphere and others.",
+        "skills": null,
+        "startDate": {
+          "year": 2024,
+          "text": "2024"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQELfc9OHaLGDw/company-logo_400_400/B4EZaSBgaNHoAY-/0/1746206590923/lightspeed_venture_partners_logo?e=1776902400&v=beta&t=pd0UtcFwQIStwZIVH17il_vpG7s2fBvkAbCkWoS_fwo",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQELfc9OHaLGDw/company-logo_400_400/B4EZaSBgaNHoAY-/0/1746206590923/lightspeed_venture_partners_logo?e=1776902400&v=beta&t=pd0UtcFwQIStwZIVH17il_vpG7s2fBvkAbCkWoS_fwo",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQELfc9OHaLGDw/company-logo_200_200/B4EZaSBgaNHoAI-/0/1746206590923/lightspeed_venture_partners_logo?e=1776902400&v=beta&t=pbki0Zks6mqdNGr0fEI9_kJ68EWr1lzNDxabMyZK3uc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQELfc9OHaLGDw/company-logo_100_100/B4EZaSBgaNHoAQ-/0/1746206590923/lightspeed_venture_partners_logo?e=1776902400&v=beta&t=xFVh2vR_3TPrN0nNktn846HLjiexbE82k6nRZsae7N0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Board Director",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Judgment Labs",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/106751871/",
+        "companyId": "106751871",
+        "duration": "1 yr 4 mos",
+        "description": "Led Seed for LSVP",
+        "skills": null,
+        "startDate": {
+          "year": 2025,
+          "text": "2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQE54JDzcgmQPw/company-logo_400_400/B56ZlToc9rKMAg-/0/1758044737666/judgmentlabs_logo?e=1776902400&v=beta&t=sCQhtOtpIz7-oHj9MwpSqja_WDosPozXpWKFyLXKZf0",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQE54JDzcgmQPw/company-logo_400_400/B56ZlToc9rKMAg-/0/1758044737666/judgmentlabs_logo?e=1776902400&v=beta&t=sCQhtOtpIz7-oHj9MwpSqja_WDosPozXpWKFyLXKZf0",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQE54JDzcgmQPw/company-logo_200_200/B56ZlToc9rKMAQ-/0/1758044737666/judgmentlabs_logo?e=1776902400&v=beta&t=Naq1YSFbibKUytKL4CF23xsc5v1wrv4ljf3TWI47qGw",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQE54JDzcgmQPw/company-logo_100_100/B56ZlToc9rKMAY-/0/1758044737666/judgmentlabs_logo?e=1776902400&v=beta&t=Ea06TgwnF8RAk-722iBAN2PWs9KPDzeJRrs_BTsYtYc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Periodic Labs",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/108918379/",
+        "companyId": "108918379",
+        "duration": "1 yr 4 mos",
+        "description": "Series Seed for LSVP",
+        "skills": null,
+        "startDate": {
+          "year": 2025,
+          "text": "2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHhLa2BG-vacA/company-logo_400_400/B4EZl0i12VKsAY-/0/1758596914967?e=1776902400&v=beta&t=2LG-_TjRynOsFwd4v9u8_mohbUunFOQLcp1mW0XM_gk",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHhLa2BG-vacA/company-logo_400_400/B4EZl0i12VKsAY-/0/1758596914967?e=1776902400&v=beta&t=2LG-_TjRynOsFwd4v9u8_mohbUunFOQLcp1mW0XM_gk",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHhLa2BG-vacA/company-logo_200_200/B4EZl0i12VKsAI-/0/1758596914967?e=1776902400&v=beta&t=fRjESBHiuNv7aUzojTDUqiIWZtVptLZrF1Qt0CZxN0A",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHhLa2BG-vacA/company-logo_100_100/B4EZl0i12VKsAQ-/0/1758596914967?e=1776902400&v=beta&t=XxAap4d1bwyM-9zSxER4nW2V-5R_DLit5_uCi7svgno",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "ReflectionAI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/106009488/",
+        "companyId": "106009488",
+        "duration": "2 yrs 4 mos",
+        "description": "Led Series A for LSVP",
+        "skills": null,
+        "startDate": {
+          "year": 2024,
+          "text": "2024"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQFgNhkgSonY2Q/company-logo_400_400/B56ZnFdKCUJYAY-/0/1759954379600/reflectionai_logo?e=1776902400&v=beta&t=PnnUlhUHBAYZc_oTONrIuW1m_7QFWQl-svxn3Cnfx_k",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFgNhkgSonY2Q/company-logo_400_400/B56ZnFdKCUJYAY-/0/1759954379600/reflectionai_logo?e=1776902400&v=beta&t=PnnUlhUHBAYZc_oTONrIuW1m_7QFWQl-svxn3Cnfx_k",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFgNhkgSonY2Q/company-logo_200_200/B56ZnFdKCUJYAI-/0/1759954379600/reflectionai_logo?e=1776902400&v=beta&t=38-O_CB6H5OC8dininUDQ56kmCbyA_llfaO2JsFtFXo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFgNhkgSonY2Q/company-logo_100_100/B56ZnFdKCUJYAQ-/0/1759954379600/reflectionai_logo?e=1776902400&v=beta&t=Xu23RAC7Ac_S8A79K14zwZQ-NkbDgl-ErPZN1MMvmLo",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Anthropic",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/74126343/",
+        "companyId": "74126343",
+        "duration": "1 yr 4 mos",
+        "description": "LSVP led Series E",
+        "skills": null,
+        "startDate": {
+          "year": 2025,
+          "text": "2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_400_400/company-logo_400_400/0/1719256729905/anthropicresearch_logo?e=1776902400&v=beta&t=6sv-GagnF1G5d4B4rN1Yu3sq6fln2BP_9tb0s6bARoY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_400_400/company-logo_400_400/0/1719256729905/anthropicresearch_logo?e=1776902400&v=beta&t=6sv-GagnF1G5d4B4rN1Yu3sq6fln2BP_9tb0s6bARoY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_200_200/company-logo_200_200/0/1719256413073/anthropicresearch_logo?e=1776902400&v=beta&t=cPQIIISEsrdyXB00bI4BYAdxnK2Mx72yV0BDdzg3baM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_100_100/company-logo_100_100/0/1719256989269/anthropicresearch_logo?e=1776902400&v=beta&t=6343WBiudLAu8QSHWrlzIJOnlExxTT9uZZpuCs-AeLk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Inferact",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/111211108/",
+        "companyId": "111211108",
+        "duration": "4 mos",
+        "description": "Led Seed for LSVP",
+        "skills": null,
+        "startDate": {
+          "year": 2026,
+          "text": "2026"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQFi_hYCizKyPg/company-logo_400_400/B56Zvt.i83KIAY-/0/1769224155559/inferact_logo?e=1776902400&v=beta&t=amxtOZxYWZjVliBgs3kt4AFOO6sUUMia_GyKfhUYmO0",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFi_hYCizKyPg/company-logo_400_400/B56Zvt.i83KIAY-/0/1769224155559/inferact_logo?e=1776902400&v=beta&t=amxtOZxYWZjVliBgs3kt4AFOO6sUUMia_GyKfhUYmO0",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFi_hYCizKyPg/company-logo_200_200/B56Zvt.i83KIAI-/0/1769224155559/inferact_logo?e=1776902400&v=beta&t=cZx5f3FmubGSzob_cZ4nl3mndX7qkpKlC4D0T23XNyo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFi_hYCizKyPg/company-logo_100_100/B56Zvt.i83KIAQ-/0/1769224155559/inferact_logo?e=1776902400&v=beta&t=FA76C4MRM-KLVYj5asnbTJ0mQa2RmWRFFoXedKkQRp8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyId": "105913171",
+        "duration": "1 yr 4 mos",
+        "description": "Series Seed for LSVP",
+        "skills": null,
+        "startDate": {
+          "year": 2025,
+          "text": "2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Board Observer",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Unsloth AI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/99331585/",
+        "companyId": "99331585",
+        "duration": "2 yrs 4 mos",
+        "description": "Led Seed for LSVP",
+        "skills": null,
+        "startDate": {
+          "year": 2024,
+          "text": "2024"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHh9cAvUwbiLA/company-logo_400_400/B56Z0eTseIJMAY-/0/1774329972902/unsloth_logo?e=1776902400&v=beta&t=-fXRxAzvyHq_DKMNyjgZ-eM2fg4N0RVuzeE2krK175Y",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHh9cAvUwbiLA/company-logo_400_400/B56Z0eTseIJMAY-/0/1774329972902/unsloth_logo?e=1776902400&v=beta&t=-fXRxAzvyHq_DKMNyjgZ-eM2fg4N0RVuzeE2krK175Y",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHh9cAvUwbiLA/company-logo_200_200/B56Z0eTseIJMAI-/0/1774329972902/unsloth_logo?e=1776902400&v=beta&t=LRPKjCKnFubKmpZnVNf7or_5f-tBK-_ukloeNjoOj8M",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHh9cAvUwbiLA/company-logo_100_100/B56Z0eTseIJMAQ-/0/1774329972902/unsloth_logo?e=1776902400&v=beta&t=DgKpglYoLY4FmBM_zUu8uSKsIx4NnrxZEFVysAbrCk0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "LMArena",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/107123113/",
+        "companyId": "107123113",
+        "duration": "1 yr 4 mos",
+        "description": "Series Seed for LSVP",
+        "skills": null,
+        "startDate": {
+          "year": 2025,
+          "text": "2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQFLjHzu_lPaGA/company-logo_400_400/B56ZwMAk6BHIAY-/0/1769728004044/arenaai_logo?e=1776902400&v=beta&t=yWSqvQ80E-pHXZl2sOCkh5Jfk0OwN_93W4SIjTxP9fE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFLjHzu_lPaGA/company-logo_400_400/B56ZwMAk6BHIAY-/0/1769728004044/arenaai_logo?e=1776902400&v=beta&t=yWSqvQ80E-pHXZl2sOCkh5Jfk0OwN_93W4SIjTxP9fE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFLjHzu_lPaGA/company-logo_200_200/B56ZwMAk6BHIAI-/0/1769728004044/arenaai_logo?e=1776902400&v=beta&t=HKXU1HCNrnVl6OlE7Zf6EECcok0TkqYsZjq6Kr8js7g",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFLjHzu_lPaGA/company-logo_100_100/B56ZwMAk6BHIAQ-/0/1769728004044/arenaai_logo?e=1776902400&v=beta&t=6gRozmq8LcWHqTS5diI5Lft-_EsUXQw_V7Ov4qoQDhY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Board Observer",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Virtue AI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/104096821/",
+        "companyId": "104096821",
+        "duration": "1 yr 4 mos",
+        "description": "Led Series A for LSVP",
+        "skills": null,
+        "startDate": {
+          "year": 2025,
+          "text": "2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQE2PJRdDG5BtQ/company-logo_400_400/B4EZcS7Y1JHkAY-/0/1748369247985/virtue_ai_logo?e=1776902400&v=beta&t=dPI2Woqt3yRKB94JJ2bYnB4MPo1Nh1wm15SRt0fhRMQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQE2PJRdDG5BtQ/company-logo_400_400/B4EZcS7Y1JHkAY-/0/1748369247985/virtue_ai_logo?e=1776902400&v=beta&t=dPI2Woqt3yRKB94JJ2bYnB4MPo1Nh1wm15SRt0fhRMQ",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQE2PJRdDG5BtQ/company-logo_200_200/B4EZcS7Y1JHkAI-/0/1748369247985/virtue_ai_logo?e=1776902400&v=beta&t=SyAkTmuDmvd7Eg8ry5twqC2HZgdhFW4Zcn6UcNxCQck",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQE2PJRdDG5BtQ/company-logo_100_100/B4EZcS7Y1JHkAQ-/0/1748369247985/virtue_ai_logo?e=1776902400&v=beta&t=d2qxuMJe3OtkMD6uZNokdNrw44tkmQYhbTcEw4sjj8Y",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Board Director",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Cleric",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/101224919/",
+        "companyId": "101224919",
+        "duration": "1 yr",
+        "description": "Led Seed for Zetta",
+        "skills": null,
+        "startDate": {
+          "year": 2023,
+          "text": "2023"
+        },
+        "endDate": {
+          "year": 2024,
+          "text": "2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4D0BAQG6buaenJ_fVg/company-logo_400_400/B4DZZeaeqGG4Ag-/0/1745340722242/cleric_io_logo?e=1776902400&v=beta&t=bJRlAX09OBWGm1G2d2QUyt1QDFBfY01e9mPPXLBQEoI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQG6buaenJ_fVg/company-logo_400_400/B4DZZeaeqGG4Ag-/0/1745340722242/cleric_io_logo?e=1776902400&v=beta&t=bJRlAX09OBWGm1G2d2QUyt1QDFBfY01e9mPPXLBQEoI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQG6buaenJ_fVg/company-logo_200_200/B4DZZeaeqGG4AQ-/0/1745340722242/cleric_io_logo?e=1776902400&v=beta&t=Z_W2NaEvlzhwbSBewYPelofxQFQDBlc2W1P-rqx7ccE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQG6buaenJ_fVg/company-logo_100_100/B4DZZeaeqGG4AY-/0/1745340722242/cleric_io_logo?e=1776902400&v=beta&t=MxkOiAgdGnuBgUY9GzM0gZoBfzm0H2hKsnzzuL8q3tY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Board Director",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Argilla",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/11501021/",
+        "companyId": "11501021",
+        "duration": "2 yrs",
+        "description": "Led Seed for Zetta. Acquired by Hugging Face.",
+        "skills": null,
+        "startDate": {
+          "year": 2022,
+          "text": "2022"
+        },
+        "endDate": {
+          "year": 2024,
+          "text": "2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEvHXMl_WX5Jw/company-logo_400_400/company-logo_400_400/0/1674137380669/argilla_io_logo?e=1776902400&v=beta&t=YTq68TbwFKG6XbCKgcPmDh8CIzTul62jfblJK_1t5c0",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEvHXMl_WX5Jw/company-logo_400_400/company-logo_400_400/0/1674137380669/argilla_io_logo?e=1776902400&v=beta&t=YTq68TbwFKG6XbCKgcPmDh8CIzTul62jfblJK_1t5c0",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEvHXMl_WX5Jw/company-logo_200_200/company-logo_200_200/0/1674137380669/argilla_io_logo?e=1776902400&v=beta&t=6cIjs5S1NI86fKWdIEYDK3eTCp9e3od7RFV_W1XlJ_I",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEvHXMl_WX5Jw/company-logo_100_100/company-logo_100_100/0/1674137380669/argilla_io_logo?e=1776902400&v=beta&t=NXLva6efvaTAZjrZIi6MdEqlUDfgXkZ48WYnZ2kh0sE",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Board Director",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Weaviate",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/11702022/",
+        "companyId": "11702022",
+        "duration": "3 yrs",
+        "description": "Led Seed for Zetta",
+        "skills": null,
+        "startDate": {
+          "year": 2021,
+          "text": "2021"
+        },
+        "endDate": {
+          "year": 2024,
+          "text": "2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4D0BAQFfgBLRA2U4Og/company-logo_400_400/company-logo_400_400/0/1698828873823/weaviate_io_logo?e=1776902400&v=beta&t=AdET5MtjxBXE5_BEa4uLqnfW_yNKzLrC2TWOy7XMBCc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQFfgBLRA2U4Og/company-logo_400_400/company-logo_400_400/0/1698828873823/weaviate_io_logo?e=1776902400&v=beta&t=AdET5MtjxBXE5_BEa4uLqnfW_yNKzLrC2TWOy7XMBCc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQFfgBLRA2U4Og/company-logo_200_200/company-logo_200_200/0/1698828873823/weaviate_io_logo?e=1776902400&v=beta&t=8GJS4FgpEkhZcKGTAySGR-97vNGvlopfxZhWiQhYd-s",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQFfgBLRA2U4Og/company-logo_100_100/company-logo_100_100/0/1698828873823/weaviate_io_logo?e=1776902400&v=beta&t=IoTpYWEEy252-XJj3kIZEybjrU_QgHCgiJvEitekGWU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Board Director",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Galley",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/18559898/",
+        "companyId": "18559898",
+        "duration": "4 yrs",
+        "description": "Led Seed for Zetta",
+        "skills": null,
+        "startDate": {
+          "year": 2020,
+          "text": "2020"
+        },
+        "endDate": {
+          "year": 2024,
+          "text": "2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQEZJH_AGzPWOQ/company-logo_400_400/B56ZwHMNIlJ4AY-/0/1769647166277/galleysolutions_logo?e=1776902400&v=beta&t=KNXaQBHlyN5pfUJ5p_BVCkAp7CiH99w5LDk45U-ENus",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEZJH_AGzPWOQ/company-logo_400_400/B56ZwHMNIlJ4AY-/0/1769647166277/galleysolutions_logo?e=1776902400&v=beta&t=KNXaQBHlyN5pfUJ5p_BVCkAp7CiH99w5LDk45U-ENus",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEZJH_AGzPWOQ/company-logo_200_200/B56ZwHMNIlJ4AI-/0/1769647166276/galleysolutions_logo?e=1776902400&v=beta&t=Fs_6wr-AWKkywLSu9JlaUxKRHnIGkwGniUCgB95WvHw",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEZJH_AGzPWOQ/company-logo_100_100/B56ZwHMNIlJ4AQ-/0/1769647166277/galleysolutions_logo?e=1776902400&v=beta&t=NaYt1bDMtjQTs3RVFm4mf07OlNp0VS_cQbiBe9LyZsM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Board Director",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Featureform",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/43228458/",
+        "companyId": "43228458",
+        "duration": "4 yrs",
+        "description": "Led Seed for Zetta. Acquired by Redis.",
+        "skills": null,
+        "startDate": {
+          "year": 2020,
+          "text": "2020"
+        },
+        "endDate": {
+          "year": 2024,
+          "text": "2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQF-nsH4HH069A/company-logo_400_400/company-logo_400_400/0/1630649984830/streamsql_logo?e=1776902400&v=beta&t=JVmLGYcju_AMhrWNhKy6MFloIBWpGLXptk40YRUJQdE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQF-nsH4HH069A/company-logo_400_400/company-logo_400_400/0/1630649984830/streamsql_logo?e=1776902400&v=beta&t=JVmLGYcju_AMhrWNhKy6MFloIBWpGLXptk40YRUJQdE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQF-nsH4HH069A/company-logo_200_200/company-logo_200_200/0/1630649984830/streamsql_logo?e=1776902400&v=beta&t=ggGD0hvJ_cMVAug4TeSbulVONhyw2Jvdv8xqyqS61EI",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQF-nsH4HH069A/company-logo_100_100/company-logo_100_100/0/1630649984830/streamsql_logo?e=1776902400&v=beta&t=LiKrOPbhpyknPkDblawJ5sFbamk4cyxh-4OrBPdTqTY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Board Observer",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "EnsoData",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10075923/",
+        "companyId": "10075923",
+        "duration": "4 yrs",
+        "description": "Led Seed for Zetta",
+        "skills": null,
+        "startDate": {
+          "year": 2020,
+          "text": "2020"
+        },
+        "endDate": {
+          "year": 2024,
+          "text": "2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQEESY1d_mqjdA/company-logo_400_400/company-logo_400_400/0/1630630382929/ensodata_logo?e=1776902400&v=beta&t=vdsaSKAdIzVS-w9J8P2W10GkopOzeNzov4Ikp0AkPwg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEESY1d_mqjdA/company-logo_400_400/company-logo_400_400/0/1630630382929/ensodata_logo?e=1776902400&v=beta&t=vdsaSKAdIzVS-w9J8P2W10GkopOzeNzov4Ikp0AkPwg",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEESY1d_mqjdA/company-logo_200_200/company-logo_200_200/0/1630630382929/ensodata_logo?e=1776902400&v=beta&t=CGeftgmFJW09ic-1iwWzrU9q-spzX-jfbnEspIaIlZo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEESY1d_mqjdA/company-logo_100_100/company-logo_100_100/0/1630630382929/ensodata_logo?e=1776902400&v=beta&t=DJr2bVVuaPvHfMsnW9ST4pxyffTVxyI1EYen6ZH64Cw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Partner",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Zetta Venture Partners",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/18203791/",
+        "companyId": "18203791",
+        "duration": "6 yrs",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "year": 2018,
+          "text": "2018"
+        },
+        "endDate": {
+          "year": 2024,
+          "text": "2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQG-Qq2q1AzkcQ/company-logo_400_400/company-logo_400_400/0/1689698221314/zetta_venture_partners_logo?e=1776902400&v=beta&t=AdZgi6fhDZtFSB9W0DqfB5x-5fTs2xzo9lwlGdF9Y9k",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQG-Qq2q1AzkcQ/company-logo_400_400/company-logo_400_400/0/1689698221314/zetta_venture_partners_logo?e=1776902400&v=beta&t=AdZgi6fhDZtFSB9W0DqfB5x-5fTs2xzo9lwlGdF9Y9k",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQG-Qq2q1AzkcQ/company-logo_200_200/company-logo_200_200/0/1689698221314/zetta_venture_partners_logo?e=1776902400&v=beta&t=bHmmoW_Aj1IWg9XwJ6fAy7Jn_8gk3cwoYgzlUwd1rII",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQG-Qq2q1AzkcQ/company-logo_100_100/company-logo_100_100/0/1689698221314/zetta_venture_partners_logo?e=1776902400&v=beta&t=8AOf6k-A3B4u43lx3plssMzMVXqRo3zQoGcAl_wUJyY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investment Team",
+        "location": "San Francisco, California, United States",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Spectrum Equity",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/24577/",
+        "companyId": "24577",
+        "duration": "1 yr",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "year": 2017,
+          "text": "2017"
+        },
+        "endDate": {
+          "year": 2018,
+          "text": "2018"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQE_OqVroGky8Q/company-logo_400_400/B56ZfmkTrrHUAY-/0/1751919967250/spectrum_equity_logo?e=1776902400&v=beta&t=3IYhDFUzTtC2yhircg5-jrgzvcNzOSPDQcQ_GiIHUwc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQE_OqVroGky8Q/company-logo_400_400/B56ZfmkTrrHUAY-/0/1751919967250/spectrum_equity_logo?e=1776902400&v=beta&t=3IYhDFUzTtC2yhircg5-jrgzvcNzOSPDQcQ_GiIHUwc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQE_OqVroGky8Q/company-logo_200_200/B56ZfmkTrrHUAI-/0/1751919967250/spectrum_equity_logo?e=1776902400&v=beta&t=G9Nwj3iVv1OeUJ1sWBwcQyq7IeVpEVpBVC6gzMTsTmA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQE_OqVroGky8Q/company-logo_100_100/B56ZfmkTrrHUAQ-/0/1751919967250/spectrum_equity_logo?e=1776902400&v=beta&t=_TPqPgXCiXyb2SLmIryhjy7oivMfj73l1q9fbld-MMo",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "University of California, Berkeley",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2517/",
+        "schoolId": "2517",
+        "degree": "Bachelor of Science (BSc.)",
+        "fieldOfStudy": null,
+        "skills": [],
+        "insights": "Activities and societies: Heavyweight Varsity Crew",
+        "startDate": {
+          "year": 2013,
+          "text": "2013"
+        },
+        "endDate": {
+          "year": 2017,
+          "text": "2017"
+        },
+        "period": "2013 - 2017",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_400_400/company-logo_400_400/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=ihsqGpnHzj0nlc8nr3zQwTYbq6GYQDs_WRmOHxXO6Cs",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_400_400/company-logo_400_400/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=ihsqGpnHzj0nlc8nr3zQwTYbq6GYQDs_WRmOHxXO6Cs",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_200_200/company-logo_200_200/0/1732135669730/uc_berkeley_logo?e=1776902400&v=beta&t=99cgQbgSotN9XiK7TbWS3PhqRVGT8S6VKfitEcMn0-E",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_100_100/company-logo_100_100/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=spLtug0cp3xqHCXq1OoZudTryqzyY85FoIZwfJ-_XzA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "University of Melbourne",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/5677/",
+        "schoolId": "5677",
+        "degree": null,
+        "fieldOfStudy": null,
+        "skills": [],
+        "insights": "Activities and societies: Trinity College",
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQEACkXGOAWOFg/company-logo_400_400/company-logo_400_400/0/1691363410465?e=1776902400&v=beta&t=cOSRarcpZhHGbxeR2Lx8GKsGban846N6Kx2Cqvn5Q1Y",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEACkXGOAWOFg/company-logo_400_400/company-logo_400_400/0/1691363410465?e=1776902400&v=beta&t=cOSRarcpZhHGbxeR2Lx8GKsGban846N6Kx2Cqvn5Q1Y",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEACkXGOAWOFg/company-logo_200_200/company-logo_200_200/0/1691363410465?e=1776902400&v=beta&t=Auml5vvk35nipru4whwDXW2R26-h6pPNSOe6w-FgxTM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEACkXGOAWOFg/company-logo_100_100/company-logo_100_100/0/1691363410465?e=1776902400&v=beta&t=j7WR20T_5wi9q-Q0z07pcvWQaFN8V3IPZioWeuW3uy4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Brisbane Grammar School",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/8530369/",
+        "schoolId": "8530369",
+        "degree": null,
+        "fieldOfStudy": null,
+        "skills": [],
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQEvxbA_BvXD3g/company-logo_400_400/company-logo_400_400/0/1630597973606/brisbane_grammar_school_logo?e=1776902400&v=beta&t=KQxjMKbJ0CVqIQ9-o_HmcsfsguaufHqmHqvRp42w8JY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEvxbA_BvXD3g/company-logo_400_400/company-logo_400_400/0/1630597973606/brisbane_grammar_school_logo?e=1776902400&v=beta&t=KQxjMKbJ0CVqIQ9-o_HmcsfsguaufHqmHqvRp42w8JY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEvxbA_BvXD3g/company-logo_200_200/company-logo_200_200/0/1630597973606/brisbane_grammar_school_logo?e=1776902400&v=beta&t=M1LVZEEgeIJLduzectKekVddGKPkpkII4zFzlpIEzns",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEvxbA_BvXD3g/company-logo_100_100/company-logo_100_100/0/1630597973606/brisbane_grammar_school_logo?e=1776902400&v=beta&t=QQ28MuhEpD-uuy3KlrTC_epZQux-mHMo8lN6_TxOfVc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAAASb0QB8UEWcZgKOpaHO7dnB7V4KjnjqQ8",
+        "firstName": "Guru",
+        "lastName": "Chahal",
+        "publicIdentifier": "guruchahal",
+        "linkedinUrl": "https://www.linkedin.com/in/guruchahal"
+      },
+      {
+        "id": "ACoAAAzTvYABvMGL0BhzWvn235PUEsUKhkGdKsU",
+        "firstName": "Connor",
+        "lastName": "Love",
+        "publicIdentifier": "connor-love-a800a260",
+        "linkedinUrl": "https://www.linkedin.com/in/connor-love-a800a260"
+      },
+      {
+        "id": "ACoAAAN5MHUB8NxdeysCZUeAgXa8OGvtZNRhRBU",
+        "firstName": "Bucky",
+        "lastName": "Moore",
+        "publicIdentifier": "buckymoore",
+        "linkedinUrl": "https://www.linkedin.com/in/buckymoore"
+      },
+      {
+        "id": "ACoAABX5F08BdWGoN_Ir0J5JunSAF4gUE89u3aI",
+        "firstName": "Brian",
+        "lastName": "Zhan",
+        "publicIdentifier": "bzhan",
+        "linkedinUrl": "https://www.linkedin.com/in/bzhan"
+      },
+      {
+        "id": "ACoAAAMMS4cBv_Z-FPkcOJpiFdH083zDyV8zMeQ",
+        "firstName": "Nnamdi",
+        "lastName": "Iregbulem",
+        "publicIdentifier": "nnamdiiregbulem",
+        "linkedinUrl": "https://www.linkedin.com/in/nnamdiiregbulem"
+      },
+      {
+        "id": "ACoAAAKkXwoBAmTkuiiWClWq6mGvsScwOAPaT8w",
+        "firstName": "Nina",
+        "lastName": "Achadjian",
+        "publicIdentifier": "nina-achadjian",
+        "linkedinUrl": "https://www.linkedin.com/in/nina-achadjian"
+      },
+      {
+        "id": "ACoAAB8rl4kBL6DSKXNk9Yh_-UqxYMVm6DYNsUk",
+        "firstName": "Amber",
+        "lastName": "Yang",
+        "publicIdentifier": "amber-yang",
+        "linkedinUrl": "https://www.linkedin.com/in/amber-yang"
+      },
+      {
+        "id": "ACoAAANtGhsBGuZuDmwGT8cmRw808JTVrzL-MGM",
+        "firstName": "Anoushka",
+        "lastName": "Vaswani",
+        "publicIdentifier": "anoushka-vaswani-aa330017",
+        "linkedinUrl": "https://www.linkedin.com/in/anoushka-vaswani-aa330017"
+      },
+      {
+        "id": "ACoAAAAFLDMB5R5D8parghrH5WUxk3OYBdqvcuA",
+        "firstName": "Will",
+        "lastName": "Kohler",
+        "publicIdentifier": "will-kohler-217144",
+        "linkedinUrl": "https://www.linkedin.com/in/will-kohler-217144"
+      },
+      {
+        "id": "ACoAABmTGf8BD99zdXw1M6BvJBOh_rZj4A3qhsg",
+        "firstName": "Alex",
+        "lastName": "Ren",
+        "publicIdentifier": "alexchengmingren",
+        "linkedinUrl": "https://www.linkedin.com/in/alexchengmingren"
+      },
+      {
+        "id": "ACoAAAoDkzgBOjd_V9dYcTipq4XPeXJ9HOPji90",
+        "firstName": "Lisa",
+        "lastName": "Han",
+        "publicIdentifier": "lisabethhan",
+        "linkedinUrl": "https://www.linkedin.com/in/lisabethhan"
+      },
+      {
+        "id": "ACoAAAIiowkB9nUaFjlJfSUCdfudas3f6O384X8",
+        "firstName": "Alex",
+        "lastName": "Taussig",
+        "publicIdentifier": "ataussig",
+        "linkedinUrl": "https://www.linkedin.com/in/ataussig"
+      },
+      {
+        "id": "ACoAABRHdYQB3qlsHGOGsRrNB0WsIIw-rmqfhTI",
+        "firstName": "Elsa",
+        "lastName": "Cong",
+        "publicIdentifier": "elsacong",
+        "linkedinUrl": "https://www.linkedin.com/in/elsacong"
+      },
+      {
+        "id": "ACoAAAqBTdoBzv6H_NRAqAZQ_XsYw_WAgukF7A8",
+        "firstName": "Stephanie",
+        "lastName": "Zhan",
+        "publicIdentifier": "stephaniezhan",
+        "linkedinUrl": "https://www.linkedin.com/in/stephaniezhan"
+      },
+      {
+        "id": "ACoAAACKppMBjcLR9XiEnWw2wXlY6Db3CWJewqI",
+        "firstName": "Raviraj",
+        "lastName": "Jain",
+        "publicIdentifier": "ravirajjain",
+        "linkedinUrl": "https://www.linkedin.com/in/ravirajjain"
+      },
+      {
+        "id": "ACoAAAAVW7EBKTpx3YBY9c2bSuGc-z8y9O1gOCk",
+        "firstName": "Peter",
+        "lastName": "Steinle",
+        "publicIdentifier": "peter-steinle-041576",
+        "linkedinUrl": "https://www.linkedin.com/in/peter-steinle-041576"
+      },
+      {
+        "id": "ACoAAAKhoggBbwS2YVsi6oDWXNetMWzveuFOLlI",
+        "firstName": "Galym",
+        "lastName": "Imanbayev, MD",
+        "publicIdentifier": "galymimanbayev",
+        "linkedinUrl": "https://www.linkedin.com/in/galymimanbayev"
+      },
+      {
+        "id": "ACoAAAj1dUQBVxcyTzfViz_vKCLoCG60nGzkcYs",
+        "firstName": "Amish",
+        "lastName": "Desai",
+        "publicIdentifier": "aadesai",
+        "linkedinUrl": "https://www.linkedin.com/in/aadesai"
+      },
+      {
+        "id": "ACoAAB7o1EEBE1ioGZ8MiDQ_qoCzHHfTqVAAyqA",
+        "firstName": "Elijah",
+        "lastName": "Conniff",
+        "publicIdentifier": "elijahconniff",
+        "linkedinUrl": "https://www.linkedin.com/in/elijahconniff"
+      },
+      {
+        "id": "ACoAAAAE4IsBKkgW-Gbq_GISL0IAdMI1RxkkxYo",
+        "firstName": "Gaurav",
+        "lastName": "Gupta",
+        "publicIdentifier": "ggupta",
+        "linkedinUrl": "https://www.linkedin.com/in/ggupta"
+      },
+      {
+        "id": "ACoAABluHpcBZoUtVCP6DQzknD3sEoeOwSfZUc8",
+        "firstName": "MINAMBA",
+        "lastName": "Patrick",
+        "position": "--",
+        "publicIdentifier": "minamba-patrick-387a72ba",
+        "linkedinUrl": "https://www.linkedin.com/in/minamba-patrick-387a72ba"
+      },
+      {
+        "id": "ACoAAEei0GEB5-uFaZIzOsv9hrZnRf4IPBD4Aw0",
+        "firstName": "laura",
+        "lastName": "trolez",
+        "position": "--",
+        "publicIdentifier": "laura-trolez-6015b8296",
+        "linkedinUrl": "https://www.linkedin.com/in/laura-trolez-6015b8296"
+      },
+      {
+        "id": "ACoAAA5EfeIBphQVuMASl1A_d74nv7DiASKZ5Q8",
+        "firstName": "muriel",
+        "lastName": "Beraud",
+        "position": "--",
+        "publicIdentifier": "muriel-beraud-16a1b868",
+        "linkedinUrl": "https://www.linkedin.com/in/muriel-beraud-16a1b868"
+      },
+      {
+        "id": "ACoAACflvtABiGlriLoIJ0cDZDClzfPZn8sQMrw",
+        "firstName": "Benoit",
+        "lastName": "Faure",
+        "position": "--",
+        "publicIdentifier": "benoit-faure-900205168",
+        "linkedinUrl": "https://www.linkedin.com/in/benoit-faure-900205168"
+      },
+      {
+        "id": "ACoAABlX0XMBktBfE1Pg2AAJaknqEWspYBfgidw",
+        "firstName": "Maryline",
+        "lastName": "MOULIN",
+        "position": "--",
+        "publicIdentifier": "maryline-moulin-617488ba",
+        "linkedinUrl": "https://www.linkedin.com/in/maryline-moulin-617488ba"
+      },
+      {
+        "id": "ACoAABfTGHkB5fuHfz_-DCoF29wgBk71VAEHeRI",
+        "firstName": "Evelyne",
+        "lastName": "PAPE",
+        "position": "--",
+        "publicIdentifier": "evelyne-pape-a21a41b1",
+        "linkedinUrl": "https://www.linkedin.com/in/evelyne-pape-a21a41b1"
+      },
+      {
+        "id": "ACoAAGPjJMkBfX0s-dl6lpluOr10AIPNRwPVRwg",
+        "firstName": "Cyrille",
+        "lastName": "Camilli",
+        "position": "--",
+        "publicIdentifier": "cyrille-camilli-3752953a9",
+        "linkedinUrl": "https://www.linkedin.com/in/cyrille-camilli-3752953a9"
+      },
+      {
+        "id": "ACoAAASxMh0B_Be5_LcrSM6IBu2TVXOFkRJmmEo",
+        "firstName": "phanlem",
+        "lastName": "chhea",
+        "position": "--",
+        "publicIdentifier": "phanlem-chhea-56544422",
+        "linkedinUrl": "https://www.linkedin.com/in/phanlem-chhea-56544422"
+      },
+      {
+        "id": "ACoAAF2b1GQBJdRh8mMXF-VUjElAHsZlLoVIgk0",
+        "firstName": "Loutfia",
+        "lastName": "Sittou",
+        "position": "--",
+        "publicIdentifier": "loutfia-sittou-518b56379",
+        "linkedinUrl": "https://www.linkedin.com/in/loutfia-sittou-518b56379"
+      },
+      {
+        "id": "ACoAABpjSQsBdyWEhKrEQCCo6GIZnQmsdPOhYuc",
+        "firstName": "JANIE",
+        "lastName": "LETROT",
+        "position": "--",
+        "publicIdentifier": "janie-letrot-54b320104",
+        "linkedinUrl": "https://www.linkedin.com/in/janie-letrot-54b320104"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAABlmzjQByJgyN8Q2Dm6gezOdjCEOMUpzPwQ"
+    }
+  }
+}

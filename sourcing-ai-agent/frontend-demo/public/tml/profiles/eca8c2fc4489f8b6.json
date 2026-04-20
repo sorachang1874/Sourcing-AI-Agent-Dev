@@ -1,0 +1,658 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAADzlZzEBdWZJQQ2cxRghrHy6miDRm-x1-aM",
+    "profile_url": "https://www.linkedin.com/in/ACwAADzlZzEBdWZJQQ2cxRghrHy6miDRm-x1-aM"
+  },
+  "item": {
+    "id": "ACoAADzlZzEBoKVyBC88LTrw6jJELhhWXsqGw3E",
+    "publicIdentifier": "rabia-n-6691a2246",
+    "linkedinUrl": "https://www.linkedin.com/in/rabia-n-6691a2246",
+    "firstName": "Rabia",
+    "lastName": "N.",
+    "emails": [],
+    "companyWebsites": [
+      {
+        "url": "https://hyperfoundation.org/",
+        "domain": "hyperfoundation.org",
+        "validEmailServer": true
+      },
+      {
+        "url": "http://axyon.ai/",
+        "domain": "axyon.ai"
+      }
+    ],
+    "headline": "Board advisor leveraging payments expertise and strategic insights.",
+    "openToWork": false,
+    "hiring": false,
+    "premium": true,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Bowling Green, Kentucky, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "Bowling Green, KY, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "Kentucky",
+        "city": "Bowling Green"
+      }
+    },
+    "objectUrn": "1021667121",
+    "registeredAt": "2022-07-21T10:47:37.990Z",
+    "topSkills": null,
+    "connectionsCount": 1305,
+    "followerCount": 1299,
+    "verified": false,
+    "about": "Currently serving as a Member of the Board of Advisors at Hyperliquid, with a Harvard MBA and extensive experience in financial advisory, board administration, and payments. Previously co-founded Axyon AI to develop advanced AI-driven solutions and contributed to Animoca Brands as a Senior Financial Advisor, supporting the growth of its Web3 initiatives. Also held executive positions at Thinking Machines Lab and served as a Board Member at Blockonomics. Combines strategic leadership, financial expertise, and a deep understanding of payment systems to drive innovation and value in technology-focused organizations.",
+    "currentPosition": [
+      {
+        "companyId": "110036370",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/110036370/",
+        "companyName": "Hyperliquid",
+        "dateRange": {
+          "start": {
+            "month": 8,
+            "year": 2024,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "18484",
+        "companyId": "4867",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/4867/",
+        "schoolName": "Harvard Business School"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": null,
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Board advisor leveraging payments expertise and strategic insights.",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of the Board of Advisors",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Hyperliquid",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/hyperliquid/",
+        "companyId": "110036370",
+        "companyUniversalName": "hyperliquid",
+        "duration": "1 yr 9 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Aug",
+          "year": 2024,
+          "text": "Aug 2024"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4D0BAQFl6QfomqpJjg/company-logo_400_400/B4DZp9dZZlGgAc-/0/1763041450093?e=1776902400&v=beta&t=KoPUTa6G1ZBtlfmL9YWK1PDTMfQPR6YO84lFtVRXsp8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQFl6QfomqpJjg/company-logo_400_400/B4DZp9dZZlGgAc-/0/1763041450093?e=1776902400&v=beta&t=KoPUTa6G1ZBtlfmL9YWK1PDTMfQPR6YO84lFtVRXsp8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQFl6QfomqpJjg/company-logo_200_200/B4DZp9dZZlGgAM-/0/1763041450093?e=1776902400&v=beta&t=L3idzx6P9NewnjzTA8ojes-qJAE0Caq21mP-56hI7tY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQFl6QfomqpJjg/company-logo_100_100/B4DZp9dZZlGgAU-/0/1763041450093?e=1776902400&v=beta&t=HK9tF3RFZsGOxMBjNAFbM7405I1a0XVdXsK9Yxnbup0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Co-Founder",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Axyon AI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10330819/",
+        "companyId": "10330819",
+        "duration": "6 yrs 4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "year": 2020,
+          "text": "2020"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFiqHrVno9enQ/company-logo_400_400/company-logo_400_400/0/1674481547201/axyon_ai_logo?e=1776902400&v=beta&t=auFROaWLcKoSyYbNy08FTG2Hpm-Gyn4mq8S-P5MT3gA",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFiqHrVno9enQ/company-logo_400_400/company-logo_400_400/0/1674481547201/axyon_ai_logo?e=1776902400&v=beta&t=auFROaWLcKoSyYbNy08FTG2Hpm-Gyn4mq8S-P5MT3gA",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFiqHrVno9enQ/company-logo_200_200/company-logo_200_200/0/1674481547200/axyon_ai_logo?e=1776902400&v=beta&t=GgrBhZ6In9Ut0W_Qj-xtAvpRvLdEdqhvQqkx2TtoB_A",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFiqHrVno9enQ/company-logo_100_100/company-logo_100_100/0/1674481547200/axyon_ai_logo?e=1776902400&v=beta&t=AvO9FbSy6v3oO4Ab_TRXGenKhzEkxBWAs31Jl2RiLf8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Board Member",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Blockonomics",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/11076311/",
+        "companyId": "11076311",
+        "duration": "4 yrs 3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2021,
+          "text": "May 2021"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2025,
+          "text": "Jul 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQGCcRoid-m1EQ/company-logo_400_400/company-logo_400_400/0/1652270712573/blockonomicsco_logo?e=1776902400&v=beta&t=qARDJePMhCecEvVZcRRDOrUf4-uQnMAD90rH969r1Gg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGCcRoid-m1EQ/company-logo_400_400/company-logo_400_400/0/1652270712573/blockonomicsco_logo?e=1776902400&v=beta&t=qARDJePMhCecEvVZcRRDOrUf4-uQnMAD90rH969r1Gg",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGCcRoid-m1EQ/company-logo_200_200/company-logo_200_200/0/1652270712573/blockonomicsco_logo?e=1776902400&v=beta&t=oVkTZ1sEO_f5cWWh6LzMmppVUMrqFKurJyOg4ayySKM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGCcRoid-m1EQ/company-logo_100_100/company-logo_100_100/0/1652270712573/blockonomicsco_logo?e=1776902400&v=beta&t=cNmygz2rpuZEraFEhIFeIaF9iPBhxxi7GpGlbz3Z7o4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "President / VP of Engineering",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyId": "105913171",
+        "duration": "2 yrs 4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2023,
+          "text": "Mar 2023"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2025,
+          "text": "Jun 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior Financial Advisor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Animoca Brands",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10177471/",
+        "companyId": "10177471",
+        "duration": "1 yr 5 mos",
+        "description": "Headquartered in Hong Kong, Animoca Brands is recognized as the largest fund in the Web3 sector. Its financial holdings include $172 million in cash, $330 million in third-party tokens, and approximately $1.6 billion in off-balance-sheet token reserves.",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2022,
+          "text": "May 2022"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2023,
+          "text": "Sep 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFH4a-pPO27dQ/company-logo_400_400/company-logo_400_400/0/1631315541687?e=1776902400&v=beta&t=Fc1loNWv2qhtKHrGX0tvupqOc7yAn0n6xb2qv75dDt0",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFH4a-pPO27dQ/company-logo_400_400/company-logo_400_400/0/1631315541687?e=1776902400&v=beta&t=Fc1loNWv2qhtKHrGX0tvupqOc7yAn0n6xb2qv75dDt0",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFH4a-pPO27dQ/company-logo_200_200/company-logo_200_200/0/1631315541687?e=1776902400&v=beta&t=-bA-wQR5UTVMdVM0eol92ToylV3MgJaPV-y4tkAAcD4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFH4a-pPO27dQ/company-logo_100_100/company-logo_100_100/0/1631315541687?e=1776902400&v=beta&t=8d39yzrfJI8p8ga8T6iQLHZ7YevQdCSGTubYuL0XlZ8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Special Council",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Dogecoin",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/79324603/",
+        "companyId": "79324603",
+        "duration": "3 yrs 6 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Apr",
+          "year": 2019,
+          "text": "Apr 2019"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2022,
+          "text": "Sep 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQG5JBONUMXjhw/company-logo_400_400/company-logo_400_400/0/1630616569752/dogecoinfoundation_logo?e=1776902400&v=beta&t=_mu29zITAqtGL0GisuDB1w2l_1O7lJWggYMERpjHwdA",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQG5JBONUMXjhw/company-logo_400_400/company-logo_400_400/0/1630616569752/dogecoinfoundation_logo?e=1776902400&v=beta&t=_mu29zITAqtGL0GisuDB1w2l_1O7lJWggYMERpjHwdA",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQG5JBONUMXjhw/company-logo_200_200/company-logo_200_200/0/1630616569752/dogecoinfoundation_logo?e=1776902400&v=beta&t=eMXrRHN5mdj2hshaqm3cSrhCJUhlsUZ2j6dCCje9DeE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQG5JBONUMXjhw/company-logo_100_100/company-logo_100_100/0/1630616569752/dogecoinfoundation_logo?e=1776902400&v=beta&t=YlrSdwLzY3iIZDUNRiOUZryxQqmxGOQXbJXhuGDpV8k",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Harvard Business School",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/4867/",
+        "schoolId": "4867",
+        "degree": "Master of Business Administration - MBA",
+        "fieldOfStudy": null,
+        "skills": [],
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQF_DkXTlZVo1w/company-logo_400_400/company-logo_400_400/0/1639781479259/harvard_business_school_logo?e=1776902400&v=beta&t=ZYNQag9XVMpe3mZGU_kpEMbtKtO93O09BJPEXmoPv6g",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQF_DkXTlZVo1w/company-logo_400_400/company-logo_400_400/0/1639781479259/harvard_business_school_logo?e=1776902400&v=beta&t=ZYNQag9XVMpe3mZGU_kpEMbtKtO93O09BJPEXmoPv6g",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQF_DkXTlZVo1w/company-logo_200_200/company-logo_200_200/0/1639781479259/harvard_business_school_logo?e=1776902400&v=beta&t=51wmvggNfmpTJ6A1wOLmbqonlr_wrQCNVdYfVViF3T4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQF_DkXTlZVo1w/company-logo_100_100/company-logo_100_100/0/1639781479259/harvard_business_school_logo?e=1776902400&v=beta&t=pJyn-3t_Xfh0Y9Mlsf5HA23Nm87JoKRMCA_pLobIcew",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Payments"
+      },
+      {
+        "name": "Board Level"
+      },
+      {
+        "name": "Board Administration"
+      },
+      {
+        "name": "Fundraising"
+      },
+      {
+        "name": "Start-up Consulting"
+      },
+      {
+        "name": "Enterprise Consulting"
+      },
+      {
+        "name": "Small Business Consulting"
+      },
+      {
+        "name": "Engineering"
+      },
+      {
+        "name": "Organizational Consulting"
+      },
+      {
+        "name": "Marketing Management"
+      },
+      {
+        "name": "Computer Graphics Design"
+      },
+      {
+        "name": "Image Editing"
+      },
+      {
+        "name": "Content Design"
+      },
+      {
+        "name": "Graphic Design Software"
+      },
+      {
+        "name": "Graphic Design"
+      },
+      {
+        "name": "Web Development"
+      },
+      {
+        "name": "Communication",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Adobe Photoshop",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Adobe Illustrator"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "moreProfiles": [
+      {
+        "id": "ACoAAFYbppMBNGmNZpYEbw8UBsNZ8XZG3HEE4tI",
+        "firstName": "Niba",
+        "lastName": "Sadiq",
+        "publicIdentifier": "niba-sadiq-a43989343",
+        "linkedinUrl": "https://www.linkedin.com/in/niba-sadiq-a43989343"
+      },
+      {
+        "id": "ACoAAEE9XJYB_raocA6v3ItESBd-MstzwTHRkXY",
+        "firstName": "Abraham",
+        "lastName": "Shiesty",
+        "publicIdentifier": "abraham-shiesty-732686266",
+        "linkedinUrl": "https://www.linkedin.com/in/abraham-shiesty-732686266"
+      },
+      {
+        "id": "ACoAAFTEv6wBsZdljDf_Tt9bwdBLOP6_oDeqGjc",
+        "firstName": "Victor ",
+        "lastName": "Munene",
+        "publicIdentifier": "victor-munene-ba4350338",
+        "linkedinUrl": "https://www.linkedin.com/in/victor-munene-ba4350338"
+      },
+      {
+        "id": "ACoAAFPeTfABZ2ByjBIl7WLD45nYqjUb43mWK6w",
+        "firstName": "Sidra",
+        "lastName": "Shafi",
+        "publicIdentifier": "sidra-shafi-214289333",
+        "linkedinUrl": "https://www.linkedin.com/in/sidra-shafi-214289333"
+      },
+      {
+        "id": "ACoAAFE2P4sBMLgaGiFUAMm5loONG5-9vmwK8o0",
+        "firstName": "Areesha ",
+        "lastName": "Fatima",
+        "publicIdentifier": "areesha-fatima-4b7375320",
+        "linkedinUrl": "https://www.linkedin.com/in/areesha-fatima-4b7375320"
+      },
+      {
+        "id": "ACoAAFDr6CwBIh0RF78PRkd-p5G3RXNtjDTCj5U",
+        "firstName": "Muhammad Zohaib",
+        "lastName": "A.",
+        "publicIdentifier": "muhammad-zohaib-a-b5080531a",
+        "linkedinUrl": "https://www.linkedin.com/in/muhammad-zohaib-a-b5080531a"
+      },
+      {
+        "id": "ACoAAE6RL2IBq-oLDVeOOlq5oWNOdS7yx5lX1G8",
+        "firstName": "iqra",
+        "lastName": "shaheen",
+        "publicIdentifier": "iqra-shaheen-202537309",
+        "linkedinUrl": "https://www.linkedin.com/in/iqra-shaheen-202537309"
+      },
+      {
+        "id": "ACoAADwLoA8BmE_9-D9EurNbFo__zOCbS3VADZI",
+        "firstName": "Naira",
+        "lastName": "Khaliq  ",
+        "publicIdentifier": "naira-khaliq",
+        "linkedinUrl": "https://www.linkedin.com/in/naira-khaliq"
+      },
+      {
+        "id": "ACoAAFF6JxQB-6KuimDTn7d2UXWVofF1k27exFQ",
+        "firstName": "Ameera",
+        "lastName": "Bilal",
+        "publicIdentifier": "ameera-bilal-904960321",
+        "linkedinUrl": "https://www.linkedin.com/in/ameera-bilal-904960321"
+      },
+      {
+        "id": "ACoAAEUWGDgBMgXhFrFZPpYRSRlJ-YskOhysSYo",
+        "firstName": "Laiba",
+        "lastName": "Naeem",
+        "publicIdentifier": "laiba-naeem-620209284",
+        "linkedinUrl": "https://www.linkedin.com/in/laiba-naeem-620209284"
+      },
+      {
+        "id": "ACoAAEiHo4wBOpOlHFUY_CDdM04oASJ0fiElg1I",
+        "firstName": "Anum",
+        "lastName": "Sohail",
+        "publicIdentifier": "anum-sohail-a9062a29b",
+        "linkedinUrl": "https://www.linkedin.com/in/anum-sohail-a9062a29b"
+      },
+      {
+        "id": "ACoAAC1k3UMBkukfgVun8Sl6cINX7JhV3rdNxao",
+        "firstName": "Andrew",
+        "lastName": "L.",
+        "publicIdentifier": "thesium",
+        "linkedinUrl": "https://www.linkedin.com/in/thesium"
+      },
+      {
+        "id": "ACoAAEZxl08B0ZRuJrErfB07krudY2vHHAQs-hs",
+        "firstName": "Akinwale",
+        "lastName": "Morakinyo",
+        "publicIdentifier": "akinwalemorakinyo",
+        "linkedinUrl": "https://www.linkedin.com/in/akinwalemorakinyo"
+      },
+      {
+        "id": "ACoAABmaqsQBnf03Z6Rw3O30z2Qq0oPCbpY0kqw",
+        "firstName": "Arnav",
+        "lastName": "Kapur",
+        "publicIdentifier": "arnav-kapur",
+        "linkedinUrl": "https://www.linkedin.com/in/arnav-kapur"
+      },
+      {
+        "id": "ACoAAFLJamoB2HkOXzSGbv_HU6ZECScm7uf-Irw",
+        "firstName": "Amna",
+        "lastName": "Farooq",
+        "publicIdentifier": "amna-farooq-ab6197329",
+        "linkedinUrl": "https://www.linkedin.com/in/amna-farooq-ab6197329"
+      },
+      {
+        "id": "ACoAAE4yhOsBZ9aCGtu-UdtXnW9DXg5t5q8xEdw",
+        "firstName": "Hadiya",
+        "lastName": "Khalid",
+        "publicIdentifier": "hadiya-khalid-a63444307",
+        "linkedinUrl": "https://www.linkedin.com/in/hadiya-khalid-a63444307"
+      },
+      {
+        "id": "ACoAADQJvt4BW6Dtk_C0IsWvN_myzz0RmcrQoiA",
+        "firstName": "HOSSEIN",
+        "lastName": "M.",
+        "publicIdentifier": "hossein-m-652473204",
+        "linkedinUrl": "https://www.linkedin.com/in/hossein-m-652473204"
+      },
+      {
+        "id": "ACoAAE69o44BThMxATA5VJ7wvFb7YmenLmAqchs",
+        "firstName": "Neha",
+        "lastName": "Fatima",
+        "publicIdentifier": "neha-fatima-15250130a",
+        "linkedinUrl": "https://www.linkedin.com/in/neha-fatima-15250130a"
+      },
+      {
+        "id": "ACoAACQ1yM8BtlTefxcfHQxki7ffx765wOqzVJk",
+        "firstName": "Evan",
+        "lastName": "C.",
+        "publicIdentifier": "evan-c-1a755114b",
+        "linkedinUrl": "https://www.linkedin.com/in/evan-c-1a755114b"
+      },
+      {
+        "id": "ACoAACIwnMMBrLYimJdsI3NBVL6sS3bvBk1X3_A",
+        "firstName": "Georgios",
+        "lastName": "K.",
+        "publicIdentifier": "georgios-k-b17126140",
+        "linkedinUrl": "https://www.linkedin.com/in/georgios-k-b17126140"
+      },
+      {
+        "id": "ACoAAB3s6iABwePTW_LInjBT3tR4M8BNHhnp5_M",
+        "firstName": "Benjamin",
+        "lastName": "Harms",
+        "position": "Co-Founder at Archetype Insurance Group",
+        "publicIdentifier": "benjamin-harms-340183120",
+        "linkedinUrl": "https://www.linkedin.com/in/benjamin-harms-340183120"
+      },
+      {
+        "id": "ACoAAD7n5WsBsLKZ1JsjZhyFNFRjT4_ZDRC3448",
+        "firstName": "Erennn",
+        "lastName": "Taarg",
+        "position": "Discord Moderator / Junior Governance Analyst at DAOplomats | Former Marketing Coordinator at Black Flag DAO (formerly Bankless DAO)| Photographer , Web3 Builder",
+        "publicIdentifier": "erennn-taarg-20b543255",
+        "linkedinUrl": "https://www.linkedin.com/in/erennn-taarg-20b543255"
+      },
+      {
+        "id": "ACoAAFebGioBFuedvq7RPKwKGNRFT2iUIfvmrDU",
+        "firstName": "Anthony ",
+        "lastName": "Bassenden",
+        "position": "Founder & CEO | FTMO Trader | Crypto & Forex Market Expert",
+        "publicIdentifier": "anthony-bassenden-74a288350",
+        "linkedinUrl": "https://www.linkedin.com/in/anthony-bassenden-74a288350"
+      },
+      {
+        "id": "ACoAAGNxCKUBG-amKjjU6fals_MX55cSp7Tb2NM",
+        "firstName": "Nguyễn",
+        "lastName": "Phương",
+        "position": "Senior Graphic Designer tại Hyperliquid",
+        "publicIdentifier": "nguyễn-phương-6b18893a6",
+        "linkedinUrl": "https://www.linkedin.com/in/nguyễn-phương-6b18893a6"
+      },
+      {
+        "id": "ACoAACHg69YBKGerFWKNuRtpbXb5MEPD-f25r_c",
+        "firstName": "Garren",
+        "lastName": "LaPlante",
+        "position": "Business Systems Analyst at Medicus Healthcare Solutions",
+        "publicIdentifier": "garren-laplante-69a42813a",
+        "linkedinUrl": "https://www.linkedin.com/in/garren-laplante-69a42813a"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAADzlZzEBdWZJQQ2cxRghrHy6miDRm-x1-aM"
+    }
+  }
+}

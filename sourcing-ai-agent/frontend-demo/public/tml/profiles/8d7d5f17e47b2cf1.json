@@ -1,0 +1,441 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAF1g88ABy28B9juJY-n7oqUc5q7iNtP14DE",
+    "profile_url": "https://www.linkedin.com/in/ACwAAF1g88ABy28B9juJY-n7oqUc5q7iNtP14DE"
+  },
+  "item": {
+    "id": "ACoAAF1g88AB-G-z-kA00gmZAGbH1CebbGsdmjQ",
+    "publicIdentifier": "jason-morales-5407b5378",
+    "linkedinUrl": "https://www.linkedin.com/in/jason-morales-5407b5378",
+    "firstName": "Jason",
+    "lastName": "Morales",
+    "emails": [
+      {
+        "email": "jason.morales@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Certified Phlebotomist at Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": true,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Los Fresnos, Texas, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "Los Fresnos, TX, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "Texas",
+        "city": "Los Fresnos"
+      }
+    },
+    "objectUrn": "1566634944",
+    "registeredAt": "2025-08-04T19:43:00.272Z",
+    "topSkills": null,
+    "connectionsCount": 3,
+    "followerCount": 3,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": null,
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4E03AQHKOYkz_QP56g/profile-displayphoto-shrink_200_200/B4EZh2m9OTHEAY-/0/1754336580693?e=1776902400&v=beta&t=gzLpQmyb8epcA5cXOcHppf2buD3U212XROz9NELpOwc",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQHKOYkz_QP56g/profile-displayphoto-shrink_200_200/B4EZh2m9OTHEAY-/0/1754336580693?e=1776902400&v=beta&t=gzLpQmyb8epcA5cXOcHppf2buD3U212XROz9NELpOwc",
+          "width": 96,
+          "height": 96,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQHKOYkz_QP56g/profile-displayphoto-shrink_800_800/B4EZh2m9OTHEAc-/0/1754336580693?e=1776902400&v=beta&t=K0A5kR8O09fqPu5qwcQvqeREEYgxjYdPOwGPi6SocLw",
+          "width": 96,
+          "height": 96,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQHKOYkz_QP56g/profile-displayphoto-shrink_400_400/B4EZh2m9OTHEAg-/0/1754336580693?e=1776902400&v=beta&t=QefhZV1tapJm79mix2PYofdqRwWyo7tpW-fHo5P9yms",
+          "width": 96,
+          "height": 96,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQHKOYkz_QP56g/profile-displayphoto-shrink_100_100/B4EZh2m9OTHEAU-/0/1754336580695?e=1776902400&v=beta&t=woG0AcQoSanS59CNWH48y8AOVMhy3isFMjoIVBN10gw",
+          "width": 96,
+          "height": 96,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D4E03AQHKOYkz_QP56g/profile-displayphoto-shrink_200_200/B4EZh2m9OTHEAY-/0/1754336580693?e=1776902400&v=beta&t=gzLpQmyb8epcA5cXOcHppf2buD3U212XROz9NELpOwc",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Certified Phlebotomist at Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Certified Phlebotomist",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": null,
+        "description": null,
+        "skills": null,
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Phlebotomist",
+        "location": "United States",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "TridentCare",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/35532491/",
+        "companyId": "35532491",
+        "duration": "11 mos",
+        "description": null,
+        "skills": [
+          "20 years of experience"
+        ],
+        "startDate": {
+          "month": "Sep",
+          "year": 2024,
+          "text": "Sep 2024"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2025,
+          "text": "Jul 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQH-Wg2Hkb2VUw/company-logo_400_400/company-logo_400_400/0/1630566433057?e=1776902400&v=beta&t=R-reKmVvWptPmTf4lktedu4ZMYk5gAYHgrX9oODDaiQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQH-Wg2Hkb2VUw/company-logo_400_400/company-logo_400_400/0/1630566433057?e=1776902400&v=beta&t=R-reKmVvWptPmTf4lktedu4ZMYk5gAYHgrX9oODDaiQ",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQH-Wg2Hkb2VUw/company-logo_200_200/company-logo_200_200/0/1630566433056?e=1776902400&v=beta&t=H1mJXS4fSlXru53DTOj-wrQBNZDvFriiuD6rDyAsTYI",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQH-Wg2Hkb2VUw/company-logo_100_100/company-logo_100_100/0/1630566433056?e=1776902400&v=beta&t=cxvIz6zwGRP9MqO96XBBrpQvYM1nNewP0kXLSWaVpXE",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "20 years of experience "
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAAndp5YB7ZzJchfUStNLhRBpC1_xRp6Ne2s",
+        "firstName": "Leslie",
+        "lastName": "Harris",
+        "position": "Product Designer @ PayPal",
+        "publicIdentifier": "leslie-harris29",
+        "linkedinUrl": "https://www.linkedin.com/in/leslie-harris29"
+      },
+      {
+        "id": "ACoAAAENaWYBwdu7iAI2IKZrGUcaj9LAYxroaDc",
+        "firstName": "Jaime",
+        "lastName": "Young",
+        "position": "UX Research Manager at ServiceNow",
+        "publicIdentifier": "jaimeyoung51",
+        "linkedinUrl": "https://www.linkedin.com/in/jaimeyoung51"
+      },
+      {
+        "id": "ACoAABV61Q0BF3ER-196Zc9GK5TviMrbbIlVGqg",
+        "firstName": "Samuel",
+        "lastName": "Schoenholz",
+        "position": "Thinking Machines Lab | Ex: OpenAI, Google Brain",
+        "publicIdentifier": "samuel-schoenholz-379830a0",
+        "linkedinUrl": "https://www.linkedin.com/in/samuel-schoenholz-379830a0"
+      },
+      {
+        "id": "ACoAAA2sOK0Be05FwKVRAMgADYm4XesWXnHUIWM",
+        "firstName": "Julie",
+        "lastName": "Myers MN, RN",
+        "position": "Healthcare Leadership | Operations & Clinical Programs | Quality Improvement | Lean | Building Teams, Programs & Partnerships that deliver measurable outcomes while advancing health equity",
+        "publicIdentifier": "julie-myers-mn-rn-1799a564",
+        "linkedinUrl": "https://www.linkedin.com/in/julie-myers-mn-rn-1799a564"
+      },
+      {
+        "id": "ACoAAACQBzQB5nk5kOpFWQRtK4pv3RaL5q2G-pA",
+        "firstName": "Jonathan",
+        "lastName": "Lachman",
+        "position": "Founding Head of Operations at Thinking Machines Lab",
+        "publicIdentifier": "jonathan-lachman-4981b23",
+        "linkedinUrl": "https://www.linkedin.com/in/jonathan-lachman-4981b23"
+      },
+      {
+        "id": "ACoAABB_dR8Bvt4uZrWAJmKAxg-rr6vfkwOuGMU",
+        "firstName": "Michael",
+        "lastName": "Kuhn",
+        "position": "Staff Product Designer at Adobe",
+        "publicIdentifier": "michael-kuhn",
+        "linkedinUrl": "https://www.linkedin.com/in/michael-kuhn"
+      },
+      {
+        "id": "ACoAADFLAL8BSYeXhRkq6FhcFYsF_ngm_isUXDQ",
+        "firstName": "Aksharaa",
+        "lastName": "Bhobe",
+        "position": "MS IMC at Northwestern ‘26 | Culturally Obsessive Data Storyteller",
+        "publicIdentifier": "aksharaa-bhobe",
+        "linkedinUrl": "https://www.linkedin.com/in/aksharaa-bhobe"
+      },
+      {
+        "id": "ACoAACp3XSwBj2fRuReLzItQrkP0Ea55rrdT_D0",
+        "firstName": "Dr Sheena",
+        "lastName": "Ramazanu",
+        "position": "Connecting Research, Policy & Communities for Impact 🌻I Senior Visiting Fellow (NUS) I GNLI Scholar (ICN, Geneva) I WHO Technical Advisor (Diabetes) I Researcher, H-Index 24 I Junior Chamber International TOYP’23 🇸🇬",
+        "publicIdentifier": "dr-sheena-ramazanu-66472a17a",
+        "linkedinUrl": "https://www.linkedin.com/in/dr-sheena-ramazanu-66472a17a"
+      },
+      {
+        "id": "ACoAABuhnI0BiTg8hQMSwyg8LxcrYYOowCSOSkM",
+        "firstName": "Brandon",
+        "lastName": "Trabucco",
+        "position": "Thinking Machines Lab; CMU ML (PhD); Berkeley AI (Bachelors); NDSEG Fellow; Singer and Composer",
+        "publicIdentifier": "brandontrabucco",
+        "linkedinUrl": "https://www.linkedin.com/in/brandontrabucco"
+      },
+      {
+        "id": "ACoAAAz9bGoBB8ZFZxWoSlEph_Z2btV1aAYnNaQ",
+        "firstName": "Prof. Yogesh Kumar",
+        "lastName": "Jain",
+        "position": "Professor I Researcher I Deputy Dean I Finance I Accounts I FinTech I AI Tools I Data Science I Academic Leader • Author • Consultant • Outcome-Based Education I Executive Education",
+        "publicIdentifier": "prof-yogesh-kumar-jain-922b9b60",
+        "linkedinUrl": "https://www.linkedin.com/in/prof-yogesh-kumar-jain-922b9b60"
+      },
+      {
+        "id": "ACoAAC5eInoBm9wJapQc1mCX12E4NtZ_BtKIRB8",
+        "firstName": "Mudaber",
+        "lastName": "Jamshaid",
+        "publicIdentifier": "mudaberjamshaid",
+        "linkedinUrl": "https://www.linkedin.com/in/mudaberjamshaid"
+      },
+      {
+        "id": "ACoAAAhi-P0Beino9txHLKy2FifehAT_IcPj7Gk",
+        "firstName": "Gabriela",
+        "lastName": "Nubling",
+        "position": "Product Manager @ Netflix | Product Innovation and Strategy | M.S in Software Engineering",
+        "publicIdentifier": "gabrielanubling",
+        "linkedinUrl": "https://www.linkedin.com/in/gabrielanubling"
+      },
+      {
+        "id": "ACoAACm7XfIB5EjqiHQv8SJP7Y18c3jLrmpNWZI",
+        "firstName": "Caroline",
+        "lastName": "Ricksen",
+        "position": "Operations @ Thinking Machines Lab",
+        "publicIdentifier": "caroline-ricksen-702588176",
+        "linkedinUrl": "https://www.linkedin.com/in/caroline-ricksen-702588176"
+      },
+      {
+        "id": "ACoAAAerjr4BhkURBa_1tbyBZNJA1hyKNlP41D0",
+        "firstName": "Teddy",
+        "lastName": "Zvirawa",
+        "position": "Technical leadership, Partnerships & Government Engagement.",
+        "publicIdentifier": "teddy-zvirawa-8a611937",
+        "linkedinUrl": "https://www.linkedin.com/in/teddy-zvirawa-8a611937"
+      },
+      {
+        "id": "ACoAABPg53YBHdOvmp7pU72eDhcho-7cnwyxk1o",
+        "firstName": "Pia",
+        "lastName": "Santos",
+        "position": "Founding Team at Thinking Machines Lab",
+        "publicIdentifier": "piafsantos",
+        "linkedinUrl": "https://www.linkedin.com/in/piafsantos"
+      },
+      {
+        "id": "ACoAAACdJ5kBAtcq166YJM1XMeoitJvN-WxH5sw",
+        "firstName": "Chris",
+        "lastName": "Royer",
+        "position": "Product Design Leader | UX Strategy | Visual Communication | Scaling high-impact teams of research- and data-informed designers",
+        "publicIdentifier": "chrisroyer",
+        "linkedinUrl": "https://www.linkedin.com/in/chrisroyer"
+      },
+      {
+        "id": "ACoAAAM8-CoB4EuoMEQ2LLngdqMnC4lLbEgxTy8",
+        "firstName": "Andrew",
+        "lastName": "Straub",
+        "position": "Finance at Thinking Machines Lab",
+        "publicIdentifier": "andrew-straub-52223b16",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-straub-52223b16"
+      },
+      {
+        "id": "ACoAABebSPMByZP3ZnuWuJpWKhAcOO8xLxhLatU",
+        "firstName": "Alicia",
+        "lastName": "P.",
+        "position": "IT",
+        "publicIdentifier": "aliciacphan",
+        "linkedinUrl": "https://www.linkedin.com/in/aliciacphan"
+      },
+      {
+        "id": "ACoAAAfMRA8BOGAcAhlOeBgTF3a-tYoCbvSZ_gs",
+        "firstName": "Randall",
+        "lastName": "L.",
+        "position": "making models bigger and showing them more data",
+        "publicIdentifier": "randall-lin",
+        "linkedinUrl": "https://www.linkedin.com/in/randall-lin"
+      },
+      {
+        "id": "ACoAAAFeNNIBGA1Mtyi5_iGkRC19uDzKU2t5dVs",
+        "firstName": "Kunal",
+        "lastName": "Bhalla",
+        "position": "knlb.dev",
+        "publicIdentifier": "kunalbhalla",
+        "linkedinUrl": "https://www.linkedin.com/in/kunalbhalla"
+      },
+      {
+        "id": "ACoAACA8zv0BTVWLSUHsPJrWsUI10jzn0F57pHo",
+        "firstName": "Damir",
+        "lastName": "Sartayev",
+        "position": "AI CTO & Founder | MY project LNN+LLM+QML=AGI | Quantum, Neuro-symbolic AI | Liquid Neural Networks | RWKV | Mamba(SSM)  | Pharmacy AI, Minerals AI | Full‑Stack AI (LLMs, Agents, Fine‑Tuning, RAG, Vision) | Q-Day Q-ark",
+        "publicIdentifier": "damir-q-day-q-ark",
+        "linkedinUrl": "https://www.linkedin.com/in/damir-q-day-q-ark"
+      },
+      {
+        "id": "ACoAADopuTsBh9lDxOJzJsV8jI_KfOrsc6Tu7aQ",
+        "firstName": "Aashitosh",
+        "lastName": "Swami",
+        "position": "Lab assistant",
+        "publicIdentifier": "aashitosh-swami-67796a232",
+        "linkedinUrl": "https://www.linkedin.com/in/aashitosh-swami-67796a232"
+      },
+      {
+        "id": "ACoAAAQ1QI4Bex6mqv5SgvahWcZuzAuWiTKciBo",
+        "firstName": "Bi",
+        "lastName": "Xue",
+        "position": "Thinking Machines Lab",
+        "publicIdentifier": "bi-xue-9527871b",
+        "linkedinUrl": "https://www.linkedin.com/in/bi-xue-9527871b"
+      },
+      {
+        "id": "ACoAADwrCKUB0FU7B3O7AIg9j_wieI-QOvJrtEE",
+        "firstName": "Katy",
+        "lastName": "Liemandt",
+        "position": "TML | San Francisco",
+        "publicIdentifier": "katy-liemandt-399092242",
+        "linkedinUrl": "https://www.linkedin.com/in/katy-liemandt-399092242"
+      },
+      {
+        "id": "ACoAABndRmcBpm4Yye7FXowpjFeEUUMBs2FZM3g",
+        "firstName": "Dylan",
+        "lastName": "H.",
+        "position": "Thinking Machines Lab",
+        "publicIdentifier": "dphuang2",
+        "linkedinUrl": "https://www.linkedin.com/in/dphuang2"
+      },
+      {
+        "id": "ACoAAAM07-gB20Vg4hTVwpax2eyLJhzmkVGgucg",
+        "firstName": "Katie",
+        "lastName": "Slattery",
+        "position": "Accounting @ Thinking Machines Lab",
+        "publicIdentifier": "katieslattery",
+        "linkedinUrl": "https://www.linkedin.com/in/katieslattery"
+      },
+      {
+        "id": "ACoAAAeoHjYB_Lo5sUFlpZpz2L74oe9nEIKztQA",
+        "firstName": "Jenya",
+        "lastName": "L.",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "jenya-l",
+        "linkedinUrl": "https://www.linkedin.com/in/jenya-l"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAF1g88ABy28B9juJY-n7oqUc5q7iNtP14DE"
+    }
+  }
+}

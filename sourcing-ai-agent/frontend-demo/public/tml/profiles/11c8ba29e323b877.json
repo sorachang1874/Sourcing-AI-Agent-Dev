@@ -1,0 +1,1025 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAAqQQsEBG6XuFY95BAAkBNaIol8q55c5UI0",
+    "profile_url": "https://www.linkedin.com/in/ACwAAAqQQsEBG6XuFY95BAAkBNaIol8q55c5UI0"
+  },
+  "item": {
+    "id": "ACoAAAqQQsEBwKqJ_m6UFGubnc-1mO5W-0QBSm8",
+    "publicIdentifier": "meredithalvin",
+    "linkedinUrl": "https://www.linkedin.com/in/meredithalvin",
+    "firstName": "Meredith",
+    "lastName": "Alvin",
+    "emails": [
+      {
+        "email": "meredith.alvin@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Recruiting @ Thinking Machines",
+    "openToWork": false,
+    "hiring": false,
+    "premium": true,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "177226433",
+    "registeredAt": "2012-04-03T04:51:10.863Z",
+    "topSkills": null,
+    "connectionsCount": 2598,
+    "followerCount": 2882,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 2,
+            "year": 2026,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "17939",
+        "companyId": "2517",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2517/",
+        "schoolName": "University of California, Berkeley"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/C5603AQHoVCiT-8PWMg/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1551207579723?e=1776902400&v=beta&t=dL4L5ruOcfrQzMpQ2A4vgrGvn-6W6YqzXbb_d8JMziU",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQHoVCiT-8PWMg/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1551207579723?e=1776902400&v=beta&t=dL4L5ruOcfrQzMpQ2A4vgrGvn-6W6YqzXbb_d8JMziU",
+          "width": 274,
+          "height": 274,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQHoVCiT-8PWMg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1551207579751?e=1776902400&v=beta&t=Mjf4c2l7_izmTGcbq_GJd_IhP-8AGuOALzWdEUVGQe0",
+          "width": 274,
+          "height": 274,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQHoVCiT-8PWMg/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1551207579800?e=1776902400&v=beta&t=kbSDkwTh1_gcHQ2qWZ1VXHY6HXrm0dsoqFGtNhCKark",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQHoVCiT-8PWMg/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1551207579758?e=1776902400&v=beta&t=Xqlc65cMwuaDhoGGo_g2dmZwSgHcYzCivcMoVPpBsHM",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/C5603AQHoVCiT-8PWMg/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1551207579723?e=1776902400&v=beta&t=dL4L5ruOcfrQzMpQ2A4vgrGvn-6W6YqzXbb_d8JMziU",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Recruiting @ Thinking Machines",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Recruiting ",
+        "location": "San Francisco Bay Area",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2026,
+          "text": "Feb 2026"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Member of Recruiting Staff",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "OpenAI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/11130470/",
+        "companyId": "11130470",
+        "duration": "1 yr 5 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Oct",
+          "year": 2024,
+          "text": "Oct 2024"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2026,
+          "text": "Feb 2026"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_200_200/B56ZT8EYB8HsAI-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=O6RSWlpQ5W4zNCOCTu621qCyTijLuXFJS4pz2_hBQfo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_100_100/B56ZT8EYB8HsAQ-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=y7RA89V9q8GlAjQ1oRU-jf_-n5zlSXRCnykXBIkgHfM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Technical Recruiter",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Stripe",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/2135371/",
+        "companyId": "2135371",
+        "duration": "4 yrs 10 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2020,
+          "text": "Jan 2020"
+        },
+        "endDate": {
+          "month": "Oct",
+          "year": 2024,
+          "text": "Oct 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQE2ZfJyfn-VCg/company-logo_400_400/B56ZlyKwpUKIAY-/0/1758557047806/stripe_logo?e=1776902400&v=beta&t=flaM5KtAekc-eCrsPt6jUJseCn4TVJ_2mGnh7a4mhfs",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQE2ZfJyfn-VCg/company-logo_400_400/B56ZlyKwpUKIAY-/0/1758557047806/stripe_logo?e=1776902400&v=beta&t=flaM5KtAekc-eCrsPt6jUJseCn4TVJ_2mGnh7a4mhfs",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQE2ZfJyfn-VCg/company-logo_200_200/B56ZlyKwpUKIAI-/0/1758557047806/stripe_logo?e=1776902400&v=beta&t=r4K4PUiGBdc2o59oMpdtYpYF-XbxPTZGNLeDzmYjFHQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQE2ZfJyfn-VCg/company-logo_100_100/B56ZlyKwpUKIAQ-/0/1758557047806/stripe_logo?e=1776902400&v=beta&t=iOBPxSpWTqzlwIvkbpLE3q6QJZMHgZGC6i8-Q8SCOao",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Technical Recruiter",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Airbnb",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/309694/",
+        "companyId": "309694",
+        "duration": "1 yr 7 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jul",
+          "year": 2018,
+          "text": "Jul 2018"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2020,
+          "text": "Jan 2020"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQFhfl32crIGIw/company-logo_400_400/company-logo_400_400/0/1630637496980/airbnb_logo?e=1776902400&v=beta&t=-9EBSuoM2qiLzzUeI-QP65UtwxiAn9NJuUx0fILPcYk",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFhfl32crIGIw/company-logo_400_400/company-logo_400_400/0/1630637496980/airbnb_logo?e=1776902400&v=beta&t=-9EBSuoM2qiLzzUeI-QP65UtwxiAn9NJuUx0fILPcYk",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFhfl32crIGIw/company-logo_200_200/company-logo_200_200/0/1630637496980/airbnb_logo?e=1776902400&v=beta&t=-3qQmvj1qu-2zugzDAxthowl38BYrIBN2iZg4JC2SMM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFhfl32crIGIw/company-logo_100_100/company-logo_100_100/0/1630637496980/airbnb_logo?e=1776902400&v=beta&t=NN0xpAq1y-Paivx3-GiRnB4Z3o78xAGKmROKeyAVIZM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Technical Recruiter",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Twilio Inc.",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/400528/",
+        "companyId": "400528",
+        "duration": "7 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "89bcf71ede9bb9d602d1d1288be24f44137447a0",
+        "startDate": {
+          "month": "Jan",
+          "year": 2018,
+          "text": "Jan 2018"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2018,
+          "text": "Jul 2018"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQEmISp-ciExQw/company-logo_400_400/B56ZYyhH7TGoAc-/0/1744604267044/twilio_inc__logo?e=1776902400&v=beta&t=wda69EZVs4yHxpctOwT-qbHOxR37FrAYczjXwV4MJ7w",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEmISp-ciExQw/company-logo_400_400/B56ZYyhH7TGoAc-/0/1744604267044/twilio_inc__logo?e=1776902400&v=beta&t=wda69EZVs4yHxpctOwT-qbHOxR37FrAYczjXwV4MJ7w",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEmISp-ciExQw/company-logo_200_200/B56ZYyhH7TGoAM-/0/1744604267044/twilio_inc__logo?e=1776902400&v=beta&t=hIF0TbY2uuI89mzjP1-4iVItchjKhZSUUgOasvJobvQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEmISp-ciExQw/company-logo_100_100/B56ZYyhH7TGoAU-/0/1744604267044/twilio_inc__logo?e=1776902400&v=beta&t=bqa2JXCN4ZFERWJtDZinsGB2GzwRdHq9WK58nEvmweY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Technical Sourcer",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Twilio Inc.",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/400528/",
+        "companyId": "400528",
+        "duration": "1 yr 7 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "89bcf71ede9bb9d602d1d1288be24f44137447a0",
+        "startDate": {
+          "month": "Jul",
+          "year": 2016,
+          "text": "Jul 2016"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2018,
+          "text": "Jan 2018"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQEmISp-ciExQw/company-logo_400_400/B56ZYyhH7TGoAc-/0/1744604267044/twilio_inc__logo?e=1776902400&v=beta&t=wda69EZVs4yHxpctOwT-qbHOxR37FrAYczjXwV4MJ7w",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEmISp-ciExQw/company-logo_400_400/B56ZYyhH7TGoAc-/0/1744604267044/twilio_inc__logo?e=1776902400&v=beta&t=wda69EZVs4yHxpctOwT-qbHOxR37FrAYczjXwV4MJ7w",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEmISp-ciExQw/company-logo_200_200/B56ZYyhH7TGoAM-/0/1744604267044/twilio_inc__logo?e=1776902400&v=beta&t=hIF0TbY2uuI89mzjP1-4iVItchjKhZSUUgOasvJobvQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEmISp-ciExQw/company-logo_100_100/B56ZYyhH7TGoAU-/0/1744604267044/twilio_inc__logo?e=1776902400&v=beta&t=bqa2JXCN4ZFERWJtDZinsGB2GzwRdHq9WK58nEvmweY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Recruiting Coordinator",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Twilio Inc.",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/400528/",
+        "companyId": "400528",
+        "duration": "11 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "89bcf71ede9bb9d602d1d1288be24f44137447a0",
+        "startDate": {
+          "month": "Sep",
+          "year": 2015,
+          "text": "Sep 2015"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2016,
+          "text": "Jul 2016"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQEmISp-ciExQw/company-logo_400_400/B56ZYyhH7TGoAc-/0/1744604267044/twilio_inc__logo?e=1776902400&v=beta&t=wda69EZVs4yHxpctOwT-qbHOxR37FrAYczjXwV4MJ7w",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEmISp-ciExQw/company-logo_400_400/B56ZYyhH7TGoAc-/0/1744604267044/twilio_inc__logo?e=1776902400&v=beta&t=wda69EZVs4yHxpctOwT-qbHOxR37FrAYczjXwV4MJ7w",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEmISp-ciExQw/company-logo_200_200/B56ZYyhH7TGoAM-/0/1744604267044/twilio_inc__logo?e=1776902400&v=beta&t=hIF0TbY2uuI89mzjP1-4iVItchjKhZSUUgOasvJobvQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEmISp-ciExQw/company-logo_100_100/B56ZYyhH7TGoAU-/0/1744604267044/twilio_inc__logo?e=1776902400&v=beta&t=bqa2JXCN4ZFERWJtDZinsGB2GzwRdHq9WK58nEvmweY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Recruiting Coordinator",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Apple",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/162479/",
+        "companyId": "162479",
+        "duration": "2 yrs 2 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Aug",
+          "year": 2013,
+          "text": "Aug 2013"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2015,
+          "text": "Sep 2015"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_400_400/company-logo_400_400/0/1630637844948/apple_logo?e=1776902400&v=beta&t=KteXM40NNLQ3nz21Do-neoy-f7lbDDA7kJmtS5wwrL4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_400_400/company-logo_400_400/0/1630637844948/apple_logo?e=1776902400&v=beta&t=KteXM40NNLQ3nz21Do-neoy-f7lbDDA7kJmtS5wwrL4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_200_200/company-logo_200_200/0/1630637844948/apple_logo?e=1776902400&v=beta&t=I8RMorsmHMk3gA9b3fT4m2HDgfVtfdB6se4bEZcMHb8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_100_100/company-logo_100_100/0/1630637844948/apple_logo?e=1776902400&v=beta&t=8c3EpxT43tZMihGirOM7eBnDzFHAGiYV-OxaRj_xfjo",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Recruiting Coordinator",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Alison Brown Placement Specialists, LLC",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1888066/",
+        "companyId": "1888066",
+        "duration": "4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2013,
+          "text": "May 2013"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2013,
+          "text": "Aug 2013"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQGvQyXWbuW1NA/company-logo_400_400/company-logo_400_400/0/1630644564382/alison_brown_placement_specialists_llc_logo?e=1776902400&v=beta&t=zFyD_n2u0kdmyrPmrjNWIDZIb1e2jHLfQpcTVv80GFU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGvQyXWbuW1NA/company-logo_400_400/company-logo_400_400/0/1630644564382/alison_brown_placement_specialists_llc_logo?e=1776902400&v=beta&t=zFyD_n2u0kdmyrPmrjNWIDZIb1e2jHLfQpcTVv80GFU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGvQyXWbuW1NA/company-logo_200_200/company-logo_200_200/0/1630644564382/alison_brown_placement_specialists_llc_logo?e=1776902400&v=beta&t=u_SYILy7E2uDJ-WR2V26YHWyFewb8XjznbrGEIMt8yc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGvQyXWbuW1NA/company-logo_100_100/company-logo_100_100/0/1630644564382/alison_brown_placement_specialists_llc_logo?e=1776902400&v=beta&t=Me1SvRHcmlxu2OVSmL-3lbbJc4IkdPqqXkGH_uRZTeQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Education Coordinator Assistant",
+        "location": "Cupertino, CA",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Communication Academy",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Communication+Academy",
+        "duration": "9 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2012,
+          "text": "Jun 2012"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2013,
+          "text": "Feb 2013"
+        }
+      },
+      {
+        "position": "Research Assistant",
+        "location": "University of California, Berkeley, CA",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Relationship and Social Cognition Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Relationship+and+Social+Cognition+Lab",
+        "duration": "9 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2011,
+          "text": "Sep 2011"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2012,
+          "text": "May 2012"
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "University of California, Berkeley",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2517/",
+        "schoolId": "2517",
+        "degree": "Bachelor of Arts (B.A.)",
+        "fieldOfStudy": "Psychology",
+        "skills": [],
+        "insights": "Activities and societies: Alpha Phi Lambda Chapter",
+        "startDate": {
+          "year": 2010,
+          "text": "2010"
+        },
+        "endDate": {
+          "year": 2012,
+          "text": "2012"
+        },
+        "period": "2010 - 2012",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_400_400/company-logo_400_400/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=ihsqGpnHzj0nlc8nr3zQwTYbq6GYQDs_WRmOHxXO6Cs",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_400_400/company-logo_400_400/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=ihsqGpnHzj0nlc8nr3zQwTYbq6GYQDs_WRmOHxXO6Cs",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_200_200/company-logo_200_200/0/1732135669730/uc_berkeley_logo?e=1776902400&v=beta&t=99cgQbgSotN9XiK7TbWS3PhqRVGT8S6VKfitEcMn0-E",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_100_100/company-logo_100_100/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=spLtug0cp3xqHCXq1OoZudTryqzyY85FoIZwfJ-_XzA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "University of San Diego",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/8245/",
+        "schoolId": "8245",
+        "degree": "Psychology",
+        "fieldOfStudy": null,
+        "skills": [],
+        "startDate": {
+          "year": 2008,
+          "text": "2008"
+        },
+        "endDate": {
+          "year": 2010,
+          "text": "2010"
+        },
+        "period": "2008 - 2010",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGUxhWUZo1Izg/company-logo_400_400/B56ZoKhYp.HkAY-/0/1761113115767/university_of_san_diego_logo?e=1776902400&v=beta&t=0xnlXrICCjV8-jJAA7KbFwqmvA4UmGr2Y2Meaffqz6k",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGUxhWUZo1Izg/company-logo_400_400/B56ZoKhYp.HkAY-/0/1761113115767/university_of_san_diego_logo?e=1776902400&v=beta&t=0xnlXrICCjV8-jJAA7KbFwqmvA4UmGr2Y2Meaffqz6k",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGUxhWUZo1Izg/company-logo_200_200/B56ZoKhYp.HkAI-/0/1761113115767/university_of_san_diego_logo?e=1776902400&v=beta&t=uLYpAa5jQZdGE9QHLc0pFgwbD9kQ1gBQCTbd7E_0FSM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGUxhWUZo1Izg/company-logo_100_100/B56ZoKhYp.HkAQ-/0/1761113115767/university_of_san_diego_logo?e=1776902400&v=beta&t=QArlZmUnwm_pZ04VkUtYna-1IQYXHjFBQwX6_z1YBVw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Time Management",
+        "positions": [
+          "Endorsed by 2 colleagues at Apple"
+        ],
+        "endorsements": "20 endorsements"
+      },
+      {
+        "name": "Psychology",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Research",
+        "endorsements": "12 endorsements"
+      },
+      {
+        "name": "Customer Service",
+        "endorsements": "14 endorsements"
+      },
+      {
+        "name": "Calendaring",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Proofreading",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Formatting Documents",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Project Management",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Creative Writing",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Account Management",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Social Networking",
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "Recruiting",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Social Media",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Event Planning",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Sales",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Leadership",
+        "endorsements": "11 endorsements"
+      },
+      {
+        "name": "Microsoft Word",
+        "endorsements": "11 endorsements"
+      },
+      {
+        "name": "Microsoft Excel",
+        "endorsements": "13 endorsements"
+      },
+      {
+        "name": "Teamwork",
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "PowerPoint",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Oral & Written Communication Skills",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Interpersonal Skill",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Highly detail oriented",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Close Attention to Detail",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Adobe Acrobat",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Outlook",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Microsoft Office",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Public Speaking",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Communication",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Management",
+        "endorsements": "1 endorsement"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAEDQfhMBVp-38HB2nfHzEgiIzkTMx6gmb04",
+        "firstName": "Liliya",
+        "lastName": "H.",
+        "publicIdentifier": "liliya-h-783205264",
+        "linkedinUrl": "https://www.linkedin.com/in/liliya-h-783205264"
+      },
+      {
+        "id": "ACoAAAuqiPMBDXSiJxYHke6cxvURGjZVd2Vgjrs",
+        "firstName": "Brian",
+        "lastName": "Hansen",
+        "publicIdentifier": "brianphansen",
+        "linkedinUrl": "https://www.linkedin.com/in/brianphansen"
+      },
+      {
+        "id": "ACoAAAbc1egBmg-Z39pjvXCny1avMM54_gegY0E",
+        "firstName": "Erika",
+        "lastName": "Ida",
+        "publicIdentifier": "erikavida",
+        "linkedinUrl": "https://www.linkedin.com/in/erikavida"
+      },
+      {
+        "id": "ACoAABOu21MBpN7A6EMLEnuhAyZvwB7MOlWoszc",
+        "firstName": "Max",
+        "lastName": "Bennett",
+        "publicIdentifier": "max-bennett-38371392",
+        "linkedinUrl": "https://www.linkedin.com/in/max-bennett-38371392"
+      },
+      {
+        "id": "ACoAABE9sVMBCH0i964WlvecDNyGKTviqyXKcTY",
+        "firstName": "Hannah",
+        "lastName": "T.",
+        "publicIdentifier": "hannahnth",
+        "linkedinUrl": "https://www.linkedin.com/in/hannahnth"
+      },
+      {
+        "id": "ACoAAAClvh8BxQrK0B7-P9r1xzkbNtQOeRWwoCg",
+        "firstName": "Kristen",
+        "lastName": "Dallara",
+        "publicIdentifier": "kristen-dallara-b3b7793",
+        "linkedinUrl": "https://www.linkedin.com/in/kristen-dallara-b3b7793"
+      },
+      {
+        "id": "ACoAADDB7DABJK3fhQa97pAxpbFcGbMtI2pA2Ek",
+        "firstName": "Ruila",
+        "lastName": "M.",
+        "publicIdentifier": "ruilama",
+        "linkedinUrl": "https://www.linkedin.com/in/ruilama"
+      },
+      {
+        "id": "ACoAAAwInjYByVy9qWMK1AOzMiluuq381V_xZys",
+        "firstName": "Anthony",
+        "lastName": "Dang",
+        "publicIdentifier": "danganthony",
+        "linkedinUrl": "https://www.linkedin.com/in/danganthony"
+      },
+      {
+        "id": "ACoAABN6LVcBjQmWfasRW5liEzg_nRNaX9DKsZY",
+        "firstName": "Chibuenyi ",
+        "lastName": "G.",
+        "publicIdentifier": "chibuenyi-griffith",
+        "linkedinUrl": "https://www.linkedin.com/in/chibuenyi-griffith"
+      },
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAABJF4mQBVJYIx7g-ASuPnmo5mH2mDuWdwQg",
+        "firstName": "Erika",
+        "lastName": "Byun",
+        "publicIdentifier": "erika-nakamatsu-byun",
+        "linkedinUrl": "https://www.linkedin.com/in/erika-nakamatsu-byun"
+      },
+      {
+        "id": "ACoAAAUNcBoBQm1YuhLyecmNbYZZamPSQiy7loo",
+        "firstName": "Janice",
+        "lastName": "Kwong",
+        "publicIdentifier": "janicejkwong",
+        "linkedinUrl": "https://www.linkedin.com/in/janicejkwong"
+      },
+      {
+        "id": "ACoAAAMu_-cBCVy6A6BN3JJjE0w-fe76PWaFsXg",
+        "firstName": "Karen",
+        "lastName": "Ohri Sharma",
+        "publicIdentifier": "karenohri",
+        "linkedinUrl": "https://www.linkedin.com/in/karenohri"
+      },
+      {
+        "id": "ACoAAAqFwR4BlJ7Yu8I7fPuYhO9br19xf6DOg28",
+        "firstName": "Kate",
+        "lastName": "Fahy",
+        "publicIdentifier": "kated1",
+        "linkedinUrl": "https://www.linkedin.com/in/kated1"
+      },
+      {
+        "id": "ACoAAAAcKtUBhnEmIuzVht2H3oqhJ9tKrO4NQIY",
+        "firstName": "George",
+        "lastName": "Rider",
+        "publicIdentifier": "georgerider",
+        "linkedinUrl": "https://www.linkedin.com/in/georgerider"
+      },
+      {
+        "id": "ACoAABPg53YBHdOvmp7pU72eDhcho-7cnwyxk1o",
+        "firstName": "Pia",
+        "lastName": "Santos",
+        "publicIdentifier": "piafsantos",
+        "linkedinUrl": "https://www.linkedin.com/in/piafsantos"
+      },
+      {
+        "id": "ACoAAAA5_J4BLF_hstAYeDi_1eBOvk0iTD_JqGU",
+        "firstName": "Christian",
+        "lastName": "Sotto",
+        "publicIdentifier": "csotto",
+        "linkedinUrl": "https://www.linkedin.com/in/csotto"
+      },
+      {
+        "id": "ACoAAAtKOE0BsPH_h2N_cozy1k9IChkLpy6Tx2g",
+        "firstName": "Justin",
+        "lastName": "Gopez",
+        "publicIdentifier": "justin-gopez-32552653",
+        "linkedinUrl": "https://www.linkedin.com/in/justin-gopez-32552653"
+      },
+      {
+        "id": "ACoAABIQqdYBLHMhmqcofhN0yLX1nuGiicqVfV0",
+        "firstName": "Sarah",
+        "lastName": "Warkov",
+        "publicIdentifier": "sarahwarkov",
+        "linkedinUrl": "https://www.linkedin.com/in/sarahwarkov"
+      },
+      {
+        "id": "ACoAABbIzlUBYcHGoaySqtjdTNky0bFiv3u-YwU",
+        "firstName": "Shelly",
+        "lastName": "Lipson",
+        "publicIdentifier": "shelly-lipson-699026a8",
+        "linkedinUrl": "https://www.linkedin.com/in/shelly-lipson-699026a8"
+      },
+      {
+        "id": "ACoAAD0X3gMB6SHGJet7kErINnnPEm1MfVrPLVU",
+        "firstName": "Tina",
+        "lastName": "Brezar",
+        "position": "Health and Safety Engineer",
+        "publicIdentifier": "tina-brezar-543318247",
+        "linkedinUrl": "https://www.linkedin.com/in/tina-brezar-543318247"
+      },
+      {
+        "id": "ACoAAAd7sDYBfdaT94IaduBSSWiX1gEvsuI6M8I",
+        "firstName": "Luka",
+        "lastName": "Ambrozic",
+        "position": "Account Manager at Elaphe | Performance Powertrains | Robotics | Passionate Business Developer | Enthusiastically connecting people and searching for Win-Win | DeepTech focus",
+        "publicIdentifier": "lukaambrozic",
+        "linkedinUrl": "https://www.linkedin.com/in/lukaambrozic"
+      },
+      {
+        "id": "ACoAAArhyOQBnt5Ld8hAOX4E-m4Admut3348qTI",
+        "firstName": "Jurij",
+        "lastName": "Zumer",
+        "position": "Project Manager at EFAFLEX inženiring d.o.o.",
+        "publicIdentifier": "jurij-zumer-57018551",
+        "linkedinUrl": "https://www.linkedin.com/in/jurij-zumer-57018551"
+      },
+      {
+        "id": "ACoAAA_UWYgBDqSzIMwolPHyVoTCJRhPheNB87g",
+        "firstName": "Janez",
+        "lastName": "Flerin",
+        "position": "FIA Technical delegate Autocross&Cross-Country at Fédération Internationale de l’Automobile (FIA)",
+        "publicIdentifier": "janez-flerin-148b3574",
+        "linkedinUrl": "https://www.linkedin.com/in/janez-flerin-148b3574"
+      },
+      {
+        "id": "ACoAAB7uXeoB27nP2cRVsXchuGnyStaEE8uINFk",
+        "firstName": "David",
+        "lastName": "Palcic",
+        "position": "Technical Project Lead | Industrial Door & Automation Systems | From Hands-On Field Work to Complete Project Execution",
+        "publicIdentifier": "david-palcic-48a95b125",
+        "linkedinUrl": "https://www.linkedin.com/in/david-palcic-48a95b125"
+      },
+      {
+        "id": "ACoAAAEU2XYB1_gsewTvmcrfE0qJkm_pV3v8nEU",
+        "firstName": "Hrvoje",
+        "lastName": "Vagner",
+        "position": "Maintenance Manager at B.P.A.C. AUTO - Lactalis group",
+        "publicIdentifier": "hrvoje-vagner-9320ab6",
+        "linkedinUrl": "https://www.linkedin.com/in/hrvoje-vagner-9320ab6"
+      },
+      {
+        "id": "ACoAAE8Jx0UBWs8eP524dhggye6lxxlAczCFJsM",
+        "firstName": "Simon",
+        "lastName": "Margon",
+        "position": "Master of Science in Mechanical Engineering",
+        "publicIdentifier": "simon-margon-1p4i1",
+        "linkedinUrl": "https://www.linkedin.com/in/simon-margon-1p4i1"
+      },
+      {
+        "id": "ACoAAAuERn0BH6daLdIS9YL_i9IxvzeHSeu4kGc",
+        "firstName": "Marko",
+        "lastName": "Makarovic",
+        "position": "Project Manager at EFAFLEX inženiring d.o.o.",
+        "publicIdentifier": "marko-makarovic-0a586054",
+        "linkedinUrl": "https://www.linkedin.com/in/marko-makarovic-0a586054"
+      },
+      {
+        "id": "ACoAAFq1UysBYLoE3aY_QJG9QKEVYdp9-VH1UP0",
+        "firstName": "Alenka",
+        "lastName": "Gašperšič",
+        "position": "Head of Sales Marketing at GS-CarboTech, d.o.o.",
+        "publicIdentifier": "alenka-gašperšič-2b77aa365",
+        "linkedinUrl": "https://www.linkedin.com/in/alenka-gašperšič-2b77aa365"
+      },
+      {
+        "id": "ACoAACBtnjIBSUlZcFH0q-ScXuaCQjoWu2Rz5L4",
+        "firstName": "Luka",
+        "lastName": "Bregar",
+        "position": "Project Manager at EFAFLEX inženiring d.o.o.",
+        "publicIdentifier": "luka-bregar-66a252132",
+        "linkedinUrl": "https://www.linkedin.com/in/luka-bregar-66a252132"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAAqQQsEBG6XuFY95BAAkBNaIol8q55c5UI0"
+    }
+  }
+}

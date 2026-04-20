@@ -1,0 +1,1038 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAAfMRA8BnXUGaYsLVyNzks35IBbD3Y85dO8",
+    "profile_url": "https://www.linkedin.com/in/ACwAAAfMRA8BnXUGaYsLVyNzks35IBbD3Y85dO8"
+  },
+  "item": {
+    "id": "ACoAAAfMRA8BOGAcAhlOeBgTF3a-tYoCbvSZ_gs",
+    "publicIdentifier": "randall-lin",
+    "linkedinUrl": "https://www.linkedin.com/in/randall-lin",
+    "firstName": "Randall",
+    "lastName": "L.",
+    "emails": [
+      {
+        "email": "randall@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "making models bigger and showing them more data",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "130827279",
+    "registeredAt": "2011-07-19T15:34:12.000Z",
+    "topSkills": null,
+    "connectionsCount": 775,
+    "followerCount": 772,
+    "verified": false,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 1,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "17811",
+        "companyId": "4992",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/4992/",
+        "schoolName": "California Institute of Technology"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/C5603AQErug1SzELfjQ/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1632213820497?e=1776902400&v=beta&t=CC_zyKIOYM8A_fWhcPcNRQ39KUV-Q6JoGYFWyXVxa2k",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQErug1SzELfjQ/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1632213820497?e=1776902400&v=beta&t=CC_zyKIOYM8A_fWhcPcNRQ39KUV-Q6JoGYFWyXVxa2k",
+          "width": 465,
+          "height": 465,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQErug1SzELfjQ/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1632213820497?e=1776902400&v=beta&t=JvbsO3mkACArKX9boeVW1XKdUloVu5uy2qgnTcWaUak",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQErug1SzELfjQ/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1632213820497?e=1776902400&v=beta&t=HdjWYrM7XjhMPkouORfWGOqAHgbH_KOEAolhlTY1kSw",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQErug1SzELfjQ/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1632213820497?e=1776902400&v=beta&t=QcUAIVDswZqUEkuPyU2NNibE6kRyrLjSchUh2TlG3Mg",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/C5603AQErug1SzELfjQ/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1632213820497?e=1776902400&v=beta&t=CC_zyKIOYM8A_fWhcPcNRQ39KUV-Q6JoGYFWyXVxa2k",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "making models bigger and showing them more data",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "friend",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "1 yr 4 mos",
+        "description": "having fun with computer",
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2025,
+          "text": "Jan 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "OpenAI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/11130470/",
+        "companyId": "11130470",
+        "duration": "1 yr 11 mos",
+        "description": "struggle against computer",
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2023,
+          "text": "Mar 2023"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2025,
+          "text": "Jan 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_200_200/B56ZT8EYB8HsAI-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=O6RSWlpQ5W4zNCOCTu621qCyTijLuXFJS4pz2_hBQfo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_100_100/B56ZT8EYB8HsAQ-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=y7RA89V9q8GlAjQ1oRU-jf_-n5zlSXRCnykXBIkgHfM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Staff Machine Learning Engineer",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Twitter",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/96622/",
+        "companyId": "96622",
+        "duration": "2 yrs 8 mos",
+        "description": "- Technical lead for tiger team of engineers and researchers (8) responsible for 1000x'ing trainable parameter count and 4x'ing training throughput for the Home Timeline model.\n- Enabled 4x training throughput by benchmarking explicit CUDA stream control in PyTorch and switched Home Timeline training to PyTorch.\n- Enabled robust experimentation on extremely large embedding tables (3B parameter count models) on single machines.\n- Halved training wallclock time by implementing nonblocking concurrent evaluation.\n- Technical lead for ML training and evaluation team\n- Obtained +X00K DAU by enabling 20x faster large recommendation system training by distributing IO.\n- 5x'd training throughput and halved serving latency by designing and mentoring senior engineers in implementing large scale feature selection on GPU.\n- Enabled 30x more experimentation by designing and implementing platform wide containerized training on cloud with access to modern accelerators.\n- Enabled 5x more frequent large recommendation system retraining by increasing ETL throughput (examples/s) of Apache Beam pipelines and training IO.",
+        "skills": null,
+        "experienceGroupId": "8be469616d366ad3a7d92379c12f8a435f9f22ab",
+        "startDate": {
+          "month": "Jan",
+          "year": 2021,
+          "text": "Jan 2021"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2023,
+          "text": "Aug 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQEJZABhJ-eE0g/company-logo_400_400/company-logo_400_400/0/1690242317195/twitter_logo?e=1776902400&v=beta&t=v1UiJouIeHZOwxTZcNZBqVwnhDB8_OXyoGWyqdW3DLQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEJZABhJ-eE0g/company-logo_400_400/company-logo_400_400/0/1690242317195/twitter_logo?e=1776902400&v=beta&t=v1UiJouIeHZOwxTZcNZBqVwnhDB8_OXyoGWyqdW3DLQ",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEJZABhJ-eE0g/company-logo_200_200/company-logo_200_200/0/1690242317195/twitter_logo?e=1776902400&v=beta&t=21hE24egqGYy3F-4IPD7RfkIhjO-WBeDsOAAaL72H5w",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEJZABhJ-eE0g/company-logo_100_100/company-logo_100_100/0/1690242317195/twitter_logo?e=1776902400&v=beta&t=4siCHaqQwjJ3_CILzf6sxKVHLUizNvZRdaC1XT2Egrs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "ML Training Tech Lead / Engineering Manager",
+        "location": "San Francisco, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Twitter",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/96622/",
+        "companyId": "96622",
+        "duration": "4 mos",
+        "description": "- Tech lead and primary author and main contributor to https://github.com/twitter/the-algorithm-ml (responsible for > 95% of code at time of public repo creation)\n- Increased user active minutes by > +3% by switching Home Timeline model to multi-task learning.\n- 10x’d training throughput and 100x’d model capacity of TWHIN implementation via novel graph learning application of Torchrec library.\n - Unblocked all IO-bound training with Flatbuﬀer implementation of distributed last-mile-preprocessing / loading\n- Ownership ofTwitter-wideML training stack, started newML repo, and uniﬁcation of all consumer and ads recsys models on my PyTorch stack.\n- Maintained team vision, impact, and employment through Twitter acquisition and numerous organization restructurings",
+        "skills": null,
+        "experienceGroupId": "8be469616d366ad3a7d92379c12f8a435f9f22ab",
+        "startDate": {
+          "month": "Dec",
+          "year": 2022,
+          "text": "Dec 2022"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2023,
+          "text": "Mar 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQEJZABhJ-eE0g/company-logo_400_400/company-logo_400_400/0/1690242317195/twitter_logo?e=1776902400&v=beta&t=v1UiJouIeHZOwxTZcNZBqVwnhDB8_OXyoGWyqdW3DLQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEJZABhJ-eE0g/company-logo_400_400/company-logo_400_400/0/1690242317195/twitter_logo?e=1776902400&v=beta&t=v1UiJouIeHZOwxTZcNZBqVwnhDB8_OXyoGWyqdW3DLQ",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEJZABhJ-eE0g/company-logo_200_200/company-logo_200_200/0/1690242317195/twitter_logo?e=1776902400&v=beta&t=21hE24egqGYy3F-4IPD7RfkIhjO-WBeDsOAAaL72H5w",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEJZABhJ-eE0g/company-logo_100_100/company-logo_100_100/0/1690242317195/twitter_logo?e=1776902400&v=beta&t=4siCHaqQwjJ3_CILzf6sxKVHLUizNvZRdaC1XT2Egrs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Lead Machine Learning Engineer",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Labelbox",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/18526564/",
+        "companyId": "18526564",
+        "duration": "8 mos",
+        "description": "- Weekly machine learning talks geared towards a nontechnical audience\n- Hiring machine learning backend engineers\n- Ideation, creation, lead, and implementation of automated annotation product features\n- Ideation and creation of model diagnostics\n- Lead on data import to the Training Data Platform",
+        "skills": null,
+        "startDate": {
+          "month": "Apr",
+          "year": 2020,
+          "text": "Apr 2020"
+        },
+        "endDate": {
+          "month": "Nov",
+          "year": 2020,
+          "text": "Nov 2020"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQGAzm3VSPg8_w/company-logo_400_400/company-logo_400_400/0/1661792998366/labelbox_logo?e=1776902400&v=beta&t=w1hrQ_NrQfDtBCgg7hDgvndx9fEWySx7qE8osDVg2kw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGAzm3VSPg8_w/company-logo_400_400/company-logo_400_400/0/1661792998366/labelbox_logo?e=1776902400&v=beta&t=w1hrQ_NrQfDtBCgg7hDgvndx9fEWySx7qE8osDVg2kw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGAzm3VSPg8_w/company-logo_200_200/company-logo_200_200/0/1661792998366/labelbox_logo?e=1776902400&v=beta&t=uWEj876Dk-dVpiKPH8fL6ggXOrJgGPwLXUAM6sNlvJQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGAzm3VSPg8_w/company-logo_100_100/company-logo_100_100/0/1661792998366/labelbox_logo?e=1776902400&v=beta&t=WWKzWRd1tKSldZROSl4uyFm1LbfcYMXYjEQf-xguwiM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Machine Learning Engineer",
+        "location": "San Francisco",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Fathom",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/17933978/",
+        "companyId": "17933978",
+        "duration": "3 yrs 2 mos",
+        "description": "Tech lead for creation of first of its kind large language model (8B parameters) trained on > 250B tokens in a HIPAA environment.\n\nA Google TechTalk, 2018/9/24\nApache Airflow Meetup: Airbender - Combining Kubernetes, Airflow, and Github\n(https://www.youtube.com/watch?v=P5ilmD8_eys)",
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2017,
+          "text": "Feb 2017"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2020,
+          "text": "Mar 2020"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQFC3Wq1tp250w/company-logo_400_400/company-logo_400_400/0/1630593220845/fathom_health_logo?e=1776902400&v=beta&t=EvPs3o1DUTo1mJcxE8kDlRgRs7pspoGZNEYdNT4Kg4c",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFC3Wq1tp250w/company-logo_400_400/company-logo_400_400/0/1630593220845/fathom_health_logo?e=1776902400&v=beta&t=EvPs3o1DUTo1mJcxE8kDlRgRs7pspoGZNEYdNT4Kg4c",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFC3Wq1tp250w/company-logo_200_200/company-logo_200_200/0/1630593220845/fathom_health_logo?e=1776902400&v=beta&t=bD6_c0wCURlzqvspV374HZ8VkhRm8saBXdUldKCnAzI",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFC3Wq1tp250w/company-logo_100_100/company-logo_100_100/0/1630593220845/fathom_health_logo?e=1776902400&v=beta&t=oTlCdIdP5YKqaRj6Pwc0es0NJJswER6pMtfQ8qnQE9o",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior Research Engineer",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Halo Neuroscience",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3714802/",
+        "companyId": "3714802",
+        "duration": "2 yrs 8 mos",
+        "description": "Full stack (study design, development, deployment, and analysis) cognitive neuroscience research in house and over the air.\n\nHardware / firmware testing platform development.\n\nNeuronal level models of muscle stack and tripartite synapse.",
+        "skills": null,
+        "startDate": {
+          "month": "Jul",
+          "year": 2014,
+          "text": "Jul 2014"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2017,
+          "text": "Feb 2017"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFSPoCwaEUnXg/company-logo_400_400/B4EZc6IkmPHcAY-/0/1749027015399/halo_neuroscience_logo?e=1776902400&v=beta&t=USnMq7Gy2gFtqh0dlY8ylaDyQqarki9NsoQSWRWpsPk",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFSPoCwaEUnXg/company-logo_400_400/B4EZc6IkmPHcAY-/0/1749027015399/halo_neuroscience_logo?e=1776902400&v=beta&t=USnMq7Gy2gFtqh0dlY8ylaDyQqarki9NsoQSWRWpsPk",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFSPoCwaEUnXg/company-logo_200_200/B4EZc6IkmPHcAI-/0/1749027015399/halo_neuroscience_logo?e=1776902400&v=beta&t=FD5IH3t4PbpbAAo1LD2IvuWZ3PjnHv6fMOYGt9VRniU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFSPoCwaEUnXg/company-logo_100_100/B4EZc6IkmPHcAQ-/0/1749027015398/halo_neuroscience_logo?e=1776902400&v=beta&t=lr-Ei9zEjEycXOw6Iy9Tn8rufzCnee7baU1hfLZFWU8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Summer Undergraduate Research Fellowship",
+        "location": "Greater Boston",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Harvard University",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1646/",
+        "companyId": "1646",
+        "duration": "4 mos",
+        "description": "Graph theoretic investigations and modeling of biophysical mechanisms responsible for sculpting cortical circuitry.  Ecog analysis of visuo-perceptual data.",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2013,
+          "text": "Jun 2013"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2013,
+          "text": "Sep 2013"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF5t62bcL0e9g/company-logo_400_400/company-logo_400_400/0/1631318058235?e=1776902400&v=beta&t=RkTNKHKBHCNAI5CNo-HAGQ7uOxrr8GBSdP6Mhal50gg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF5t62bcL0e9g/company-logo_400_400/company-logo_400_400/0/1631318058235?e=1776902400&v=beta&t=RkTNKHKBHCNAI5CNo-HAGQ7uOxrr8GBSdP6Mhal50gg",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF5t62bcL0e9g/company-logo_200_200/company-logo_200_200/0/1631318058235?e=1776902400&v=beta&t=y8dfVnr4duhkYkxwxXb0xTfyu2DFsZFXt5hsz507GaM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF5t62bcL0e9g/company-logo_100_100/company-logo_100_100/0/1631318058235?e=1776902400&v=beta&t=LVLwVc7yBweIB3_TixXGZZEymyF01yoePCCl9P-3kb0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Summer Undergraduate Research Fellow",
+        "location": "Koch Lab",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "California Institute of Technology",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/california-institute-of-technology/",
+        "companyId": "4992",
+        "companyUniversalName": "california-institute-of-technology",
+        "duration": "2 yrs",
+        "description": "Investigated synaptic efficacy information theoretic measures for single neurons.",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2011,
+          "text": "Jun 2011"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2013,
+          "text": "May 2013"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C510BAQFCGqEmSwrc4w/company-logo_400_400/company-logo_400_400/0/1631338994369?e=1776902400&v=beta&t=PJ97dtjx-Tbcys1bF8WzMZ9K8G7PR3OYYox11K40LKU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQFCGqEmSwrc4w/company-logo_400_400/company-logo_400_400/0/1631338994369?e=1776902400&v=beta&t=PJ97dtjx-Tbcys1bF8WzMZ9K8G7PR3OYYox11K40LKU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQFCGqEmSwrc4w/company-logo_200_200/company-logo_200_200/0/1631338994369?e=1776902400&v=beta&t=pVJ4zOhIyWRMWwbRuYgdMkkxAoGZ9IyZCYbwlHkaCzw",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQFCGqEmSwrc4w/company-logo_100_100/company-logo_100_100/0/1631338994369?e=1776902400&v=beta&t=RlafUhrg4HABzQu7N8nLvsufA85c5jd3fwUEdhjGRGY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "NSF REU Research Fellow",
+        "location": "Claremont",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Keck Graduate Institute",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/23674/",
+        "companyId": "23674",
+        "duration": "2 yrs",
+        "description": "Investigated model for sympatric speciation solely from resource competition.",
+        "skills": null,
+        "startDate": {
+          "year": 2008,
+          "text": "2008"
+        },
+        "endDate": {
+          "year": 2010,
+          "text": "2010"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFL4fL3XFdPCA/company-logo_400_400/company-logo_400_400/0/1631362587503/keck_graduate_institute_logo?e=1776902400&v=beta&t=XlwSb-ElnI5aswiJfw35GSa6qp25QPBjdSuAS_JyqmE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFL4fL3XFdPCA/company-logo_400_400/company-logo_400_400/0/1631362587503/keck_graduate_institute_logo?e=1776902400&v=beta&t=XlwSb-ElnI5aswiJfw35GSa6qp25QPBjdSuAS_JyqmE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFL4fL3XFdPCA/company-logo_200_200/company-logo_200_200/0/1631362587503/keck_graduate_institute_logo?e=1776902400&v=beta&t=idpZwIo_qf1pRgXu7NFPJwnqQwotanZ0WIu11IutAy4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFL4fL3XFdPCA/company-logo_100_100/company-logo_100_100/0/1631362587503/keck_graduate_institute_logo?e=1776902400&v=beta&t=FbRVS5l0kpT12AzLVMt2dY2gheGBVguUfLYmtHaZ4jk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Caltech",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/4992/",
+        "schoolId": "4992",
+        "degree": "Bachelor of Science (BS)",
+        "fieldOfStudy": "Physics",
+        "skills": [],
+        "startDate": {
+          "year": 2010,
+          "text": "2010"
+        },
+        "endDate": {
+          "year": 2014,
+          "text": "2014"
+        },
+        "period": "2010 - 2014",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C510BAQFCGqEmSwrc4w/company-logo_400_400/company-logo_400_400/0/1631338994369?e=1776902400&v=beta&t=PJ97dtjx-Tbcys1bF8WzMZ9K8G7PR3OYYox11K40LKU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQFCGqEmSwrc4w/company-logo_400_400/company-logo_400_400/0/1631338994369?e=1776902400&v=beta&t=PJ97dtjx-Tbcys1bF8WzMZ9K8G7PR3OYYox11K40LKU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQFCGqEmSwrc4w/company-logo_200_200/company-logo_200_200/0/1631338994369?e=1776902400&v=beta&t=pVJ4zOhIyWRMWwbRuYgdMkkxAoGZ9IyZCYbwlHkaCzw",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQFCGqEmSwrc4w/company-logo_100_100/company-logo_100_100/0/1631338994369?e=1776902400&v=beta&t=RlafUhrg4HABzQu7N8nLvsufA85c5jd3fwUEdhjGRGY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [
+      {
+        "role": "Board of Control Member",
+        "description": "3 year Board of Control Member (at-large and Lloyd House representative).  Extensive adjudication proceedings for Honor Code violations.",
+        "duration": "Mar 2012 - Jun 2014 · 2 yrs 4 mos",
+        "startDate": {
+          "month": "Mar",
+          "year": 2012,
+          "text": "Mar 2012"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2014,
+          "text": "Jun 2014 · 2 yrs 4 mos"
+        },
+        "organizationName": "California Institute of Technology",
+        "organizationLinkedinUrl": null,
+        "cause": "Education"
+      }
+    ],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Mathematica",
+        "positions": [
+          "Endorsed by 3 colleagues at Caltech"
+        ],
+        "endorsements": "10 endorsements"
+      },
+      {
+        "name": "Data Science",
+        "positions": [
+          "Endorsed by 2 colleagues at Caltech"
+        ],
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Data Analysis",
+        "positions": [
+          "Endorsed by 2 colleagues at Labelbox"
+        ],
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "NEURON",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Matlab",
+        "endorsements": "8 endorsements"
+      },
+      {
+        "name": "Biophysics",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Physics",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "LaTeX",
+        "endorsements": "9 endorsements"
+      },
+      {
+        "name": "Python",
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "Scientific Computing",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "JavaScript",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Experimentation",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Vim",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "C",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "C++",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Research",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Algorithms",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Statistics",
+        "endorsements": "4 endorsements"
+      }
+    ],
+    "publications": [
+      {
+        "title": "Trade-offs govern resource specialization in a model of sympatric asexuals",
+        "publishedAt": "Oct 31, 2013",
+        "link": "http://arxiv.org/abs/1310.8634"
+      }
+    ],
+    "courses": [
+      {
+        "title": "Classical Mechanics",
+        "number": "Ph 107 abc",
+        "associatedWith": "Associated with California Institute of Technology",
+        "associatedWithLink": "https://www.linkedin.com/company/4992/"
+      },
+      {
+        "title": "Quantum Mechanics",
+        "number": "Ph 125 abc",
+        "associatedWith": "Associated with California Institute of Technology",
+        "associatedWithLink": "https://www.linkedin.com/company/4992/"
+      }
+    ],
+    "patents": [
+      {
+        "title": "System and method for automated content annotation workflow",
+        "number": "11270062",
+        "issuedAt": "Mar 8, 2022"
+      },
+      {
+        "title": "Electrode system for electrical stimulation",
+        "number": "US US14878647",
+        "issuedAt": "Filed Oct 8, 2015"
+      }
+    ],
+    "honorsAndAwards": [
+      {
+        "title": "Stamps Scholar",
+        "issuedBy": "Stamps",
+        "issuedAt": "Aug 2010",
+        "description": "4 year merit fully funded scholarship with additional $15,000 in creative funding for parachute documentary filmmaking.",
+        "associatedWith": "Associated with California Institute of Technology",
+        "associatedWithLink": "https://www.linkedin.com/company/4992/"
+      }
+    ],
+    "languages": [
+      {
+        "name": "Chinese",
+        "proficiency": "Limited working proficiency"
+      },
+      {
+        "name": "Spanish",
+        "proficiency": "Elementary proficiency"
+      },
+      {
+        "name": "Taiwanese",
+        "proficiency": "Limited working proficiency"
+      }
+    ],
+    "causes": [],
+    "featured": {
+      "images": [],
+      "link": "https://www.linkedin.com/in/randall-lin/overlay/1635518178997/single-media-viewer?type=DOCUMENT&profileId=ACoAAAfMRA8BOGAcAhlOeBgTF3a-tYoCbvSZ_gs",
+      "title": "rllincvfeb23.pdf",
+      "slides": [
+        {
+          "title": "rllincvfeb23.pdf",
+          "subtitle": null,
+          "description": null,
+          "url": "https://www.linkedin.com/in/randall-lin/overlay/1635518178997/single-media-viewer?type=DOCUMENT&profileId=ACoAAAfMRA8BOGAcAhlOeBgTF3a-tYoCbvSZ_gs",
+          "image": {
+            "url": null
+          }
+        },
+        {
+          "title": "rllinCVMay2021.pdf",
+          "subtitle": null,
+          "description": null,
+          "url": "https://www.linkedin.com/in/randall-lin/overlay/1635470786121/single-media-viewer?type=DOCUMENT&profileId=ACoAAAfMRA8BOGAcAhlOeBgTF3a-tYoCbvSZ_gs",
+          "image": {
+            "url": null
+          }
+        }
+      ]
+    },
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAABQ5lJUBry2byQYf_TtxDF9Rha9l-RqYsaM",
+        "firstName": "Guang-He",
+        "lastName": "Lee",
+        "publicIdentifier": "guang-he-lee-64577895",
+        "linkedinUrl": "https://www.linkedin.com/in/guang-he-lee-64577895"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABMugyUBsZ9MwIVIzmOSzlvmO6TOFL-mfAU",
+        "firstName": "Chih-Kuan (Jason)",
+        "lastName": "Yeh",
+        "publicIdentifier": "chih-kuan-jason-yeh-8859378b",
+        "linkedinUrl": "https://www.linkedin.com/in/chih-kuan-jason-yeh-8859378b"
+      },
+      {
+        "id": "ACoAABqSHaUBgoPu_j2NSmNfYyGkrcUvLn5mbbo",
+        "firstName": "Jacob",
+        "lastName": "van Gogh",
+        "publicIdentifier": "jacobvangogh",
+        "linkedinUrl": "https://www.linkedin.com/in/jacobvangogh"
+      },
+      {
+        "id": "ACoAACaOARIBRO2EEH12QWQO29L__oI3N2K4u14",
+        "firstName": "Mingjie",
+        "lastName": "Sun",
+        "publicIdentifier": "mingjie-sun-06a761160",
+        "linkedinUrl": "https://www.linkedin.com/in/mingjie-sun-06a761160"
+      },
+      {
+        "id": "ACoAABGzJXcBFaJqVFgqgYNbhaPVKRkP3iG33dA",
+        "firstName": "Noah",
+        "lastName": "Shpak",
+        "publicIdentifier": "nshpak",
+        "linkedinUrl": "https://www.linkedin.com/in/nshpak"
+      },
+      {
+        "id": "ACoAACA1ZlYBhPNODsf7Z3UNo1tLYMShFQ7OQJw",
+        "firstName": "Yujia",
+        "lastName": "Bao",
+        "publicIdentifier": "yujia-bao-506b76130",
+        "linkedinUrl": "https://www.linkedin.com/in/yujia-bao-506b76130"
+      },
+      {
+        "id": "ACoAAAENQhgBH8wIeS6hMrUoWlbKk5L9GWNNQCE",
+        "firstName": "Andrii",
+        "lastName": "Grynenko",
+        "publicIdentifier": "andrii-grynenko-a48aab5",
+        "linkedinUrl": "https://www.linkedin.com/in/andrii-grynenko-a48aab5"
+      },
+      {
+        "id": "ACoAABYs4-IB5mHx5eVfOHzu1e8xlO3q_kb38IM",
+        "firstName": "Brydon",
+        "lastName": "Eastman",
+        "publicIdentifier": "brydon-eastman-396719a4",
+        "linkedinUrl": "https://www.linkedin.com/in/brydon-eastman-396719a4"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAABA0sF8BJqwmfoms3veu9TE72tj8JMUQEFA",
+        "firstName": "Sam",
+        "lastName": "Shleifer",
+        "publicIdentifier": "sam-shleifer-a5307a77",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-shleifer-a5307a77"
+      },
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAABV61Q0BF3ER-196Zc9GK5TviMrbbIlVGqg",
+        "firstName": "Samuel",
+        "lastName": "Schoenholz",
+        "publicIdentifier": "samuel-schoenholz-379830a0",
+        "linkedinUrl": "https://www.linkedin.com/in/samuel-schoenholz-379830a0"
+      },
+      {
+        "id": "ACoAABhIg7YBYN2NPIu8voYj5D7JQVZGxonqHvc",
+        "firstName": "Ruiqi",
+        "lastName": "Zhong",
+        "publicIdentifier": "ruiqi-zhong-09a533b4",
+        "linkedinUrl": "https://www.linkedin.com/in/ruiqi-zhong-09a533b4"
+      },
+      {
+        "id": "ACoAABuhnI0BiTg8hQMSwyg8LxcrYYOowCSOSkM",
+        "firstName": "Brandon",
+        "lastName": "Trabucco",
+        "publicIdentifier": "brandontrabucco",
+        "linkedinUrl": "https://www.linkedin.com/in/brandontrabucco"
+      },
+      {
+        "id": "ACoAABxxSOoBxMid0wd8m2NDb9w5zTY2lQbrNz4",
+        "firstName": "Leon",
+        "lastName": "G.",
+        "publicIdentifier": "yazhi-gao",
+        "linkedinUrl": "https://www.linkedin.com/in/yazhi-gao"
+      },
+      {
+        "id": "ACoAAB4qbUUBsc9H_NLZN2duLUOOyyFDm-k_ACo",
+        "firstName": "Riley",
+        "lastName": "Shanahan",
+        "publicIdentifier": "rileyshanny",
+        "linkedinUrl": "https://www.linkedin.com/in/rileyshanny"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAAAqPUXUB26nPtwJxJLy_Ar7H-YLBlb44QnY",
+        "firstName": "Neal",
+        "lastName": "Wu",
+        "publicIdentifier": "nealwu",
+        "linkedinUrl": "https://www.linkedin.com/in/nealwu"
+      },
+      {
+        "id": "ACoAAEZziDMBiJ_3cgE2Vgae1OLSIr2TKd6n3vg",
+        "firstName": "Elias",
+        "lastName": "Solomon",
+        "position": "Civil Engineer/Main teacher in British International school ",
+        "publicIdentifier": "elias-solomon-303a1228b",
+        "linkedinUrl": "https://www.linkedin.com/in/elias-solomon-303a1228b"
+      },
+      {
+        "id": "ACoAAFl_4qQBEn-Uk7di31mqo_q0awahOvzIynk",
+        "firstName": "Gia Bao",
+        "lastName": "Doan",
+        "position": " Founder at Debut Biotechnology | Real Estate Background | NYU Stern",
+        "publicIdentifier": "doangiabaohunt",
+        "linkedinUrl": "https://www.linkedin.com/in/doangiabaohunt"
+      },
+      {
+        "id": "ACoAAFTAfzMB7lq0aZ87OrF28on0QnYtQsdjNSc",
+        "firstName": "MONTY",
+        "lastName": "RAJ",
+        "position": "We help creators & coaches get more views, retain attention, and grow faster using high-converting short-form content",
+        "publicIdentifier": "monty-raj-897237338",
+        "linkedinUrl": "https://www.linkedin.com/in/monty-raj-897237338"
+      },
+      {
+        "id": "ACoAAEAELaoBpPuKzf3KR1GQA_gNs3cejmydBHc",
+        "firstName": "Hira",
+        "lastName": "Noor",
+        "position": "Curating 5000+ Leaders Across 50+ Industries | Director of Public Relations, Cohorts | Client Relationship Manager, Diginet Global | Curation Chief, Future Fest & Ejad Labs | Civil Engineer",
+        "publicIdentifier": "hira-noor-a0a82825b",
+        "linkedinUrl": "https://www.linkedin.com/in/hira-noor-a0a82825b"
+      },
+      {
+        "id": "ACoAAE9IZk8B0hmsV2G9s6hn9jH2A0xszuRyfPM",
+        "firstName": "Sierra",
+        "lastName": "Sanchez",
+        "position": "Web Designer at Meta",
+        "publicIdentifier": "sierra-sanchez-8bb567311",
+        "linkedinUrl": "https://www.linkedin.com/in/sierra-sanchez-8bb567311"
+      },
+      {
+        "id": "ACoAAGVPEGkBsJi5HqoC7k63T-R8zfPKFMm28t8",
+        "firstName": "Anil Kumar",
+        "lastName": "M",
+        "position": "Senior Manager | Quality Assurance | Procurement | IoT Devices | ATM Surveillance Systems | Vendor Management | Operations | Hardware Testing",
+        "publicIdentifier": "anil-kumar-m-3a12773b5",
+        "linkedinUrl": "https://www.linkedin.com/in/anil-kumar-m-3a12773b5"
+      },
+      {
+        "id": "ACoAAETwqDABamGZVJANBHWUyvGq9PdEryG7fD0",
+        "firstName": "Amarri",
+        "lastName": "Robinson",
+        "position": "big fan of cells 🧬 | BioE @ Caltech ’29 | SSP 23, ISEF 24, AFE 25 ",
+        "publicIdentifier": "amarribioe",
+        "linkedinUrl": "https://www.linkedin.com/in/amarribioe"
+      },
+      {
+        "id": "ACoAAEQF_BcBmm1g_yl7-oaHkuVG42MdopyZF_o",
+        "firstName": "Preet",
+        "lastName": "Dobriyal",
+        "position": "Build Operations Intelligence System | Data Automation & Reporting Systems | Python • SQL • Power BI | I help teams replace manual Excel reporting with automated dashboards",
+        "publicIdentifier": "preet-dobriyal",
+        "linkedinUrl": "https://www.linkedin.com/in/preet-dobriyal"
+      },
+      {
+        "id": "ACoAAD-giiABZgn_iVUt2gYf2xoGqUTvxKT0xDc",
+        "firstName": "Roohi",
+        "lastName": "Dalal",
+        "position": "Deputy Director for Public Policy, American Astronomical Society",
+        "publicIdentifier": "roohi-dalal",
+        "linkedinUrl": "https://www.linkedin.com/in/roohi-dalal"
+      },
+      {
+        "id": "ACoAAEyZjpMB52njr9aCKVmDLmUQqTSV9SjC7vs",
+        "firstName": "Michaeleen",
+        "lastName": "Doucleff, PhD",
+        "position": "Science Correspondent at NPR",
+        "publicIdentifier": "michaeleen-doucleff-phd-72b47a2ba",
+        "linkedinUrl": "https://www.linkedin.com/in/michaeleen-doucleff-phd-72b47a2ba"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAAfMRA8BnXUGaYsLVyNzks35IBbD3Y85dO8"
+    }
+  }
+}

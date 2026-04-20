@@ -1,0 +1,345 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAF5ocnEBW_MJ9nEccJTwKsQRp2_4_e7Lee8",
+    "profile_url": "https://www.linkedin.com/in/ACwAAF5ocnEBW_MJ9nEccJTwKsQRp2_4_e7Lee8"
+  },
+  "item": {
+    "id": "ACoAAF5ocnEBlMUM9wcH12It1P4R-112H1ll10E",
+    "publicIdentifier": "jayzzy-austy-895542382",
+    "linkedinUrl": "https://www.linkedin.com/in/jayzzy-austy-895542382",
+    "firstName": "Jayzzy",
+    "lastName": "Austy",
+    "emails": [
+      {
+        "email": "jayzzy.austy@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Hustle at Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Nakuru, Nakuru, Kenya",
+      "countryCode": "KE",
+      "parsed": {
+        "text": "Nakuru, Kenya",
+        "countryCode": "KE",
+        "regionCode": null,
+        "country": "Kenya",
+        "countryFull": "Kenya",
+        "state": "Nakuru",
+        "city": "Nakuru"
+      }
+    },
+    "objectUrn": "1583903345",
+    "registeredAt": "2025-09-03T15:19:41.252Z",
+    "topSkills": null,
+    "connectionsCount": 0,
+    "followerCount": 1,
+    "verified": false,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": null,
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": null,
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Hustle at Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Hustle",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": null,
+        "description": null,
+        "skills": null,
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAABLy1pABnmnlVzZwItG9SAFREtMoZKcj5Mg",
+        "firstName": "Rosalie",
+        "lastName": "Girard",
+        "publicIdentifier": "rosaliecgirard",
+        "linkedinUrl": "https://www.linkedin.com/in/rosaliecgirard"
+      },
+      {
+        "id": "ACoAAEF3sysBtC4UBkLw82mkK3v2psj8e6YWGPw",
+        "firstName": "Crinu",
+        "lastName": "Dimitriu",
+        "publicIdentifier": "crinu-dimitriu",
+        "linkedinUrl": "https://www.linkedin.com/in/crinu-dimitriu"
+      },
+      {
+        "id": "ACoAABgHQ5QBOkbT3Tfo9k_Z-DFwA_6X_PA0rkM",
+        "firstName": "Amber",
+        "lastName": "Weise",
+        "publicIdentifier": "amberweise",
+        "linkedinUrl": "https://www.linkedin.com/in/amberweise"
+      },
+      {
+        "id": "ACoAAAAARMABZ3YLggJZgJ1HPHW7NN_36TNZ2xA",
+        "firstName": "Adam",
+        "lastName": "D'Angelo",
+        "publicIdentifier": "dangelo",
+        "linkedinUrl": "https://www.linkedin.com/in/dangelo"
+      },
+      {
+        "id": "ACoAAClH6SYBu217MAsDL4_0gaHkX3LgMqLjvFA",
+        "firstName": "Tolu Victor",
+        "lastName": "Sanwoolu",
+        "publicIdentifier": "victorsanwoolu",
+        "linkedinUrl": "https://www.linkedin.com/in/victorsanwoolu"
+      },
+      {
+        "id": "ACoAAAACxVwBQJDdIjlTwIyutaKYhrky2b8stTQ",
+        "firstName": "Shane",
+        "lastName": "Young",
+        "publicIdentifier": "cincyshane",
+        "linkedinUrl": "https://www.linkedin.com/in/cincyshane"
+      },
+      {
+        "id": "ACoAAABF-MwB7iB4akwmoOuY2weqOHO5wxcyoHU",
+        "firstName": "Demis",
+        "lastName": "Hassabis",
+        "publicIdentifier": "demishassabis",
+        "linkedinUrl": "https://www.linkedin.com/in/demishassabis"
+      },
+      {
+        "id": "ACoAABfuS7sBIW0qLoGbj0PZVdqoODuFL9v2ccM",
+        "firstName": "Matt",
+        "lastName": "Davasi",
+        "publicIdentifier": "m-davasi",
+        "linkedinUrl": "https://www.linkedin.com/in/m-davasi"
+      },
+      {
+        "id": "ACoAAAAm1cIBw9IkE9uYVp-XcVa5wTjWqsDA778",
+        "firstName": "Adam",
+        "lastName": "Pode, CCWP",
+        "publicIdentifier": "adampode",
+        "linkedinUrl": "https://www.linkedin.com/in/adampode"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAABFmakQBEluVepxY639zEmykn0ExwFzLlFI",
+        "firstName": "Ashish",
+        "lastName": "Vaswani",
+        "publicIdentifier": "ashish-vaswani-99892181",
+        "linkedinUrl": "https://www.linkedin.com/in/ashish-vaswani-99892181"
+      },
+      {
+        "id": "ACoAAAMW6TwBkKIolCWVccFFHGhSG5kjBt0jQgc",
+        "firstName": "Rémi",
+        "lastName": "Dyon",
+        "publicIdentifier": "remidyon",
+        "linkedinUrl": "https://www.linkedin.com/in/remidyon"
+      },
+      {
+        "id": "ACoAAAHlijIBydUn0kdExcSMOY25MBj0wIhxegU",
+        "firstName": "Charles",
+        "lastName": "Lamanna",
+        "publicIdentifier": "charleslamanna",
+        "linkedinUrl": "https://www.linkedin.com/in/charleslamanna"
+      },
+      {
+        "id": "ACoAABEM7osBPXyGYep6aq2sLfhFwwdJ6wj2n4s",
+        "firstName": "Prafulla",
+        "lastName": "Dhariwal",
+        "publicIdentifier": "prafulladhariwal",
+        "linkedinUrl": "https://www.linkedin.com/in/prafulladhariwal"
+      },
+      {
+        "id": "ACoAAAQMrpUBixQZW4yoVdFYYgrQx7mp2dvJNvQ",
+        "firstName": "Greg",
+        "lastName": "Brockman",
+        "publicIdentifier": "thegdb",
+        "linkedinUrl": "https://www.linkedin.com/in/thegdb"
+      },
+      {
+        "id": "ACoAAALMGwUB3skIBFQGrXHkVg2AatTU34ADPns",
+        "firstName": "Ian",
+        "lastName": "Goodfellow",
+        "publicIdentifier": "ian-goodfellow-b7187213",
+        "linkedinUrl": "https://www.linkedin.com/in/ian-goodfellow-b7187213"
+      },
+      {
+        "id": "ACoAADDOSkoBFf3LYzqFvb11qqaCOxU66CQSCP0",
+        "firstName": "Abdelrahman",
+        "lastName": "Zidan",
+        "position": "BI Analyst @ TeamViewer | MSc Strategic Information Management",
+        "publicIdentifier": "abdelrahman-zidan-6362811aa",
+        "linkedinUrl": "https://www.linkedin.com/in/abdelrahman-zidan-6362811aa"
+      },
+      {
+        "id": "ACoAACnlx8IBcRhAYhNrp_WDdvkA_HLfuLkVdeQ",
+        "firstName": "Muhammad Arsal",
+        "lastName": "Ejaz",
+        "position": "Working Student@TeamViewer | Manual Testing | Automation |",
+        "publicIdentifier": "muhammad-arsal-ejaz-1964a9177",
+        "linkedinUrl": "https://www.linkedin.com/in/muhammad-arsal-ejaz-1964a9177"
+      },
+      {
+        "id": "ACoAAAAxZfUB9sg-TOFDik3a0ODz6_hsqstDmco",
+        "firstName": "Umut",
+        "lastName": "Elmali",
+        "position": "Product Manager bei TeamViewer",
+        "publicIdentifier": "umut-elmali-5851011",
+        "linkedinUrl": "https://www.linkedin.com/in/umut-elmali-5851011"
+      },
+      {
+        "id": "ACoAAD3NIGsBSwAAonMDhEzs9A5QaBGS8P6g7ac",
+        "firstName": "Sara",
+        "lastName": "Rafiq",
+        "position": "FAU’27 | IBA’24 | xSalesflo | xBazaar | xZaraye ",
+        "publicIdentifier": "sararafiq",
+        "linkedinUrl": "https://www.linkedin.com/in/sararafiq"
+      },
+      {
+        "id": "ACoAACGNTOwBK645M-YKWGuKD_xyJ_gWk67dBrk",
+        "firstName": "Owais",
+        "lastName": "Ibrahim",
+        "position": "Full Stack Developer | React | Node | Javascript | MERN | PWA | Tailwind",
+        "publicIdentifier": "owaisibrahim",
+        "linkedinUrl": "https://www.linkedin.com/in/owaisibrahim"
+      },
+      {
+        "id": "ACoAACU1K60BlUF8OqfRO8R0WPuY2dRTeBeLLjw",
+        "firstName": "Hamza",
+        "lastName": "Khalid",
+        "position": "Microsoft certified Dynamics Ax/D365 F&O Technical consultant ",
+        "publicIdentifier": "hamza-khalid-ab9082155",
+        "linkedinUrl": "https://www.linkedin.com/in/hamza-khalid-ab9082155"
+      },
+      {
+        "id": "ACoAABPf2V4Be3azAE5WpDD1NDqa0BmTRNEVu-E",
+        "firstName": "Aayushi",
+        "lastName": "na",
+        "position": "Software Engineer",
+        "publicIdentifier": "aayushi-na-47a80193",
+        "linkedinUrl": "https://www.linkedin.com/in/aayushi-na-47a80193"
+      },
+      {
+        "id": "ACoAACb1S30BiqCy35YcKVp-9_pMRz1KLVI3z48",
+        "firstName": "Isaac",
+        "lastName": "Mulwa",
+        "position": "Software Engineer",
+        "publicIdentifier": "imkiptoo",
+        "linkedinUrl": "https://www.linkedin.com/in/imkiptoo"
+      },
+      {
+        "id": "ACoAABHpWvwB9ZN13ZvYuUv2kRZTyJZze93UEB0",
+        "firstName": "Simon",
+        "lastName": "Grosser",
+        "position": "Business Operations Manager bei TeamViewer",
+        "publicIdentifier": "simon-grosser-a2477b84",
+        "linkedinUrl": "https://www.linkedin.com/in/simon-grosser-a2477b84"
+      },
+      {
+        "id": "ACoAAB79H1EBTW969-3w2EJSspwL6f4l12AmfvQ",
+        "firstName": "Annisa Sofura",
+        "lastName": "D.",
+        "position": "Student at Darmstadt University of Applied Sciences",
+        "publicIdentifier": "annisa-s-dewi",
+        "linkedinUrl": "https://www.linkedin.com/in/annisa-s-dewi"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAF5ocnEBW_MJ9nEccJTwKsQRp2_4_e7Lee8"
+    }
+  }
+}

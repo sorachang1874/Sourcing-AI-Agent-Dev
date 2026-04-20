@@ -1,0 +1,800 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAA4HOMcBjHQNGyUbyfYCY-sOZshkNFC30Jk",
+    "profile_url": "https://www.linkedin.com/in/ACwAAA4HOMcBjHQNGyUbyfYCY-sOZshkNFC30Jk"
+  },
+  "item": {
+    "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+    "publicIdentifier": "mira-murati-4b39a066",
+    "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066",
+    "firstName": "Mira",
+    "lastName": "Murati",
+    "emails": [
+      {
+        "email": "mira.murati@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      },
+      {
+        "url": "https://openai.com/",
+        "domain": "openai.com"
+      }
+    ],
+    "headline": "Co-Founder and CEO at Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": true,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco Bay Area",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "235354311",
+    "registeredAt": "2013-02-28T00:03:08.269Z",
+    "topSkills": null,
+    "connectionsCount": 2525,
+    "followerCount": 226052,
+    "verified": false,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 12,
+            "year": 2024,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "18839",
+        "companyId": "163348",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/163348/",
+        "schoolName": "Dartmouth College"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5616AQGZmHm0eCDOcw/profile-displaybackgroundimage-shrink_350_1400/B56ZwqRxEIHQAY-/0/1770235826743?e=1776902400&v=beta&t=N7Mj4HIcwHmPRsiM_NZiiBlDHLYIljKzFfL_yXpiXno",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5616AQGZmHm0eCDOcw/profile-displaybackgroundimage-shrink_350_1400/B56ZwqRxEIHQAY-/0/1770235826743?e=1776902400&v=beta&t=N7Mj4HIcwHmPRsiM_NZiiBlDHLYIljKzFfL_yXpiXno",
+          "width": 1400,
+          "height": 350,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5616AQGZmHm0eCDOcw/profile-displaybackgroundimage-shrink_200_800/B56ZwqRxEIHQAU-/0/1770235826743?e=1776902400&v=beta&t=kXiRK6hk4zEmlebqAkHZHfT-vRpcGwuHfHjixDnp8fw",
+          "width": 800,
+          "height": 200,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Co-Founder and CEO at Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Co-Founder and Chief Executive Officer",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "1 yr 5 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Dec",
+          "year": 2024,
+          "text": "Dec 2024"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Chief Technology Officer",
+        "location": "San Francisco, California, United States",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "OpenAI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/11130470/",
+        "companyId": "11130470",
+        "duration": "4 yrs",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "0cda935a5b486ccae968157064a61474431731cd",
+        "startDate": {
+          "month": "May",
+          "year": 2022,
+          "text": "May 2022"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_200_200/B56ZT8EYB8HsAI-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=O6RSWlpQ5W4zNCOCTu621qCyTijLuXFJS4pz2_hBQfo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_100_100/B56ZT8EYB8HsAQ-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=y7RA89V9q8GlAjQ1oRU-jf_-n5zlSXRCnykXBIkgHfM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "SVP of Research, Product & Partnerships",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "OpenAI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/11130470/",
+        "companyId": "11130470",
+        "duration": "1 yr 6 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "0cda935a5b486ccae968157064a61474431731cd",
+        "startDate": {
+          "month": "Dec",
+          "year": 2020,
+          "text": "Dec 2020"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2022,
+          "text": "May 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_200_200/B56ZT8EYB8HsAI-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=O6RSWlpQ5W4zNCOCTu621qCyTijLuXFJS4pz2_hBQfo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_100_100/B56ZT8EYB8HsAQ-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=y7RA89V9q8GlAjQ1oRU-jf_-n5zlSXRCnykXBIkgHfM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "VP of Applied AI & Partnerships",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "OpenAI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/11130470/",
+        "companyId": "11130470",
+        "duration": "2 yrs 7 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "0cda935a5b486ccae968157064a61474431731cd",
+        "startDate": {
+          "month": "Jun",
+          "year": 2018,
+          "text": "Jun 2018"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2020,
+          "text": "Dec 2020"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_200_200/B56ZT8EYB8HsAI-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=O6RSWlpQ5W4zNCOCTu621qCyTijLuXFJS4pz2_hBQfo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_100_100/B56ZT8EYB8HsAQ-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=y7RA89V9q8GlAjQ1oRU-jf_-n5zlSXRCnykXBIkgHfM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "VP of Product & Engineering",
+        "location": "San Francisco",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Leap Motion",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/2871784/",
+        "companyId": "2871784",
+        "duration": "2 yrs",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "year": 2016,
+          "text": "2016"
+        },
+        "endDate": {
+          "year": 2018,
+          "text": "2018"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C510BAQG4RkiAtXJ6_A/company-logo_400_400/company-logo_400_400/0/1631367540844?e=1776902400&v=beta&t=H2rHBVfE6mTQzVx2mo9ZMtIlAvFKvUK-hJwOy44xFTM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQG4RkiAtXJ6_A/company-logo_400_400/company-logo_400_400/0/1631367540844?e=1776902400&v=beta&t=H2rHBVfE6mTQzVx2mo9ZMtIlAvFKvUK-hJwOy44xFTM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQG4RkiAtXJ6_A/company-logo_200_200/company-logo_200_200/0/1631367540844?e=1776902400&v=beta&t=7wD81hClbEu0AZIwJRiIidV-KAcLC_Z-n4iBRk6K1sQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQG4RkiAtXJ6_A/company-logo_100_100/company-logo_100_100/0/1631367540844?e=1776902400&v=beta&t=fTR0uZuz-EFLBklaK7Hr5WvSdPPHLQ1CEStoLVgf2Ss",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior Product Manager, Model X",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Tesla",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/15564/",
+        "companyId": "15564",
+        "duration": "3 yrs",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "year": 2013,
+          "text": "2013"
+        },
+        "endDate": {
+          "year": 2016,
+          "text": "2016"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQHUcu98SZ2TVw/company-logo_400_400/company-logo_400_400/0/1630576446368/tesla_motors_logo?e=1776902400&v=beta&t=o2aM3BOsXGOokcr2lHziQZDhypcwzCrU9j8OGYFtoDs",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQHUcu98SZ2TVw/company-logo_400_400/company-logo_400_400/0/1630576446368/tesla_motors_logo?e=1776902400&v=beta&t=o2aM3BOsXGOokcr2lHziQZDhypcwzCrU9j8OGYFtoDs",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQHUcu98SZ2TVw/company-logo_200_200/company-logo_200_200/0/1630576446368/tesla_motors_logo?e=1776902400&v=beta&t=7K7LtVEoK0miVi0ZDKPCYYp3dth9PBQRzFxL4X0O8G0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQHUcu98SZ2TVw/company-logo_100_100/company-logo_100_100/0/1630576446368/tesla_motors_logo?e=1776902400&v=beta&t=lXA7Rm2TXGjBWkaDmYS5yFO_Q4MIGOW8aOaSRqLd5WA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Advanced Concepts Engineer",
+        "location": "Huntington Beach, CA",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Zodiac Aerospace",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/7749/",
+        "companyId": "7749",
+        "duration": "1 yr",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "year": 2012,
+          "text": "2012"
+        },
+        "endDate": {
+          "year": 2013,
+          "text": "2013"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQEXGXYK7cARXg/company-logo_400_400/company-logo_400_400/0/1631422127135?e=1776902400&v=beta&t=g4Qy8WmYmj7n-i87XAySQ0TUDy8OX87YoG_nj9cbsls",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEXGXYK7cARXg/company-logo_400_400/company-logo_400_400/0/1631422127135?e=1776902400&v=beta&t=g4Qy8WmYmj7n-i87XAySQ0TUDy8OX87YoG_nj9cbsls",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEXGXYK7cARXg/company-logo_200_200/company-logo_200_200/0/1631422127135?e=1776902400&v=beta&t=aE_X45sM0v6Rl6VTzAOPTPcdCuZuJqn8MtQ_fi_JHyM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEXGXYK7cARXg/company-logo_100_100/company-logo_100_100/0/1631422127135?e=1776902400&v=beta&t=PX07VXTEhAz8S5HvhnEY9ZCryMI_unu9ywwRkp_RhBM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Summer Analyst",
+        "location": "Tokyo, Japan",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Goldman Sachs",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1382/",
+        "companyId": "1382",
+        "duration": "Less than a year",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "year": 2011,
+          "text": "2011"
+        },
+        "endDate": {
+          "year": 2011,
+          "text": "2011"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQG9L7InIQVZrQ/company-logo_400_400/company-logo_400_400/0/1722506756452/goldman_sachs_logo?e=1776902400&v=beta&t=DTAHHIGqk0-6NwsKozo49cf7cSVIkRjik6PWy7n4Igo",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQG9L7InIQVZrQ/company-logo_400_400/company-logo_400_400/0/1722506756452/goldman_sachs_logo?e=1776902400&v=beta&t=DTAHHIGqk0-6NwsKozo49cf7cSVIkRjik6PWy7n4Igo",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQG9L7InIQVZrQ/company-logo_200_200/company-logo_200_200/0/1722506756452/goldman_sachs_logo?e=1776902400&v=beta&t=LbXgUBqLTG8WC8WiqJUDLbH1pEMH9-To7Q0kl24pF-o",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQG9L7InIQVZrQ/company-logo_100_100/company-logo_100_100/0/1722506756452/goldman_sachs_logo?e=1776902400&v=beta&t=t2QyjuxlieK0VUXv2C-gha4bouSKyf1_T6PIC1uBDic",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Dartmouth College",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/163348/",
+        "schoolId": "163348",
+        "degree": "Bachelor of Engineering (B.E.)",
+        "fieldOfStudy": "Mechanical Engineering",
+        "skills": [],
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQELVZKDzlGDzA/company-logo_400_400/company-logo_400_400/0/1631325633796?e=1776902400&v=beta&t=QytJ1JVt1-lGcRjKbcg-MmYu_WZHPZ1dPOe22atX_Zc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQELVZKDzlGDzA/company-logo_400_400/company-logo_400_400/0/1631325633796?e=1776902400&v=beta&t=QytJ1JVt1-lGcRjKbcg-MmYu_WZHPZ1dPOe22atX_Zc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQELVZKDzlGDzA/company-logo_200_200/company-logo_200_200/0/1631325633796?e=1776902400&v=beta&t=28xyqoN8C3UdunF-XiAQZMebHl46argha1hOQE8X114",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQELVZKDzlGDzA/company-logo_100_100/company-logo_100_100/0/1631325633796?e=1776902400&v=beta&t=_MkX_8d6jThTZxNYAdzGsP5NcqlGagbsTo8K9mJ7NCg",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Product Development",
+        "endorsements": "7 endorsements"
+      },
+      {
+        "name": "Product Design",
+        "positions": [
+          "Endorsed by 2 colleagues at Leap Motion (inactive account - see Ultraleap)"
+        ],
+        "endorsements": "24 endorsements"
+      },
+      {
+        "name": "Product Management",
+        "positions": [
+          "Endorsed by 2 colleagues at Leap Motion (inactive account - see Ultraleap)"
+        ],
+        "endorsements": "22 endorsements"
+      },
+      {
+        "name": "Statistics",
+        "endorsements": "11 endorsements"
+      },
+      {
+        "name": "Finite Element Analysis",
+        "endorsements": "14 endorsements"
+      },
+      {
+        "name": "Mechanical Engineering",
+        "endorsements": "7 endorsements"
+      },
+      {
+        "name": "Engineering",
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "Catia",
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "Strategy",
+        "endorsements": "12 endorsements"
+      },
+      {
+        "name": "Management",
+        "endorsements": "8 endorsements"
+      },
+      {
+        "name": "Leadership",
+        "endorsements": "8 endorsements"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABgwxtcBfqsJJUHPwsSPuBE4K9oKyRqUp5o",
+        "firstName": "Lia",
+        "lastName": "Guy",
+        "publicIdentifier": "aureliaguy",
+        "linkedinUrl": "https://www.linkedin.com/in/aureliaguy"
+      },
+      {
+        "id": "ACoAAACQBzQB5nk5kOpFWQRtK4pv3RaL5q2G-pA",
+        "firstName": "Jonathan",
+        "lastName": "Lachman",
+        "publicIdentifier": "jonathan-lachman-4981b23",
+        "linkedinUrl": "https://www.linkedin.com/in/jonathan-lachman-4981b23"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAAAOshwUBNNaU-8JRTNkhsmgKZnIXot9YbHk",
+        "firstName": "Ilya",
+        "lastName": "Sutskever",
+        "publicIdentifier": "ilya-sutskever",
+        "linkedinUrl": "https://www.linkedin.com/in/ilya-sutskever"
+      },
+      {
+        "id": "ACoAAAAWldQBOsoCXLpqsc_2VwUTUy0CbOeaOjE",
+        "firstName": "Srinivas",
+        "lastName": "Narayanan",
+        "publicIdentifier": "srinivasnarayanan",
+        "linkedinUrl": "https://www.linkedin.com/in/srinivasnarayanan"
+      },
+      {
+        "id": "ACoAABEM7osBPXyGYep6aq2sLfhFwwdJ6wj2n4s",
+        "firstName": "Prafulla",
+        "lastName": "Dhariwal",
+        "publicIdentifier": "prafulladhariwal",
+        "linkedinUrl": "https://www.linkedin.com/in/prafulladhariwal"
+      },
+      {
+        "id": "ACoAAAQMrpUBixQZW4yoVdFYYgrQx7mp2dvJNvQ",
+        "firstName": "Greg",
+        "lastName": "Brockman",
+        "publicIdentifier": "thegdb",
+        "linkedinUrl": "https://www.linkedin.com/in/thegdb"
+      },
+      {
+        "id": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+        "firstName": "Saurabh",
+        "lastName": "Garg",
+        "publicIdentifier": "saurabh-garg-b680b5b8",
+        "linkedinUrl": "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+      },
+      {
+        "id": "ACoAAAY6cNwB7lblXvQaDTUDoMXPTyFIuyDnMIY",
+        "firstName": "Daniela",
+        "lastName": "Amodei",
+        "publicIdentifier": "daniela-amodei-790bb22a",
+        "linkedinUrl": "https://www.linkedin.com/in/daniela-amodei-790bb22a"
+      },
+      {
+        "id": "ACoAAADIX18Bw3Txyq8zCGzoe5bHmQw4Wyqknug",
+        "firstName": "Dario",
+        "lastName": "Amodei",
+        "publicIdentifier": "dario-amodei-3934934",
+        "linkedinUrl": "https://www.linkedin.com/in/dario-amodei-3934934"
+      },
+      {
+        "id": "ACoAAAl87CYBWKLLyGNTbomy6oqIPv-5n34CXIY",
+        "firstName": "Andrew",
+        "lastName": "Tulloch",
+        "publicIdentifier": "andrew-tulloch-17238745",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-tulloch-17238745"
+      },
+      {
+        "id": "ACoAAADSAbIBAZnYtjjLeCsXLOP2JjyfXwYda0U",
+        "firstName": "Sam",
+        "lastName": "Altman",
+        "publicIdentifier": "sam-altman-financial-advisor",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-altman-financial-advisor"
+      },
+      {
+        "id": "ACoAAB0rIioBpZV78bFTk-DfUx6qAk2QSsXhTiI",
+        "firstName": "Jakub",
+        "lastName": "Pachocki",
+        "publicIdentifier": "jakub-pachocki",
+        "linkedinUrl": "https://www.linkedin.com/in/jakub-pachocki"
+      },
+      {
+        "id": "ACoAABFmakQBEluVepxY639zEmykn0ExwFzLlFI",
+        "firstName": "Ashish",
+        "lastName": "Vaswani",
+        "publicIdentifier": "ashish-vaswani-99892181",
+        "linkedinUrl": "https://www.linkedin.com/in/ashish-vaswani-99892181"
+      },
+      {
+        "id": "ACoAABPg53YBHdOvmp7pU72eDhcho-7cnwyxk1o",
+        "firstName": "Pia",
+        "lastName": "Santos",
+        "publicIdentifier": "piafsantos",
+        "linkedinUrl": "https://www.linkedin.com/in/piafsantos"
+      },
+      {
+        "id": "ACoAAACFbM8BJP_3CAVzYGvxIGrPJwno6hjA6Nc",
+        "firstName": "Sriya",
+        "lastName": "Santhanam",
+        "publicIdentifier": "sriya-santhanam-327b182",
+        "linkedinUrl": "https://www.linkedin.com/in/sriya-santhanam-327b182"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAAAPH3hkBD4YvYU1lCbTlnKlqFvJCZxL3KlQ",
+        "firstName": "Weiheng",
+        "lastName": "Zhang",
+        "publicIdentifier": "weiheng-zhang",
+        "linkedinUrl": "https://www.linkedin.com/in/weiheng-zhang"
+      },
+      {
+        "id": "ACoAACiYobsBIsFeygSvCrdgCI21Uxtamj_Z0tQ",
+        "firstName": "Dipan",
+        "lastName": "Debnath",
+        "position": "Architect | Rhino • Archicad• Enscape | Residential & Mixed-Use Projects | Frankfurt",
+        "publicIdentifier": "dipan-debnath-msc-arch",
+        "linkedinUrl": "https://www.linkedin.com/in/dipan-debnath-msc-arch"
+      },
+      {
+        "id": "ACoAADfmS2wB6QlQn8_FiRP_t-_bX710Xx3px8s",
+        "firstName": "zahra",
+        "lastName": "ziapour",
+        "position": "Architect at Self Employed",
+        "publicIdentifier": "zahra-ziapour-2100b7222",
+        "linkedinUrl": "https://www.linkedin.com/in/zahra-ziapour-2100b7222"
+      },
+      {
+        "id": "ACoAADh2rZ4BYyerx9AGrlwJaqDRyWZ2DojQrFY",
+        "firstName": "Susanne",
+        "lastName": "Reifenrath",
+        "position": "Dramaturgin/Performerin bei Self Employed",
+        "publicIdentifier": "susanne-reifenrath-07a2bb225",
+        "linkedinUrl": "https://www.linkedin.com/in/susanne-reifenrath-07a2bb225"
+      },
+      {
+        "id": "ACoAADoCOQMBekxyYC9_k2dAPCD0Ozdg5wlloPU",
+        "firstName": "Samuel",
+        "lastName": "Mamudu",
+        "position": "Architect|Artist|",
+        "publicIdentifier": "samuel-mamudu-543b20231",
+        "linkedinUrl": "https://www.linkedin.com/in/samuel-mamudu-543b20231"
+      },
+      {
+        "id": "ACoAAB9Hsl0B6y2SQmhXfVUAb0SsEQBAud43zbc",
+        "firstName": "Jaka",
+        "lastName": "Bizilj",
+        "position": "Producer, Founder, Investor, Human Rights Law",
+        "publicIdentifier": "jaka-bizilj-391903127",
+        "linkedinUrl": "https://www.linkedin.com/in/jaka-bizilj-391903127"
+      },
+      {
+        "id": "ACoAAFBKaIcBLE9r3syu3szXJU8JxTH4CDsddoY",
+        "firstName": "Jana",
+        "lastName": "Nirvana",
+        "position": "Love is an Art and Art is Love.",
+        "publicIdentifier": "jana-nirvana-b73160317",
+        "linkedinUrl": "https://www.linkedin.com/in/jana-nirvana-b73160317"
+      },
+      {
+        "id": "ACoAAER52JUBDrJy-DpqdBQUrlAjuowP8MaJNSc",
+        "firstName": "Elena",
+        "lastName": "Dikov",
+        "position": "Hypnotherapeutin | Entfalte dein Potenzial durch RTT® und HypnoX – Maßgeschneiderte Hypnose-Coachings für deine persönliche Transformation!",
+        "publicIdentifier": "elena-dikov",
+        "linkedinUrl": "https://www.linkedin.com/in/elena-dikov"
+      },
+      {
+        "id": "ACoAABue2zUBE8qT4lgmHgRf9sdzadBQKMXomz0",
+        "firstName": "Porkalai",
+        "lastName": "Sivanandam",
+        "position": "Architect ",
+        "publicIdentifier": "porkalai-sivanandam-93123410b",
+        "linkedinUrl": "https://www.linkedin.com/in/porkalai-sivanandam-93123410b"
+      },
+      {
+        "id": "ACoAABRLuv0BOxZTRrcnxtfgcJazqHV-zFy3FNQ",
+        "firstName": "Steve",
+        "lastName": "Bug",
+        "position": "DJ, Producer, Mixing Engineer, Music Production Coach",
+        "publicIdentifier": "steve-bug-a7905096",
+        "linkedinUrl": "https://www.linkedin.com/in/steve-bug-a7905096"
+      },
+      {
+        "id": "ACoAABzHGZgBh-BeOL6vq4-nr64dh8z2fFCFgyg",
+        "firstName": "Asteway",
+        "lastName": "Mussa",
+        "position": "Project Manager",
+        "publicIdentifier": "asteway-mussa-108838115",
+        "linkedinUrl": "https://www.linkedin.com/in/asteway-mussa-108838115"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAA4HOMcBjHQNGyUbyfYCY-sOZshkNFC30Jk"
+    }
+  }
+}

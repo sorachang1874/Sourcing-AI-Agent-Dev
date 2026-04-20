@@ -1,0 +1,1079 @@
+{
+  "member_urn": "506096965",
+  "message": "For high volume usage and custom pricing, visit https://app.enrichgraph.io or contact us at support@enrichgraph.io",
+  "entity_urn": "ACoAAB4qbUUBsc9H_NLZN2duLUOOyyFDm-k_ACo",
+  "contact_info": null,
+  "public_identifier": "rileyshanny",
+  "projects": {},
+  "first_name": "Riley",
+  "publications": {},
+  "last_name": "Shanahan",
+  "verifications": {
+    "sections": null,
+    "is_verified": true,
+    "joined_date": null
+  },
+  "background_photo_url": null,
+  "websites": [
+    "https://www.linkedin.com/in/rileyshanny"
+  ],
+  "certifications": {},
+  "profile_url": "https://www.linkedin.com/in/rileyshanny",
+  "experience": [
+    {
+      "company_name": "Thinking Machines Lab",
+      "date_range": {
+        "start": {
+          "year": 2026,
+          "month": 1,
+          "day": null,
+          "iso": "2026-01"
+        },
+        "end": null
+      },
+      "company_url": "https://www.linkedin.com/company/thinkingmachinesai/",
+      "company_id": "105913171",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+      "company_employee_count_range": {
+        "start": 11,
+        "end": 50
+      },
+      "company_industry": "Computer Software",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_name": "Thinking Machines Lab",
+          "date_range": {
+            "start": {
+              "year": 2026,
+              "month": 1,
+              "day": null,
+              "iso": "2026-01"
+            },
+            "end": null
+          },
+          "company_url": "https://www.linkedin.com/company/thinkingmachinesai/",
+          "company_id": "105913171",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "title": "Member of Technical Staff",
+          "company_employee_count_range": {
+            "start": 11,
+            "end": 50
+          },
+          "company_industry": "Computer Software",
+          "description": null,
+          "workplace_type": null,
+          "employment_type": "Full-time",
+          "location_name": "San Francisco Bay Area"
+        }
+      ]
+    },
+    {
+      "company_name": "Hex",
+      "date_range": {
+        "start": {
+          "year": 2022,
+          "month": 11,
+          "day": null,
+          "iso": "2022-11"
+        },
+        "end": {
+          "year": 2026,
+          "month": 1,
+          "day": null,
+          "iso": "2026-01"
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/hex-technologies/",
+      "company_id": "69022212",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGPSikej9EpbQ/company-logo_400_400/company-logo_400_400/0/1718232346589?e=1776902400&v=beta&t=dxtp_cQpDbsfVqMNjNmcheONGI9DRIfHPa_RxxvXet0",
+      "company_employee_count_range": {
+        "start": 51,
+        "end": 200
+      },
+      "company_industry": "Computer Software",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_name": "Hex",
+          "date_range": {
+            "start": {
+              "year": 2022,
+              "month": 11,
+              "day": null,
+              "iso": "2022-11"
+            },
+            "end": {
+              "year": 2026,
+              "month": 1,
+              "day": null,
+              "iso": "2026-01"
+            }
+          },
+          "company_url": "https://www.linkedin.com/company/hex-technologies/",
+          "company_id": "69022212",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGPSikej9EpbQ/company-logo_400_400/company-logo_400_400/0/1718232346589?e=1776902400&v=beta&t=dxtp_cQpDbsfVqMNjNmcheONGI9DRIfHPa_RxxvXet0",
+          "title": "Software Engineer",
+          "company_employee_count_range": {
+            "start": 51,
+            "end": 200
+          },
+          "company_industry": "Computer Software",
+          "description": "Product eng for core product and AI mostly. Also spent a year working on product infra and frameworks, which became a staffed team.",
+          "workplace_type": null,
+          "employment_type": "Full-time",
+          "location_name": "San Francisco Bay Area"
+        }
+      ]
+    },
+    {
+      "company_name": "Accel",
+      "date_range": {
+        "start": {
+          "year": 2018,
+          "month": 5,
+          "day": null,
+          "iso": "2018-05"
+        },
+        "end": {
+          "year": 2026,
+          "month": 1,
+          "day": null,
+          "iso": "2026-01"
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/accel-vc/",
+      "company_id": "17412",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQH_PauWkInHbg/company-logo_400_400/company-logo_400_400/0/1728561813044/accel_vc_logo?e=1776902400&v=beta&t=V1dyy10s8DfmhHGWfksY1YNtN9ulCqyKsedJFjUHbQs",
+      "company_employee_count_range": {
+        "start": 51,
+        "end": 200
+      },
+      "company_industry": "Venture Capital & Private Equity",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_name": "Accel",
+          "date_range": {
+            "start": {
+              "year": 2018,
+              "month": 5,
+              "day": null,
+              "iso": "2018-05"
+            },
+            "end": {
+              "year": 2026,
+              "month": 1,
+              "day": null,
+              "iso": "2026-01"
+            }
+          },
+          "company_url": "https://www.linkedin.com/company/accel-vc/",
+          "company_id": "17412",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQH_PauWkInHbg/company-logo_400_400/company-logo_400_400/0/1728561813044/accel_vc_logo?e=1776902400&v=beta&t=V1dyy10s8DfmhHGWfksY1YNtN9ulCqyKsedJFjUHbQs",
+          "title": "Accel Scholar",
+          "company_employee_count_range": {
+            "start": 51,
+            "end": 200
+          },
+          "company_industry": "Venture Capital & Private Equity",
+          "description": null,
+          "workplace_type": null,
+          "employment_type": null,
+          "location_name": "Berkeley"
+        }
+      ]
+    },
+    {
+      "company_name": "Bolt",
+      "date_range": {
+        "start": {
+          "year": 2021,
+          "month": 10,
+          "day": null,
+          "iso": "2021-10"
+        },
+        "end": {
+          "year": 2022,
+          "month": 11,
+          "day": null,
+          "iso": "2022-11"
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/bolt-com/",
+      "company_id": "4795130",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQGerub4etHRTw/company-logo_400_400/B4EZxIHsayGcAY-/0/1770736502840/bolt_com_logo?e=1776902400&v=beta&t=cFLL4ibWCU1IgjS5TBz350elWcTPfOmBH6X4Mrs8tgY",
+      "company_employee_count_range": {
+        "start": 201,
+        "end": 500
+      },
+      "company_industry": "Computer Software",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_name": "Bolt",
+          "date_range": {
+            "start": {
+              "year": 2021,
+              "month": 10,
+              "day": null,
+              "iso": "2021-10"
+            },
+            "end": {
+              "year": 2022,
+              "month": 11,
+              "day": null,
+              "iso": "2022-11"
+            }
+          },
+          "company_url": "https://www.linkedin.com/company/bolt-com/",
+          "company_id": "4795130",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQGerub4etHRTw/company-logo_400_400/B4EZxIHsayGcAY-/0/1770736502840/bolt_com_logo?e=1776902400&v=beta&t=cFLL4ibWCU1IgjS5TBz350elWcTPfOmBH6X4Mrs8tgY",
+          "title": "Software Engineer",
+          "company_employee_count_range": {
+            "start": 201,
+            "end": 500
+          },
+          "company_industry": "Computer Software",
+          "description": null,
+          "workplace_type": null,
+          "employment_type": "Full-time",
+          "location_name": "San Francisco Bay Area"
+        }
+      ]
+    },
+    {
+      "company_name": "Nines",
+      "date_range": {
+        "start": {
+          "year": 2019,
+          "month": 1,
+          "day": null,
+          "iso": "2019-01"
+        },
+        "end": {
+          "year": 2021,
+          "month": 10,
+          "day": null,
+          "iso": "2021-10"
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/ninesradiology/",
+      "company_id": "19137953",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQHL1XZLFQBdMg/company-logo_400_400/company-logo_400_400/0/1630568991093/ninesai_logo?e=1776902400&v=beta&t=EH4x_S5ps8CHkb-a9jSbL2KnsfM9RTg3z5yikivWPlU",
+      "company_employee_count_range": {
+        "start": 11,
+        "end": 50
+      },
+      "company_industry": "Biotechnology",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_name": "Nines",
+          "date_range": {
+            "start": {
+              "year": 2019,
+              "month": 1,
+              "day": null,
+              "iso": "2019-01"
+            },
+            "end": {
+              "year": 2021,
+              "month": 10,
+              "day": null,
+              "iso": "2021-10"
+            }
+          },
+          "company_url": "https://www.linkedin.com/company/ninesradiology/",
+          "company_id": "19137953",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQHL1XZLFQBdMg/company-logo_400_400/company-logo_400_400/0/1630568991093/ninesai_logo?e=1776902400&v=beta&t=EH4x_S5ps8CHkb-a9jSbL2KnsfM9RTg3z5yikivWPlU",
+          "title": "Software Engineer",
+          "company_employee_count_range": {
+            "start": 11,
+            "end": 50
+          },
+          "company_industry": "Biotechnology",
+          "description": "Left Cal as a junior for 6 months to work at Nines, then came back post grad. Nines (acquired by Sirona medical) was a Series A, Accel-backed startup developing a Tele-radiology + AI product. \nWorked as a product engineer to build the queuing / task management system for radiologists to read scans, ingest reports from large healthcare systems, and integrate ML into diagnostic flows.",
+          "workplace_type": null,
+          "employment_type": null,
+          "location_name": null
+        },
+        {
+          "company_name": "Nines",
+          "date_range": {
+            "start": {
+              "year": 2019,
+              "month": 1,
+              "day": null,
+              "iso": "2019-01"
+            },
+            "end": {
+              "year": 2019,
+              "month": 7,
+              "day": null,
+              "iso": "2019-07"
+            }
+          },
+          "company_url": "https://www.linkedin.com/company/ninesradiology/",
+          "company_id": "19137953",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQHL1XZLFQBdMg/company-logo_400_400/company-logo_400_400/0/1630568991093/ninesai_logo?e=1776902400&v=beta&t=EH4x_S5ps8CHkb-a9jSbL2KnsfM9RTg3z5yikivWPlU",
+          "title": "Software Engineer Intern ",
+          "company_employee_count_range": {
+            "start": 11,
+            "end": 50
+          },
+          "company_industry": "Biotechnology",
+          "description": "- Joined Accel-backed series A startup motivated to automate healthcare diagnoses and predictions by applying machine learning to various imaging modalities. \n- Built NLP pipeline and evaluated several models in their ability to process and predict medical diagnoses from free-text radiology reports. The team was able to use NLP-generated labels as a source of ground truth for image model training. \n- Facilitated communications with hospital partners and engineering teams to anonymize patient data quickly while remaining HIPAA compliant.",
+          "workplace_type": null,
+          "employment_type": null,
+          "location_name": "Palo Alto "
+        }
+      ]
+    },
+    {
+      "company_name": "Google",
+      "date_range": {
+        "start": {
+          "year": 2019,
+          "month": 5,
+          "day": null,
+          "iso": "2019-05"
+        },
+        "end": {
+          "year": 2019,
+          "month": 8,
+          "day": null,
+          "iso": "2019-08"
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/google/",
+      "company_id": "1441",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+      "company_employee_count_range": {
+        "start": 10001,
+        "end": null
+      },
+      "company_industry": "Computer Software",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_name": "Google",
+          "date_range": {
+            "start": {
+              "year": 2019,
+              "month": 5,
+              "day": null,
+              "iso": "2019-05"
+            },
+            "end": {
+              "year": 2019,
+              "month": 8,
+              "day": null,
+              "iso": "2019-08"
+            }
+          },
+          "company_url": "https://www.linkedin.com/company/google/",
+          "company_id": "1441",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+          "title": "Software Engineering Intern, Gmail Intelligence",
+          "company_employee_count_range": {
+            "start": 10001,
+            "end": null
+          },
+          "company_industry": "Computer Software",
+          "description": "- Developed and launched automatic label and filter suggestions on iOS, Android, and web clients.\n- Worked closely with SREs and QA to complete rollout plan and implement server and client experiments for fine-tuning of thresholds, A/B testing, and easy rollbacks. \n- Collaborated with UX and PM to optimize thresholds for workflow suggestions, analyzing and defining user affinity with email domains and senders. Predicted coverage and acceptance rates through offline analysis.",
+          "workplace_type": null,
+          "employment_type": "Internship",
+          "location_name": null
+        }
+      ]
+    },
+    {
+      "company_name": "Google",
+      "date_range": {
+        "start": {
+          "year": 2018,
+          "month": 5,
+          "day": null,
+          "iso": "2018-05"
+        },
+        "end": {
+          "year": 2018,
+          "month": 8,
+          "day": null,
+          "iso": "2018-08"
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/google/",
+      "company_id": "1441",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+      "company_employee_count_range": {
+        "start": 10001,
+        "end": null
+      },
+      "company_industry": "Computer Software",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_name": "Google",
+          "date_range": {
+            "start": {
+              "year": 2018,
+              "month": 5,
+              "day": null,
+              "iso": "2018-05"
+            },
+            "end": {
+              "year": 2018,
+              "month": 8,
+              "day": null,
+              "iso": "2018-08"
+            }
+          },
+          "company_url": "https://www.linkedin.com/company/google/",
+          "company_id": "1441",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+          "title": "Software Engineering Intern, Google Earth Engine",
+          "company_employee_count_range": {
+            "start": 10001,
+            "end": null
+          },
+          "company_industry": "Computer Software",
+          "description": "- Interned for the Earth Engine team, in the Geo (maps) engineering org. Earth Engine provides a platform for planetary-scale analysis on a multi-petabyte catalog of satellite imagery and geospatial datasets. \n- Created a Google Cloud service and user facing tool to enable Earth Engine users to construct and download animated GIFs by selecting a time period and coordinate bounds from a dataset. \n- Provided scientists and journalists with tools to more effectively share research and information to the general public and policy makers. \n- Please see the attached link for an interview on Google's blog about my summer!",
+          "workplace_type": null,
+          "employment_type": "Internship",
+          "location_name": null
+        }
+      ]
+    },
+    {
+      "company_name": "Extended Reality at Berkeley",
+      "date_range": {
+        "start": {
+          "year": 2018,
+          "month": 1,
+          "day": null,
+          "iso": "2018-01"
+        },
+        "end": {
+          "year": 2018,
+          "month": 5,
+          "day": null,
+          "iso": "2018-05"
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/xratb/",
+      "company_id": "12960352",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQFfh9oKlnEoCA/company-logo_400_400/company-logo_400_400/0/1630637081176/virtual_reality_at_berkeley_logo?e=1776902400&v=beta&t=YcdCdnTZZ-XTVCzQiSPV1szHwod_PeSiLGK1wpQog2A",
+      "company_employee_count_range": {
+        "start": 51,
+        "end": 200
+      },
+      "company_industry": "Computer Software",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_name": "Virtual Reality at Berkeley",
+          "date_range": {
+            "start": {
+              "year": 2018,
+              "month": 1,
+              "day": null,
+              "iso": "2018-01"
+            },
+            "end": {
+              "year": 2018,
+              "month": 5,
+              "day": null,
+              "iso": "2018-05"
+            }
+          },
+          "company_url": "https://www.linkedin.com/company/xratb/",
+          "company_id": "12960352",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQFfh9oKlnEoCA/company-logo_400_400/company-logo_400_400/0/1630637081176/virtual_reality_at_berkeley_logo?e=1776902400&v=beta&t=YcdCdnTZZ-XTVCzQiSPV1szHwod_PeSiLGK1wpQog2A",
+          "title": "Unity Developer",
+          "company_employee_count_range": {
+            "start": 51,
+            "end": 200
+          },
+          "company_industry": "Computer Software",
+          "description": "- Partnered with Jennifer Doudna's research lab on UC Berkeley's campus in order to provide students with an education platform to more deeply understand CRISPR gene editing technology. \n- Collaborated with small team to build an iOS app and visual representations in augmented reality of the different CRISPR gene structures and proteins.",
+          "workplace_type": null,
+          "employment_type": null,
+          "location_name": "Berkeley"
+        }
+      ]
+    },
+    {
+      "company_name": "University of California, Berkeley, Haas School of Business",
+      "date_range": {
+        "start": {
+          "year": 2017,
+          "month": 7,
+          "day": null,
+          "iso": "2017-07"
+        },
+        "end": {
+          "year": 2018,
+          "month": 5,
+          "day": null,
+          "iso": "2018-05"
+        }
+      },
+      "company_url": "https://www.linkedin.com/school/berkeley-haas/",
+      "company_id": "2519",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQEgtgO__FQAyw/company-logo_400_400/B56ZoSxhMVJwAY-/0/1761251562935/berkeley_haas_logo?e=1776902400&v=beta&t=NE-QcoDc6DJ2vB6Oj-9R9PgsTA_B5qlR27cnUKfE-rc",
+      "company_employee_count_range": {
+        "start": 201,
+        "end": 500
+      },
+      "company_industry": "Higher Education",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_name": "University of California, Berkeley, Haas School of Business",
+          "date_range": {
+            "start": {
+              "year": 2017,
+              "month": 7,
+              "day": null,
+              "iso": "2017-07"
+            },
+            "end": {
+              "year": 2018,
+              "month": 5,
+              "day": null,
+              "iso": "2018-05"
+            }
+          },
+          "company_url": "https://www.linkedin.com/school/berkeley-haas/",
+          "company_id": "2519",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQEgtgO__FQAyw/company-logo_400_400/B56ZoSxhMVJwAY-/0/1761251562935/berkeley_haas_logo?e=1776902400&v=beta&t=NE-QcoDc6DJ2vB6Oj-9R9PgsTA_B5qlR27cnUKfE-rc",
+          "title": "Mobile Application Developer",
+          "company_employee_count_range": {
+            "start": 201,
+            "end": 500
+          },
+          "company_industry": "Higher Education",
+          "description": "• Selected as lead developer to create app that promotes safe childbirth in Kenya through program designed to analyze key data, anticipate health complications, and recommend\nmedical actions.\n• Tasked to provide multiple interfaces to allow communication and transfer of medical data between\nmedical assistants, expectant mothers, clinics, and family members",
+          "workplace_type": null,
+          "employment_type": null,
+          "location_name": "Berkeley California "
+        }
+      ]
+    },
+    {
+      "company_name": "DiversaTech",
+      "date_range": {
+        "start": {
+          "year": 2016,
+          "month": 8,
+          "day": null,
+          "iso": "2016-08"
+        },
+        "end": {
+          "year": 2018,
+          "month": 5,
+          "day": null,
+          "iso": "2018-05"
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/diversatech-berkeley/",
+      "company_id": "10503603",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQFBYLP3j-mm5w/company-logo_400_400/company-logo_400_400/0/1724438606230/diversatech_berkeley_logo?e=1776902400&v=beta&t=Lmcc6_sWH9CRECBvzP5pahi70_ljRmKujys4i7hbvdE",
+      "company_employee_count_range": {
+        "start": 11,
+        "end": 50
+      },
+      "company_industry": "Management Consulting",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_name": "DiversaTech at Berkeley",
+          "date_range": {
+            "start": {
+              "year": 2016,
+              "month": 8,
+              "day": null,
+              "iso": "2016-08"
+            },
+            "end": {
+              "year": 2018,
+              "month": 5,
+              "day": null,
+              "iso": "2018-05"
+            }
+          },
+          "company_url": "https://www.linkedin.com/company/diversatech-berkeley/",
+          "company_id": "10503603",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQFBYLP3j-mm5w/company-logo_400_400/company-logo_400_400/0/1724438606230/diversatech_berkeley_logo?e=1776902400&v=beta&t=Lmcc6_sWH9CRECBvzP5pahi70_ljRmKujys4i7hbvdE",
+          "title": "Project Manager and Senior Tech Consultant",
+          "company_employee_count_range": {
+            "start": 11,
+            "end": 50
+          },
+          "company_industry": "Management Consulting",
+          "description": "Spring 2018: Participated on team for client LinkedIn. Performed international market research and provided recommendations for a new confidential feature on the LinkedIn platform hoping to ship within the next year. \n\nFall 2017: Project manager on team of seven other consultants for EdTech client to perform market research on countries and international schools to allow for effective expansion into several international student markets.\n\nSpring 2017: Selected to lead a tech consulting team and project. Responsibilities include recruiting a tech company as a client and organizing a consulting project, as well as recruiting and hiring a team of Berkeley students to serve as consultants. \n\nFall 2016: Selected to participate in semester-long tech consulting project for Latin American start-up, Kiwi. I am working directly with the CEO and founder of the start-up to deliver a strategy, road map, and new plan for the expected official lunch in Spring 2017.",
+          "workplace_type": null,
+          "employment_type": null,
+          "location_name": "Berkeley"
+        }
+      ]
+    },
+    {
+      "company_name": "The New York Times",
+      "date_range": {
+        "start": {
+          "year": 2017,
+          "month": 5,
+          "day": null,
+          "iso": "2017-05"
+        },
+        "end": {
+          "year": 2017,
+          "month": 8,
+          "day": null,
+          "iso": "2017-08"
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/the-new-york-times/",
+      "company_id": "4236",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQEp-f9Ptu2yVQ/company-logo_400_400/company-logo_400_400/0/1631319717018?e=1776902400&v=beta&t=EZpld19HsR2z88YabbH7JujNa595TS-UG4avXfKgrEM",
+      "company_employee_count_range": {
+        "start": 1001,
+        "end": 5000
+      },
+      "company_industry": "Newspapers",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_name": "The New York Times",
+          "date_range": {
+            "start": {
+              "year": 2017,
+              "month": 5,
+              "day": null,
+              "iso": "2017-05"
+            },
+            "end": {
+              "year": 2017,
+              "month": 8,
+              "day": null,
+              "iso": "2017-08"
+            }
+          },
+          "company_url": "https://www.linkedin.com/company/the-new-york-times/",
+          "company_id": "4236",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQEp-f9Ptu2yVQ/company-logo_400_400/company-logo_400_400/0/1631319717018?e=1776902400&v=beta&t=EZpld19HsR2z88YabbH7JujNa595TS-UG4avXfKgrEM",
+          "title": "Software Engineer Internship",
+          "company_employee_count_range": {
+            "start": 1001,
+            "end": 5000
+          },
+          "company_industry": "Newspapers",
+          "description": "• Developed drawer bar and design for navigation to different article sections and account settings\n• Served as scrum master for 10-week long intern project to increase user engagement and provide enhanced accessibility to evergreen and featured content\n• Collaborated with advertising team to implement additional Localytics and Firebase events to enhance\nuser engagement tools\n• Wrote unit tests using Mockito and evaluated JSON files and ad calls through Charles Proxy",
+          "workplace_type": null,
+          "employment_type": null,
+          "location_name": "New York City"
+        }
+      ]
+    },
+    {
+      "company_name": "University of California, Berkeley",
+      "date_range": {
+        "start": {
+          "year": 2017,
+          "month": 1,
+          "day": null,
+          "iso": "2017-01"
+        },
+        "end": {
+          "year": 2017,
+          "month": 6,
+          "day": null,
+          "iso": "2017-06"
+        }
+      },
+      "company_url": "https://www.linkedin.com/school/uc-berkeley/",
+      "company_id": "2517",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_400_400/company-logo_400_400/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=ihsqGpnHzj0nlc8nr3zQwTYbq6GYQDs_WRmOHxXO6Cs",
+      "company_employee_count_range": {
+        "start": 10001,
+        "end": null
+      },
+      "company_industry": "Higher Education",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_name": "University of California, Berkeley",
+          "date_range": {
+            "start": {
+              "year": 2017,
+              "month": 1,
+              "day": null,
+              "iso": "2017-01"
+            },
+            "end": {
+              "year": 2017,
+              "month": 6,
+              "day": null,
+              "iso": "2017-06"
+            }
+          },
+          "company_url": "https://www.linkedin.com/school/uc-berkeley/",
+          "company_id": "2517",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_400_400/company-logo_400_400/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=ihsqGpnHzj0nlc8nr3zQwTYbq6GYQDs_WRmOHxXO6Cs",
+          "title": "Researcher",
+          "company_employee_count_range": {
+            "start": 10001,
+            "end": null
+          },
+          "company_industry": "Higher Education",
+          "description": "Worked on a cognitive research project to transform STEM learning for middle school students specifically from under-served schools in Los Angeles. \nMy responsibilities include analyzing primary data from students and teachers and researching current debugging practices and protocol. I hope to redesign debugging practices by offering and implementing an online platform.",
+          "workplace_type": null,
+          "employment_type": null,
+          "location_name": "Berkeley, California"
+        }
+      ]
+    },
+    {
+      "company_name": "Expedia Group",
+      "date_range": {
+        "start": {
+          "year": 2016,
+          "month": 6,
+          "day": null,
+          "iso": "2016-06"
+        },
+        "end": {
+          "year": 2016,
+          "month": 8,
+          "day": null,
+          "iso": "2016-08"
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/expediagroup/",
+      "company_id": "2751",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQGCJ4PG0WVumA/company-logo_400_400/company-logo_400_400/0/1630646301487/expedia_logo?e=1776902400&v=beta&t=KNCowG9LWlrczwSlx15nKNmVPTWLz03D4xEXzsvlUTc",
+      "company_employee_count_range": {
+        "start": 10001,
+        "end": null
+      },
+      "company_industry": "Computer Software",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_name": "Expedia, Inc.",
+          "date_range": {
+            "start": {
+              "year": 2016,
+              "month": 6,
+              "day": null,
+              "iso": "2016-06"
+            },
+            "end": {
+              "year": 2016,
+              "month": 8,
+              "day": null,
+              "iso": "2016-08"
+            }
+          },
+          "company_url": "https://www.linkedin.com/company/expediagroup/",
+          "company_id": "2751",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQGCJ4PG0WVumA/company-logo_400_400/company-logo_400_400/0/1630646301487/expedia_logo?e=1776902400&v=beta&t=KNCowG9LWlrczwSlx15nKNmVPTWLz03D4xEXzsvlUTc",
+          "title": "Mobile App Development Intern",
+          "company_employee_count_range": {
+            "start": 10001,
+            "end": null
+          },
+          "company_industry": "Computer Software",
+          "description": "As a member of the Android Mobile App team, I worked to enhance the design of the app's user interface, create AB tests, and fix bugs. I collaborated and worked with the design, database, and iOS teams throughout all stages of the development life cycle of a product. I had the opportunity to work on both internal projects to improve the efficiency of the software engineers and also stories for the android main Expedia app that also impacted several of Expedia Inc's companies such as Hotwire and Travelocity. \nI am most proud of creating a feature Bug Reporter, which is a android library easily implemented within any android mobile development team. It makes the bug reporting process much more efficient for software engineers by allowing the user to find, report, and identify the cause of a bug. Bug reporter is designed to detect a user shaking the device, which in turn creates a screenshot that can be annotated and then automatically sent within an email app on the android test device attaching device information, the annotated screenshot, and a log file. Bug Reporter is now actively and successfully being used within Expedia.",
+          "workplace_type": null,
+          "employment_type": null,
+          "location_name": null
+        }
+      ]
+    },
+    {
+      "company_name": "Mathnasium - The Math Learning Center",
+      "date_range": {
+        "start": {
+          "year": 2016,
+          "month": 1,
+          "day": null,
+          "iso": "2016-01"
+        },
+        "end": {
+          "year": 2016,
+          "month": 6,
+          "day": null,
+          "iso": "2016-06"
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/mathnasium--the-math-learning-center/",
+      "company_id": "276439",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/C4D0BAQHunkgUAh9BxA/company-logo_400_400/company-logo_400_400/0/1631303185539?e=1776902400&v=beta&t=irMApxHnDWIunB5EEAN1RDizEoobyhfkxIMHUYXTndg",
+      "company_employee_count_range": {
+        "start": 1001,
+        "end": 5000
+      },
+      "company_industry": "Education Management",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_name": "Mathnasium - The Math Learning Center",
+          "date_range": {
+            "start": {
+              "year": 2016,
+              "month": 1,
+              "day": null,
+              "iso": "2016-01"
+            },
+            "end": {
+              "year": 2016,
+              "month": 6,
+              "day": null,
+              "iso": "2016-06"
+            }
+          },
+          "company_url": "https://www.linkedin.com/company/mathnasium--the-math-learning-center/",
+          "company_id": "276439",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C4D0BAQHunkgUAh9BxA/company-logo_400_400/company-logo_400_400/0/1631303185539?e=1776902400&v=beta&t=irMApxHnDWIunB5EEAN1RDizEoobyhfkxIMHUYXTndg",
+          "title": "Group Math Tutor",
+          "company_employee_count_range": {
+            "start": 1001,
+            "end": 5000
+          },
+          "company_industry": "Education Management",
+          "description": "Tutored elementary and middle school students in pre-algebra, algebra, and geometry.",
+          "workplace_type": null,
+          "employment_type": null,
+          "location_name": "Menlo Park"
+        }
+      ]
+    },
+    {
+      "company_name": "Girls Who Code",
+      "date_range": {
+        "start": {
+          "year": 2015,
+          "month": 6,
+          "day": null,
+          "iso": "2015-06"
+        },
+        "end": {
+          "year": 2015,
+          "month": 8,
+          "day": null,
+          "iso": "2015-08"
+        }
+      },
+      "company_url": "https://www.linkedin.com/school/girlswhocode/",
+      "company_id": "3978634",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/C4D0BAQEHUTYYyPFEhQ/company-logo_400_400/company-logo_400_400/0/1630509785189/girlswhocode_logo?e=1776902400&v=beta&t=3UluAYufOCSva76jVdbgbCUfbTwoaOnepx8xarnli38",
+      "company_employee_count_range": {
+        "start": 51,
+        "end": 200
+      },
+      "company_industry": "Civic & Social Organization",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_name": "Girls Who Code",
+          "date_range": {
+            "start": {
+              "year": 2015,
+              "month": 6,
+              "day": null,
+              "iso": "2015-06"
+            },
+            "end": {
+              "year": 2015,
+              "month": 8,
+              "day": null,
+              "iso": "2015-08"
+            }
+          },
+          "company_url": "https://www.linkedin.com/school/girlswhocode/",
+          "company_id": "3978634",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C4D0BAQEHUTYYyPFEhQ/company-logo_400_400/company-logo_400_400/0/1630509785189/girlswhocode_logo?e=1776902400&v=beta&t=3UluAYufOCSva76jVdbgbCUfbTwoaOnepx8xarnli38",
+          "title": "Participant",
+          "company_employee_count_range": {
+            "start": 51,
+            "end": 200
+          },
+          "company_industry": "Civic & Social Organization",
+          "description": null,
+          "workplace_type": null,
+          "employment_type": null,
+          "location_name": "Hosted by Stanford and Intel"
+        }
+      ]
+    },
+    {
+      "company_name": "Peninsula Bridge",
+      "date_range": {
+        "start": {
+          "year": 2015,
+          "month": 6,
+          "day": null,
+          "iso": "2015-06"
+        },
+        "end": {
+          "year": 2015,
+          "month": 7,
+          "day": null,
+          "iso": "2015-07"
+        }
+      },
+      "company_url": null,
+      "company_id": null,
+      "company_logo_url": null,
+      "company_employee_count_range": null,
+      "company_industry": null,
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_name": "Peninsula Bridge",
+          "date_range": {
+            "start": {
+              "year": 2015,
+              "month": 6,
+              "day": null,
+              "iso": "2015-06"
+            },
+            "end": {
+              "year": 2015,
+              "month": 7,
+              "day": null,
+              "iso": "2015-07"
+            }
+          },
+          "company_url": null,
+          "company_id": null,
+          "company_logo_url": null,
+          "title": "Legacy Community Service Scholarship and Grant Recipient",
+          "company_employee_count_range": null,
+          "company_industry": null,
+          "description": "I applied for and received a full time grant from the Legacy Foundation based on my proposal to design, develop, and teach a first-ever computer science course for an established non-profit dedicated to advancing education for underserved youth",
+          "workplace_type": null,
+          "employment_type": null,
+          "location_name": "Menlo Park"
+        }
+      ]
+    }
+  ],
+  "network_info": null,
+  "profile_photo_url": "https://media.licdn.com/dms/image/v2/D5603AQE3gG7froM7Og/profile-displayphoto-crop_800_800/B56ZvajehVHcAU-/0/1768898302815?e=1776902400&v=beta&t=e6oABxw92PWM0mles6aPvBC8MMYq4i9RktKEjR7TMYg",
+  "skills": {},
+  "industry": "Internet",
+  "organizations": [
+    {
+      "name": "UC Berkeley CS Scholars Cohort",
+      "date_range": {
+        "start": {
+          "year": 2016,
+          "month": 8,
+          "day": null,
+          "iso": "2016-08"
+        },
+        "end": null
+      },
+      "url": null,
+      "company_id": null,
+      "title": "UC Berkeley CS Scholars Cohort",
+      "company": null,
+      "image_url": null,
+      "position_held": null,
+      "description": "Accepted into program within Berkeley computer science department that works to support a diverse group of students and minorities interested in pursuing computer science and other fields in STEM. "
+    }
+  ],
+  "courses": {},
+  "volunteer_experiences": {},
+  "languages": {},
+  "education": [
+    {
+      "activities": "Cal Alumni Leadership Scholarship",
+      "grade": null,
+      "description": null,
+      "school_name": "University of California, Berkeley",
+      "school_id": "17939",
+      "date_range": {
+        "start": {
+          "year": 2016,
+          "month": null,
+          "day": null,
+          "iso": "2016"
+        },
+        "end": {
+          "year": 2020,
+          "month": null,
+          "day": null,
+          "iso": "2020"
+        }
+      },
+      "school_url": "https://www.linkedin.com/school/uc-berkeley/",
+      "school_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_400_400/company-logo_400_400/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=ihsqGpnHzj0nlc8nr3zQwTYbq6GYQDs_WRmOHxXO6Cs",
+      "degree": null,
+      "field_of_study": "Computer Science"
+    }
+  ],
+  "test_scores": {},
+  "badges": {
+    "is_hiring": false,
+    "premium": false,
+    "creator": false,
+    "influencer": false,
+    "top_voice": false,
+    "open_to_work": false
+  },
+  "honors": [
+    {
+      "name": "Cal Alumni Leadership Scholarship",
+      "date_range": {
+        "start": {
+          "year": 2016,
+          "month": 6,
+          "day": null,
+          "iso": "2016-06"
+        },
+        "end": null
+      },
+      "url": null,
+      "company_id": null,
+      "title": "Cal Alumni Leadership Scholarship",
+      "company": null,
+      "image_url": null,
+      "position_held": null,
+      "description": "Received a scholarship for my freshmen year of college based on my leadership skills and experience throughout high school. "
+    },
+    {
+      "name": "Sacred Heart Preparatory Awards",
+      "date_range": {
+        "start": {
+          "year": 2016,
+          "month": 5,
+          "day": null,
+          "iso": "2016-05"
+        },
+        "end": null
+      },
+      "url": null,
+      "company_id": null,
+      "title": "Sacred Heart Preparatory Awards",
+      "company": null,
+      "image_url": null,
+      "position_held": null,
+      "description": "AP Physics Award\nAP Calculus Award\nSocial Sciences Department Award (Psychology)\nForeign Languages Department Award (Spanish)\nAlgebra 2 Award\n"
+    }
+  ],
+  "patents": {},
+  "location": {
+    "country": "United States",
+    "name": "San Francisco Bay Area",
+    "country_code": "US",
+    "city": null
+  },
+  "headline": "Eng at Thinking Machines ",
+  "summary": null
+}

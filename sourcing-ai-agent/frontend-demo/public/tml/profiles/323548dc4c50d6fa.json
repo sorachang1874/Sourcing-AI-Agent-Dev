@@ -1,0 +1,302 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAFzMsh0BShVfqNic018izVd-K0t7Bv4YkhQ",
+    "profile_url": "https://www.linkedin.com/in/ACwAAFzMsh0BShVfqNic018izVd-K0t7Bv4YkhQ"
+  },
+  "item": {
+    "id": "ACoAAFzMsh0BHHjGR2VcHCUkVfCDVhzascIsQWc",
+    "publicIdentifier": "manjula-manjula-8254aa375",
+    "linkedinUrl": "https://www.linkedin.com/in/manjula-manjula-8254aa375",
+    "firstName": "Manjula",
+    "lastName": "Manjula",
+    "emails": [
+      {
+        "email": "manjula.manjula@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Billing Typist at Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Bengaluru, Karnataka, India",
+      "countryCode": "IN",
+      "parsed": {
+        "text": "Bengaluru, India",
+        "countryCode": "IN",
+        "regionCode": null,
+        "country": "India",
+        "countryFull": "India",
+        "state": "Karnataka",
+        "city": "Bengaluru"
+      }
+    },
+    "objectUrn": "1556918813",
+    "registeredAt": "2025-07-16T06:30:04.194Z",
+    "topSkills": null,
+    "connectionsCount": 0,
+    "followerCount": 0,
+    "verified": false,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": null,
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": null,
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Billing Typist at Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Billing Typist",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": null,
+        "description": null,
+        "skills": null,
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAAItEFIBHAslztZ0We_icX_YZljepH2USOg",
+        "firstName": "Jonathan",
+        "lastName": "Eldan",
+        "position": "Chief Financial Officer at Zeotap",
+        "publicIdentifier": "jonathan-eldan-cpa",
+        "linkedinUrl": "https://www.linkedin.com/in/jonathan-eldan-cpa"
+      },
+      {
+        "id": "ACoAAAQ4Q7kByw3YKf2rFlmWzRMF7P8Gw4S9PIU",
+        "firstName": "Yinghai",
+        "lastName": "L.",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "yinghai83",
+        "linkedinUrl": "https://www.linkedin.com/in/yinghai83"
+      },
+      {
+        "id": "ACoAAAlv47wBKiTjsoad4IxsMejn9BBd66GIh8M",
+        "firstName": "Adriaan",
+        "lastName": "Kroon",
+        "position": "Special projects @ Mogotes",
+        "publicIdentifier": "adriaan-kroon-a2403445",
+        "linkedinUrl": "https://www.linkedin.com/in/adriaan-kroon-a2403445"
+      },
+      {
+        "id": "ACoAACNSuUcBIKGwmx4l1BGHGGJkpzljbmlMwJg",
+        "firstName": "Devednya",
+        "lastName": "Vyas",
+        "position": "Product Design | BrowserStack",
+        "publicIdentifier": "devednya-vyas-807575146",
+        "linkedinUrl": "https://www.linkedin.com/in/devednya-vyas-807575146"
+      },
+      {
+        "id": "ACoAADKBjakBe8lSY3LvP87-L9u7KYrvubdv8TA",
+        "firstName": "Abdul Nazer",
+        "lastName": "V",
+        "position": "Billing Typist at Silky Weddings",
+        "publicIdentifier": "abdul-nazer-v-3499391b7",
+        "linkedinUrl": "https://www.linkedin.com/in/abdul-nazer-v-3499391b7"
+      },
+      {
+        "id": "ACoAACk3-5oB1BP46nuYcIu9Sc81S-aimMgCZeU",
+        "firstName": "Pranshu",
+        "lastName": "Katiyar",
+        "publicIdentifier": "pranshukatiyar",
+        "linkedinUrl": "https://www.linkedin.com/in/pranshukatiyar"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAABGzJXcBFaJqVFgqgYNbhaPVKRkP3iG33dA",
+        "firstName": "Noah",
+        "lastName": "Shpak",
+        "position": "Thinking Machines",
+        "publicIdentifier": "nshpak",
+        "linkedinUrl": "https://www.linkedin.com/in/nshpak"
+      },
+      {
+        "id": "ACoAAAAWldQBOsoCXLpqsc_2VwUTUy0CbOeaOjE",
+        "firstName": "Srinivas",
+        "lastName": "Narayanan",
+        "publicIdentifier": "srinivasnarayanan",
+        "linkedinUrl": "https://www.linkedin.com/in/srinivasnarayanan"
+      },
+      {
+        "id": "ACoAACPkWxEBKT87wOQm-fzblhLVPteGIpUhii0",
+        "firstName": "Aswin",
+        "lastName": "Nagarajan",
+        "publicIdentifier": "aswin-nagarajan-a957b8149",
+        "linkedinUrl": "https://www.linkedin.com/in/aswin-nagarajan-a957b8149"
+      },
+      {
+        "id": "ACoAAAmf5bQBE9zWTvtIZlqQPzW22G4Tss9cb0E",
+        "firstName": "Andrew",
+        "lastName": "Lee",
+        "position": "Design at Thinking Machines Lab",
+        "publicIdentifier": "alhyunsoo",
+        "linkedinUrl": "https://www.linkedin.com/in/alhyunsoo"
+      },
+      {
+        "id": "ACoAABDME6QBnHeQ_vvVN5D2kVRik33pS3BwXkw",
+        "firstName": "Qamar",
+        "lastName": "Sayyed",
+        "position": "Production Head Factory mgmt. at Weidmuller Saudi Arabia",
+        "publicIdentifier": "qamar-sayyed-4844647a",
+        "linkedinUrl": "https://www.linkedin.com/in/qamar-sayyed-4844647a"
+      },
+      {
+        "id": "ACoAAFzBUR0Bt1zRKAzI8OS7_g6ytwU9UvfJwnI",
+        "firstName": "Lathika",
+        "lastName": "gunasekaran",
+        "position": "Digital Marketing Manager at Thinking Machines Lab",
+        "publicIdentifier": "lathika-gunasekaran-1651ab375",
+        "linkedinUrl": "https://www.linkedin.com/in/lathika-gunasekaran-1651ab375"
+      },
+      {
+        "id": "ACoAACKyU4wBgf1X7dfUvYdRkHWZhPH5ddsmcVg",
+        "firstName": "Tanupriya",
+        "lastName": "S.",
+        "position": "Machine Learning Engineer 3 @ Expedia | Google APAC WomenTechmakers Scholar 2018",
+        "publicIdentifier": "tanupriyasingh",
+        "linkedinUrl": "https://www.linkedin.com/in/tanupriyasingh"
+      },
+      {
+        "id": "ACoAADwrCKUB0FU7B3O7AIg9j_wieI-QOvJrtEE",
+        "firstName": "Katy",
+        "lastName": "Liemandt",
+        "position": "TML | San Francisco",
+        "publicIdentifier": "katy-liemandt-399092242",
+        "linkedinUrl": "https://www.linkedin.com/in/katy-liemandt-399092242"
+      },
+      {
+        "id": "ACoAADVXPNMBPF1WJV_QPX8hWAS3572hzH5-frw",
+        "firstName": "NIJAM",
+        "lastName": "KOTWAL",
+        "position": "Operation Engineer at ABS Oil and Gas Solution LLC",
+        "publicIdentifier": "nijam-kotwal-64385320b",
+        "linkedinUrl": "https://www.linkedin.com/in/nijam-kotwal-64385320b"
+      },
+      {
+        "id": "ACoAADjypFcByoidA4wL4z0hf2nLOvKGUNSC6qE",
+        "firstName": "Azgar",
+        "lastName": "Shaik",
+        "publicIdentifier": "nlpwithazgar",
+        "linkedinUrl": "https://www.linkedin.com/in/nlpwithazgar"
+      },
+      {
+        "id": "ACoAAFknqokBb3MFZzNuYeNDDCHNA0Nxw7aaCo8",
+        "firstName": "Sulbha",
+        "lastName": "Kutwal",
+        "position": "Senior Human Resource Executive at GuruSchools LLC,Guru Education, Guru Hospitality, Intern Guru and Guru Consulting.",
+        "publicIdentifier": "sulbha-kutwal-809b20358",
+        "linkedinUrl": "https://www.linkedin.com/in/sulbha-kutwal-809b20358"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "position": "Co-Founder and CEO at Thinking Machines Lab",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAAD5jySMB2A8PEPOfyMLVE2Txm7fjb4z7OIo",
+        "firstName": "Asmaa",
+        "lastName": "Khalid",
+        "position": "Talent Acquisition coordinator @ Al mouyasser - Fattal group | Communication | Coordination | Leadership",
+        "publicIdentifier": "asmaa-khalid-abdulrazzaq",
+        "linkedinUrl": "https://www.linkedin.com/in/asmaa-khalid-abdulrazzaq"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAFzMsh0BShVfqNic018izVd-K0t7Bv4YkhQ"
+    }
+  }
+}

@@ -1,0 +1,648 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAACmzAtgB4CHtDfWnlg9FmTVVgz0xGuLyCCU",
+    "profile_url": "https://www.linkedin.com/in/ACwAACmzAtgB4CHtDfWnlg9FmTVVgz0xGuLyCCU"
+  },
+  "item": {
+    "id": "ACoAACmzAtgBiDGd-HW1TzeGD6e3xWxnqDi9o-0",
+    "publicIdentifier": "zitongyang",
+    "linkedinUrl": "https://www.linkedin.com/in/zitongyang",
+    "firstName": "Zitong",
+    "lastName": "Yang",
+    "emails": [
+      {
+        "email": "zitong.yang@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Continually self-improving AI",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco Bay Area",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "699597528",
+    "registeredAt": "2018-12-07T23:49:04.835Z",
+    "topSkills": null,
+    "connectionsCount": 761,
+    "followerCount": 829,
+    "verified": true,
+    "about": "https://zitongyang.github.io/",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 12,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "17926",
+        "companyId": "1792",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1792/",
+        "schoolName": "Stanford University"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/C5603AQFvEyNaW1zudg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1651554330010?e=1776902400&v=beta&t=M23w3Q9Sca1OEUL5k4rTsv-WgeAUO9WtajIluS8L_5Q",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQFvEyNaW1zudg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1651554330010?e=1776902400&v=beta&t=M23w3Q9Sca1OEUL5k4rTsv-WgeAUO9WtajIluS8L_5Q",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQFvEyNaW1zudg/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1651554330010?e=1776902400&v=beta&t=tOBpzBOiPbSRoxzZg-__oMfO6XLDLNjPyT0I9wA-fgo",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQFvEyNaW1zudg/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1651554330010?e=1776902400&v=beta&t=fO5E-h6PgDEfO-ZGh34nRijhLAciSEp91OgUFGOr7iA",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQFvEyNaW1zudg/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1651554330010?e=1776902400&v=beta&t=6mTcAyhsyD9JZbkLejF8HAYvDRgynmSYTdcAs5Og0zo",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": {
+      "url": "https://media.licdn.com/dms/image/v2/C5616AQGnQ6FMX20kNQ/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1668907458935?e=1776902400&v=beta&t=lZJ4yMQzmE1hvcN5emMb_FyfsyTle_XCeyMsAKqsp5w",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5616AQGnQ6FMX20kNQ/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1668907458935?e=1776902400&v=beta&t=lZJ4yMQzmE1hvcN5emMb_FyfsyTle_XCeyMsAKqsp5w",
+          "width": 1125,
+          "height": 282,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5616AQGnQ6FMX20kNQ/profile-displaybackgroundimage-shrink_200_800/profile-displaybackgroundimage-shrink_200_800/0/1668907458935?e=1776902400&v=beta&t=ZEw1LYB6WLtgk7gJ38xc5uUIpGWn23VIDwCFXY_-ua4",
+          "width": 797,
+          "height": 200,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "photo": "https://media.licdn.com/dms/image/v2/C5603AQFvEyNaW1zudg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1651554330010?e=1776902400&v=beta&t=M23w3Q9Sca1OEUL5k4rTsv-WgeAUO9WtajIluS8L_5Q",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Continually self-improving AI",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco Bay Area",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "5 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Dec",
+          "year": 2025,
+          "text": "Dec 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Scientist",
+        "location": "Cupertino, CA",
+        "employmentType": "Part-time",
+        "workplaceType": "On-site",
+        "companyName": "Apple",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/162479/",
+        "companyId": "162479",
+        "duration": "1 yr 7 mos",
+        "description": "Language model synthetic pretraining.",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2024,
+          "text": "Jun 2024"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2025,
+          "text": "Dec 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_400_400/company-logo_400_400/0/1630637844948/apple_logo?e=1776902400&v=beta&t=KteXM40NNLQ3nz21Do-neoy-f7lbDDA7kJmtS5wwrL4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_400_400/company-logo_400_400/0/1630637844948/apple_logo?e=1776902400&v=beta&t=KteXM40NNLQ3nz21Do-neoy-f7lbDDA7kJmtS5wwrL4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_200_200/company-logo_200_200/0/1630637844948/apple_logo?e=1776902400&v=beta&t=I8RMorsmHMk3gA9b3fT4m2HDgfVtfdB6se4bEZcMHb8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_100_100/company-logo_100_100/0/1630637844948/apple_logo?e=1776902400&v=beta&t=8c3EpxT43tZMihGirOM7eBnDzFHAGiYV-OxaRj_xfjo",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Scientist",
+        "location": "New York, New York, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Google",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1441/",
+        "companyId": "1441",
+        "duration": "6 mos",
+        "description": "Retrieval augmented language model.",
+        "skills": null,
+        "startDate": {
+          "month": "Apr",
+          "year": 2022,
+          "text": "Apr 2022"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2022,
+          "text": "Sep 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_200_200/B4EZmhegXHGcAM-/0/1759350753990/google_logo?e=1776902400&v=beta&t=CTzyZ9kqXiycW6UU0lJPQmCNKxu5QeAaPL_y9ftsJX0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_100_100/B4EZmhegXHGcAU-/0/1759350753990/google_logo?e=1776902400&v=beta&t=LRCYpUl9rmgdri4awRP4FVlvccNARAtgcfqxtRHdedI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Quantitate Researcher",
+        "location": "Berkeley, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "The Voleon Group",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/2700263/",
+        "companyId": "2700263",
+        "duration": "1 yr",
+        "description": "Developed machine learning models for forecasting multi-period bond returns and related uncertainty quantification techniques. Also developed market impact model and exploited it in portfolio planning. Maintained production system through on-call rotation and debugged live trading systems.",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2021,
+          "text": "May 2021"
+        },
+        "endDate": {
+          "month": "Apr",
+          "year": 2022,
+          "text": "Apr 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQGENLLnX5Ai9w/company-logo_400_400/company-logo_400_400/0/1630584753475/voleon_capital_management_logo?e=1776902400&v=beta&t=in8GFCj6eeRO31kj7H6kDjvfM18BniIfFkzumI_oJNc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGENLLnX5Ai9w/company-logo_400_400/company-logo_400_400/0/1630584753475/voleon_capital_management_logo?e=1776902400&v=beta&t=in8GFCj6eeRO31kj7H6kDjvfM18BniIfFkzumI_oJNc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGENLLnX5Ai9w/company-logo_200_200/company-logo_200_200/0/1630584753475/voleon_capital_management_logo?e=1776902400&v=beta&t=bYvQS3w5TAX5zS9LWUK30wgXPF62J_kuBCKh4e5kHKc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGENLLnX5Ai9w/company-logo_100_100/company-logo_100_100/0/1630584753475/voleon_capital_management_logo?e=1776902400&v=beta&t=sXHb6mrH9HrLan_B0E1qKFaAqjb154AUdN6hsLLhkYo",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Stanford University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1792/",
+        "schoolId": "1792",
+        "degree": "Doctor of Philosophy - PhD",
+        "fieldOfStudy": "Statistics",
+        "skills": [],
+        "insights": "Activities and societies: Advised by Prof. Emmanuel Candès and Prof. Tatsunori Hashimoto. Supported by Stanford Graduate Fellowship (SGF).",
+        "startDate": {
+          "year": 2022,
+          "text": "2022"
+        },
+        "endDate": {
+          "year": 2025,
+          "text": "2025"
+        },
+        "period": "2022 - 2025",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_400_400/company-logo_400_400/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=zzE-1MKqCLrmkqb1p2hJqhVuV2hbdZzC0j_ok6Kyhk8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_400_400/company-logo_400_400/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=zzE-1MKqCLrmkqb1p2hJqhVuV2hbdZzC0j_ok6Kyhk8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_200_200/company-logo_200_200/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=0xd9OiQTt31rPm8_wUnQNPsZKrh8XBXIidNxV9RaB5s",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_100_100/company-logo_100_100/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=9qvsDNg8-8GHe51pI3kr1K_DGeN_zXJEt0DlOSSFopY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "University of California, Berkeley",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2517/",
+        "schoolId": "2517",
+        "degree": "B.A. & M.S.",
+        "fieldOfStudy": null,
+        "skills": [],
+        "description": "B.S. with triple major in Physics, Mathematics, and Computer Science (2016-2020)\nM.S. in Electrical Engineering (2020-2021)",
+        "startDate": {
+          "year": 2016,
+          "text": "2016"
+        },
+        "endDate": {
+          "year": 2021,
+          "text": "2021"
+        },
+        "period": "2016 - 2021",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_400_400/company-logo_400_400/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=ihsqGpnHzj0nlc8nr3zQwTYbq6GYQDs_WRmOHxXO6Cs",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_400_400/company-logo_400_400/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=ihsqGpnHzj0nlc8nr3zQwTYbq6GYQDs_WRmOHxXO6Cs",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_200_200/company-logo_200_200/0/1732135669730/uc_berkeley_logo?e=1776902400&v=beta&t=99cgQbgSotN9XiK7TbWS3PhqRVGT8S6VKfitEcMn0-E",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_100_100/company-logo_100_100/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=spLtug0cp3xqHCXq1OoZudTryqzyY85FoIZwfJ-_XzA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAABQ5lJUBry2byQYf_TtxDF9Rha9l-RqYsaM",
+        "firstName": "Guang-He",
+        "lastName": "Lee",
+        "publicIdentifier": "guang-he-lee-64577895",
+        "linkedinUrl": "https://www.linkedin.com/in/guang-he-lee-64577895"
+      },
+      {
+        "id": "ACoAABmsYasBhsFwXKca6Ooio5i6nRfTRvN4d2Y",
+        "firstName": "Liyuan",
+        "lastName": "Liu",
+        "publicIdentifier": "liyuanlucasliu",
+        "linkedinUrl": "https://www.linkedin.com/in/liyuanlucasliu"
+      },
+      {
+        "id": "ACoAABqSHaUBgoPu_j2NSmNfYyGkrcUvLn5mbbo",
+        "firstName": "Jacob",
+        "lastName": "van Gogh",
+        "publicIdentifier": "jacobvangogh",
+        "linkedinUrl": "https://www.linkedin.com/in/jacobvangogh"
+      },
+      {
+        "id": "ACoAAC66rE4BA1J19n2WFXntDP0CA8Uw4NElYBs",
+        "firstName": "Yangjun",
+        "lastName": "Ruan",
+        "publicIdentifier": "yangjun-ruan-55267b19a",
+        "linkedinUrl": "https://www.linkedin.com/in/yangjun-ruan-55267b19a"
+      },
+      {
+        "id": "ACoAAEAbBpQBT4luNj8gPYU6CgQ_GNJey3AJTiE",
+        "firstName": "Rajat",
+        "lastName": "Goel",
+        "publicIdentifier": "rajatgoel2010",
+        "linkedinUrl": "https://www.linkedin.com/in/rajatgoel2010"
+      },
+      {
+        "id": "ACoAACA1ZlYBhPNODsf7Z3UNo1tLYMShFQ7OQJw",
+        "firstName": "Yujia",
+        "lastName": "Bao",
+        "publicIdentifier": "yujia-bao-506b76130",
+        "linkedinUrl": "https://www.linkedin.com/in/yujia-bao-506b76130"
+      },
+      {
+        "id": "ACoAAAENQhgBH8wIeS6hMrUoWlbKk5L9GWNNQCE",
+        "firstName": "Andrii",
+        "lastName": "Grynenko",
+        "publicIdentifier": "andrii-grynenko-a48aab5",
+        "linkedinUrl": "https://www.linkedin.com/in/andrii-grynenko-a48aab5"
+      },
+      {
+        "id": "ACoAACKNVUMBztbhQ3RUYQ-Mg89xUJ39N-XJpM4",
+        "firstName": "Long",
+        "lastName": "Lian",
+        "publicIdentifier": "longlian",
+        "linkedinUrl": "https://www.linkedin.com/in/longlian"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAADgLvm4BAaa-N5zNQvfP5qFptuA8bvJs3nM",
+        "firstName": "Yifei",
+        "lastName": "Zhou",
+        "publicIdentifier": "yifei-zhou-57aa9b222",
+        "linkedinUrl": "https://www.linkedin.com/in/yifei-zhou-57aa9b222"
+      },
+      {
+        "id": "ACoAABA0sF8BJqwmfoms3veu9TE72tj8JMUQEFA",
+        "firstName": "Sam",
+        "lastName": "Shleifer",
+        "publicIdentifier": "sam-shleifer-a5307a77",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-shleifer-a5307a77"
+      },
+      {
+        "id": "ACoAAB3BApkB38H4Z__jKDDFBfF7jt7w16vD0Xs",
+        "firstName": "Rafael",
+        "lastName": "Rafailov",
+        "publicIdentifier": "rafael-rafailov-1b521611b",
+        "linkedinUrl": "https://www.linkedin.com/in/rafael-rafailov-1b521611b"
+      },
+      {
+        "id": "ACoAADCkfncB4P7VWZ-S1Ojv9-aHq_bFsA6LBQY",
+        "firstName": "Ziqiao",
+        "lastName": "Ma",
+        "publicIdentifier": "ziqiao-ma",
+        "linkedinUrl": "https://www.linkedin.com/in/ziqiao-ma"
+      },
+      {
+        "id": "ACoAABhIg7YBYN2NPIu8voYj5D7JQVZGxonqHvc",
+        "firstName": "Ruiqi",
+        "lastName": "Zhong",
+        "publicIdentifier": "ruiqi-zhong-09a533b4",
+        "linkedinUrl": "https://www.linkedin.com/in/ruiqi-zhong-09a533b4"
+      },
+      {
+        "id": "ACoAAB44HngBUCHFyPWzb7z5GQiC8FODQpn-4gU",
+        "firstName": "Alex",
+        "lastName": "Robey",
+        "publicIdentifier": "alexrobey",
+        "linkedinUrl": "https://www.linkedin.com/in/alexrobey"
+      },
+      {
+        "id": "ACoAABqU8psBncgwN-WH-D8F1Jq9i7OsFmcPDt4",
+        "firstName": "Jeffrey",
+        "lastName": "Tao",
+        "publicIdentifier": "jeffrey-tao",
+        "linkedinUrl": "https://www.linkedin.com/in/jeffrey-tao"
+      },
+      {
+        "id": "ACoAACy2BxwB9fCrfCBI06w0X-gHyQTFLJIpJGc",
+        "firstName": "Guangxuan",
+        "lastName": "X.",
+        "publicIdentifier": "xgx",
+        "linkedinUrl": "https://www.linkedin.com/in/xgx"
+      },
+      {
+        "id": "ACoAABxxSOoBxMid0wd8m2NDb9w5zTY2lQbrNz4",
+        "firstName": "Leon",
+        "lastName": "G.",
+        "publicIdentifier": "yazhi-gao",
+        "linkedinUrl": "https://www.linkedin.com/in/yazhi-gao"
+      },
+      {
+        "id": "ACoAAAeoHjYB_Lo5sUFlpZpz2L74oe9nEIKztQA",
+        "firstName": "Jenya",
+        "lastName": "L.",
+        "publicIdentifier": "jenya-l",
+        "linkedinUrl": "https://www.linkedin.com/in/jenya-l"
+      },
+      {
+        "id": "ACoAABVAP64BY4RszeJt11vohsLM-gj1PiARl2o",
+        "firstName": "Jiaming",
+        "lastName": "Cui",
+        "publicIdentifier": "jiaming-cui-57a49a9b",
+        "linkedinUrl": "https://www.linkedin.com/in/jiaming-cui-57a49a9b"
+      },
+      {
+        "id": "ACoAAAI1MJoBLOCpIUHYlz8f2n8mTWho-q5ob48",
+        "firstName": "Stacey-Ann",
+        "lastName": "Spencer",
+        "position": "Research Professional",
+        "publicIdentifier": "stacey-ann-spencer-4224a310",
+        "linkedinUrl": "https://www.linkedin.com/in/stacey-ann-spencer-4224a310"
+      },
+      {
+        "id": "ACoAADgyuhkBAWQBrn2YJ-2hkE2G0UrtVkcuWEU",
+        "firstName": "Colleen",
+        "lastName": "McMaken",
+        "position": "Research Assistant at Marine Biological Laboratory",
+        "publicIdentifier": "colleen-mcmaken-b35911223",
+        "linkedinUrl": "https://www.linkedin.com/in/colleen-mcmaken-b35911223"
+      },
+      {
+        "id": "ACoAABo5lbABM_xMJYUhTOVyqLQrW7a0KgV8zSs",
+        "firstName": "Aparna",
+        "lastName": "Joshi",
+        "position": "Senior Software Engineer at Google DeepMind",
+        "publicIdentifier": "aparna-j",
+        "linkedinUrl": "https://www.linkedin.com/in/aparna-j"
+      },
+      {
+        "id": "ACoAADc-_IcBm4qYYQzg8YR_KCiDbu-Ez156lQM",
+        "firstName": "claudia",
+        "lastName": "valderrama",
+        "position": "Clinical Research Associate ",
+        "publicIdentifier": "claudia-valderrama-a334a921a",
+        "linkedinUrl": "https://www.linkedin.com/in/claudia-valderrama-a334a921a"
+      },
+      {
+        "id": "ACoAAA3ZqA0B09ljMaaDl5Saeqjmfey32gpFXLY",
+        "firstName": "Liya",
+        "lastName": "Weldegebriel, Ph.D.",
+        "position": "Research Scientist | Environmental Engineering",
+        "publicIdentifier": "liya-weldegebriel",
+        "linkedinUrl": "https://www.linkedin.com/in/liya-weldegebriel"
+      },
+      {
+        "id": "ACoAABZvlZcB2ACKZ2Sdi9XbefinFwjnNZt7ZE4",
+        "firstName": "Sanjana",
+        "lastName": "Srivastava",
+        "position": "Computer Science PhD Student at Stanford University",
+        "publicIdentifier": "sanjana-srivastava5",
+        "linkedinUrl": "https://www.linkedin.com/in/sanjana-srivastava5"
+      },
+      {
+        "id": "ACoAAAPu-lcBIGQPRRGtS-7Fk2h5-PpBgUfVDCA",
+        "firstName": "Juan",
+        "lastName": "Diez",
+        "position": "Scientist",
+        "publicIdentifier": "juan-diez-69b1261a",
+        "linkedinUrl": "https://www.linkedin.com/in/juan-diez-69b1261a"
+      },
+      {
+        "id": "ACoAAAB0VUkBl-CfdX_TtsWbFnUx8pFgiTyLr2s",
+        "firstName": "Gillian",
+        "lastName": "Cross Hogg, MPH, PMP",
+        "position": "Senior Study Director @ Westat | Project Management Professional (PMP)®, Public Health",
+        "publicIdentifier": "gilliancrosshogg",
+        "linkedinUrl": "https://www.linkedin.com/in/gilliancrosshogg"
+      },
+      {
+        "id": "ACoAAAU_CFMBxG-WlDivezXpij7ACBht7V3Z8io",
+        "firstName": "Niki",
+        "lastName": "Parmar",
+        "position": "Anthropic, Co-Founder EssentialAI, Adept AI, Ex-Google Brain",
+        "publicIdentifier": "nikiparmar",
+        "linkedinUrl": "https://www.linkedin.com/in/nikiparmar"
+      },
+      {
+        "id": "ACoAAALpnRUBD24lOxjWNfh6uxDzHwDaVYCU3Zw",
+        "firstName": "John",
+        "lastName": "Lambert",
+        "position": "Gemini | Google DeepMind",
+        "publicIdentifier": "johnwlambert",
+        "linkedinUrl": "https://www.linkedin.com/in/johnwlambert"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAACmzAtgB4CHtDfWnlg9FmTVVgz0xGuLyCCU"
+    }
+  }
+}

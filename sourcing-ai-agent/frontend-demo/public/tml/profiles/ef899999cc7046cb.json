@@ -1,0 +1,807 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAADgLvm4BSPsKVj2bkqh0ClLQ6kpsvkl7Uio",
+    "profile_url": "https://www.linkedin.com/in/ACwAADgLvm4BSPsKVj2bkqh0ClLQ6kpsvkl7Uio"
+  },
+  "item": {
+    "id": "ACoAADgLvm4BAaa-N5zNQvfP5qFptuA8bvJs3nM",
+    "publicIdentifier": "yifei-zhou-57aa9b222",
+    "linkedinUrl": "https://www.linkedin.com/in/yifei-zhou-57aa9b222",
+    "firstName": "Yifei",
+    "lastName": "Zhou",
+    "emails": [
+      {
+        "email": "yifei.zhou@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Member of Technical Staff at Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco Bay Area",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "940293742",
+    "registeredAt": "2021-10-10T17:19:02.248Z",
+    "topSkills": null,
+    "connectionsCount": 565,
+    "followerCount": 614,
+    "verified": true,
+    "about": "Member of Technical Staff at Thinking Machines Lab.\nLLM Agents and RL. \nAcademic website yifeizhou02.github.io",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 1,
+            "year": 2026,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "17939",
+        "companyId": "2517",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2517/",
+        "schoolName": "University of California, Berkeley"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/C4E03AQEZBJnTZKZkuA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1633886526088?e=1776902400&v=beta&t=CJQa9K-dVAcFaEIeQLy01Viq1_GtLRyLuFWr4X2ehQo",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4E03AQEZBJnTZKZkuA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1633886526088?e=1776902400&v=beta&t=CJQa9K-dVAcFaEIeQLy01Viq1_GtLRyLuFWr4X2ehQo",
+          "width": 600,
+          "height": 600,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4E03AQEZBJnTZKZkuA/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1633886526088?e=1776902400&v=beta&t=Man3qdhf2GHOTsyooF3my4hL0XnHSfn2YD_HDEevTXs",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4E03AQEZBJnTZKZkuA/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1633886526088?e=1776902400&v=beta&t=MgEKOdnBVbcm2rBnJjZ-RL5Y1hUINi0gXKUIDWmj1Zc",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4E03AQEZBJnTZKZkuA/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1633886526088?e=1776902400&v=beta&t=UGLCPYMyeaPlrINcXeD1-x_79Ik06lTtjPhsMwPaRyI",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/C4E03AQEZBJnTZKZkuA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1633886526088?e=1776902400&v=beta&t=CJQa9K-dVAcFaEIeQLy01Viq1_GtLRyLuFWr4X2ehQo",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Member of Technical Staff at Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco Bay Area",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2026,
+          "text": "Jan 2026"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Member of Technical Staff",
+        "location": "Palo Alto, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "xAI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/96151950/",
+        "companyId": "96151950",
+        "duration": "8 mos",
+        "description": "Self-Play Research Team Lead\nGrok 4 (Core contributor)",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2025,
+          "text": "Jun 2025"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2026,
+          "text": "Jan 2026"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQFGK5Kkd1nUlg/company-logo_400_400/company-logo_400_400/0/1738099065875/xai_logo?e=1776902400&v=beta&t=D9_BxwFh9s6Xs2Cj7r80cNvoc3yl7tyg6f8ZvrbXv64",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFGK5Kkd1nUlg/company-logo_400_400/company-logo_400_400/0/1738099065875/xai_logo?e=1776902400&v=beta&t=D9_BxwFh9s6Xs2Cj7r80cNvoc3yl7tyg6f8ZvrbXv64",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFGK5Kkd1nUlg/company-logo_200_200/company-logo_200_200/0/1738099065875/xai_logo?e=1776902400&v=beta&t=HEoRgaX2hRkDsEbWqIdB85Qph6PAPQDMvqQqOoxhzHc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFGK5Kkd1nUlg/company-logo_100_100/company-logo_100_100/0/1738099065875/xai_logo?e=1776902400&v=beta&t=fPyP5ijKRIbwP3cYP1d0JhCSK_zHRQZxBvUsdDb3vPk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Visiting Researcher",
+        "location": null,
+        "employmentType": "Part-time",
+        "workplaceType": null,
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "9 mos",
+        "description": "Sweet-RL (https://arxiv.org/abs/2503.15478) for human-agent collaboration\nSelf-Challenging Language Model Agent (https://arxiv.org/abs/2506.01716) for self-improvement of general multi-turn tool-use LLM agents",
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2024,
+          "text": "Sep 2024"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2025,
+          "text": "May 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Applied Scientist Intern",
+        "location": null,
+        "employmentType": "Internship",
+        "workplaceType": null,
+        "companyName": "Amazon",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1586/",
+        "companyId": "1586",
+        "duration": "5 mos",
+        "description": "Proposer-Agent-Evaluator (https://arxiv.org/abs/2412.13194) for improving multi-modal GUI agent with autonomous reinforcement learning",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2024,
+          "text": "May 2024"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2024,
+          "text": "Sep 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGDLy4STCnHbg/company-logo_400_400/B56ZnZxDipI0AY-/0/1760295142304/amazon_logo?e=1776902400&v=beta&t=lYPAbzBmg2YQhgQFeMnV-wHyKGvMPrvdCpcjHf_aGWc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGDLy4STCnHbg/company-logo_400_400/B56ZnZxDipI0AY-/0/1760295142304/amazon_logo?e=1776902400&v=beta&t=lYPAbzBmg2YQhgQFeMnV-wHyKGvMPrvdCpcjHf_aGWc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGDLy4STCnHbg/company-logo_200_200/B56ZnZxDipI0AI-/0/1760295142304/amazon_logo?e=1776902400&v=beta&t=Pkt-34tlkuFgo_d6O--s7BFOke10xwNIu23VHSfAC1Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGDLy4STCnHbg/company-logo_100_100/B56ZnZxDipI0AQ-/0/1760295142304/amazon_logo?e=1776902400&v=beta&t=Glfc3A2Yqstx_u6NdGLKHNNMcZSYljXNIHa7f-Ob1fA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Teaching Assistant",
+        "location": "Ithaca, New York, United States",
+        "employmentType": "Part-time",
+        "workplaceType": null,
+        "companyName": "Cornell University",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3523/",
+        "companyId": "3523",
+        "duration": "5 mos",
+        "description": "Teaching Assitant for CS 4670 Intro to Computer Vision by prof. Bharath Hariharan\nDesign and grade assignments.",
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2022,
+          "text": "Jan 2022"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2022,
+          "text": "May 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQE8SOXGRyv7LA/company-logo_400_400/company-logo_400_400/0/1631339899678?e=1776902400&v=beta&t=z9EFnVC4jc3IxQB_5kqZY2twhs1zh2Ujg4UhI6lnvpE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQE8SOXGRyv7LA/company-logo_400_400/company-logo_400_400/0/1631339899678?e=1776902400&v=beta&t=z9EFnVC4jc3IxQB_5kqZY2twhs1zh2Ujg4UhI6lnvpE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQE8SOXGRyv7LA/company-logo_200_200/company-logo_200_200/0/1631339899678?e=1776902400&v=beta&t=8gqRb5n6ds_eGdBVsrRa4BIwJxYLH19ImYd_laDJuRs",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQE8SOXGRyv7LA/company-logo_100_100/company-logo_100_100/0/1631339899678?e=1776902400&v=beta&t=mU_RrLLR-_WiPMdGl7V8gFPp5Oov5XKzqLiWoFS3_r4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "University of California, Berkeley",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2517/",
+        "schoolId": "2517",
+        "degree": "Doctor of Philosophy - PhD",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "description": "On Leave",
+        "startDate": {
+          "month": "May",
+          "year": 2023,
+          "text": "May 2023"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2027,
+          "text": "May 2027"
+        },
+        "period": "May 2023 - May 2027",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_400_400/company-logo_400_400/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=ihsqGpnHzj0nlc8nr3zQwTYbq6GYQDs_WRmOHxXO6Cs",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_400_400/company-logo_400_400/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=ihsqGpnHzj0nlc8nr3zQwTYbq6GYQDs_WRmOHxXO6Cs",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_200_200/company-logo_200_200/0/1732135669730/uc_berkeley_logo?e=1776902400&v=beta&t=99cgQbgSotN9XiK7TbWS3PhqRVGT8S6VKfitEcMn0-E",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_100_100/company-logo_100_100/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=spLtug0cp3xqHCXq1OoZudTryqzyY85FoIZwfJ-_XzA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Cornell University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3523/",
+        "schoolId": "3523",
+        "degree": "Bachelor's degree",
+        "fieldOfStudy": "Mathematics and Computer Science",
+        "skills": [],
+        "insights": "Grade: 4.17/4\nActivities and societies: Tanner Dean's scholar, Dean's List, NLP lead for Cornell University Artificial Intelligence (CUAI), studying away at Peking University for the year 2020.",
+        "startDate": {
+          "month": "Sep",
+          "year": 2020,
+          "text": "Sep 2020"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2023,
+          "text": "Jun 2023"
+        },
+        "period": "Sep 2020 - Jun 2023",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQE8SOXGRyv7LA/company-logo_400_400/company-logo_400_400/0/1631339899678?e=1776902400&v=beta&t=z9EFnVC4jc3IxQB_5kqZY2twhs1zh2Ujg4UhI6lnvpE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQE8SOXGRyv7LA/company-logo_400_400/company-logo_400_400/0/1631339899678?e=1776902400&v=beta&t=z9EFnVC4jc3IxQB_5kqZY2twhs1zh2Ujg4UhI6lnvpE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQE8SOXGRyv7LA/company-logo_200_200/company-logo_200_200/0/1631339899678?e=1776902400&v=beta&t=8gqRb5n6ds_eGdBVsrRa4BIwJxYLH19ImYd_laDJuRs",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQE8SOXGRyv7LA/company-logo_100_100/company-logo_100_100/0/1631339899678?e=1776902400&v=beta&t=mU_RrLLR-_WiPMdGl7V8gFPp5Oov5XKzqLiWoFS3_r4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Cornell University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3523/",
+        "schoolId": "3523",
+        "degree": "Bachelor of Arts - BA",
+        "fieldOfStudy": "Mathematics and Computer Science",
+        "skills": [],
+        "startDate": {
+          "year": 2020,
+          "text": "2020"
+        },
+        "endDate": {
+          "year": 2023,
+          "text": "2023"
+        },
+        "period": "2020 - 2023",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQE8SOXGRyv7LA/company-logo_400_400/company-logo_400_400/0/1631339899678?e=1776902400&v=beta&t=z9EFnVC4jc3IxQB_5kqZY2twhs1zh2Ujg4UhI6lnvpE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQE8SOXGRyv7LA/company-logo_400_400/company-logo_400_400/0/1631339899678?e=1776902400&v=beta&t=z9EFnVC4jc3IxQB_5kqZY2twhs1zh2Ujg4UhI6lnvpE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQE8SOXGRyv7LA/company-logo_200_200/company-logo_200_200/0/1631339899678?e=1776902400&v=beta&t=8gqRb5n6ds_eGdBVsrRa4BIwJxYLH19ImYd_laDJuRs",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQE8SOXGRyv7LA/company-logo_100_100/company-logo_100_100/0/1631339899678?e=1776902400&v=beta&t=mU_RrLLR-_WiPMdGl7V8gFPp5Oov5XKzqLiWoFS3_r4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Reinforcement Learning",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Machine Learning",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Natural Language Processing (NLP)",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "PyTorch",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "TensorFlow",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Python (Programming Language)",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Java",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "C (Programming Language)",
+        "endorsements": "1 endorsement"
+      }
+    ],
+    "publications": [],
+    "courses": [
+      {
+        "title": "Advanced Natural Language Processing and Machine Learning",
+        "number": "CS 6741"
+      },
+      {
+        "title": "Computer System and Organizations",
+        "number": "CS 3410"
+      },
+      {
+        "title": "Convex Analysis",
+        "number": "ORIE 6328"
+      },
+      {
+        "title": "Empirical Methods in Natural Language Processing"
+      },
+      {
+        "title": "Foundations of Reinforcement Learning",
+        "number": "CS 6789"
+      },
+      {
+        "title": "Honored Introduction to Analysis",
+        "number": "MATH 4130"
+      },
+      {
+        "title": "Introduction to Computer Vision",
+        "number": "CS 4670"
+      },
+      {
+        "title": "Introduction to Machine Learning",
+        "number": "CS 4780"
+      },
+      {
+        "title": "Linear Algebra",
+        "number": "MATH 4310"
+      }
+    ],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAATAFhsB-MSu8aXWUBacbi6fvU_SaAqdBH4",
+        "firstName": "Jeff",
+        "lastName": "Hanson",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "jshanson7",
+        "linkedinUrl": "https://www.linkedin.com/in/jshanson7"
+      },
+      {
+        "id": "ACoAAEZnBtoBb1Us7ZKgHfOXAYT764pKcDQy848",
+        "firstName": "Songlin",
+        "lastName": "Yang",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "songlin-yang-b8a69728b",
+        "linkedinUrl": "https://www.linkedin.com/in/songlin-yang-b8a69728b"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABJRjjUBRj9EXhEAO-4ZyhHgzD0ztjMvrlI",
+        "firstName": "Andrea",
+        "lastName": "Madotto",
+        "position": "Member of Technical Staff at TML",
+        "publicIdentifier": "andrea-madotto-899b1386",
+        "linkedinUrl": "https://www.linkedin.com/in/andrea-madotto-899b1386"
+      },
+      {
+        "id": "ACoAABMugyUBsZ9MwIVIzmOSzlvmO6TOFL-mfAU",
+        "firstName": "Chih-Kuan (Jason)",
+        "lastName": "Yeh",
+        "position": "building LLMs",
+        "publicIdentifier": "chih-kuan-jason-yeh-8859378b",
+        "linkedinUrl": "https://www.linkedin.com/in/chih-kuan-jason-yeh-8859378b"
+      },
+      {
+        "id": "ACoAACaOARIBRO2EEH12QWQO29L__oI3N2K4u14",
+        "firstName": "Mingjie",
+        "lastName": "Sun",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "mingjie-sun-06a761160",
+        "linkedinUrl": "https://www.linkedin.com/in/mingjie-sun-06a761160"
+      },
+      {
+        "id": "ACoAACA1ZlYBhPNODsf7Z3UNo1tLYMShFQ7OQJw",
+        "firstName": "Yujia",
+        "lastName": "Bao",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "yujia-bao-506b76130",
+        "linkedinUrl": "https://www.linkedin.com/in/yujia-bao-506b76130"
+      },
+      {
+        "id": "ACoAABYs4-IB5mHx5eVfOHzu1e8xlO3q_kb38IM",
+        "firstName": "Brydon",
+        "lastName": "Eastman",
+        "position": "Nerd @ Thinking Machines Labs | Formerly Member of Technical Staff @ OpenAI | PhD in Mathematical Oncology",
+        "publicIdentifier": "brydon-eastman-396719a4",
+        "linkedinUrl": "https://www.linkedin.com/in/brydon-eastman-396719a4"
+      },
+      {
+        "id": "ACoAACKNVUMBztbhQ3RUYQ-Mg89xUJ39N-XJpM4",
+        "firstName": "Long",
+        "lastName": "Lian",
+        "position": "Member of Technical Staff at Thinking Machines Lab | Post-training Team | Large-scale RL | Multi-agent Systems | Real-time Multi-modal Models",
+        "publicIdentifier": "longlian",
+        "linkedinUrl": "https://www.linkedin.com/in/longlian"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAAB3BApkB38H4Z__jKDDFBfF7jt7w16vD0Xs",
+        "firstName": "Rafael",
+        "lastName": "Rafailov",
+        "position": "Member Of Technical Staff - Thinking Machines Lab",
+        "publicIdentifier": "rafael-rafailov-1b521611b",
+        "linkedinUrl": "https://www.linkedin.com/in/rafael-rafailov-1b521611b"
+      },
+      {
+        "id": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+        "firstName": "Saurabh",
+        "lastName": "Garg",
+        "position": "Thinking Machines Lab | Prev: Mistral AI, CMU, IIT-B",
+        "publicIdentifier": "saurabh-garg-b680b5b8",
+        "linkedinUrl": "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+      },
+      {
+        "id": "ACoAADCkfncB4P7VWZ-S1Ojv9-aHq_bFsA6LBQY",
+        "firstName": "Ziqiao",
+        "lastName": "Ma",
+        "publicIdentifier": "ziqiao-ma",
+        "linkedinUrl": "https://www.linkedin.com/in/ziqiao-ma"
+      },
+      {
+        "id": "ACoAAAhY-psBFcHXNbjunn6_QnPfV6Bo6w4yzug",
+        "firstName": "Kenny",
+        "lastName": "Yu",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "kenny-yu-aa3a9a3a",
+        "linkedinUrl": "https://www.linkedin.com/in/kenny-yu-aa3a9a3a"
+      },
+      {
+        "id": "ACoAAAwf4lcBgfLcNvMLGYnAjvxGpzWMO50zhUw",
+        "firstName": "Deepak",
+        "lastName": "Gopinath",
+        "position": "Thinking Machines Lab | Ex Apple Foundation Models, Facebook AI Research | LTI @ CMU",
+        "publicIdentifier": "deepakgopinath",
+        "linkedinUrl": "https://www.linkedin.com/in/deepakgopinath"
+      },
+      {
+        "id": "ACoAABqU8psBncgwN-WH-D8F1Jq9i7OsFmcPDt4",
+        "firstName": "Jeffrey",
+        "lastName": "Tao",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "jeffrey-tao",
+        "linkedinUrl": "https://www.linkedin.com/in/jeffrey-tao"
+      },
+      {
+        "id": "ACoAACy2BxwB9fCrfCBI06w0X-gHyQTFLJIpJGc",
+        "firstName": "Guangxuan",
+        "lastName": "X.",
+        "publicIdentifier": "xgx",
+        "linkedinUrl": "https://www.linkedin.com/in/xgx"
+      },
+      {
+        "id": "ACoAABxxSOoBxMid0wd8m2NDb9w5zTY2lQbrNz4",
+        "firstName": "Leon",
+        "lastName": "G.",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "yazhi-gao",
+        "linkedinUrl": "https://www.linkedin.com/in/yazhi-gao"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAAAeoHjYB_Lo5sUFlpZpz2L74oe9nEIKztQA",
+        "firstName": "Jenya",
+        "lastName": "L.",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "jenya-l",
+        "linkedinUrl": "https://www.linkedin.com/in/jenya-l"
+      },
+      {
+        "id": "ACoAACO1cp4ByOQ4I2nM6iLumqbJKCkhJGIJF5U",
+        "firstName": "Nicolás ",
+        "lastName": "Rodríguez Niño",
+        "position": "Medical Affairs | MSL | Epidemiology MSc PhD(s)",
+        "publicIdentifier": "nicolás-rodríguez-niño-a52775148",
+        "linkedinUrl": "https://www.linkedin.com/in/nicolás-rodríguez-niño-a52775148"
+      },
+      {
+        "id": "ACoAABW5aAYBjBHYYw13bQd1E1cWMWJB5KV7YEg",
+        "firstName": "Julián David",
+        "lastName": "Estupiñán Higuera",
+        "position": "Medical Manager | Medical Affairs | Pharmaceutical Industry | Medical Lead |",
+        "publicIdentifier": "estupinan-julian-md",
+        "linkedinUrl": "https://www.linkedin.com/in/estupinan-julian-md"
+      },
+      {
+        "id": "ACoAAE8WOmUBgk2cs-T9kXuVP8lioXLpWaNMQW0",
+        "firstName": "Daniela",
+        "lastName": "Arroyave Madrigal",
+        "position": "Administrative Assistant | Bilingual Customer Service",
+        "publicIdentifier": "daniela-arroyave-madrigal-b45440310",
+        "linkedinUrl": "https://www.linkedin.com/in/daniela-arroyave-madrigal-b45440310"
+      },
+      {
+        "id": "ACoAAFeCDsIBHIQ_DWuU6C9mN1wWtL0HJM8ZfJ4",
+        "firstName": "Pedro",
+        "lastName": "Vizcaino Lascano",
+        "position": "--",
+        "publicIdentifier": "pedro-vizcaino-lascano-94281634b",
+        "linkedinUrl": "https://www.linkedin.com/in/pedro-vizcaino-lascano-94281634b"
+      },
+      {
+        "id": "ACoAAAcrV64BTwYKMyIZlL16RYQy9qTKMjee5Tc",
+        "firstName": "Eliana",
+        "lastName": "Correa Vera",
+        "position": "RN |MSc Epidemiology |Medical Affairs | Medical Excellence |Clinical Trials | Evidence Generation | Real World Evidence | Integrated Evidence Plan | GxP Compliance | Managed Access Programs | Strategic Partnering |",
+        "publicIdentifier": "eliana-correa-vera-09234734",
+        "linkedinUrl": "https://www.linkedin.com/in/eliana-correa-vera-09234734"
+      },
+      {
+        "id": "ACoAAE4ARMkB7fYdfCpr04Oi7T7QQRlOf7qBY-A",
+        "firstName": "Juan",
+        "lastName": "Hernandez MD, MSc",
+        "position": "Director Médico (Medical Affairs Director & Market Access Specialist) ||",
+        "publicIdentifier": "juanmanuelhernandezm",
+        "linkedinUrl": "https://www.linkedin.com/in/juanmanuelhernandezm"
+      },
+      {
+        "id": "ACoAAA49T7QBUUNenK5oNpu9c6d_VGir8z3ToFI",
+        "firstName": "KATERINE ANDREA",
+        "lastName": "ACERO GONZALEZ",
+        "position": "Medico General, Esp. Gerencia integral de servicios en salud. Interés en docencia y administración",
+        "publicIdentifier": "katerine-andrea-acero-gonzalez-98400b68",
+        "linkedinUrl": "https://www.linkedin.com/in/katerine-andrea-acero-gonzalez-98400b68"
+      },
+      {
+        "id": "ACoAABCxGH4B98SWo03M-ys_5qd85u9358Vaiow",
+        "firstName": "Margarita",
+        "lastName": "Hidalgo",
+        "position": "Physician, MSc. Public health, Global health specialization / Research assistant / Medical Affairs",
+        "publicIdentifier": "margarita-hidalgo-13a95179",
+        "linkedinUrl": "https://www.linkedin.com/in/margarita-hidalgo-13a95179"
+      },
+      {
+        "id": "ACoAACfWIXUBz40QhO0vxf4A1uqzokjYcP-KC-0",
+        "firstName": "Diana Marcela",
+        "lastName": "Walteros Acero",
+        "position": "Médica epidemióloga | 15+ años liderando vigilancia epidemiológica y salud pública | Consultoría e investigación",
+        "publicIdentifier": "diana-marcela-walteros-acero-6719b1167",
+        "linkedinUrl": "https://www.linkedin.com/in/diana-marcela-walteros-acero-6719b1167"
+      },
+      {
+        "id": "ACoAACqKu_oBoPH0ZhsroBx_YH_bj2b_UJwdeYs",
+        "firstName": "Daniela",
+        "lastName": "Florez Garcia",
+        "position": "Medical Director LATAM/ Medical Scientific Liaison - MSL / Master’s Epidemiology and Public Health / Pharmaceutical Industry / Doctor in Medicine",
+        "publicIdentifier": "daniela-florez-garcia-22204117b",
+        "linkedinUrl": "https://www.linkedin.com/in/daniela-florez-garcia-22204117b"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAADgLvm4BSPsKVj2bkqh0ClLQ6kpsvkl7Uio"
+    }
+  }
+}

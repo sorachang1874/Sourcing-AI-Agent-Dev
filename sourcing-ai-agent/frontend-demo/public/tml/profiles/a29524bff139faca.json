@@ -1,0 +1,588 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAGNIHIYBGqPLCFrDzRmWu6bk3nYifRu75YY",
+    "profile_url": "https://www.linkedin.com/in/ACwAAGNIHIYBGqPLCFrDzRmWu6bk3nYifRu75YY"
+  },
+  "item": {
+    "id": "ACoAAGNIHIYBgXYd94g_Sp3Dp9OAc10BNltSiQM",
+    "publicIdentifier": "shakyra-fraser-6869b53a5",
+    "linkedinUrl": "https://www.linkedin.com/in/shakyra-fraser-6869b53a5",
+    "firstName": "Shakyra",
+    "lastName": "Fraser",
+    "emails": [
+      {
+        "email": "shakyra.fraser@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Founder & Managing Director at FSF Group | AI Strategy & Data Analysis | US–UK Market Specialist",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Loughborough, England, United Kingdom",
+      "countryCode": "GB",
+      "parsed": {
+        "text": "Loughborough, United Kingdom",
+        "countryCode": "GB",
+        "regionCode": null,
+        "country": "UK",
+        "countryFull": "United Kingdom",
+        "state": "England",
+        "city": "Loughborough"
+      }
+    },
+    "objectUrn": "1665670278",
+    "registeredAt": "2026-01-13T11:30:43.615Z",
+    "topSkills": "Computer-Aided Design (CAD) • Artificial Intelligence (AI) • Technical Support • Information Technology • Wireless Technologies",
+    "connectionsCount": 0,
+    "followerCount": 656,
+    "verified": false,
+    "about": "Founder and Managing Director of FSF Group, a UK-based consultancy focused on AI, data analytics, and emerging technology strategy.\n\nMy work bridges US and UK technology ecosystems, drawing on hands-on experience gained during an extended professional period in the United States. While in the US, I developed a strong foundation in artificial intelligence and data-driven decision-making, working alongside leading practitioners and gaining exposure to cutting-edge AI research and deployment.\n\nIn April 2025, I worked part-time as a Data Analyst (Contract) with Thinking Machines Lab, supporting analytical and data-focused initiatives within an advanced research environment. This role strengthened my applied understanding of AI systems, data pipelines, and real-world model evaluation.\n\nAfter returning to the UK in August 2025, I founded FSF Group to provide organisations with practical AI insight, strategic guidance, and access to transatlantic expertise. FSF Group supports clients seeking to understand, adopt, and operationalise AI responsibly and effectively.\n\nMy background also includes early-stage company formation, commercial operations, and strategic oversight, giving me a grounded, business-first approach to emerging technologies.\n",
+    "currentPosition": [
+      {
+        "companyId": null,
+        "companyLinkedinUrl": null,
+        "companyName": "FSF GROUP",
+        "dateRange": {
+          "start": {
+            "month": 8,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "12615",
+        "companyId": "9988",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/9988/",
+        "schoolName": "Loughborough University"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4E03AQGjcwZ9DRgYVQ/profile-displayphoto-crop_800_800/B4EZvHS_eqIcAI-/0/1768575205042?e=1776902400&v=beta&t=oI9xM0xTULx4-2UC5-NJtoRR5b3jEETcPF2M_bZrFb8",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQGjcwZ9DRgYVQ/profile-displayphoto-crop_800_800/B4EZvHS_eqIcAI-/0/1768575205042?e=1776902400&v=beta&t=oI9xM0xTULx4-2UC5-NJtoRR5b3jEETcPF2M_bZrFb8",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQGjcwZ9DRgYVQ/profile-displayphoto-scale_400_400/B4EZvHS_eqIcAg-/0/1768575205130?e=1776902400&v=beta&t=LHFmHuaizRCG0tgLYRZ7f6_fttYX-e0b3c93wDDvYN8",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQGjcwZ9DRgYVQ/profile-displayphoto-scale_200_200/B4EZvHS_eqIcAY-/0/1768575205130?e=1776902400&v=beta&t=GV025A9SZl3CU6woh8gtPDaZ2WMFovYxnKJjTmXVNog",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQGjcwZ9DRgYVQ/profile-displayphoto-scale_100_100/B4EZvHS_eqIcAc-/0/1768575205130?e=1776902400&v=beta&t=NQJ4QbPaMh6OKTA6bNA5lbSiyKqE5n3dTzHZEqr_duI",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D4E03AQGjcwZ9DRgYVQ/profile-displayphoto-crop_800_800/B4EZvHS_eqIcAI-/0/1768575205042?e=1776902400&v=beta&t=oI9xM0xTULx4-2UC5-NJtoRR5b3jEETcPF2M_bZrFb8",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Founder & Managing Director at FSF Group | AI Strategy & Data Analysis | US–UK Market Specialist",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Director",
+        "location": "London Area, United Kingdom",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "FSF GROUP",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=FSF+GROUP",
+        "duration": "9 mos",
+        "description": "FSF Group\nAug 2025 – Present | United Kingdom\n\t•\tFounded FSF Group to advise organisations on AI strategy, data analytics, and emerging technologies\n\t•\tProvide insight informed by US-based AI research environments and international industry networks\n\t•\tSupport clients with strategic positioning, technology assessment, and data-driven decision frameworks\n\t•\tAct as a bridge between US innovation practices and UK market needs\n",
+        "skills": null,
+        "startDate": {
+          "month": "Aug",
+          "year": 2025,
+          "text": "Aug 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        }
+      },
+      {
+        "position": "Data Analyst",
+        "location": "London Area, United Kingdom",
+        "employmentType": "Part-time",
+        "workplaceType": "Remote",
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyId": "105913171",
+        "duration": "1 yr 1 mo",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "9c1b9aacc5bf168899b42c20f5f1d4ea60a25935",
+        "startDate": {
+          "month": "Apr",
+          "year": 2025,
+          "text": "Apr 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Data Analyst (Contract, Part-Time)",
+        "location": "London Area, United Kingdom",
+        "employmentType": "Part-time",
+        "workplaceType": "On-site",
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyId": "105913171",
+        "duration": "5 mos",
+        "description": "Supported data analysis and research initiatives within an advanced AI research environment\n\t•\tWorked with large datasets to generate insights and support model evaluation\n\t•\tCollaborated with multidisciplinary technical teams on analytical problem-solving\n\t•\tStrengthened applied knowledge of AI systems and data workflows",
+        "skills": null,
+        "experienceGroupId": "9c1b9aacc5bf168899b42c20f5f1d4ea60a25935",
+        "startDate": {
+          "month": "Apr",
+          "year": 2025,
+          "text": "Apr 2025"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2025,
+          "text": "Aug 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Loughborough University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/9988/",
+        "schoolId": "9988",
+        "degree": "Bachelor of Business Administration",
+        "fieldOfStudy": "Business Administration and Management",
+        "skills": [],
+        "startDate": {
+          "year": 2021,
+          "text": "2021"
+        },
+        "endDate": {
+          "year": 2025,
+          "text": "2025"
+        },
+        "period": "2021 - 2025",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQECUrbULyXJ_A/company-logo_400_400/B4EZij3RZCHgAY-/0/1755095832492/loughborough_university_logo?e=1776902400&v=beta&t=Fh5BrN9eP3T31vmeC4SM4vGaAPtBN8yzTdNnHCsB8nY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQECUrbULyXJ_A/company-logo_400_400/B4EZij3RZCHgAY-/0/1755095832492/loughborough_university_logo?e=1776902400&v=beta&t=Fh5BrN9eP3T31vmeC4SM4vGaAPtBN8yzTdNnHCsB8nY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQECUrbULyXJ_A/company-logo_200_200/B4EZij3RZCHgAI-/0/1755095832492/loughborough_university_logo?e=1776902400&v=beta&t=urbM4dGzm27FtPdWN6PddGkF6jlOj4r3vzBa_C3E0K8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQECUrbULyXJ_A/company-logo_100_100/B4EZij3RZCHgAQ-/0/1755095832492/loughborough_university_logo?e=1776902400&v=beta&t=_NbnYjt1sKjK29D-z7spSRUcbpiylCGZXVN3uytMzZ0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Loughborough University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/9988/",
+        "schoolId": "9988",
+        "degree": "Bachelor's degree",
+        "fieldOfStudy": "Marketing",
+        "skills": [],
+        "insights": "Grade: 1:1",
+        "startDate": {
+          "month": "Jan",
+          "year": 2019,
+          "text": "Jan 2019"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2021,
+          "text": "Jan 2021"
+        },
+        "period": "Jan 2019 - Jan 2021",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQECUrbULyXJ_A/company-logo_400_400/B4EZij3RZCHgAY-/0/1755095832492/loughborough_university_logo?e=1776902400&v=beta&t=Fh5BrN9eP3T31vmeC4SM4vGaAPtBN8yzTdNnHCsB8nY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQECUrbULyXJ_A/company-logo_400_400/B4EZij3RZCHgAY-/0/1755095832492/loughborough_university_logo?e=1776902400&v=beta&t=Fh5BrN9eP3T31vmeC4SM4vGaAPtBN8yzTdNnHCsB8nY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQECUrbULyXJ_A/company-logo_200_200/B4EZij3RZCHgAI-/0/1755095832492/loughborough_university_logo?e=1776902400&v=beta&t=urbM4dGzm27FtPdWN6PddGkF6jlOj4r3vzBa_C3E0K8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQECUrbULyXJ_A/company-logo_100_100/B4EZij3RZCHgAQ-/0/1755095832492/loughborough_university_logo?e=1776902400&v=beta&t=_NbnYjt1sKjK29D-z7spSRUcbpiylCGZXVN3uytMzZ0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Computer-Aided Design (CAD)"
+      },
+      {
+        "name": "Artificial Intelligence (AI)"
+      },
+      {
+        "name": "Technical Support"
+      },
+      {
+        "name": "Information Technology"
+      },
+      {
+        "name": "Wireless Technologies"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAACH2c-UBvGr4GQoUkCYh7aWduESDhb3td5E",
+        "firstName": "Christopher",
+        "lastName": "B.",
+        "publicIdentifier": "christopherjbarber",
+        "linkedinUrl": "https://www.linkedin.com/in/christopherjbarber"
+      },
+      {
+        "id": "ACoAACO0aiYBHBgxdKf_eCFbx0-Y6Rcenvn0yDo",
+        "firstName": "Sherif",
+        "lastName": "ElMenyawy",
+        "publicIdentifier": "sherif-elmenyawy1993",
+        "linkedinUrl": "https://www.linkedin.com/in/sherif-elmenyawy1993"
+      },
+      {
+        "id": "ACoAAAtejpUBrRFIBH7UXDwvzQyphJE_6oAdKSg",
+        "firstName": "Turki",
+        "lastName": "Alhajri",
+        "publicIdentifier": "turki-alhajri-safety-ehs-hse-saudi-manager-qhse-auditor-iso-sustainability-esg-tabuk-pharmaceuticals",
+        "linkedinUrl": "https://www.linkedin.com/in/turki-alhajri-safety-ehs-hse-saudi-manager-qhse-auditor-iso-sustainability-esg-tabuk-pharmaceuticals"
+      },
+      {
+        "id": "ACoAACDhfdIBY9dZCttXh8IzKj_VN6jDxA_QAAg",
+        "firstName": "Evan",
+        "lastName": "Cohen",
+        "position": "Talent and Recruting | Creating impact through strategy & action",
+        "publicIdentifier": "evanbcohen",
+        "linkedinUrl": "https://www.linkedin.com/in/evanbcohen"
+      },
+      {
+        "id": "ACoAAAW7jkYB71a3RYrc9sau_XA4KGVVMLqqF04",
+        "firstName": "Yash",
+        "lastName": "Sharma",
+        "position": "Currently working as a Consultant to Shri Bhupender Yadav Ji, Union Cabinet Minister of Environment, Forest and Climate Change, Government of India.",
+        "publicIdentifier": "yashsharmaofficial",
+        "linkedinUrl": "https://www.linkedin.com/in/yashsharmaofficial"
+      },
+      {
+        "id": "ACoAAAhZ_GoBkQswj_IheMLBSfiRO1zT-QZJg6Y",
+        "firstName": "Özgür",
+        "lastName": "Türkalp",
+        "position": "Co-Founder & CEO at Alesta Sports Tech.®",
+        "publicIdentifier": "ozgurturkalp",
+        "linkedinUrl": "https://www.linkedin.com/in/ozgurturkalp"
+      },
+      {
+        "id": "ACoAAA4uCGIBs7wabG5gMZyaorOHxrm1FSEyRgg",
+        "firstName": "Graham",
+        "lastName": "Ferris",
+        "publicIdentifier": "graham-ferris",
+        "linkedinUrl": "https://www.linkedin.com/in/graham-ferris"
+      },
+      {
+        "id": "ACoAAAbCpmcBRiACeO9dWAT64Gb92Yw56ZzJUAs",
+        "firstName": "Clifford",
+        "lastName": "Kang",
+        "position": "Seres Group Vice President",
+        "publicIdentifier": "clifford-kang-607b9831",
+        "linkedinUrl": "https://www.linkedin.com/in/clifford-kang-607b9831"
+      },
+      {
+        "id": "ACoAAAn5JUYBNsVFlVEsJt__ae8G82rP83eB1JU",
+        "firstName": "Djoann",
+        "lastName": "Fal",
+        "publicIdentifier": "djoannfal",
+        "linkedinUrl": "https://www.linkedin.com/in/djoannfal"
+      },
+      {
+        "id": "ACoAAADp2kcBRCMMT9du22BOp73CC8GauDRASxE",
+        "firstName": "Sreekanth",
+        "lastName": "Narayan, MBA",
+        "position": "Tech Leader | SAP Transformation Expert | Speaker | Zero-to-Multi-Million Growth Strategist | Human-Centered Digital Innovation | From Crisis To Catalyst | NEXT100 CIO's 2025 Awardee |",
+        "publicIdentifier": "2810sreekanth",
+        "linkedinUrl": "https://www.linkedin.com/in/2810sreekanth"
+      },
+      {
+        "id": "ACoAAApBNaMBN2j6g1UCH9NHh8hjveWMaM1NUBw",
+        "firstName": "Silvana",
+        "lastName": "Oliveira",
+        "publicIdentifier": "silvana-alves-de-oliveira",
+        "linkedinUrl": "https://www.linkedin.com/in/silvana-alves-de-oliveira"
+      },
+      {
+        "id": "ACoAACxFs7UByTRGmOuzS57hW0rT0p-JAOaRcpA",
+        "firstName": "Andrè",
+        "lastName": "W.",
+        "publicIdentifier": "andre-wittgenstein",
+        "linkedinUrl": "https://www.linkedin.com/in/andre-wittgenstein"
+      },
+      {
+        "id": "ACoAAAYKAV4BupTKuYOLAoJ9BUnugS8q5ezmzqM",
+        "firstName": "Tobias",
+        "lastName": "Abt",
+        "publicIdentifier": "tobias-abt-826b2129",
+        "linkedinUrl": "https://www.linkedin.com/in/tobias-abt-826b2129"
+      },
+      {
+        "id": "ACoAABGC3sEB-ISSwi0r7K3bAV7ToCREeP6nuE8",
+        "firstName": "Akram",
+        "lastName": "Alchammaa, CFA, CMA, MBA",
+        "position": "VP | Corporate Strategy, Planning & Performance Management, Partnerships and M&A",
+        "publicIdentifier": "akramalchammaa",
+        "linkedinUrl": "https://www.linkedin.com/in/akramalchammaa"
+      },
+      {
+        "id": "ACoAAGNWCt4B1hVwJJGSn4Nb7FhRu9Rgjr6DrHE",
+        "firstName": "Mitchell",
+        "lastName": "Weijerman",
+        "position": "Making Bitcoin Mining easy, accessible and profitable for investors worldwide || managing 80,000 mining machines",
+        "publicIdentifier": "mitchellweijerman",
+        "linkedinUrl": "https://www.linkedin.com/in/mitchellweijerman"
+      },
+      {
+        "id": "ACoAADagopMBJKv9rAIbRrApkhfLUBrVHRoK7HI",
+        "firstName": "Raymond",
+        "lastName": "Kim",
+        "position": "Commerce @UofT",
+        "publicIdentifier": "raymondmkim",
+        "linkedinUrl": "https://www.linkedin.com/in/raymondmkim"
+      },
+      {
+        "id": "ACoAACdozFkBKYlH0RtX7TbgzWl8wIQb3OPSN1w",
+        "firstName": "Eddie",
+        "lastName": "Shid",
+        "publicIdentifier": "eddie-shid-021517165",
+        "linkedinUrl": "https://www.linkedin.com/in/eddie-shid-021517165"
+      },
+      {
+        "id": "ACoAAAG7BCABB_c0fKPSGdM7P5QtaW3mJZNPgys",
+        "firstName": "Richard",
+        "lastName": "Nilsen",
+        "publicIdentifier": "nilsenrichard",
+        "linkedinUrl": "https://www.linkedin.com/in/nilsenrichard"
+      },
+      {
+        "id": "ACoAAE26aokBmWSoawI1kXlDjjv6FkS_hwO3oEQ",
+        "firstName": "Jamal",
+        "lastName": "Alshanfari ",
+        "position": "Ambassador, Head of Oman health office,Geneva,Switzerland🇨🇭🇴🇲|\nBoard Member| Strategic Planner | Project management |  ",
+        "publicIdentifier": "jamal-alshanfari-a35889304",
+        "linkedinUrl": "https://www.linkedin.com/in/jamal-alshanfari-a35889304"
+      },
+      {
+        "id": "ACoAAAXE1VgBaY0ktIO2-_tsFhvGQhOVOMWdNlY",
+        "firstName": "Jackson ",
+        "lastName": "Campos",
+        "publicIdentifier": "jacksoncampos",
+        "linkedinUrl": "https://www.linkedin.com/in/jacksoncampos"
+      },
+      {
+        "id": "ACoAACQ_VsYBaZC3wN8hXcVjIch7y1Va8k-t4Ew",
+        "firstName": "Angelo",
+        "lastName": "Covetti",
+        "position": "Stiamo assumendo consulenti commerciali green service",
+        "publicIdentifier": "angelo-covetti-6327b314b",
+        "linkedinUrl": "https://www.linkedin.com/in/angelo-covetti-6327b314b"
+      },
+      {
+        "id": "ACoAAB0v8mcBCBaT2MwZhSW22qpt1P1g3_vyXDk",
+        "firstName": "Laura",
+        "lastName": "Alessandro",
+        "position": "Insegnante yoga e Naturopata ",
+        "publicIdentifier": "laura-alessandro-607bb0117",
+        "linkedinUrl": "https://www.linkedin.com/in/laura-alessandro-607bb0117"
+      },
+      {
+        "id": "ACoAAA_aDh4BrEvGxkNM7RFHwueh-WuVpanlGpM",
+        "firstName": "Giulia",
+        "lastName": "Zenone",
+        "position": "Customer Experience and Administration",
+        "publicIdentifier": "giulia-zenone",
+        "linkedinUrl": "https://www.linkedin.com/in/giulia-zenone"
+      },
+      {
+        "id": "ACoAAAXyiJYBZkflG--zc1s7E7adT89S8ILuMxg",
+        "firstName": "Claudio",
+        "lastName": "Dell'Accio",
+        "position": "Sustainable Destination Manager",
+        "publicIdentifier": "claudio-dell-accio-5b24bb29",
+        "linkedinUrl": "https://www.linkedin.com/in/claudio-dell-accio-5b24bb29"
+      },
+      {
+        "id": "ACoAAC_k9k4B4mtRDkCAqUiH9yp7qbV-RmZ5pJM",
+        "firstName": "Jacopo",
+        "lastName": "Bertolini",
+        "position": "Imprenditore e CEO di NOVAROI HOLDING & Beside Agency | Destination marketing & Digital strategy | Turismo, innovazione e comunicazione istituzionale | Menbro BNI capitolo Portovenere ",
+        "publicIdentifier": "jacopo-bertolini",
+        "linkedinUrl": "https://www.linkedin.com/in/jacopo-bertolini"
+      },
+      {
+        "id": "ACoAAAG1BrUBQA8WB5Z5IZSKQjQiXFeKRp85kMQ",
+        "firstName": "Susana",
+        "lastName": "Alonso",
+        "position": "Wine Marketer, Digital Strategist, Sommelier & Blogger. \nAuthor of the book “Digital Wine Marketing”. Founder of Sorsi di Web.",
+        "publicIdentifier": "alonsosusana",
+        "linkedinUrl": "https://www.linkedin.com/in/alonsosusana"
+      },
+      {
+        "id": "ACoAACwvJmsB61XX5tCRltF_OweCqRM2wuH_z5Y",
+        "firstName": "Giorgia",
+        "lastName": "Mordenti",
+        "position": "Specialised translator for tourism & hospitality | Certified tour leader | Italian ·  English · Spanish · Portuguese| SEO translation · Localisation · Proofreading · Post-editing",
+        "publicIdentifier": "giorgiamordenti",
+        "linkedinUrl": "https://www.linkedin.com/in/giorgiamordenti"
+      },
+      {
+        "id": "ACoAAAPCEykBuuRl0eCRfI7PfyF9UIJ1bHUZLtg",
+        "firstName": "Massimo",
+        "lastName": "Gazzè",
+        "position": "Presidente at CEJEE Comité Européen des Journalistes",
+        "publicIdentifier": "massimogazze",
+        "linkedinUrl": "https://www.linkedin.com/in/massimogazze"
+      },
+      {
+        "id": "ACoAABUiN64B04rlKemgH0pwa7IcSmbc5rlJBJg",
+        "firstName": "Monica",
+        "lastName": "Zanesi",
+        "position": ".",
+        "publicIdentifier": "monica-zanesi-6128ab9a",
+        "linkedinUrl": "https://www.linkedin.com/in/monica-zanesi-6128ab9a"
+      },
+      {
+        "id": "ACoAAArEXVwBnVBvyRGXilQQ3RUGSFQheo81umM",
+        "firstName": "Antonio",
+        "lastName": "Ierrubino",
+        "position": "Management & Consultant",
+        "publicIdentifier": "antonio-ierrubino-8245b550",
+        "linkedinUrl": "https://www.linkedin.com/in/antonio-ierrubino-8245b550"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAGNIHIYBGqPLCFrDzRmWu6bk3nYifRu75YY"
+    }
+  }
+}

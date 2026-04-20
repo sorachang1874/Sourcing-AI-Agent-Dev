@@ -1,0 +1,609 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAC336YcBpvLqyNigQC6UfjUkFznA51tMtuI",
+    "profile_url": "https://www.linkedin.com/in/ACwAAC336YcBpvLqyNigQC6UfjUkFznA51tMtuI"
+  },
+  "item": {
+    "id": "ACoAAC336YcB-OjmzGKkYyPVI46hNoQHEjhPVuw",
+    "publicIdentifier": "shaoyj",
+    "linkedinUrl": "https://www.linkedin.com/in/shaoyj",
+    "firstName": "Yijia",
+    "lastName": "Shao",
+    "emails": [
+      {
+        "email": "yijia.shao@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Ph.D. Student at Stanford CS",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Stanford, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "Stanford, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "Stanford"
+      }
+    },
+    "objectUrn": "771221895",
+    "registeredAt": "2019-10-26T23:44:49.285Z",
+    "topSkills": null,
+    "connectionsCount": 2927,
+    "followerCount": 3263,
+    "verified": true,
+    "about": "Find more about me through my personal website: https://cs.stanford.edu/~shaoyj/\n\nIf you are interested in human-centered AI, I am hosting a podcast to share technical human-centered AI work through long-form videos. Check it out: https://augmented-mind.github.io/",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 6,
+            "year": 2025,
+            "day": null
+          },
+          "end": {
+            "month": 9,
+            "year": 2025,
+            "day": null
+          }
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "17926",
+        "companyId": "1792",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1792/",
+        "schoolName": "Stanford University"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5603AQF2YmI4r0mZCw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1669029692343?e=1776902400&v=beta&t=Q9xUVNYXHhJvIsVpFYOR7cRNskyfdcBH2gi9e8cSQ2Q",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQF2YmI4r0mZCw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1669029692343?e=1776902400&v=beta&t=Q9xUVNYXHhJvIsVpFYOR7cRNskyfdcBH2gi9e8cSQ2Q",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQF2YmI4r0mZCw/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1669029692343?e=1776902400&v=beta&t=gjuZS8ISuzziwG0eGFY2d1cksrltcu3Ufko9SJ-o_qw",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQF2YmI4r0mZCw/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1669029692343?e=1776902400&v=beta&t=LVk72OGDlBCOBmOA3dgWLq9Mf6ogbDdnXYkV2Le5XkA",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQF2YmI4r0mZCw/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1669029692343?e=1776902400&v=beta&t=YUwdcRrmcqmE9IKJfK2yDbwh-Fnc-whUoYZtLyCEVxU",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D5603AQF2YmI4r0mZCw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1669029692343?e=1776902400&v=beta&t=Q9xUVNYXHhJvIsVpFYOR7cRNskyfdcBH2gi9e8cSQ2Q",
+    "profileLocales": [
+      {
+        "country": "TW",
+        "language": "zh"
+      }
+    ],
+    "primaryLocale": {
+      "country": "TW",
+      "language": "zh"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Ph.D. Student at Stanford CS",
+        "locale": "zh_TW"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Intern",
+        "location": "San Francisco Bay Area",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "4 mos",
+        "description": "Member of Technical Staff",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2025,
+          "text": "Jun 2025"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2025,
+          "text": "Sep 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Intern",
+        "location": "Beijing, China",
+        "employmentType": "Full-time",
+        "workplaceType": "Hybrid",
+        "companyName": "Microsoft",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1035/",
+        "companyId": "1035",
+        "duration": "7 mos",
+        "description": "Data, Knowledge, and Intelligence",
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2022,
+          "text": "Jan 2022"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2022,
+          "text": "Jul 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_400_400/B56ZYQ0mrGGoAc-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=47BifJmZk2QcSo7UM_a7lFIk5vBFq49cOHVWx8Pu2dE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_400_400/B56ZYQ0mrGGoAc-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=47BifJmZk2QcSo7UM_a7lFIk5vBFq49cOHVWx8Pu2dE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_200_200/B56ZYQ0mrGGoAM-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=z3mTaKdLV9rmnHGq4MakEXZj6vY7Y9TWAjx0_U7y0X0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_100_100/B56ZYQ0mrGGoAU-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=tKqX5UTArC3FajWCGY-yk-mpPeeR1obx-D3VehmNycQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer Intern",
+        "location": "Beijing, China",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Google",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1441/",
+        "companyId": "1441",
+        "duration": "3 mos",
+        "description": "Tensorflow Lite",
+        "skills": null,
+        "startDate": {
+          "month": "Jul",
+          "year": 2021,
+          "text": "Jul 2021"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2021,
+          "text": "Sep 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_200_200/B4EZmhegXHGcAM-/0/1759350753990/google_logo?e=1776902400&v=beta&t=CTzyZ9kqXiycW6UU0lJPQmCNKxu5QeAaPL_y9ftsJX0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_100_100/B4EZmhegXHGcAU-/0/1759350753990/google_logo?e=1776902400&v=beta&t=LRCYpUl9rmgdri4awRP4FVlvccNARAtgcfqxtRHdedI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Stanford University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1792/",
+        "schoolId": "1792",
+        "degree": "Doctor of Philosophy - PhD",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "startDate": null,
+        "endDate": {
+          "month": "Sep",
+          "year": 2023,
+          "text": "Sep 2023"
+        },
+        "period": "Sep 2023",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_400_400/company-logo_400_400/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=zzE-1MKqCLrmkqb1p2hJqhVuV2hbdZzC0j_ok6Kyhk8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_400_400/company-logo_400_400/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=zzE-1MKqCLrmkqb1p2hJqhVuV2hbdZzC0j_ok6Kyhk8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_200_200/company-logo_200_200/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=0xd9OiQTt31rPm8_wUnQNPsZKrh8XBXIidNxV9RaB5s",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_100_100/company-logo_100_100/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=9qvsDNg8-8GHe51pI3kr1K_DGeN_zXJEt0DlOSSFopY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Peking University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/20289/",
+        "schoolId": "20289",
+        "degree": "Bachelor of Science - BS",
+        "fieldOfStudy": "Data Science",
+        "skills": [],
+        "startDate": {
+          "month": "Sep",
+          "year": 2019,
+          "text": "Sep 2019"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2023,
+          "text": "Jul 2023"
+        },
+        "period": "Sep 2019 - Jul 2023",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQFNJ0xtCpaTmA/company-logo_400_400/company-logo_400_400/0/1630659985593/peking_university_logo?e=1776902400&v=beta&t=tzWsCJkzrFTjS8-XTrasS49bBUqZTxxm9qz4Y-W-UEI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFNJ0xtCpaTmA/company-logo_400_400/company-logo_400_400/0/1630659985593/peking_university_logo?e=1776902400&v=beta&t=tzWsCJkzrFTjS8-XTrasS49bBUqZTxxm9qz4Y-W-UEI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFNJ0xtCpaTmA/company-logo_200_200/company-logo_200_200/0/1630659985593/peking_university_logo?e=1776902400&v=beta&t=GGCchHN0MhDF69ugXCZ_57G9SYP0XpXZfHVxS90uIdg",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFNJ0xtCpaTmA/company-logo_100_100/company-logo_100_100/0/1630659985593/peking_university_logo?e=1776902400&v=beta&t=6Epw2UUmAPAeqOOrlKudHnFnsFVCE8IuE-eKVpCxg2I",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": {
+      "images": [
+        "https://media.licdn.com/dms/image/sync/v2/D5627AQFuZCeJhMZ1eA/articleshare-shrink_800/articleshare-shrink_800/0/1711205965384?e=1776164400&v=beta&t=Lrp373-XkpoqVIJgamsR0woR8BUoQPOH3JRavyeiW7Y"
+      ],
+      "link": "https://cs.stanford.edu/~shaoyj/",
+      "title": "About",
+      "subtitle": "Yijia Shao’s Personal Website",
+      "slides": [
+        {
+          "title": "About",
+          "subtitle": "Yijia Shao’s Personal Website",
+          "description": null,
+          "url": "https://cs.stanford.edu/~shaoyj/",
+          "image": {
+            "url": "https://media.licdn.com/dms/image/sync/v2/D5627AQFuZCeJhMZ1eA/articleshare-shrink_800/articleshare-shrink_800/0/1711205965384?e=1776164400&v=beta&t=Lrp373-XkpoqVIJgamsR0woR8BUoQPOH3JRavyeiW7Y"
+          }
+        }
+      ]
+    },
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAAACxGUB_UQKrUg2khdIgag0S3gCfbUz7Bw",
+        "firstName": "Erik",
+        "lastName": "Brynjolfsson",
+        "publicIdentifier": "erikbrynjolfsson",
+        "linkedinUrl": "https://www.linkedin.com/in/erikbrynjolfsson"
+      },
+      {
+        "id": "ACoAAB_rsusB6MF4t4BKbZdDshX_hvXb-vL7y3M",
+        "firstName": "Chuyue (Livia)",
+        "lastName": "Sun",
+        "publicIdentifier": "chuyue-sun",
+        "linkedinUrl": "https://www.linkedin.com/in/chuyue-sun"
+      },
+      {
+        "id": "ACoAACfmd0ABbho5wa-olR8eCTGjfOqDnZQ-jAk",
+        "firstName": "Zhuoyi",
+        "lastName": "Huang",
+        "publicIdentifier": "zhuoyi-huang",
+        "linkedinUrl": "https://www.linkedin.com/in/zhuoyi-huang"
+      },
+      {
+        "id": "ACoAAB4gOPsBfHPW6mJ6E1z6tiTXsJjT2ZQXMV4",
+        "firstName": "Yuhui",
+        "lastName": "Zhang",
+        "publicIdentifier": "yuhui-zhang-223325121",
+        "linkedinUrl": "https://www.linkedin.com/in/yuhui-zhang-223325121"
+      },
+      {
+        "id": "ACoAAC4xBH0BVTZ1cuNVm_aLvbq4yoLfavaA50w",
+        "firstName": "Yutong",
+        "lastName": "Zhang",
+        "publicIdentifier": "yutong-zhang74",
+        "linkedinUrl": "https://www.linkedin.com/in/yutong-zhang74"
+      },
+      {
+        "id": "ACoAAD12yNcBE_woCw-SwWiJgc77N-V1C3oSn24",
+        "firstName": "Tian",
+        "lastName": "Gao",
+        "publicIdentifier": "tian-gao-333418249",
+        "linkedinUrl": "https://www.linkedin.com/in/tian-gao-333418249"
+      },
+      {
+        "id": "ACoAAA5SdSABvEA5f5XmimnwoGVQSAT1IR5v67Y",
+        "firstName": "David",
+        "lastName": "Nguyen",
+        "publicIdentifier": "davidnguyeneconomistoecdparis",
+        "linkedinUrl": "https://www.linkedin.com/in/davidnguyeneconomistoecdparis"
+      },
+      {
+        "id": "ACoAAEGqVfsBOne-ncXMjvp1RFY703OIWKM8QRw",
+        "firstName": "Fan",
+        "lastName": "Nie",
+        "publicIdentifier": "fan-nie-677b4b268",
+        "linkedinUrl": "https://www.linkedin.com/in/fan-nie-677b4b268"
+      },
+      {
+        "id": "ACoAAETlQycBALw60JcmIPWi65XyaGR1LrQTLrU",
+        "firstName": "Zhiyu",
+        "lastName": "Xie",
+        "publicIdentifier": "zhiyu-xie",
+        "linkedinUrl": "https://www.linkedin.com/in/zhiyu-xie"
+      },
+      {
+        "id": "ACoAAChHFNsBT4F3v_aoGuocsmBWpXZpCuq3VoM",
+        "firstName": "Tiange",
+        "lastName": "Xiang",
+        "publicIdentifier": "xtiange",
+        "linkedinUrl": "https://www.linkedin.com/in/xtiange"
+      },
+      {
+        "id": "ACoAADj-R7UBz__YPbtn8zb8n2sNTXfRMcry6bM",
+        "firstName": "Yining",
+        "lastName": "Mao",
+        "publicIdentifier": "yining-mao-a71285228",
+        "linkedinUrl": "https://www.linkedin.com/in/yining-mao-a71285228"
+      },
+      {
+        "id": "ACoAAB5nK5ABgDnpQtQLSz47P5EkLXGKgOtWb5Y",
+        "firstName": "Shannon",
+        "lastName": "Shen",
+        "publicIdentifier": "shannonzshen",
+        "linkedinUrl": "https://www.linkedin.com/in/shannonzshen"
+      },
+      {
+        "id": "ACoAACuPZ3oBIaxmSFaC5a5xFZ3psLLh-44LlvM",
+        "firstName": "Michael",
+        "lastName": "Ryan",
+        "publicIdentifier": "michael-ryan-207",
+        "linkedinUrl": "https://www.linkedin.com/in/michael-ryan-207"
+      },
+      {
+        "id": "ACoAADszw1oBJ4LrCvckPV0wWLTFZFSN8Dkastc",
+        "firstName": "Haoran",
+        "lastName": "Geng",
+        "publicIdentifier": "haoran-geng-422778238",
+        "linkedinUrl": "https://www.linkedin.com/in/haoran-geng-422778238"
+      },
+      {
+        "id": "ACoAAC9mAaEB9atcjEiOSwKb8jD-Vv-lqIQHFuQ",
+        "firstName": "Yanzhe",
+        "lastName": "Zhang",
+        "publicIdentifier": "steven-yanzhe-zhang",
+        "linkedinUrl": "https://www.linkedin.com/in/steven-yanzhe-zhang"
+      },
+      {
+        "id": "ACoAAC6QBnUBXe9Y3g8ZkCLOskLYXAxja6FtAyc",
+        "firstName": "Shirley",
+        "lastName": "Wu",
+        "publicIdentifier": "shirley-wu-bb1751199",
+        "linkedinUrl": "https://www.linkedin.com/in/shirley-wu-bb1751199"
+      },
+      {
+        "id": "ACoAAESvutUB-9Ka13lFBK_sqrFcvolKct4FTUI",
+        "firstName": "Wanjia",
+        "lastName": "Zhao",
+        "publicIdentifier": "wanjia-zhao-299b13281",
+        "linkedinUrl": "https://www.linkedin.com/in/wanjia-zhao-299b13281"
+      },
+      {
+        "id": "ACoAACx6vrcBhnR6rUNnupTxTbHsMa1ulhHjlnQ",
+        "firstName": "Yucheng",
+        "lastName": "Jiang",
+        "publicIdentifier": "yucheng-jiang-a1bab8189",
+        "linkedinUrl": "https://www.linkedin.com/in/yucheng-jiang-a1bab8189"
+      },
+      {
+        "id": "ACoAADk02XABLr4rqFs0zuWGH67QMGLD9HbHHj0",
+        "firstName": "Humishka",
+        "lastName": "Zope",
+        "publicIdentifier": "humishka-zope",
+        "linkedinUrl": "https://www.linkedin.com/in/humishka-zope"
+      },
+      {
+        "id": "ACoAAAUTFlUBuHRq2Xtvawx2YA8obnGXBDPoJFY",
+        "firstName": "Diyi",
+        "lastName": "Yang",
+        "publicIdentifier": "diyi-yang-10561924",
+        "linkedinUrl": "https://www.linkedin.com/in/diyi-yang-10561924"
+      },
+      {
+        "id": "ACoAAECk3lkBdHjgekaEijeri3Tb9FBGXurP_3o",
+        "firstName": "Joe",
+        "lastName": "Goodman",
+        "position": "--",
+        "publicIdentifier": "joe-goodman-1b5267263",
+        "linkedinUrl": "https://www.linkedin.com/in/joe-goodman-1b5267263"
+      },
+      {
+        "id": "ACoAAFHSLa4BrszhEjWoaOcp0pPKKGj1g4ZlGTI",
+        "firstName": "Jin Hua",
+        "lastName": "F",
+        "position": "--",
+        "publicIdentifier": "jin-hua-f-266883323",
+        "linkedinUrl": "https://www.linkedin.com/in/jin-hua-f-266883323"
+      },
+      {
+        "id": "ACoAAF2hIswBbMYSPmR-hJosvAco3A2_ovntSac",
+        "firstName": "Magdalena",
+        "lastName": "Elliott",
+        "position": "--",
+        "publicIdentifier": "magdalena-elliott-8100a337a",
+        "linkedinUrl": "https://www.linkedin.com/in/magdalena-elliott-8100a337a"
+      },
+      {
+        "id": "ACoAADwFKzIBig6VpmfMppqs3SD9YXHBSIYn-cQ",
+        "firstName": "Fahad",
+        "lastName": "Ahsan",
+        "position": "--",
+        "publicIdentifier": "fahad-ahsan-302296241",
+        "linkedinUrl": "https://www.linkedin.com/in/fahad-ahsan-302296241"
+      },
+      {
+        "id": "ACoAADh26YQBZaZy-rDoGYQki0-dyDuZeoL0Je4",
+        "firstName": "Nick",
+        "lastName": "Colo",
+        "position": "--",
+        "publicIdentifier": "nick-colo-b18307225",
+        "linkedinUrl": "https://www.linkedin.com/in/nick-colo-b18307225"
+      },
+      {
+        "id": "ACoAAGVRPPoB6JzfysWzLJGwW928nJu-tOvDWVs",
+        "firstName": "Robert",
+        "lastName": "undefined",
+        "position": "--",
+        "publicIdentifier": "robert-undefined-9363253b5",
+        "linkedinUrl": "https://www.linkedin.com/in/robert-undefined-9363253b5"
+      },
+      {
+        "id": "ACoAAEtMXxcByDS4d3W3s6E_rNuWXFxtti1xP2k",
+        "firstName": "Isha",
+        "lastName": "Thanks",
+        "position": "--",
+        "publicIdentifier": "isha-thanks-29b0aa2b3",
+        "linkedinUrl": "https://www.linkedin.com/in/isha-thanks-29b0aa2b3"
+      },
+      {
+        "id": "ACoAAGVdj3UB6zn8e-x8mEgNiojLhOlG2LluXb0",
+        "firstName": "D",
+        "lastName": "G",
+        "position": "--",
+        "publicIdentifier": "d-g-1316553b5",
+        "linkedinUrl": "https://www.linkedin.com/in/d-g-1316553b5"
+      },
+      {
+        "id": "ACoAAEklISgBXrZEam1N3338znmn0erCLbBS508",
+        "firstName": "Jonathan",
+        "lastName": "Bennett",
+        "position": "--",
+        "publicIdentifier": "jonathan-bennett-a60b872a2",
+        "linkedinUrl": "https://www.linkedin.com/in/jonathan-bennett-a60b872a2"
+      },
+      {
+        "id": "ACoAAFjGbNwBmFbhrKaNSxt5k12udwLWm2HmC_s",
+        "firstName": "Paolo",
+        "lastName": "Mariani",
+        "position": "--",
+        "publicIdentifier": "paolo-mariani-878968356",
+        "linkedinUrl": "https://www.linkedin.com/in/paolo-mariani-878968356"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAC336YcBpvLqyNigQC6UfjUkFznA51tMtuI"
+    }
+  }
+}

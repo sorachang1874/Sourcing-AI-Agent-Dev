@@ -1,0 +1,888 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAABLLpuMBh_XM8OZ79LUJESl-zZ0E8WJNQVA",
+    "profile_url": "https://www.linkedin.com/in/ACwAABLLpuMBh_XM8OZ79LUJESl-zZ0E8WJNQVA"
+  },
+  "item": {
+    "id": "ACoAABLLpuMBU7a9WPW-GubLTIkDjAF6hz7Ujkc",
+    "publicIdentifier": "daniel-xu-42b73289",
+    "linkedinUrl": "https://www.linkedin.com/in/daniel-xu-42b73289",
+    "firstName": "Daniel",
+    "lastName": "Xu",
+    "emails": [
+      {
+        "email": "daniel.xu@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Low level systems",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "315336419",
+    "registeredAt": "2014-01-11T00:33:40.423Z",
+    "topSkills": null,
+    "connectionsCount": 561,
+    "followerCount": 621,
+    "verified": true,
+    "about": "I hack on systems software. Free software enthusiast. Mostly, I just like computers.",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 6,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "18321",
+        "companyId": "2650",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2650/",
+        "schoolName": "University of Illinois at Urbana-Champaign"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/C5603AQH5X9X2pVzQkQ/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1569620174469?e=1776902400&v=beta&t=y2iW_pydfDiFigH0HTmopKqGk6TH7u_eS1LxJ2iX3c8",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQH5X9X2pVzQkQ/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1569620174469?e=1776902400&v=beta&t=y2iW_pydfDiFigH0HTmopKqGk6TH7u_eS1LxJ2iX3c8",
+          "width": 500,
+          "height": 500,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQH5X9X2pVzQkQ/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1569620174441?e=1776902400&v=beta&t=IRDOjhXUBMXEDwOK-TfWvijFp2gH0wImEHGdIAzfTN4",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQH5X9X2pVzQkQ/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1569620174388?e=1776902400&v=beta&t=LXJADKRwRCCorr6EyK2QQDZcFU2O1DGZB0gKJBRJ1Oo",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQH5X9X2pVzQkQ/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1569620174413?e=1776902400&v=beta&t=a6L8KuSVcxsu7vZFgnBOJcfZuQbS67m6iHepVzfu2HE",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/C5603AQH5X9X2pVzQkQ/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1569620174469?e=1776902400&v=beta&t=y2iW_pydfDiFigH0HTmopKqGk6TH7u_eS1LxJ2iX3c8",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Low level systems",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "11 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2025,
+          "text": "Jun 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "1 yr 3 mos",
+        "description": "Linux kernel team\n\nbpftrace, eBPF, kernel networking",
+        "skills": null,
+        "startDate": {
+          "month": "Apr",
+          "year": 2024,
+          "text": "Apr 2024"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2025,
+          "text": "Jun 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior Principal Software Engineer",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Aviatrix",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/6440846/",
+        "companyId": "6440846",
+        "duration": "2 yrs 5 mos",
+        "description": "Dataplane / Linux kernel\n\nAlong with firewalls, high performance ipsec, test infra, dev infra, ci, and a bit of everything else",
+        "skills": null,
+        "startDate": {
+          "month": "Nov",
+          "year": 2021,
+          "text": "Nov 2021"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2024,
+          "text": "Mar 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQE8m9apWnrY_w/company-logo_400_400/B56ZWV68dEHsAY-/0/1741977012896/aviatrix_systems_logo?e=1776902400&v=beta&t=ewDHAt0BmetGFUpNctkaOfbzkHwv3vxDou5_CDlguEI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQE8m9apWnrY_w/company-logo_400_400/B56ZWV68dEHsAY-/0/1741977012896/aviatrix_systems_logo?e=1776902400&v=beta&t=ewDHAt0BmetGFUpNctkaOfbzkHwv3vxDou5_CDlguEI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQE8m9apWnrY_w/company-logo_200_200/B56ZWV68dEHsAI-/0/1741977012896/aviatrix_systems_logo?e=1776902400&v=beta&t=igWQCzIBFkbmj26HieYbpUCkkI-SZYUFbgL8mZ1gTiM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQE8m9apWnrY_w/company-logo_100_100/B56ZWV68dEHsAQ-/0/1741977012896/aviatrix_systems_logo?e=1776902400&v=beta&t=-m5a1BCqXvE1VhyE0Q9bs5y9scXgRZ6WM9Ld2UkwhlA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "4 yrs 4 mos",
+        "description": "Linux kernel team / Linux kernel applications\n\neBPF, btrfs, cgroup2, nbd",
+        "skills": null,
+        "startDate": {
+          "month": "Jul",
+          "year": 2017,
+          "text": "Jul 2017"
+        },
+        "endDate": {
+          "month": "Oct",
+          "year": 2021,
+          "text": "Oct 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Teaching assistant",
+        "location": "Urbana-Champaign Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "University of Illinois at Urbana-Champaign",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/university-of-illinois-urbana-champaign/",
+        "companyId": "2650",
+        "companyUniversalName": "university-of-illinois-urbana-champaign",
+        "duration": "5 mos",
+        "description": "CS 438 Networks",
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2017,
+          "text": "Jan 2017"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2017,
+          "text": "May 2017"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGFFDl_Z9pIAA/company-logo_400_400/company-logo_400_400/0/1630611684443/university_of_illinois_at_urbana_champaign_logo?e=1776902400&v=beta&t=1--Z9zB14SnN_KSEEz3x-H2Uy7aJs5OXT38VWWEsQEo",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGFFDl_Z9pIAA/company-logo_400_400/company-logo_400_400/0/1630611684443/university_of_illinois_at_urbana_champaign_logo?e=1776902400&v=beta&t=1--Z9zB14SnN_KSEEz3x-H2Uy7aJs5OXT38VWWEsQEo",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGFFDl_Z9pIAA/company-logo_200_200/company-logo_200_200/0/1630611684443/university_of_illinois_at_urbana_champaign_logo?e=1776902400&v=beta&t=nFuRnwx0uMs09egU9-21TjWewArRDux06lp-r6wcprY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGFFDl_Z9pIAA/company-logo_100_100/company-logo_100_100/0/1630611684443/university_of_illinois_at_urbana_champaign_logo?e=1776902400&v=beta&t=YdPWblWwq_--WXVROnRQ5WEjcYM16NA0RvPcrTcOWgk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Intern",
+        "location": "Urbana-Champaign Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Yahoo",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1288/",
+        "companyId": "1288",
+        "duration": "9 mos",
+        "description": "Apache Traffic Server development",
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2016,
+          "text": "Sep 2016"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2017,
+          "text": "May 2017"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHZRIvlF1NvZA/company-logo_400_400/company-logo_400_400/0/1734629033465/yahoo_logo?e=1776902400&v=beta&t=tyoKWOjjRA2BeufKGvXBFBWHkbTEaAWCK1LH1mzBGgw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHZRIvlF1NvZA/company-logo_400_400/company-logo_400_400/0/1734629033465/yahoo_logo?e=1776902400&v=beta&t=tyoKWOjjRA2BeufKGvXBFBWHkbTEaAWCK1LH1mzBGgw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHZRIvlF1NvZA/company-logo_200_200/company-logo_200_200/0/1734629033465/yahoo_logo?e=1776902400&v=beta&t=1nVR5z7fxUI0LuIAhrouqrG2RA6tMBwjBnzu0e3vdLM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHZRIvlF1NvZA/company-logo_100_100/company-logo_100_100/0/1734629033465/yahoo_logo?e=1776902400&v=beta&t=qzVdd30zO1ELed5xdznH0nO-72k4t64sThqn6__upgI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Intern",
+        "location": "Sunnyvale, CA",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Riverbed",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/7796/",
+        "companyId": "7796",
+        "duration": "4 mos",
+        "description": "OpenStack stuff",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2016,
+          "text": "May 2016"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2016,
+          "text": "Aug 2016"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHCgilFCds1fw/company-logo_400_400/company-logo_400_400/0/1651011522873/riverbed_technology_logo?e=1776902400&v=beta&t=FM7rwq5bvjpRiJ9lNQZk0ZXT8W3DTwbTrU5jDZta1cg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHCgilFCds1fw/company-logo_400_400/company-logo_400_400/0/1651011522873/riverbed_technology_logo?e=1776902400&v=beta&t=FM7rwq5bvjpRiJ9lNQZk0ZXT8W3DTwbTrU5jDZta1cg",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHCgilFCds1fw/company-logo_200_200/company-logo_200_200/0/1651011522873/riverbed_technology_logo?e=1776902400&v=beta&t=Vuc-H4akyrHA_zVBvbyIjH2lB9MtEVFOtXKE4iVbVq0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHCgilFCds1fw/company-logo_100_100/company-logo_100_100/0/1651011522873/riverbed_technology_logo?e=1776902400&v=beta&t=bq4JJGgq3d1sKMv43knJfylZw2CAulYGUIp5t9p5qAY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Intern",
+        "location": "Sunnyvale & Champaign",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Yahoo",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1288/",
+        "companyId": "1288",
+        "duration": "1 yr",
+        "description": "Apache Traffic Server development",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2015,
+          "text": "Jun 2015"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2016,
+          "text": "May 2016"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHZRIvlF1NvZA/company-logo_400_400/company-logo_400_400/0/1734629033465/yahoo_logo?e=1776902400&v=beta&t=tyoKWOjjRA2BeufKGvXBFBWHkbTEaAWCK1LH1mzBGgw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHZRIvlF1NvZA/company-logo_400_400/company-logo_400_400/0/1734629033465/yahoo_logo?e=1776902400&v=beta&t=tyoKWOjjRA2BeufKGvXBFBWHkbTEaAWCK1LH1mzBGgw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHZRIvlF1NvZA/company-logo_200_200/company-logo_200_200/0/1734629033465/yahoo_logo?e=1776902400&v=beta&t=1nVR5z7fxUI0LuIAhrouqrG2RA6tMBwjBnzu0e3vdLM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHZRIvlF1NvZA/company-logo_100_100/company-logo_100_100/0/1734629033465/yahoo_logo?e=1776902400&v=beta&t=qzVdd30zO1ELed5xdznH0nO-72k4t64sThqn6__upgI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "University of Illinois Urbana-Champaign",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2650/",
+        "schoolId": "2650",
+        "degree": "BS",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "description": "Great time, lots of learning.",
+        "insights": "Activities and societies: Underwater Hockey Club",
+        "startDate": {
+          "year": 2013,
+          "text": "2013"
+        },
+        "endDate": {
+          "year": 2017,
+          "text": "2017"
+        },
+        "period": "2013 - 2017",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGFFDl_Z9pIAA/company-logo_400_400/company-logo_400_400/0/1630611684443/university_of_illinois_at_urbana_champaign_logo?e=1776902400&v=beta&t=1--Z9zB14SnN_KSEEz3x-H2Uy7aJs5OXT38VWWEsQEo",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGFFDl_Z9pIAA/company-logo_400_400/company-logo_400_400/0/1630611684443/university_of_illinois_at_urbana_champaign_logo?e=1776902400&v=beta&t=1--Z9zB14SnN_KSEEz3x-H2Uy7aJs5OXT38VWWEsQEo",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGFFDl_Z9pIAA/company-logo_200_200/company-logo_200_200/0/1630611684443/university_of_illinois_at_urbana_champaign_logo?e=1776902400&v=beta&t=nFuRnwx0uMs09egU9-21TjWewArRDux06lp-r6wcprY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGFFDl_Z9pIAA/company-logo_100_100/company-logo_100_100/0/1630611684443/university_of_illinois_at_urbana_champaign_logo?e=1776902400&v=beta&t=YdPWblWwq_--WXVROnRQ5WEjcYM16NA0RvPcrTcOWgk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [
+      {
+        "role": "CS 125 TA",
+        "description": "CS 125 Intro to Computer Science",
+        "duration": "Jan 2014 - May 2015 · 1 yr 5 mos",
+        "startDate": {
+          "month": "Jan",
+          "year": 2014,
+          "text": "Jan 2014"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2015,
+          "text": "May 2015 · 1 yr 5 mos"
+        },
+        "organizationName": "UIUC",
+        "organizationLinkedinUrl": null,
+        "cause": "Education"
+      },
+      {
+        "role": "Swim Coach",
+        "description": "Swim coach for Special Olympics swim team",
+        "duration": "Jan 2013 - Jun 2014 · 1 yr 6 mos",
+        "startDate": {
+          "month": "Jan",
+          "year": 2013,
+          "text": "Jan 2013"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2014,
+          "text": "Jun 2014 · 1 yr 6 mos"
+        },
+        "organizationName": "STARS Swim Club",
+        "organizationLinkedinUrl": null,
+        "cause": "Social Services"
+      }
+    ],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "C++",
+        "endorsements": "7 endorsements"
+      },
+      {
+        "name": "Hustle",
+        "endorsements": "10 endorsements"
+      },
+      {
+        "name": "Strong Business Acumen",
+        "endorsements": "7 endorsements"
+      },
+      {
+        "name": "Software Engineering",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "C",
+        "assessments": "Passed LinkedIn Skill Assessment",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Python",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Java",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "Online Gaming",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Skating",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Food Preparation",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Rap"
+      },
+      {
+        "name": "Ethical Hacking"
+      },
+      {
+        "name": "Vibrational Healing",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Random Vibration"
+      },
+      {
+        "name": "Software Development",
+        "endorsements": "1 endorsement"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "position": "AI Researcher, Co-founder @ Thinking Machines Lab",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAAAQ4Q7kByw3YKf2rFlmWzRMF7P8Gw4S9PIU",
+        "firstName": "Yinghai",
+        "lastName": "L.",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "yinghai83",
+        "linkedinUrl": "https://www.linkedin.com/in/yinghai83"
+      },
+      {
+        "id": "ACoAABQ5lJUBry2byQYf_TtxDF9Rha9l-RqYsaM",
+        "firstName": "Guang-He",
+        "lastName": "Lee",
+        "position": "Thinking Machines Lab | Prev: Anthropic, Citadel, MIT",
+        "publicIdentifier": "guang-he-lee-64577895",
+        "linkedinUrl": "https://www.linkedin.com/in/guang-he-lee-64577895"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABMugyUBsZ9MwIVIzmOSzlvmO6TOFL-mfAU",
+        "firstName": "Chih-Kuan (Jason)",
+        "lastName": "Yeh",
+        "position": "building LLMs",
+        "publicIdentifier": "chih-kuan-jason-yeh-8859378b",
+        "linkedinUrl": "https://www.linkedin.com/in/chih-kuan-jason-yeh-8859378b"
+      },
+      {
+        "id": "ACoAABqSHaUBgoPu_j2NSmNfYyGkrcUvLn5mbbo",
+        "firstName": "Jacob",
+        "lastName": "van Gogh",
+        "position": "ML Research @ Thinking Machines",
+        "publicIdentifier": "jacobvangogh",
+        "linkedinUrl": "https://www.linkedin.com/in/jacobvangogh"
+      },
+      {
+        "id": "ACoAACaOARIBRO2EEH12QWQO29L__oI3N2K4u14",
+        "firstName": "Mingjie",
+        "lastName": "Sun",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "mingjie-sun-06a761160",
+        "linkedinUrl": "https://www.linkedin.com/in/mingjie-sun-06a761160"
+      },
+      {
+        "id": "ACoAACQq5HoBKvwLgBUlXiVziRWJDXBocy6aOE4",
+        "firstName": "Erik",
+        "lastName": "Wijmans",
+        "position": "AI Researcher",
+        "publicIdentifier": "erik-wijmans-0a226814b",
+        "linkedinUrl": "https://www.linkedin.com/in/erik-wijmans-0a226814b"
+      },
+      {
+        "id": "ACoAAAENQhgBH8wIeS6hMrUoWlbKk5L9GWNNQCE",
+        "firstName": "Andrii",
+        "lastName": "Grynenko",
+        "position": "Software Engineer",
+        "publicIdentifier": "andrii-grynenko-a48aab5",
+        "linkedinUrl": "https://www.linkedin.com/in/andrii-grynenko-a48aab5"
+      },
+      {
+        "id": "ACoAABYs4-IB5mHx5eVfOHzu1e8xlO3q_kb38IM",
+        "firstName": "Brydon",
+        "lastName": "Eastman",
+        "position": "Nerd @ Thinking Machines Labs | Formerly Member of Technical Staff @ OpenAI | PhD in Mathematical Oncology",
+        "publicIdentifier": "brydon-eastman-396719a4",
+        "linkedinUrl": "https://www.linkedin.com/in/brydon-eastman-396719a4"
+      },
+      {
+        "id": "ACoAAACo1tYBGy9sT2OWZuEULOMe4K_b2Y22-F8",
+        "firstName": "Alex",
+        "lastName": "Gartrell",
+        "position": "Engineering @ Thinking Machines, Ex-Meta/Facebook",
+        "publicIdentifier": "alexgartrell",
+        "linkedinUrl": "https://www.linkedin.com/in/alexgartrell"
+      },
+      {
+        "id": "ACoAABA0sF8BJqwmfoms3veu9TE72tj8JMUQEFA",
+        "firstName": "Sam",
+        "lastName": "Shleifer",
+        "position": "The Biggest Legend",
+        "publicIdentifier": "sam-shleifer-a5307a77",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-shleifer-a5307a77"
+      },
+      {
+        "id": "ACoAAB3BApkB38H4Z__jKDDFBfF7jt7w16vD0Xs",
+        "firstName": "Rafael",
+        "lastName": "Rafailov",
+        "position": "Member Of Technical Staff - Thinking Machines Lab",
+        "publicIdentifier": "rafael-rafailov-1b521611b",
+        "linkedinUrl": "https://www.linkedin.com/in/rafael-rafailov-1b521611b"
+      },
+      {
+        "id": "ACoAACEKIcoBlH0R5ZT_TKQuJ4i3ZD4WlI1-rME",
+        "firstName": "Jacob",
+        "lastName": "Menick",
+        "position": "Thinking Machines, Founding Team",
+        "publicIdentifier": "jacob-menick-5a277a135",
+        "linkedinUrl": "https://www.linkedin.com/in/jacob-menick-5a277a135"
+      },
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "position": "Thinking about machines",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAAAd3c8cBXKnzqS80_HMaDIGNdqrXbaFbO5g",
+        "firstName": "James",
+        "lastName": "Sun",
+        "position": "Software Engineer",
+        "publicIdentifier": "james5un",
+        "linkedinUrl": "https://www.linkedin.com/in/james5un"
+      },
+      {
+        "id": "ACoAAAhY-psBFcHXNbjunn6_QnPfV6Bo6w4yzug",
+        "firstName": "Kenny",
+        "lastName": "Yu",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "kenny-yu-aa3a9a3a",
+        "linkedinUrl": "https://www.linkedin.com/in/kenny-yu-aa3a9a3a"
+      },
+      {
+        "id": "ACoAABxxSOoBxMid0wd8m2NDb9w5zTY2lQbrNz4",
+        "firstName": "Leon",
+        "lastName": "G.",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "yazhi-gao",
+        "linkedinUrl": "https://www.linkedin.com/in/yazhi-gao"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAAAeoHjYB_Lo5sUFlpZpz2L74oe9nEIKztQA",
+        "firstName": "Jenya",
+        "lastName": "L.",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "jenya-l",
+        "linkedinUrl": "https://www.linkedin.com/in/jenya-l"
+      },
+      {
+        "id": "ACoAABVICJUBZtVVJX_i5ErrnXkbRseSGKYCcFU",
+        "firstName": "Andrew",
+        "lastName": "Strutt",
+        "position": "R&D Tax Incentive Program Specialist",
+        "publicIdentifier": "andrew-strutt-8716a59b",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-strutt-8716a59b"
+      },
+      {
+        "id": "ACoAAA_mjHQBbxDC-ofILyIWZx9MbpVdKHpfolE",
+        "firstName": "Peter",
+        "lastName": "Kennedy",
+        "position": "Retired Financial Services Tax specialist",
+        "publicIdentifier": "peterkennedypwc",
+        "linkedinUrl": "https://www.linkedin.com/in/peterkennedypwc"
+      },
+      {
+        "id": "ACoAAALHkJ4BJew1eNJVcn_9rNvSKUNbU4jQHwU",
+        "firstName": "Latha",
+        "lastName": "Kumar",
+        "position": "Principal and Tax Specialist at ThePartners in North Sydney.",
+        "publicIdentifier": "latha-kumar-91274a13",
+        "linkedinUrl": "https://www.linkedin.com/in/latha-kumar-91274a13"
+      },
+      {
+        "id": "ACoAAClw7wMBmViifEgXrAuvExX_hmbLuSnSqQ8",
+        "firstName": "Janete",
+        "lastName": "Nader",
+        "position": "Senior Tax Accountant",
+        "publicIdentifier": "janete-nader-76ba15174",
+        "linkedinUrl": "https://www.linkedin.com/in/janete-nader-76ba15174"
+      },
+      {
+        "id": "ACoAACiv96EBTSabv4dUBXIjQEeeRA44J1wr5Q0",
+        "firstName": "Trixie",
+        "lastName": "Reyes",
+        "position": "Accountant/Auditor",
+        "publicIdentifier": "trxreyes",
+        "linkedinUrl": "https://www.linkedin.com/in/trxreyes"
+      },
+      {
+        "id": "ACoAABWU_1QBxb_8QmMzCl6SBKLPh-gYY89cCvY",
+        "firstName": "Shubinder kaur",
+        "lastName": "Ladia",
+        "position": "Tax and Accounting Software Specialist @ Wolters Kluwer | ISC2 Candidate",
+        "publicIdentifier": "shubinder-kaur-ladia-784318a1",
+        "linkedinUrl": "https://www.linkedin.com/in/shubinder-kaur-ladia-784318a1"
+      },
+      {
+        "id": "ACoAACHwclUB9aQMNu1eAf5D54w1s2XSKoF5ftA",
+        "firstName": "Cyrus",
+        "lastName": "Thistleton",
+        "position": "Tax Specialist - Emerging ERP, Tax and Accounting system Specialist ",
+        "publicIdentifier": "cyrus-thistleton-47183913a",
+        "linkedinUrl": "https://www.linkedin.com/in/cyrus-thistleton-47183913a"
+      },
+      {
+        "id": "ACoAAANfvDkB3tVRVYFlJ4aPMFQzM-NjG0qQL6A",
+        "firstName": "John",
+        "lastName": "Avery",
+        "position": "Land Tax Specialist",
+        "publicIdentifier": "john-avery-b61b5916",
+        "linkedinUrl": "https://www.linkedin.com/in/john-avery-b61b5916"
+      },
+      {
+        "id": "ACoAABYOSCoBElnyT1hbLDVTyCOTbqVWEzsYZJs",
+        "firstName": "Roxanie",
+        "lastName": "Calixto, CPA, MSA",
+        "position": "Indirect Tax Specialist at QBE Insurance",
+        "publicIdentifier": "roxanie-calixto-cpa-msa-576b10a3",
+        "linkedinUrl": "https://www.linkedin.com/in/roxanie-calixto-cpa-msa-576b10a3"
+      },
+      {
+        "id": "ACoAABBAYOoBsn17S7FZC22tL5s7zAKLI8jcxGs",
+        "firstName": "Odette",
+        "lastName": "Yen",
+        "position": "Specialist Tax Agent - Fuel Tax Credits ",
+        "publicIdentifier": "odette-yen-26238a77",
+        "linkedinUrl": "https://www.linkedin.com/in/odette-yen-26238a77"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAABLLpuMBh_XM8OZ79LUJESl-zZ0E8WJNQVA"
+    }
+  }
+}

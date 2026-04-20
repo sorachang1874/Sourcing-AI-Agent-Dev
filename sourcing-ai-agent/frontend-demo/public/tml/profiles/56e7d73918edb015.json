@@ -1,0 +1,1022 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAABnLX1IBvRLHYJkmIPl9WdiCDVd5roIYf8k",
+    "profile_url": "https://www.linkedin.com/in/ACwAABnLX1IBvRLHYJkmIPl9WdiCDVd5roIYf8k"
+  },
+  "item": {
+    "id": "ACoAABnLX1IB8hIAjg2IlA_6DHsRjL_bO56WmvE",
+    "publicIdentifier": "jifan-zhang-016b1b100",
+    "linkedinUrl": "https://www.linkedin.com/in/jifan-zhang-016b1b100",
+    "firstName": "Jifan",
+    "lastName": "Zhang",
+    "emails": [
+      {
+        "email": "jifan.zhang@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "MTS @ Thinking Machines | Prev. Anthropic, xAI",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "432758610",
+    "registeredAt": "2015-07-05T03:34:28.462Z",
+    "topSkills": null,
+    "connectionsCount": 1060,
+    "followerCount": 1128,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 3,
+            "year": 2026,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "19689",
+        "companyId": "4099",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/4099/",
+        "schoolName": "University of Wisconsin-Madison"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4E03AQGEtML-mLeMng/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1686285614393?e=1776902400&v=beta&t=DzBja_VKb_5Ilu5HLXTd-8URi_yCDsfxC5SvnxGqPm0",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQGEtML-mLeMng/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1686285614393?e=1776902400&v=beta&t=DzBja_VKb_5Ilu5HLXTd-8URi_yCDsfxC5SvnxGqPm0",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQGEtML-mLeMng/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1686285614393?e=1776902400&v=beta&t=BWlrA5XqGtYX0BNlIRumNE0ijhaFp-bQ-bqOF9sYl2A",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQGEtML-mLeMng/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1686285614393?e=1776902400&v=beta&t=1luI-LV0GqcA7xbAvMlruiopajOdFmifx-s782RmLFI",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQGEtML-mLeMng/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1686285614393?e=1776902400&v=beta&t=b_sPY-DMss7EnbfRG7kPqELY-brO3UpodPAvaNaNSrI",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D4E03AQGEtML-mLeMng/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1686285614393?e=1776902400&v=beta&t=DzBja_VKb_5Ilu5HLXTd-8URi_yCDsfxC5SvnxGqPm0",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "MTS @ Thinking Machines | Prev. Anthropic, xAI",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco Bay Area",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "2 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2026,
+          "text": "Mar 2026"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Member of Technical Staff",
+        "location": "Palo Alto, CA",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "xAI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/96151950/",
+        "companyId": "96151950",
+        "duration": "4 mos",
+        "description": "Post-training, model behavior & safety. Resigned due to AI safety concerns.",
+        "skills": null,
+        "startDate": {
+          "month": "Dec",
+          "year": 2025,
+          "text": "Dec 2025"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2026,
+          "text": "Mar 2026"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQFGK5Kkd1nUlg/company-logo_400_400/company-logo_400_400/0/1738099065875/xai_logo?e=1776902400&v=beta&t=D9_BxwFh9s6Xs2Cj7r80cNvoc3yl7tyg6f8ZvrbXv64",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFGK5Kkd1nUlg/company-logo_400_400/company-logo_400_400/0/1738099065875/xai_logo?e=1776902400&v=beta&t=D9_BxwFh9s6Xs2Cj7r80cNvoc3yl7tyg6f8ZvrbXv64",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFGK5Kkd1nUlg/company-logo_200_200/company-logo_200_200/0/1738099065875/xai_logo?e=1776902400&v=beta&t=HEoRgaX2hRkDsEbWqIdB85Qph6PAPQDMvqQqOoxhzHc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFGK5Kkd1nUlg/company-logo_100_100/company-logo_100_100/0/1738099065875/xai_logo?e=1776902400&v=beta&t=fPyP5ijKRIbwP3cYP1d0JhCSK_zHRQZxBvUsdDb3vPk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Fellow",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Anthropic",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/74126343/",
+        "companyId": "74126343",
+        "duration": "7 mos",
+        "description": "Alignment Science and Claude’s Character/Values",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2025,
+          "text": "Jun 2025"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2025,
+          "text": "Dec 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_400_400/company-logo_400_400/0/1719256729905/anthropicresearch_logo?e=1776902400&v=beta&t=6sv-GagnF1G5d4B4rN1Yu3sq6fln2BP_9tb0s6bARoY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_400_400/company-logo_400_400/0/1719256729905/anthropicresearch_logo?e=1776902400&v=beta&t=6sv-GagnF1G5d4B4rN1Yu3sq6fln2BP_9tb0s6bARoY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_200_200/company-logo_200_200/0/1719256413073/anthropicresearch_logo?e=1776902400&v=beta&t=cPQIIISEsrdyXB00bI4BYAdxnK2Mx72yV0BDdzg3baM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_100_100/company-logo_100_100/0/1719256989269/anthropicresearch_logo?e=1776902400&v=beta&t=6343WBiudLAu8QSHWrlzIJOnlExxTT9uZZpuCs-AeLk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Assistant",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Wisconsin Institute for Discovery",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3710240/",
+        "companyId": "3710240",
+        "duration": "4 yrs",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2021,
+          "text": "Sep 2021"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2025,
+          "text": "Aug 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQFznS-mTmxCSg/company-logo_400_400/company-logo_400_400/0/1631366079629?e=1776902400&v=beta&t=N-YJnoCPkCBzkD8bByyixtkA0idYEwYLDoBIz0wDrak",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFznS-mTmxCSg/company-logo_400_400/company-logo_400_400/0/1631366079629?e=1776902400&v=beta&t=N-YJnoCPkCBzkD8bByyixtkA0idYEwYLDoBIz0wDrak",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFznS-mTmxCSg/company-logo_200_200/company-logo_200_200/0/1631366079629?e=1776902400&v=beta&t=zQeQ9B68izYGUalagm6IBpeTptt_c0CxlNZu5l1cnQQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFznS-mTmxCSg/company-logo_100_100/company-logo_100_100/0/1631366079629?e=1776902400&v=beta&t=W9vTthrpiv02qyKvju_2izUHIBo7KJ8m2UvdW1x8-3s",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Assistant",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "NSF AI-EDGE Institute",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/102763038/",
+        "companyId": "102763038",
+        "duration": "4 yrs",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2021,
+          "text": "Sep 2021"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2025,
+          "text": "Aug 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQH6ncF1XONi4g/company-logo_400_400/company-logo_400_400/0/1719255357328?e=1776902400&v=beta&t=55YL4NRv5FxdqPkYB5C4MFpPrTwxIeRPBVwqcSI2Efc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH6ncF1XONi4g/company-logo_400_400/company-logo_400_400/0/1719255357328?e=1776902400&v=beta&t=55YL4NRv5FxdqPkYB5C4MFpPrTwxIeRPBVwqcSI2Efc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH6ncF1XONi4g/company-logo_200_200/company-logo_200_200/0/1719256759235?e=1776902400&v=beta&t=vyL1IPEU3U4Sd5j8fOGOYNgoFdw2LLqb9hQnYcnvCHU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH6ncF1XONi4g/company-logo_100_100/company-logo_100_100/0/1719257672709?e=1776902400&v=beta&t=tQaKXBZwgHIGpSc3pINbRrPsIV7XjnQ3i7zjjonJpP4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Applied Scientist Intern",
+        "location": "Palo Alto, California, United States",
+        "employmentType": "Internship",
+        "workplaceType": null,
+        "companyName": "Amazon",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1586/",
+        "companyId": "1586",
+        "duration": "5 mos",
+        "description": "Active learning and data selection for inference-time scaling of LLMs.",
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2025,
+          "text": "Feb 2025"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2025,
+          "text": "Jun 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGDLy4STCnHbg/company-logo_400_400/B56ZnZxDipI0AY-/0/1760295142304/amazon_logo?e=1776902400&v=beta&t=lYPAbzBmg2YQhgQFeMnV-wHyKGvMPrvdCpcjHf_aGWc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGDLy4STCnHbg/company-logo_400_400/B56ZnZxDipI0AY-/0/1760295142304/amazon_logo?e=1776902400&v=beta&t=lYPAbzBmg2YQhgQFeMnV-wHyKGvMPrvdCpcjHf_aGWc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGDLy4STCnHbg/company-logo_200_200/B56ZnZxDipI0AI-/0/1760295142304/amazon_logo?e=1776902400&v=beta&t=Pkt-34tlkuFgo_d6O--s7BFOke10xwNIu23VHSfAC1Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGDLy4STCnHbg/company-logo_100_100/B56ZnZxDipI0AQ-/0/1760295142304/amazon_logo?e=1776902400&v=beta&t=Glfc3A2Yqstx_u6NdGLKHNNMcZSYljXNIHa7f-Ob1fA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Intern",
+        "location": null,
+        "employmentType": "Internship",
+        "workplaceType": null,
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "8 mos",
+        "description": "Research and development of an active learning system for social behavior modeling",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2022,
+          "text": "May 2022"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2022,
+          "text": "Dec 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer Intern",
+        "location": null,
+        "employmentType": "Internship",
+        "workplaceType": null,
+        "companyName": "Google",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1441/",
+        "companyId": "1441",
+        "duration": "4 mos",
+        "description": "Optimize data efficiency for click through rate (CTR) modeling at trillion dataset scale",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2021,
+          "text": "May 2021"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2021,
+          "text": "Aug 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_200_200/B4EZmhegXHGcAM-/0/1759350753990/google_logo?e=1776902400&v=beta&t=CTzyZ9kqXiycW6UU0lJPQmCNKxu5QeAaPL_y9ftsJX0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_100_100/B4EZmhegXHGcAU-/0/1759350753990/google_logo?e=1776902400&v=beta&t=LRCYpUl9rmgdri4awRP4FVlvccNARAtgcfqxtRHdedI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer Intern",
+        "location": null,
+        "employmentType": "Internship",
+        "workplaceType": null,
+        "companyName": "Google",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1441/",
+        "companyId": "1441",
+        "duration": "4 mos",
+        "description": "Build better 3D reconstructed scenes for Google Map",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2020,
+          "text": "Jun 2020"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2020,
+          "text": "Sep 2020"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_200_200/B4EZmhegXHGcAM-/0/1759350753990/google_logo?e=1776902400&v=beta&t=CTzyZ9kqXiycW6UU0lJPQmCNKxu5QeAaPL_y9ftsJX0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_100_100/B4EZmhegXHGcAU-/0/1759350753990/google_logo?e=1776902400&v=beta&t=LRCYpUl9rmgdri4awRP4FVlvccNARAtgcfqxtRHdedI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer Intern",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "4 mos",
+        "description": "Prototyped the first PyTorch data preprocessing pipeline for distributed data loading and preprocessing",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2019,
+          "text": "Jun 2019"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2019,
+          "text": "Sep 2019"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "University of Wisconsin-Madison",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/4099/",
+        "schoolId": "4099",
+        "degree": "Doctor of Philosophy - PhD",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "description": "Research Advisor: Robert Nowak",
+        "startDate": {
+          "year": 2021,
+          "text": "2021"
+        },
+        "endDate": {
+          "year": 2025,
+          "text": "2025"
+        },
+        "period": "2021 - 2025",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQFyYW54n5mwAw/company-logo_400_400/company-logo_400_400/0/1630601304331/university_of_wisconsin_madison_logo?e=1776902400&v=beta&t=wvxiQBgUnjXdwAk0IObiT5Wj6TKUeAe0dsTc65a_B6I",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFyYW54n5mwAw/company-logo_400_400/company-logo_400_400/0/1630601304331/university_of_wisconsin_madison_logo?e=1776902400&v=beta&t=wvxiQBgUnjXdwAk0IObiT5Wj6TKUeAe0dsTc65a_B6I",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFyYW54n5mwAw/company-logo_200_200/company-logo_200_200/0/1630601304331/university_of_wisconsin_madison_logo?e=1776902400&v=beta&t=JIZjxIyPx28gvO2q5ssmaawR06ihMxZMP5fsoP6FPJk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFyYW54n5mwAw/company-logo_100_100/company-logo_100_100/0/1630601304331/university_of_wisconsin_madison_logo?e=1776902400&v=beta&t=WiXXgwWugZh6iAllcwcr5PFeMXeSBDbLjxMwfYnOlPM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "University of Washington",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2584/",
+        "schoolId": "2584",
+        "degree": "Master's degree",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "description": "Research Advisor: Kevin Jamieson",
+        "startDate": {
+          "year": 2019,
+          "text": "2019"
+        },
+        "endDate": {
+          "year": 2021,
+          "text": "2021"
+        },
+        "period": "2019 - 2021",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEMmhF9TqUCgA/company-logo_400_400/company-logo_400_400/0/1630545704089/university_of_washington_logo?e=1776902400&v=beta&t=UgMit_quQ3GsgGT3-3A6kXvDwnn-KVRW_u_HRd4RLTg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEMmhF9TqUCgA/company-logo_400_400/company-logo_400_400/0/1630545704089/university_of_washington_logo?e=1776902400&v=beta&t=UgMit_quQ3GsgGT3-3A6kXvDwnn-KVRW_u_HRd4RLTg",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEMmhF9TqUCgA/company-logo_200_200/company-logo_200_200/0/1630545704089/university_of_washington_logo?e=1776902400&v=beta&t=oLn8mUaUFi_GW9rfy_TVuoJ0FPajqWaQ14uovZsGklk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEMmhF9TqUCgA/company-logo_100_100/company-logo_100_100/0/1630545704089/university_of_washington_logo?e=1776902400&v=beta&t=RUr9ZHiq7JXufQGL_LdkRWkSpWGB-J-AGwcl4F0cy6Y",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "University of Washington",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2584/",
+        "schoolId": "2584",
+        "degree": "Bachelor's degree",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "startDate": {
+          "year": 2016,
+          "text": "2016"
+        },
+        "endDate": {
+          "year": 2019,
+          "text": "2019"
+        },
+        "period": "2016 - 2019",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEMmhF9TqUCgA/company-logo_400_400/company-logo_400_400/0/1630545704089/university_of_washington_logo?e=1776902400&v=beta&t=UgMit_quQ3GsgGT3-3A6kXvDwnn-KVRW_u_HRd4RLTg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEMmhF9TqUCgA/company-logo_400_400/company-logo_400_400/0/1630545704089/university_of_washington_logo?e=1776902400&v=beta&t=UgMit_quQ3GsgGT3-3A6kXvDwnn-KVRW_u_HRd4RLTg",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEMmhF9TqUCgA/company-logo_200_200/company-logo_200_200/0/1630545704089/university_of_washington_logo?e=1776902400&v=beta&t=oLn8mUaUFi_GW9rfy_TVuoJ0FPajqWaQ14uovZsGklk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEMmhF9TqUCgA/company-logo_100_100/company-logo_100_100/0/1630545704089/university_of_washington_logo?e=1776902400&v=beta&t=RUr9ZHiq7JXufQGL_LdkRWkSpWGB-J-AGwcl4F0cy6Y",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "PRINCETON INTERNATIONAL SCHOOL OF MATHEMATICS AND SCIENCE, INC.",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/15773220/",
+        "schoolId": "15773220",
+        "degree": "Secondary School",
+        "fieldOfStudy": null,
+        "skills": [],
+        "startDate": {
+          "year": 2013,
+          "text": "2013"
+        },
+        "endDate": {
+          "year": 2016,
+          "text": "2016"
+        },
+        "period": "2013 - 2016",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEyoDlILrBySw/company-logo_400_400/company-logo_400_400/0/1630572604643?e=1776902400&v=beta&t=PE_bXW005wJ7WJD1oHm8mGxpAQqr7OJhr9ZVYqa7vYI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEyoDlILrBySw/company-logo_400_400/company-logo_400_400/0/1630572604643?e=1776902400&v=beta&t=PE_bXW005wJ7WJD1oHm8mGxpAQqr7OJhr9ZVYqa7vYI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEyoDlILrBySw/company-logo_200_200/company-logo_200_200/0/1630572604643?e=1776902400&v=beta&t=x73F1nPU2Uquk9MU95DpaKW7-LqZEV8GY0mTyjf8xds",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEyoDlILrBySw/company-logo_100_100/company-logo_100_100/0/1630572604643?e=1776902400&v=beta&t=tIpm8nzq_BdI9eksmM32qSSaWz55IbVEmhfnHnQ_hbw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "The High School Affiliated to Renmin University of China",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/35690124/",
+        "schoolId": "35690124",
+        "degree": "Middle School Diploma",
+        "fieldOfStudy": null,
+        "skills": [],
+        "startDate": {
+          "year": 2010,
+          "text": "2010"
+        },
+        "endDate": {
+          "year": 2013,
+          "text": "2013"
+        },
+        "period": "2010 - 2013",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGKFjqgO6C1fw/company-logo_400_400/company-logo_400_400/0/1630602532239/rdfz_logo?e=1776902400&v=beta&t=Ww6K0JuVdTp7AztCkY7GNFFi_7nvgDYXvDAnn6SirMQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGKFjqgO6C1fw/company-logo_400_400/company-logo_400_400/0/1630602532239/rdfz_logo?e=1776902400&v=beta&t=Ww6K0JuVdTp7AztCkY7GNFFi_7nvgDYXvDAnn6SirMQ",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGKFjqgO6C1fw/company-logo_200_200/company-logo_200_200/0/1630602532239/rdfz_logo?e=1776902400&v=beta&t=-s5pqIULOxiWsn5vHEPV6jGB2Hhv4uaAyq4yI92Z7Yc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGKFjqgO6C1fw/company-logo_100_100/company-logo_100_100/0/1630602532239/rdfz_logo?e=1776902400&v=beta&t=UtCtaYnjLqSZk6iO-1YWTvxnw59Vkp9GnT0uTPhSSHU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAABQ5lJUBry2byQYf_TtxDF9Rha9l-RqYsaM",
+        "firstName": "Guang-He",
+        "lastName": "Lee",
+        "publicIdentifier": "guang-he-lee-64577895",
+        "linkedinUrl": "https://www.linkedin.com/in/guang-he-lee-64577895"
+      },
+      {
+        "id": "ACoAAAPxMTsB6AbW45NodBVmmA7QtDdYCGnuR7A",
+        "firstName": "Lili",
+        "lastName": "Yu",
+        "publicIdentifier": "lili-yu-6771961a",
+        "linkedinUrl": "https://www.linkedin.com/in/lili-yu-6771961a"
+      },
+      {
+        "id": "ACoAAC7R-qABlDyowgt6SOQ_cofkbZeINoupfSc",
+        "firstName": "Rachit",
+        "lastName": "Surana",
+        "publicIdentifier": "rachit-surana-42809719b",
+        "linkedinUrl": "https://www.linkedin.com/in/rachit-surana-42809719b"
+      },
+      {
+        "id": "ACoAACzqre0BC35Fgz5qnJJOGokywF_UVF7T_WQ",
+        "firstName": "Jiayi",
+        "lastName": "Yuan",
+        "publicIdentifier": "jyuan99",
+        "linkedinUrl": "https://www.linkedin.com/in/jyuan99"
+      },
+      {
+        "id": "ACoAABBFhp8Bwk7UYKnbevL3_-ZBPIv2JVku1Bw",
+        "firstName": "Zhewei",
+        "lastName": "Shi",
+        "publicIdentifier": "zheweishi",
+        "linkedinUrl": "https://www.linkedin.com/in/zheweishi"
+      },
+      {
+        "id": "ACoAACFi4DgBkYTcJLNWpxXTrKGWZphi3GT8is4",
+        "firstName": "Zihan",
+        "lastName": "Wang",
+        "publicIdentifier": "zihanwangki",
+        "linkedinUrl": "https://www.linkedin.com/in/zihanwangki"
+      },
+      {
+        "id": "ACoAAFB_Y_ABlkjtESk3qn3th2kspizy41PV4Ng",
+        "firstName": "Yuexiang",
+        "lastName": "Zhai",
+        "publicIdentifier": "yuexiang-zhai-440356318",
+        "linkedinUrl": "https://www.linkedin.com/in/yuexiang-zhai-440356318"
+      },
+      {
+        "id": "ACoAABs6eSEBSJGEeoSg0y0k9vbZBdo6Z0uPyq8",
+        "firstName": "Kaan",
+        "lastName": "Ertas",
+        "publicIdentifier": "kaan-ertas",
+        "linkedinUrl": "https://www.linkedin.com/in/kaan-ertas"
+      },
+      {
+        "id": "ACoAABHkuyUByNPl3ebZpneB10P5XFDM3pYxFbw",
+        "firstName": "Shimin",
+        "lastName": "Wang",
+        "publicIdentifier": "shimin-wang-57165484",
+        "linkedinUrl": "https://www.linkedin.com/in/shimin-wang-57165484"
+      },
+      {
+        "id": "ACoAABxPPpwB8cCTJmnMGfe369RzCVuZVLAWP-I",
+        "firstName": "Zhenmei",
+        "lastName": "Shi",
+        "publicIdentifier": "zhenmei-shi-56408a113",
+        "linkedinUrl": "https://www.linkedin.com/in/zhenmei-shi-56408a113"
+      },
+      {
+        "id": "ACoAACwo0RUBe4duw2zQi26RIZ_RDvgAJB2avaY",
+        "firstName": "Cade",
+        "lastName": "Gordon",
+        "publicIdentifier": "cade-gordon",
+        "linkedinUrl": "https://www.linkedin.com/in/cade-gordon"
+      },
+      {
+        "id": "ACoAACSAOcQB6q_yZdysyXNKsE4_wyqp2A8wxvc",
+        "firstName": "Jie",
+        "lastName": "Huang",
+        "publicIdentifier": "jie-huang-4b0104151",
+        "linkedinUrl": "https://www.linkedin.com/in/jie-huang-4b0104151"
+      },
+      {
+        "id": "ACoAABPFBVIB0hwGnkoVdz0YEr88t6x4qXXbcpc",
+        "firstName": "Wei-Tsung",
+        "lastName": "Lu",
+        "publicIdentifier": "weitsunglu",
+        "linkedinUrl": "https://www.linkedin.com/in/weitsunglu"
+      },
+      {
+        "id": "ACoAAC5SWy8Byiafb7eae8yyh8sntydFXiukmc4",
+        "firstName": "Patrick",
+        "lastName": "Hampson",
+        "publicIdentifier": "patrick-hampson-17b323198",
+        "linkedinUrl": "https://www.linkedin.com/in/patrick-hampson-17b323198"
+      },
+      {
+        "id": "ACoAAAQb5WABaT3_mDJpEve67N46Z4rh8R8fYZY",
+        "firstName": "Yunlong",
+        "lastName": "Liu",
+        "publicIdentifier": "davisyunlongliu",
+        "linkedinUrl": "https://www.linkedin.com/in/davisyunlongliu"
+      },
+      {
+        "id": "ACoAABG9AE8ByNzQvzeOHNtdy3MCp7_WqKIA_AY",
+        "firstName": "Yifan",
+        "lastName": "Yang",
+        "publicIdentifier": "yifan-yang-ml",
+        "linkedinUrl": "https://www.linkedin.com/in/yifan-yang-ml"
+      },
+      {
+        "id": "ACoAADQffp0BrDao3sUlfZlqqTSu6qXijYEjYqM",
+        "firstName": "Chaoqi",
+        "lastName": "W.",
+        "publicIdentifier": "chaoqi-w-479a40204",
+        "linkedinUrl": "https://www.linkedin.com/in/chaoqi-w-479a40204"
+      },
+      {
+        "id": "ACoAACiklHcBpnaoLJaUHGEy08IHPDoRxQm9vn4",
+        "firstName": "Jing",
+        "lastName": "Gu",
+        "publicIdentifier": "jing-gu-3b3437170",
+        "linkedinUrl": "https://www.linkedin.com/in/jing-gu-3b3437170"
+      },
+      {
+        "id": "ACoAABMyAFABbAKYvHfee0tRJhfWvMu1PdfWywE",
+        "firstName": "Chuan",
+        "lastName": "Guo",
+        "publicIdentifier": "chuan-guo-068a288b",
+        "linkedinUrl": "https://www.linkedin.com/in/chuan-guo-068a288b"
+      },
+      {
+        "id": "ACoAAAkRCIAB74T3tzFzEbBEzjnS1AHAcQIxKRY",
+        "firstName": "Frank",
+        "lastName": "Luan",
+        "publicIdentifier": "franklsf",
+        "linkedinUrl": "https://www.linkedin.com/in/franklsf"
+      },
+      {
+        "id": "ACoAAGVr1OYBmrwooMKvFT0PXOyWwjPCULUk_KA",
+        "firstName": "usman",
+        "lastName": "khan",
+        "position": "Student at University of Wisconsin-Madison",
+        "publicIdentifier": "usman-khan-432a263b5",
+        "linkedinUrl": "https://www.linkedin.com/in/usman-khan-432a263b5"
+      },
+      {
+        "id": "ACoAAGJhNmIBCsJAU79vH7eGI6AlUgFIySq1dPs",
+        "firstName": "Quadr",
+        "lastName": "Busari",
+        "position": "Senior Clinical Research Scientist at Mayo Clinic",
+        "publicIdentifier": "quadr-busari-6029183a0",
+        "linkedinUrl": "https://www.linkedin.com/in/quadr-busari-6029183a0"
+      },
+      {
+        "id": "ACoAAGOjzzMBZoyQXHyn2SeifWWhZRfFLjhhqGE",
+        "firstName": "ARIANA",
+        "lastName": "PANCCA MENDOZA",
+        "position": "Estudiante de Ciencias de la Comunicación en la Especialidad de Relaciones Públicas de la Universidad Nacional de San Agustin de Arequipa",
+        "publicIdentifier": "ariana-pancca-mendoza-357a133a7",
+        "linkedinUrl": "https://www.linkedin.com/in/ariana-pancca-mendoza-357a133a7"
+      },
+      {
+        "id": "ACoAAGNZb9QBX_1Z-7WOGYn3b9-CXl4zdBS-SkE",
+        "firstName": "Adisu",
+        "lastName": "Ashore",
+        "position": "Student at University of Wisconsin-Madison",
+        "publicIdentifier": "adisu-ashore-7842623a6",
+        "linkedinUrl": "https://www.linkedin.com/in/adisu-ashore-7842623a6"
+      },
+      {
+        "id": "ACoAAGPAVXMBKRqpeQp2iUtPTtLVD0btKOfLxC4",
+        "firstName": "Michelle",
+        "lastName": "M.",
+        "position": "Unique “dual-threat” leader combining high-level corporate strategy with deep technical fluency. Expert in bridging the gap between technical teams and stakeholders to accelerate user adoption and maximize ROI.",
+        "publicIdentifier": "michelle-m-12b5753a8",
+        "linkedinUrl": "https://www.linkedin.com/in/michelle-m-12b5753a8"
+      },
+      {
+        "id": "ACoAAGU5iXMBzJmVgLEcdJmlmAZcxHrFCoIXA7M",
+        "firstName": "James",
+        "lastName": "Holsen",
+        "position": "Owner at J and J Roofing and Remodeling ",
+        "publicIdentifier": "james-holsen-a6b8b63b4",
+        "linkedinUrl": "https://www.linkedin.com/in/james-holsen-a6b8b63b4"
+      },
+      {
+        "id": "ACoAAGQvthsB9OyXp0GpuRfGOzikc_YeWxDgfiQ",
+        "firstName": "Emmanuel",
+        "lastName": "Juma",
+        "position": "Student at University of Wisconsin-Madison",
+        "publicIdentifier": "emmanuel-juma-24bab53aa",
+        "linkedinUrl": "https://www.linkedin.com/in/emmanuel-juma-24bab53aa"
+      },
+      {
+        "id": "ACoAAGP9ZkABq483wIVyoRDBJt2Ofh0ERz8FIlo",
+        "firstName": "Hoin",
+        "lastName": "Hwang",
+        "position": "Global Medical Device BD | DEXA | CE MDR | Cross-border Deals (EU / Middle East / India / South East Asia) | Ex-BMTECH | GE Healthcare Collaboration",
+        "publicIdentifier": "hoin-hwang",
+        "linkedinUrl": "https://www.linkedin.com/in/hoin-hwang"
+      },
+      {
+        "id": "ACoAAGQBF5wB-2gi8mcuxB8AcqNyXfoobq5u3n8",
+        "firstName": "Meredith",
+        "lastName": "Duryea",
+        "position": "Elementary Education Student at University of Wisconsin-Madison",
+        "publicIdentifier": "meredith-duryea-164a813a9",
+        "linkedinUrl": "https://www.linkedin.com/in/meredith-duryea-164a813a9"
+      },
+      {
+        "id": "ACoAAGQYqD0B6TrglAtgxGM7m_GHfv36vvGkxAs",
+        "firstName": "John",
+        "lastName": "Nganga",
+        "position": "Student at University of Wisconsin-Madison",
+        "publicIdentifier": "john-nganga-a254a63aa",
+        "linkedinUrl": "https://www.linkedin.com/in/john-nganga-a254a63aa"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAABnLX1IBvRLHYJkmIPl9WdiCDVd5roIYf8k"
+    }
+  }
+}

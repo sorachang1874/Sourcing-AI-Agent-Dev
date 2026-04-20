@@ -1,0 +1,688 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAABmEHXwBC9zy3ve5iN_yx1iyPEk-3ePzaYs",
+    "profile_url": "https://www.linkedin.com/in/ACwAABmEHXwBC9zy3ve5iN_yx1iyPEk-3ePzaYs"
+  },
+  "item": {
+    "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+    "publicIdentifier": "kyle-luther-624448bb",
+    "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb",
+    "firstName": "Kyle",
+    "lastName": "Luther",
+    "emails": [
+      {
+        "email": "kyle.luther@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Member of Technical Staff at Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "428088700",
+    "registeredAt": "2015-06-19T03:40:48.537Z",
+    "topSkills": null,
+    "connectionsCount": 266,
+    "followerCount": 532,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 2,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "18867",
+        "companyId": "157313",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/157313/",
+        "schoolName": "Princeton University"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5603AQEN3OL1iTV94Q/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1715547330196?e=1776902400&v=beta&t=K_D6v7KulwmtpxUIOFCnHwwEab_cniKFgSMFj53m1A8",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQEN3OL1iTV94Q/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1715547330196?e=1776902400&v=beta&t=K_D6v7KulwmtpxUIOFCnHwwEab_cniKFgSMFj53m1A8",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQEN3OL1iTV94Q/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1715547330196?e=1776902400&v=beta&t=NHLh2W4ESzOR4p8GDJuOwuusCuzqnWT98tcixiFid_0",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQEN3OL1iTV94Q/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1715547330196?e=1776902400&v=beta&t=lxzezIRiQFRAF3GRLxbsIR3O6odQmJe2VzQPuVaGDDA",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQEN3OL1iTV94Q/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1715547330196?e=1776902400&v=beta&t=7Cubjn06oP_QlCksD5pi7LMqKMhBUc4qaq2u0X0cBUw",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D5603AQEN3OL1iTV94Q/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1715547330196?e=1776902400&v=beta&t=K_D6v7KulwmtpxUIOFCnHwwEab_cniKFgSMFj53m1A8",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Member of Technical Staff at Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "1 yr 3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2025,
+          "text": "Feb 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco Bay Area",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "OpenAI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/11130470/",
+        "companyId": "11130470",
+        "duration": "1 yr 1 mo",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "4f2fe83a6fefe1034130861f9083d200eb9caf3e",
+        "startDate": {
+          "month": "Feb",
+          "year": 2024,
+          "text": "Feb 2024"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2025,
+          "text": "Feb 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_200_200/B56ZT8EYB8HsAI-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=O6RSWlpQ5W4zNCOCTu621qCyTijLuXFJS4pz2_hBQfo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_100_100/B56ZT8EYB8HsAQ-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=y7RA89V9q8GlAjQ1oRU-jf_-n5zlSXRCnykXBIkgHfM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Member of Technical Staff (Resident)",
+        "location": "San Francisco Bay Area",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "OpenAI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/11130470/",
+        "companyId": "11130470",
+        "duration": "8 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "4f2fe83a6fefe1034130861f9083d200eb9caf3e",
+        "startDate": {
+          "month": "Jul",
+          "year": 2023,
+          "text": "Jul 2023"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2024,
+          "text": "Feb 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_200_200/B56ZT8EYB8HsAI-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=O6RSWlpQ5W4zNCOCTu621qCyTijLuXFJS4pz2_hBQfo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_100_100/B56ZT8EYB8HsAQ-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=y7RA89V9q8GlAjQ1oRU-jf_-n5zlSXRCnykXBIkgHfM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Postdoctoral Researcher",
+        "location": "Princeton, New Jersey, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Princeton University",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/princeton-university/",
+        "companyId": "157313",
+        "companyUniversalName": "princeton-university",
+        "duration": "1 yr 4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2022,
+          "text": "May 2022"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2023,
+          "text": "Aug 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQE4zTC5PJAKSA/company-logo_400_400/company-logo_400_400/0/1630648147093/princeton_university_logo?e=1776902400&v=beta&t=-ejT6CJtb1WJH1ltf1aXlgVpSicKPKcnMorTjVwhDiw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQE4zTC5PJAKSA/company-logo_400_400/company-logo_400_400/0/1630648147093/princeton_university_logo?e=1776902400&v=beta&t=-ejT6CJtb1WJH1ltf1aXlgVpSicKPKcnMorTjVwhDiw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQE4zTC5PJAKSA/company-logo_200_200/company-logo_200_200/0/1630648147093/princeton_university_logo?e=1776902400&v=beta&t=ggPm_li0hUErI1U6HnsMryjmaT7fSfuTYqw3Iwn3nJ0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQE4zTC5PJAKSA/company-logo_100_100/company-logo_100_100/0/1630648147093/princeton_university_logo?e=1776902400&v=beta&t=05S5Q38mlOytDLLUfnx7oLpzf9y5HraXODpL-bUd0mc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Princeton University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/157313/",
+        "schoolId": "157313",
+        "degree": "Doctor of Philosophy - PhD",
+        "fieldOfStudy": "Physics",
+        "skills": [],
+        "startDate": {
+          "month": "Sep",
+          "year": 2016,
+          "text": "Sep 2016"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2022,
+          "text": "May 2022"
+        },
+        "period": "Sep 2016 - May 2022",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQE4zTC5PJAKSA/company-logo_400_400/company-logo_400_400/0/1630648147093/princeton_university_logo?e=1776902400&v=beta&t=-ejT6CJtb1WJH1ltf1aXlgVpSicKPKcnMorTjVwhDiw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQE4zTC5PJAKSA/company-logo_400_400/company-logo_400_400/0/1630648147093/princeton_university_logo?e=1776902400&v=beta&t=-ejT6CJtb1WJH1ltf1aXlgVpSicKPKcnMorTjVwhDiw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQE4zTC5PJAKSA/company-logo_200_200/company-logo_200_200/0/1630648147093/princeton_university_logo?e=1776902400&v=beta&t=ggPm_li0hUErI1U6HnsMryjmaT7fSfuTYqw3Iwn3nJ0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQE4zTC5PJAKSA/company-logo_100_100/company-logo_100_100/0/1630648147093/princeton_university_logo?e=1776902400&v=beta&t=05S5Q38mlOytDLLUfnx7oLpzf9y5HraXODpL-bUd0mc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "University of California, Berkeley",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2517/",
+        "schoolId": "2517",
+        "degree": "Bachelor of Arts - BA",
+        "fieldOfStudy": "Physics",
+        "skills": [],
+        "startDate": {
+          "month": "Aug",
+          "year": 2014,
+          "text": "Aug 2014"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2016,
+          "text": "May 2016"
+        },
+        "period": "Aug 2014 - May 2016",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_400_400/company-logo_400_400/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=ihsqGpnHzj0nlc8nr3zQwTYbq6GYQDs_WRmOHxXO6Cs",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_400_400/company-logo_400_400/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=ihsqGpnHzj0nlc8nr3zQwTYbq6GYQDs_WRmOHxXO6Cs",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_200_200/company-logo_200_200/0/1732135669730/uc_berkeley_logo?e=1776902400&v=beta&t=99cgQbgSotN9XiK7TbWS3PhqRVGT8S6VKfitEcMn0-E",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_100_100/company-logo_100_100/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=spLtug0cp3xqHCXq1OoZudTryqzyY85FoIZwfJ-_XzA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Physics",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Machine Learning",
+        "endorsements": "1 endorsement"
+      }
+    ],
+    "publications": [
+      {
+        "title": "Kernel similarity matching with Hebbian networks",
+        "publishedAt": "Neurips",
+        "description": "We derive a network with online Hebbian learning rules capable of performing kernel similarity matching.",
+        "link": "https://openreview.net/forum?id=NSophzmqq8Y"
+      },
+      {
+        "title": "Learning and segmenting dense voxel embeddings for 3D neuron reconstruction",
+        "publishedAt": "IEEE Transactions on Medical Imaging",
+        "description": "We use convolutional networks to assign an embedding vector to every voxel (3D pixel). These embedding vectors which are then used to segment 3D volumetric microscopy images.",
+        "link": "https://ieeexplore.ieee.org/document/9489304"
+      },
+      {
+        "title": "Learning metric graphs for neuron segmentation in electron microscopy images",
+        "publishedAt": "IEEE International Symposium on Biomedical Imaging",
+        "description": "We use convolutional networks to assign an embedding vector to every pixel in 2D micrscopy images of brain tissue. These embedding vectors are then used to segment every neuron.",
+        "link": "https://ieeexplore.ieee.org/document/8759576"
+      },
+      {
+        "title": "Reexamining the principle of mean-variance preservation for neural network initialization",
+        "publishedAt": "Physical Review Research",
+        "description": "We prove that in a wide ReLU network the variance of individual neurons decays to zero with depth, even when networks are initialized with the popular Kaiming initialization.",
+        "link": "https://journals.aps.org/prresearch/abstract/10.1103/PhysRevResearch.2.033135"
+      },
+      {
+        "title": "Sensitivity of sparse codes to image distortions",
+        "publishedAt": "Neural Computation",
+        "description": "We identify and explain the following: a linear classifier trained to classify MNIST digits has lower test set performance when classifying the outputs of a sparse coding module than when classifying the raw pixels.",
+        "link": "https://direct.mit.edu/neco/article/34/7/1616/111334/Sensitivity-of-Sparse-Codes-to-Image-Distortions"
+      },
+      {
+        "title": "Stacked unsupervised learning with a network architecture found by supervised meta-learning",
+        "publishedAt": "Arxiv",
+        "description": "We train a deep neural network to classify objects without using backpropagation. We devise layer-local learning rules and use evolutionary algorithms to tune the parameters of the learning rules so that the network achieves high recognition performance.",
+        "link": "https://arxiv.org/abs/2206.02716"
+      },
+      {
+        "title": "Unsupervised learning by a softened correlation game: duality and convergence",
+        "publishedAt": "Asilomar Conference on Signals, Systems & Computers",
+        "description": "We analyze convergence and duality guarantees in a recently proposed model of cortical learning which pits excitatory and inhibitory neurons against each other in a two player zero-sum game.",
+        "link": "https://ieeexplore.ieee.org/abstract/document/9048957"
+      }
+    ],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAAAQ4Q7kByw3YKf2rFlmWzRMF7P8Gw4S9PIU",
+        "firstName": "Yinghai",
+        "lastName": "L.",
+        "publicIdentifier": "yinghai83",
+        "linkedinUrl": "https://www.linkedin.com/in/yinghai83"
+      },
+      {
+        "id": "ACoAAAl87CYBWKLLyGNTbomy6oqIPv-5n34CXIY",
+        "firstName": "Andrew",
+        "lastName": "Tulloch",
+        "publicIdentifier": "andrew-tulloch-17238745",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-tulloch-17238745"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABV61Q0BF3ER-196Zc9GK5TviMrbbIlVGqg",
+        "firstName": "Samuel",
+        "lastName": "Schoenholz",
+        "publicIdentifier": "samuel-schoenholz-379830a0",
+        "linkedinUrl": "https://www.linkedin.com/in/samuel-schoenholz-379830a0"
+      },
+      {
+        "id": "ACoAABgwxtcBfqsJJUHPwsSPuBE4K9oKyRqUp5o",
+        "firstName": "Lia",
+        "lastName": "Guy",
+        "publicIdentifier": "aureliaguy",
+        "linkedinUrl": "https://www.linkedin.com/in/aureliaguy"
+      },
+      {
+        "id": "ACoAAACQBzQB5nk5kOpFWQRtK4pv3RaL5q2G-pA",
+        "firstName": "Jonathan",
+        "lastName": "Lachman",
+        "publicIdentifier": "jonathan-lachman-4981b23",
+        "linkedinUrl": "https://www.linkedin.com/in/jonathan-lachman-4981b23"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAAA6jodABB4FFTQD3NzZ7B0vo91j5zOLQQn4",
+        "firstName": "luke",
+        "lastName": "metz",
+        "publicIdentifier": "luke-metz-5003046a",
+        "linkedinUrl": "https://www.linkedin.com/in/luke-metz-5003046a"
+      },
+      {
+        "id": "ACoAAAJzsfoBp0MxssQYMgmy0ZNO2U3sA58ugwc",
+        "firstName": "Joshua",
+        "lastName": "Gross",
+        "publicIdentifier": "joshgross",
+        "linkedinUrl": "https://www.linkedin.com/in/joshgross"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAABYs4-IB5mHx5eVfOHzu1e8xlO3q_kb38IM",
+        "firstName": "Brydon",
+        "lastName": "Eastman",
+        "publicIdentifier": "brydon-eastman-396719a4",
+        "linkedinUrl": "https://www.linkedin.com/in/brydon-eastman-396719a4"
+      },
+      {
+        "id": "ACoAAACo1tYBGy9sT2OWZuEULOMe4K_b2Y22-F8",
+        "firstName": "Alex",
+        "lastName": "Gartrell",
+        "publicIdentifier": "alexgartrell",
+        "linkedinUrl": "https://www.linkedin.com/in/alexgartrell"
+      },
+      {
+        "id": "ACoAABPg53YBHdOvmp7pU72eDhcho-7cnwyxk1o",
+        "firstName": "Pia",
+        "lastName": "Santos",
+        "publicIdentifier": "piafsantos",
+        "linkedinUrl": "https://www.linkedin.com/in/piafsantos"
+      },
+      {
+        "id": "ACoAAA4HVN4BOZg5espOvMVoO3OY04NZmuqvMCo",
+        "firstName": "Shaojie",
+        "lastName": "Bai",
+        "publicIdentifier": "shaojie-bai",
+        "linkedinUrl": "https://www.linkedin.com/in/shaojie-bai"
+      },
+      {
+        "id": "ACoAAAO-j_IBXcvIzhZtQ7QNkky6tlnQTcFl9qI",
+        "firstName": "Myle",
+        "lastName": "Ott",
+        "publicIdentifier": "myleott",
+        "linkedinUrl": "https://www.linkedin.com/in/myleott"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAAAji1bkB1eLX4z2Jb9-N2nMhEGNLWptSnqU",
+        "firstName": "Clare",
+        "lastName": "Birch",
+        "publicIdentifier": "clarebirch42",
+        "linkedinUrl": "https://www.linkedin.com/in/clarebirch42"
+      },
+      {
+        "id": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+        "firstName": "Saurabh",
+        "lastName": "Garg",
+        "publicIdentifier": "saurabh-garg-b680b5b8",
+        "linkedinUrl": "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+      },
+      {
+        "id": "ACoAAAAdzCEB9t8wLSGcpoQ71RdetK75KW7RgS4",
+        "firstName": "Mark",
+        "lastName": "Jen",
+        "publicIdentifier": "markjen",
+        "linkedinUrl": "https://www.linkedin.com/in/markjen"
+      },
+      {
+        "id": "ACoAAGNVOJcBcEdR3_msn2SkueeqAiM5a21s3VM",
+        "firstName": "Caroline",
+        "lastName": "Spencer",
+        "position": "Managing Director, Chief Investment Officer at Altantis Capital Partners",
+        "publicIdentifier": "caroline-spencer-90714a3a6",
+        "linkedinUrl": "https://www.linkedin.com/in/caroline-spencer-90714a3a6"
+      },
+      {
+        "id": "ACoAAGClVt8BVpUkpDpexBuxvnkBnX9pxr-g3lk",
+        "firstName": "Mia",
+        "lastName": "Majura",
+        "position": "Student at Princeton University",
+        "publicIdentifier": "mia-majura-25302a393",
+        "linkedinUrl": "https://www.linkedin.com/in/mia-majura-25302a393"
+      },
+      {
+        "id": "ACoAAF07oIgBPtfiYiXZ9itwPc1r_NHk2FMdSq0",
+        "firstName": "Eli",
+        "lastName": "Friend",
+        "position": "Student Athlete at Princeton University | MAP Skills Challenge Fellow ’26",
+        "publicIdentifier": "eli-friend-a34a15377",
+        "linkedinUrl": "https://www.linkedin.com/in/eli-friend-a34a15377"
+      },
+      {
+        "id": "ACoAAFqYNSIB_6XJ_xy-F6u373L8xj6dOH_Jqfg",
+        "firstName": "Joan",
+        "lastName": "Albright",
+        "position": "Incoming freshman at Princeton | Computer Science and Applied Mathematics | Interested in AI, Data and Tech-Driven Business",
+        "publicIdentifier": "joan-albright",
+        "linkedinUrl": "https://www.linkedin.com/in/joan-albright"
+      },
+      {
+        "id": "ACoAAF4QBvIBB1gcmQVFT4G00GBMXftRjZnMBfM",
+        "firstName": "Smaran",
+        "lastName": "M",
+        "position": "--",
+        "publicIdentifier": "smaran-m-3aa609380",
+        "linkedinUrl": "https://www.linkedin.com/in/smaran-m-3aa609380"
+      },
+      {
+        "id": "ACoAAF9fAmQB7h_thLk4UPOyUPRiiuQ1B379HxA",
+        "firstName": "Sabrina ",
+        "lastName": "Lopes",
+        "position": "Strategic HRBP | Talent Acquisition |  Onboarding & Offboarding | Employee Engagement and Retention | Team Management & Development | Driving Leadership , Culture & Organizational Growth",
+        "publicIdentifier": "sabrina-lopes-a04a35387",
+        "linkedinUrl": "https://www.linkedin.com/in/sabrina-lopes-a04a35387"
+      },
+      {
+        "id": "ACoAAGQ6fdABRYT8tkwrVsQLGSSNuphyIT5ipWc",
+        "firstName": "Nevien",
+        "lastName": "Aped",
+        "position": "CSR | Stakeholder Management | Corporate Communications",
+        "publicIdentifier": "nevien-aped-0681963ab",
+        "linkedinUrl": "https://www.linkedin.com/in/nevien-aped-0681963ab"
+      },
+      {
+        "id": "ACoAAGECYnoBxPEX0Y_o6pN1qn4NjCFYHE8XDpw",
+        "firstName": "Lukas",
+        "lastName": "Palys",
+        "position": "Student at Princeton University",
+        "publicIdentifier": "lukasapalys",
+        "linkedinUrl": "https://www.linkedin.com/in/lukasapalys"
+      },
+      {
+        "id": "ACoAAF8nUN8BUON_sObb86HNruaK8mZdZdmpf-M",
+        "firstName": "Thatcher",
+        "lastName": "Bernstein",
+        "position": "Student-Athlete at Princeton University",
+        "publicIdentifier": "thatcher-bernstein-73b775386",
+        "linkedinUrl": "https://www.linkedin.com/in/thatcher-bernstein-73b775386"
+      },
+      {
+        "id": "ACoAAFtbKnEBjRlKTiyagZnyPzvOHQkDNajuaDo",
+        "firstName": "Eric",
+        "lastName": "Gillman",
+        "position": "Leading Marketing and Project Management professional assisting clients to achieve their GTM and business objectives.",
+        "publicIdentifier": "eric-gillman-mktg",
+        "linkedinUrl": "https://www.linkedin.com/in/eric-gillman-mktg"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAABmEHXwBC9zy3ve5iN_yx1iyPEk-3ePzaYs"
+    }
+  }
+}

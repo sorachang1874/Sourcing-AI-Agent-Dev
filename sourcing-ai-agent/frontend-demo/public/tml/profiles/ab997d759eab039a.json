@@ -1,0 +1,1440 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAA4HVN4B_XYJ2_7gVT3BikkXhT9Re2pwv6c",
+    "profile_url": "https://www.linkedin.com/in/ACwAAA4HVN4B_XYJ2_7gVT3BikkXhT9Re2pwv6c"
+  },
+  "item": {
+    "id": "ACoAAA4HVN4BOZg5espOvMVoO3OY04NZmuqvMCo",
+    "publicIdentifier": "shaojie-bai",
+    "linkedinUrl": "https://www.linkedin.com/in/shaojie-bai",
+    "firstName": "Shaojie",
+    "lastName": "Bai",
+    "emails": [
+      {
+        "email": "shaojie.bai@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Member of Technical Staff @ Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco Bay Area",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "235361502",
+    "registeredAt": "2013-02-28T00:52:09.986Z",
+    "topSkills": null,
+    "connectionsCount": 710,
+    "followerCount": 875,
+    "verified": true,
+    "about": "Somewhat deep, somewhat sequential, and somewhat implicit.",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 3,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "19232",
+        "companyId": "3147",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3147/",
+        "schoolName": "Carnegie Mellon University"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": null,
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Member of Technical Staff @ Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco Bay Area",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "1 yr 2 mos",
+        "description": "Building multimodal greatness!",
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2025,
+          "text": "Mar 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Staff AI Research Scientist",
+        "location": "Menlo Park, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "8 mos",
+        "description": "Audio-visual modeling, self-supervised learning, generative models, synthetic data, multimodal LLMs. Reality Labs Research + GenAI Llama pretraining research.",
+        "skills": null,
+        "experienceGroupId": "67cd93e8b389ef68b9acd1dc206d2ae34b578839",
+        "startDate": {
+          "month": "Aug",
+          "year": 2024,
+          "text": "Aug 2024"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2025,
+          "text": "Mar 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior AI Research Scientist",
+        "location": "Pittsburgh, Pennsylvania, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "1 yr 1 mo",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "67cd93e8b389ef68b9acd1dc206d2ae34b578839",
+        "startDate": {
+          "month": "Aug",
+          "year": 2023,
+          "text": "Aug 2023"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2024,
+          "text": "Aug 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "AI Research Scientist",
+        "location": "Pittsburgh, Pennsylvania, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "1 yr 1 mo",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "67cd93e8b389ef68b9acd1dc206d2ae34b578839",
+        "startDate": {
+          "month": "Aug",
+          "year": 2022,
+          "text": "Aug 2022"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2023,
+          "text": "Aug 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "PhD Student",
+        "location": "Pittsburgh, Pennsylvania, USA",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Carnegie Mellon University",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/carnegie-mellon-university/",
+        "companyId": "3147",
+        "companyUniversalName": "carnegie-mellon-university",
+        "duration": "4 yrs 10 mos",
+        "description": "Starting in Aug 2017, I am a full-time Ph.D. student at Carnegie Mellon University (Machine Learning Department of SCS), under the supervision of J. Zico Kolter. My research interests are in deep learning architecture and some interesting optimization+DL problems. I was also the coordinator of the CMU AI Seminar (http://www.cs.cmu.edu/~aiseminar/).\n\nI defended my doctoral thesis “Equilibrium Approaches in Deep Leaning” and graduated in May 2022!",
+        "skills": null,
+        "experienceGroupId": "d5ff454da138d95fa27be09e5125d7a4f435c805",
+        "startDate": {
+          "month": "Aug",
+          "year": 2017,
+          "text": "Aug 2017"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2022,
+          "text": "May 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_200_200/company-logo_200_200/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Cr9dcgM6gBeNici6XTUDQUKQfYAc8US2OXBC0P5yB-Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_100_100/company-logo_100_100/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=iJiUJ2BhQORJLlvMYFhw22Mq44Z-z45Fza4_dNRwHSs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Graduate Teaching Assistant",
+        "location": "Pittsburgh, Pennsylvania",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Carnegie Mellon University",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/carnegie-mellon-university/",
+        "companyId": "3147",
+        "companyUniversalName": "carnegie-mellon-university",
+        "duration": "5 mos",
+        "description": "I was a teaching assistant for CMU’s course 10-701: Intro to Machine Learning (PhD), working with Prof. Manuela Veloso and Prof. Pradeep Ravikumar. This graduate course covers a broad range of advanced topics in Machine Learning.",
+        "skills": null,
+        "experienceGroupId": "d5ff454da138d95fa27be09e5125d7a4f435c805",
+        "startDate": {
+          "month": "Jan",
+          "year": 2018,
+          "text": "Jan 2018"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2018,
+          "text": "May 2018"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_200_200/company-logo_200_200/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Cr9dcgM6gBeNici6XTUDQUKQfYAc8US2OXBC0P5yB-Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_100_100/company-logo_100_100/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=iJiUJ2BhQORJLlvMYFhw22Mq44Z-z45Fza4_dNRwHSs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Intern (AI)",
+        "location": "Menlo Park, California, United States",
+        "employmentType": "Internship",
+        "workplaceType": null,
+        "companyName": "Facebook AI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/76987811/",
+        "companyId": "76987811",
+        "duration": "4 mos",
+        "description": "I joined the Facebook AI Research (FAIR) as a PhD research intern in summer 2020, working with Michael Auli.",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2020,
+          "text": "May 2020"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2020,
+          "text": "Aug 2020"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_200_200/company-logo_200_200/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=CL3OcEUIyBJFm9Wkw4iT9gJoWpsvGBIAhhNM0DjZx_A",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_100_100/company-logo_100_100/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=sZq9Sard1kGYVIprgBkNhUvJRTI7tf3pXOCP1bQBfpM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Machine Learning Research Intern",
+        "location": "Pittsburgh, Pennsylvania",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Bosch USA",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/165755/",
+        "companyId": "165755",
+        "duration": "4 mos",
+        "description": "In summer 2019, I worked at Robert Bosch LLC (the US office *and* the Germany office) as a machine learning research intern, under (my advisor and Bosch’s chief AI scientist) Zico Kolter. Parcipated in the Kaggle competition \"Predicting Molecular Properties\" with the BCAI team and was ranked 1/2749 (top 0.05%).",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2019,
+          "text": "May 2019"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2019,
+          "text": "Aug 2019"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQEBR7Z8fC602g/company-logo_400_400/B56Z1GB7cPG8AY-/0/1774996404501/boschusa_logo?e=1776902400&v=beta&t=3DrbDMnp8vbOQEFPdeXv8JMDfxZnpix3gwau_56YDuc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEBR7Z8fC602g/company-logo_400_400/B56Z1GB7cPG8AY-/0/1774996404501/boschusa_logo?e=1776902400&v=beta&t=3DrbDMnp8vbOQEFPdeXv8JMDfxZnpix3gwau_56YDuc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEBR7Z8fC602g/company-logo_200_200/B56Z1GB7cPG8AI-/0/1774996404501/boschusa_logo?e=1776902400&v=beta&t=b4RiWJdaFA1sC-UaAayL8s8DcY8Lwh-U13jJ_PI9Qn4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEBR7Z8fC602g/company-logo_100_100/B56Z1GB7cPG8AQ-/0/1774996404501/boschusa_logo?e=1776902400&v=beta&t=XkmjbEyxNi12M7UjE5dUZJP2C6j6vKCtcIv5xNsA1Qo",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Graduate AI Research Intern",
+        "location": "Santa Clara, California",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Intel Labs",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/727974/",
+        "companyId": "727974",
+        "duration": "4 mos",
+        "description": "In summer 2018, I worked with Vladlen Koltun at Intel Intelligent Systems Lab (AI lab) as a graduate research intern.",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2018,
+          "text": "May 2018"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2018,
+          "text": "Aug 2018"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHMPl1uyCtoIw/company-logo_400_400/company-logo_400_400/0/1735061733939/intel_labs_logo?e=1776902400&v=beta&t=bYWWZ0rwbbETtbpqGfIYJA5FxKpjDWigE1muEvNGapE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHMPl1uyCtoIw/company-logo_400_400/company-logo_400_400/0/1735061733939/intel_labs_logo?e=1776902400&v=beta&t=bYWWZ0rwbbETtbpqGfIYJA5FxKpjDWigE1muEvNGapE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHMPl1uyCtoIw/company-logo_200_200/company-logo_200_200/0/1735061733939/intel_labs_logo?e=1776902400&v=beta&t=RqNbLNu73YfhY1bbJHFpazXWt05MwUsW_o-p0Ko2-rM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHMPl1uyCtoIw/company-logo_100_100/company-logo_100_100/0/1735061733939/intel_labs_logo?e=1776902400&v=beta&t=mBbomg-fu-9M1C0VGwE4UjATR_MYHgGQWOWvGWEWTe4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Lead Teaching Assistant",
+        "location": "Greater Pittsburgh Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Carnegie Mellon University",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/carnegie-mellon-university/",
+        "companyId": "3147",
+        "companyUniversalName": "carnegie-mellon-university",
+        "duration": "5 mos",
+        "description": "In spring 2017, I worked (again) with professor Mahadev Satyanarayanan (Satya) and Padmanabhan Pillai (Babu) as a teaching assistant in the course 15-440/640: Distributed Systems. This was an undergrad & grad level course that covered the fundamentals about the modern Distributed Systems (RPC, caching, MapReduce, VM, Scaling, Security, etc.). ",
+        "skills": null,
+        "experienceGroupId": "b622be9e4c23164f153e712679deec238c6c122a",
+        "startDate": {
+          "month": "Jan",
+          "year": 2017,
+          "text": "Jan 2017"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2017,
+          "text": "May 2017"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_200_200/company-logo_200_200/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Cr9dcgM6gBeNici6XTUDQUKQfYAc8US2OXBC0P5yB-Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_100_100/company-logo_100_100/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=iJiUJ2BhQORJLlvMYFhw22Mq44Z-z45Fza4_dNRwHSs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Teaching Assistant",
+        "location": "Pittsburgh, Pennsylvania",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Carnegie Mellon University",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/carnegie-mellon-university/",
+        "companyId": "3147",
+        "companyUniversalName": "carnegie-mellon-university",
+        "duration": "5 mos",
+        "description": "I worked as one of the teaching assistants for CMU's graduate-level machine learning course, 10-601, taught by Prof. Roni Rosenfeld in fall 2016.",
+        "skills": null,
+        "experienceGroupId": "b622be9e4c23164f153e712679deec238c6c122a",
+        "startDate": {
+          "month": "Aug",
+          "year": 2016,
+          "text": "Aug 2016"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2016,
+          "text": "Dec 2016"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_200_200/company-logo_200_200/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Cr9dcgM6gBeNici6XTUDQUKQfYAc8US2OXBC0P5yB-Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_100_100/company-logo_100_100/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=iJiUJ2BhQORJLlvMYFhw22Mq44Z-z45Fza4_dNRwHSs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer Intern",
+        "location": "San Jose, California",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "PayPal",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1482/",
+        "companyId": "1482",
+        "duration": "4 mos",
+        "description": "Worked as a software engineer intern at PayPal's Merchant Onboarding team on its (then) latest detection machine learning (ML) project.",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2016,
+          "text": "May 2016"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2016,
+          "text": "Aug 2016"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGlX0cKdGRk-w/company-logo_400_400/company-logo_400_400/0/1725506319701?e=1776902400&v=beta&t=nRZSMz7kuIgJVJy-1JysoHWCWAt4JNOR3Yufu3dHuAA",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGlX0cKdGRk-w/company-logo_400_400/company-logo_400_400/0/1725506319701?e=1776902400&v=beta&t=nRZSMz7kuIgJVJy-1JysoHWCWAt4JNOR3Yufu3dHuAA",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGlX0cKdGRk-w/company-logo_200_200/company-logo_200_200/0/1725506319701?e=1776902400&v=beta&t=NST6KKpsfp7w8026ZhKOCo-QWn3AMGeAwlf1OsqTYmU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGlX0cKdGRk-w/company-logo_100_100/company-logo_100_100/0/1725506319701?e=1776902400&v=beta&t=JmfINQIzc6lHyWPfhSB1C90DRrrhoKsGsuLolH-EqWM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Teaching Assistant",
+        "location": "Pittsburgh, PA",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Carnegie Mellon University",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/carnegie-mellon-university/",
+        "companyId": "3147",
+        "companyUniversalName": "carnegie-mellon-university",
+        "duration": "5 mos",
+        "description": "I worked as a teaching assistant of CMU's 15-440/640 Distributed Systems class with professor Mahadev Satyanarayanan (Satya) and Padmanabhan Pillai (Babu) in S16. This was an undergrad & grad level course that covered the fundamentals about the modern Distributed Systems (RPC, caching, MapReduce, VM, Scaling, Security, etc.).",
+        "skills": null,
+        "experienceGroupId": "71a05eb27bf8a472e5c2374c2e387f58bda256ee",
+        "startDate": {
+          "month": "Jan",
+          "year": 2016,
+          "text": "Jan 2016"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2016,
+          "text": "May 2016"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_200_200/company-logo_200_200/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Cr9dcgM6gBeNici6XTUDQUKQfYAc8US2OXBC0P5yB-Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_100_100/company-logo_100_100/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=iJiUJ2BhQORJLlvMYFhw22Mq44Z-z45Fza4_dNRwHSs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Assistant",
+        "location": "Pittsburgh, PA",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Carnegie Mellon University",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/carnegie-mellon-university/",
+        "companyId": "3147",
+        "companyUniversalName": "carnegie-mellon-university",
+        "duration": "2 yrs 3 mos",
+        "description": "I worked for a lunar project for an Astrobotic program that dealt with a mission sending objects to the moon in 2015, along with faculty in Carnegie Mellon. My primary job was to search through the database, and through discussion, helped determine the objects to be sent to the Moon.",
+        "skills": null,
+        "experienceGroupId": "71a05eb27bf8a472e5c2374c2e387f58bda256ee",
+        "startDate": {
+          "month": "Oct",
+          "year": 2013,
+          "text": "Oct 2013"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2015,
+          "text": "Dec 2015"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_200_200/company-logo_200_200/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Cr9dcgM6gBeNici6XTUDQUKQfYAc8US2OXBC0P5yB-Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_100_100/company-logo_100_100/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=iJiUJ2BhQORJLlvMYFhw22Mq44Z-z45Fza4_dNRwHSs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Teaching Assistant",
+        "location": "Pittsburgh, PA",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Carnegie Mellon University",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/carnegie-mellon-university/",
+        "companyId": "3147",
+        "companyUniversalName": "carnegie-mellon-university",
+        "duration": "6 mos",
+        "description": "I was the TA of course 33-131 Matters and Interactions I at Carnegie Mellon. In class I taught some materials that the instructor did not get into details or cover in lecture, and helped my students with their doubts and practice problems.",
+        "skills": null,
+        "experienceGroupId": "71a05eb27bf8a472e5c2374c2e387f58bda256ee",
+        "startDate": {
+          "month": "Aug",
+          "year": 2014,
+          "text": "Aug 2014"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2015,
+          "text": "Jan 2015"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_200_200/company-logo_200_200/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Cr9dcgM6gBeNici6XTUDQUKQfYAc8US2OXBC0P5yB-Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_100_100/company-logo_100_100/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=iJiUJ2BhQORJLlvMYFhw22Mq44Z-z45Fza4_dNRwHSs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Developer Internship",
+        "location": "Verona, WI",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Epic",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/163658/",
+        "companyId": "163658",
+        "duration": "4 mos",
+        "description": "I worked as a software developer summer intern at Epic Systems. Cooperating with two other college interns, we sought to build a new generation web-based Epic's patient registration system based on the existing kiosk prototype called Welcome. The whole application was built mainly using ASP.NET MVC 5 with Razor and Entity Framework, with development environment connected to Epic's own database. The new app would enable a very efficient identification narrowing, appointment check-in, demographics verification, various payment method and online document signing with an even smarter workflow configuration. The programming languages involved are C#, HTML, CSS and Javascript (including the use of jQuery library, like ajax). I also used Objective-C and managed to convert this web-application to an iOS8 app that runs on an iPad.",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2015,
+          "text": "May 2015"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2015,
+          "text": "Aug 2015"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQH6HS4jtIcQ4w/company-logo_400_400/company-logo_400_400/0/1631348441877?e=1776902400&v=beta&t=eyFVcYhJqLlpigBKwo-UGIENuXo17ufFEQAzNtwumd8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQH6HS4jtIcQ4w/company-logo_400_400/company-logo_400_400/0/1631348441877?e=1776902400&v=beta&t=eyFVcYhJqLlpigBKwo-UGIENuXo17ufFEQAzNtwumd8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQH6HS4jtIcQ4w/company-logo_200_200/company-logo_200_200/0/1631348441877?e=1776902400&v=beta&t=ZS7LjyC0GGwVK-evH6M4MA5qYGc5WXSmNhzgKB9D5_4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQH6HS4jtIcQ4w/company-logo_100_100/company-logo_100_100/0/1631348441877?e=1776902400&v=beta&t=lqeALvm7PpfQEsj_YVSrL5tyXt_ydKOBSoN1YTsnx7U",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Carnegie Mellon University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3147/",
+        "schoolId": "3147",
+        "degree": "Doctor of Philosophy - PhD",
+        "fieldOfStudy": "Machine Learning",
+        "skills": [],
+        "description": "I joined CMU's Machine Learning Department in School of Computer Science as a Ph.D. student in fall 2017. I worked on deep learning architectures, sequence modeling, and implicit networks under the supervision of Professor J. Zico Kolter.",
+        "startDate": {
+          "year": 2017,
+          "text": "2017"
+        },
+        "endDate": {
+          "year": 2022,
+          "text": "2022"
+        },
+        "period": "2017 - 2022",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_200_200/company-logo_200_200/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Cr9dcgM6gBeNici6XTUDQUKQfYAc8US2OXBC0P5yB-Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_100_100/company-logo_100_100/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=iJiUJ2BhQORJLlvMYFhw22Mq44Z-z45Fza4_dNRwHSs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Carnegie Mellon University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3147/",
+        "schoolId": "3147",
+        "degree": "Bachelor of Science (B.S.)",
+        "fieldOfStudy": "Applied Mathematics",
+        "skills": [],
+        "description": "Graduated with University Honor and Mellon College of Science (MCS) College Honor.",
+        "insights": "Grade: 4.0/4.0",
+        "startDate": {
+          "year": 2013,
+          "text": "2013"
+        },
+        "endDate": {
+          "year": 2017,
+          "text": "2017"
+        },
+        "period": "2013 - 2017",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_200_200/company-logo_200_200/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Cr9dcgM6gBeNici6XTUDQUKQfYAc8US2OXBC0P5yB-Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_100_100/company-logo_100_100/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=iJiUJ2BhQORJLlvMYFhw22Mq44Z-z45Fza4_dNRwHSs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Carnegie Mellon University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3147/",
+        "schoolId": "3147",
+        "degree": "Bachelor of Science (B.S.)",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "description": "Graduated with University Honor and School of Computer Science (SCS) College Honor. My undergraduate senior thesis is \"The Effect of Pre-ReLU Input Distribution on Deep Neural Net's Performances\", advised by Professor J. Zico Kolter.",
+        "insights": "Grade: 4.0/4.0",
+        "startDate": {
+          "year": 2013,
+          "text": "2013"
+        },
+        "endDate": {
+          "year": 2017,
+          "text": "2017"
+        },
+        "period": "2013 - 2017",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_200_200/company-logo_200_200/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Cr9dcgM6gBeNici6XTUDQUKQfYAc8US2OXBC0P5yB-Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_100_100/company-logo_100_100/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=iJiUJ2BhQORJLlvMYFhw22Mq44Z-z45Fza4_dNRwHSs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Shenzhen Foreign Languages School",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/31560020/",
+        "schoolId": "31560020",
+        "degree": "High School Diploma",
+        "fieldOfStudy": "General Academics",
+        "skills": [],
+        "insights": "Grade: 4.25/4.30\nActivities and societies: MUN, Student Association Union, School Newspaper, Badminton, etc.",
+        "startDate": {
+          "year": 2010,
+          "text": "2010"
+        },
+        "endDate": {
+          "year": 2013,
+          "text": "2013"
+        },
+        "period": "2010 - 2013",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C510BAQFIJ7piu41-6A/company-logo_400_400/company-logo_400_400/0/1630615187891?e=1776902400&v=beta&t=BOQU6T7hd7xTv2jryJGfABrD7H938xAVlzHrYkoG00k",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQFIJ7piu41-6A/company-logo_400_400/company-logo_400_400/0/1630615187891?e=1776902400&v=beta&t=BOQU6T7hd7xTv2jryJGfABrD7H938xAVlzHrYkoG00k",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQFIJ7piu41-6A/company-logo_200_200/company-logo_200_200/0/1630615187891?e=1776902400&v=beta&t=x0NayWOp_cziMAo8pbY0jGh_07VNOBHrtnBs1VRo98c",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQFIJ7piu41-6A/company-logo_100_100/company-logo_100_100/0/1630615187891?e=1776902400&v=beta&t=RS2VMfb-cvo3H0D__2rQyBsHmPO05zMTCYI0ktsPw7Q",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [
+      {
+        "title": "Bachelor of Science in Mathematical Sciences (with University Honors)",
+        "issuedAt": "Issued May 2021",
+        "issuedBy": "Carnegie Mellon University",
+        "issuedByLink": "https://www.linkedin.com/company/3147/",
+        "issuedByLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_200_200/company-logo_200_200/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Cr9dcgM6gBeNici6XTUDQUKQfYAc8US2OXBC0P5yB-Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_100_100/company-logo_100_100/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=iJiUJ2BhQORJLlvMYFhw22Mq44Z-z45Fza4_dNRwHSs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "title": "Bachelor of Science in Computer Science (with University Honor)",
+        "issuedAt": "Issued May 2017",
+        "issuedBy": "Carnegie Mellon University",
+        "issuedByLink": "https://www.linkedin.com/company/3147/",
+        "issuedByLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_200_200/company-logo_200_200/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Cr9dcgM6gBeNici6XTUDQUKQfYAc8US2OXBC0P5yB-Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_100_100/company-logo_100_100/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=iJiUJ2BhQORJLlvMYFhw22Mq44Z-z45Fza4_dNRwHSs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "projects": [],
+    "volunteering": [
+      {
+        "role": "City Volunteer of 26th Universiade in Shenzhen, China",
+        "duration": "Jun 2011 - Aug 2011 · 3 mos",
+        "startDate": {
+          "month": "Jun",
+          "year": 2011,
+          "text": "Jun 2011"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2011,
+          "text": "Aug 2011 · 3 mos"
+        },
+        "organizationName": "Shenzhen Volunteer Association",
+        "organizationLinkedinUrl": null
+      }
+    ],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Python (Programming Language)"
+      },
+      {
+        "name": "Sequence Modeling"
+      },
+      {
+        "name": "Natural Language Processing (NLP)"
+      },
+      {
+        "name": "Python",
+        "endorsements": "8 endorsements"
+      },
+      {
+        "name": "English",
+        "endorsements": "9 endorsements"
+      },
+      {
+        "name": "C",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "C#",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Java",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Go"
+      },
+      {
+        "name": "Machine Learning",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "Objective-C",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "JavaScript",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "SML",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Common Lisp"
+      },
+      {
+        "name": "Chinese",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Research",
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "Matlab",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Microsoft Office",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "LaTeX",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "HTML",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "ASP.NET MVC",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "jQuery",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "C++"
+      },
+      {
+        "name": "Maple"
+      },
+      {
+        "name": "CUDA"
+      },
+      {
+        "name": "Deep Learning"
+      },
+      {
+        "name": "tensor"
+      }
+    ],
+    "publications": [],
+    "courses": [
+      {
+        "title": "Algorithm Design and Analysis",
+        "number": "15-451",
+        "associatedWith": "Associated with Carnegie Mellon University",
+        "associatedWithLink": "https://www.linkedin.com/company/3147/"
+      },
+      {
+        "title": "Combinatorics",
+        "number": "21-301",
+        "associatedWith": "Associated with Carnegie Mellon University",
+        "associatedWithLink": "https://www.linkedin.com/company/3147/"
+      },
+      {
+        "title": "Continuous-Time Finance",
+        "number": "21-420",
+        "associatedWith": "Associated with Carnegie Mellon University",
+        "associatedWithLink": "https://www.linkedin.com/company/3147/"
+      },
+      {
+        "title": "Convex Optimization",
+        "number": "10-725",
+        "associatedWith": "Associated with Carnegie Mellon University",
+        "associatedWithLink": "https://www.linkedin.com/company/3147/"
+      },
+      {
+        "title": "Distributed Systems",
+        "number": "15-440/640",
+        "associatedWith": "Associated with Carnegie Mellon University",
+        "associatedWithLink": "https://www.linkedin.com/company/3147/"
+      },
+      {
+        "title": "Machine Learning for PhD",
+        "number": "10-701",
+        "associatedWith": "Associated with Carnegie Mellon University",
+        "associatedWithLink": "https://www.linkedin.com/company/3147/"
+      },
+      {
+        "title": "Numerical Methods",
+        "number": "21-369",
+        "associatedWith": "Associated with Carnegie Mellon University",
+        "associatedWithLink": "https://www.linkedin.com/company/3147/"
+      },
+      {
+        "title": "Operations Research I & II",
+        "number": "21-393 (292)",
+        "associatedWith": "Associated with Carnegie Mellon University",
+        "associatedWithLink": "https://www.linkedin.com/company/3147/"
+      },
+      {
+        "title": "Parallel Computer Architecture and Programming",
+        "number": "15-418/618",
+        "associatedWith": "Associated with Carnegie Mellon University",
+        "associatedWithLink": "https://www.linkedin.com/company/3147/"
+      },
+      {
+        "title": "Principle of Real Analysis I & II",
+        "number": "21-356 (355)",
+        "associatedWith": "Associated with Carnegie Mellon University",
+        "associatedWithLink": "https://www.linkedin.com/company/3147/"
+      },
+      {
+        "title": "Principles of Programming Languages",
+        "number": "15-312",
+        "associatedWith": "Associated with Carnegie Mellon University",
+        "associatedWithLink": "https://www.linkedin.com/company/3147/"
+      },
+      {
+        "title": "Principles of Software System Construction",
+        "number": "15-214",
+        "associatedWith": "Associated with Carnegie Mellon University",
+        "associatedWithLink": "https://www.linkedin.com/company/3147/"
+      },
+      {
+        "title": "Probability",
+        "number": "21-325",
+        "associatedWith": "Associated with Carnegie Mellon University",
+        "associatedWithLink": "https://www.linkedin.com/company/3147/"
+      },
+      {
+        "title": "Probability Graphical Models",
+        "number": "10-708",
+        "associatedWith": "Associated with Carnegie Mellon University",
+        "associatedWithLink": null
+      },
+      {
+        "title": "Statistical Machine Learning",
+        "number": "10-702",
+        "associatedWith": "Associated with Carnegie Mellon University",
+        "associatedWithLink": null
+      }
+    ],
+    "patents": [],
+    "honorsAndAwards": [
+      {
+        "title": "Dean's List with High Honor of School of Computer Science, Mellon College of Science and Dietrich College",
+        "issuedBy": "Carnegie Mellon University",
+        "issuedAt": "Feb 2015",
+        "description": "This high honor is awarded to students with extraordinary academic record at CMU. Being in an interdisciplinary program at CMU, I have been awarded such high honor with recognition from two colleges (SCS, MCS and DC) in all semesters since Fall 2013.",
+        "associatedWith": "Associated with Carnegie Mellon University",
+        "associatedWithLink": "https://www.linkedin.com/company/3147/"
+      }
+    ],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAAAQ4Q7kByw3YKf2rFlmWzRMF7P8Gw4S9PIU",
+        "firstName": "Yinghai",
+        "lastName": "L.",
+        "publicIdentifier": "yinghai83",
+        "linkedinUrl": "https://www.linkedin.com/in/yinghai83"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABgwxtcBfqsJJUHPwsSPuBE4K9oKyRqUp5o",
+        "firstName": "Lia",
+        "lastName": "Guy",
+        "publicIdentifier": "aureliaguy",
+        "linkedinUrl": "https://www.linkedin.com/in/aureliaguy"
+      },
+      {
+        "id": "ACoAABMugyUBsZ9MwIVIzmOSzlvmO6TOFL-mfAU",
+        "firstName": "Chih-Kuan (Jason)",
+        "lastName": "Yeh",
+        "publicIdentifier": "chih-kuan-jason-yeh-8859378b",
+        "linkedinUrl": "https://www.linkedin.com/in/chih-kuan-jason-yeh-8859378b"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAACaOARIBRO2EEH12QWQO29L__oI3N2K4u14",
+        "firstName": "Mingjie",
+        "lastName": "Sun",
+        "publicIdentifier": "mingjie-sun-06a761160",
+        "linkedinUrl": "https://www.linkedin.com/in/mingjie-sun-06a761160"
+      },
+      {
+        "id": "ACoAAAJzsfoBp0MxssQYMgmy0ZNO2U3sA58ugwc",
+        "firstName": "Joshua",
+        "lastName": "Gross",
+        "publicIdentifier": "joshgross",
+        "linkedinUrl": "https://www.linkedin.com/in/joshgross"
+      },
+      {
+        "id": "ACoAABYs4-IB5mHx5eVfOHzu1e8xlO3q_kb38IM",
+        "firstName": "Brydon",
+        "lastName": "Eastman",
+        "publicIdentifier": "brydon-eastman-396719a4",
+        "linkedinUrl": "https://www.linkedin.com/in/brydon-eastman-396719a4"
+      },
+      {
+        "id": "ACoAAACo1tYBGy9sT2OWZuEULOMe4K_b2Y22-F8",
+        "firstName": "Alex",
+        "lastName": "Gartrell",
+        "publicIdentifier": "alexgartrell",
+        "linkedinUrl": "https://www.linkedin.com/in/alexgartrell"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+        "firstName": "Saurabh",
+        "lastName": "Garg",
+        "publicIdentifier": "saurabh-garg-b680b5b8",
+        "linkedinUrl": "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+      },
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAABhKWCYBiuV3Zv9Hbt8t0j-xMRqxawBcSgw",
+        "firstName": "Kurt",
+        "lastName": "Shuster",
+        "publicIdentifier": "kurtshuster1",
+        "linkedinUrl": "https://www.linkedin.com/in/kurtshuster1"
+      },
+      {
+        "id": "ACoAAAl87CYBWKLLyGNTbomy6oqIPv-5n34CXIY",
+        "firstName": "Andrew",
+        "lastName": "Tulloch",
+        "publicIdentifier": "andrew-tulloch-17238745",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-tulloch-17238745"
+      },
+      {
+        "id": "ACoAABhIg7YBYN2NPIu8voYj5D7JQVZGxonqHvc",
+        "firstName": "Ruiqi",
+        "lastName": "Zhong",
+        "publicIdentifier": "ruiqi-zhong-09a533b4",
+        "linkedinUrl": "https://www.linkedin.com/in/ruiqi-zhong-09a533b4"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAAAO-j_IBXcvIzhZtQ7QNkky6tlnQTcFl9qI",
+        "firstName": "Myle",
+        "lastName": "Ott",
+        "publicIdentifier": "myleott",
+        "linkedinUrl": "https://www.linkedin.com/in/myleott"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAAAAdzCEB9t8wLSGcpoQ71RdetK75KW7RgS4",
+        "firstName": "Mark",
+        "lastName": "Jen",
+        "publicIdentifier": "markjen",
+        "linkedinUrl": "https://www.linkedin.com/in/markjen"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAA4HVN4B_XYJ2_7gVT3BikkXhT9Re2pwv6c"
+    }
+  }
+}

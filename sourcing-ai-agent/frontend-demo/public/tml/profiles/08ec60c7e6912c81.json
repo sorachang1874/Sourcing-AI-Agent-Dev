@@ -1,0 +1,943 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAABZu3vEBeNmG0oIKiC2NlZhIa5wH82XN8Cg",
+    "profile_url": "https://www.linkedin.com/in/ACwAABZu3vEBeNmG0oIKiC2NlZhIa5wH82XN8Cg"
+  },
+  "item": {
+    "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+    "publicIdentifier": "ngoyal2707",
+    "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707",
+    "firstName": "Naman",
+    "lastName": "Goyal",
+    "emails": [
+      {
+        "email": "naman.goyal@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Member of Technical Staff at Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "New York, New York, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "New York City, NY, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "New York",
+        "city": "New York City"
+      }
+    },
+    "objectUrn": "376364785",
+    "registeredAt": "2014-10-10T16:42:58.156Z",
+    "topSkills": null,
+    "connectionsCount": 835,
+    "followerCount": 1278,
+    "verified": false,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 3,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "18158",
+        "companyId": "3558",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3558/",
+        "schoolName": "Georgia Institute of Technology"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": null,
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Member of Technical Staff at Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "1 yr 2 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2025,
+          "text": "Mar 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer",
+        "location": "New York City Metropolitan Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Facebook",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/76987811/",
+        "companyId": "76987811",
+        "duration": "6 yrs 7 mos",
+        "description": "Research Engineer at FAIR, NY.",
+        "skills": null,
+        "startDate": {
+          "month": "Aug",
+          "year": 2018,
+          "text": "Aug 2018"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2025,
+          "text": "Feb 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_200_200/company-logo_200_200/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=CL3OcEUIyBJFm9Wkw4iT9gJoWpsvGBIAhhNM0DjZx_A",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_100_100/company-logo_100_100/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=sZq9Sard1kGYVIprgBkNhUvJRTI7tf3pXOCP1bQBfpM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Yelp",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/31517/",
+        "companyId": "31517",
+        "duration": "2 yrs 1 mo",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jul",
+          "year": 2016,
+          "text": "Jul 2016"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2018,
+          "text": "Jul 2018"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQEZtZ8AGku9DA/company-logo_400_400/company-logo_400_400/0/1631836422115/yelp_com_logo?e=1776902400&v=beta&t=_7jBzwZepBu91K8Da2ZEfwUBCzbwO8c_rh8x7KDV5t4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEZtZ8AGku9DA/company-logo_400_400/company-logo_400_400/0/1631836422115/yelp_com_logo?e=1776902400&v=beta&t=_7jBzwZepBu91K8Da2ZEfwUBCzbwO8c_rh8x7KDV5t4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEZtZ8AGku9DA/company-logo_200_200/company-logo_200_200/0/1631836422115/yelp_com_logo?e=1776902400&v=beta&t=y3j7SWed_LWi2FHvQOfauZJa2g2qRpxy0gHzncXxlzk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEZtZ8AGku9DA/company-logo_100_100/company-logo_100_100/0/1631836422115/yelp_com_logo?e=1776902400&v=beta&t=Quw6mMwaIn9FYkaBy0jbWXwvsWSShMPhg1ZXGW7NWOM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Graduate Teaching Assistant",
+        "location": "Atlanta",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Georgia Institute of Technology",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/georgia-institute-of-technology/",
+        "companyId": "3558",
+        "companyUniversalName": "georgia-institute-of-technology",
+        "duration": "5 mos",
+        "description": "GTA of graduate level class of Artificial Intelligence with following responsibilities:\n\n1) Grading and Writing Auto grader scripts.\n2) Holding weekly office hours for helping student with both understanding conceptual material in machine learning techniques and programming assignment.",
+        "skills": null,
+        "experienceGroupId": "d3436660fc0268a309bb42436f8bb04f4dba38a2",
+        "startDate": {
+          "month": "Jan",
+          "year": 2016,
+          "text": "Jan 2016"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2016,
+          "text": "May 2016"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFuhLQoh5_7yA/company-logo_400_400/company-logo_400_400/0/1640110532212/georgia_institute_of_technology_logo?e=1776902400&v=beta&t=A3nLu-fD9kr-oBIibW14IwUalRdZEqZCFA-wMJthzYM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFuhLQoh5_7yA/company-logo_400_400/company-logo_400_400/0/1640110532212/georgia_institute_of_technology_logo?e=1776902400&v=beta&t=A3nLu-fD9kr-oBIibW14IwUalRdZEqZCFA-wMJthzYM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFuhLQoh5_7yA/company-logo_200_200/company-logo_200_200/0/1640110532212/georgia_institute_of_technology_logo?e=1776902400&v=beta&t=GVMnO4bxq2_sIppgOz19jaUSWVYoHUPt1hvLYmrLtVk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFuhLQoh5_7yA/company-logo_100_100/company-logo_100_100/0/1640110532212/georgia_institute_of_technology_logo?e=1776902400&v=beta&t=eziLkxSosTombxeIytwef2LDgnTAic4jcEiF5pGQDRk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Graduate Teaching Assistant",
+        "location": "Atlanta",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Georgia Institute of Technology",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/georgia-institute-of-technology/",
+        "companyId": "3558",
+        "companyUniversalName": "georgia-institute-of-technology",
+        "duration": "5 mos",
+        "description": "GTA of graduate level class of Natural Language Processing with following responsibilities:\n\n1) Grading and Writing Auto grader scripts.\n2) Holding weekly office hours for helping student with both understanding conceptual material in machine learning techniques and programming assignment.",
+        "skills": null,
+        "experienceGroupId": "d3436660fc0268a309bb42436f8bb04f4dba38a2",
+        "startDate": {
+          "month": "Aug",
+          "year": 2015,
+          "text": "Aug 2015"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2015,
+          "text": "Dec 2015"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFuhLQoh5_7yA/company-logo_400_400/company-logo_400_400/0/1640110532212/georgia_institute_of_technology_logo?e=1776902400&v=beta&t=A3nLu-fD9kr-oBIibW14IwUalRdZEqZCFA-wMJthzYM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFuhLQoh5_7yA/company-logo_400_400/company-logo_400_400/0/1640110532212/georgia_institute_of_technology_logo?e=1776902400&v=beta&t=A3nLu-fD9kr-oBIibW14IwUalRdZEqZCFA-wMJthzYM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFuhLQoh5_7yA/company-logo_200_200/company-logo_200_200/0/1640110532212/georgia_institute_of_technology_logo?e=1776902400&v=beta&t=GVMnO4bxq2_sIppgOz19jaUSWVYoHUPt1hvLYmrLtVk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFuhLQoh5_7yA/company-logo_100_100/company-logo_100_100/0/1640110532212/georgia_institute_of_technology_logo?e=1776902400&v=beta&t=eziLkxSosTombxeIytwef2LDgnTAic4jcEiF5pGQDRk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Associate developer Intern",
+        "location": "Atlanta",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Home Depot",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/90912/",
+        "companyId": "90912",
+        "duration": "4 mos",
+        "description": "Worked on project 'Weather driven demand'. The goal was to adjust inventory needs with taking weather conditions into account. Worked on Parsing weather data, classifying storm into categories according to the text and using time series models on the sales- inventory data. ",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2015,
+          "text": "May 2015"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2015,
+          "text": "Aug 2015"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQFzq2SBFc2snA/company-logo_400_400/company-logo_400_400/0/1631330455484?e=1776902400&v=beta&t=QE7H6nf_Gnad00zj10X2SWzz0RizO_o-2eRIOlA958o",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFzq2SBFc2snA/company-logo_400_400/company-logo_400_400/0/1631330455484?e=1776902400&v=beta&t=QE7H6nf_Gnad00zj10X2SWzz0RizO_o-2eRIOlA958o",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFzq2SBFc2snA/company-logo_200_200/company-logo_200_200/0/1631330455484?e=1776902400&v=beta&t=JOOwUznM2onTS-ErHXCtD_NwGYTbM4jnvq2eszlykmM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFzq2SBFc2snA/company-logo_100_100/company-logo_100_100/0/1631330455484?e=1776902400&v=beta&t=vG5kBsbOD_Pv2IWpBwkoi333IBeSi6-ygC9iO3aqtWk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Graduate Research Assistant",
+        "location": "Atlanta",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Georgia Institute of Technology",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/georgia-institute-of-technology/",
+        "companyId": "3558",
+        "companyUniversalName": "georgia-institute-of-technology",
+        "duration": "5 mos",
+        "description": "Worked in Data analytics and simulation lab on two projects:\n1) Sidewalk optimization and visualization: Built optimization and visualization tool for finding the best sidewalks to be constructed under budget constraints using integer linear programming solver.\n2) Building Optimization: Used active learning with Genetic algorithm (NSGA) to solve\nmulti-objective optimization problem efficiently in building design problem.",
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2015,
+          "text": "Jan 2015"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2015,
+          "text": "May 2015"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFuhLQoh5_7yA/company-logo_400_400/company-logo_400_400/0/1640110532212/georgia_institute_of_technology_logo?e=1776902400&v=beta&t=A3nLu-fD9kr-oBIibW14IwUalRdZEqZCFA-wMJthzYM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFuhLQoh5_7yA/company-logo_400_400/company-logo_400_400/0/1640110532212/georgia_institute_of_technology_logo?e=1776902400&v=beta&t=A3nLu-fD9kr-oBIibW14IwUalRdZEqZCFA-wMJthzYM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFuhLQoh5_7yA/company-logo_200_200/company-logo_200_200/0/1640110532212/georgia_institute_of_technology_logo?e=1776902400&v=beta&t=GVMnO4bxq2_sIppgOz19jaUSWVYoHUPt1hvLYmrLtVk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFuhLQoh5_7yA/company-logo_100_100/company-logo_100_100/0/1640110532212/georgia_institute_of_technology_logo?e=1776902400&v=beta&t=eziLkxSosTombxeIytwef2LDgnTAic4jcEiF5pGQDRk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Member of Technical Staff",
+        "location": "Pune/Pimpri-Chinchwad Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "TIBCO Software Inc.",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3420/",
+        "companyId": "3420",
+        "duration": "1 yr 1 mo",
+        "description": "Worked on development of a real time MOLAP engine to aggregate various performance metrics, Implemented statistical metric functions to be calculated at real time for high velocity industrial data, Worked on the core JAVA thread pool model of the aggregation engine.",
+        "skills": null,
+        "experienceGroupId": "dcda4e26aaa15c595bbc461f66785a37d4a66019",
+        "startDate": {
+          "month": "Jun",
+          "year": 2013,
+          "text": "Jun 2013"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2014,
+          "text": "Jun 2014"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHygNCCIMTg_w/company-logo_400_400/company-logo_400_400/0/1719843639830/tibco_logo?e=1776902400&v=beta&t=uSajHtMQZeIDmkaqP9LrQxBKfUu0e1mL41Yb4xqleJI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHygNCCIMTg_w/company-logo_400_400/company-logo_400_400/0/1719843639830/tibco_logo?e=1776902400&v=beta&t=uSajHtMQZeIDmkaqP9LrQxBKfUu0e1mL41Yb4xqleJI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHygNCCIMTg_w/company-logo_200_200/company-logo_200_200/0/1719843639830/tibco_logo?e=1776902400&v=beta&t=eJCXBeSb3NZdKHzsP5mtcwGVBGqAgC0QrnFLFsuaL90",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHygNCCIMTg_w/company-logo_100_100/company-logo_100_100/0/1719843639830/tibco_logo?e=1776902400&v=beta&t=MH4CGSddgoq100i9d1GzOk_6SyPGwgXAs8hfh36YDPg",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Associate Member of Technical Staff",
+        "location": "Pune/Pimpri-Chinchwad Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "TIBCO Software Inc.",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3420/",
+        "companyId": "3420",
+        "duration": "11 mos",
+        "description": "Worked on development of a distributed application and infrastructure monitoring tool. Integrated it with In-memory Datagrid as a new transport mechanism for history analytics. Resolved many critical customer service and enhancement requests. ",
+        "skills": null,
+        "experienceGroupId": "dcda4e26aaa15c595bbc461f66785a37d4a66019",
+        "startDate": {
+          "month": "Aug",
+          "year": 2012,
+          "text": "Aug 2012"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2013,
+          "text": "Jun 2013"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHygNCCIMTg_w/company-logo_400_400/company-logo_400_400/0/1719843639830/tibco_logo?e=1776902400&v=beta&t=uSajHtMQZeIDmkaqP9LrQxBKfUu0e1mL41Yb4xqleJI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHygNCCIMTg_w/company-logo_400_400/company-logo_400_400/0/1719843639830/tibco_logo?e=1776902400&v=beta&t=uSajHtMQZeIDmkaqP9LrQxBKfUu0e1mL41Yb4xqleJI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHygNCCIMTg_w/company-logo_200_200/company-logo_200_200/0/1719843639830/tibco_logo?e=1776902400&v=beta&t=eJCXBeSb3NZdKHzsP5mtcwGVBGqAgC0QrnFLFsuaL90",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHygNCCIMTg_w/company-logo_100_100/company-logo_100_100/0/1719843639830/tibco_logo?e=1776902400&v=beta&t=MH4CGSddgoq100i9d1GzOk_6SyPGwgXAs8hfh36YDPg",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Georgia Institute of Technology",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3558/",
+        "schoolId": "3558",
+        "degree": "Master of Science (MS)",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "description": "Courses:\n\nMachine Learning\nNatural Language Processing\nData and Visual Analytics\nComputational Science and Algorithms\nDeep Learning for Perception\nProbabilistic Graphical Models\nAdvanced operating Systems\nArtificial Intelligence\nAdvanced Computer Vision",
+        "insights": "Grade: 4.0",
+        "startDate": {
+          "year": 2014,
+          "text": "2014"
+        },
+        "endDate": {
+          "year": 2016,
+          "text": "2016"
+        },
+        "period": "2014 - 2016",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFuhLQoh5_7yA/company-logo_400_400/company-logo_400_400/0/1640110532212/georgia_institute_of_technology_logo?e=1776902400&v=beta&t=A3nLu-fD9kr-oBIibW14IwUalRdZEqZCFA-wMJthzYM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFuhLQoh5_7yA/company-logo_400_400/company-logo_400_400/0/1640110532212/georgia_institute_of_technology_logo?e=1776902400&v=beta&t=A3nLu-fD9kr-oBIibW14IwUalRdZEqZCFA-wMJthzYM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFuhLQoh5_7yA/company-logo_200_200/company-logo_200_200/0/1640110532212/georgia_institute_of_technology_logo?e=1776902400&v=beta&t=GVMnO4bxq2_sIppgOz19jaUSWVYoHUPt1hvLYmrLtVk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFuhLQoh5_7yA/company-logo_100_100/company-logo_100_100/0/1640110532212/georgia_institute_of_technology_logo?e=1776902400&v=beta&t=eziLkxSosTombxeIytwef2LDgnTAic4jcEiF5pGQDRk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Savitribai Phule Pune University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/15094398/",
+        "schoolId": "15094398",
+        "degree": "Bachelor of Engineering (BE)",
+        "fieldOfStudy": "Computer Engineering",
+        "skills": [],
+        "description": "Department Gold Medalist",
+        "insights": "Grade: 72%",
+        "startDate": {
+          "year": 2008,
+          "text": "2008"
+        },
+        "endDate": {
+          "year": 2012,
+          "text": "2012"
+        },
+        "period": "2008 - 2012",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEFsIyAZyuMwA/company-logo_400_400/company-logo_400_400/0/1631345386058?e=1776902400&v=beta&t=p4WiMzfJp58kbanGjNdEaqKVwzdU8A0FkfsTusqRJC8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEFsIyAZyuMwA/company-logo_400_400/company-logo_400_400/0/1631345386058?e=1776902400&v=beta&t=p4WiMzfJp58kbanGjNdEaqKVwzdU8A0FkfsTusqRJC8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEFsIyAZyuMwA/company-logo_200_200/company-logo_200_200/0/1631345386058?e=1776902400&v=beta&t=E0_XkjDjevBIYEyqBudxWKln88u6u3oEfGRuDIbauIw",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEFsIyAZyuMwA/company-logo_100_100/company-logo_100_100/0/1631345386058?e=1776902400&v=beta&t=CQHByP0VCGvCAx4xknMbl90TWx_CiLLw7fnI9eI1gXE",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "C",
+        "positions": [
+          "Endorsed by 3 colleagues at Georgia Institute of Technology"
+        ],
+        "endorsements": "14 endorsements"
+      },
+      {
+        "name": "C++",
+        "positions": [
+          "Endorsed by 3 colleagues at Georgia Institute of Technology"
+        ],
+        "endorsements": "11 endorsements"
+      },
+      {
+        "name": "Java",
+        "positions": [
+          "Endorsed by 4 colleagues at Georgia Institute of Technology"
+        ],
+        "endorsements": "10 endorsements"
+      },
+      {
+        "name": "JavaScript",
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "SQL",
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "Eclipse",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Linux",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Matlab",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "python",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Python",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "Natural Language Processing",
+        "endorsements": "7 endorsements"
+      },
+      {
+        "name": "Machine Learning",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "deep learning",
+        "endorsements": "4 endorsements"
+      }
+    ],
+    "publications": [
+      {
+        "title": "LearningToQuestion at SemEval 2017 Task 3: Ranking Similar Questions by Learning to Rank Using Rich Features",
+        "publishedAt": "Semeval · Aug 3, 2017",
+        "description": "This paper describes our official entry LearningToQuestion for SemEval 2017 task 3 community question answer. The objective is to rerank questions obtained in web forum as per their similarity to original question. Our system uses pairwise learning to rank methods on rich set of hand designed and representation learning features. We use various semantic features that help our system to achieve promising results on the task. The system achieved second highest results on official metrics MAP and good results on other search metrics.",
+        "link": "http://nlp.arizona.edu/SemEval-2017/pdf/SemEval050.pdf"
+      },
+      {
+        "title": "A Joint Model of Rhetorical Discourse Structure and Summarization",
+        "publishedAt": "EMNLP Structured Prediction Workshop · Sep 26, 2016",
+        "description": "In Rhetorical Structure Theory, discourse units participate in asymmetric relationships, with one element acting as the nucleus and the other as the satellite. In the resulting tree-like nuclearity structure, the importance of each discourse unit can be measured by the number of relations in which it acts as the nucleus or as the satellite. Existing approaches to automatically parsing such structures suffer from two problems: they employ local inference techniques that do not capture document level structural regularities, and they rely on annotated training data, which is expensive\nto obtain at the discourse level. We investigate the SampleRank structure learning algorithm as a potential solution to both problems. SampleRank allows us to incorporate arbitrary document-level features in a global stochastic inference algorithm. Furthermore, it enables the training of a joint model of discourse structure and summarization, which can be learned from document-level summaries alone, without discourse-level supervision. We obtain mixed results in the fully supervised case, and negative results for the joint model of discourse structure and summarization.",
+        "link": "https://structuredprediction.github.io/final/6/6_Paper.pdf"
+      },
+      {
+        "title": "The Social Dynamics of Language Change in Online Networks",
+        "publishedAt": "SocInfo · Sep 7, 2016",
+        "description": "Language change is a complex social phenomenon, revealing pathways of communication and sociocultural influence. But, while language change has long been a topic of study in sociolinguistics, traditional linguistic research methods rely on circumstantial evidence, estimating the direction of change from differences between older and younger speakers. In this paper, we use a data set of several million Twitter users to track language changes in progress. First, we show that language change can be viewed as a form of social influence: we observe complex contagion for phonetic spellings and \"netspeak\" abbreviations (e.g., lol), but not for older dialect markers from spoken language. Next, we test whether specific types of social network connections are more influential than others, using a parametric Hawkes process model. We find that tie strength plays an important role: densely embedded social ties are significantly better conduits of linguistic influence. Geographic locality appears to play a more limited role: we find relatively little evidence to support the hypothesis that individuals are more influenced by geographically local social ties, even in their usage of geographical dialect markers.",
+        "link": "http://arxiv.org/abs/1609.02075"
+      },
+      {
+        "title": "Active Learning in Multi-objective Evolutionary Algorithms for Sustainable Building Design (Best paper nomination)",
+        "publishedAt": "GECCO · Jul 22, 2016",
+        "description": "Residential and commercial buildings are responsible for about 40% of primary energy consumption in the US. The design of a building has tremendous effect on its energy profile, and recently there\nhas been an increased interest in developing optimization methods that support the design of high performance buildings. Previous approaches are either based on simulation optimization or on training an accurate predictive model to replace expensive energy simulations during the optimization. We propose a method, suitable for expensive multiobjective optimization in very large search spaces. In particular, we use a Gaussian Process (GP) model for the prediction and devise an active learning scheme in a multi-objective genetic algorithm to preferentially simulate only solutions that are very informative to the model’s predictions for the current generation. We develop a comprehensive and publicly available benchmark for building design optimization. We show that the GP model is highly competitive as a surrogate for building energy simulations, in addition to being well-suited for the active learning setting. Our results show that our approach clearly outperforms surrogate-based optimization, and produces solutions close in hypervolume to simulation optimization, while using only a fraction of the simulations and time.",
+        "link": "http://dl.acm.org/citation.cfm?id=2908947&dl=ACM&coll=DL&CFID=665704744&CFTOKEN=54192304"
+      }
+    ],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "position": "AI Researcher, Co-founder @ Thinking Machines Lab",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAABEmYXYB5f-3ZmFG8dI-n9XAlqySBqO-2PA",
+        "firstName": "Luke",
+        "lastName": "Carlson",
+        "position": "Thinking Machines | Member of Technical Staff",
+        "publicIdentifier": "jlukecarlson",
+        "linkedinUrl": "https://www.linkedin.com/in/jlukecarlson"
+      },
+      {
+        "id": "ACoAAAQ4Q7kByw3YKf2rFlmWzRMF7P8Gw4S9PIU",
+        "firstName": "Yinghai",
+        "lastName": "L.",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "yinghai83",
+        "linkedinUrl": "https://www.linkedin.com/in/yinghai83"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABgwxtcBfqsJJUHPwsSPuBE4K9oKyRqUp5o",
+        "firstName": "Lia",
+        "lastName": "Guy",
+        "position": "Research @ OpenAI",
+        "publicIdentifier": "aureliaguy",
+        "linkedinUrl": "https://www.linkedin.com/in/aureliaguy"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAAAJzsfoBp0MxssQYMgmy0ZNO2U3sA58ugwc",
+        "firstName": "Joshua",
+        "lastName": "Gross",
+        "position": "Engineering Leadership, Meta Superintelligence Lab",
+        "publicIdentifier": "joshgross",
+        "linkedinUrl": "https://www.linkedin.com/in/joshgross"
+      },
+      {
+        "id": "ACoAABYs4-IB5mHx5eVfOHzu1e8xlO3q_kb38IM",
+        "firstName": "Brydon",
+        "lastName": "Eastman",
+        "position": "Nerd @ Thinking Machines Labs | Formerly Member of Technical Staff @ OpenAI | PhD in Mathematical Oncology",
+        "publicIdentifier": "brydon-eastman-396719a4",
+        "linkedinUrl": "https://www.linkedin.com/in/brydon-eastman-396719a4"
+      },
+      {
+        "id": "ACoAAACo1tYBGy9sT2OWZuEULOMe4K_b2Y22-F8",
+        "firstName": "Alex",
+        "lastName": "Gartrell",
+        "position": "Engineering @ Thinking Machines, Ex-Meta/Facebook",
+        "publicIdentifier": "alexgartrell",
+        "linkedinUrl": "https://www.linkedin.com/in/alexgartrell"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAABA0sF8BJqwmfoms3veu9TE72tj8JMUQEFA",
+        "firstName": "Sam",
+        "lastName": "Shleifer",
+        "position": "The Biggest Legend",
+        "publicIdentifier": "sam-shleifer-a5307a77",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-shleifer-a5307a77"
+      },
+      {
+        "id": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+        "firstName": "Saurabh",
+        "lastName": "Garg",
+        "position": "Thinking Machines Lab | Prev: Mistral AI, CMU, IIT-B",
+        "publicIdentifier": "saurabh-garg-b680b5b8",
+        "linkedinUrl": "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+      },
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "position": "Thinking about machines",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAABhKWCYBiuV3Zv9Hbt8t0j-xMRqxawBcSgw",
+        "firstName": "Kurt",
+        "lastName": "Shuster",
+        "position": "AI Research Engineer",
+        "publicIdentifier": "kurtshuster1",
+        "linkedinUrl": "https://www.linkedin.com/in/kurtshuster1"
+      },
+      {
+        "id": "ACoAAABnAccB9h1LTKUrBFif76qxLwe9k7nyE_s",
+        "firstName": "Ian",
+        "lastName": "O'Connell",
+        "position": "Software engineer",
+        "publicIdentifier": "ianoc",
+        "linkedinUrl": "https://www.linkedin.com/in/ianoc"
+      },
+      {
+        "id": "ACoAAAl87CYBWKLLyGNTbomy6oqIPv-5n34CXIY",
+        "firstName": "Andrew",
+        "lastName": "Tulloch",
+        "position": "AI Research @ Meta",
+        "publicIdentifier": "andrew-tulloch-17238745",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-tulloch-17238745"
+      },
+      {
+        "id": "ACoAABhIg7YBYN2NPIu8voYj5D7JQVZGxonqHvc",
+        "firstName": "Ruiqi",
+        "lastName": "Zhong",
+        "position": "AI researcher. LLM + human collaboration.",
+        "publicIdentifier": "ruiqi-zhong-09a533b4",
+        "linkedinUrl": "https://www.linkedin.com/in/ruiqi-zhong-09a533b4"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "position": "Co-Founder and CEO at Thinking Machines Lab",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAAAO-j_IBXcvIzhZtQ7QNkky6tlnQTcFl9qI",
+        "firstName": "Myle",
+        "lastName": "Ott",
+        "position": "ML infra at Thinking Machines",
+        "publicIdentifier": "myleott",
+        "linkedinUrl": "https://www.linkedin.com/in/myleott"
+      },
+      {
+        "id": "ACoAACHkUNgBogKk7Q3xekxMdWLMSikZY2zgQsU",
+        "firstName": "Stephen",
+        "lastName": "Roller",
+        "position": "AI Researcher",
+        "publicIdentifier": "stephen-roller-38851513a",
+        "linkedinUrl": "https://www.linkedin.com/in/stephen-roller-38851513a"
+      },
+      {
+        "id": "ACoAAFKRhVoBHnNXfdyD0zVbuvbiX8m0p986K_g",
+        "firstName": "Nenad",
+        "lastName": "Ristanic",
+        "position": "Leadkwalificatie, Leadgeneratie, Sales Representative ",
+        "publicIdentifier": "nenad-ristanic-076b10327",
+        "linkedinUrl": "https://www.linkedin.com/in/nenad-ristanic-076b10327"
+      },
+      {
+        "id": "ACoAACEUBL0B0ZJTKcCIBAi4HhRWqaZ90b2n89E",
+        "firstName": "Katarina",
+        "lastName": "Ferderbar",
+        "position": "mag.pharm",
+        "publicIdentifier": "katarina-ferderbar-539a31135",
+        "linkedinUrl": "https://www.linkedin.com/in/katarina-ferderbar-539a31135"
+      },
+      {
+        "id": "ACoAAAql7BcBytA7E6mEWLR8OhG0siDumFMmRO8",
+        "firstName": "Ana",
+        "lastName": "Sobota",
+        "position": ".",
+        "publicIdentifier": "ana-sobota-15b9b34b",
+        "linkedinUrl": "https://www.linkedin.com/in/ana-sobota-15b9b34b"
+      },
+      {
+        "id": "ACoAACDyYxQBCaaxoZHTJ0dA8GEIZQNEAIvcvSo",
+        "firstName": "Tomislav",
+        "lastName": "Horvat",
+        "position": "Helping companies rank on Google & get recommended in AI Search.",
+        "publicIdentifier": "tomislav-horvat",
+        "linkedinUrl": "https://www.linkedin.com/in/tomislav-horvat"
+      },
+      {
+        "id": "ACoAAD_ZgWABeIIyjz87MFtvyupC46cZNVNu96Y",
+        "firstName": "Tea",
+        "lastName": "Cvetko, MD",
+        "position": "Cardiologist @University Hospital Dubrava | MD",
+        "publicIdentifier": "tea-cvetko-md-5148ba25a",
+        "linkedinUrl": "https://www.linkedin.com/in/tea-cvetko-md-5148ba25a"
+      },
+      {
+        "id": "ACoAACe_nH0BTY1ASzvY5FKS7aAMjl4JQCs6ZDg",
+        "firstName": "Luka",
+        "lastName": "M.",
+        "position": "ENT resident",
+        "publicIdentifier": "luka-m-5913bb167",
+        "linkedinUrl": "https://www.linkedin.com/in/luka-m-5913bb167"
+      },
+      {
+        "id": "ACoAAB4BMRIB4Cx-X9Ez_m10qKJZFk7II0NGUC0",
+        "firstName": "Tihomir",
+        "lastName": "Novak",
+        "position": "IT Manager at Colas Croatia",
+        "publicIdentifier": "tihomir-novak",
+        "linkedinUrl": "https://www.linkedin.com/in/tihomir-novak"
+      },
+      {
+        "id": "ACoAADvrYJ0BJk5pJEcdHPQMi_FAxFGarqi_VYA",
+        "firstName": "Marko",
+        "lastName": "Vetturelli",
+        "position": "Anesthesiology resident",
+        "publicIdentifier": "marko-vetturelli-111800240",
+        "linkedinUrl": "https://www.linkedin.com/in/marko-vetturelli-111800240"
+      },
+      {
+        "id": "ACoAACi6eosB4yD2xkpNfA5E4hJ5wA5ucSe8_GE",
+        "firstName": "Mateja",
+        "lastName": "Ostrički",
+        "position": "Head of the Department of cardiology with coronary care unit at County hospital Čakovec",
+        "publicIdentifier": "mateja-ostrički-a37a09170",
+        "linkedinUrl": "https://www.linkedin.com/in/mateja-ostrički-a37a09170"
+      },
+      {
+        "id": "ACoAAAogHN8BE1Q4TtP_XEG6CjV0gD_ydFFcrP0",
+        "firstName": "Zeljka",
+        "lastName": "Novak",
+        "position": "--",
+        "publicIdentifier": "zeljka-novak-33ba8448",
+        "linkedinUrl": "https://www.linkedin.com/in/zeljka-novak-33ba8448"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAABZu3vEBeNmG0oIKiC2NlZhIa5wH82XN8Cg"
+    }
+  }
+}

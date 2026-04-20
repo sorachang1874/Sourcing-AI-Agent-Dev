@@ -1,0 +1,605 @@
+{
+  "organizations": {},
+  "volunteer_experiences": [
+    {
+      "name": "Beijing 2008 Olympic Games",
+      "url": null,
+      "description": null,
+      "company": null,
+      "title": "Volunteer",
+      "company_id": null,
+      "image_url": null,
+      "position_held": null,
+      "date_range": {
+        "start": {
+          "year": 2008,
+          "month": 7,
+          "day": null,
+          "iso": "2008-07"
+        },
+        "end": {
+          "year": 2008,
+          "month": 8,
+          "day": null,
+          "iso": "2008-08"
+        }
+      }
+    }
+  ],
+  "location": {
+    "city": null,
+    "name": "United States",
+    "country_code": "US",
+    "country": null
+  },
+  "contact_info": null,
+  "message": "For high volume usage and custom pricing, visit https://app.enrichgraph.io or contact us at support@enrichgraph.io",
+  "education": [
+    {
+      "field_of_study": "Complex Systems and Networks",
+      "activities": null,
+      "grade": "3.97/4",
+      "description": "Thesis title: Information Diffusion on Social Networks: Competition, Efficiency, and Topics.",
+      "school_id": "18342",
+      "school_url": "https://www.linkedin.com/school/indiana-university-bloomington/",
+      "date_range": null,
+      "school_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQFonK534Iq8-Q/company-logo_400_400/company-logo_400_400/0/1631332394799?e=1776902400&v=beta&t=xjEPFj_AIW2PJxX9XUwHwA4XCC1wvpqJFM_TctDC9Os",
+      "school_name": "Indiana University Bloomington",
+      "degree": "Ph.D."
+    },
+    {
+      "field_of_study": "Information System and Computer Science",
+      "activities": null,
+      "grade": "3.85/4",
+      "description": "Thesis title: Social Network Analysis of Online Question-Answer Systems.",
+      "school_id": "11287",
+      "school_url": "https://www.linkedin.com/school/peking-university/",
+      "date_range": null,
+      "school_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQFNJ0xtCpaTmA/company-logo_400_400/company-logo_400_400/0/1630659985593/peking_university_logo?e=1776902400&v=beta&t=tzWsCJkzrFTjS8-XTrasS49bBUqZTxxm9qz4Y-W-UEI",
+      "school_name": "Peking University",
+      "degree": "Bachelor's degree"
+    },
+    {
+      "field_of_study": "Information System, School of Business",
+      "activities": null,
+      "grade": "3.80/4",
+      "description": "Short-term exchange study",
+      "school_id": "12881",
+      "school_url": "https://www.linkedin.com/school/universityofhongkong/",
+      "date_range": null,
+      "school_logo_url": "https://media.licdn.com/dms/image/v2/C4D0BAQEubCTgcfA2sQ/company-logo_400_400/company-logo_400_400/0/1631325687808?e=1776902400&v=beta&t=DrtWxmB2s8pSnRZs_Z9oli8U4jmYe2rEFi0Ur5Xg2KU",
+      "school_name": "The University of Hong Kong",
+      "degree": "Bachelor's degree"
+    }
+  ],
+  "member_urn": "74248375",
+  "publications": [
+    {
+      "name": "The Role of Information Diffusion in the Evolution of Social Networks",
+      "url": "http://www.bgoncalves.com/component/jdownloads/finish/3/46.html",
+      "description": "Every day millions of users are connected through online social networks, generating a rich trove of data that allows us to study the mechanisms behind human interactions. Triadic closure has been treated as the major mechanism for creating social links: if Al- ice follows Bob and Bob follows Charlie, Alice will follow Char- lie. Here we present an analysis of longitudinal micro-blogging data, revealing a more nuanced view of the strategies employed by users when expanding their social circles. While the network struc- ture affects the spread of information among users, the network is in turn shaped by this communication activity. This suggests a link creation mechanism whereby Alice is more likely to follow Charlie after seeing many messages by Charlie. We characterize users with a set of parameters associated with different link creation strategies, estimated by a Maximum-Likelihood approach. Triadic closure does have a strong effect on link formation, but shortcuts based on traffic are another key factor in interpreting network evo- lution. However, individual strategies for following other users are highly heterogeneous. Link creation behaviors can be summarized by classifying users in different categories with distinct structural and behavioral characteristics. Users who are popular, active, and influential tend to create traffic-based shortcuts, making the infor- mation diffusion process more efficient in the network.",
+      "company": null,
+      "title": "The Role of Information Diffusion in the Evolution of Social Networks",
+      "company_id": null,
+      "image_url": null,
+      "position_held": null,
+      "date_range": null
+    }
+  ],
+  "entity_urn": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+  "badges": {
+    "is_hiring": false,
+    "premium": false,
+    "creator": false,
+    "influencer": false,
+    "top_voice": false,
+    "open_to_work": false
+  },
+  "public_identifier": "lilianweng",
+  "verifications": {
+    "sections": null,
+    "is_verified": true,
+    "joined_date": null
+  },
+  "first_name": "Lilian",
+  "skills": [
+    "Machine Learning",
+    "Python",
+    "R",
+    "Data Mining",
+    "Data Analysis",
+    "Perl",
+    "C++",
+    "Java",
+    "Research",
+    "HTML",
+    "CSS",
+    "SQL",
+    "MySQL",
+    "Photoshop",
+    "JavaScript",
+    "LaTeX",
+    "PHP",
+    "Programming",
+    "Algorithms",
+    "Hadoop"
+  ],
+  "last_name": "Weng",
+  "test_scores": {},
+  "headline": "AI Researcher, Co-founder @ Thinking Machines Lab",
+  "courses": {},
+  "industry": "Computer Software",
+  "network_info": null,
+  "profile_photo_url": "https://media.licdn.com/dms/image/v2/D5603AQEt5A-r4ZoPxg/profile-displayphoto-shrink_800_800/B56ZZ8eJ3HHgAc-/0/1745845002152?e=1776902400&v=beta&t=B4HD7aeHrpHyHVoje0hSunRaSjMsx0q9KvI59-_i1oQ",
+  "languages": {},
+  "background_photo_url": null,
+  "websites": [
+    "https://www.linkedin.com/in/lilianweng"
+  ],
+  "certifications": {},
+  "profile_url": "https://www.linkedin.com/in/lilianweng",
+  "experience": [
+    {
+      "company_url": "https://www.linkedin.com/company/thinkingmachinesai/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+      "company_employee_count_range": {
+        "start": 11,
+        "end": 50
+      },
+      "company_industry": "Computer Software",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_url": "https://www.linkedin.com/company/thinkingmachinesai/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "company_employee_count_range": {
+            "start": 11,
+            "end": 50
+          },
+          "company_industry": "Computer Software",
+          "workplace_type": null,
+          "location_name": null,
+          "company_id": "105913171",
+          "title": "Co-Founder",
+          "company_name": "Thinking Machines Lab",
+          "description": null,
+          "employment_type": "Full-time",
+          "date_range": {
+            "start": {
+              "year": 2025,
+              "month": 1,
+              "day": null,
+              "iso": "2025-01"
+            },
+            "end": null
+          }
+        }
+      ],
+      "company_id": "105913171",
+      "company_name": "Thinking Machines Lab",
+      "date_range": {
+        "start": {
+          "year": 2025,
+          "month": 1,
+          "day": null,
+          "iso": "2025-01"
+        },
+        "end": null
+      }
+    },
+    {
+      "company_url": "https://www.linkedin.com/company/openai/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+      "company_employee_count_range": {
+        "start": 1001,
+        "end": 5000
+      },
+      "company_industry": "Research",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_url": "https://www.linkedin.com/company/openai/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "company_employee_count_range": {
+            "start": 1001,
+            "end": 5000
+          },
+          "company_industry": "Research",
+          "workplace_type": null,
+          "location_name": null,
+          "company_id": "11130470",
+          "title": "VP of Research, Safety",
+          "company_name": "OpenAI",
+          "description": null,
+          "employment_type": "Full-time",
+          "date_range": {
+            "start": {
+              "year": 2024,
+              "month": 8,
+              "day": null,
+              "iso": "2024-08"
+            },
+            "end": {
+              "year": 2024,
+              "month": 11,
+              "day": null,
+              "iso": "2024-11"
+            }
+          }
+        },
+        {
+          "company_url": "https://www.linkedin.com/company/openai/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "company_employee_count_range": {
+            "start": 1001,
+            "end": 5000
+          },
+          "company_industry": "Research",
+          "workplace_type": null,
+          "location_name": null,
+          "company_id": "11130470",
+          "title": "Head of Safety Systems",
+          "company_name": "OpenAI",
+          "description": "Lead a group of engineers and researchers working on AI Safety.",
+          "employment_type": "Full-time",
+          "date_range": {
+            "start": {
+              "year": 2023,
+              "month": 5,
+              "day": null,
+              "iso": "2023-05"
+            },
+            "end": {
+              "year": 2024,
+              "month": 8,
+              "day": null,
+              "iso": "2024-08"
+            }
+          }
+        },
+        {
+          "company_url": "https://www.linkedin.com/company/openai/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "company_employee_count_range": {
+            "start": 1001,
+            "end": 5000
+          },
+          "company_industry": "Research",
+          "workplace_type": null,
+          "location_name": null,
+          "company_id": "11130470",
+          "title": "Head of Applied AI Research",
+          "company_name": "OpenAI",
+          "description": "Build and lead the Applied AI Research team, including Product Research, Partnership Research and Applied Safety, to make our API more powerful, helpful and safer. We work on a variety of cutting-edge research problems on large deep learning models with a goal to solve real world tasks well.\n\n- https://openai.com/blog/customized-gpt-3/\n- https://openai.com/blog/introducing-text-and-code-embeddings/\n- https://openai.com/blog/new-and-improved-content-moderation-tooling/\n- https://openai.com/blog/new-and-improved-embedding-model/\n- https://arxiv.org/abs/2201.10005\n- https://arxiv.org/abs/2208.03274\n- https://openai.com/blog/the-power-of-continuous-learning\n- https://openai.com/research/gpt-4",
+          "employment_type": "Full-time",
+          "date_range": {
+            "start": {
+              "year": 2021,
+              "month": 1,
+              "day": null,
+              "iso": "2021-01"
+            },
+            "end": {
+              "year": 2023,
+              "month": 5,
+              "day": null,
+              "iso": "2023-05"
+            }
+          }
+        },
+        {
+          "company_url": "https://www.linkedin.com/company/openai/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "company_employee_count_range": {
+            "start": 1001,
+            "end": 5000
+          },
+          "company_industry": "Research",
+          "workplace_type": null,
+          "location_name": "San Francisco Bay Area",
+          "company_id": "11130470",
+          "title": "Research Scientist",
+          "company_name": "OpenAI",
+          "description": "Tech lead @ Robotics team, with a focus on algorithms for training robotic tasks.\n- Teach a robot hand how to solve Rubik's cube: https://openai.com/blog/solving-rubiks-cube/\n- Teach a robot hand how to rotate block: https://openai.com/blog/learning-dexterity/\n- Self-play as a curriculum for learning complex goals: https://arxiv.org/abs/2101.04882\n- A diverse collection of simulation environments for robotic manipulation tasks: https://github.com/openai/robogym\n- OpenAI Remote Rendering Backend (ORRB): https://arxiv.org/abs/1906.11633",
+          "employment_type": null,
+          "date_range": {
+            "start": {
+              "year": 2018,
+              "month": 2,
+              "day": null,
+              "iso": "2018-02"
+            },
+            "end": {
+              "year": 2021,
+              "month": 1,
+              "day": null,
+              "iso": "2021-01"
+            }
+          }
+        }
+      ],
+      "company_id": "11130470",
+      "company_name": "OpenAI",
+      "date_range": {
+        "start": {
+          "year": 2018,
+          "month": 2,
+          "day": null,
+          "iso": "2018-02"
+        },
+        "end": {
+          "year": 2024,
+          "month": 11,
+          "day": null,
+          "iso": "2024-11"
+        }
+      }
+    },
+    {
+      "company_url": "https://www.linkedin.com/company/affirm/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQEHSbORvS_jKg/company-logo_400_400/company-logo_400_400/0/1630665839795/affirm_logo?e=1776902400&v=beta&t=iAOjlJbrv3EfdkYTplMzI-P4CnXDK1DcPP_dhZBZANo",
+      "company_employee_count_range": {
+        "start": 1001,
+        "end": 5000
+      },
+      "company_industry": "Financial Services",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_url": "https://www.linkedin.com/company/affirm/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQEHSbORvS_jKg/company-logo_400_400/company-logo_400_400/0/1630665839795/affirm_logo?e=1776902400&v=beta&t=iAOjlJbrv3EfdkYTplMzI-P4CnXDK1DcPP_dhZBZANo",
+          "company_employee_count_range": {
+            "start": 1001,
+            "end": 5000
+          },
+          "company_industry": "Financial Services",
+          "workplace_type": null,
+          "location_name": "San Francisco Bay Area",
+          "company_id": "2963249",
+          "title": "Staff Machine Learning Engineer",
+          "company_name": "Affirm, Inc.",
+          "description": "Working on the underwriting model\n- Research for model improvement\n- Implementation of model serving in production\n- Training data pipeline",
+          "employment_type": null,
+          "date_range": {
+            "start": {
+              "year": 2016,
+              "month": 2,
+              "day": null,
+              "iso": "2016-02"
+            },
+            "end": {
+              "year": 2018,
+              "month": 2,
+              "day": null,
+              "iso": "2018-02"
+            }
+          }
+        }
+      ],
+      "company_id": "2963249",
+      "company_name": "Affirm",
+      "date_range": {
+        "start": {
+          "year": 2016,
+          "month": 2,
+          "day": null,
+          "iso": "2016-02"
+        },
+        "end": {
+          "year": 2018,
+          "month": 2,
+          "day": null,
+          "iso": "2018-02"
+        }
+      }
+    },
+    {
+      "company_url": "https://www.linkedin.com/company/dropbox/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQHjnNsmL5L2NA/company-logo_400_400/company-logo_400_400/0/1654114493492/dropbox_logo?e=1776902400&v=beta&t=_72JvfiCX1YU3QD9b2Hj5Xut8arf1_QenHsVTo_xT_Y",
+      "company_employee_count_range": {
+        "start": 1001,
+        "end": 5000
+      },
+      "company_industry": "Computer Software",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_url": "https://www.linkedin.com/company/dropbox/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQHjnNsmL5L2NA/company-logo_400_400/company-logo_400_400/0/1654114493492/dropbox_logo?e=1776902400&v=beta&t=_72JvfiCX1YU3QD9b2Hj5Xut8arf1_QenHsVTo_xT_Y",
+          "company_employee_count_range": {
+            "start": 1001,
+            "end": 5000
+          },
+          "company_industry": "Computer Software",
+          "workplace_type": null,
+          "location_name": null,
+          "company_id": "167251",
+          "title": "Software Engineer",
+          "company_name": "Dropbox",
+          "description": "Working on Dropbox Recents, mainly backend.",
+          "employment_type": null,
+          "date_range": {
+            "start": {
+              "year": 2015,
+              "month": 8,
+              "day": null,
+              "iso": "2015-08"
+            },
+            "end": {
+              "year": 2016,
+              "month": 2,
+              "day": null,
+              "iso": "2016-02"
+            }
+          }
+        },
+        {
+          "company_url": "https://www.linkedin.com/company/dropbox/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQHjnNsmL5L2NA/company-logo_400_400/company-logo_400_400/0/1654114493492/dropbox_logo?e=1776902400&v=beta&t=_72JvfiCX1YU3QD9b2Hj5Xut8arf1_QenHsVTo_xT_Y",
+          "company_employee_count_range": {
+            "start": 1001,
+            "end": 5000
+          },
+          "company_industry": "Computer Software",
+          "workplace_type": null,
+          "location_name": null,
+          "company_id": "167251",
+          "title": "Data Scientist",
+          "company_name": "Dropbox",
+          "description": "Various data problems: campaign system, AB test and gating systems, search ranking, product insights, etc.",
+          "employment_type": null,
+          "date_range": {
+            "start": {
+              "year": 2014,
+              "month": 4,
+              "day": null,
+              "iso": "2014-04"
+            },
+            "end": {
+              "year": 2015,
+              "month": 8,
+              "day": null,
+              "iso": "2015-08"
+            }
+          }
+        }
+      ],
+      "company_id": "167251",
+      "company_name": "Dropbox",
+      "date_range": {
+        "start": {
+          "year": 2014,
+          "month": 4,
+          "day": null,
+          "iso": "2014-04"
+        },
+        "end": {
+          "year": 2016,
+          "month": 2,
+          "day": null,
+          "iso": "2016-02"
+        }
+      }
+    },
+    {
+      "company_url": "https://www.linkedin.com/company/facebook/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+      "company_employee_count_range": {
+        "start": 10001,
+        "end": null
+      },
+      "company_industry": "Computer Software",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_url": "https://www.linkedin.com/company/facebook/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+          "company_employee_count_range": {
+            "start": 10001,
+            "end": null
+          },
+          "company_industry": "Computer Software",
+          "workplace_type": null,
+          "location_name": null,
+          "company_id": "76987811",
+          "title": "Data Scientist Intern",
+          "company_name": "Facebook",
+          "description": "- Study the relationship between Facebook post virality and various features of the content, aiming at improving Ads targeting strategies to trigger bigger cascades. \n- Compare users with complex social circles and others with simple ego graph in terms of behavioral patterns, effort in friendship maintenance, and effects on boosting content popularity through reshare.",
+          "employment_type": null,
+          "date_range": {
+            "start": {
+              "year": 2013,
+              "month": 6,
+              "day": null,
+              "iso": "2013-06"
+            },
+            "end": {
+              "year": 2013,
+              "month": 8,
+              "day": null,
+              "iso": "2013-08"
+            }
+          }
+        }
+      ],
+      "company_id": "76987811",
+      "company_name": "Facebook",
+      "date_range": {
+        "start": {
+          "year": 2013,
+          "month": 6,
+          "day": null,
+          "iso": "2013-06"
+        },
+        "end": {
+          "year": 2013,
+          "month": 8,
+          "day": null,
+          "iso": "2013-08"
+        }
+      }
+    },
+    {
+      "company_url": "https://www.linkedin.com/company/facebook/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+      "company_employee_count_range": {
+        "start": 10001,
+        "end": null
+      },
+      "company_industry": "Computer Software",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_url": "https://www.linkedin.com/company/facebook/",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+          "company_employee_count_range": {
+            "start": 10001,
+            "end": null
+          },
+          "company_industry": "Computer Software",
+          "workplace_type": null,
+          "location_name": null,
+          "company_id": "76987811",
+          "title": "Software Engineer Intern",
+          "company_name": "Facebook",
+          "description": "- Investigate how friends are clustered according to conversation topics in an ego-centric viewpoint and how the topic selecting behavior is restricted by social relationship. The study is intended to provide insights into several Facebook products like the measure of social tie strengths, friends recommendation, and newsfeed ranking.",
+          "employment_type": null,
+          "date_range": {
+            "start": {
+              "year": 2012,
+              "month": 5,
+              "day": null,
+              "iso": "2012-05"
+            },
+            "end": {
+              "year": 2012,
+              "month": 8,
+              "day": null,
+              "iso": "2012-08"
+            }
+          }
+        }
+      ],
+      "company_id": "76987811",
+      "company_name": "Facebook",
+      "date_range": {
+        "start": {
+          "year": 2012,
+          "month": 5,
+          "day": null,
+          "iso": "2012-05"
+        },
+        "end": {
+          "year": 2012,
+          "month": 8,
+          "day": null,
+          "iso": "2012-08"
+        }
+      }
+    }
+  ],
+  "honors": {},
+  "patents": {},
+  "projects": {},
+  "summary": null
+}

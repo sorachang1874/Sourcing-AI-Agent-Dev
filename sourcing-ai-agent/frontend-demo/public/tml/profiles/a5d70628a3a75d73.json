@@ -1,0 +1,394 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAFpCltABdBGOOEjkhBuphxATBthDqBsxiEw",
+    "profile_url": "https://www.linkedin.com/in/ACwAAFpCltABdBGOOEjkhBuphxATBthDqBsxiEw"
+  },
+  "item": {
+    "id": "ACoAAFpCltABWsgsrhlYJzlC8hJ6VZhiQC0nmD0",
+    "publicIdentifier": "plio-mil-954182363",
+    "linkedinUrl": "https://www.linkedin.com/in/plio-mil-954182363",
+    "firstName": "plio",
+    "lastName": "mil",
+    "emails": [
+      {
+        "email": "plio.mil@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Think at Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Plano, Texas, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "Plano, TX, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "Texas",
+        "city": "Plano"
+      }
+    },
+    "objectUrn": "1514313424",
+    "registeredAt": "2025-05-01T13:11:40.762Z",
+    "topSkills": null,
+    "connectionsCount": 0,
+    "followerCount": 2,
+    "verified": false,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": null,
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": null,
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Think at Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Think",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": null,
+        "description": null,
+        "skills": null,
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Think",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": null,
+        "description": null,
+        "skills": null,
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "moreProfiles": [
+      {
+        "id": "ACoAACoe0NABzB1QzB5QTxG_x_vLGjzpkPg1hlc",
+        "firstName": "Jacqueline",
+        "lastName": "S.",
+        "publicIdentifier": "jacqueline-s-3287b0178",
+        "linkedinUrl": "https://www.linkedin.com/in/jacqueline-s-3287b0178"
+      },
+      {
+        "id": "ACoAAFzBUR0Bt1zRKAzI8OS7_g6ytwU9UvfJwnI",
+        "firstName": "Lathika",
+        "lastName": "gunasekaran",
+        "publicIdentifier": "lathika-gunasekaran-1651ab375",
+        "linkedinUrl": "https://www.linkedin.com/in/lathika-gunasekaran-1651ab375"
+      },
+      {
+        "id": "ACoAABQ5lJUBry2byQYf_TtxDF9Rha9l-RqYsaM",
+        "firstName": "Guang-He",
+        "lastName": "Lee",
+        "publicIdentifier": "guang-he-lee-64577895",
+        "linkedinUrl": "https://www.linkedin.com/in/guang-he-lee-64577895"
+      },
+      {
+        "id": "ACoAAEP0r70Ble84uqoeciFHVQjR_IzczYbDYL0",
+        "firstName": "Aya",
+        "lastName": "Hayder",
+        "publicIdentifier": "aya-hayder",
+        "linkedinUrl": "https://www.linkedin.com/in/aya-hayder"
+      },
+      {
+        "id": "ACoAADs2qOYBWtZeVHb28mfKkKDFzGo8JFE3Ov0",
+        "firstName": "Aeham",
+        "lastName": "Hamid Nafea",
+        "publicIdentifier": "aehamhamid",
+        "linkedinUrl": "https://www.linkedin.com/in/aehamhamid"
+      },
+      {
+        "id": "ACoAABGaEy8Bu1ycKB5WUvyRc69OERCzymW7mxY",
+        "firstName": "Jamie",
+        "lastName": "Cahill",
+        "publicIdentifier": "james-cahill-093a9582",
+        "linkedinUrl": "https://www.linkedin.com/in/james-cahill-093a9582"
+      },
+      {
+        "id": "ACoAADwrCKUB0FU7B3O7AIg9j_wieI-QOvJrtEE",
+        "firstName": "Katy",
+        "lastName": "Liemandt",
+        "publicIdentifier": "katy-liemandt-399092242",
+        "linkedinUrl": "https://www.linkedin.com/in/katy-liemandt-399092242"
+      },
+      {
+        "id": "ACoAAEIBF7ABlNe8YwK5Mk1pZI5kaGeyHxCmOKs",
+        "firstName": "Enes Ercan Enwar",
+        "lastName": "Hurmuzlu",
+        "publicIdentifier": "anaspythagorean",
+        "linkedinUrl": "https://www.linkedin.com/in/anaspythagorean"
+      },
+      {
+        "id": "ACoAACNQrUgBauh-nN054D_d1fwGbW6k3ErIucQ",
+        "firstName": "Jennifer",
+        "lastName": "H.",
+        "publicIdentifier": "jenniferhe1",
+        "linkedinUrl": "https://www.linkedin.com/in/jenniferhe1"
+      },
+      {
+        "id": "ACoAAEMC5SABreGmDi5qO9_Kjznmaj7EE7UjiH0",
+        "firstName": "Samer",
+        "lastName": "Kareem",
+        "publicIdentifier": "samer-kareem-34061b274",
+        "linkedinUrl": "https://www.linkedin.com/in/samer-kareem-34061b274"
+      },
+      {
+        "id": "ACoAAAA2vokB13oimfryav6SiwioS4PI5j9ezw0",
+        "firstName": "Constantine",
+        "lastName": "Sapuntzakis",
+        "publicIdentifier": "csapuntz",
+        "linkedinUrl": "https://www.linkedin.com/in/csapuntz"
+      },
+      {
+        "id": "ACoAAAKt40cBXB9sE5KqqiLVZpsyluwsev4vewk",
+        "firstName": "Erim",
+        "lastName": "T.",
+        "publicIdentifier": "erim-t-b1b07813",
+        "linkedinUrl": "https://www.linkedin.com/in/erim-t-b1b07813"
+      },
+      {
+        "id": "ACoAADHPdTABY7_fSPg-C9cyepb7KG7AvTOHHb4",
+        "firstName": "A. Rahman",
+        "lastName": "Shakoor",
+        "publicIdentifier": "rahmannshakoor",
+        "linkedinUrl": "https://www.linkedin.com/in/rahmannshakoor"
+      },
+      {
+        "id": "ACoAACL_VOMB8FJ3cktHIjz3cxJTRRYhTjJyL6k",
+        "firstName": "Xinzhe",
+        "lastName": "Yang",
+        "publicIdentifier": "xinzheyang",
+        "linkedinUrl": "https://www.linkedin.com/in/xinzheyang"
+      },
+      {
+        "id": "ACoAAEOvidMBNDVA5LIy3Ok4PohigBZ5GCPsp6k",
+        "firstName": "Haroon",
+        "lastName": "Aziz",
+        "publicIdentifier": "haroon-aziz-b2b376278",
+        "linkedinUrl": "https://www.linkedin.com/in/haroon-aziz-b2b376278"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAABqpmrMBgJcaN_TVYONzY5ZVPImRTjjvHjo",
+        "firstName": "Charlotte",
+        "lastName": "Field",
+        "publicIdentifier": "charlotte-field-443983105",
+        "linkedinUrl": "https://www.linkedin.com/in/charlotte-field-443983105"
+      },
+      {
+        "id": "ACoAAF3ruboBAmt7ZSoBUxm9jDmvpb2dqw0DH2I",
+        "firstName": "Aiman",
+        "lastName": "Abdulraheem",
+        "publicIdentifier": "aiman-abdulraheem-67686037b",
+        "linkedinUrl": "https://www.linkedin.com/in/aiman-abdulraheem-67686037b"
+      },
+      {
+        "id": "ACoAAAC-21cByF3m_g2tBj2GBclHtNT2C2mC12M",
+        "firstName": "Gonzo",
+        "lastName": "Granzeau",
+        "publicIdentifier": "goninzo",
+        "linkedinUrl": "https://www.linkedin.com/in/goninzo"
+      },
+      {
+        "id": "ACoAAFIXFWIBrmS-OXxp3vVrU1pGibt4OuzrE4g",
+        "firstName": "Marwah",
+        "lastName": "AL-HELLI",
+        "publicIdentifier": "marwah-al-helli-6022a0325",
+        "linkedinUrl": "https://www.linkedin.com/in/marwah-al-helli-6022a0325"
+      },
+      {
+        "id": "ACoAAF8a-tgBsWqvtTuM92mboyLWNKtBoUa9tIU",
+        "firstName": "Liyan",
+        "lastName": "Chen",
+        "position": "--",
+        "publicIdentifier": "liyan-chen-908445386",
+        "linkedinUrl": "https://www.linkedin.com/in/liyan-chen-908445386"
+      },
+      {
+        "id": "ACoAACA8zv0BTVWLSUHsPJrWsUI10jzn0F57pHo",
+        "firstName": "Damir",
+        "lastName": "Sartayev",
+        "position": "AI CTO & Founder | MY project LNN+LLM+QML=AGI | Quantum, Neuro-symbolic AI | Liquid Neural Networks | RWKV | Mamba(SSM)  | Pharmacy AI, Minerals AI | Full‑Stack AI (LLMs, Agents, Fine‑Tuning, RAG, Vision) | Q-Day Q-ark",
+        "publicIdentifier": "damir-q-day-q-ark",
+        "linkedinUrl": "https://www.linkedin.com/in/damir-q-day-q-ark"
+      },
+      {
+        "id": "ACoAADopuTsBh9lDxOJzJsV8jI_KfOrsc6Tu7aQ",
+        "firstName": "Aashitosh",
+        "lastName": "Swami",
+        "position": "Lab assistant",
+        "publicIdentifier": "aashitosh-swami-67796a232",
+        "linkedinUrl": "https://www.linkedin.com/in/aashitosh-swami-67796a232"
+      },
+      {
+        "id": "ACoAAF-wKU0B0ntoadXt7VUjWK9yj5o52dHzVKA",
+        "firstName": "Kaif",
+        "lastName": "Rehman",
+        "position": "Laboratory Technician at Thinking Machines Lab",
+        "publicIdentifier": "kaif-rehman-72577b389",
+        "linkedinUrl": "https://www.linkedin.com/in/kaif-rehman-72577b389"
+      },
+      {
+        "id": "ACoAACxX5AEBYonmfz9M8tQ8jO7Nx3jIXe_VSjw",
+        "firstName": "Sophie Rose",
+        "lastName": "Shapiro",
+        "position": "Creative Operations",
+        "publicIdentifier": "sophie-rose-shapiro",
+        "linkedinUrl": "https://www.linkedin.com/in/sophie-rose-shapiro"
+      },
+      {
+        "id": "ACoAAFUBvsYBMskyWP5r-Lf7ZUccZSuFy2nCqkA",
+        "firstName": "Ankit",
+        "lastName": "Baghel",
+        "position": "--DMLT lab technician\nb.sc chemistry chemical industry lab",
+        "publicIdentifier": "ankit-baghel-40675a339",
+        "linkedinUrl": "https://www.linkedin.com/in/ankit-baghel-40675a339"
+      },
+      {
+        "id": "ACoAAFrO2hYBQn9I3leFzBjeUmgehOiK_AGSCr8",
+        "firstName": "Muhammad",
+        "lastName": "Adam Usman",
+        "position": "Electrician at Thinking Machines Lab",
+        "publicIdentifier": "muhammad-adam-usman-472276366",
+        "linkedinUrl": "https://www.linkedin.com/in/muhammad-adam-usman-472276366"
+      },
+      {
+        "id": "ACoAAF1g88AB-G-z-kA00gmZAGbH1CebbGsdmjQ",
+        "firstName": "Jason",
+        "lastName": "Morales",
+        "position": "Certified Phlebotomist at Thinking Machines Lab",
+        "publicIdentifier": "jason-morales-5407b5378",
+        "linkedinUrl": "https://www.linkedin.com/in/jason-morales-5407b5378"
+      },
+      {
+        "id": "ACoAAF3SWDYB6aZAqtjbw1-LDNZ4qxxHLFKTL0g",
+        "firstName": "Md",
+        "lastName": "Mdamaz",
+        "position": "Company work at Thinking Machines Lab",
+        "publicIdentifier": "md-mdamaz-b5a19937b",
+        "linkedinUrl": "https://www.linkedin.com/in/md-mdamaz-b5a19937b"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAFpCltABdBGOOEjkhBuphxATBthDqBsxiEw"
+    }
+  }
+}

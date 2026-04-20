@@ -1,0 +1,817 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAEbMc8wBuufoagmwaTUzztA4zKA0dkg7j1A",
+    "profile_url": "https://www.linkedin.com/in/ACwAAEbMc8wBuufoagmwaTUzztA4zKA0dkg7j1A"
+  },
+  "item": {
+    "id": "ACoAAEbMc8wB0uhA35L4gKG7o8ILm4QWdBnoBAU",
+    "publicIdentifier": "javaria-nadeem-778962291",
+    "linkedinUrl": "https://www.linkedin.com/in/javaria-nadeem-778962291",
+    "firstName": "Javaria",
+    "lastName": "Nadeem",
+    "emails": [],
+    "companyWebsites": [
+      {
+        "url": "http://www.uaf.edu.pk",
+        "domain": "uaf.edu.pk",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Bioinformatician|NGS and RNA-seq Analysis|Python,R,Bash,Linux|Genomics and computational Biology",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Irvine, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "Irvine, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "Irvine"
+      }
+    },
+    "objectUrn": "1187804108",
+    "registeredAt": "2023-09-17T08:14:51.770Z",
+    "topSkills": null,
+    "connectionsCount": 420,
+    "followerCount": 426,
+    "verified": false,
+    "about": "I am a motivated Bioinformatics student with a strong academic foundation in genetics, molecular biology, and computational analysis. My primary interest lies in leveraging technology and data-driven approaches to understand complex biological systems and solve real-world scientific problems.\nThrough academic research, presentations, and project-based learning, I have developed skills in scientific writing, data interpretation, critical analysis, and the application of bioinformatics tools. I am particularly interested in areas such as genetic algorithms, epigenetics, molecular data analysis, and computational biology workflows.\nI am committed to continuous learning, professional growth, and contributing to innovative research in life sciences. I aspire to work in environments where I can apply analytical thinking, technical skills, and scientific knowledge to advance research and healthcare solutions.",
+    "currentPosition": [
+      {
+        "companyId": "3753305",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3753305/",
+        "companyName": "University of Agriculture, Faisalabad",
+        "dateRange": {
+          "start": {
+            "month": 4,
+            "year": 2022,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "5487034",
+        "companyId": "104337244",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/104337244/",
+        "schoolName": "The Educators"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4D03AQEdtW7tLSyNqQ/profile-displayphoto-crop_800_800/B4DZzRFQjlHIAI-/0/1773034346946?e=1776902400&v=beta&t=NwkMwBRNkoRJ2GMW8-bTcAMbLneyiK1r2QCsNG3059Q",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4D03AQEdtW7tLSyNqQ/profile-displayphoto-crop_800_800/B4DZzRFQjlHIAI-/0/1773034346946?e=1776902400&v=beta&t=NwkMwBRNkoRJ2GMW8-bTcAMbLneyiK1r2QCsNG3059Q",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4D03AQEdtW7tLSyNqQ/profile-displayphoto-scale_400_400/B4DZzRFQjlHIAg-/0/1773034347053?e=1776902400&v=beta&t=7ewIYTwfCykNV1JshUSpAD0qvZx9QL38AWEbCLEPJDw",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4D03AQEdtW7tLSyNqQ/profile-displayphoto-scale_200_200/B4DZzRFQjlHIAY-/0/1773034347053?e=1776902400&v=beta&t=HBg9w1-IFBU6vr1NSDIgB-ma6NLkVwU3sTKEUVfgs-Y",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4D03AQEdtW7tLSyNqQ/profile-displayphoto-scale_100_100/B4DZzRFQjlHIAc-/0/1773034347053?e=1776902400&v=beta&t=YJnXTkXUW8BJOWYPuPCKFRhVmsf4_L135Z6fzgZV8ig",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4D16AQEonQZU-DG31w/profile-displaybackgroundimage-shrink_350_1400/B4DZzRFanvGkAc-/0/1773034386800?e=1776902400&v=beta&t=4GLHxYWVMnoVEM0fcdlnpYgxlLErGh5skg84AD8Bb7Y",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4D16AQEonQZU-DG31w/profile-displaybackgroundimage-shrink_350_1400/B4DZzRFanvGkAc-/0/1773034386800?e=1776902400&v=beta&t=4GLHxYWVMnoVEM0fcdlnpYgxlLErGh5skg84AD8Bb7Y",
+          "width": 1400,
+          "height": 350,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4D16AQEonQZU-DG31w/profile-displaybackgroundimage-shrink_200_800/B4DZzRFanvGkAY-/0/1773034386800?e=1776902400&v=beta&t=Yknva7aZJKfvx1FEzSJmAKNIi9lrAjr-ENS3EExGdeI",
+          "width": 800,
+          "height": 200,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "photo": "https://media.licdn.com/dms/image/v2/D4D03AQEdtW7tLSyNqQ/profile-displayphoto-crop_800_800/B4DZzRFQjlHIAI-/0/1773034346946?e=1776902400&v=beta&t=NwkMwBRNkoRJ2GMW8-bTcAMbLneyiK1r2QCsNG3059Q",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Bioinformatician|NGS and RNA-seq Analysis|Python,R,Bash,Linux|Genomics and computational Biology",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Bioinformatics intern",
+        "location": "Punjab, Pakistan",
+        "employmentType": "Internship",
+        "workplaceType": "Remote",
+        "companyName": "University of Agriculture, Faisalabad",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/university-of-agriculture-faisalabad/",
+        "companyId": "3753305",
+        "companyUniversalName": "university-of-agriculture-faisalabad",
+        "duration": "4 yrs 1 mo",
+        "description": "Assisted in the analysis of high throughput sequencing data including RNA-seq and whole genome sequencing. \nPerformed quality control of raw FastQ files using fastqc and trimming with trimmomatic.\nconducted sequences alignment using Hisat2/Star/BWA",
+        "skills": [
+          "Bioinformatics Intern",
+          "Genomics or Data analysis Enthusiast",
+          "Computational Tools",
+          "Motift discovery or RNA sequence analysis",
+          "Python R",
+          "Aspiring Bioinformatics"
+        ],
+        "startDate": {
+          "month": "Apr",
+          "year": 2022,
+          "text": "Apr 2022"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C510BAQEpvWaD8BNv9A/company-logo_400_400/company-logo_400_400/0/1631330752577?e=1776902400&v=beta&t=gyIk0cEzZD9eoa5ASviea6JOJA-zxlWOTdB00uR_Pfk",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQEpvWaD8BNv9A/company-logo_400_400/company-logo_400_400/0/1631330752577?e=1776902400&v=beta&t=gyIk0cEzZD9eoa5ASviea6JOJA-zxlWOTdB00uR_Pfk",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQEpvWaD8BNv9A/company-logo_200_200/company-logo_200_200/0/1631330752577?e=1776902400&v=beta&t=xskZNMusbTdFsLBtbJr15TfHTCzOjzOBKgZvyYKsvvc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQEpvWaD8BNv9A/company-logo_100_100/company-logo_100_100/0/1631330752577?e=1776902400&v=beta&t=LqZcGc98sFyiAMCR6sGLNNyDNBnYk0KyJtyaX6gt69k",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Founder & Executive Director",
+        "location": "Irvine, California, United States",
+        "employmentType": "Self-employed",
+        "workplaceType": null,
+        "companyName": "Soul Healer Studio",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Soul+Healer+Studio",
+        "duration": "1 yr 2 mos",
+        "description": "Founded a family office with a team of 36 people focusing on psychodynamic therapy, emotional repair and inner growth;\nProvided individual and couple psychological counseling services to professionals, founders, cross-cultural couples and other groups;\nProvided coaching, consulting and angel investment support to early mental health and emotional technology startups;\nExplored how consciousness, technology and healing can be integrated in product design",
+        "skills": null,
+        "startDate": {
+          "year": 2025,
+          "text": "2025"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2026,
+          "text": "Feb 2026"
+        }
+      },
+      {
+        "position": "Co-Founder & Non-Executive Director",
+        "location": "California, United States",
+        "employmentType": "Self-employed",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyId": "105913171",
+        "duration": "5 mos",
+        "description": "Co-founded with Mira Murati to build a new kind of incubator: one focused on consciousness, human-AI co-evolution, and emotional intelligence in tech;\nLead investment and mentorship in early-stage startups across mental health, human-AI interaction, and next-generation interfaces;\nAdvise founders on product strategy, team psychology, and mission clarity",
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2025,
+          "text": "Mar 2025"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2025,
+          "text": "Jul 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior AI Data Engineer ",
+        "location": "San Francisco, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "OpenAI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/11130470/",
+        "companyId": "11130470",
+        "duration": "6 yrs",
+        "description": "Led a 27-person data team working on the training and evaluation pipelines of multimodal large language models;\nDesigned and implemented real-time feedback loops to improve model alignment, consistency, and user experience;\nCollaborated with research and product teams to deploy cutting-edge models responsibly and at scale",
+        "skills": null,
+        "startDate": {
+          "month": "Oct",
+          "year": 2018,
+          "text": "Oct 2018"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2024,
+          "text": "Sep 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_200_200/B56ZT8EYB8HsAI-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=O6RSWlpQ5W4zNCOCTu621qCyTijLuXFJS4pz2_hBQfo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_100_100/B56ZT8EYB8HsAQ-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=y7RA89V9q8GlAjQ1oRU-jf_-n5zlSXRCnykXBIkgHfM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior Data Engineer",
+        "location": "Redmond, Washington, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Microsoft",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1035/",
+        "companyId": "1035",
+        "duration": "4 yrs",
+        "description": "Architected high-scale ETL systems for Azure and Office365 usage analytics\nLed migration from batch to near-real-time processing, improving operational agility\nMentored junior engineers and drove cross-functional data practices",
+        "skills": null,
+        "experienceGroupId": "a43ec85821f19902045b952aab09c4f5771b0374",
+        "startDate": {
+          "month": "Jun",
+          "year": 2014,
+          "text": "Jun 2014"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2018,
+          "text": "May 2018"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_400_400/B56ZYQ0mrGGoAc-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=47BifJmZk2QcSo7UM_a7lFIk5vBFq49cOHVWx8Pu2dE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_400_400/B56ZYQ0mrGGoAc-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=47BifJmZk2QcSo7UM_a7lFIk5vBFq49cOHVWx8Pu2dE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_200_200/B56ZYQ0mrGGoAM-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=z3mTaKdLV9rmnHGq4MakEXZj6vY7Y9TWAjx0_U7y0X0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_100_100/B56ZYQ0mrGGoAU-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=tKqX5UTArC3FajWCGY-yk-mpPeeR1obx-D3VehmNycQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Data Analyst",
+        "location": "Irvine, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Microsoft",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1035/",
+        "companyId": "1035",
+        "duration": "3 yrs 9 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "a43ec85821f19902045b952aab09c4f5771b0374",
+        "startDate": {
+          "month": "Sep",
+          "year": 2010,
+          "text": "Sep 2010"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2014,
+          "text": "May 2014"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_400_400/B56ZYQ0mrGGoAc-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=47BifJmZk2QcSo7UM_a7lFIk5vBFq49cOHVWx8Pu2dE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_400_400/B56ZYQ0mrGGoAc-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=47BifJmZk2QcSo7UM_a7lFIk5vBFq49cOHVWx8Pu2dE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_200_200/B56ZYQ0mrGGoAM-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=z3mTaKdLV9rmnHGq4MakEXZj6vY7Y9TWAjx0_U7y0X0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_100_100/B56ZYQ0mrGGoAU-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=tKqX5UTArC3FajWCGY-yk-mpPeeR1obx-D3VehmNycQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "The Educators",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/104337244/",
+        "schoolId": "104337244",
+        "degree": "University of agricultural faisalabad",
+        "fieldOfStudy": "Biomathematics",
+        "skills": [],
+        "description": "I am Passionate Bioinformatics Enthusiast with a strong background in analyzing biological data and translating complex datasets into meaningful insights. Experienced in genomics,proteomics and comparative analysis using computational tools or Linux .\nBioinformatics researcher with expertise in genome and protein analysis,orthologous gene clustering and functional annotation.",
+        "startDate": {
+          "month": "Feb",
+          "year": 2022,
+          "text": "Feb 2022"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2026,
+          "text": "Feb 2026"
+        },
+        "period": "Feb 2022 - Feb 2026",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4D0BAQGG5gro8u_-gw/company-logo_400_400/company-logo_400_400/0/1722111930649?e=1776902400&v=beta&t=75zF2RFSMATkLKevfCeJNh937r371VBDo9zGfzK2pts",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQGG5gro8u_-gw/company-logo_400_400/company-logo_400_400/0/1722111930649?e=1776902400&v=beta&t=75zF2RFSMATkLKevfCeJNh937r371VBDo9zGfzK2pts",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQGG5gro8u_-gw/company-logo_200_200/company-logo_200_200/0/1722111930649?e=1776902400&v=beta&t=FLhHlxHMdSSgVTOhbxpBuqsGjqsanRGHMJ4aAZ8Xuww",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQGG5gro8u_-gw/company-logo_100_100/company-logo_100_100/0/1722111930649?e=1776902400&v=beta&t=PEyE1eQ90tV7OfOhIuW8AF7iEdV-o8FMSfKskj5XvXo",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "UCLA",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2477/",
+        "schoolId": "2477",
+        "degree": "Master of Arts - MA",
+        "fieldOfStudy": "Psychotherapy & Counseling ",
+        "skills": [],
+        "description": "Specialized in Psychodynamic Therapy, Cultural Psychology, and Mindfulness-Based Approaches",
+        "startDate": {
+          "month": "Sep",
+          "year": 2018,
+          "text": "Sep 2018"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2020,
+          "text": "Jun 2020"
+        },
+        "period": "Sep 2018 - Jun 2020",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQEDHp-TpD9AYQ/company-logo_400_400/company-logo_400_400/0/1688403831517/ucla_logo?e=1776902400&v=beta&t=w-iceNVDAaFKmAsOYvYO9sTXHwebw76pe9R-GTgIw8g",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEDHp-TpD9AYQ/company-logo_400_400/company-logo_400_400/0/1688403831517/ucla_logo?e=1776902400&v=beta&t=w-iceNVDAaFKmAsOYvYO9sTXHwebw76pe9R-GTgIw8g",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEDHp-TpD9AYQ/company-logo_200_200/company-logo_200_200/0/1688403831517/ucla_logo?e=1776902400&v=beta&t=apSMiPq_D81dd0N2wkZxJfq0wTTdcD2B_0DaFeLIzRI",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEDHp-TpD9AYQ/company-logo_100_100/company-logo_100_100/0/1688403831517/ucla_logo?e=1776902400&v=beta&t=HbefwqYCfdhdsUd19CtD8n3y9tu6IbypfPK-rqgQiY8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "UC Irvine",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/4418/",
+        "schoolId": "4418",
+        "degree": "Master of Business Administration - MBA",
+        "fieldOfStudy": "Technology & Innovation Management",
+        "skills": [],
+        "description": "Tech Strategy, Innovation Leadership, Organizational Behavior",
+        "startDate": {
+          "month": "Sep",
+          "year": 2012,
+          "text": "Sep 2012"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2014,
+          "text": "Jul 2014"
+        },
+        "period": "Sep 2012 - Jul 2014",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGxOSkIiHW9Ag/company-logo_400_400/B56ZoNqMfXJYAY-/0/1761165756689/university_of_california_irvine_logo?e=1776902400&v=beta&t=T4wQTWLi8WGQfpvHEcNnzWIljGW_C1SKFNMAHgwJ2bE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGxOSkIiHW9Ag/company-logo_400_400/B56ZoNqMfXJYAY-/0/1761165756689/university_of_california_irvine_logo?e=1776902400&v=beta&t=T4wQTWLi8WGQfpvHEcNnzWIljGW_C1SKFNMAHgwJ2bE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGxOSkIiHW9Ag/company-logo_200_200/B56ZoNqMfXJYAI-/0/1761165756689/university_of_california_irvine_logo?e=1776902400&v=beta&t=MVqCnppEKa0OUK0cpHuNQKkVsm5oUy1be_Wax6_8bVU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGxOSkIiHW9Ag/company-logo_100_100/B56ZoNqMfXJYAQ-/0/1761165756689/university_of_california_irvine_logo?e=1776902400&v=beta&t=1Y-9rAyBf1SNH1weTqzpdQf3q49iPgR-9FWN42gDJYM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Bioinformatics Intern",
+        "positions": [
+          "Bioinformatics intern at University of Agriculture, Faisalabad"
+        ]
+      },
+      {
+        "name": "Genomics or Data analysis Enthusiast ",
+        "positions": [
+          "Bioinformatics intern at University of Agriculture, Faisalabad"
+        ]
+      },
+      {
+        "name": "Computational Tools",
+        "positions": [
+          "Bioinformatics intern at University of Agriculture, Faisalabad"
+        ]
+      },
+      {
+        "name": "Motift discovery or RNA sequence analysis ",
+        "positions": [
+          "Bioinformatics intern at University of Agriculture, Faisalabad"
+        ]
+      },
+      {
+        "name": "Python R ",
+        "positions": [
+          "Bioinformatics intern at University of Agriculture, Faisalabad"
+        ]
+      },
+      {
+        "name": "Aspiring Bioinformatics ",
+        "positions": [
+          "Bioinformatics intern at University of Agriculture, Faisalabad"
+        ]
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAAMJM9ABUUNQOWnxGu7_bd_XO6So1ghGHok",
+        "firstName": "Frank",
+        "lastName": "Long",
+        "position": "Commercial Lines Producer at Brown & Brown of Tennessee",
+        "publicIdentifier": "frank-long-15408415",
+        "linkedinUrl": "https://www.linkedin.com/in/frank-long-15408415"
+      },
+      {
+        "id": "ACoAADIOFlwBn-9GaS6EQTiBmCXN_p5wjGJ3UHI",
+        "firstName": "Saad",
+        "lastName": "Butt",
+        "position": "Student at gc ",
+        "publicIdentifier": "saad-butt-1642aa1b5",
+        "linkedinUrl": "https://www.linkedin.com/in/saad-butt-1642aa1b5"
+      },
+      {
+        "id": "ACoAAALdVkwBKVn8FKhYQF2jdOZc2EZ1vW5APc4",
+        "firstName": "Mary",
+        "lastName": "Tygret",
+        "position": "CPCU",
+        "publicIdentifier": "mary-tygret-5a411814",
+        "linkedinUrl": "https://www.linkedin.com/in/mary-tygret-5a411814"
+      },
+      {
+        "id": "ACoAAA2Y9_QB77QtEnKmo7_thcOZutfeOTpMMYA",
+        "firstName": "Charlie",
+        "lastName": "Neese",
+        "position": "Managing Broker at Zeitlin Sotheby's International Realty",
+        "publicIdentifier": "charlie-neese-b5849664",
+        "linkedinUrl": "https://www.linkedin.com/in/charlie-neese-b5849664"
+      },
+      {
+        "id": "ACoAAAER5EYBjpANjeKkpdfcKGDvdBWmeUM_Le0",
+        "firstName": "Helen",
+        "lastName": "G.",
+        "position": "AVP Financial Planning and Budget",
+        "publicIdentifier": "helen-g-71a0176",
+        "linkedinUrl": "https://www.linkedin.com/in/helen-g-71a0176"
+      },
+      {
+        "id": "ACoAAAUySkUBwR_pai-hosSobzV2omeKTN9N1VE",
+        "firstName": "Jun",
+        "lastName": "Castro",
+        "position": "Principal Owner at Almazan Trading & Son",
+        "publicIdentifier": "jun-castro-59924425",
+        "linkedinUrl": "https://www.linkedin.com/in/jun-castro-59924425"
+      },
+      {
+        "id": "ACoAACqVQokBFMEp7oriMTRlosRK5wdrllMUxW4",
+        "firstName": "Sajid",
+        "lastName": "Ali",
+        "position": "Speechwriter|Creative Writer| Blog writer| Copywriter| Academic Writer|",
+        "publicIdentifier": "sajid-ali-46131417b",
+        "linkedinUrl": "https://www.linkedin.com/in/sajid-ali-46131417b"
+      },
+      {
+        "id": "ACoAAEFPK7EBKrxzlISD4g-dxyao-tKODPwrS_g",
+        "firstName": "Musfira Sahaab ",
+        "lastName": "Shahid",
+        "position": "Assignment Writing| Content Writing| Content Creation Ideas| App Development|Web Development",
+        "publicIdentifier": "musfira-sahaab-shahid-041b4a266",
+        "linkedinUrl": "https://www.linkedin.com/in/musfira-sahaab-shahid-041b4a266"
+      },
+      {
+        "id": "ACoAAAbzzYgBoL91KGzfppng0TWzA7ymjqp_4lo",
+        "firstName": "Christie",
+        "lastName": "Reeves, CPCU, CIC",
+        "position": "Area Sr VP - Client Service Director at Arthur J. Gallagher & Co",
+        "publicIdentifier": "christie-reeves-cpcu-cic-80809033",
+        "linkedinUrl": "https://www.linkedin.com/in/christie-reeves-cpcu-cic-80809033"
+      },
+      {
+        "id": "ACoAACJ_9owBmH_adlJGRgPlu-x6iYv0cIcc2n0",
+        "firstName": "Sally",
+        "lastName": "G.",
+        "position": "EMDR-trained. Telehealth Provider. Research student in Affective Computing (AI and Cognitive Science). Trilingual.",
+        "publicIdentifier": "sally-g-464a14141",
+        "linkedinUrl": "https://www.linkedin.com/in/sally-g-464a14141"
+      },
+      {
+        "id": "ACoAABKsBjkBLFgLtVXMAGPiI1GjxOE1mi5K0Hs",
+        "firstName": "Lisa",
+        "lastName": "Kolodziej",
+        "position": "Commercial Marketing Manager",
+        "publicIdentifier": "lisa-kolodziej-a21ab288",
+        "linkedinUrl": "https://www.linkedin.com/in/lisa-kolodziej-a21ab288"
+      },
+      {
+        "id": "ACoAACITt74BgaLUX9pipzqHAeLu_-ZyrKBaoMU",
+        "firstName": "Brooke",
+        "lastName": "Peden",
+        "position": "Accounting and Finance Manager",
+        "publicIdentifier": "brooke-peden-0a657313b",
+        "linkedinUrl": "https://www.linkedin.com/in/brooke-peden-0a657313b"
+      },
+      {
+        "id": "ACoAAFgfad8BsJQmBuzi0QAWDJ3ZtJTQGhRq-kU",
+        "firstName": "Shaheryar",
+        "lastName": "Sandhu",
+        "position": "Search Engine Optimization Manager at SLICK STARTER",
+        "publicIdentifier": "shaheryar-sandhuu",
+        "linkedinUrl": "https://www.linkedin.com/in/shaheryar-sandhuu"
+      },
+      {
+        "id": "ACoAAALcXMcBTp0wsplUNBvYLIY_FA9NOkcDrNg",
+        "firstName": "Chris",
+        "lastName": "Parisi",
+        "position": "Hospitality Professional",
+        "publicIdentifier": "chrisparisi1",
+        "linkedinUrl": "https://www.linkedin.com/in/chrisparisi1"
+      },
+      {
+        "id": "ACoAAALxkGQB8D6-4n2cYkjoxVWWXFzC4i1olRY",
+        "firstName": "Mike",
+        "lastName": "Hargis",
+        "position": "Vice President at Arthur J. Gallagher and Co.",
+        "publicIdentifier": "mike-hargis-74465714",
+        "linkedinUrl": "https://www.linkedin.com/in/mike-hargis-74465714"
+      },
+      {
+        "id": "ACoAAABOe3oBt9lKCl_c8ID3GoDunEhkHV_vZn0",
+        "firstName": "Stephen",
+        "lastName": "Perez",
+        "position": "Legal Private Detectives - Temporarily Closed",
+        "publicIdentifier": "stephen-perez-6228801",
+        "linkedinUrl": "https://www.linkedin.com/in/stephen-perez-6228801"
+      },
+      {
+        "id": "ACoAAEQdl1gB66sVGV3-043sIhwL_yM1OrSTEz8",
+        "firstName": "Eman",
+        "lastName": "Rohail",
+        "position": "Student Intern at English works ",
+        "publicIdentifier": "eman-rohail-96087427a",
+        "linkedinUrl": "https://www.linkedin.com/in/eman-rohail-96087427a"
+      },
+      {
+        "id": "ACoAAADc3BoBFqOExBj5J2ZjqTed9yf2dBbW-n8",
+        "firstName": "Marlyn",
+        "lastName": "Soto-Pichardo",
+        "position": "DevOps - Application Services",
+        "publicIdentifier": "marlyn-soto-pichardo-38aa204",
+        "linkedinUrl": "https://www.linkedin.com/in/marlyn-soto-pichardo-38aa204"
+      },
+      {
+        "id": "ACoAAAeQ84sBL3Yrr9I-Qf9YjQsywPAZO1pFlcY",
+        "firstName": "Miguel",
+        "lastName": "Ancheta",
+        "position": "Marketing at HealthCare Synergy, Inc.",
+        "publicIdentifier": "miguel-ancheta-80b61836",
+        "linkedinUrl": "https://www.linkedin.com/in/miguel-ancheta-80b61836"
+      },
+      {
+        "id": "ACoAAFeuC-gBmwXQx2mxgg17NVxYvA_hI78i4rc",
+        "firstName": "Monica",
+        "lastName": "Paulo",
+        "position": "--",
+        "publicIdentifier": "monica-paulo-120787350",
+        "linkedinUrl": "https://www.linkedin.com/in/monica-paulo-120787350"
+      },
+      {
+        "id": "ACoAACSUiLUBqbnIc7hs6fKrwutQYgMheOyv2cQ",
+        "firstName": "Haris",
+        "lastName": "Pervaiz",
+        "position": "Machine Learning & Deep Learning Specialist | Python Developer | Advanced Data Analyst | Business Intelligence | Project Manager | UX/UI Designer | Hybrid App Developer | ERP Consultant",
+        "publicIdentifier": "haris-pervaiz-759646151",
+        "linkedinUrl": "https://www.linkedin.com/in/haris-pervaiz-759646151"
+      },
+      {
+        "id": "ACoAAD3tcCoBZqEzaPSq6GQSy9D9DvkkF7Y2dUA",
+        "firstName": "Fizza",
+        "lastName": "Khan",
+        "position": "Research writer | content writer | Graphic Designer  | Professional writer | Environmental scientist | Sustainability enthusiast | Climate change advocate | Eco-friendly solutions | Water quality specialist",
+        "publicIdentifier": "fizza-khan-3a2b4824b",
+        "linkedinUrl": "https://www.linkedin.com/in/fizza-khan-3a2b4824b"
+      },
+      {
+        "id": "ACoAAEM3NGQBsr9CADQiSzHPzgxrVOeXLhF542k",
+        "firstName": "Muhammad Asif Jamal",
+        "lastName": "(Ph.D.)",
+        "position": "Scientific Officer (Agronomy) Sugarcane Research Station, Khanpur (R.Y. Khan)",
+        "publicIdentifier": "muhammad-asif-jamal-ph-d-2047b3275",
+        "linkedinUrl": "https://www.linkedin.com/in/muhammad-asif-jamal-ph-d-2047b3275"
+      },
+      {
+        "id": "ACoAABQScUIBOwCIyPUk3jDWCRhM0LpsOWYjbqI",
+        "firstName": "Adeel",
+        "lastName": "Ahmad",
+        "position": "Scientific Officer at Ayub Agricultural Research Institute Faisalabad",
+        "publicIdentifier": "adeel-ahmad772",
+        "linkedinUrl": "https://www.linkedin.com/in/adeel-ahmad772"
+      },
+      {
+        "id": "ACoAAEtBlXABU95ZuzfPbpffqyTlttH9NIbGClo",
+        "firstName": "Muhammad",
+        "lastName": "Asif",
+        "position": "Ph.D Food Technology l Researcher",
+        "publicIdentifier": "muhammad-asif-128a092b2",
+        "linkedinUrl": "https://www.linkedin.com/in/muhammad-asif-128a092b2"
+      },
+      {
+        "id": "ACoAAD4KRQkBRmu5OjgWU6_L67iPgLH8uvh3jCE",
+        "firstName": "Ghulam Mah-ul-Din",
+        "lastName": "Larra",
+        "position": "Environmental Engineer.                                                                         ||MS.c (Hons) Environmental Engineering|| PEC:ENVIRO/00933 ||Environmental Management ||Certified ISO 14001:2015||",
+        "publicIdentifier": "ghulam-mah-ul-din-larra-9496b9250",
+        "linkedinUrl": "https://www.linkedin.com/in/ghulam-mah-ul-din-larra-9496b9250"
+      },
+      {
+        "id": "ACoAAFTr8lYBcwxGmIWd4U1vB_Wa9Q6dpV8B5pU",
+        "firstName": "Adeeba",
+        "lastName": "Z.",
+        "position": "Attended University of Agriculture, Faisalabad",
+        "publicIdentifier": "adeeba-z-73218b339",
+        "linkedinUrl": "https://www.linkedin.com/in/adeeba-z-73218b339"
+      },
+      {
+        "id": "ACoAABHZ3TYBiKYw_dsmD-ooO4DbJ-9SpH0H-J8",
+        "firstName": "Babar",
+        "lastName": "Shahbaz",
+        "position": "Professor | Consultant |  Agricultural Extension | Agri-Food Systems | Climate Change Adaptation | Foresight and Anticipatory Adaptation | Sustainable Rural Livelihoods",
+        "publicIdentifier": "babar-shahbaz-3b237084",
+        "linkedinUrl": "https://www.linkedin.com/in/babar-shahbaz-3b237084"
+      },
+      {
+        "id": "ACoAAFtnoJIBUPgv8JpZ_Ij3X8X9T-WIx8tl7Zc",
+        "firstName": "Muhammad Noor",
+        "lastName": "Ullah",
+        "position": "Student  at Agriculture university of Faisalabad ",
+        "publicIdentifier": "muhammad-noor-ullah-6426a4369",
+        "linkedinUrl": "https://www.linkedin.com/in/muhammad-noor-ullah-6426a4369"
+      },
+      {
+        "id": "ACoAAFDx-SQB81Qmppj00mQ6WcyT-Tg97HdetP0",
+        "firstName": "Eman",
+        "lastName": "Sibghat",
+        "position": "Full Stack Web Developer",
+        "publicIdentifier": "eman-sibghat-03097831a",
+        "linkedinUrl": "https://www.linkedin.com/in/eman-sibghat-03097831a"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAEbMc8wBuufoagmwaTUzztA4zKA0dkg7j1A"
+    }
+  }
+}

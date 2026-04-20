@@ -1,0 +1,636 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAADZ4N-EB3fxcjXg6fqflhySvo8ZxecwjhA0",
+    "profile_url": "https://www.linkedin.com/in/ACwAADZ4N-EB3fxcjXg6fqflhySvo8ZxecwjhA0"
+  },
+  "item": {
+    "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+    "publicIdentifier": "rowanzellers",
+    "linkedinUrl": "https://www.linkedin.com/in/rowanzellers",
+    "firstName": "Rowan",
+    "lastName": "Zellers",
+    "emails": [
+      {
+        "email": "rowan.zellers@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      },
+      {
+        "url": "https://rowanzellers.com",
+        "domain": "rowanzellers.com"
+      }
+    ],
+    "headline": "thinking machines, ex-openai",
+    "websites": [
+      "https://rowanzellers.com"
+    ],
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "913848289",
+    "registeredAt": "2021-06-25T18:20:50.880Z",
+    "topSkills": null,
+    "connectionsCount": 380,
+    "followerCount": 3762,
+    "verified": true,
+    "about": "i don't check linkedin. see rowanzellers.com",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 2,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "19657",
+        "companyId": "2584",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2584/",
+        "schoolName": "University of Washington"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/C5603AQHbfRhafN9y1Q/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1654788316741?e=1776902400&v=beta&t=3kCz-wATs-LkhgsveHQyITp6y0VXaz2Ufuq4xuKUxog",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQHbfRhafN9y1Q/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1654788316741?e=1776902400&v=beta&t=3kCz-wATs-LkhgsveHQyITp6y0VXaz2Ufuq4xuKUxog",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQHbfRhafN9y1Q/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1654788316741?e=1776902400&v=beta&t=BP3pOgy_-s6T_I0ZBVRxJOrrobXYuZ8Q0HRbcV4Pvg0",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQHbfRhafN9y1Q/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1654788316741?e=1776902400&v=beta&t=vBDQvvvq2lmkzOR5vXhC3Yj679V1DTiqHqofKmTUa08",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQHbfRhafN9y1Q/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1654788316741?e=1776902400&v=beta&t=gHjSwE08Od-ZpLJv4vjmm7QaMDJ1dLjNzkic0XkaXD0",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/C5603AQHbfRhafN9y1Q/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1654788316741?e=1776902400&v=beta&t=3kCz-wATs-LkhgsveHQyITp6y0VXaz2Ufuq4xuKUxog",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "thinking machines, ex-openai",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "1 yr 3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2025,
+          "text": "Feb 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "OpenAI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/11130470/",
+        "companyId": "11130470",
+        "duration": "2 yrs 8 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jul",
+          "year": 2022,
+          "text": "Jul 2022"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2025,
+          "text": "Feb 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_200_200/B56ZT8EYB8HsAI-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=O6RSWlpQ5W4zNCOCTu621qCyTijLuXFJS4pz2_hBQfo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_100_100/B56ZT8EYB8HsAQ-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=y7RA89V9q8GlAjQ1oRU-jf_-n5zlSXRCnykXBIkgHfM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Intern",
+        "location": "Seattle, Washington, United States",
+        "employmentType": "Internship",
+        "workplaceType": null,
+        "companyName": "Allen Institute for AI (AI2)",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3766239/",
+        "companyId": "3766239",
+        "duration": "4 yrs 3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Apr",
+          "year": 2018,
+          "text": "Apr 2018"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2022,
+          "text": "Jun 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHvnJPziICDYA/company-logo_400_400/company-logo_400_400/0/1723049731653/allen_ai_logo?e=1776902400&v=beta&t=pDaPI2LKMpbfWGluS-cJPAPTyMoyxYdL1JjQYkmE6K4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHvnJPziICDYA/company-logo_400_400/company-logo_400_400/0/1723049731653/allen_ai_logo?e=1776902400&v=beta&t=pDaPI2LKMpbfWGluS-cJPAPTyMoyxYdL1JjQYkmE6K4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHvnJPziICDYA/company-logo_200_200/company-logo_200_200/0/1723049731653/allen_ai_logo?e=1776902400&v=beta&t=sCDaWt6-XhtkqyjNfq_Rn2JcQhPyJeQoqICfYzwa64k",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHvnJPziICDYA/company-logo_100_100/company-logo_100_100/0/1723049731653/allen_ai_logo?e=1776902400&v=beta&t=lifSpoI1NOHMH-WQPlHX2TL0AfudJ4NGo6z_tCTf0Q4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "University of Washington",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2584/",
+        "schoolId": "2584",
+        "degree": "Doctor of Philosophy - PhD",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "startDate": {
+          "year": 2016,
+          "text": "2016"
+        },
+        "endDate": {
+          "year": 2022,
+          "text": "2022"
+        },
+        "period": "2016 - 2022",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEMmhF9TqUCgA/company-logo_400_400/company-logo_400_400/0/1630545704089/university_of_washington_logo?e=1776902400&v=beta&t=UgMit_quQ3GsgGT3-3A6kXvDwnn-KVRW_u_HRd4RLTg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEMmhF9TqUCgA/company-logo_400_400/company-logo_400_400/0/1630545704089/university_of_washington_logo?e=1776902400&v=beta&t=UgMit_quQ3GsgGT3-3A6kXvDwnn-KVRW_u_HRd4RLTg",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEMmhF9TqUCgA/company-logo_200_200/company-logo_200_200/0/1630545704089/university_of_washington_logo?e=1776902400&v=beta&t=oLn8mUaUFi_GW9rfy_TVuoJ0FPajqWaQ14uovZsGklk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEMmhF9TqUCgA/company-logo_100_100/company-logo_100_100/0/1630545704089/university_of_washington_logo?e=1776902400&v=beta&t=RUr9ZHiq7JXufQGL_LdkRWkSpWGB-J-AGwcl4F0cy6Y",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Harvey Mudd College",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/19253/",
+        "schoolId": "19253",
+        "degree": "Bachelor of Science",
+        "fieldOfStudy": "Mathematics and Computer Science",
+        "skills": [],
+        "insights": "Grade: High Distinction",
+        "startDate": {
+          "month": "Aug",
+          "year": 2012,
+          "text": "Aug 2012"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2016,
+          "text": "May 2016"
+        },
+        "period": "Aug 2012 - May 2016",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHemxvB6tRt_w/company-logo_400_400/company-logo_400_400/0/1727220275769/harvey_mudd_college_logo?e=1776902400&v=beta&t=e-l0bxw2TwSrogQn_2sZ_NlGqIGhZL9njz6AKnoWJJ0",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHemxvB6tRt_w/company-logo_400_400/company-logo_400_400/0/1727220275769/harvey_mudd_college_logo?e=1776902400&v=beta&t=e-l0bxw2TwSrogQn_2sZ_NlGqIGhZL9njz6AKnoWJJ0",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHemxvB6tRt_w/company-logo_200_200/company-logo_200_200/0/1727220275769/harvey_mudd_college_logo?e=1776902400&v=beta&t=r64cz9jdnLGnivCgHxMDNCZxU27VHfDpuWarzKkiBlM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHemxvB6tRt_w/company-logo_100_100/company-logo_100_100/0/1727220275769/harvey_mudd_college_logo?e=1776902400&v=beta&t=arbPa3t8-8YbkskHNzzibws8nOBS4czkImOJ9rzcX8M",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Natural Language Processing (NLP)",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Computer Vision",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Deep Learning",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Machine Learning",
+        "assessments": "Passed LinkedIn Skill Assessment",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Python (Programming Language)",
+        "assessments": "Passed LinkedIn Skill Assessment",
+        "endorsements": "1 endorsement"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAADGE-AoBWopX8Yz0_gxbsPDk1rMk6Mx37ZE",
+        "firstName": "Giovanni",
+        "lastName": "D'Antonio",
+        "publicIdentifier": "giovanni-dantonio",
+        "linkedinUrl": "https://www.linkedin.com/in/giovanni-dantonio"
+      },
+      {
+        "id": "ACoAAEZnBtoBb1Us7ZKgHfOXAYT764pKcDQy848",
+        "firstName": "Songlin",
+        "lastName": "Yang",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "songlin-yang-b8a69728b",
+        "linkedinUrl": "https://www.linkedin.com/in/songlin-yang-b8a69728b"
+      },
+      {
+        "id": "ACoAAAd3c8cBXKnzqS80_HMaDIGNdqrXbaFbO5g",
+        "firstName": "James",
+        "lastName": "Sun",
+        "position": "Software Engineer",
+        "publicIdentifier": "james5un",
+        "linkedinUrl": "https://www.linkedin.com/in/james5un"
+      },
+      {
+        "id": "ACoAAAQ1QI4Bex6mqv5SgvahWcZuzAuWiTKciBo",
+        "firstName": "Bi",
+        "lastName": "Xue",
+        "position": "Thinking Machines Lab",
+        "publicIdentifier": "bi-xue-9527871b",
+        "linkedinUrl": "https://www.linkedin.com/in/bi-xue-9527871b"
+      },
+      {
+        "id": "ACoAABqSHaUBgoPu_j2NSmNfYyGkrcUvLn5mbbo",
+        "firstName": "Jacob",
+        "lastName": "van Gogh",
+        "position": "ML Research @ Thinking Machines",
+        "publicIdentifier": "jacobvangogh",
+        "linkedinUrl": "https://www.linkedin.com/in/jacobvangogh"
+      },
+      {
+        "id": "ACoAACQq5HoBKvwLgBUlXiVziRWJDXBocy6aOE4",
+        "firstName": "Erik",
+        "lastName": "Wijmans",
+        "position": "AI Researcher",
+        "publicIdentifier": "erik-wijmans-0a226814b",
+        "linkedinUrl": "https://www.linkedin.com/in/erik-wijmans-0a226814b"
+      },
+      {
+        "id": "ACoAAAhY-psBFcHXNbjunn6_QnPfV6Bo6w4yzug",
+        "firstName": "Kenny",
+        "lastName": "Yu",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "kenny-yu-aa3a9a3a",
+        "linkedinUrl": "https://www.linkedin.com/in/kenny-yu-aa3a9a3a"
+      },
+      {
+        "id": "ACoAAACo1tYBGy9sT2OWZuEULOMe4K_b2Y22-F8",
+        "firstName": "Alex",
+        "lastName": "Gartrell",
+        "position": "Engineering @ Thinking Machines, Ex-Meta/Facebook",
+        "publicIdentifier": "alexgartrell",
+        "linkedinUrl": "https://www.linkedin.com/in/alexgartrell"
+      },
+      {
+        "id": "ACoAAAD-hTABHsUcZMNYC-D_hAv_HSbY1IIDv3Y",
+        "firstName": "Opher",
+        "lastName": "Lieber",
+        "position": "Thinking Machines",
+        "publicIdentifier": "opherlieber",
+        "linkedinUrl": "https://www.linkedin.com/in/opherlieber"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAAA8JdrgBK-ShYTbFkZL80wSafgw-uaGsb9Q",
+        "firstName": "Kevin",
+        "lastName": "B.",
+        "position": "Security at Thinking Machines Lab",
+        "publicIdentifier": "kevin-b-5885a270",
+        "linkedinUrl": "https://www.linkedin.com/in/kevin-b-5885a270"
+      },
+      {
+        "id": "ACoAADgLvm4BAaa-N5zNQvfP5qFptuA8bvJs3nM",
+        "firstName": "Yifei",
+        "lastName": "Zhou",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "yifei-zhou-57aa9b222",
+        "linkedinUrl": "https://www.linkedin.com/in/yifei-zhou-57aa9b222"
+      },
+      {
+        "id": "ACoAACy2BxwB9fCrfCBI06w0X-gHyQTFLJIpJGc",
+        "firstName": "Guangxuan",
+        "lastName": "X.",
+        "publicIdentifier": "xgx",
+        "linkedinUrl": "https://www.linkedin.com/in/xgx"
+      },
+      {
+        "id": "ACoAAA4HVN4BOZg5espOvMVoO3OY04NZmuqvMCo",
+        "firstName": "Shaojie",
+        "lastName": "Bai",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "shaojie-bai",
+        "linkedinUrl": "https://www.linkedin.com/in/shaojie-bai"
+      },
+      {
+        "id": "ACoAABxxSOoBxMid0wd8m2NDb9w5zTY2lQbrNz4",
+        "firstName": "Leon",
+        "lastName": "G.",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "yazhi-gao",
+        "linkedinUrl": "https://www.linkedin.com/in/yazhi-gao"
+      },
+      {
+        "id": "ACoAAB4qbUUBsc9H_NLZN2duLUOOyyFDm-k_ACo",
+        "firstName": "Riley",
+        "lastName": "Shanahan",
+        "position": "Eng at Thinking Machines ",
+        "publicIdentifier": "rileyshanny",
+        "linkedinUrl": "https://www.linkedin.com/in/rileyshanny"
+      },
+      {
+        "id": "ACoAABA0sF8BJqwmfoms3veu9TE72tj8JMUQEFA",
+        "firstName": "Sam",
+        "lastName": "Shleifer",
+        "position": "The Biggest Legend",
+        "publicIdentifier": "sam-shleifer-a5307a77",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-shleifer-a5307a77"
+      },
+      {
+        "id": "ACoAAAeoHjYB_Lo5sUFlpZpz2L74oe9nEIKztQA",
+        "firstName": "Jenya",
+        "lastName": "L.",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "jenya-l",
+        "linkedinUrl": "https://www.linkedin.com/in/jenya-l"
+      },
+      {
+        "id": "ACoAACEKIcoBlH0R5ZT_TKQuJ4i3ZD4WlI1-rME",
+        "firstName": "Jacob",
+        "lastName": "Menick",
+        "position": "Thinking Machines, Founding Team",
+        "publicIdentifier": "jacob-menick-5a277a135",
+        "linkedinUrl": "https://www.linkedin.com/in/jacob-menick-5a277a135"
+      },
+      {
+        "id": "ACoAABVAP64BY4RszeJt11vohsLM-gj1PiARl2o",
+        "firstName": "Jiaming",
+        "lastName": "Cui",
+        "position": "Pretraining @ Thinking Machines Lab",
+        "publicIdentifier": "jiaming-cui-57a49a9b",
+        "linkedinUrl": "https://www.linkedin.com/in/jiaming-cui-57a49a9b"
+      },
+      {
+        "id": "ACoAAApsl8wB-EXTiQfzh99nXspFhz_bjzTIlE4",
+        "firstName": "Tejasvi",
+        "lastName": "Lekkala",
+        "position": "SAP Security Consultant",
+        "publicIdentifier": "tejasvilekkala",
+        "linkedinUrl": "https://www.linkedin.com/in/tejasvilekkala"
+      },
+      {
+        "id": "ACoAAATqE0QBeW1pNKMXyenD9oPQaefGT9dO23w",
+        "firstName": "Anesu",
+        "lastName": "Marufu",
+        "position": "Cyber-Security >> Researcher | Consultant | Ethical Hacker | Enthusiast",
+        "publicIdentifier": "ane-su",
+        "linkedinUrl": "https://www.linkedin.com/in/ane-su"
+      },
+      {
+        "id": "ACoAABD4x4wBvXGF1ujhDMVqU8SNyVYaXd-m1vs",
+        "firstName": "Payam",
+        "lastName": "Samimi",
+        "position": "CEO & Defensive Security Consultant",
+        "publicIdentifier": "payam-samimi",
+        "linkedinUrl": "https://www.linkedin.com/in/payam-samimi"
+      },
+      {
+        "id": "ACoAAD2rnPsBslEHnB2T8fh7uMGYsji9TDoTzkc",
+        "firstName": "Lavanya",
+        "lastName": "Katta",
+        "position": "SAP Security and GRC Associate Consultant | immediately Available",
+        "publicIdentifier": "lavanyakatta",
+        "linkedinUrl": "https://www.linkedin.com/in/lavanyakatta"
+      },
+      {
+        "id": "ACoAACSlK0oBnUl0GRxjAhJ2SZ8R6aO1f4mxHaA",
+        "firstName": "Thiago Coelho",
+        "lastName": "Gilis",
+        "position": "Cyber Security Specialist",
+        "publicIdentifier": "tgilis",
+        "linkedinUrl": "https://www.linkedin.com/in/tgilis"
+      },
+      {
+        "id": "ACoAABfUC9wBb7u81cJ2eiJeQXYnSQEk7aZqfzk",
+        "firstName": "Alex",
+        "lastName": "Widmann",
+        "position": "ISMS Expert",
+        "publicIdentifier": "alex-widmann",
+        "linkedinUrl": "https://www.linkedin.com/in/alex-widmann"
+      },
+      {
+        "id": "ACoAACKAwGsBzCvqY6nQYlF_3R3k58vf2FyumgQ",
+        "firstName": "M. Alperen",
+        "lastName": "Bingöl",
+        "position": "IT Security Consultant",
+        "publicIdentifier": "m-alperenbingol",
+        "linkedinUrl": "https://www.linkedin.com/in/m-alperenbingol"
+      },
+      {
+        "id": "ACoAADTnuwwBd00g7Hu1D5rKzm5wdq-K4BN4wys",
+        "firstName": "asang",
+        "lastName": "christian",
+        "position": "IT security consultant, SOC analyst.",
+        "publicIdentifier": "asang-christian-63830a209",
+        "linkedinUrl": "https://www.linkedin.com/in/asang-christian-63830a209"
+      },
+      {
+        "id": "ACoAADRgpOkBPpB_7ikJU0mzANSFdbCI8voixtI",
+        "firstName": "Benjamin",
+        "lastName": "Röhr",
+        "position": "Security Consultant",
+        "publicIdentifier": "benjamin-röhr-2b535b206",
+        "linkedinUrl": "https://www.linkedin.com/in/benjamin-röhr-2b535b206"
+      },
+      {
+        "id": "ACoAAD1tGYkBN868YuP3Khi8KOkagn2y97VsOrM",
+        "firstName": "Simon",
+        "lastName": "Atalay",
+        "position": "Cyber Security Consultant",
+        "publicIdentifier": "simon-atalay-b75170249",
+        "linkedinUrl": "https://www.linkedin.com/in/simon-atalay-b75170249"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAADZ4N-EB3fxcjXg6fqflhySvo8ZxecwjhA0"
+    }
+  }
+}

@@ -1,0 +1,972 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAABoG0oUBYeQogqhxXOfJeN_MduEvNiRYWdw",
+    "profile_url": "https://www.linkedin.com/in/ACwAABoG0oUBYeQogqhxXOfJeN_MduEvNiRYWdw"
+  },
+  "item": {
+    "id": "ACoAABoG0oUBl986ZaMrLUASG1NhDoJyVlav4Po",
+    "publicIdentifier": "ekzhang",
+    "linkedinUrl": "https://www.linkedin.com/in/ekzhang",
+    "firstName": "Eric",
+    "lastName": "Zhang",
+    "emails": [
+      {
+        "email": "eric.zhang@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "MTS, Thinking Machines",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "New York, New York, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "New York City, NY, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "New York",
+        "city": "New York City"
+      }
+    },
+    "objectUrn": "436654725",
+    "registeredAt": "2015-07-24T18:47:12.791Z",
+    "topSkills": null,
+    "connectionsCount": 1234,
+    "followerCount": 2018,
+    "verified": true,
+    "about": "I am a software engineer, researcher, and designer. I hope to empower individuals to cultivate passion, insight, and joy; and to help others laugh and smile more.\n\nMy open-source software has reached millions of people, spanning work in distributed systems, programming languages, computer graphics, and interaction design. I enjoy working in small teams, sharing fresh engineering and design perspectives.\n\nHow I conceptualize my work: Computers influence our daily lives, augment how people think, and shape how we perceive each other and our visions for the world. They're pretty cool! And I think technology is ultimately in service to the wonderful ideas and places; beliefs, aspirations, and dreams of all the people who rely on it.\n\nI have a math degree and a CS graduate degree from Harvard. Not looking for jobs right now.",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 10,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "18483",
+        "companyId": "1646",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1646/",
+        "schoolName": "Harvard University"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4E03AQE7MU3qXkZ08g/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1683815926429?e=1776902400&v=beta&t=3IFgqpLFL327ogIzNvo9mCJkmx3PJ0L4iICXcnkq_94",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQE7MU3qXkZ08g/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1683815926429?e=1776902400&v=beta&t=3IFgqpLFL327ogIzNvo9mCJkmx3PJ0L4iICXcnkq_94",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQE7MU3qXkZ08g/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1683815926429?e=1776902400&v=beta&t=zyCIrJgKP1OonkQx2ctXL44xjavuS4wAx3U2ZFNFAX4",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQE7MU3qXkZ08g/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1683815926429?e=1776902400&v=beta&t=mbIPuCkjYXGGi6Zcnh6Kvmf0nYR90N0x4dyk6tJti-c",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQE7MU3qXkZ08g/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1683815926429?e=1776902400&v=beta&t=SzztFDBsPSrWJ7TfY0QTXu4Y_2klqQWwy61t8xFOZiA",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4E16AQHZELcNJlQ0ww/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1683815811025?e=1776902400&v=beta&t=-G084qP0HBpEL-GrCFubqkcJy95aE-p8yvQDWCWLPRQ",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E16AQHZELcNJlQ0ww/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1683815811025?e=1776902400&v=beta&t=-G084qP0HBpEL-GrCFubqkcJy95aE-p8yvQDWCWLPRQ",
+          "width": 1400,
+          "height": 350,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E16AQHZELcNJlQ0ww/profile-displaybackgroundimage-shrink_200_800/profile-displaybackgroundimage-shrink_200_800/0/1683815811025?e=1776902400&v=beta&t=t56yzG3aDHCTH1qd_L4NkG5A9dPY2CiTyjlzx9h5JQI",
+          "width": 800,
+          "height": 200,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "photo": "https://media.licdn.com/dms/image/v2/D4E03AQE7MU3qXkZ08g/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1683815926429?e=1776902400&v=beta&t=3IFgqpLFL327ogIzNvo9mCJkmx3PJ0L4iICXcnkq_94",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "MTS, Thinking Machines",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "New York, New York, United States",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "7 mos",
+        "description": "A bit of everything, lots of work to do.\nML infra → product → pretraining → kernels/numerics → inference → distributed systems → RL",
+        "skills": null,
+        "startDate": {
+          "month": "Oct",
+          "year": 2025,
+          "text": "Oct 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Principal Engineer",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Modal",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/79045818/",
+        "companyId": "79045818",
+        "duration": "1 yr",
+        "description": "Most senior engineer as the company grew to 70+ people and a valuation of $1B.\n\nInfra research lead. Technical direction for container runtime, product, & core infrastructure, jumping around to help projects come together and making sure we build software that lasts.\n\n- Modal Notebooks: https://modal.com/blog/notebooks\n- Modal SDKs for JS and Go: https://modal.com/blog/sdk-javascript-go\n- High-availability WireGuard: https://modal.com/blog/vprox\n- Serverless HTTP stack: https://modal.com/blog/serverless-http\n- Distributed TLS relays: https://modal.com/docs/guide/tunnels\n- eBPF network infrastructure: https://modal.com/docs/guide/private-networking",
+        "skills": null,
+        "experienceGroupId": "c0773a8ef269ba2583b5d6a505df699d90d9ce57",
+        "startDate": {
+          "month": "Nov",
+          "year": 2024,
+          "text": "Nov 2024"
+        },
+        "endDate": {
+          "month": "Oct",
+          "year": 2025,
+          "text": "Oct 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHy7exnpF9hzA/company-logo_400_400/B4EZmTj1JVKQAY-/0/1759117267991/modal_labs_logo?e=1776902400&v=beta&t=W9OpWpm605wEJqJtXsGhe6E26c-bFsPw0LeKQt9s6UI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHy7exnpF9hzA/company-logo_400_400/B4EZmTj1JVKQAY-/0/1759117267991/modal_labs_logo?e=1776902400&v=beta&t=W9OpWpm605wEJqJtXsGhe6E26c-bFsPw0LeKQt9s6UI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHy7exnpF9hzA/company-logo_200_200/B4EZmTj1JVKQAI-/0/1759117267991/modal_labs_logo?e=1776902400&v=beta&t=PYcE1TzYrlMjvXtZRGgMGFYm8utylMr3gChKCQTsTlE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHy7exnpF9hzA/company-logo_100_100/B4EZmTj1JVKQAQ-/0/1759117267991/modal_labs_logo?e=1776902400&v=beta&t=51io2eLiYDJMH1x9TaincMubw3o_OkSVOdYgOc7Fglg",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Founding Engineer",
+        "location": "New York, New York, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Modal",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/79045818/",
+        "companyId": "79045818",
+        "duration": "3 yrs 9 mos",
+        "description": "Founding team member (#4).\n\nFor 3 years, was #1 committer, made technical decisions like adopting Rust and Svelte despite early skepticism and shaped the long-term engineering direction.\n\nBuilt Modal's container runtime and was the first product-focused engineer and designer.",
+        "skills": null,
+        "experienceGroupId": "c0773a8ef269ba2583b5d6a505df699d90d9ce57",
+        "startDate": {
+          "month": "Feb",
+          "year": 2022,
+          "text": "Feb 2022"
+        },
+        "endDate": {
+          "month": "Oct",
+          "year": 2025,
+          "text": "Oct 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHy7exnpF9hzA/company-logo_400_400/B4EZmTj1JVKQAY-/0/1759117267991/modal_labs_logo?e=1776902400&v=beta&t=W9OpWpm605wEJqJtXsGhe6E26c-bFsPw0LeKQt9s6UI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHy7exnpF9hzA/company-logo_400_400/B4EZmTj1JVKQAY-/0/1759117267991/modal_labs_logo?e=1776902400&v=beta&t=W9OpWpm605wEJqJtXsGhe6E26c-bFsPw0LeKQt9s6UI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHy7exnpF9hzA/company-logo_200_200/B4EZmTj1JVKQAI-/0/1759117267991/modal_labs_logo?e=1776902400&v=beta&t=PYcE1TzYrlMjvXtZRGgMGFYm8utylMr3gChKCQTsTlE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHy7exnpF9hzA/company-logo_100_100/B4EZmTj1JVKQAQ-/0/1759117267991/modal_labs_logo?e=1776902400&v=beta&t=51io2eLiYDJMH1x9TaincMubw3o_OkSVOdYgOc7Fglg",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Contractor",
+        "location": "Greater London, England, United Kingdom",
+        "employmentType": "Contract",
+        "workplaceType": null,
+        "companyName": "Prosper Robotics",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/78367470/",
+        "companyId": "78367470",
+        "duration": "1 mo",
+        "description": "Developed VR-teleoperated household robots with electrical and mechanical engineers.",
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2022,
+          "text": "Jan 2022"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2022,
+          "text": "Jan 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHWXQummIZMwQ/company-logo_400_400/company-logo_400_400/0/1721754052815/prosperrobotics_logo?e=1776902400&v=beta&t=Q1BUj9EzhZYf0G7e45cHD6BtYy9t30aP8Yxe4BYl97o",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHWXQummIZMwQ/company-logo_400_400/company-logo_400_400/0/1721754052815/prosperrobotics_logo?e=1776902400&v=beta&t=Q1BUj9EzhZYf0G7e45cHD6BtYy9t30aP8Yxe4BYl97o",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHWXQummIZMwQ/company-logo_200_200/company-logo_200_200/0/1721754052815/prosperrobotics_logo?e=1776902400&v=beta&t=pbtiNnOGmNcTzIMV3ftl5ZETRyGa08M6zPl5AfvTcuQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHWXQummIZMwQ/company-logo_100_100/company-logo_100_100/0/1721754052815/prosperrobotics_logo?e=1776902400&v=beta&t=ge2v5OVaDxr9P2VhEebJ9RVRiOIzKtUzvvmhwYspXME",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer",
+        "location": "San Francisco, California, United States",
+        "employmentType": "Part-time",
+        "workplaceType": null,
+        "companyName": "Convex",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/71328718/",
+        "companyId": "71328718",
+        "duration": "5 mos",
+        "description": "First hired engineer at a seed-stage startup. Wrote significant components of the MVP. Re-architected the Convex client library, added some systems components in Rust, and advised on developer experience.",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2021,
+          "text": "Jun 2021"
+        },
+        "endDate": {
+          "month": "Oct",
+          "year": 2021,
+          "text": "Oct 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQEtODWbqjdhQg/company-logo_400_400/company-logo_400_400/0/1736194456966/convex_dev_logo?e=1776902400&v=beta&t=uE31wtwI0djHlmjInvF4eW1DIiXKjh8rAHLStzi2pTg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEtODWbqjdhQg/company-logo_400_400/company-logo_400_400/0/1736194456966/convex_dev_logo?e=1776902400&v=beta&t=uE31wtwI0djHlmjInvF4eW1DIiXKjh8rAHLStzi2pTg",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEtODWbqjdhQg/company-logo_200_200/company-logo_200_200/0/1736194456966/convex_dev_logo?e=1776902400&v=beta&t=MFs_Mrh3VgJ8GZACQhahy5WJhW3c8d14Yme3jbZ8ETs",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEtODWbqjdhQg/company-logo_100_100/company-logo_100_100/0/1736194456966/convex_dev_logo?e=1776902400&v=beta&t=6q88WJpsYSfeoF7SiO6mceyLaO62or2TENJOKm54KEM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Quantitative Research Intern",
+        "location": "Chicago, Illinois, United States",
+        "employmentType": "Internship",
+        "workplaceType": null,
+        "companyName": "Jump Trading LLC",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/294033/",
+        "companyId": "294033",
+        "duration": "3 mos",
+        "description": "Worked on US equities analysis and contributed to some open-source Ethereum projects.",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2021,
+          "text": "Jun 2021"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2021,
+          "text": "Aug 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQFgF0X6zG8WKA/company-logo_400_400/B56Zjwy2RpHUAc-/0/1756386518504/jump_trading_logo?e=1776902400&v=beta&t=nNuv8DTJJ6f9eb3pYH_boAtWnmfLm3D6CZkzCaDg9Ic",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFgF0X6zG8WKA/company-logo_400_400/B56Zjwy2RpHUAc-/0/1756386518504/jump_trading_logo?e=1776902400&v=beta&t=nNuv8DTJJ6f9eb3pYH_boAtWnmfLm3D6CZkzCaDg9Ic",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFgF0X6zG8WKA/company-logo_200_200/B56Zjwy2RpHUAM-/0/1756386518504/jump_trading_logo?e=1776902400&v=beta&t=XYFM9BLzLyotIR7ztfTopMdibUjIKToIfYe8iucWvQY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFgF0X6zG8WKA/company-logo_100_100/B56Zjwy2RpHUAU-/0/1756386518504/jump_trading_logo?e=1776902400&v=beta&t=Qiy0FP3zuAlJIPk8pfrw-tpRVS05b_2uQY9pngfDfqM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineering Intern - ML Infrastructure",
+        "location": "San Francisco, California, United States",
+        "employmentType": "Internship",
+        "workplaceType": null,
+        "companyName": "Scale AI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/17998520/",
+        "companyId": "17998520",
+        "duration": "2 mos",
+        "description": "Wrangled Kubernetes and Terraform resources and wrote some better CLIs for training machine learning models.",
+        "skills": null,
+        "startDate": {
+          "month": "Dec",
+          "year": 2020,
+          "text": "Dec 2020"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2021,
+          "text": "Jan 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQFLIeQFxapL7Q/company-logo_400_400/B56Za2650hGgAY-/0/1746825617004/scaleai_logo?e=1776902400&v=beta&t=WuKxDBJye0l-qkA7vVw7m9unrdiqtkS97oJzAPEJS7k",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFLIeQFxapL7Q/company-logo_400_400/B56Za2650hGgAY-/0/1746825617004/scaleai_logo?e=1776902400&v=beta&t=WuKxDBJye0l-qkA7vVw7m9unrdiqtkS97oJzAPEJS7k",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFLIeQFxapL7Q/company-logo_200_200/B56Za2650hGgAI-/0/1746825617004/scaleai_logo?e=1776902400&v=beta&t=QMe8EBOWi2WVWrdjmUWfRXFiMfjK8IkUQAwbhFCy1UU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFLIeQFxapL7Q/company-logo_100_100/B56Za2650hGgAQ-/0/1746825617004/scaleai_logo?e=1776902400&v=beta&t=8okUByQi9Cb1RZxj6fSTmOFAAva87FUQbByCIt3_0DU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Architecture Intern - PVA",
+        "location": "San Francisco, California, United States",
+        "employmentType": "Internship",
+        "workplaceType": null,
+        "companyName": "NVIDIA",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3608/",
+        "companyId": "3608",
+        "duration": "3 mos",
+        "description": "Deep learning models for semantic segmentation on street image datasets (Cityscapes, KITTI).",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2020,
+          "text": "Jun 2020"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2020,
+          "text": "Aug 2020"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGV36q2EowSyw/company-logo_400_400/company-logo_400_400/0/1724881581208/nvidia_logo?e=1776902400&v=beta&t=C4mWS6vTQukkUtFskEc75guVQWnxYpncWO_y7nNqVeY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGV36q2EowSyw/company-logo_400_400/company-logo_400_400/0/1724881581208/nvidia_logo?e=1776902400&v=beta&t=C4mWS6vTQukkUtFskEc75guVQWnxYpncWO_y7nNqVeY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGV36q2EowSyw/company-logo_200_200/company-logo_200_200/0/1724881581208/nvidia_logo?e=1776902400&v=beta&t=3Eb3ojsmrCjgggr-i-ceH5i78HKTHMfU_Sw6-_Qwl9I",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGV36q2EowSyw/company-logo_100_100/company-logo_100_100/0/1724881581208/nvidia_logo?e=1776902400&v=beta&t=J1fAnNhA-iMhp5no8LIGLr70F4jKZs6zO4pSLqTQaFc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Assistant - Programming Languages Group",
+        "location": "Cambridge, Massachusetts, United States",
+        "employmentType": "Part-time",
+        "workplaceType": null,
+        "companyName": "Harvard John A. Paulson School of Engineering and Applied Sciences",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1711270/",
+        "companyId": "1711270",
+        "duration": "4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2020,
+          "text": "May 2020"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2020,
+          "text": "Aug 2020"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF26un2IGhsYg/company-logo_400_400/company-logo_400_400/0/1630609147706/harvard_school_of_engineering_and_applied_sciences_logo?e=1776902400&v=beta&t=ipdFzN6uuBBql5ZdhcT-wRdqQijfYf0Ugw-wDc6Y2w8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF26un2IGhsYg/company-logo_400_400/company-logo_400_400/0/1630609147706/harvard_school_of_engineering_and_applied_sciences_logo?e=1776902400&v=beta&t=ipdFzN6uuBBql5ZdhcT-wRdqQijfYf0Ugw-wDc6Y2w8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF26un2IGhsYg/company-logo_200_200/company-logo_200_200/0/1630609147706/harvard_school_of_engineering_and_applied_sciences_logo?e=1776902400&v=beta&t=XLcHUkOGlCMdLiaeAaSY-xoKeV_Uv5Qh-jRgt1n_hKk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF26un2IGhsYg/company-logo_100_100/company-logo_100_100/0/1630609147706/harvard_school_of_engineering_and_applied_sciences_logo?e=1776902400&v=beta&t=6uKVf4vPbvJ0KNVEorRCdTOZjf9Gb1mpxGyXwEI37mU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Undergraduate Researcher",
+        "location": "Cambridge, Massachusetts, United States",
+        "employmentType": "Part-time",
+        "workplaceType": null,
+        "companyName": "Harvard Medical School",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1645/",
+        "companyId": "1645",
+        "duration": "7 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Dec",
+          "year": 2019,
+          "text": "Dec 2019"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2020,
+          "text": "Jun 2020"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFpnx840JxXEA/company-logo_400_400/company-logo_400_400/0/1631308066635?e=1776902400&v=beta&t=VO7CEpSBtMI2SUx9tKvHipzrPMCLXYVXJK38sNRKt1o",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFpnx840JxXEA/company-logo_400_400/company-logo_400_400/0/1631308066635?e=1776902400&v=beta&t=VO7CEpSBtMI2SUx9tKvHipzrPMCLXYVXJK38sNRKt1o",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFpnx840JxXEA/company-logo_200_200/company-logo_200_200/0/1631308066635?e=1776902400&v=beta&t=GHOYrRlgWHaw22v6E6P6cUy6m16gklYGc1bhUpHCiSg",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFpnx840JxXEA/company-logo_100_100/company-logo_100_100/0/1631308066635?e=1776902400&v=beta&t=gueX7aZqSILpaL4L8IzD7KPN0YBClXmDUr9bUxoPask",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Computer Science Instructor",
+        "location": "Santa Clara, California, United States",
+        "employmentType": "Part-time",
+        "workplaceType": null,
+        "companyName": "AlphaStar Academy",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=AlphaStar+Academy",
+        "duration": "2 yrs 5 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Dec",
+          "year": 2017,
+          "text": "Dec 2017"
+        },
+        "endDate": {
+          "month": "Apr",
+          "year": 2020,
+          "text": "Apr 2020"
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Harvard University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1646/",
+        "schoolId": "1646",
+        "degree": "Master of Science - MS",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "description": "Got this concurrently with my BA in 7 semesters. I took so many grad classes that I could've had 2 master's degrees. It was lots of fun.",
+        "startDate": {
+          "year": 2022,
+          "text": "2022"
+        },
+        "endDate": {
+          "year": 2023,
+          "text": "2023"
+        },
+        "period": "2022 - 2023",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF5t62bcL0e9g/company-logo_400_400/company-logo_400_400/0/1631318058235?e=1776902400&v=beta&t=RkTNKHKBHCNAI5CNo-HAGQ7uOxrr8GBSdP6Mhal50gg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF5t62bcL0e9g/company-logo_400_400/company-logo_400_400/0/1631318058235?e=1776902400&v=beta&t=RkTNKHKBHCNAI5CNo-HAGQ7uOxrr8GBSdP6Mhal50gg",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF5t62bcL0e9g/company-logo_200_200/company-logo_200_200/0/1631318058235?e=1776902400&v=beta&t=y8dfVnr4duhkYkxwxXb0xTfyu2DFsZFXt5hsz507GaM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF5t62bcL0e9g/company-logo_100_100/company-logo_100_100/0/1631318058235?e=1776902400&v=beta&t=LVLwVc7yBweIB3_TixXGZZEymyF01yoePCCl9P-3kb0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Harvard University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1646/",
+        "schoolId": "1646",
+        "degree": "Bachelor of Arts - BA",
+        "fieldOfStudy": "Computer Science and Mathematics",
+        "skills": [],
+        "description": "Magna cum laude, with highest honors in field",
+        "startDate": {
+          "year": 2019,
+          "text": "2019"
+        },
+        "endDate": {
+          "year": 2023,
+          "text": "2023"
+        },
+        "period": "2019 - 2023",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF5t62bcL0e9g/company-logo_400_400/company-logo_400_400/0/1631318058235?e=1776902400&v=beta&t=RkTNKHKBHCNAI5CNo-HAGQ7uOxrr8GBSdP6Mhal50gg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF5t62bcL0e9g/company-logo_400_400/company-logo_400_400/0/1631318058235?e=1776902400&v=beta&t=RkTNKHKBHCNAI5CNo-HAGQ7uOxrr8GBSdP6Mhal50gg",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF5t62bcL0e9g/company-logo_200_200/company-logo_200_200/0/1631318058235?e=1776902400&v=beta&t=y8dfVnr4duhkYkxwxXb0xTfyu2DFsZFXt5hsz507GaM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF5t62bcL0e9g/company-logo_100_100/company-logo_100_100/0/1631318058235?e=1776902400&v=beta&t=LVLwVc7yBweIB3_TixXGZZEymyF01yoePCCl9P-3kb0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Interaction Design"
+      },
+      {
+        "name": "Systems Engineering"
+      }
+    ],
+    "publications": [
+      {
+        "title": "Limit Densities of Patterns in Permutation Inflations",
+        "publishedAt": "Electronic Journal of Combinatorics · Jan 29, 2021",
+        "link": "https://www.combinatorics.org/ojs/index.php/eljc/article/view/v28i1p24/pdf"
+      }
+    ],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [
+      {
+        "title": "Gold Medalist at the International Olympiad in Informatics",
+        "issuedBy": "IOI",
+        "issuedAt": "Aug 2019",
+        "description": "Two-time gold medalist for USA.",
+        "associatedWith": null,
+        "associatedWithLink": null
+      }
+    ],
+    "languages": [],
+    "causes": [],
+    "featured": {
+      "images": [
+        "https://media.licdn.com/dms/image/sync/v2/D4E27AQGZnf2-CoIPoQ/articleshare-shrink_1280_800/articleshare-shrink_1280_800/0/1732141893095?e=1776160800&v=beta&t=rQG6cIFdO8flhC1yoGeaW4r9fpvoLsXspn-N74aKQRM"
+      ],
+      "link": "https://www.linkedin.com/in/ekzhang/overlay/1610345575891/single-media-viewer?type=LINK&profileId=ACoAABoG0oUBl986ZaMrLUASG1NhDoJyVlav4Po",
+      "title": "Projects",
+      "subtitle": "ekzhang.com",
+      "slides": [
+        {
+          "title": "Projects",
+          "subtitle": "ekzhang.com",
+          "description": "Open source programming projects.",
+          "url": "https://www.linkedin.com/in/ekzhang/overlay/1610345575891/single-media-viewer?type=LINK&profileId=ACoAABoG0oUBl986ZaMrLUASG1NhDoJyVlav4Po",
+          "image": {
+            "url": "https://media.licdn.com/dms/image/sync/v2/D4E27AQGZnf2-CoIPoQ/articleshare-shrink_1280_800/articleshare-shrink_1280_800/0/1732141893095?e=1776160800&v=beta&t=rQG6cIFdO8flhC1yoGeaW4r9fpvoLsXspn-N74aKQRM"
+          }
+        }
+      ]
+    },
+    "moreProfiles": [
+      {
+        "id": "ACoAABEmYXYB5f-3ZmFG8dI-n9XAlqySBqO-2PA",
+        "firstName": "Luke",
+        "lastName": "Carlson",
+        "publicIdentifier": "jlukecarlson",
+        "linkedinUrl": "https://www.linkedin.com/in/jlukecarlson"
+      },
+      {
+        "id": "ACoAABQ5lJUBry2byQYf_TtxDF9Rha9l-RqYsaM",
+        "firstName": "Guang-He",
+        "lastName": "Lee",
+        "publicIdentifier": "guang-he-lee-64577895",
+        "linkedinUrl": "https://www.linkedin.com/in/guang-he-lee-64577895"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABGaEy8Bu1ycKB5WUvyRc69OERCzymW7mxY",
+        "firstName": "Jamie",
+        "lastName": "Cahill",
+        "publicIdentifier": "james-cahill-093a9582",
+        "linkedinUrl": "https://www.linkedin.com/in/james-cahill-093a9582"
+      },
+      {
+        "id": "ACoAACHgqNcBO7G9QHjfnTyp5v6rVbPMJ19f1dc",
+        "firstName": "Claire",
+        "lastName": "Fu",
+        "publicIdentifier": "clairecfu",
+        "linkedinUrl": "https://www.linkedin.com/in/clairecfu"
+      },
+      {
+        "id": "ACoAACaOARIBRO2EEH12QWQO29L__oI3N2K4u14",
+        "firstName": "Mingjie",
+        "lastName": "Sun",
+        "publicIdentifier": "mingjie-sun-06a761160",
+        "linkedinUrl": "https://www.linkedin.com/in/mingjie-sun-06a761160"
+      },
+      {
+        "id": "ACoAABGzJXcBFaJqVFgqgYNbhaPVKRkP3iG33dA",
+        "firstName": "Noah",
+        "lastName": "Shpak",
+        "publicIdentifier": "nshpak",
+        "linkedinUrl": "https://www.linkedin.com/in/nshpak"
+      },
+      {
+        "id": "ACoAABYs4-IB5mHx5eVfOHzu1e8xlO3q_kb38IM",
+        "firstName": "Brydon",
+        "lastName": "Eastman",
+        "publicIdentifier": "brydon-eastman-396719a4",
+        "linkedinUrl": "https://www.linkedin.com/in/brydon-eastman-396719a4"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAACHG180BXiyeZ2qJgoggx27e4iM3ajxvp18",
+        "firstName": "Andy",
+        "lastName": "Hwang",
+        "publicIdentifier": "andrewnhwang",
+        "linkedinUrl": "https://www.linkedin.com/in/andrewnhwang"
+      },
+      {
+        "id": "ACoAAAFeNNIBGA1Mtyi5_iGkRC19uDzKU2t5dVs",
+        "firstName": "Kunal",
+        "lastName": "Bhalla",
+        "publicIdentifier": "kunalbhalla",
+        "linkedinUrl": "https://www.linkedin.com/in/kunalbhalla"
+      },
+      {
+        "id": "ACoAABA0sF8BJqwmfoms3veu9TE72tj8JMUQEFA",
+        "firstName": "Sam",
+        "lastName": "Shleifer",
+        "publicIdentifier": "sam-shleifer-a5307a77",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-shleifer-a5307a77"
+      },
+      {
+        "id": "ACoAABLLpuMBU7a9WPW-GubLTIkDjAF6hz7Ujkc",
+        "firstName": "Daniel",
+        "lastName": "Xu",
+        "publicIdentifier": "daniel-xu-42b73289",
+        "linkedinUrl": "https://www.linkedin.com/in/daniel-xu-42b73289"
+      },
+      {
+        "id": "ACoAABhKWCYBiuV3Zv9Hbt8t0j-xMRqxawBcSgw",
+        "firstName": "Kurt",
+        "lastName": "Shuster",
+        "publicIdentifier": "kurtshuster1",
+        "linkedinUrl": "https://www.linkedin.com/in/kurtshuster1"
+      },
+      {
+        "id": "ACoAADYMzQABdXTSxolT2YjHmNBBSeT6YrGSQmQ",
+        "firstName": "Tarushii",
+        "lastName": "Goel",
+        "publicIdentifier": "tarushii-goel",
+        "linkedinUrl": "https://www.linkedin.com/in/tarushii-goel"
+      },
+      {
+        "id": "ACoAAAwf4lcBgfLcNvMLGYnAjvxGpzWMO50zhUw",
+        "firstName": "Deepak",
+        "lastName": "Gopinath",
+        "publicIdentifier": "deepakgopinath",
+        "linkedinUrl": "https://www.linkedin.com/in/deepakgopinath"
+      },
+      {
+        "id": "ACoAAAO-j_IBXcvIzhZtQ7QNkky6tlnQTcFl9qI",
+        "firstName": "Myle",
+        "lastName": "Ott",
+        "publicIdentifier": "myleott",
+        "linkedinUrl": "https://www.linkedin.com/in/myleott"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAACHkUNgBogKk7Q3xekxMdWLMSikZY2zgQsU",
+        "firstName": "Stephen",
+        "lastName": "Roller",
+        "publicIdentifier": "stephen-roller-38851513a",
+        "linkedinUrl": "https://www.linkedin.com/in/stephen-roller-38851513a"
+      },
+      {
+        "id": "ACoAAAqPUXUB26nPtwJxJLy_Ar7H-YLBlb44QnY",
+        "firstName": "Neal",
+        "lastName": "Wu",
+        "publicIdentifier": "nealwu",
+        "linkedinUrl": "https://www.linkedin.com/in/nealwu"
+      },
+      {
+        "id": "ACoAAGYTHegBOyXtWkSSRsx4B50072OY7g8v1u0",
+        "firstName": "Sherhana Dimple",
+        "lastName": "Halis",
+        "position": "Student at Harvard University",
+        "publicIdentifier": "sherhana-dimple-halis-9746323b9",
+        "linkedinUrl": "https://www.linkedin.com/in/sherhana-dimple-halis-9746323b9"
+      },
+      {
+        "id": "ACoAAGYUhEUB4HLb4ZtZpQzyf9lxnu1IAfQdKXk",
+        "firstName": "Rahul",
+        "lastName": "Kumar",
+        "position": "Student at Harvard University",
+        "publicIdentifier": "rahul-kumar-a856773b9",
+        "linkedinUrl": "https://www.linkedin.com/in/rahul-kumar-a856773b9"
+      },
+      {
+        "id": "ACoAAGYXh4kBixOQdqSEMbgRO2EuMD8PVQMVgto",
+        "firstName": "Sophie Perez",
+        "lastName": "Jullie",
+        "position": "Student at Harvard University",
+        "publicIdentifier": "sophie-perez-jullie-1a17523b9",
+        "linkedinUrl": "https://www.linkedin.com/in/sophie-perez-jullie-1a17523b9"
+      },
+      {
+        "id": "ACoAAGYWAVsB62O2nrJRDFIqnkA5lGogOCZzH8k",
+        "firstName": "Cloudlight",
+        "lastName": "Media",
+        "position": "Student at Harvard University",
+        "publicIdentifier": "cloudlight-media-4237043b9",
+        "linkedinUrl": "https://www.linkedin.com/in/cloudlight-media-4237043b9"
+      },
+      {
+        "id": "ACoAAGYp23kBPbNJuMLZLuj7t4ZpgjvEv3nObXk",
+        "firstName": "Larry",
+        "lastName": "Bettis",
+        "position": "Student at Harvard University",
+        "publicIdentifier": "larry-bettis-3090313ba",
+        "linkedinUrl": "https://www.linkedin.com/in/larry-bettis-3090313ba"
+      },
+      {
+        "id": "ACoAAGYeWOUBGnFjeNsR7XsHTxNV0xDX-pElKNI",
+        "firstName": "Kerby",
+        "lastName": "Ordoño",
+        "position": "Student at Harvard University",
+        "publicIdentifier": "kerby-ordoño-8859283b9",
+        "linkedinUrl": "https://www.linkedin.com/in/kerby-ordoño-8859283b9"
+      },
+      {
+        "id": "ACoAAGY4UjcB4tJ7Q_y6swiE8HaB2xrz8nYH8sI",
+        "firstName": "Moonlights",
+        "lastName": "Grace",
+        "position": "Student at Harvard University",
+        "publicIdentifier": "moonlights-grace-9874093ba",
+        "linkedinUrl": "https://www.linkedin.com/in/moonlights-grace-9874093ba"
+      },
+      {
+        "id": "ACoAAGYboLwB2eh4X4whwL5iGnTnftIxdm4tWhY",
+        "firstName": "Edward",
+        "lastName": "Piega",
+        "position": "Student at Harvard University",
+        "publicIdentifier": "edward-piega-7108613b9",
+        "linkedinUrl": "https://www.linkedin.com/in/edward-piega-7108613b9"
+      },
+      {
+        "id": "ACoAAGYemJ8B5xVtV-17m4hR-4yBrLWyKN1zoXo",
+        "firstName": "Serafin",
+        "lastName": "Cañafranca",
+        "position": "Estudyante sa Harvard University",
+        "publicIdentifier": "serafin-cañafranca-1bb9363b9",
+        "linkedinUrl": "https://www.linkedin.com/in/serafin-cañafranca-1bb9363b9"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAABoG0oUBYeQogqhxXOfJeN_MduEvNiRYWdw"
+    }
+  }
+}

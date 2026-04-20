@@ -1,0 +1,254 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAF3iFs0BCqBRgSPMnEEPzM0y03kIE9UahFk",
+    "profile_url": "https://www.linkedin.com/in/ACwAAF3iFs0BCqBRgSPMnEEPzM0y03kIE9UahFk"
+  },
+  "item": {
+    "id": "ACoAAF3iFs0B5KL2xqFPgPlKZSPuFcXtHpKbYgk",
+    "publicIdentifier": "joorut-karlsen-0b95b737b",
+    "linkedinUrl": "https://www.linkedin.com/in/joorut-karlsen-0b95b737b",
+    "firstName": "Joorut",
+    "lastName": "Karlsen",
+    "emails": [
+      {
+        "email": "joorut.karlsen@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Assistant at Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Nuuk, Greenland",
+      "countryCode": "GL",
+      "parsed": {
+        "text": "Nuuk, Greenland",
+        "countryCode": "GL",
+        "regionCode": null,
+        "country": "Greenland",
+        "countryFull": "Greenland",
+        "city": "Nuuk"
+      }
+    },
+    "objectUrn": "1575098061",
+    "registeredAt": "2025-08-19T09:32:23.193Z",
+    "topSkills": null,
+    "connectionsCount": 0,
+    "followerCount": 0,
+    "verified": false,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": null,
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4D03AQH_JQkKk_05Ng/profile-displayphoto-shrink_200_200/B4DZjBrC3yHwAY-/0/1755595943593?e=1776902400&v=beta&t=TWPOgzDSb6v3LmNMtW4570psp-e2W573nDeE0-bMKrw",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4D03AQH_JQkKk_05Ng/profile-displayphoto-shrink_200_200/B4DZjBrC3yHwAY-/0/1755595943593?e=1776902400&v=beta&t=TWPOgzDSb6v3LmNMtW4570psp-e2W573nDeE0-bMKrw",
+          "width": 96,
+          "height": 96,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4D03AQH_JQkKk_05Ng/profile-displayphoto-shrink_800_800/B4DZjBrC3yHwAc-/0/1755595943593?e=1776902400&v=beta&t=UOFny0RBoTSQp3074ud3ezCbyKEr9Ig-mLKPxG-ASNI",
+          "width": 96,
+          "height": 96,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4D03AQH_JQkKk_05Ng/profile-displayphoto-shrink_100_100/B4DZjBrC3yHwAU-/0/1755595943593?e=1776902400&v=beta&t=-8V5UJKLY13T-3HwhNqH9xd8dcn_C-_d2UOUmm3Kuks",
+          "width": 96,
+          "height": 96,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4D03AQH_JQkKk_05Ng/profile-displayphoto-shrink_400_400/B4DZjBrC3yHwAg-/0/1755595943592?e=1776902400&v=beta&t=p04T47CcQkK00vyW9lEz8E3LrJM_f_MS7gu-9IaiSiA",
+          "width": 96,
+          "height": 96,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D4D03AQH_JQkKk_05Ng/profile-displayphoto-shrink_200_200/B4DZjBrC3yHwAY-/0/1755595943593?e=1776902400&v=beta&t=TWPOgzDSb6v3LmNMtW4570psp-e2W573nDeE0-bMKrw",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Assistant at Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Assistant",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": null,
+        "description": null,
+        "skills": null,
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAABhKWCYBiuV3Zv9Hbt8t0j-xMRqxawBcSgw",
+        "firstName": "Kurt",
+        "lastName": "Shuster",
+        "position": "AI Research Engineer",
+        "publicIdentifier": "kurtshuster1",
+        "linkedinUrl": "https://www.linkedin.com/in/kurtshuster1"
+      },
+      {
+        "id": "ACoAACHgqNcBO7G9QHjfnTyp5v6rVbPMJ19f1dc",
+        "firstName": "Claire",
+        "lastName": "Fu",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "clairecfu",
+        "linkedinUrl": "https://www.linkedin.com/in/clairecfu"
+      },
+      {
+        "id": "ACoAAAF70jABH9DSpgp0gn2kmhMF2O2_dXo363Y",
+        "firstName": "Lauren Escher",
+        "lastName": "Lennon",
+        "position": "Legal @ Thinking Machines Lab",
+        "publicIdentifier": "lauren-escher-lennon-0944058",
+        "linkedinUrl": "https://www.linkedin.com/in/lauren-escher-lennon-0944058"
+      },
+      {
+        "id": "ACoAADYMzQABdXTSxolT2YjHmNBBSeT6YrGSQmQ",
+        "firstName": "Tarushii",
+        "lastName": "Goel",
+        "position": "Member of Technical Staff @ Thinking Machines",
+        "publicIdentifier": "tarushii-goel",
+        "linkedinUrl": "https://www.linkedin.com/in/tarushii-goel"
+      },
+      {
+        "id": "ACoAACxX5AEBYonmfz9M8tQ8jO7Nx3jIXe_VSjw",
+        "firstName": "Sophie Rose",
+        "lastName": "Shapiro",
+        "position": "Creative Operations",
+        "publicIdentifier": "sophie-rose-shapiro",
+        "linkedinUrl": "https://www.linkedin.com/in/sophie-rose-shapiro"
+      },
+      {
+        "id": "ACoAAFUBvsYBMskyWP5r-Lf7ZUccZSuFy2nCqkA",
+        "firstName": "Ankit",
+        "lastName": "Baghel",
+        "position": "--DMLT lab technician\nb.sc chemistry chemical industry lab",
+        "publicIdentifier": "ankit-baghel-40675a339",
+        "linkedinUrl": "https://www.linkedin.com/in/ankit-baghel-40675a339"
+      },
+      {
+        "id": "ACoAACHG180BXiyeZ2qJgoggx27e4iM3ajxvp18",
+        "firstName": "Andy",
+        "lastName": "Hwang",
+        "position": "thinking machines",
+        "publicIdentifier": "andrewnhwang",
+        "linkedinUrl": "https://www.linkedin.com/in/andrewnhwang"
+      },
+      {
+        "id": "ACoAABqU8psBncgwN-WH-D8F1Jq9i7OsFmcPDt4",
+        "firstName": "Jeffrey",
+        "lastName": "Tao",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "jeffrey-tao",
+        "linkedinUrl": "https://www.linkedin.com/in/jeffrey-tao"
+      },
+      {
+        "id": "ACoAABoG0oUBl986ZaMrLUASG1NhDoJyVlav4Po",
+        "firstName": "Eric",
+        "lastName": "Zhang",
+        "position": "MTS, Thinking Machines",
+        "publicIdentifier": "ekzhang",
+        "linkedinUrl": "https://www.linkedin.com/in/ekzhang"
+      },
+      {
+        "id": "ACoAAAM8-CoB4EuoMEQ2LLngdqMnC4lLbEgxTy8",
+        "firstName": "Andrew",
+        "lastName": "Straub",
+        "position": "Finance at Thinking Machines Lab",
+        "publicIdentifier": "andrew-straub-52223b16",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-straub-52223b16"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAF3iFs0BCqBRgSPMnEEPzM0y03kIE9UahFk"
+    }
+  }
+}

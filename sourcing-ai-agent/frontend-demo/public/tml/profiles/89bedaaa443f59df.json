@@ -1,0 +1,2582 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAB25W_cBqfGsQMY7wt31yiDbXyHgpVFiCiU",
+    "profile_url": "https://www.linkedin.com/in/ACwAAB25W_cBqfGsQMY7wt31yiDbXyHgpVFiCiU"
+  },
+  "item": {
+    "id": "ACoAAB25W_cBJvis01d0hMgt6XtRg-rXuYtwxKA",
+    "publicIdentifier": "alexis-aleyza-dunn",
+    "linkedinUrl": "https://www.linkedin.com/in/alexis-aleyza-dunn",
+    "firstName": "Alexis",
+    "lastName": "Dunn",
+    "emails": [],
+    "companyWebsites": [
+      {
+        "url": "http://www.arihealth.net",
+        "domain": "arihealth.net",
+        "validEmailServer": true
+      },
+      {
+        "url": "https://www.deepmind.google",
+        "domain": "deepmind.google"
+      },
+      {
+        "url": "http://www.nvidia.com",
+        "domain": "nvidia.com"
+      },
+      {
+        "url": "https://news.microsoft.com/",
+        "domain": "microsoft.com"
+      }
+    ],
+    "headline": "CEO @ ARI Health | Obstetric Care Application Development | Computational Biology & AI Research Scientist | NVIDIA Inception Program & Google Deepmind Fellow",
+    "openToWork": false,
+    "hiring": false,
+    "premium": true,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Vancouver, Washington, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "Vancouver, WA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "Washington",
+        "city": "Vancouver"
+      }
+    },
+    "objectUrn": "498686967",
+    "registeredAt": "2016-05-18T01:21:52.076Z",
+    "topSkills": "Research and Development (R&D) • Clinical Research • Artificial Intelligence (AI) •  Healthcare Strategy and Innovation • Biotechnology",
+    "connectionsCount": 2652,
+    "followerCount": 3071,
+    "verified": true,
+    "about": "Alexis is a scientist turned operator building healthcare AI and care delivery infrastructure for obstetric care. As Founder and CEO of ARI Health, she leads the end-to-end build of MaternID, connecting longitudinal clinical validation and causal modeling research with FDA-aligned product execution, provider and payer partnerships, and actuarial unit economic design for a scalable, risk-bearing maternity care model. Her long-term vision is to establish a vertically integrated, closed-loop obstetric care delivery and decision support system, built to assume total clinical and financial accountability for pregnancy outcomes.\n\n\n\nUnderpinning this vision is a technical foundation utilizing the following systems:\n\nProduct Experience: \n• Computer Vision: Real-time multimodal sensor fusion, high-fidelity feature extraction pipelines, and semantic segmentation. \n• Stochastic Systems: Non-linear state estimation (EKF/UKF) and Lie Algebra manifold optimization for predictive modeling.\n• Neural Architectures: Custom transformer-based inference engines and Multimodal RAG architecture.\n• Controls: Application of stochastic control theory to complex multimodal signal processing stacks.\n\nOperating systems: \n• Linux (Debian/Ubuntu Server, Custom Kernels)\n• Darwin (macOS Kernel / Apple Silicon environment)\n• Real-Time Linux (PREEMPT_RT)\n\nLanguages & Protocols: \n• Python (JAX/Flax), C++ (17/20), C, CUDA C, ARM64 Assembly, Swift, Bash \n• CMake, Bazel, Prometheus, OpenTelemetry \n• SQL, gRPC, Protocol Buffers \n• HL7 FHIR (R4), DICOM (DCMTK/pydicom)\n\nPlatforms:\n• JAX, PyTorch/TensorFlow, NVIDIA TensorRT, OpenCV, Apple Metal Performance Shaders\n• Google Kubernetes Engine (GKE), Google Distributed Cloud, Terraform (IaC)\n• Google Confidential VMs, Microsoft Entra ID \n\nDesign and Implementation: \n• Multimodal Inference Engine - Currently engineering a bespoke spatiotemporal reasoning module and low-latency decision engine, optimizing matrix operations for complex state estimation and high-throughput edge deployment integrating secure HL7/DICOM ingestion pipelines.",
+    "currentPosition": [
+      {
+        "companyId": "86329709",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/86329709/",
+        "companyName": "ARI Health",
+        "dateRange": {
+          "start": {
+            "month": 3,
+            "year": 2018,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "19662",
+        "companyId": "166875",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/166875/",
+        "schoolName": "Washington State University"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5603AQGdvRZtbf3PhA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1713212377382?e=1776902400&v=beta&t=Zf8NxfnkpRDkT9JHlpxZHus2Qaj2iKp-gvosOFsVEnM",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQGdvRZtbf3PhA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1713212377382?e=1776902400&v=beta&t=Zf8NxfnkpRDkT9JHlpxZHus2Qaj2iKp-gvosOFsVEnM",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQGdvRZtbf3PhA/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1713212377382?e=1776902400&v=beta&t=zVgFEswC3MHtCTgHi0bEMWguEKRa-D5tZbfbp56GX3g",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQGdvRZtbf3PhA/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1713212377382?e=1776902400&v=beta&t=ziZAgGqNKkLQyoiYuuJtBBxZkQgXiCv7MVYoMEmqnXs",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQGdvRZtbf3PhA/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1713212377382?e=1776902400&v=beta&t=XDG0oxpixI116YGAQ0oHdUMWrqO3hWCZfLFvVSo2cM4",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5616AQGI9KLgaaW1fA/profile-displaybackgroundimage-shrink_350_1400/B56ZxTrzVQLQAY-/0/1770930519238?e=1776902400&v=beta&t=iv8MjaNomzlwyBAAYRJ8acH5bZfPBlYLwlzb4sJWvTI",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5616AQGI9KLgaaW1fA/profile-displaybackgroundimage-shrink_350_1400/B56ZxTrzVQLQAY-/0/1770930519238?e=1776902400&v=beta&t=iv8MjaNomzlwyBAAYRJ8acH5bZfPBlYLwlzb4sJWvTI",
+          "width": 1400,
+          "height": 349,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5616AQGI9KLgaaW1fA/profile-displaybackgroundimage-shrink_200_800/B56ZxTrzVQLQAU-/0/1770930519238?e=1776902400&v=beta&t=2kolz5LzErrFLWpTr5BZ8cDICTyFr2LY8aqoCgbWQXA",
+          "width": 800,
+          "height": 199,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "photo": "https://media.licdn.com/dms/image/v2/D5603AQGdvRZtbf3PhA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1713212377382?e=1776902400&v=beta&t=Zf8NxfnkpRDkT9JHlpxZHus2Qaj2iKp-gvosOFsVEnM",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "CEO @ ARI Health | Obstetric Care Application Development | Computational Biology & AI Research Scientist | NVIDIA Inception Program & Google Deepmind Fellow",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Founder & Chief Executive Officer",
+        "location": "Seattle, Washington, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "ARI Health",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/ari-health/",
+        "companyId": "86329709",
+        "companyUniversalName": "ari-health",
+        "duration": "8 yrs 2 mos",
+        "description": "Transforming maternal health outcomes with continuous AI\n\nAlexis orchestrates ARI Health’s corporate strategy, capital formation, and technical R&D, driving the transition from deep-tech innovation to a scalable commercial enterprise.\n\nMilestones:\n• Secured over $40,000 in funding from NSF I-Corps and WSU, leveraging $25,000 in Microsoft Azure credits to scale the AI and blockchain infrastructure.\n• Implemented a blockchain-anchored patient data management system, ensuring immutable audit trails to exceed HIPAA requirements and prepare for FDA Software as a Medical Device (SaMD) classification.\n• Orchestrated the scalable deployment of AI-driven triage protocols across high-volume OB/GYN departments, successfully filtering clinical signals for 2,500+ patients to validate the platform's ability to detect critical maternal risks.\n• Established collaborations with major medical institutions for product validation and market readiness. Led efforts to align research outcomes with market strategies, ensuring ARI Health's solutions meet the needs of both patients and healthcare providers.\n• Cultivated strategic alliances with academic medical centers to co-develop insurance underwriting models, proving that proactive intervention significantly reduces payer costs for NICU and readmissions.\n• Engineered the proprietary \"Causal Brain\" architecture, fusing augmented reality computer vision with immunometabolic predictive modeling. Directed bioinformatics research on immunometabolism to predict pregnancy complications such as preeclampsia and gestational diabetes, advancing the technology toward clinical trials.",
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2018,
+          "text": "Mar 2018"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQEzHsmuvE_TBw/company-logo_400_400/company-logo_400_400/0/1729733727720/ari_health_logo?e=1776902400&v=beta&t=jAYtxvK0HloZmoTi1cDlri35dIcahuOszgReQl8CkaM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEzHsmuvE_TBw/company-logo_400_400/company-logo_400_400/0/1729733727720/ari_health_logo?e=1776902400&v=beta&t=jAYtxvK0HloZmoTi1cDlri35dIcahuOszgReQl8CkaM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEzHsmuvE_TBw/company-logo_200_200/company-logo_200_200/0/1729733727720/ari_health_logo?e=1776902400&v=beta&t=KQtIHIwZzUwLMJ4xGliHIhpZNtYTnypzAi2rRd8RgYE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEzHsmuvE_TBw/company-logo_100_100/company-logo_100_100/0/1729733727720/ari_health_logo?e=1776902400&v=beta&t=iXJnxfQee1WjW2vpc7HxnG0AQMMeVeCMEGcFcLJ4aLU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Deepmind Academic Fellowship ",
+        "location": null,
+        "employmentType": "Part-time",
+        "workplaceType": "Remote",
+        "companyName": "Google DeepMind",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1594050/",
+        "companyId": "1594050",
+        "duration": "5 mos",
+        "description": "Research Fellow advancing biologically grounded AI for maternal and fetal risk prediction, translating DeepMind methods into ARI Health’s causal and agentic modeling stack.\n\nResponsibilities and learning experiences:\n• Apply causal inference, probabilistic reasoning, and biological representation learning to improve pregnancy trajectory modeling, moving from retrospective chart interpretation toward forward simulation of maternal fetal risk.\n• Design and run reproducible experimentation pipelines that connect immunometabolic and endocrine signals to real world phenotypes captured through longitudinal monitoring, with emphasis on rare event prediction such as preeclampsia and related hypertensive disorders.\n• Develop evaluation frameworks for small data clinical settings, including robustness testing, calibration, and error analysis aligned to clinical actionability, safety, and low resource deployment constraints.\n• Translate research outputs into product grade requirements for ARI Health, informing data standards, labeling strategy, and evidence generation plans that support FDA aligned execution.\n• Operate as an industry research bridge, leveraging ARI Health’s platform to test autonomous and clinician in the loop agent behaviors in high stakes workflows, focusing on escalation logic, decision traceability, and outcome linked measurement.",
+        "skills": null,
+        "startDate": {
+          "month": "Dec",
+          "year": 2025,
+          "text": "Dec 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_400_400/company-logo_400_400/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=r_t5nQiM8A2L0aUP5m-PXCGPiKrvOklfisLwUFyoqwc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_400_400/company-logo_400_400/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=r_t5nQiM8A2L0aUP5m-PXCGPiKrvOklfisLwUFyoqwc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_200_200/company-logo_200_200/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=2BilPPrSvxkF02b9uz-N6ccku99E3v2Y8bAOBExGcFA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_100_100/company-logo_100_100/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=TS688J1rsD8hLhjNZfNOSDSKLf9q38j5d5Qgo7HUC_0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "NVIDIA Inception Startup Member",
+        "location": "Hillsboro, Oregon, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "Hybrid",
+        "companyName": "NVIDIA",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3608/",
+        "companyId": "3608",
+        "duration": "1 yr 6 mos",
+        "description": "Selected for the NVIDIA Inception accelerator, ARI Health leverages high-performance GPU infrastructure to fast-track the training of its autonomous agentic models. This strategic integration powers the platform’s real-time computer vision and deep learning engines, directly translating advanced computational architecture into scalable clinical precision.\n\nResponsibilities and Learning Experiences:\n• Access to Advanced Technologies: Leveraging NVIDIA's AI platforms, including the NVIDIA AI Bench and PyTorch frameworks, to develop and enhance ARI Health's AI and blockchain-based patient data management systems. \n• Technical Skill Enhancement: Expanding expertise in artificial intelligence, machine learning, and high-performance computing by utilizing NVIDIA's resources and developer tools. This includes integrating NVIDIA's Morpheus cybersecurity AI SDK to enhance the security features of our healthcare applications.\n• Collaborative Innovation: Engaging with NVIDIA experts and the broader AI startup community to share knowledge, best practices, and emerging trends. \n• Go-to-Market Support: Receiving assistance with marketing strategies, public relations, and gaining exposure to potential investors through NVIDIA's extensive network. \n• Participation in Specialized Programs: Involvement in NVIDIA's initiatives such as the AI Blueprint for vulnerability analysis and generative AI applications.",
+        "skills": null,
+        "startDate": {
+          "month": "Nov",
+          "year": 2024,
+          "text": "Nov 2024"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGV36q2EowSyw/company-logo_400_400/company-logo_400_400/0/1724881581208/nvidia_logo?e=1776902400&v=beta&t=C4mWS6vTQukkUtFskEc75guVQWnxYpncWO_y7nNqVeY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGV36q2EowSyw/company-logo_400_400/company-logo_400_400/0/1724881581208/nvidia_logo?e=1776902400&v=beta&t=C4mWS6vTQukkUtFskEc75guVQWnxYpncWO_y7nNqVeY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGV36q2EowSyw/company-logo_200_200/company-logo_200_200/0/1724881581208/nvidia_logo?e=1776902400&v=beta&t=3Eb3ojsmrCjgggr-i-ceH5i78HKTHMfU_Sw6-_Qwl9I",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGV36q2EowSyw/company-logo_100_100/company-logo_100_100/0/1724881581208/nvidia_logo?e=1776902400&v=beta&t=J1fAnNhA-iMhp5no8LIGLr70F4jKZs6zO4pSLqTQaFc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Founder Development and Mentorship Program - Microsoft for Startups Founders Hub",
+        "location": "Redmond, Washington, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "Remote",
+        "companyName": "Microsoft",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1035/",
+        "companyId": "1035",
+        "duration": "1 yr 11 mos",
+        "description": "Participating in the Microsoft for Startups Founders Hub at the \"Grow\" stage, (level 3) I leverage $25,000 in Azure credits to enhance our AI and blockchain-based patient data management system, improving data integrity and efficiency at two local pacific northwest hospitals.",
+        "skills": null,
+        "experienceGroupId": "90f6853e6ab29e3dbbfb7915ffd7f464a17c0362",
+        "startDate": {
+          "month": "Jun",
+          "year": 2024,
+          "text": "Jun 2024"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_400_400/B56ZYQ0mrGGoAc-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=47BifJmZk2QcSo7UM_a7lFIk5vBFq49cOHVWx8Pu2dE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_400_400/B56ZYQ0mrGGoAc-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=47BifJmZk2QcSo7UM_a7lFIk5vBFq49cOHVWx8Pu2dE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_200_200/B56ZYQ0mrGGoAM-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=z3mTaKdLV9rmnHGq4MakEXZj6vY7Y9TWAjx0_U7y0X0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_100_100/B56ZYQ0mrGGoAU-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=tKqX5UTArC3FajWCGY-yk-mpPeeR1obx-D3VehmNycQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Microsoft MVP Program (Valuable Professional) ",
+        "location": "Vancouver, Washington, United States",
+        "employmentType": "Part-time",
+        "workplaceType": "Hybrid",
+        "companyName": "Microsoft",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1035/",
+        "companyId": "1035",
+        "duration": "2 yrs",
+        "description": "The Microsoft Most Valuable Professionals (MVP) program recognizes exceptional community leaders for their technical expertise, leadership, speaking experience, online influence, and commitment to solving real world problems. The program connects technical community leaders with Microsoft to promote engagement, advocacy, and knowledge sharing on Microsoft products & services.",
+        "skills": null,
+        "experienceGroupId": "90f6853e6ab29e3dbbfb7915ffd7f464a17c0362",
+        "startDate": {
+          "month": "Jan",
+          "year": 2023,
+          "text": "Jan 2023"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2024,
+          "text": "Dec 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_400_400/B56ZYQ0mrGGoAc-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=47BifJmZk2QcSo7UM_a7lFIk5vBFq49cOHVWx8Pu2dE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_400_400/B56ZYQ0mrGGoAc-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=47BifJmZk2QcSo7UM_a7lFIk5vBFq49cOHVWx8Pu2dE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_200_200/B56ZYQ0mrGGoAM-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=z3mTaKdLV9rmnHGq4MakEXZj6vY7Y9TWAjx0_U7y0X0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_100_100/B56ZYQ0mrGGoAU-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=tKqX5UTArC3FajWCGY-yk-mpPeeR1obx-D3VehmNycQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "AI/ML Engineer - Healthcare AI Fellowship",
+        "location": null,
+        "employmentType": "Contract",
+        "workplaceType": "Remote",
+        "companyName": "Turmerik",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/98020815/",
+        "companyId": "98020815",
+        "duration": "5 mos",
+        "description": "Startup leveraging machine learning to optimize clinical trial workflows. Designing and implementing components of clinical trial AI workflow, ensuring compliance with FDA and IHC GCP guidelines.",
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2025,
+          "text": "Sep 2025"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2026,
+          "text": "Jan 2026"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFoWkRqKfABsA/company-logo_400_400/B4EZamENn4GQAc-/0/1746542844773/turmerik_logo?e=1776902400&v=beta&t=wd0UXvrBSqlc52bwRX0cktuIoblkYIbWbbIhgz_j_xE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFoWkRqKfABsA/company-logo_400_400/B4EZamENn4GQAc-/0/1746542844773/turmerik_logo?e=1776902400&v=beta&t=wd0UXvrBSqlc52bwRX0cktuIoblkYIbWbbIhgz_j_xE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFoWkRqKfABsA/company-logo_200_200/B4EZamENn4GQAM-/0/1746542844773/turmerik_logo?e=1776902400&v=beta&t=23xd5lErdX5DsFjVr_izXXF16d8GjkNXBIQABUdJhJM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFoWkRqKfABsA/company-logo_100_100/B4EZamENn4GQAU-/0/1746542844773/turmerik_logo?e=1776902400&v=beta&t=_Tf8KCknjsrC39hqTgtAaaOFHaD6C_sYRTIYua-iO2Q",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Tinker (Beta) Researcher-in-Residence ",
+        "location": "San Francisco Bay Area",
+        "employmentType": "Part-time",
+        "workplaceType": "Remote",
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyId": "105913171",
+        "duration": "7 mos",
+        "description": "• Invited Researcher-in-Residence for the closed beta of Tinker, a training API for fine-tuning large language models on distributed GPU infrastructure. I use Tinker to prototype and scale ARI Health’s foundation and task-specific models for maternal and fetal health risk prediction.\n• Design and implement custom loss functions, training loops, and evaluation pipelines for LLM fine-tuning, leveraging Tinker’s abstractions to run efficiently on large Qwen/Llama models.\n• Build reproducible data and RL-style training pipelines around real-world obstetric and remote-monitoring signals, aligned with ARI Health’s focus on early detection of complications such as preeclampsia and gestational diabetes.\n• Abstract and automate infrastructure for rapid experimentation, including distributed execution, checkpointing, and model export for deployment within ARI Health’s GPU-accelerated monitoring and predictive analytics stack.\n• Collaborate with Tinker’s core team as a beta partner, providing feedback on reliability, developer ergonomics, and healthcare-specific use cases to inform roadmap and feature design.",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2025,
+          "text": "Jun 2025"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2025,
+          "text": "Dec 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Community and Program Management Team",
+        "location": "Cambridge, Massachusetts, United States",
+        "employmentType": "Part-time",
+        "workplaceType": "Hybrid",
+        "companyName": "Girls Into VC",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/91516921/",
+        "companyId": "91516921",
+        "duration": "2 yrs",
+        "description": "As a leader at Girls Into VC, I focus on community building and program development to provide educational and hands-on experiences for aspiring venture capitalists.\n\nCommunity Building:\n\n• Strategic Initiatives: Spearhead community engagement through various initiatives aimed at fostering connections among aspiring VCs, founders, and industry professionals.\n• Event Planning: Organize Zoom events such as speed networking, in-person meetups, coffee chat pairings, and ambassador-led chapters in specific cities.\n• Resource Sharing: Develop and maintain a database of community members, facilitate group chats based on locations or sectors of interest, and create ways for members to submit resources for newsletters.\n• Educational Events: Host live speaker sessions and other educational events to ensure active participation and value for community members.\n• Pitch Competitions: Plan pitch competitions where female founders present their ideas, and aspiring investors gain insights from VC advice.\n\nProgram Development:\n\n• Externship Programs: Develop and coordinate externships with startup firms, providing hands-on experiences in market research, sourcing startups, operational support, and event management.\n• VC Firm Externships: Design externship opportunities with VC firms, focusing on gaining skills in market research, startup sourcing, and other essential VC functions.\n• Competitions: Organize competitions where participants either pitch startups or conduct due diligence on potential investments, with the possibility of securing sponsorships for funding prizes.\n• Pitch Events: Create opportunities for aspiring investors to attend pitch events and listen to advice from experienced VCs.\n• Open Office Hours: Implement open office hours for community members to book time with mentors or industry experts, ensuring respectful and productive use of time.",
+        "skills": null,
+        "experienceGroupId": "0d83178c6e238ff1b5271aeeb958034034e31e32",
+        "startDate": {
+          "month": "Jan",
+          "year": 2024,
+          "text": "Jan 2024"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2025,
+          "text": "Dec 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEp_FjugMIHLg/company-logo_400_400/company-logo_400_400/0/1697926185655/girls_into_vc_logo?e=1776902400&v=beta&t=UrDAEM0mJRndzVCqzx-c4tHw1WxKFUQ1oxcJOgDGD7M",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEp_FjugMIHLg/company-logo_400_400/company-logo_400_400/0/1697926185655/girls_into_vc_logo?e=1776902400&v=beta&t=UrDAEM0mJRndzVCqzx-c4tHw1WxKFUQ1oxcJOgDGD7M",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEp_FjugMIHLg/company-logo_200_200/company-logo_200_200/0/1697926185655/girls_into_vc_logo?e=1776902400&v=beta&t=Ty-STFjFfqM7hPWMYGOhfhnPJs0oZqZf2gr_qXTkf9w",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEp_FjugMIHLg/company-logo_100_100/company-logo_100_100/0/1697926185655/girls_into_vc_logo?e=1776902400&v=beta&t=UeKi2gKuAPVtZxdFh8oPw4qXSOb7gRbSMOwxR472niU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Venture Fellow",
+        "location": "Cambridge, Massachusetts, United States",
+        "employmentType": null,
+        "workplaceType": "Remote",
+        "companyName": "Girls Into VC",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/91516921/",
+        "companyId": "91516921",
+        "duration": "5 mos",
+        "description": "The Girls Into VC Fellowship was an innovative program designed to empower and educate the next generation of female leaders in the venture capital industry. Over the course of 10 weeks, this fellowship provided a deep dive into the venture capital and startup ecosystems, offering a unique blend of mentorship, hands-on experience, and comprehensive learning.\n\nResponsibilities and Learning Opportunities:\n• Engaged in an interactive curriculum covering all aspects of venture capital, including fund dynamics, strategic exit mechanisms, and investment strategies.\n• Developed expertise in evaluating startup potential through training in due diligence and market trend analysis, while gaining practical insights into the venture capital sector, including fund management and investment diversification.\n• Undertook a capstone project involving the creation of an investment memo and term sheet, simulating real-world venture capital decision-making processes.\n\nGoals:\n• Applied business acumen in real-world scenarios, particularly focusing on fostering innovation and viable solutions in healthcare for underserved populations, including rural areas.\n• Contributed meaningfully to the venture capital community by leveraging my unique insights from the healthcare industry and my passion for socially conscious investment.",
+        "skills": null,
+        "experienceGroupId": "0d83178c6e238ff1b5271aeeb958034034e31e32",
+        "startDate": {
+          "month": "Jan",
+          "year": 2024,
+          "text": "Jan 2024"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2024,
+          "text": "May 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEp_FjugMIHLg/company-logo_400_400/company-logo_400_400/0/1697926185655/girls_into_vc_logo?e=1776902400&v=beta&t=UrDAEM0mJRndzVCqzx-c4tHw1WxKFUQ1oxcJOgDGD7M",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEp_FjugMIHLg/company-logo_400_400/company-logo_400_400/0/1697926185655/girls_into_vc_logo?e=1776902400&v=beta&t=UrDAEM0mJRndzVCqzx-c4tHw1WxKFUQ1oxcJOgDGD7M",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEp_FjugMIHLg/company-logo_200_200/company-logo_200_200/0/1697926185655/girls_into_vc_logo?e=1776902400&v=beta&t=Ty-STFjFfqM7hPWMYGOhfhnPJs0oZqZf2gr_qXTkf9w",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEp_FjugMIHLg/company-logo_100_100/company-logo_100_100/0/1697926185655/girls_into_vc_logo?e=1776902400&v=beta&t=UeKi2gKuAPVtZxdFh8oPw4qXSOb7gRbSMOwxR472niU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Board Member - Pacific Northwest Leadership Council",
+        "location": "Portland, Oregon, United States",
+        "employmentType": "Part-time",
+        "workplaceType": null,
+        "companyName": "JoyRx",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/6458010/",
+        "companyId": "6458010",
+        "duration": "1 yr 8 mos",
+        "description": "• Bring a broad perspective, passion, and interest in the long-term strength of the organization.\n• Bring a variety of talent and expertise in many areas including community leadership, new business development, innovation, healthcare, technology, research, law, or marketing among other important intellectual or industry capital.\n• Provide access to community leaders, resources, volunteers, and new donors and deepen existing community relations.\n• Enhance awareness of CCA and actively garner engagement and support from the community.",
+        "skills": null,
+        "experienceGroupId": "5d92634d604b21f3637611fb53cf9076eae54860",
+        "startDate": {
+          "month": "Apr",
+          "year": 2024,
+          "text": "Apr 2024"
+        },
+        "endDate": {
+          "month": "Nov",
+          "year": 2025,
+          "text": "Nov 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQEyRzP__kifxg/company-logo_400_400/B56ZdCCA9oHUAc-/0/1749159514340/ccajoyrx_logo?e=1776902400&v=beta&t=yw8y4eTp9VlknsQ3J2ndDUtOPTfDV7Q9bc_p-G2VSao",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEyRzP__kifxg/company-logo_400_400/B56ZdCCA9oHUAc-/0/1749159514340/ccajoyrx_logo?e=1776902400&v=beta&t=yw8y4eTp9VlknsQ3J2ndDUtOPTfDV7Q9bc_p-G2VSao",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEyRzP__kifxg/company-logo_200_200/B56ZdCCA9oHUAM-/0/1749159514340/ccajoyrx_logo?e=1776902400&v=beta&t=Y-wF2__wg0-0xvbJC0-meWMBxB4wpmfMrcZhXfZoRpU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEyRzP__kifxg/company-logo_100_100/B56ZdCCA9oHUAU-/0/1749159514340/ccajoyrx_logo?e=1776902400&v=beta&t=eWSqQ5LC-0SvE-1G1nbHtjRr35q4FuwguWO8k4pxasc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Board Member - Young Professionals Counsel",
+        "location": "Portland, Oregon Metropolitan Area",
+        "employmentType": "Full-time",
+        "workplaceType": "Hybrid",
+        "companyName": "JoyRx",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/6458010/",
+        "companyId": "6458010",
+        "duration": "1 yr 8 mos",
+        "description": "Working with the Children's Cancer Association to create immediate and measurable improvements in the mental and emotional wellness of young and severely ill cancer patients.\n\nResponsibilities:\n• Actively participate as a key member of the Young Professionals Council, contributing to strategic decision-making and planning to support the mission of JoyRx and the Children's Cancer Association.\n• Collaborate with a diverse group of professionals to create and implement initiatives aimed at enhancing the mental and emotional wellness of young and severely ill cancer patients.\n• Manage fundraising efforts, organize events, and drive awareness campaigns to generate resources and support for the organization's programs.\n• Engage with the community and stakeholders to advocate for the needs of young cancer patients, ensuring their voices are heard and their challenges are addressed.\n• Committed to enhancing the support systems and resources available to these patients, ensuring they receive comprehensive care that addresses not just their physical health, but their overall quality of life.",
+        "skills": null,
+        "experienceGroupId": "5d92634d604b21f3637611fb53cf9076eae54860",
+        "startDate": {
+          "month": "Sep",
+          "year": 2022,
+          "text": "Sep 2022"
+        },
+        "endDate": {
+          "month": "Apr",
+          "year": 2024,
+          "text": "Apr 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQEyRzP__kifxg/company-logo_400_400/B56ZdCCA9oHUAc-/0/1749159514340/ccajoyrx_logo?e=1776902400&v=beta&t=yw8y4eTp9VlknsQ3J2ndDUtOPTfDV7Q9bc_p-G2VSao",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEyRzP__kifxg/company-logo_400_400/B56ZdCCA9oHUAc-/0/1749159514340/ccajoyrx_logo?e=1776902400&v=beta&t=yw8y4eTp9VlknsQ3J2ndDUtOPTfDV7Q9bc_p-G2VSao",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEyRzP__kifxg/company-logo_200_200/B56ZdCCA9oHUAM-/0/1749159514340/ccajoyrx_logo?e=1776902400&v=beta&t=Y-wF2__wg0-0xvbJC0-meWMBxB4wpmfMrcZhXfZoRpU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEyRzP__kifxg/company-logo_100_100/B56ZdCCA9oHUAU-/0/1749159514340/ccajoyrx_logo?e=1776902400&v=beta&t=eWSqQ5LC-0SvE-1G1nbHtjRr35q4FuwguWO8k4pxasc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Director of Community Relations",
+        "location": "New York City Metropolitan Area",
+        "employmentType": "Part-time",
+        "workplaceType": "Remote",
+        "companyName": "Alopecia Justice League",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/104119074/",
+        "companyId": "104119074",
+        "duration": "8 mos",
+        "description": "Primary point of contact between AJL and key external stakeholders, including schools, healthcare providers, policymakers, and community organizations. Role focuses on building, maintaining, and expanding AJL’s partner network, fostering relationships with diverse communities, and advancing awareness, advocacy, and education related to alopecia areata (AA) and hair inclusivity. Oversee the implementation of educational programs, supports recruitment efforts, and enhances AJL’s visibility through strategic outreach.\n\nKey Responsibilities:\n•  Relationship Building: Establish partnerships with hospitals, schools, medical groups, and community organizations. Foster ties with underrepresented communities and engage with policymakers and medical professionals.\n• School and Healthcare Outreach: Coordinate virtual and in-person school visits for alopecia awareness curriculum. Identify target schools and healthcare partners.\n• Advocacy and Awareness: Promote alopecia awareness through events and community outreach. Represent AJL at conferences and meetings.\n• Program Coordination: Oversee curriculum rollout, manage educational visits, and ensure alignment with AJL’s values.\n• Volunteer Engagement: Assist in recruiting volunteers and support diverse representation in leadership roles.\n• Monitoring and Evaluation: Track outreach effectiveness, review metrics, and report outcomes.\n• Event Planning and Strategic Reporting: Help organize AJL events and submit progress reports on community engagement.",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2024,
+          "text": "Jun 2024"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2025,
+          "text": "Jan 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQF5QCllSp5eYQ/company-logo_400_400/company-logo_400_400/0/1724731147537/alopeciajusticeleague_logo?e=1776902400&v=beta&t=p6zpaimIcEE8gUIeHOleHPv9v7lHnyb72J8X-GcdjjA",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQF5QCllSp5eYQ/company-logo_400_400/company-logo_400_400/0/1724731147537/alopeciajusticeleague_logo?e=1776902400&v=beta&t=p6zpaimIcEE8gUIeHOleHPv9v7lHnyb72J8X-GcdjjA",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQF5QCllSp5eYQ/company-logo_200_200/company-logo_200_200/0/1724731147537/alopeciajusticeleague_logo?e=1776902400&v=beta&t=mVuDr-wCzd0I2CoMW4_8kHJnSKh5bwR9-aBLPRq0X7I",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQF5QCllSp5eYQ/company-logo_100_100/company-logo_100_100/0/1724731147537/alopeciajusticeleague_logo?e=1776902400&v=beta&t=XcWMJw5KIW60BO_3FLVmNEPG5b6xfHmk-DKlvaVB_O4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Clinical Preceptorship - OB/GYN",
+        "location": null,
+        "employmentType": "Apprenticeship",
+        "workplaceType": "On-site",
+        "companyName": "Vancouver Clinic",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/45676/",
+        "companyId": "45676",
+        "duration": "2 yrs 9 mos",
+        "description": "My Clinical Preceptorship at Vancouver Clinic is a specialized apprenticeship focused on OB/GYN and maternal-fetal medicine. This was an immersive experience in women's health, providing a vital link between academic learning and practical, hands-on application in a clinical setting. \n\nResponsibilities and Learning Experiences:\n• Specialized Patient Care: Direct involvement in patient care within the Obstetrics and Gynecology department, including prenatal care, labor and delivery support, and postpartum care.\n• Clinical Skills Enhancement: Developing specific clinical skills pertinent to OB/GYN, such as conducting pelvic exams, fetal monitoring, and managing obstetric emergencies under the guidance of experienced practitioners.\n• Interdisciplinary Collaboration: Collaborating with obstetricians, gynecologists, midwives, and other healthcare professionals to provide comprehensive care for women at various stages of life.\n• Mentorship and Professional Development: Receiving targeted mentorship from seasoned OB/GYN clinicians, enhancing my understanding of women's health issues, patient management, and surgical procedures.\n• Application of Evidence-Based Practices: Applying the latest evidence-based practices in obstetrics and gynecology to ensure optimal patient outcomes and staying abreast of advancements in women's health care. \n\nClinical Innovation in Women's Health: This preceptorship equipped me not just to offer empathetic and informed care, but also to challenge conventional practices and introduce innovative solutions to improve the healthcare experiences of women at various life stages. My aim is to use this experience as a springboard to lead and influence the future of women's health, ensuring that care is not only high-quality but also progressive and responsive to the evolving needs of women.",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2022,
+          "text": "May 2022"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2025,
+          "text": "Jan 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGeYYf2ZXXbfw/company-logo_400_400/company-logo_400_400/0/1714582081381/vancouver_clinic_logo?e=1776902400&v=beta&t=LeW3aKJJ7jmLSwKGKqmyO4rG6SP9pDAT7aUdnPmkcGg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGeYYf2ZXXbfw/company-logo_400_400/company-logo_400_400/0/1714582081381/vancouver_clinic_logo?e=1776902400&v=beta&t=LeW3aKJJ7jmLSwKGKqmyO4rG6SP9pDAT7aUdnPmkcGg",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGeYYf2ZXXbfw/company-logo_200_200/company-logo_200_200/0/1714582081381/vancouver_clinic_logo?e=1776902400&v=beta&t=9iTo7xYmdVs6rq1BNrlDjnjeWhx68AQidB7aZSnip6w",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGeYYf2ZXXbfw/company-logo_100_100/company-logo_100_100/0/1714582081381/vancouver_clinic_logo?e=1776902400&v=beta&t=KiEbC3pO43JTC870daoFpPqNtUJsXN6dVt8eQLl1vy0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Regional Leadership Team Member - Pacific Northwest (Vancouver, Portland, Spokane / Eastern WA)",
+        "location": "Seattle, Washington, United States",
+        "employmentType": "Part-time",
+        "workplaceType": "Hybrid",
+        "companyName": "Nucleate",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/66584747/",
+        "companyId": "66584747",
+        "duration": "2 yrs 5 mos",
+        "description": "Assisting in leading the efforts to launch a new chapter of Nucleate Bio in Seattle. My responsibilities include strategizing and executing plans to foster a thriving biotech ecosystem in the Pacific Northwest, particularly in Portland and Spokane.\n\nResponsibilities:\n• Leading the efforts to launch and develop the Nucleate Bio chapter in Seattle, expanding the organization's reach and impact in the biotech sector.\n• Collaborating with a diverse team of students and professionals to create a supportive and dynamic environment for biotech entrepreneurs and startups.\n• Facilitating connections between emerging biotech leaders and industry experts, investors, and academic institutions to promote knowledge exchange and collaboration.\n• Organizing events, workshops, and networking opportunities that cater to the unique needs of the local biotech community.\n• Driving initiatives to streamline company formation processes, enabling founders to concentrate on transforming groundbreaking scientific discoveries into viable biotech ventures.\n\nImpact and Vision: Committed to nurturing a vibrant biotech ecosystem in the Pacific Northwest, I aim to accelerate the translation of cutting-edge science into impactful solutions that address pressing healthcare challenges.\n\nAbout Nucleate: Nucleate is a student-led nonprofit organization dedicated to empowering the next generation of biotech leaders. By streamlining the process of company formation, Nucleate allows founders to focus on translating innovative scientific ideas into breakthrough biotechnological solutions. Our mission is to build a vibrant community that supports the growth and success of emerging biotech ventures.",
+        "skills": null,
+        "startDate": {
+          "month": "Aug",
+          "year": 2022,
+          "text": "Aug 2022"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2024,
+          "text": "Dec 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHm4jVfaCboXQ/company-logo_400_400/company-logo_400_400/0/1632517900001/nucleatehq_logo?e=1776902400&v=beta&t=sJkyh18nWpIPCvinNdD5TRvS4XMj42bYPInEBzfqwZg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHm4jVfaCboXQ/company-logo_400_400/company-logo_400_400/0/1632517900001/nucleatehq_logo?e=1776902400&v=beta&t=sJkyh18nWpIPCvinNdD5TRvS4XMj42bYPInEBzfqwZg",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHm4jVfaCboXQ/company-logo_200_200/company-logo_200_200/0/1632517900001/nucleatehq_logo?e=1776902400&v=beta&t=gIYt1q9jMnh_Cdwgm4qHO4Lu3L7Mt3Dpdy-zd3A5cTc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHm4jVfaCboXQ/company-logo_100_100/company-logo_100_100/0/1632517900001/nucleatehq_logo?e=1776902400&v=beta&t=eW_tHHGsscWrNRzSjmVGFpdjW8LwLz2F5YRXuVSz78o",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Sinclair Scholar",
+        "location": "Vancouver, Washington, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Washington State University",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/washington-state-university/",
+        "companyId": "166875",
+        "companyUniversalName": "washington-state-university",
+        "duration": "2 yrs 7 mos",
+        "description": "• Research and Innovation: Engaged in clinical research projects, applying innovative approaches to improve maternal health outcomes. Notably, I contributed to a project titled \"Maternal Instincts,\" which aligns with the scholarship's focus on scholarly inquiry and innovation. My work spans Health Technology, Communication, Bioinformatics, and Cellular and Molecular Mechanisms. \n\n• Senior Thesis: For my thesis, I conducted an in-depth study titled \"Deciphering the Pathophysiology of Preeclampsia,\" focusing on molecular mechanisms and proteomic interactions. This research provided valuable insights into this complex condition, contributing to the broader field of maternal health.\n\n• Graduate Project: Led the \"Maternal Instincts Campaign,\" a health technology initiative for prenatal and postnatal care. This project showcased my ability to integrate research findings into practical healthcare solutions, highlighting the importance of technology in enhancing maternal care.",
+        "skills": null,
+        "experienceGroupId": "a639c2cea115ce5607bf89b99ed1df652237770a",
+        "startDate": {
+          "month": "Jun",
+          "year": 2021,
+          "text": "Jun 2021"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2023,
+          "text": "Dec 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQGfChk-QhW3ug/company-logo_400_400/company-logo_400_400/0/1631713534923/washington_state_university_logo?e=1776902400&v=beta&t=s6xvxjGKegn1GVPNeYpQ81hg0a4kfqWLn8iFGuzmdAI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGfChk-QhW3ug/company-logo_400_400/company-logo_400_400/0/1631713534923/washington_state_university_logo?e=1776902400&v=beta&t=s6xvxjGKegn1GVPNeYpQ81hg0a4kfqWLn8iFGuzmdAI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGfChk-QhW3ug/company-logo_200_200/company-logo_200_200/0/1631713534923/washington_state_university_logo?e=1776902400&v=beta&t=QSr56PcJcPAuUvroV7WTgEkR-LbPufAlbpiyDmFSjr8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGfChk-QhW3ug/company-logo_100_100/company-logo_100_100/0/1631713534923/washington_state_university_logo?e=1776902400&v=beta&t=pN_cA5qGiU643RztihfYtZGsYk1seeNVhP6M-fi3D-I",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "WSU Business Plan Competition",
+        "location": "Vancouver, Washington, United States",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Washington State University",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/washington-state-university/",
+        "companyId": "166875",
+        "companyUniversalName": "washington-state-university",
+        "duration": "1 mo",
+        "description": "As a participant in the Washington State University Business Plan Competition, I had the opportunity to put my entrepreneurial skills to the test, developing and presenting a comprehensive business plan. This competition provided a platform for aspiring entrepreneurs from WSU to showcase innovative business ideas and strategies.\n\nKey Aspects of My Participation:\n• Business Plan Development: Crafted a detailed business plan, which included market analysis, financial projections, and a strategic plan for growth. This process honed my skills in business modeling, financial planning, and market research.\n• Innovative Solution Presentation: Presented an innovative business concept, demonstrating my ability to think critically and creatively about real-world business challenges.\n• Collaboration and Networking: Collaborated with a team of fellow students, mentors, and advisors, benefiting from the diverse perspectives and expertise that each member brought to the table.\n• Feedback and Learning: Received valuable feedback from a panel of judges comprising business professionals and entrepreneurs, which was instrumental in refining my business acumen and understanding of the startup ecosystem.\n• Competitive Experience: Engaged in a competitive environment that tested not only my business knowledge but also my ability to communicate effectively and persuade potential investors and stakeholders.",
+        "skills": null,
+        "experienceGroupId": "a639c2cea115ce5607bf89b99ed1df652237770a",
+        "startDate": {
+          "month": "May",
+          "year": 2022,
+          "text": "May 2022"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2022,
+          "text": "May 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQGfChk-QhW3ug/company-logo_400_400/company-logo_400_400/0/1631713534923/washington_state_university_logo?e=1776902400&v=beta&t=s6xvxjGKegn1GVPNeYpQ81hg0a4kfqWLn8iFGuzmdAI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGfChk-QhW3ug/company-logo_400_400/company-logo_400_400/0/1631713534923/washington_state_university_logo?e=1776902400&v=beta&t=s6xvxjGKegn1GVPNeYpQ81hg0a4kfqWLn8iFGuzmdAI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGfChk-QhW3ug/company-logo_200_200/company-logo_200_200/0/1631713534923/washington_state_university_logo?e=1776902400&v=beta&t=QSr56PcJcPAuUvroV7WTgEkR-LbPufAlbpiyDmFSjr8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGfChk-QhW3ug/company-logo_100_100/company-logo_100_100/0/1631713534923/washington_state_university_logo?e=1776902400&v=beta&t=pN_cA5qGiU643RztihfYtZGsYk1seeNVhP6M-fi3D-I",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "NSF I-Corps",
+        "location": "Vancouver, Washington, United States",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Washington State University",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/washington-state-university/",
+        "companyId": "166875",
+        "companyUniversalName": "washington-state-university",
+        "duration": "4 mos",
+        "description": "As a participant in the NSF I-Corps program at Washington State University, I was awarded a $5,000 grant from the WSU Carson College of Business. This prestigious National Science Foundation-funded program is designed to foster innovation and entrepreneurial skills among faculty, students, and staff.\n\nKey Highlights:\n• Research Commercialization: Focused on evaluating the market opportunity for a research product or service, learning how to transform scientific and technological discoveries into commercially viable solutions.\n• Grant Achievement: Successfully secured a significant grant, demonstrating my project's potential and alignment with the NSF's vision of encouraging innovation and entrepreneurship in science and technology.\n• Intensive Training: Participated in an intensive program that provided coaching and mentorship, enhancing my understanding of market dynamics and business model development.\n• Collaboration: Worked closely with a diverse team of researchers, mentors, and industry experts, leveraging their collective knowledge to refine and pitch my project.\n• Market Analysis and Validation: Conducted thorough market analysis and validation processes, gaining insights into customer needs, competitive landscapes, and potential barriers to market entry.\n\nImpact and Learning Outcomes: The NSF I-Corps program was a transformative experience, significantly enhancing my entrepreneurial mindset and skill set. It provided me with a unique opportunity to explore the intersection of research, innovation, and business, laying a solid foundation for future entrepreneurial endeavors. The experience not only equipped me with practical tools for market evaluation and business strategy development but also instilled a deeper appreciation for the role of research in driving societal and economic progress.",
+        "skills": null,
+        "experienceGroupId": "a639c2cea115ce5607bf89b99ed1df652237770a",
+        "startDate": {
+          "month": "Feb",
+          "year": 2022,
+          "text": "Feb 2022"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2022,
+          "text": "May 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQGfChk-QhW3ug/company-logo_400_400/company-logo_400_400/0/1631713534923/washington_state_university_logo?e=1776902400&v=beta&t=s6xvxjGKegn1GVPNeYpQ81hg0a4kfqWLn8iFGuzmdAI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGfChk-QhW3ug/company-logo_400_400/company-logo_400_400/0/1631713534923/washington_state_university_logo?e=1776902400&v=beta&t=s6xvxjGKegn1GVPNeYpQ81hg0a4kfqWLn8iFGuzmdAI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGfChk-QhW3ug/company-logo_200_200/company-logo_200_200/0/1631713534923/washington_state_university_logo?e=1776902400&v=beta&t=QSr56PcJcPAuUvroV7WTgEkR-LbPufAlbpiyDmFSjr8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGfChk-QhW3ug/company-logo_100_100/company-logo_100_100/0/1631713534923/washington_state_university_logo?e=1776902400&v=beta&t=pN_cA5qGiU643RztihfYtZGsYk1seeNVhP6M-fi3D-I",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Substitute Teacher",
+        "location": "Washougal, Washington",
+        "employmentType": "Part-time",
+        "workplaceType": null,
+        "companyName": "Washougal School District",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/7044833/",
+        "companyId": "7044833",
+        "duration": "7 yrs 1 mo",
+        "description": "In my role as a Substitute Paraeducator at Washougal School District, I have dedicated myself to supporting the educational and developmental needs of mentally and physically handicapped children aged 4-19. This position has allowed me to contribute meaningfully to the academic and personal growth of students across various grade levels and abilities.\n\nResponsibilities and Achievements:\n• Specialized Education: Delivered tailored educational support in core subjects such as Math, English, and AP Studies - adapting teaching methods to suit the unique learning styles and needs of each student.\n• Student Empowerment: Actively worked to empower and motivate a diverse group of 50 students, fostering an environment where they feel encouraged and supported to continue their education despite their challenges.\n• Inclusive Learning Environment: Created and maintained an inclusive classroom atmosphere that values each student's individuality and promotes a sense of belonging and confidence.\n• Collaborative Support: Collaborated with lead teachers and support staff to develop and implement individualized education plans (IEPs) that address the specific educational requirements of students with disabilities.\n\nSkills and Expertise:\n• Proficient in K-12 education with a focus on special education.\n• Skilled in developing and adapting educational materials and activities to cater to a wide range of learning abilities and disabilities.\n• Strong interpersonal skills, enabling effective communication with students, parents, and colleagues.\n\nImpact and Reflection: This role has been a profound journey in understanding the diverse needs of special education students. It has honed my ability to make a tangible difference in the lives of these children, instilling in them a love for learning and a belief in their own capabilities. My experience as a Substitute Paraeducator has been incredibly rewarding, teaching me the value of patience, empathy, and creativity in education.",
+        "skills": [
+          "K-12 Education"
+        ],
+        "experienceGroupId": "4fa450bef57ebcc89af38cab9237af4b5e81c0da",
+        "startDate": {
+          "month": "Nov",
+          "year": 2016,
+          "text": "Nov 2016"
+        },
+        "endDate": {
+          "month": "Nov",
+          "year": 2023,
+          "text": "Nov 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGE774Yt9mHow/company-logo_400_400/company-logo_400_400/0/1630644276984/washougal_school_district_logo?e=1776902400&v=beta&t=XRQ2ZoQoFo9d5N0-MZ0A58iyN0kd3PCX2lepWtkq05g",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGE774Yt9mHow/company-logo_400_400/company-logo_400_400/0/1630644276984/washougal_school_district_logo?e=1776902400&v=beta&t=XRQ2ZoQoFo9d5N0-MZ0A58iyN0kd3PCX2lepWtkq05g",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGE774Yt9mHow/company-logo_200_200/company-logo_200_200/0/1630644276984/washougal_school_district_logo?e=1776902400&v=beta&t=2rT0-g9KDq_wFA6M7JgdZKUu5wWnmY34eN54vSTlYcM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGE774Yt9mHow/company-logo_100_100/company-logo_100_100/0/1630644276984/washougal_school_district_logo?e=1776902400&v=beta&t=0Srtv18YRDQZrGdtzvl7foGdukFfjdNzl7elz9BladQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Speech and Literacy Specialist",
+        "location": "Washougal, Washington, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Washougal School District",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/7044833/",
+        "companyId": "7044833",
+        "duration": "1 yr 6 mos",
+        "description": "Reading Specialist: Taught kindergarten - 5th-grade literacy lessons and generated content knowledge improvement. Taught reading lessons specifically individualized for students with various learning needs. Responsible for daily monitoring of the personal and academic growth of all students by using various progress monitoring methods.",
+        "skills": null,
+        "experienceGroupId": "4fa450bef57ebcc89af38cab9237af4b5e81c0da",
+        "startDate": {
+          "month": "Jan",
+          "year": 2020,
+          "text": "Jan 2020"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2021,
+          "text": "Jun 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGE774Yt9mHow/company-logo_400_400/company-logo_400_400/0/1630644276984/washougal_school_district_logo?e=1776902400&v=beta&t=XRQ2ZoQoFo9d5N0-MZ0A58iyN0kd3PCX2lepWtkq05g",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGE774Yt9mHow/company-logo_400_400/company-logo_400_400/0/1630644276984/washougal_school_district_logo?e=1776902400&v=beta&t=XRQ2ZoQoFo9d5N0-MZ0A58iyN0kd3PCX2lepWtkq05g",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGE774Yt9mHow/company-logo_200_200/company-logo_200_200/0/1630644276984/washougal_school_district_logo?e=1776902400&v=beta&t=2rT0-g9KDq_wFA6M7JgdZKUu5wWnmY34eN54vSTlYcM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGE774Yt9mHow/company-logo_100_100/company-logo_100_100/0/1630644276984/washougal_school_district_logo?e=1776902400&v=beta&t=0Srtv18YRDQZrGdtzvl7foGdukFfjdNzl7elz9BladQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "AP Paraeducator and Proctor",
+        "location": "Washougal, Washington, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Washougal School District",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/7044833/",
+        "companyId": "7044833",
+        "duration": "10 mos",
+        "description": "Teaching Assistant: Assisted students with class material in rigorous AP courses, graded classwork/exams, generated content knowledge improvement and moderated AP testing exams.",
+        "skills": null,
+        "experienceGroupId": "4fa450bef57ebcc89af38cab9237af4b5e81c0da",
+        "startDate": {
+          "month": "Sep",
+          "year": 2017,
+          "text": "Sep 2017"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2018,
+          "text": "Jun 2018"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGE774Yt9mHow/company-logo_400_400/company-logo_400_400/0/1630644276984/washougal_school_district_logo?e=1776902400&v=beta&t=XRQ2ZoQoFo9d5N0-MZ0A58iyN0kd3PCX2lepWtkq05g",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGE774Yt9mHow/company-logo_400_400/company-logo_400_400/0/1630644276984/washougal_school_district_logo?e=1776902400&v=beta&t=XRQ2ZoQoFo9d5N0-MZ0A58iyN0kd3PCX2lepWtkq05g",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGE774Yt9mHow/company-logo_200_200/company-logo_200_200/0/1630644276984/washougal_school_district_logo?e=1776902400&v=beta&t=2rT0-g9KDq_wFA6M7JgdZKUu5wWnmY34eN54vSTlYcM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGE774Yt9mHow/company-logo_100_100/company-logo_100_100/0/1630644276984/washougal_school_district_logo?e=1776902400&v=beta&t=0Srtv18YRDQZrGdtzvl7foGdukFfjdNzl7elz9BladQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "HOSA - Future Health Professionals - Advisor",
+        "location": "Camas, Washington, United States",
+        "employmentType": "Part-time",
+        "workplaceType": "On-site",
+        "companyName": "Camas High School",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/4428123/",
+        "companyId": "4428123",
+        "duration": "5 mos",
+        "description": "HOSA - Future Health Professionals is a global student organization that provides a unique program of leadership development, motivation, and recognition for students pursuing careers in the health professions. HOSA's mission is to empower future health professionals to become leaders in the global health community through education, collaboration, and experience.\n\n• Program Development: Design and implement educational programs and activities that align with HOSA’s objectives, enriching students' understanding of healthcare careers.\n• Leadership Training: Facilitate leadership development opportunities to help students build essential skills such as teamwork, communication, and problem-solving.\n• Career Pathway Exploration: Assist students in exploring various health career pathways, including organizing guest lectures, workshops, and field trips to medical facilities.\n• Competitions and Conferences: Prepare and accompany students to HOSA conferences and competitions, where they can showcase their skills and knowledge and connect with other health profession students and professionals.",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2023,
+          "text": "Jun 2023"
+        },
+        "endDate": {
+          "month": "Oct",
+          "year": 2023,
+          "text": "Oct 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHCP02yp2fJEA/company-logo_400_400/company-logo_400_400/0/1630582473203?e=1776902400&v=beta&t=nhwvHnv4i--E6oWA-eS0W09lMin4jCCCW8L8gua477Y",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHCP02yp2fJEA/company-logo_400_400/company-logo_400_400/0/1630582473203?e=1776902400&v=beta&t=nhwvHnv4i--E6oWA-eS0W09lMin4jCCCW8L8gua477Y",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHCP02yp2fJEA/company-logo_200_200/company-logo_200_200/0/1630582473203?e=1776902400&v=beta&t=ZoKuGK5dTvxK-efyjBiLIijgqjNS6WojseYMn7xzdww",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHCP02yp2fJEA/company-logo_100_100/company-logo_100_100/0/1630582473203?e=1776902400&v=beta&t=LupsVNJQ-PJU9TjldP-mq0A5Sx5ikOh8P18evDUHDJs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Surgical Technician / Clinical Support",
+        "location": "Washougal, Washington",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Orchard Hills Animal Hospital",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Orchard+Hills+Animal+Hospital",
+        "duration": "2 yrs 1 mo",
+        "description": "• Advanced Clinical and Surgical Support: Proficient in a variety of technical tasks including administering medications, performing phlebotomy, conducting laboratory tests with microscopy, and preparing surgical equipment. Assisted in surgeries, ensuring efficient and safe procedural execution.\n• Anesthesia and Surgical Assistance: Skilled in assisting with anesthesia, including endotracheal intubation, and actively contributing to patient safety during surgical procedures. Utilized ultrasound technology for cystoscopies and operated x-ray machines for diagnostic and intraoperative purposes.\n• Clinical Documentation: Maintained meticulous records of patient information, surgical procedures, and post-operative care. Demonstrated a high standard of care and attention to detail in charting patient charts, ensuring accuracy and thoroughness in documentation. \n• Infection Prevention: Applied strict infection control techniques to maintain a sterile environment in the operating room, safeguarding against contamination and infection risks.\n• Patient-Centered Care: Acted as a primary point of contact for patients and their families, providing empathetic communication and addressing inquiries and concerns. Ensured patient comfort and understanding by clearly explaining procedures and post-operative care.",
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2019,
+          "text": "Jan 2019"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2021,
+          "text": "Jan 2021"
+        }
+      },
+      {
+        "position": "Medical Assistant",
+        "location": "Pinehurst, North Carolina",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "West Pine Middle School",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/8307783/",
+        "companyId": "8307783",
+        "duration": "8 mos",
+        "description": "• Clinical Medical Assistance: Performed catheterization procedures, ensuring patient comfort and adherence to clinical safety standards. Conducted and recorded basic patient vitals, including blood pressure, temperature, heart rate, and respiratory rate, providing essential data for patient care plans.\n• Medical Education Support: Facilitated knowledge improvement in medical subjects, employing various teaching methods tailored to individual learning needs. Responsible for daily monitoring of patients' educational and personal growth within a healthcare setting, utilizing diverse progress monitoring techniques to assess and support their development.\n• Interdisciplinary Collaboration: Regularly collaborated with a multidisciplinary medical team, including nurses, physicians, and therapists, to discuss and implement accommodations for patients with special needs. Participated in monthly meetings to review and optimize patient care plans, ensuring that medical, educational, and personal needs of patients with special needs were adequately addressed and supported.",
+        "skills": null,
+        "startDate": {
+          "month": "Oct",
+          "year": 2017,
+          "text": "Oct 2017"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2018,
+          "text": "May 2018"
+        },
+        "companyLogo": null
+      },
+      {
+        "position": "Community Outreach and Education Intern",
+        "location": "Key West, Florida, United States",
+        "employmentType": "Internship",
+        "workplaceType": "On-site",
+        "companyName": "Reef Relief",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/55038383/",
+        "companyId": "55038383",
+        "duration": "4 mos",
+        "description": "• Educational Program Development: Crafted and delivered engaging lesson plans on marine biology, conservation, and oceanography to over 50 children aged 6 to 12. My approach combined educational rigor with interactive learning methods to ignite interest in marine science.\n• Interactive Learning Experiences: Facilitated hands-on activities, including dissections and ocean acidification demonstrations, enhancing the students' understanding and engagement with marine environmental issues.\n• Fundraising and Event Management: Successfully organized six fundraising events, demonstrating strong event planning and management skills. These events collectively raised over $10,000 in just three months, significantly contributing to the organization's funding goals.\n• Community Engagement: Played a key role in achieving a 30% increase in the giving goal target for 2018 and contributed to the organization's recognition as “Best in Key West.” My efforts included cultivating relationships with donors and sponsors, strengthening community support for Reef Relief’s initiatives.\n• Donor Relationship Building: Actively engaged with donors and sponsors, fostering a network of support that was crucial for the organization's sustainability and growth.",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2017,
+          "text": "May 2017"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2017,
+          "text": "Aug 2017"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQH1iWwyJVQtmg/company-logo_400_400/company-logo_400_400/0/1630565378082?e=1776902400&v=beta&t=DC-FYd5t_BLl73DNnQFbf_VGhXyzZSMFmhXkgZVnj0k",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQH1iWwyJVQtmg/company-logo_400_400/company-logo_400_400/0/1630565378082?e=1776902400&v=beta&t=DC-FYd5t_BLl73DNnQFbf_VGhXyzZSMFmhXkgZVnj0k",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQH1iWwyJVQtmg/company-logo_200_200/company-logo_200_200/0/1630565378082?e=1776902400&v=beta&t=umVg6_R9amopLYVGtGLD9y23XUPhG0BSblenRavoyeM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQH1iWwyJVQtmg/company-logo_100_100/company-logo_100_100/0/1630565378082?e=1776902400&v=beta&t=tm_5PBftRXAJeYEc3d2Teu6yZULDBL4srW1SUSMhmWc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior Molecular Research Scientist & Laboratory Operations Coordinator",
+        "location": "Corvallis, Oregon, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Oregon State University",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/165337/",
+        "companyId": "165337",
+        "duration": "2 yrs 3 mos",
+        "description": "In my role as a Senior Molecular Research Scientist, I applied my expertise in molecular biology, genetics, and biostatistics to spearhead groundbreaking research. I was integral in conducting qualitative studies in marine biology, particularly focusing on bivalve mollusk growth and coral bleaching, while assessing environmental impacts on marine ecosystems.\n\nResponsibilities and Contributions:\n• Research: Conducted two sensitive qualitative studies on bivalve mollusk growth and coral bleaching, providing critical insights into marine biology and ecology. Examined the effects of harmful algal blooms in Panama and the Maldivian community.\n• Experimental Design: Developed and refined experimental formulas, which were approved by the principal investigator and successfully implemented in various studies.\n• Scientific Publications: Actively assisted in the preparation and submission of multiple scientific publications, contributing to the wider body of knowledge in the field.\n• Presentation of Findings: Presented research findings in various settings, including seminars and conferences, adeptly tailoring presentations for both brief (2 minutes) and detailed (10 minutes) formats.\n• Laboratory Management: Installed and calibrated over 10 pieces of complex laboratory equipment, including instrumentation and microscopes, ensuring optimal functionality for research activities. Streamlined inventory control, processes, and protocols, enhancing laboratory efficiency and productivity.\n• Expertise in Techniques: Proficient in qualitative chemistry, molecular DNA & PCR extraction testing, cell culture, restriction mapping, and sequencing.",
+        "skills": null,
+        "experienceGroupId": "9649652cd548a55ac9503e7e512c45a42220207d",
+        "startDate": {
+          "month": "Feb",
+          "year": 2015,
+          "text": "Feb 2015"
+        },
+        "endDate": {
+          "month": "Apr",
+          "year": 2017,
+          "text": "Apr 2017"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEtLpPkfugtXg/company-logo_400_400/company-logo_400_400/0/1631354574889?e=1776902400&v=beta&t=1McyShQ1qYOcC_u26PgoxnWE_Pgho9YAiFR7KxPU8vU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEtLpPkfugtXg/company-logo_400_400/company-logo_400_400/0/1631354574889?e=1776902400&v=beta&t=1McyShQ1qYOcC_u26PgoxnWE_Pgho9YAiFR7KxPU8vU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEtLpPkfugtXg/company-logo_200_200/company-logo_200_200/0/1631354574889?e=1776902400&v=beta&t=g7PM8ByAZnp_-RBxkzLeEBrK5i6xO7A84HCWdH18NaU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEtLpPkfugtXg/company-logo_100_100/company-logo_100_100/0/1631354574889?e=1776902400&v=beta&t=PX9EJAo-Ys6zeqTYN7xh1N1k6MacBSxVRNTbSVdS4Tw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Molecular Biology Research Scientist - Molecular Biology Lab for Marine Invertebrates",
+        "location": "Corvallis, oregon",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Oregon State University",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/165337/",
+        "companyId": "165337",
+        "duration": "1 yr 2 mos",
+        "description": "• Assisting graduate students with thesis experiments - analyzing various coral reef species for molecular mechanisms that may be associated with thermal acclimation potential.\n• Experimental design and procedures, qPCR and DNA extractions data analysis\n• Technical Experience: PCR and RELP analysis, DNA sequencing, DNA extraction, gram staining and microscopic examination, niche modeling, species richness mapping, DNA barcoding, isolated and maintained cultures of bacteria and other micro-organisms. Set up and calibrated complex instrumentation, equipment and microscopes. Used processes following standardized formulas, and created experimental formulas.\n• Instrument Experience: Veriti Thermalcyclers, Roche Light Cyclers, QIAcube automated nucleic acid extraction, Qiagility liquid handler, Qiaxcel Advanced Systems capillary electrophoresis device.",
+        "skills": null,
+        "experienceGroupId": "9649652cd548a55ac9503e7e512c45a42220207d",
+        "startDate": {
+          "month": "Jan",
+          "year": 2014,
+          "text": "Jan 2014"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2015,
+          "text": "Feb 2015"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEtLpPkfugtXg/company-logo_400_400/company-logo_400_400/0/1631354574889?e=1776902400&v=beta&t=1McyShQ1qYOcC_u26PgoxnWE_Pgho9YAiFR7KxPU8vU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEtLpPkfugtXg/company-logo_400_400/company-logo_400_400/0/1631354574889?e=1776902400&v=beta&t=1McyShQ1qYOcC_u26PgoxnWE_Pgho9YAiFR7KxPU8vU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEtLpPkfugtXg/company-logo_200_200/company-logo_200_200/0/1631354574889?e=1776902400&v=beta&t=g7PM8ByAZnp_-RBxkzLeEBrK5i6xO7A84HCWdH18NaU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEtLpPkfugtXg/company-logo_100_100/company-logo_100_100/0/1631354574889?e=1776902400&v=beta&t=PX9EJAo-Ys6zeqTYN7xh1N1k6MacBSxVRNTbSVdS4Tw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "NOAA Laboratory (GSL)/ Summer Research Program",
+        "location": "Corvallis, Oregon, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "Hybrid",
+        "companyName": "NOAA: National Oceanic & Atmospheric Administration",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/165204/",
+        "companyId": "165204",
+        "duration": "6 mos",
+        "description": "Earned a NOAA Scientific Diving certification and Nitrox Diving Certification, enabling the collection and rehabilitation of coral samples for a study that scrutinized their biochemical responses at different pH levels, uncovering unique metabolic profiles.\n\nhttps://www.youtube.com/watch?v=Ze82UwyhfRw\nhttps://www.omao.noaa.gov/ndp/noaa-diving-program-training\nhttps://research.oregonstate.edu/diving",
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2016,
+          "text": "Jan 2016"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2016,
+          "text": "Jun 2016"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQG9V63O4sKUzw/company-logo_400_400/company-logo_400_400/0/1648731139380/noaa_logo?e=1776902400&v=beta&t=N4w0BXA6dbiRyOE3XF-L29HDBp2urW72Lasqs7kyF0A",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQG9V63O4sKUzw/company-logo_400_400/company-logo_400_400/0/1648731139380/noaa_logo?e=1776902400&v=beta&t=N4w0BXA6dbiRyOE3XF-L29HDBp2urW72Lasqs7kyF0A",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQG9V63O4sKUzw/company-logo_200_200/company-logo_200_200/0/1648731139379/noaa_logo?e=1776902400&v=beta&t=UOEcm5GDbbCTW7bgQZVHLmguLYwX9AhPBQXLg-AI3Oc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQG9V63O4sKUzw/company-logo_100_100/company-logo_100_100/0/1648731139379/noaa_logo?e=1776902400&v=beta&t=clpag3gDMVHg3WL4wiDVxplPj8TZfqrfILbO59FIPRI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Bioinformatics and Field Research Scientist (Seasonal)",
+        "location": "Estacada, Oregon",
+        "employmentType": "Internship",
+        "workplaceType": null,
+        "companyName": "U.S. Department of Energy, Office of Scientific and Technical Information",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/565727/",
+        "companyId": "565727",
+        "duration": "4 mos",
+        "description": "• Performing numerous types of habitat assessments and producing research reports for collected data\n• Conducted in-depth habitat assessments across varied ecosystems using scientific methods, encompassing field studies, data collection, and analysis of species diversity and environmental factors.\n• Synthesized data into comprehensive reports, providing key insights for environmental strategies and policy-making. These reports were instrumental in shaping conservation efforts.\n• Utilized advanced data analytics to transform raw data into interpretable formats. This included creating detailed tables, informative graphs, and visual representations to elucidate complex ecological patterns and relationships.\n• Proficient in Geographic Information Systems (GIS), applied these tools to analyze spatial data, producing accurate and informative maps. This involved integrating various data layers to illustrate ecological phenomena, habitat distribution, and environmental changes over time.\n• Covered a broad spectrum of disciplines in environmental science and engineering, including:\n- Ecology: Studied interactions between organisms and their environments, focusing on ecosystem dynamics and biodiversity.\n- Botany: Investigated plant life, understanding species distribution, and plant-environment interactions.\n- Hydrology: Examined water cycle processes, including water distribution, movement, and properties, essential for understanding aquatic habitats.\n- Wildlife Conservation: Focused on preserving and managing wildlife species and their habitats, employing conservation biology principles.\n- Cartography: Created maps for ecological and conservation purposes, using GIS to represent spatial information effectively.\n\nPDF attachment - 2014 Upper Clear Creek Survey: Key habitat findings and sustainable management tips.",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2014,
+          "text": "Jun 2014"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2014,
+          "text": "Sep 2014"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQH84TpwDTOcAA/company-logo_400_400/company-logo_400_400/0/1631326013993?e=1776902400&v=beta&t=JLsfh6UZ2EC6VsFbKGz-cnvWZbdcePwoHeMp_Zt8gH4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQH84TpwDTOcAA/company-logo_400_400/company-logo_400_400/0/1631326013993?e=1776902400&v=beta&t=JLsfh6UZ2EC6VsFbKGz-cnvWZbdcePwoHeMp_Zt8gH4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQH84TpwDTOcAA/company-logo_200_200/company-logo_200_200/0/1631326013993?e=1776902400&v=beta&t=8AvUIGgssyLQ07jNLIZNtOWySbng9Yx0LsSU-FlEIqk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQH84TpwDTOcAA/company-logo_100_100/company-logo_100_100/0/1631326013993?e=1776902400&v=beta&t=SdjaMs9eBGI19s49J0ItIsShPPZA7XcssiNdeWp0bRU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Scientist",
+        "location": "Corvallis, Oregon Area",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "The National Institutes of Health",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/165107/",
+        "companyId": "165107",
+        "duration": "10 mos",
+        "description": "•  Contributed to crop and soil research leveraging chemistry, botany, ecology, and advanced mathematical models to evaluate the impact of biochar on agricultural methods and soil health, integrating findings from diverse international field studies.\n•  Implemented breeding study insights to enhance crop quality and yield, focusing on genetic disease resistance, integrated pest management, and tailored soil/climate adaptability solutions.\n•  Executed comprehensive scientific analyses, including assessments of chemical properties such as melting points and viscosity, and managed extensive datasets for in-depth evaluation.\n•  Operated and oversaw the greenhouse facility, ensuring optimal conditions for experimental integrity.   Prepared and administered chemical solutions, both standard and experimental, adhering to rigorous scientific protocols.\n\nAdvanced Technical Skills:\n•  Data analysis and interpretation, with a focus on chemical associations and interactions.\n•  Preparation and application of chemical solutions, adhering to established formulas and developing innovative experimental mixtures.\n•  Comprehensive analytical techniques for soil, plant, and water samples, encompassing grid sampling, material preparation, standard solutions, acid-base titrations, UV spectrophotometry, pH testing, viscosity, and melting point analysis.\n•  Precision calibration and maintenance of laboratory equipment, ensuring accuracy and reliability in experimental results.",
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2013,
+          "text": "Sep 2013"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2014,
+          "text": "Jun 2014"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFyi67O6Oma4g/company-logo_400_400/company-logo_400_400/0/1638911355550/national_institutes_of_health_logo?e=1776902400&v=beta&t=EJ44Be1cI_8qONTBMeL3TqQOSlmHPG-bfuJxHQFa9tg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFyi67O6Oma4g/company-logo_400_400/company-logo_400_400/0/1638911355550/national_institutes_of_health_logo?e=1776902400&v=beta&t=EJ44Be1cI_8qONTBMeL3TqQOSlmHPG-bfuJxHQFa9tg",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFyi67O6Oma4g/company-logo_200_200/company-logo_200_200/0/1638911355550/national_institutes_of_health_logo?e=1776902400&v=beta&t=HX7AtNKntQcla4n1pnCoJ7WLot0FjfyqLAEAwRdBcAk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFyi67O6Oma4g/company-logo_100_100/company-logo_100_100/0/1638911355550/national_institutes_of_health_logo?e=1776902400&v=beta&t=TveEQPXBLMBKWCaUGLg2saZg_GBlXi4ogBJn39Eiku8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Environmental Community Outreach Coordinator",
+        "location": "Seattle, Washington, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "PADI AWARE Foundation",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/200423/",
+        "companyId": "200423",
+        "duration": "6 mos",
+        "description": "Orchestrated scuba diving initiatives aimed at protecting ocean ecosystems. My responsibilities encompassed organizing environmental clean-up events and mobilizing volunteers to make a tangible impact on marine conservation. https://www.padi.com/aware\n\nKey Responsibilities and Achievements:\n• Event Management: Successfully managed over 5 major environmental clean-up events, demonstrating strong organizational and leadership skills. These events were crucial in engaging the scuba diving community in marine conservation efforts.\n• Volunteer Coordination: Mobilized and led more than 85 volunteers, creating a collaborative and effective team dedicated to ocean protection. My role involved coordinating volunteer activities, providing guidance and support to ensure successful event execution.\n• Conservation Impact: Played a significant role in the collection and proper disposal of over 80 pounds of litter from various locations across the Pacific Northwest. These efforts not only cleaned the oceans but also raised awareness about the importance of marine conservation.\n• Community Engagement: Actively engaged with the local community to increase awareness of ocean conservation issues. My efforts included educational outreach, fostering a deeper understanding of the impact of human activities on marine environments.\n• Advocacy and Awareness: Advocated for marine conservation, using the platform provided by PADI AWARE to highlight the importance of preserving ocean health and biodiversity.",
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2013,
+          "text": "Jan 2013"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2013,
+          "text": "Jun 2013"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGxiskD1NMgVQ/company-logo_400_400/company-logo_400_400/0/1634824964692/padi_aware_foundation_logo?e=1776902400&v=beta&t=8IbUTqF84QkIdYUmFA0oGim6hSpJ0xF4xy-VfPGCPcc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGxiskD1NMgVQ/company-logo_400_400/company-logo_400_400/0/1634824964692/padi_aware_foundation_logo?e=1776902400&v=beta&t=8IbUTqF84QkIdYUmFA0oGim6hSpJ0xF4xy-VfPGCPcc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGxiskD1NMgVQ/company-logo_200_200/company-logo_200_200/0/1634824964692/padi_aware_foundation_logo?e=1776902400&v=beta&t=I7dlqqvSrjUWKbrSvp2LqYt1XLazYWXhhIqJ6sVxdaU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGxiskD1NMgVQ/company-logo_100_100/company-logo_100_100/0/1634824964692/padi_aware_foundation_logo?e=1776902400&v=beta&t=9U8QP3rmHTADqV8284kbbzOgmULuh2UkgN9zA6kCJLg",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Washington State University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/166875/",
+        "schoolId": "166875",
+        "degree": "Graduate Course Work",
+        "fieldOfStudy": "Biomathematics",
+        "skills": [],
+        "description": "Advanced Graph Theory MATH 554, Doctoral-level research in Mathematics MATH 600, Computational Biology BIOL 474, Bioinformatics (biochemistry & AI/ML focused) MBIOS 578, Health Communication COMSTRAT 478, Health Policy COMHLTH 572. All scholarship funded & research focused.",
+        "insights": "Grade: 4.0",
+        "startDate": {
+          "month": "Mar",
+          "year": 2024,
+          "text": "Mar 2024"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2025,
+          "text": "Jan 2025"
+        },
+        "period": "Mar 2024 - Jan 2025",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQGfChk-QhW3ug/company-logo_400_400/company-logo_400_400/0/1631713534923/washington_state_university_logo?e=1776902400&v=beta&t=s6xvxjGKegn1GVPNeYpQ81hg0a4kfqWLn8iFGuzmdAI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGfChk-QhW3ug/company-logo_400_400/company-logo_400_400/0/1631713534923/washington_state_university_logo?e=1776902400&v=beta&t=s6xvxjGKegn1GVPNeYpQ81hg0a4kfqWLn8iFGuzmdAI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGfChk-QhW3ug/company-logo_200_200/company-logo_200_200/0/1631713534923/washington_state_university_logo?e=1776902400&v=beta&t=QSr56PcJcPAuUvroV7WTgEkR-LbPufAlbpiyDmFSjr8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGfChk-QhW3ug/company-logo_100_100/company-logo_100_100/0/1631713534923/washington_state_university_logo?e=1776902400&v=beta&t=pN_cA5qGiU643RztihfYtZGsYk1seeNVhP6M-fi3D-I",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Washington State University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/166875/",
+        "schoolId": "166875",
+        "degree": "Bachelor's degree",
+        "fieldOfStudy": "Biology - 3.94 Major GPA",
+        "skills": [],
+        "description": "Studies focused on clinical anomaly detection and graph-based modeling applied to precision medicine and high-dimensional healthcare data, emphasizing the development of predictive models and scalable implementations to inform evidence-based health policy.",
+        "startDate": {
+          "year": 2019,
+          "text": "2019"
+        },
+        "endDate": {
+          "year": 2023,
+          "text": "2023"
+        },
+        "period": "2019 - 2023",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQGfChk-QhW3ug/company-logo_400_400/company-logo_400_400/0/1631713534923/washington_state_university_logo?e=1776902400&v=beta&t=s6xvxjGKegn1GVPNeYpQ81hg0a4kfqWLn8iFGuzmdAI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGfChk-QhW3ug/company-logo_400_400/company-logo_400_400/0/1631713534923/washington_state_university_logo?e=1776902400&v=beta&t=s6xvxjGKegn1GVPNeYpQ81hg0a4kfqWLn8iFGuzmdAI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGfChk-QhW3ug/company-logo_200_200/company-logo_200_200/0/1631713534923/washington_state_university_logo?e=1776902400&v=beta&t=QSr56PcJcPAuUvroV7WTgEkR-LbPufAlbpiyDmFSjr8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGfChk-QhW3ug/company-logo_100_100/company-logo_100_100/0/1631713534923/washington_state_university_logo?e=1776902400&v=beta&t=pN_cA5qGiU643RztihfYtZGsYk1seeNVhP6M-fi3D-I",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Stanford University School of Medicine",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1790/",
+        "schoolId": "1790",
+        "degree": "Data Science in Precision Medicine and Cloud Computing",
+        "fieldOfStudy": "Fundamentals of Al/ML in Precision Medicine",
+        "skills": [],
+        "description": "All scholarship funded.",
+        "insights": "Grade: Certificate",
+        "startDate": null,
+        "endDate": {
+          "month": "Feb",
+          "year": 2024,
+          "text": "Feb 2024"
+        },
+        "period": "Feb 2024",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQH74V3iDB5G5Q/company-logo_400_400/company-logo_400_400/0/1630632331199/stanford_university_school_of_medicine_logo?e=1776902400&v=beta&t=Nhhs3e0p29I7Mu4Z9tk43BgtuBELjRmD1ky3ilXoaps",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH74V3iDB5G5Q/company-logo_400_400/company-logo_400_400/0/1630632331199/stanford_university_school_of_medicine_logo?e=1776902400&v=beta&t=Nhhs3e0p29I7Mu4Z9tk43BgtuBELjRmD1ky3ilXoaps",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH74V3iDB5G5Q/company-logo_200_200/company-logo_200_200/0/1630632331199/stanford_university_school_of_medicine_logo?e=1776902400&v=beta&t=U_bCauvn8c0vmZZ774iISG-QbTjDB-zClgT6ksAgGBo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH74V3iDB5G5Q/company-logo_100_100/company-logo_100_100/0/1630632331199/stanford_university_school_of_medicine_logo?e=1776902400&v=beta&t=CNnTxe4OffQTia950ElXfRUHtlL_2WPg0wWQ-FR6eRU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [
+      {
+        "title": "Teaching Certificate - Emergency Teacher",
+        "issuedAt": "Issued Mar 2022",
+        "link": null,
+        "issuedBy": "Washington State Board of Education",
+        "issuedByLink": "https://www.linkedin.com/company/19156124/",
+        "issuedByLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQFGftO7qXTlIg/company-logo_400_400/B56ZqZFq0zJQAc-/0/1763504997411/washington_state_board_of_education_logo?e=1776902400&v=beta&t=45vuBaSD6Ue3dc2O_MYu3_0E3O8ncclau2tnil7DVP4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFGftO7qXTlIg/company-logo_400_400/B56ZqZFq0zJQAc-/0/1763504997411/washington_state_board_of_education_logo?e=1776902400&v=beta&t=45vuBaSD6Ue3dc2O_MYu3_0E3O8ncclau2tnil7DVP4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFGftO7qXTlIg/company-logo_200_200/B56ZqZFq0zJQAM-/0/1763504997411/washington_state_board_of_education_logo?e=1776902400&v=beta&t=IotVaYFXcUufYKxxA6oi9LYoOif12pkX-J0WHpakjFg",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFGftO7qXTlIg/company-logo_100_100/B56ZqZFq0zJQAU-/0/1763504997411/washington_state_board_of_education_logo?e=1776902400&v=beta&t=-5eo7MiLR6EBbUbQ_eSL0YfM6bAGYTTO-6NjSVKApdw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "title": "WE-REACH - Cohort Fellow - Certificate of Completion",
+        "issuedAt": "Issued May 2022",
+        "link": null,
+        "issuedBy": "University of Washington",
+        "issuedByLink": "https://www.linkedin.com/company/2584/",
+        "issuedByLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEMmhF9TqUCgA/company-logo_400_400/company-logo_400_400/0/1630545704089/university_of_washington_logo?e=1776902400&v=beta&t=UgMit_quQ3GsgGT3-3A6kXvDwnn-KVRW_u_HRd4RLTg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEMmhF9TqUCgA/company-logo_400_400/company-logo_400_400/0/1630545704089/university_of_washington_logo?e=1776902400&v=beta&t=UgMit_quQ3GsgGT3-3A6kXvDwnn-KVRW_u_HRd4RLTg",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEMmhF9TqUCgA/company-logo_200_200/company-logo_200_200/0/1630545704089/university_of_washington_logo?e=1776902400&v=beta&t=oLn8mUaUFi_GW9rfy_TVuoJ0FPajqWaQ14uovZsGklk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEMmhF9TqUCgA/company-logo_100_100/company-logo_100_100/0/1630545704089/university_of_washington_logo?e=1776902400&v=beta&t=RUr9ZHiq7JXufQGL_LdkRWkSpWGB-J-AGwcl4F0cy6Y",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "title": "ACRP Certified Professional (ACRP-CP)",
+        "issuedAt": "Issued Jan 2024",
+        "link": null,
+        "issuedBy": "ACRP - Association of Clinical Research Professionals",
+        "issuedByLink": "https://www.linkedin.com/company/88282/",
+        "issuedByLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEARn8EE8ySzA/company-logo_400_400/B4EZuT_DkrKUAc-/0/1767714339706/association_of_clinical_research_professionals_logo?e=1776902400&v=beta&t=FMHpOKoqWjDVlV6ryeb6_cR84VpuNUioS9KvAeiuUSo",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEARn8EE8ySzA/company-logo_400_400/B4EZuT_DkrKUAc-/0/1767714339706/association_of_clinical_research_professionals_logo?e=1776902400&v=beta&t=FMHpOKoqWjDVlV6ryeb6_cR84VpuNUioS9KvAeiuUSo",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEARn8EE8ySzA/company-logo_200_200/B4EZuT_DkrKUAM-/0/1767714339706/association_of_clinical_research_professionals_logo?e=1776902400&v=beta&t=7JOhTjmWFv8EPQvuH_PsUi4oh3yOd9QB-B4gUOrEIQk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEARn8EE8ySzA/company-logo_100_100/B4EZuT_DkrKUAU-/0/1767714339706/association_of_clinical_research_professionals_logo?e=1776902400&v=beta&t=mI9tgCLZmGbxQ6XT2no1nKZXsNAF0qMlPummvH-g0UA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "title": "CoMotion - Cohort Fellow - Certificate of Completion",
+        "issuedAt": "Issued May 2022",
+        "link": null,
+        "issuedBy": "University of Washington",
+        "issuedByLink": "https://www.linkedin.com/company/2584/",
+        "issuedByLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEMmhF9TqUCgA/company-logo_400_400/company-logo_400_400/0/1630545704089/university_of_washington_logo?e=1776902400&v=beta&t=UgMit_quQ3GsgGT3-3A6kXvDwnn-KVRW_u_HRd4RLTg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEMmhF9TqUCgA/company-logo_400_400/company-logo_400_400/0/1630545704089/university_of_washington_logo?e=1776902400&v=beta&t=UgMit_quQ3GsgGT3-3A6kXvDwnn-KVRW_u_HRd4RLTg",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEMmhF9TqUCgA/company-logo_200_200/company-logo_200_200/0/1630545704089/university_of_washington_logo?e=1776902400&v=beta&t=oLn8mUaUFi_GW9rfy_TVuoJ0FPajqWaQ14uovZsGklk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEMmhF9TqUCgA/company-logo_100_100/company-logo_100_100/0/1630545704089/university_of_washington_logo?e=1776902400&v=beta&t=RUr9ZHiq7JXufQGL_LdkRWkSpWGB-J-AGwcl4F0cy6Y",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "title": "NSF I-Corps - Certificate of Completion",
+        "issuedAt": "Issued Apr 2022",
+        "link": null,
+        "issuedBy": "National Science Foundation (NSF)",
+        "issuedByLink": "https://www.linkedin.com/company/8599/",
+        "issuedByLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQG-wcpJntMCew/company-logo_400_400/company-logo_400_400/0/1640798348289/national_science_foundation_logo?e=1776902400&v=beta&t=Rm8Z6YFZDdFNB4NCJ4hwy7-iTqh5TyQIpWTCrwPBCqU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQG-wcpJntMCew/company-logo_400_400/company-logo_400_400/0/1640798348289/national_science_foundation_logo?e=1776902400&v=beta&t=Rm8Z6YFZDdFNB4NCJ4hwy7-iTqh5TyQIpWTCrwPBCqU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQG-wcpJntMCew/company-logo_200_200/company-logo_200_200/0/1640798348289/national_science_foundation_logo?e=1776902400&v=beta&t=fdypKjdRmU4Rd98DIrNWO6gFMrR7T9Bxmf6U0Ykoycg",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQG-wcpJntMCew/company-logo_100_100/company-logo_100_100/0/1640798348289/national_science_foundation_logo?e=1776902400&v=beta&t=2l4jU4zykUqgDSznkDfEU2k5zdi3ra5deXHwBXVQXnU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "title": "Certified Nurse Assistant",
+        "issuedAt": "Issued Feb 2022",
+        "link": null,
+        "issuedBy": "MaryAnn's CNA Training",
+        "issuedByLink": null,
+        "issuedByLogo": {
+          "url": null,
+          "sizes": []
+        }
+      },
+      {
+        "title": "Scientific Diver",
+        "issuedAt": "Issued Nov 2014 · Expired Nov 2024",
+        "link": null,
+        "issuedBy": "American Academy of Underwater Sciences",
+        "issuedByLink": "https://www.linkedin.com/company/6026376/",
+        "issuedByLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGMj059yl3V4w/company-logo_400_400/company-logo_400_400/0/1630571605041/american_academy_of_underwater_sciences_logo?e=1776902400&v=beta&t=936FnIpwu55hjLqxGrSPVxtmf5y1cT05oLNhUsOEIVc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGMj059yl3V4w/company-logo_400_400/company-logo_400_400/0/1630571605041/american_academy_of_underwater_sciences_logo?e=1776902400&v=beta&t=936FnIpwu55hjLqxGrSPVxtmf5y1cT05oLNhUsOEIVc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGMj059yl3V4w/company-logo_200_200/company-logo_200_200/0/1630571605041/american_academy_of_underwater_sciences_logo?e=1776902400&v=beta&t=ZIazE0UWfAYP8POIKqGoxVBk0IQuNLlJL3WgWqQCfys",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGMj059yl3V4w/company-logo_100_100/company-logo_100_100/0/1630571605041/american_academy_of_underwater_sciences_logo?e=1776902400&v=beta&t=Om_LmpN1C5tQ7qCxMS6QRynozw0nBc6e3-p3cGKcXTM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "title": "Basic Life Support for Healthcare Providers (BLS)",
+        "issuedAt": "Issued Feb 2022 · Expired Feb 2025",
+        "link": null,
+        "issuedBy": "American Heart Association",
+        "issuedByLink": "https://www.linkedin.com/company/157306/",
+        "issuedByLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGkbfwG3S0TkQ/company-logo_400_400/company-logo_400_400/0/1631374527549/american_heart_association_logo?e=1776902400&v=beta&t=IOW6DeL9VMlXDwg86D1jdWljC5A0qRxDndTChsEu36U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGkbfwG3S0TkQ/company-logo_400_400/company-logo_400_400/0/1631374527549/american_heart_association_logo?e=1776902400&v=beta&t=IOW6DeL9VMlXDwg86D1jdWljC5A0qRxDndTChsEu36U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGkbfwG3S0TkQ/company-logo_200_200/company-logo_200_200/0/1631374527549/american_heart_association_logo?e=1776902400&v=beta&t=3apG7X-221x0wF4rPR1x9iyLTVDe9Q7nyFQyD-PamkE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGkbfwG3S0TkQ/company-logo_100_100/company-logo_100_100/0/1631374527549/american_heart_association_logo?e=1776902400&v=beta&t=9uS3oN2O6gVTuVf4OC4EJ52nkb16ldhEbFkUMLy0jzo",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "title": "CPR/AED, First Aid & Bloodborne Pathogens Combo",
+        "issuedAt": "Issued Feb 2023 · Expired Feb 2025",
+        "link": null,
+        "issuedBy": "American Heart Association",
+        "issuedByLink": "https://www.linkedin.com/company/157306/",
+        "issuedByLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGkbfwG3S0TkQ/company-logo_400_400/company-logo_400_400/0/1631374527549/american_heart_association_logo?e=1776902400&v=beta&t=IOW6DeL9VMlXDwg86D1jdWljC5A0qRxDndTChsEu36U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGkbfwG3S0TkQ/company-logo_400_400/company-logo_400_400/0/1631374527549/american_heart_association_logo?e=1776902400&v=beta&t=IOW6DeL9VMlXDwg86D1jdWljC5A0qRxDndTChsEu36U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGkbfwG3S0TkQ/company-logo_200_200/company-logo_200_200/0/1631374527549/american_heart_association_logo?e=1776902400&v=beta&t=3apG7X-221x0wF4rPR1x9iyLTVDe9Q7nyFQyD-PamkE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGkbfwG3S0TkQ/company-logo_100_100/company-logo_100_100/0/1631374527549/american_heart_association_logo?e=1776902400&v=beta&t=9uS3oN2O6gVTuVf4OC4EJ52nkb16ldhEbFkUMLy0jzo",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "title": "Nitrox Diver",
+        "issuedAt": "Issued Sep 2014 · Expired Jan 2024",
+        "link": null,
+        "issuedBy": "NOAA: National Oceanic & Atmospheric Administration",
+        "issuedByLink": "https://www.linkedin.com/company/165204/",
+        "issuedByLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQG9V63O4sKUzw/company-logo_400_400/company-logo_400_400/0/1648731139380/noaa_logo?e=1776902400&v=beta&t=N4w0BXA6dbiRyOE3XF-L29HDBp2urW72Lasqs7kyF0A",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQG9V63O4sKUzw/company-logo_400_400/company-logo_400_400/0/1648731139380/noaa_logo?e=1776902400&v=beta&t=N4w0BXA6dbiRyOE3XF-L29HDBp2urW72Lasqs7kyF0A",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQG9V63O4sKUzw/company-logo_200_200/company-logo_200_200/0/1648731139379/noaa_logo?e=1776902400&v=beta&t=UOEcm5GDbbCTW7bgQZVHLmguLYwX9AhPBQXLg-AI3Oc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQG9V63O4sKUzw/company-logo_100_100/company-logo_100_100/0/1648731139379/noaa_logo?e=1776902400&v=beta&t=clpag3gDMVHg3WL4wiDVxplPj8TZfqrfILbO59FIPRI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "projects": [],
+    "volunteering": [
+      {
+        "role": "Apprentice",
+        "description": "Mentee in M.D. Diversity Mentorship Program - Mentors and mentees will receive resources, information, and training opportunities to support effective communication and professional development.",
+        "duration": "Jan 2022 - Present · 4 yrs 4 mos",
+        "startDate": {
+          "month": "Jan",
+          "year": 2022,
+          "text": "Jan 2022"
+        },
+        "endDate": {
+          "text": "Present · 4 yrs 4 mos"
+        },
+        "organizationName": "Oregon Health & Science University",
+        "organizationLinkedinUrl": "https://www.linkedin.com/company/165292/",
+        "cause": "Health"
+      },
+      {
+        "role": "Bioinformatics Research Volunteer (Remote)",
+        "duration": "Aug 2023 - Dec 2025 · 2 yrs 5 mos",
+        "startDate": {
+          "month": "Aug",
+          "year": 2023,
+          "text": "Aug 2023"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2025,
+          "text": "Dec 2025 · 2 yrs 5 mos"
+        },
+        "organizationName": "St. Jude Children's Research Hospital - ALSAC",
+        "organizationLinkedinUrl": "https://www.linkedin.com/company/7639/",
+        "cause": "Children"
+      }
+    ],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Computational Biology"
+      },
+      {
+        "name": "Research and Development (R&D)"
+      },
+      {
+        "name": "Clinical Research",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Clinical Trials"
+      },
+      {
+        "name": "Healthcare Administration"
+      },
+      {
+        "name": "Operational Strategy"
+      },
+      {
+        "name": "Health Policy"
+      },
+      {
+        "name": "Biotechnology",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Bioinformatics"
+      },
+      {
+        "name": "Artificial Intelligence (AI)"
+      },
+      {
+        "name": "Molecular & Cellular Biology"
+      },
+      {
+        "name": "Stem Cell Technology"
+      },
+      {
+        "name": "Synthetic Biology"
+      },
+      {
+        "name": "Graph Theory"
+      },
+      {
+        "name": "Computational Chemistry"
+      },
+      {
+        "name": "Parallel Computing"
+      },
+      {
+        "name": "Cloud Computing"
+      },
+      {
+        "name": "Machine Learning"
+      },
+      {
+        "name": "Deep Learning"
+      },
+      {
+        "name": "Artificial Neural Networks"
+      },
+      {
+        "name": " Healthcare Strategy and Innovation",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Biotechnology R&D"
+      },
+      {
+        "name": "Health Equity Infrastructure"
+      },
+      {
+        "name": "Start-up to IPO Scaling"
+      },
+      {
+        "name": "Organizational Scaling"
+      },
+      {
+        "name": "Precision Medicine Commercialization"
+      },
+      {
+        "name": "Deep Learning in Biology"
+      },
+      {
+        "name": "Graph Neural Networks"
+      },
+      {
+        "name": "Massively parallel computation"
+      },
+      {
+        "name": "Software as a Medical Device (SaMD)"
+      },
+      {
+        "name": "Google Kubernetes Engine (GKE)"
+      },
+      {
+        "name": "Python (Programming Language)",
+        "assessments": "Passed LinkedIn Skill Assessment"
+      },
+      {
+        "name": "R (Programming Language)"
+      },
+      {
+        "name": "C (Programming Language)"
+      },
+      {
+        "name": "C++"
+      },
+      {
+        "name": "SQL"
+      },
+      {
+        "name": "JavaScript"
+      },
+      {
+        "name": "Leadership",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Clinical Decision Support (CDS) Compliance"
+      },
+      {
+        "name": "Managing General Agent (MGA) Structuring"
+      },
+      {
+        "name": "Multi-Omics Data Integration"
+      },
+      {
+        "name": "Medical Cell Biology"
+      },
+      {
+        "name": "JMP"
+      },
+      {
+        "name": "Biostatistics"
+      },
+      {
+        "name": "Random Forest"
+      },
+      {
+        "name": "Technical Documentation"
+      },
+      {
+        "name": "Research",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Data Analysis",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "K-12 Education",
+        "positions": [
+          "Substitute Teacher at Washougal School District"
+        ]
+      }
+    ],
+    "publications": [],
+    "courses": [
+      {
+        "title": "Advanced Bioinformatics and Machine Learning (Graduate Course - Applied to undergraduate degree)",
+        "number": "MBIOS 578",
+        "associatedWith": "Associated with Washington State University",
+        "associatedWithLink": "https://www.linkedin.com/company/166875/"
+      },
+      {
+        "title": "Biochemistry II (Advanced Topics in Biochemistry)",
+        "number": "MBIOS 413",
+        "associatedWith": "Associated with Washington State University",
+        "associatedWithLink": "https://www.linkedin.com/company/166875/"
+      },
+      {
+        "title": "Cell Biology",
+        "number": "MBIOS 401",
+        "associatedWith": "Associated with Washington State University",
+        "associatedWithLink": "https://www.linkedin.com/company/166875/"
+      },
+      {
+        "title": "Communicating Health and Medicine in Practice (Graduate Course - Applied to undergraduate degree)",
+        "number": "COMHLTH 571",
+        "associatedWith": "Associated with Washington State University",
+        "associatedWithLink": "https://www.linkedin.com/company/166875/"
+      },
+      {
+        "title": "Data Mining and Analysis",
+        "associatedWith": "Associated with Washington State University",
+        "associatedWithLink": "https://www.linkedin.com/company/166875/"
+      },
+      {
+        "title": "Data Structures for Data Analytics",
+        "number": "DATA 219",
+        "associatedWith": "Associated with Washington State University",
+        "associatedWithLink": "https://www.linkedin.com/company/166875/"
+      },
+      {
+        "title": "General Biochemistry",
+        "number": "MBIOS 303",
+        "associatedWith": "Associated with Washington State University",
+        "associatedWithLink": "https://www.linkedin.com/company/166875/"
+      },
+      {
+        "title": "General Physics",
+        "associatedWith": "Associated with Washington State University",
+        "associatedWithLink": "https://www.linkedin.com/company/166875/"
+      },
+      {
+        "title": "Genetics",
+        "number": "BIO 301",
+        "associatedWith": "Associated with Washington State University",
+        "associatedWithLink": "https://www.linkedin.com/company/166875/"
+      },
+      {
+        "title": "Human Anatomy",
+        "number": "BIO 354",
+        "associatedWith": "Associated with Washington State University",
+        "associatedWithLink": "https://www.linkedin.com/company/166875/"
+      },
+      {
+        "title": "Human Physiology",
+        "number": "BIO 251",
+        "associatedWith": "Associated with Washington State University",
+        "associatedWithLink": "https://www.linkedin.com/company/166875/"
+      },
+      {
+        "title": "Inferential Statistics",
+        "number": "STAT 360",
+        "associatedWith": "Associated with Washington State University",
+        "associatedWithLink": "https://www.linkedin.com/company/166875/"
+      },
+      {
+        "title": "Introduction to Data Analytics",
+        "number": "DATA 115",
+        "associatedWith": "Associated with Washington State University",
+        "associatedWithLink": "https://www.linkedin.com/company/166875/"
+      },
+      {
+        "title": "Molecular Biology and Genomics",
+        "number": "MBIOS 305",
+        "associatedWith": "Associated with Washington State University",
+        "associatedWithLink": "https://www.linkedin.com/company/166875/"
+      },
+      {
+        "title": "Multivariable Calculus",
+        "associatedWith": "Associated with Washington State University",
+        "associatedWithLink": "https://www.linkedin.com/company/166875/"
+      },
+      {
+        "title": "Nanostructure and Characterization",
+        "associatedWith": "Associated with Washington State University",
+        "associatedWithLink": "https://www.linkedin.com/company/166875/"
+      },
+      {
+        "title": "Nutrition in Medical Practice",
+        "associatedWith": "Associated with Washington State University",
+        "associatedWithLink": "https://www.linkedin.com/company/166875/"
+      },
+      {
+        "title": "Organic Chemistry",
+        "number": "CHEM 301",
+        "associatedWith": "Associated with Washington State University",
+        "associatedWithLink": "https://www.linkedin.com/company/166875/"
+      },
+      {
+        "title": "Research and Scholarship",
+        "number": "BIO 401",
+        "associatedWith": "Associated with Oregon State University",
+        "associatedWithLink": null
+      },
+      {
+        "title": "Software Programming for Engineers and Scientists",
+        "associatedWith": "Associated with Washington State University",
+        "associatedWithLink": "https://www.linkedin.com/company/166875/"
+      }
+    ],
+    "patents": [],
+    "honorsAndAwards": [
+      {
+        "title": "Chancellor's Award - Inaugural Washington State University President’s Stellar Student Award",
+        "issuedBy": "Washington State University",
+        "issuedAt": "Apr 2024",
+        "description": "Received award in recognition of excellence in multiple categories including Integrity, Personal Development, Equity and Inclusivity, Community Engagement, Leadership and Initiative, and Academic Excellence. This special recognition comes from the office of WSU’s President, Kirk Schulz. As the Presidents’ Award winner - received $1,000 for outstanding contribution to the WSU community as a whole.",
+        "associatedWith": "Associated with Washington State University",
+        "associatedWithLink": "https://www.linkedin.com/company/166875/"
+      },
+      {
+        "title": "Washington State University Leadership Award for Community Advocate",
+        "issuedBy": "Washington State University",
+        "issuedAt": "Apr 2024",
+        "description": "$1,000 award for outstanding leadership and community advocacy.",
+        "associatedWith": "Associated with Washington State University",
+        "associatedWithLink": "https://www.linkedin.com/company/166875/"
+      },
+      {
+        "title": "AI/ML in Precision Medicine Scholarship",
+        "issuedBy": "Stanford School of Medicine",
+        "issuedAt": "Mar 2024",
+        "description": "Earned a $700 scholarship to complete Stanford University's Fundamentals of AI/ML in Precision Medicine Certificate, issued by the Stanford University School of Medicine - Genetics Department. https://dataocean.stanford.edu/",
+        "associatedWith": "Associated with Stanford University School of Medicine",
+        "associatedWithLink": "https://www.linkedin.com/company/1790/"
+      },
+      {
+        "title": "Top Ten Senior Award - Community Service",
+        "issuedBy": "Washington State University",
+        "issuedAt": "Mar 2024",
+        "description": "Demonstrated excellence in off-campus community service pursuits.",
+        "associatedWith": "Associated with Washington State University",
+        "associatedWithLink": "https://www.linkedin.com/company/166875/"
+      },
+      {
+        "title": "Precision Medicine & Bioinformatics Scholarship",
+        "issuedBy": "Stanford Medicine x Stanford Deep Data Research Center",
+        "issuedAt": "Jan 2024",
+        "description": "Earned a $700 scholarship to complete Stanford University's Precision Medicine & Bioinformatics Certificate, issued by the Stanford University School of Medicine - Genetics Department. https://dataocean.stanford.edu/",
+        "associatedWith": "Associated with Stanford University School of Medicine",
+        "associatedWithLink": "https://www.linkedin.com/company/1790/"
+      },
+      {
+        "title": "Top 50 Women Leaders of Portland, OR",
+        "issuedBy": "Women We Admire",
+        "issuedAt": "Dec 2023",
+        "description": "Top 50 Women Leaders of Portland for 2023 by Women We Admire. https://thewomenweadmire.com/category/awards/",
+        "associatedWith": null,
+        "associatedWithLink": null
+      },
+      {
+        "title": "Glen D. and Katherine Sinclair Endowed Scholarship - 2023/2024",
+        "issuedBy": "Washington State University",
+        "issuedAt": "Apr 2023",
+        "description": "Selected recipient of $5,000 scholarship representing some of the very best characteristics of Washington State University Vancouver: quality, commitment, and a positive vision for the future.",
+        "associatedWith": "Associated with Washington State University",
+        "associatedWithLink": "https://www.linkedin.com/company/166875/"
+      },
+      {
+        "title": "Leona M. Metzger Scholarship for Students in Medicine - 2023/2024",
+        "issuedBy": "Washington State University",
+        "issuedAt": "Apr 2023",
+        "associatedWith": "Associated with Washington State University",
+        "associatedWithLink": "https://www.linkedin.com/company/166875/"
+      },
+      {
+        "title": "Florence and George Handy Endowed Scholarship in Sciences - 2022/2023",
+        "issuedBy": "Washington State University College of Arts and Sciences",
+        "issuedAt": "Jun 2022",
+        "description": "$5,000 scholarship for high academic standing and dedication to science and technology.",
+        "associatedWith": "Associated with Washington State University",
+        "associatedWithLink": "https://www.linkedin.com/company/166875/"
+      },
+      {
+        "title": "Dibble, Dale and Olive Mae Liberty Bell Science Scholarship - 2022/2023",
+        "issuedBy": "Washington State University",
+        "issuedAt": "May 2022",
+        "description": "Selected recipient of $20,000 scholarship from the Washington State University College of Science for academic success.",
+        "associatedWith": "Associated with Washington State University",
+        "associatedWithLink": "https://www.linkedin.com/company/166875/"
+      },
+      {
+        "title": "Glen D. and Katherine Sinclair Endowed Scholarship - 2022/2023",
+        "issuedBy": "Washington State University",
+        "issuedAt": "May 2022",
+        "description": "Selected recipient of $5,000 scholarship representing some of the very best characteristics of Washington State University Vancouver: quality, commitment, and a positive vision for the future.",
+        "associatedWith": "Associated with Washington State University",
+        "associatedWithLink": "https://www.linkedin.com/company/166875/"
+      },
+      {
+        "title": "NSF I-Corps Grant",
+        "issuedBy": "National Science Foundation",
+        "issuedAt": "May 2022",
+        "description": "Received $5,000 grant from the WSU Carson College of Business I-Corps program - a National Science Foundation funded program that is managed by the Innovation and Research Engagement team. The program provides coaching for faculty, students and staff to help evaluate the market opportunity associated with a research product or service.",
+        "associatedWith": "Associated with Washington State University",
+        "associatedWithLink": null
+      },
+      {
+        "title": "Washington Opportunity Scholarship",
+        "issuedBy": "Sep 2021",
+        "description": "Recipient of $20,000 scholarship for academic success and dedication to healthcare and STEM.",
+        "associatedWith": "Associated with Washington State University",
+        "associatedWithLink": "https://www.linkedin.com/company/166875/"
+      }
+    ],
+    "languages": [],
+    "causes": [
+      "Education",
+      "Health",
+      "Science and Technology",
+      "Economic Empowerment"
+    ],
+    "featured": {
+      "images": [
+        "https://media.licdn.com/dms/image/v2/D562DAQHQqXKQdxzL1Q/profile-treasury-image-shrink_8192_8192/profile-treasury-image-shrink_8192_8192/0/1729733884729?e=1776164400&v=beta&t=ENX8_LG4U-ZE7HlTXjH3KNg8Rm90UnzXGmwpcpJhAOQ"
+      ],
+      "link": "https://www.arihealth.net",
+      "title": "Maternal Care Redefined by ARI Health (Augmented Reality Integrated Health™)",
+      "subtitle": "ARI Health",
+      "slides": [
+        {
+          "title": "Maternal Care Redefined by ARI Health (Augmented Reality Integrated Health™)",
+          "subtitle": "ARI Health",
+          "description": null,
+          "url": "https://www.arihealth.net",
+          "image": {
+            "url": "https://media.licdn.com/dms/image/v2/D562DAQHQqXKQdxzL1Q/profile-treasury-image-shrink_8192_8192/profile-treasury-image-shrink_8192_8192/0/1729733884729?e=1776164400&v=beta&t=ENX8_LG4U-ZE7HlTXjH3KNg8Rm90UnzXGmwpcpJhAOQ"
+          }
+        },
+        {
+          "title": "DAESA Awards Ceremony",
+          "subtitle": "Division of Academic Engagement and Student Achievement (DAESA)",
+          "description": null,
+          "url": "https://daesa.wsu.edu/awards-and-recognition/awards-ceremony/",
+          "image": {
+            "url": "https://media.licdn.com/dms/image/v2/D562DAQFN3LMKHS4hyg/profile-treasury-image-shrink_8192_8192/profile-treasury-image-shrink_8192_8192/0/1719362930899?e=1776164400&v=beta&t=jzWs8fqGVjzWn9Z8n22-fH9aCWcTaz0B9FwSzmcM-T8"
+          }
+        },
+        {
+          "title": null,
+          "subtitle": null,
+          "description": null,
+          "url": "https://www.linkedin.com/feed/update/urn:li:activity:7216523473462910976?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A7216523473462910976%29",
+          "image": {
+            "url": "https://media.licdn.com/dms/image/v2/D5622AQEX_b6eMUUa9g/feedshare-shrink_1280/feedshare-shrink_1280/0/1720553270285?e=1776902400&v=beta&t=Uz7wO1uLKXgpPpKkZD9wqGG3zToc-OUTbfth3ebVR2Q"
+          }
+        },
+        {
+          "title": "WSU Vancouver Scholarship Recipient - Alexis Dunn",
+          "subtitle": "YouTube",
+          "description": null,
+          "url": "https://www.youtube.com/watch?v=6ipCYqXLHdY",
+          "image": {
+            "url": "https://media.licdn.com/dms/image/sync/v2/D5627AQExBWIx3MhPdQ/articleshare-shrink_1280_800/articleshare-shrink_1280_800/0/1711152391924?e=1776164400&v=beta&t=7P00FYrO_CZExLtQuCLwZWmh1g-w9zTS6r285rnyYYo"
+          }
+        },
+        {
+          "title": "Rural Health Ventures - Investment Pitch Deck.pdf",
+          "subtitle": null,
+          "description": null,
+          "url": "https://www.linkedin.com/in/alexis-aleyza-dunn/overlay/1717629727317/single-media-viewer?type=DOCUMENT&profileId=ACoAAB25W_cBJvis01d0hMgt6XtRg-rXuYtwxKA",
+          "image": {
+            "url": null
+          }
+        }
+      ]
+    },
+    "composeOptionType": "PREMIUM_INMAIL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAAACzw60BUBcf9q40tAUpQs0mHqSqAsuPFc8",
+        "firstName": "Sangeen",
+        "lastName": "Zeb",
+        "publicIdentifier": "sangeen-zeb-891b413",
+        "linkedinUrl": "https://www.linkedin.com/in/sangeen-zeb-891b413"
+      },
+      {
+        "id": "ACoAACX_RSUB5IynO-R4nkkZZkJLdawsaDvR4sQ",
+        "firstName": "Blake",
+        "lastName": "Dunn, MBA",
+        "publicIdentifier": "blakejdunn",
+        "linkedinUrl": "https://www.linkedin.com/in/blakejdunn"
+      },
+      {
+        "id": "ACoAAABVzVgBDwYyYmZ42YlyNGySh-I0zgxs7NY",
+        "firstName": "Jesper Wolf",
+        "lastName": "Bek",
+        "publicIdentifier": "jesperbek",
+        "linkedinUrl": "https://www.linkedin.com/in/jesperbek"
+      },
+      {
+        "id": "ACoAACE2EIwB3vNVX9rm6ce5juOGovFUzVvIsCc",
+        "firstName": "Kevin",
+        "lastName": "Lu",
+        "publicIdentifier": "kzl",
+        "linkedinUrl": "https://www.linkedin.com/in/kzl"
+      },
+      {
+        "id": "ACoAAAGTKG0BTuJfHDEv3L78kc0IwHxCUH-Ltno",
+        "firstName": "David",
+        "lastName": "Shannon",
+        "publicIdentifier": "david-shannon-179a228",
+        "linkedinUrl": "https://www.linkedin.com/in/david-shannon-179a228"
+      },
+      {
+        "id": "ACoAAAuyEGkB8J41EsgelFTf7z5JbpIURfqxKtY",
+        "firstName": "Angeline",
+        "lastName": "K.",
+        "publicIdentifier": "angelinekitman",
+        "linkedinUrl": "https://www.linkedin.com/in/angelinekitman"
+      },
+      {
+        "id": "ACoAAAAoJFIBO84n898926Oq9hGZ2ujfxcRxYlE",
+        "firstName": "Donald",
+        "lastName": "Robertson",
+        "publicIdentifier": "donaldfrobertson",
+        "linkedinUrl": "https://www.linkedin.com/in/donaldfrobertson"
+      },
+      {
+        "id": "ACoAAAEVNBEBqyNyanv5Ed8Oh78zANBESYF_lJ8",
+        "firstName": "Chris",
+        "lastName": "Brown",
+        "publicIdentifier": "cjbcreighton",
+        "linkedinUrl": "https://www.linkedin.com/in/cjbcreighton"
+      },
+      {
+        "id": "ACoAAAynbAYBKeTl_5fmzFbLZza_VNd1gdC9Bbg",
+        "firstName": "Raji",
+        "lastName": "Akileh, DO",
+        "publicIdentifier": "mededcloud",
+        "linkedinUrl": "https://www.linkedin.com/in/mededcloud"
+      },
+      {
+        "id": "ACoAAAcI8SIBV9hCCOnaoWnyt3CEt4aVUmXoVg4",
+        "firstName": "Mo",
+        "lastName": "El-Bibany",
+        "publicIdentifier": "mobibany",
+        "linkedinUrl": "https://www.linkedin.com/in/mobibany"
+      },
+      {
+        "id": "ACoAACVgeCgBazuwJLIpt6XJoIZ7sqHtsD7iYpc",
+        "firstName": "Makoto",
+        "lastName": "Sakai, PMP",
+        "publicIdentifier": "makotosakai",
+        "linkedinUrl": "https://www.linkedin.com/in/makotosakai"
+      },
+      {
+        "id": "ACoAABJF4mQBVJYIx7g-ASuPnmo5mH2mDuWdwQg",
+        "firstName": "Erika",
+        "lastName": "Byun",
+        "publicIdentifier": "erika-nakamatsu-byun",
+        "linkedinUrl": "https://www.linkedin.com/in/erika-nakamatsu-byun"
+      },
+      {
+        "id": "ACoAAAQy2iYBDERRTfJk95eSSuNUXephLt4qWJA",
+        "firstName": "Ravi Joseph",
+        "lastName": "K.",
+        "publicIdentifier": "ravijoseph7",
+        "linkedinUrl": "https://www.linkedin.com/in/ravijoseph7"
+      },
+      {
+        "id": "ACoAAATQTQgBYc4rzIIV41B2fAkt44yTNxaXSCs",
+        "firstName": "Michael R.",
+        "lastName": "Boone, PE, MS",
+        "publicIdentifier": "michaelrboone",
+        "linkedinUrl": "https://www.linkedin.com/in/michaelrboone"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAAAji1bkB1eLX4z2Jb9-N2nMhEGNLWptSnqU",
+        "firstName": "Clare",
+        "lastName": "Birch",
+        "publicIdentifier": "clarebirch42",
+        "linkedinUrl": "https://www.linkedin.com/in/clarebirch42"
+      },
+      {
+        "id": "ACoAABA7A40Bb5a_q8FfKwAfYWqKYvuA3c6vQuY",
+        "firstName": "Nader",
+        "lastName": "Khalil",
+        "publicIdentifier": "naderlikeladder",
+        "linkedinUrl": "https://www.linkedin.com/in/naderlikeladder"
+      },
+      {
+        "id": "ACoAABMznFkB_XPgkYHnUl33kIHTWt1DtMAV6Pg",
+        "firstName": "Jensen",
+        "lastName": "Huang",
+        "publicIdentifier": "jenhsunhuang",
+        "linkedinUrl": "https://www.linkedin.com/in/jenhsunhuang"
+      },
+      {
+        "id": "ACoAAC4nnqYB0uow2gXndx4bWojmZn4KvVQZzBM",
+        "firstName": "Nandini",
+        "lastName": "Kumar",
+        "publicIdentifier": "nandinikumar22",
+        "linkedinUrl": "https://www.linkedin.com/in/nandinikumar22"
+      },
+      {
+        "id": "ACoAAGbO69IBI2X2e7lgC3FJvkJY3rrXT4gduog",
+        "firstName": "Anton",
+        "lastName": "Talač",
+        "position": "Výkonný asistent ve společnosti SPSDesigners",
+        "publicIdentifier": "anton-talač-556789401",
+        "linkedinUrl": "https://www.linkedin.com/in/anton-talač-556789401"
+      },
+      {
+        "id": "ACoAABz_uy0BBJ0O06o4OVGIqErB0Tq5qUr6CJs",
+        "firstName": "Jana",
+        "lastName": "Tulejova",
+        "position": "Experienced Luxury Retail Sales Professional looking for a new challenge",
+        "publicIdentifier": "jana-tulejova-a65b27116",
+        "linkedinUrl": "https://www.linkedin.com/in/jana-tulejova-a65b27116"
+      },
+      {
+        "id": "ACoAADbAb68Bga0xNh6M6vRexxkwyEKVz6LpWvI",
+        "firstName": "Katarína",
+        "lastName": "Huňady",
+        "position": "POMÔŽEM VÁM ZÍSKAŤ SPÄŤ VÁŠ ČAS - prevezmem administratívne úlohy a riadenie projektov | externá manažérka so zmyslom pre precíznosť a 100% odvedenú prácu",
+        "publicIdentifier": "katarína-huňady",
+        "linkedinUrl": "https://www.linkedin.com/in/katarína-huňady"
+      },
+      {
+        "id": "ACoAAAkntbMBtWmg0y0yMvbEDzNvrkpXH05vLVI",
+        "firstName": "Martin",
+        "lastName": "Janas",
+        "position": "CFO at ZAREN",
+        "publicIdentifier": "martin-janas-44353343",
+        "linkedinUrl": "https://www.linkedin.com/in/martin-janas-44353343"
+      },
+      {
+        "id": "ACoAAFZuynkB1WV9XdhKhW2INSg4eKFVwJvNgNs",
+        "firstName": "Matúš",
+        "lastName": "Šoltís",
+        "position": "Data Scientist @ Independent | Python, NumPy, Pandas",
+        "publicIdentifier": "matúš-šoltís-049777345",
+        "linkedinUrl": "https://www.linkedin.com/in/matúš-šoltís-049777345"
+      },
+      {
+        "id": "ACoAAAUz67sBdbmkB40S_ScRc2QoL-d_5LGcMwM",
+        "firstName": "Henrich",
+        "lastName": "Zubcak",
+        "position": "Helping B2C businesses increase sales using card linked marketing",
+        "publicIdentifier": "henrichzubcak",
+        "linkedinUrl": "https://www.linkedin.com/in/henrichzubcak"
+      },
+      {
+        "id": "ACoAAEWUWDQBLyWbhmBvnjiVGvqqygCr9AYN9iY",
+        "firstName": "Martin",
+        "lastName": "Remenar",
+        "position": "--",
+        "publicIdentifier": "martin-remenar-7b0b39286",
+        "linkedinUrl": "https://www.linkedin.com/in/martin-remenar-7b0b39286"
+      },
+      {
+        "id": "ACoAAE3oFt4BQlfgccvsl5VzRGWGH3pfL46yIK8",
+        "firstName": "Patricia",
+        "lastName": "Šidlíková",
+        "position": "VSD",
+        "publicIdentifier": "patricia-šidlíková-07a892305",
+        "linkedinUrl": "https://www.linkedin.com/in/patricia-šidlíková-07a892305"
+      },
+      {
+        "id": "ACoAABSuPEgB2SVEYuab7-fPkje8UAbU1q_EpKc",
+        "firstName": "Ivana",
+        "lastName": "Jelinek",
+        "position": "Full-time mom| Student of Psychology | Ambassador for conscious living |",
+        "publicIdentifier": "ivanajelinek",
+        "linkedinUrl": "https://www.linkedin.com/in/ivanajelinek"
+      },
+      {
+        "id": "ACoAAB9GzbsBJqG9efHjSmrFIrSxCeHHAMUNfYg",
+        "firstName": "Silvia",
+        "lastName": "Šuvadova",
+        "position": "Key account manager",
+        "publicIdentifier": "silvia-šuvadova-537895127",
+        "linkedinUrl": "https://www.linkedin.com/in/silvia-šuvadova-537895127"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAB25W_cBqfGsQMY7wt31yiDbXyHgpVFiCiU"
+    }
+  }
+}

@@ -1,0 +1,735 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAABhKWCYBgmW5Fu-BDySh0weQFCFk2aGA260",
+    "profile_url": "https://www.linkedin.com/in/ACwAABhKWCYBgmW5Fu-BDySh0weQFCFk2aGA260"
+  },
+  "item": {
+    "id": "ACoAABhKWCYBiuV3Zv9Hbt8t0j-xMRqxawBcSgw",
+    "publicIdentifier": "kurtshuster1",
+    "linkedinUrl": "https://www.linkedin.com/in/kurtshuster1",
+    "firstName": "Kurt",
+    "lastName": "Shuster",
+    "emails": [
+      {
+        "email": "kurt.shuster@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "AI Research Engineer",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "New York, New York, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "New York City, NY, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "New York",
+        "city": "New York City"
+      }
+    },
+    "objectUrn": "407525414",
+    "registeredAt": "2015-03-04T13:25:24.626Z",
+    "topSkills": null,
+    "connectionsCount": 663,
+    "followerCount": 840,
+    "verified": true,
+    "about": "Artificial Intelligence Research Engineer, with a Master of Engineering (MEng) in Computer Science from Cornell University.",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 2,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "18946",
+        "companyId": "3523",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3523/",
+        "schoolName": "Cornell University"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": null,
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "AI Research Engineer",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "New York, New York, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "1 yr 3 mos",
+        "description": "founding team",
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2025,
+          "text": "Feb 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Scientist",
+        "location": "New York, New York, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Google DeepMind",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1594050/",
+        "companyId": "1594050",
+        "duration": "7 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Aug",
+          "year": 2024,
+          "text": "Aug 2024"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2025,
+          "text": "Feb 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_400_400/company-logo_400_400/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=r_t5nQiM8A2L0aUP5m-PXCGPiKrvOklfisLwUFyoqwc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_400_400/company-logo_400_400/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=r_t5nQiM8A2L0aUP5m-PXCGPiKrvOklfisLwUFyoqwc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_200_200/company-logo_200_200/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=2BilPPrSvxkF02b9uz-N6ccku99E3v2Y8bAOBExGcFA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_100_100/company-logo_100_100/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=TS688J1rsD8hLhjNZfNOSDSKLf9q38j5d5Qgo7HUC_0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Member of the Technical Staff",
+        "location": "New York, New York, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Character.AI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/89486558/",
+        "companyId": "89486558",
+        "duration": "1 yr 3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2023,
+          "text": "Jun 2023"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2024,
+          "text": "Aug 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGNjbHSXwgRxA/company-logo_400_400/B56ZkQoTyrG0AY-/0/1756920626627/character_ai_logo?e=1776902400&v=beta&t=iIjQFZ2p-mxKhZ5rdC-PmhG_N1FxyZZ-zhCc61gsMt4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGNjbHSXwgRxA/company-logo_400_400/B56ZkQoTyrG0AY-/0/1756920626627/character_ai_logo?e=1776902400&v=beta&t=iIjQFZ2p-mxKhZ5rdC-PmhG_N1FxyZZ-zhCc61gsMt4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGNjbHSXwgRxA/company-logo_200_200/B56ZkQoTyrG0AI-/0/1756920626627/character_ai_logo?e=1776902400&v=beta&t=ktdgZyhXyFclt7dry6ukj1GvX5WbOFbqWa9ONRs2dlE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGNjbHSXwgRxA/company-logo_100_100/B56ZkQoTyrG0AQ-/0/1756920626627/character_ai_logo?e=1776902400&v=beta&t=S7cBW5d-I9ubNwlka8z5Abge45lXx9yYBgRdE6pgd0M",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Engineer",
+        "location": "Greater New York City Area",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Facebook AI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/76987811/",
+        "companyId": "76987811",
+        "duration": "5 yrs 11 mos",
+        "description": "Work on Facebook Artificial Intelligence Research (FAIR) team.",
+        "skills": null,
+        "startDate": {
+          "month": "Aug",
+          "year": 2017,
+          "text": "Aug 2017"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2023,
+          "text": "Jun 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_200_200/company-logo_200_200/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=CL3OcEUIyBJFm9Wkw4iT9gJoWpsvGBIAhhNM0DjZx_A",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_100_100/company-logo_100_100/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=sZq9Sard1kGYVIprgBkNhUvJRTI7tf3pXOCP1bQBfpM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer Intern",
+        "location": "Menlo Park, California",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Facebook",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/76987811/",
+        "companyId": "76987811",
+        "duration": "4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2016,
+          "text": "May 2016"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2016,
+          "text": "Aug 2016"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_200_200/company-logo_200_200/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=CL3OcEUIyBJFm9Wkw4iT9gJoWpsvGBIAhhNM0DjZx_A",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_100_100/company-logo_100_100/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=sZq9Sard1kGYVIprgBkNhUvJRTI7tf3pXOCP1bQBfpM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Mobile Application Developer",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "RosieApp",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=RosieApp",
+        "duration": "1 yr",
+        "description": "Worked on iOS app, implementing new features while migrating the platform to a new version of the backend API",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2015,
+          "text": "Jun 2015"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2016,
+          "text": "May 2016"
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Cornell University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3523/",
+        "schoolId": "3523",
+        "degree": "Master of Engineering - MEng",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "startDate": {
+          "year": 2017,
+          "text": "2017"
+        },
+        "endDate": {
+          "year": 2017,
+          "text": "2017"
+        },
+        "period": "2017 - 2017",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQE8SOXGRyv7LA/company-logo_400_400/company-logo_400_400/0/1631339899678?e=1776902400&v=beta&t=z9EFnVC4jc3IxQB_5kqZY2twhs1zh2Ujg4UhI6lnvpE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQE8SOXGRyv7LA/company-logo_400_400/company-logo_400_400/0/1631339899678?e=1776902400&v=beta&t=z9EFnVC4jc3IxQB_5kqZY2twhs1zh2Ujg4UhI6lnvpE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQE8SOXGRyv7LA/company-logo_200_200/company-logo_200_200/0/1631339899678?e=1776902400&v=beta&t=8gqRb5n6ds_eGdBVsrRa4BIwJxYLH19ImYd_laDJuRs",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQE8SOXGRyv7LA/company-logo_100_100/company-logo_100_100/0/1631339899678?e=1776902400&v=beta&t=mU_RrLLR-_WiPMdGl7V8gFPp5Oov5XKzqLiWoFS3_r4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Cornell University College of Arts and Sciences",
+        "schoolLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Cornell+University+College+of+Arts+and+Sciences",
+        "schoolId": null,
+        "degree": "Bachelors",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "description": "RELEVANT COURSEWORK\nData Structures and Functional Programming • Design and Programming for the Web • Intro to iPhone App\nDevelopment • Object-Oriented Programming and Data Structures • Computer System Organization and\nProgramming • Discrete Structures • Machine Learning • Introduction to Theory of Algorithms",
+        "insights": "Activities and societies: Cornell Data Science, Student Assembly Finance Commission (SAFC)",
+        "startDate": {
+          "year": 2013,
+          "text": "2013"
+        },
+        "endDate": {
+          "year": 2017,
+          "text": "2017"
+        },
+        "period": "2013 - 2017",
+        "schoolLogo": null
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Public Speaking"
+      },
+      {
+        "name": "Leadership",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Java",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Python",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "PHP",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "JavaScript",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "CSS",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "HTML",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "SQL",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Microsoft Office",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "Microsoft Word",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "PowerPoint",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Microsoft Excel",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Research",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Event Planning"
+      },
+      {
+        "name": "Social Media"
+      },
+      {
+        "name": "Data Analysis"
+      },
+      {
+        "name": "Algorithms"
+      },
+      {
+        "name": "Programming"
+      }
+    ],
+    "publications": [],
+    "courses": [
+      {
+        "title": "Data Structures and Functional Programming",
+        "number": "CS 3110"
+      },
+      {
+        "title": "Intermediate Design and Programming for the Web",
+        "number": "CS 2300"
+      },
+      {
+        "title": "Introduction to Algorithms",
+        "number": "CS 4820"
+      },
+      {
+        "title": "Machine Learning for Data Science",
+        "number": "CS 4786"
+      }
+    ],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "moreProfiles": [
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAABEmYXYB5f-3ZmFG8dI-n9XAlqySBqO-2PA",
+        "firstName": "Luke",
+        "lastName": "Carlson",
+        "publicIdentifier": "jlukecarlson",
+        "linkedinUrl": "https://www.linkedin.com/in/jlukecarlson"
+      },
+      {
+        "id": "ACoAABQ5lJUBry2byQYf_TtxDF9Rha9l-RqYsaM",
+        "firstName": "Guang-He",
+        "lastName": "Lee",
+        "publicIdentifier": "guang-he-lee-64577895",
+        "linkedinUrl": "https://www.linkedin.com/in/guang-he-lee-64577895"
+      },
+      {
+        "id": "ACoAAAQ4Q7kByw3YKf2rFlmWzRMF7P8Gw4S9PIU",
+        "firstName": "Yinghai",
+        "lastName": "L.",
+        "publicIdentifier": "yinghai83",
+        "linkedinUrl": "https://www.linkedin.com/in/yinghai83"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABGaEy8Bu1ycKB5WUvyRc69OERCzymW7mxY",
+        "firstName": "Jamie",
+        "lastName": "Cahill",
+        "publicIdentifier": "james-cahill-093a9582",
+        "linkedinUrl": "https://www.linkedin.com/in/james-cahill-093a9582"
+      },
+      {
+        "id": "ACoAACHgqNcBO7G9QHjfnTyp5v6rVbPMJ19f1dc",
+        "firstName": "Claire",
+        "lastName": "Fu",
+        "publicIdentifier": "clairecfu",
+        "linkedinUrl": "https://www.linkedin.com/in/clairecfu"
+      },
+      {
+        "id": "ACoAACaOARIBRO2EEH12QWQO29L__oI3N2K4u14",
+        "firstName": "Mingjie",
+        "lastName": "Sun",
+        "publicIdentifier": "mingjie-sun-06a761160",
+        "linkedinUrl": "https://www.linkedin.com/in/mingjie-sun-06a761160"
+      },
+      {
+        "id": "ACoAACHG180BXiyeZ2qJgoggx27e4iM3ajxvp18",
+        "firstName": "Andy",
+        "lastName": "Hwang",
+        "publicIdentifier": "andrewnhwang",
+        "linkedinUrl": "https://www.linkedin.com/in/andrewnhwang"
+      },
+      {
+        "id": "ACoAAAwf4lcBgfLcNvMLGYnAjvxGpzWMO50zhUw",
+        "firstName": "Deepak",
+        "lastName": "Gopinath",
+        "publicIdentifier": "deepakgopinath",
+        "linkedinUrl": "https://www.linkedin.com/in/deepakgopinath"
+      },
+      {
+        "id": "ACoAADgLvm4BAaa-N5zNQvfP5qFptuA8bvJs3nM",
+        "firstName": "Yifei",
+        "lastName": "Zhou",
+        "publicIdentifier": "yifei-zhou-57aa9b222",
+        "linkedinUrl": "https://www.linkedin.com/in/yifei-zhou-57aa9b222"
+      },
+      {
+        "id": "ACoAAAO-j_IBXcvIzhZtQ7QNkky6tlnQTcFl9qI",
+        "firstName": "Myle",
+        "lastName": "Ott",
+        "publicIdentifier": "myleott",
+        "linkedinUrl": "https://www.linkedin.com/in/myleott"
+      },
+      {
+        "id": "ACoAAAFeNNIBGA1Mtyi5_iGkRC19uDzKU2t5dVs",
+        "firstName": "Kunal",
+        "lastName": "Bhalla",
+        "publicIdentifier": "kunalbhalla",
+        "linkedinUrl": "https://www.linkedin.com/in/kunalbhalla"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAABA0sF8BJqwmfoms3veu9TE72tj8JMUQEFA",
+        "firstName": "Sam",
+        "lastName": "Shleifer",
+        "publicIdentifier": "sam-shleifer-a5307a77",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-shleifer-a5307a77"
+      },
+      {
+        "id": "ACoAAB3BApkB38H4Z__jKDDFBfF7jt7w16vD0Xs",
+        "firstName": "Rafael",
+        "lastName": "Rafailov",
+        "publicIdentifier": "rafael-rafailov-1b521611b",
+        "linkedinUrl": "https://www.linkedin.com/in/rafael-rafailov-1b521611b"
+      },
+      {
+        "id": "ACoAACHkUNgBogKk7Q3xekxMdWLMSikZY2zgQsU",
+        "firstName": "Stephen",
+        "lastName": "Roller",
+        "publicIdentifier": "stephen-roller-38851513a",
+        "linkedinUrl": "https://www.linkedin.com/in/stephen-roller-38851513a"
+      },
+      {
+        "id": "ACoAACEKIcoBlH0R5ZT_TKQuJ4i3ZD4WlI1-rME",
+        "firstName": "Jacob",
+        "lastName": "Menick",
+        "publicIdentifier": "jacob-menick-5a277a135",
+        "linkedinUrl": "https://www.linkedin.com/in/jacob-menick-5a277a135"
+      },
+      {
+        "id": "ACoAABoG0oUBl986ZaMrLUASG1NhDoJyVlav4Po",
+        "firstName": "Eric",
+        "lastName": "Zhang",
+        "publicIdentifier": "ekzhang",
+        "linkedinUrl": "https://www.linkedin.com/in/ekzhang"
+      },
+      {
+        "id": "ACoAADJVG9YBvA-Hx9ZxG0xP2jmukaJs8MY789w",
+        "firstName": "Puan Chairunnisa",
+        "lastName": "Suriperdana",
+        "position": "Management Trainee - Project Management at Air Liquide | Ex Merck Group, Unilever Indonesia, Kilang Pertamina Balikpapan",
+        "publicIdentifier": "puan-chairunnisa-suriperdana",
+        "linkedinUrl": "https://www.linkedin.com/in/puan-chairunnisa-suriperdana"
+      },
+      {
+        "id": "ACoAAAlUjtYByUiMYtce09HG8cxWHgqoweslxTc",
+        "firstName": "sugeng",
+        "lastName": "priyono",
+        "position": "ga at Air Liquide Gas AB",
+        "publicIdentifier": "sugeng-priyono-33251044",
+        "linkedinUrl": "https://www.linkedin.com/in/sugeng-priyono-33251044"
+      },
+      {
+        "id": "ACoAAA1khcwBHuy-id0DRTPX7ZrKRF3uY0b7cBU",
+        "firstName": "Lasti Putri",
+        "lastName": "Dianti, CHRP",
+        "position": "APAC Employee Experience Manager at Air Liquide",
+        "publicIdentifier": "lasti-putri-dianti-chrp-a902b963",
+        "linkedinUrl": "https://www.linkedin.com/in/lasti-putri-dianti-chrp-a902b963"
+      },
+      {
+        "id": "ACoAAAu_iukBDQ46Q4r7tVmq9nDNnMiWv91jWLk",
+        "firstName": "Yessi ",
+        "lastName": "Paramita",
+        "position": "T&SB Specialist SEA Cluster at Air Liquide Indonesia",
+        "publicIdentifier": "yessi-paramita-a0901356",
+        "linkedinUrl": "https://www.linkedin.com/in/yessi-paramita-a0901356"
+      },
+      {
+        "id": "ACoAAAHTEN4BVNKVTx3Gqm0JLxSr3wx3YGGKwcA",
+        "firstName": "Yulia",
+        "lastName": "Yunus, CHRP",
+        "position": "Air Liquide Indonesia - ALINDO",
+        "publicIdentifier": "yulia-yunus-chrp-aa6301a",
+        "linkedinUrl": "https://www.linkedin.com/in/yulia-yunus-chrp-aa6301a"
+      },
+      {
+        "id": "ACoAAEEBYa0BWTbO2C8Yz2yH9SWCkc5bFT_1oI4",
+        "firstName": "Hanifa",
+        "lastName": "Adella",
+        "position": "HR Operations and General Support, Air Liquide Indonesia | Recent Graduate in Urban and Regional Planning, Institut Teknologi Bandung",
+        "publicIdentifier": "hanifaadella",
+        "linkedinUrl": "https://www.linkedin.com/in/hanifaadella"
+      },
+      {
+        "id": "ACoAADGTZEsBwGl8lf0UYYBn-3xXnrI5TC_Rfsw",
+        "firstName": "Alnurul",
+        "lastName": "Arsyil",
+        "position": "Design Engineering Specialists & Ergonomic | Project Support | HSEE Methods Enthusiast ",
+        "publicIdentifier": "alnurularsyil",
+        "linkedinUrl": "https://www.linkedin.com/in/alnurularsyil"
+      },
+      {
+        "id": "ACoAADVZB8MBpN2BRcB21pxyunarSZxSLcvtUHc",
+        "firstName": "Aisyarini Vanesha",
+        "lastName": "Aji",
+        "position": "Management Trainee at Air Liquide | FT UI",
+        "publicIdentifier": "vaneshaaji",
+        "linkedinUrl": "https://www.linkedin.com/in/vaneshaaji"
+      },
+      {
+        "id": "ACoAADCZ7YsBkbDH768ho7wUPiHCEcXCT--2YcM",
+        "firstName": "Shima",
+        "lastName": "Faradilla Sulhin",
+        "position": "Account Manager Packaged Gas at Air Liquide | Key Account Management | Industrial Gases",
+        "publicIdentifier": "shima-faradilla-sulhin",
+        "linkedinUrl": "https://www.linkedin.com/in/shima-faradilla-sulhin"
+      },
+      {
+        "id": "ACoAADdVApoBW5QzRjkdbaGfKP5QpbXluOJnSHI",
+        "firstName": "Elaine",
+        "lastName": "Karunadevi Wirahardja",
+        "position": "Management Trainee Packaged Gas Operations at Air Liquide ",
+        "publicIdentifier": "elainekarunadeviw",
+        "linkedinUrl": "https://www.linkedin.com/in/elainekarunadeviw"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAABhKWCYBgmW5Fu-BDySh0weQFCFk2aGA260"
+    }
+  }
+}

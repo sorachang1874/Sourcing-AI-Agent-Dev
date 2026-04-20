@@ -1,0 +1,883 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAABqSHaUB_SN399_bm85p8gqt8Nm5mHkk9yU",
+    "profile_url": "https://www.linkedin.com/in/ACwAABqSHaUB_SN399_bm85p8gqt8Nm5mHkk9yU"
+  },
+  "item": {
+    "id": "ACoAABqSHaUBgoPu_j2NSmNfYyGkrcUvLn5mbbo",
+    "publicIdentifier": "jacobvangogh",
+    "linkedinUrl": "https://www.linkedin.com/in/jacobvangogh",
+    "firstName": "Jacob",
+    "lastName": "van Gogh",
+    "emails": [
+      {
+        "email": "jacob.vangogh@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "ML Research @ Thinking Machines",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Redwood City, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "Redwood City, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "Redwood City"
+      }
+    },
+    "objectUrn": "445783461",
+    "registeredAt": "2015-09-11T21:25:40.650Z",
+    "topSkills": null,
+    "connectionsCount": 913,
+    "followerCount": 1013,
+    "verified": false,
+    "about": "ML is cool I guess",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 8,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "17926",
+        "companyId": "1792",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1792/",
+        "schoolName": null
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5603AQEnpUaflQLoQA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1680219388153?e=1776902400&v=beta&t=G1ONf7HHXz1PXpudNI-TtX2vgvYeYQkMTxm1ZPKRkUM",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQEnpUaflQLoQA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1680219388153?e=1776902400&v=beta&t=G1ONf7HHXz1PXpudNI-TtX2vgvYeYQkMTxm1ZPKRkUM",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQEnpUaflQLoQA/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1680219388153?e=1776902400&v=beta&t=9lPVHoZhJitYvJvbicK4p5quqVYBe2t_-3j8G4l1IyM",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQEnpUaflQLoQA/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1680219388153?e=1776902400&v=beta&t=dQcFd5rbkJcoVeV7NVo6XeaFRaEel_16MhbpDZ5CLQc",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQEnpUaflQLoQA/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1680219388153?e=1776902400&v=beta&t=SL5RnF0vjbOrnC4rR0wDnNG_egCFJAOSkaFvZr2VKiU",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D5603AQEnpUaflQLoQA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1680219388153?e=1776902400&v=beta&t=G1ONf7HHXz1PXpudNI-TtX2vgvYeYQkMTxm1ZPKRkUM",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "ML Research @ Thinking Machines",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "9 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Aug",
+          "year": 2025,
+          "text": "Aug 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Principal Applied Scientist",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Amazon",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1586/",
+        "companyId": "1586",
+        "duration": "1 yr 2 mos",
+        "description": "Research lead focused on open-ended and semi-supervised learning systems for agents\n- https://labs.amazon.science/blog/nova-act\n- Task synthesis and autonomous exploration systems for agent data generation\n- Model-based reward signals for online RL and offline data filtering",
+        "skills": null,
+        "startDate": {
+          "month": "Jul",
+          "year": 2024,
+          "text": "Jul 2024"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2025,
+          "text": "Aug 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGDLy4STCnHbg/company-logo_400_400/B56ZnZxDipI0AY-/0/1760295142304/amazon_logo?e=1776902400&v=beta&t=lYPAbzBmg2YQhgQFeMnV-wHyKGvMPrvdCpcjHf_aGWc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGDLy4STCnHbg/company-logo_400_400/B56ZnZxDipI0AY-/0/1760295142304/amazon_logo?e=1776902400&v=beta&t=lYPAbzBmg2YQhgQFeMnV-wHyKGvMPrvdCpcjHf_aGWc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGDLy4STCnHbg/company-logo_200_200/B56ZnZxDipI0AI-/0/1760295142304/amazon_logo?e=1776902400&v=beta&t=Pkt-34tlkuFgo_d6O--s7BFOke10xwNIu23VHSfAC1Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGDLy4STCnHbg/company-logo_100_100/B56ZnZxDipI0AQ-/0/1760295142304/amazon_logo?e=1776902400&v=beta&t=Glfc3A2Yqstx_u6NdGLKHNNMcZSYljXNIHa7f-Ob1fA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Adept AI Labs",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/81330326/",
+        "companyId": "81330326",
+        "duration": "1 yr 10 mos",
+        "description": "Research lead that worked across the whole modeling pipeline / stack to build browser agents:\n- Built the data, modeling, and product stacks for Adept's first vision-only browser agent\n- Multi-modal architectures and self-supervised pretraining tasks for UI grounding / understanding\n- https://www.adept.ai/blog/fuyu-8b, https://www.adept.ai/blog/adept-fuyu-heavy",
+        "skills": null,
+        "startDate": {
+          "month": "Oct",
+          "year": 2022,
+          "text": "Oct 2022"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2024,
+          "text": "Jul 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHoZ-QBmwsa0g/company-logo_400_400/company-logo_400_400/0/1677107534930/adeptailabs_logo?e=1776902400&v=beta&t=MLwoe8NswpecVBq01ulf5Io-hjA3eaqh1ZHftkLJkKY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHoZ-QBmwsa0g/company-logo_400_400/company-logo_400_400/0/1677107534930/adeptailabs_logo?e=1776902400&v=beta&t=MLwoe8NswpecVBq01ulf5Io-hjA3eaqh1ZHftkLJkKY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHoZ-QBmwsa0g/company-logo_200_200/company-logo_200_200/0/1677107534930/adeptailabs_logo?e=1776902400&v=beta&t=-qdl2HvFFkkqiTxfj0GvsqGlttukpDIEalcIN-Wnm58",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHoZ-QBmwsa0g/company-logo_100_100/company-logo_100_100/0/1677107534930/adeptailabs_logo?e=1776902400&v=beta&t=nsB1bbhe_2fF8qMI6xY1aOvvNzunlU2PivxZ7op3RfU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Staff Software Engineer, Applied ML",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Lyft",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/2620735/",
+        "companyId": "2620735",
+        "duration": "3 yrs 2 mos",
+        "description": "Led the ML modeling research and ML system architecture design across a broad range of Lyft's problem spaces:\n- Continual learning methods to adapt to Lyft's dynamic marketplace\n- Causal ML for driver incentives and cancel fees\n- Distributed training and low-latency inference for ETA\n- Transformer-based architecture for destination ranking",
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2019,
+          "text": "Sep 2019"
+        },
+        "endDate": {
+          "month": "Oct",
+          "year": 2022,
+          "text": "Oct 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQG5JWwh4GET8A/company-logo_400_400/B4EZdbVQ6oHcAg-/0/1749583990773/lyft_logo?e=1776902400&v=beta&t=n5j1LT_FsmnmDoPh_dmlOjqsSdpfIiOaL_I71Dljbx4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQG5JWwh4GET8A/company-logo_400_400/B4EZdbVQ6oHcAg-/0/1749583990773/lyft_logo?e=1776902400&v=beta&t=n5j1LT_FsmnmDoPh_dmlOjqsSdpfIiOaL_I71Dljbx4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQG5JWwh4GET8A/company-logo_200_200/B4EZdbVQ6oHcAQ-/0/1749583990773/lyft_logo?e=1776902400&v=beta&t=FP4PxtIM-jwBZ0SL9dmsojUQJ7BlTPhdDVuuSOys5Rg",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQG5JWwh4GET8A/company-logo_100_100/B4EZdbVQ6oHcAY-/0/1749583990773/lyft_logo?e=1776902400&v=beta&t=NMu-IRh7aWXHPj4FKMazAZBgYyVemQYq0nJwwPecEEA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Development Engineer",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Omniscience Corporation",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/18042070/",
+        "companyId": "18042070",
+        "duration": "2 yrs 10 mos",
+        "description": "Developed machine learning solutions to tackle document digitization and insurance risk modeling. Lead teams through entire project pipelines: from ideation, through prototyping, to production deployment and beyond.\n\nInvented a novel deep learning strategy for handling bespoke document information extraction. Worked on performing ML decision explainability in a way that end-users could easily digest. Built models to automate 30% of customer's insurance applications.",
+        "skills": null,
+        "startDate": {
+          "month": "Nov",
+          "year": 2016,
+          "text": "Nov 2016"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2019,
+          "text": "Aug 2019"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQF7N31UFlTwEg/company-logo_400_400/company-logo_400_400/0/1630633941775/omnisciencecorporation_logo?e=1776902400&v=beta&t=OnXI2gvUpRwSRVC0tZz3-KTyO39D3wVcs_dGgQ7Wep8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQF7N31UFlTwEg/company-logo_400_400/company-logo_400_400/0/1630633941775/omnisciencecorporation_logo?e=1776902400&v=beta&t=OnXI2gvUpRwSRVC0tZz3-KTyO39D3wVcs_dGgQ7Wep8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQF7N31UFlTwEg/company-logo_200_200/company-logo_200_200/0/1630633941775/omnisciencecorporation_logo?e=1776902400&v=beta&t=8NFRF6o-yj1SbTs4SfoB2nQgIkBWy2k8qo7GVBYsqHg",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQF7N31UFlTwEg/company-logo_100_100/company-logo_100_100/0/1630633941775/omnisciencecorporation_logo?e=1776902400&v=beta&t=h0pxSo-bvuzSwcirTqU_XDm2Dmztc4RUtU0InJ9ySjo",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Applied Science Intern",
+        "location": "Glendale, CA",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Walt Disney Imagineering",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1295/",
+        "companyId": "1295",
+        "duration": "7 mos",
+        "description": "Provided technical expertise on science and engineering problems as a designated expert. Analyzed multi-phase fluid-surface interactions. Led cross-functional teams to solve projects’ engineering challenges. Managed multiple vendors and in-house customers simultaneously.",
+        "skills": null,
+        "startDate": {
+          "month": "Oct",
+          "year": 2015,
+          "text": "Oct 2015"
+        },
+        "endDate": {
+          "month": "Apr",
+          "year": 2016,
+          "text": "Apr 2016"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFYzQ_QIy-ScA/company-logo_400_400/B4EZjm3KxeIQAc-/0/1756219878871/walt_disney_imagineering_logo?e=1776902400&v=beta&t=tvNCVsvpqMYQZKPjd5UlxotHo8kleE6FYJlVfxKzn6c",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFYzQ_QIy-ScA/company-logo_400_400/B4EZjm3KxeIQAc-/0/1756219878871/walt_disney_imagineering_logo?e=1776902400&v=beta&t=tvNCVsvpqMYQZKPjd5UlxotHo8kleE6FYJlVfxKzn6c",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFYzQ_QIy-ScA/company-logo_200_200/B4EZjm3KxeIQAM-/0/1756219878871/walt_disney_imagineering_logo?e=1776902400&v=beta&t=h1FxZRVwgtXsqsOoacT9hxEMdUzEtk6z966QTon50oE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFYzQ_QIy-ScA/company-logo_100_100/B4EZjm3KxeIQAU-/0/1756219878871/walt_disney_imagineering_logo?e=1776902400&v=beta&t=UW6MVTKq2cQMTKfMSokiqdp-wyUN7BrKdm19vaApo7Y",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Process Development Intern",
+        "location": "United States",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Amyris",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/28434/",
+        "companyId": "28434",
+        "duration": "4 mos",
+        "description": "Bioengineering data analytics and modeling:\nCreated a model for growth rate estimation for CSTR fermentations. Developed from scratch a Nitrogen balance calculator that obtained 80% accuracy. Handled data-mining, cleaning, and analysis using Python, SQL, and JMP.",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2014,
+          "text": "Jun 2014"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2014,
+          "text": "Sep 2014"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQF6ChghGRAo9A/company-logo_400_400/company-logo_400_400/0/1658154250463/amyris_inc_logo?e=1776902400&v=beta&t=Rke7mFICAhW9pzh1FymXZ4YS2dBhqmk9f0Jf0b4GJgU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQF6ChghGRAo9A/company-logo_400_400/company-logo_400_400/0/1658154250463/amyris_inc_logo?e=1776902400&v=beta&t=Rke7mFICAhW9pzh1FymXZ4YS2dBhqmk9f0Jf0b4GJgU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQF6ChghGRAo9A/company-logo_200_200/company-logo_200_200/0/1658154250463/amyris_inc_logo?e=1776902400&v=beta&t=xNUUzzfDZ2_9OR_orlqhhd1-y323sFEa8rpgU5NYvUg",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQF6ChghGRAo9A/company-logo_100_100/company-logo_100_100/0/1658154250463/amyris_inc_logo?e=1776902400&v=beta&t=PZElwWm3VUfbHXx-YyB6wyErLulh7MRNBfLIph17wNo",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Intern",
+        "location": "Osaka, Japan",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Nitto Denko Corporation",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/14718/",
+        "companyId": "14718",
+        "duration": "4 mos",
+        "description": "Organic Li-ion battery research:\nIndependently created and analyzed charge-discharge performance of 20+ battery cell compositions. Successfully communicated with my team and advisor in Japanese.",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2013,
+          "text": "Jun 2013"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2013,
+          "text": "Sep 2013"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEdH9ExGhhDuw/company-logo_400_400/company-logo_400_400/0/1631300959896?e=1776902400&v=beta&t=4DCB3B2G0B4-G264BsZNkXJxWZiNw9XvBYv38ok2gVY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEdH9ExGhhDuw/company-logo_400_400/company-logo_400_400/0/1631300959896?e=1776902400&v=beta&t=4DCB3B2G0B4-G264BsZNkXJxWZiNw9XvBYv38ok2gVY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEdH9ExGhhDuw/company-logo_200_200/company-logo_200_200/0/1631300959896?e=1776902400&v=beta&t=Iub8eWbi5EPLvWvEyb0jbvzaptD1otSOlOM5Y2xm8qo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEdH9ExGhhDuw/company-logo_100_100/company-logo_100_100/0/1631300959896?e=1776902400&v=beta&t=DmQNEOm29EpRCgtIEtPUToLPMTQZpug1Bg95B0h4xtw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Stanford University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1792/",
+        "schoolId": "1792",
+        "degree": "Bachelor's degree",
+        "fieldOfStudy": "Chemical Engineering",
+        "skills": [],
+        "description": "Graduated with a major in Chemical Engineering and minor in Computer Science. Studied Japanese for 3 years, studying abroad in Japan for 1 quarter.",
+        "insights": "Activities and societies: The Stanford ChemE Car Team",
+        "startDate": {
+          "year": 2011,
+          "text": "2011"
+        },
+        "endDate": {
+          "year": 2015,
+          "text": "2015"
+        },
+        "period": "2011 - 2015",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_400_400/company-logo_400_400/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=zzE-1MKqCLrmkqb1p2hJqhVuV2hbdZzC0j_ok6Kyhk8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_400_400/company-logo_400_400/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=zzE-1MKqCLrmkqb1p2hJqhVuV2hbdZzC0j_ok6Kyhk8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_200_200/company-logo_200_200/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=0xd9OiQTt31rPm8_wUnQNPsZKrh8XBXIidNxV9RaB5s",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_100_100/company-logo_100_100/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=9qvsDNg8-8GHe51pI3kr1K_DGeN_zXJEt0DlOSSFopY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Artificial Intelligence",
+        "positions": [
+          "Endorsed by 2 colleagues at Omniscience Corporation"
+        ],
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Bioengineering"
+      },
+      {
+        "name": "Chemical Engineering",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Cross-functional Team Leadership"
+      },
+      {
+        "name": "Data Mining",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Data Science",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "JMP",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Machine Learning",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Modeling",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Python",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Research",
+        "endorsements": "1 endorsement"
+      }
+    ],
+    "publications": [],
+    "courses": [
+      {
+        "title": "\tBasic Principles of Heterogeneous Catalysis with Applications in Energy Transformations",
+        "number": "ChemEng 242"
+      },
+      {
+        "title": "Artificial Intelligence: Principles and Techniques",
+        "number": "CS 221"
+      },
+      {
+        "title": "Biochemical Engineering",
+        "number": "ChemEng 150"
+      },
+      {
+        "title": "Chemical Engineering Plant Design",
+        "number": "ChemEng 180"
+      },
+      {
+        "title": "Design and Analysis of Algorithms",
+        "number": "CS 161"
+      },
+      {
+        "title": "Kinetics and Reactor Design",
+        "number": "ChemEng 170"
+      },
+      {
+        "title": "Micro and Nanoscale Fabrication Engineering",
+        "number": "ChemEng 240"
+      },
+      {
+        "title": "Object-Oriented Systems Design",
+        "number": "CS 108"
+      }
+    ],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [
+      {
+        "name": "English"
+      },
+      {
+        "name": "Japanese"
+      }
+    ],
+    "causes": [
+      "Animal Welfare",
+      "Arts and Culture",
+      "Education",
+      "Environment",
+      "Health",
+      "Human Rights",
+      "Science and Technology"
+    ],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "position": "AI Researcher, Co-founder @ Thinking Machines Lab",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAAEZnBtoBb1Us7ZKgHfOXAYT764pKcDQy848",
+        "firstName": "Songlin",
+        "lastName": "Yang",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "songlin-yang-b8a69728b",
+        "linkedinUrl": "https://www.linkedin.com/in/songlin-yang-b8a69728b"
+      },
+      {
+        "id": "ACoAABQ5lJUBry2byQYf_TtxDF9Rha9l-RqYsaM",
+        "firstName": "Guang-He",
+        "lastName": "Lee",
+        "position": "Thinking Machines Lab | Prev: Anthropic, Citadel, MIT",
+        "publicIdentifier": "guang-he-lee-64577895",
+        "linkedinUrl": "https://www.linkedin.com/in/guang-he-lee-64577895"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABgwxtcBfqsJJUHPwsSPuBE4K9oKyRqUp5o",
+        "firstName": "Lia",
+        "lastName": "Guy",
+        "position": "Research @ OpenAI",
+        "publicIdentifier": "aureliaguy",
+        "linkedinUrl": "https://www.linkedin.com/in/aureliaguy"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAABYs4-IB5mHx5eVfOHzu1e8xlO3q_kb38IM",
+        "firstName": "Brydon",
+        "lastName": "Eastman",
+        "position": "Nerd @ Thinking Machines Labs | Formerly Member of Technical Staff @ OpenAI | PhD in Mathematical Oncology",
+        "publicIdentifier": "brydon-eastman-396719a4",
+        "linkedinUrl": "https://www.linkedin.com/in/brydon-eastman-396719a4"
+      },
+      {
+        "id": "ACoAAACo1tYBGy9sT2OWZuEULOMe4K_b2Y22-F8",
+        "firstName": "Alex",
+        "lastName": "Gartrell",
+        "position": "Engineering @ Thinking Machines, Ex-Meta/Facebook",
+        "publicIdentifier": "alexgartrell",
+        "linkedinUrl": "https://www.linkedin.com/in/alexgartrell"
+      },
+      {
+        "id": "ACoAACHG180BXiyeZ2qJgoggx27e4iM3ajxvp18",
+        "firstName": "Andy",
+        "lastName": "Hwang",
+        "position": "thinking machines",
+        "publicIdentifier": "andrewnhwang",
+        "linkedinUrl": "https://www.linkedin.com/in/andrewnhwang"
+      },
+      {
+        "id": "ACoAABA0sF8BJqwmfoms3veu9TE72tj8JMUQEFA",
+        "firstName": "Sam",
+        "lastName": "Shleifer",
+        "position": "The Biggest Legend",
+        "publicIdentifier": "sam-shleifer-a5307a77",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-shleifer-a5307a77"
+      },
+      {
+        "id": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+        "firstName": "Saurabh",
+        "lastName": "Garg",
+        "position": "Thinking Machines Lab | Prev: Mistral AI, CMU, IIT-B",
+        "publicIdentifier": "saurabh-garg-b680b5b8",
+        "linkedinUrl": "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+      },
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "position": "Thinking about machines",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAABhKWCYBiuV3Zv9Hbt8t0j-xMRqxawBcSgw",
+        "firstName": "Kurt",
+        "lastName": "Shuster",
+        "position": "AI Research Engineer",
+        "publicIdentifier": "kurtshuster1",
+        "linkedinUrl": "https://www.linkedin.com/in/kurtshuster1"
+      },
+      {
+        "id": "ACoAAAl87CYBWKLLyGNTbomy6oqIPv-5n34CXIY",
+        "firstName": "Andrew",
+        "lastName": "Tulloch",
+        "position": "AI Research @ Meta",
+        "publicIdentifier": "andrew-tulloch-17238745",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-tulloch-17238745"
+      },
+      {
+        "id": "ACoAABuhnI0BiTg8hQMSwyg8LxcrYYOowCSOSkM",
+        "firstName": "Brandon",
+        "lastName": "Trabucco",
+        "position": "Thinking Machines Lab; CMU ML (PhD); Berkeley AI (Bachelors); NDSEG Fellow; Singer and Composer",
+        "publicIdentifier": "brandontrabucco",
+        "linkedinUrl": "https://www.linkedin.com/in/brandontrabucco"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "position": "Co-Founder and CEO at Thinking Machines Lab",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAAAO-j_IBXcvIzhZtQ7QNkky6tlnQTcFl9qI",
+        "firstName": "Myle",
+        "lastName": "Ott",
+        "position": "ML infra at Thinking Machines",
+        "publicIdentifier": "myleott",
+        "linkedinUrl": "https://www.linkedin.com/in/myleott"
+      },
+      {
+        "id": "ACoAACszllUBNrpdP_HsYgPJGHnFo9a1xJQqCbo",
+        "firstName": "Arushi",
+        "lastName": "Somani",
+        "position": "ML Research",
+        "publicIdentifier": "arushisomani",
+        "linkedinUrl": "https://www.linkedin.com/in/arushisomani"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAAAji1bkB1eLX4z2Jb9-N2nMhEGNLWptSnqU",
+        "firstName": "Clare",
+        "lastName": "Birch",
+        "publicIdentifier": "clarebirch42",
+        "linkedinUrl": "https://www.linkedin.com/in/clarebirch42"
+      },
+      {
+        "id": "ACoAAC45VRAB_KKa2LfecUjrnaY-pvHUol0xmqA",
+        "firstName": "Gerry",
+        "lastName": "Ogbonnaya",
+        "position": "QC Analyst at Pfizer",
+        "publicIdentifier": "gerry-ogbonnaya-100872197",
+        "linkedinUrl": "https://www.linkedin.com/in/gerry-ogbonnaya-100872197"
+      },
+      {
+        "id": "ACoAABiuPaoBYjfJjm3LgSDkwoNHmJ6T79v0CKw",
+        "firstName": "lynda",
+        "lastName": "Ngankam Tcheudji",
+        "position": "Analytical Scientist at Pfizer",
+        "publicIdentifier": "lynda-ngankam-tcheudji-176809b6",
+        "linkedinUrl": "https://www.linkedin.com/in/lynda-ngankam-tcheudji-176809b6"
+      },
+      {
+        "id": "ACoAAElApkYB7SEfCmGythAqKYlo9DlYUV4LP6A",
+        "firstName": "Stephanie",
+        "lastName": "Siak",
+        "position": "QC Immunology Analyst @ Pfizer || BSc (Hons) Biochemistry & Molecular Biology Graduate at University College Dublin",
+        "publicIdentifier": "stephanie-siak-71a6b72a3",
+        "linkedinUrl": "https://www.linkedin.com/in/stephanie-siak-71a6b72a3"
+      },
+      {
+        "id": "ACoAACjb4dQBt3eNBrjzpYHdiOYL60C0A82ANRI",
+        "firstName": "Natalia",
+        "lastName": "K.",
+        "position": "Scientist",
+        "publicIdentifier": "natalia-k-8706a4171",
+        "linkedinUrl": "https://www.linkedin.com/in/natalia-k-8706a4171"
+      },
+      {
+        "id": "ACoAADeB58MBBVya8hrPY_2wTh3J8iDNGD8yc4c",
+        "firstName": "Bogdan",
+        "lastName": "Baci",
+        "position": "Bioconjugation Scientist | MSAT | Pfizer",
+        "publicIdentifier": "bogdan-baci",
+        "linkedinUrl": "https://www.linkedin.com/in/bogdan-baci"
+      },
+      {
+        "id": "ACoAAC3P-isBDtOayXmpKQwUVBVYRzIIJB2bdIc",
+        "firstName": "Aifric",
+        "lastName": "Corrigan",
+        "position": "Scientist | Drug Discovery | Pfizer BioMedicine Design",
+        "publicIdentifier": "aifric-corrigan",
+        "linkedinUrl": "https://www.linkedin.com/in/aifric-corrigan"
+      },
+      {
+        "id": "ACoAADStxaMB5ALIpL2c5zvLV7UXJmJUui9ug6w",
+        "firstName": "Richard",
+        "lastName": "O'Rahilly",
+        "position": "Continuous Improvement Specialist for Material Supply",
+        "publicIdentifier": "richard-o-rahilly-483b98207",
+        "linkedinUrl": "https://www.linkedin.com/in/richard-o-rahilly-483b98207"
+      },
+      {
+        "id": "ACoAAFA-nVoBlX-B7SiJctGFV7GWtQR8pz4QlNQ",
+        "firstName": "Ellen",
+        "lastName": "McAufield",
+        "position": "QC Analyst at Pfizer ",
+        "publicIdentifier": "ellen-mcaufield",
+        "linkedinUrl": "https://www.linkedin.com/in/ellen-mcaufield"
+      },
+      {
+        "id": "ACoAADyhWykBgDL6YN4PBP61IbU2qVpHPf7P6ek",
+        "firstName": "Laura",
+        "lastName": "Ogwueleka",
+        "position": "Quality Control Chemist at Pfizer | Scientist",
+        "publicIdentifier": "laura-ogwueleka-9757b1244",
+        "linkedinUrl": "https://www.linkedin.com/in/laura-ogwueleka-9757b1244"
+      },
+      {
+        "id": "ACoAADYT6MwBJAMAI_wD0oP15UpMnOwDiclUeOc",
+        "firstName": "Angelika",
+        "lastName": "Krasinska",
+        "position": "Bioprocess Technician & Cat Rescuer",
+        "publicIdentifier": "angelika-krasinska-0b8a17213",
+        "linkedinUrl": "https://www.linkedin.com/in/angelika-krasinska-0b8a17213"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAABqSHaUB_SN399_bm85p8gqt8Nm5mHkk9yU"
+    }
+  }
+}

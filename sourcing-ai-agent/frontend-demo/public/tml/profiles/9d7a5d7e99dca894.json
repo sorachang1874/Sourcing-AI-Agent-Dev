@@ -1,0 +1,875 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAAbBBJsB7BKjeoHuiwf0vzQeqO8JE_y6JIQ",
+    "profile_url": "https://www.linkedin.com/in/ACwAAAbBBJsB7BKjeoHuiwf0vzQeqO8JE_y6JIQ"
+  },
+  "item": {
+    "id": "ACoAAAbBBJsBnpIQdOsJB5IMpR7ePIGOlRam73w",
+    "publicIdentifier": "msaltarelli",
+    "linkedinUrl": "https://www.linkedin.com/in/msaltarelli",
+    "firstName": "Mario",
+    "lastName": "Saltarelli",
+    "emails": [
+      {
+        "email": "mario.saltarelli@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "IT",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America"
+      }
+    },
+    "objectUrn": "113312923",
+    "registeredAt": "2011-04-08T22:33:53.640Z",
+    "topSkills": null,
+    "connectionsCount": 817,
+    "followerCount": 1019,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 1,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": null,
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "IT",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "1 yr 4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2025,
+          "text": "Jan 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Head of IT",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "OpenAI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/11130470/",
+        "companyId": "11130470",
+        "duration": "5 yrs 6 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Aug",
+          "year": 2019,
+          "text": "Aug 2019"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2025,
+          "text": "Jan 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_200_200/B56ZT8EYB8HsAI-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=O6RSWlpQ5W4zNCOCTu621qCyTijLuXFJS4pz2_hBQfo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_100_100/B56ZT8EYB8HsAQ-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=y7RA89V9q8GlAjQ1oRU-jf_-n5zlSXRCnykXBIkgHfM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Systems Engineer",
+        "location": "San Francisco",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "StumbleUpon",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=StumbleUpon",
+        "duration": "3 yrs 8 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "8880355c3871f323f03987999a94417e29c15d8f",
+        "startDate": {
+          "year": 2015,
+          "text": "2015"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2018,
+          "text": "Aug 2018"
+        }
+      },
+      {
+        "position": "IT Manager",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "StumbleUpon",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=StumbleUpon",
+        "duration": "2 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "8880355c3871f323f03987999a94417e29c15d8f",
+        "startDate": {
+          "month": "Dec",
+          "year": 2014,
+          "text": "Dec 2014"
+        },
+        "endDate": {
+          "year": 2015,
+          "text": "2015"
+        }
+      },
+      {
+        "position": "IT Engineer",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "StumbleUpon",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=StumbleUpon",
+        "duration": "1 yr 7 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "8880355c3871f323f03987999a94417e29c15d8f",
+        "startDate": {
+          "month": "Jun",
+          "year": 2013,
+          "text": "Jun 2013"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2014,
+          "text": "Dec 2014"
+        }
+      },
+      {
+        "position": "IT Specialist",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "GREE International, Inc",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=GREE+International%2C+Inc",
+        "duration": "8 mos",
+        "description": "IT support specialist",
+        "skills": null,
+        "startDate": {
+          "month": "Oct",
+          "year": 2012,
+          "text": "Oct 2012"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2013,
+          "text": "May 2013"
+        }
+      },
+      {
+        "position": "Genius",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Apple Retail",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/162479/",
+        "companyId": "162479",
+        "duration": "3 yrs 8 mos",
+        "description": "Lead Trainings Of 10+\nMentored New Technicians\nLead Team Initiatives\nMac Repair\nCustomer Service",
+        "skills": null,
+        "startDate": {
+          "month": "Nov",
+          "year": 2008,
+          "text": "Nov 2008"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2012,
+          "text": "Jun 2012"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_400_400/company-logo_400_400/0/1630637844948/apple_logo?e=1776902400&v=beta&t=KteXM40NNLQ3nz21Do-neoy-f7lbDDA7kJmtS5wwrL4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_400_400/company-logo_400_400/0/1630637844948/apple_logo?e=1776902400&v=beta&t=KteXM40NNLQ3nz21Do-neoy-f7lbDDA7kJmtS5wwrL4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_200_200/company-logo_200_200/0/1630637844948/apple_logo?e=1776902400&v=beta&t=I8RMorsmHMk3gA9b3fT4m2HDgfVtfdB6se4bEZcMHb8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_100_100/company-logo_100_100/0/1630637844948/apple_logo?e=1776902400&v=beta&t=8c3EpxT43tZMihGirOM7eBnDzFHAGiYV-OxaRj_xfjo",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Specialist",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Apple Retail",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/162479/",
+        "companyId": "162479",
+        "duration": "5 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Oct",
+          "year": 2007,
+          "text": "Oct 2007"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2008,
+          "text": "Feb 2008"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_400_400/company-logo_400_400/0/1630637844948/apple_logo?e=1776902400&v=beta&t=KteXM40NNLQ3nz21Do-neoy-f7lbDDA7kJmtS5wwrL4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_400_400/company-logo_400_400/0/1630637844948/apple_logo?e=1776902400&v=beta&t=KteXM40NNLQ3nz21Do-neoy-f7lbDDA7kJmtS5wwrL4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_200_200/company-logo_200_200/0/1630637844948/apple_logo?e=1776902400&v=beta&t=I8RMorsmHMk3gA9b3fT4m2HDgfVtfdB6se4bEZcMHb8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_100_100/company-logo_100_100/0/1630637844948/apple_logo?e=1776902400&v=beta&t=8c3EpxT43tZMihGirOM7eBnDzFHAGiYV-OxaRj_xfjo",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Lapeer County Ed-Tech Center",
+        "schoolLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Lapeer+County+Ed-Tech+Center",
+        "schoolId": null,
+        "degree": null,
+        "fieldOfStudy": null,
+        "skills": [],
+        "startDate": {
+          "year": 2005,
+          "text": "2005"
+        },
+        "endDate": {
+          "year": 2007,
+          "text": "2007"
+        },
+        "period": "2005 - 2007",
+        "schoolLogo": null
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [
+      {
+        "givenBy": "Christina M. Marcet",
+        "givenByHeadline": "Information Architect | Documentation Specialist",
+        "givenAt": "April 5, 2014, Christina M. worked with Mario on the same team",
+        "givenByLink": "https://www.linkedin.com/in/marcet",
+        "description": "There's not enough space here to summarize Mario's distinguishing features as an IT Engineer. Basically, he is a gem. Specifically, he has an encyclopedic knowledge of Apple machines and easily identifies solutions to most obscure problem you might with them. Not only that, he has all the hallmarks of a leader: friendly, communicative, diplomatic, endlessly patient, interruptable (never -- and I mean *never* -- is he too busy to help you), great with followup, fantastic attitude and quirky sense of humor, encouraging, highly ethical, egoless, chases down the answers to your questions, focused and productive, stealthily wears flamboyantly colorful socks, respects authority, has an astonishing memory, is remarkably adaptable to change, is even-keeled during the worst network meltdowns... see what I mean?  Mario is a much-respected and admired member of the IT community, disarming all the grumpy-sysadmin stereotypes in one fell swoop. Work with him and you'll not only agree, you'll wish they were all like this.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D03AQEuaI7PoAQ_oA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1623363357531?e=1776902400&v=beta&t=Ad6kvQrovswR_q926C-CMVIOmQpZoMoO8xrQbNi5tQA",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D03AQEuaI7PoAQ_oA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1623363357531?e=1776902400&v=beta&t=Ad6kvQrovswR_q926C-CMVIOmQpZoMoO8xrQbNi5tQA",
+              "width": 742,
+              "height": 742,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D03AQEuaI7PoAQ_oA/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1623363357531?e=1776902400&v=beta&t=_sEMkhJ3656D7YesykjMyLqgVx2apo4x5L0-txPxU1o",
+              "width": 399,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D03AQEuaI7PoAQ_oA/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1623363357531?e=1776902400&v=beta&t=7IjcNZtFK7FheQnkjg_luhC5frRaT_rqUcbGXKPw_98",
+              "width": 199,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D03AQEuaI7PoAQ_oA/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1623363357531?e=1776902400&v=beta&t=3rR1Lq8HgSywYtM2lNgLOTa0Wt7EIveEXJnRRMEITNU",
+              "width": 99,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Rafael Assumpcao",
+        "givenByHeadline": "Senior IT Operations Manager at Facebook",
+        "givenAt": "May 10, 2013, Rafael managed Mario directly",
+        "givenByLink": "https://www.linkedin.com/in/assumpcaoraf",
+        "description": "Mario delivery quality work and is committed to his users satisfaction. He took care of important systems at GREE IT such as our File Server reorganization, MDM and was taking over our monitoring platform. Per his own initiative he deployed creative solution to monitor our Corporate Data Center. His accomplishments were recognized by everyone, including our head quarter in Japan. He has my respect, gratitude and recommendation.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQFsYJB8PTocfA/profile-displayphoto-shrink_800_800/B56ZQ4pXypH0Ac-/0/1736117193525?e=1776902400&v=beta&t=HEuySpWVmblSn4EsN4U3QJefKALBzT4t4MHtfR1RBIE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQFsYJB8PTocfA/profile-displayphoto-shrink_800_800/B56ZQ4pXypH0Ac-/0/1736117193525?e=1776902400&v=beta&t=HEuySpWVmblSn4EsN4U3QJefKALBzT4t4MHtfR1RBIE",
+              "width": 800,
+              "height": 800,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQFsYJB8PTocfA/profile-displayphoto-shrink_400_400/B56ZQ4pXypH0Ag-/0/1736117193498?e=1776902400&v=beta&t=MJ-RS5ZkNGoeYhCD4v9t2zxoowUcAV43ACmowmghIAY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQFsYJB8PTocfA/profile-displayphoto-shrink_200_200/B56ZQ4pXypH0AY-/0/1736117193498?e=1776902400&v=beta&t=R2wzflhf5It7X05i1HVjWg7uFvJ0_ZsduK5lPiuiGUU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQFsYJB8PTocfA/profile-displayphoto-shrink_100_100/B56ZQ4pXypH0AU-/0/1736117193498?e=1776902400&v=beta&t=rUd5Nv02eWvoAj0TMEvXW8_8lJaLCKp7V43DDfe0iQ4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Ambles Kwok, CISSP",
+        "givenByHeadline": "Head of Engineering & Head of Security | Cyber Risk Management",
+        "givenAt": "May 10, 2013, Ambles was senior to Mario but didn't manage Mario directly",
+        "givenByLink": "https://www.linkedin.com/in/ambles",
+        "description": "Mario is a very enthusiastic, passionate, and friendly IT specialist. Mario helped my team and I with many IT issues during his tenure in GREE. He respects the urgency of the issues and handles them appropriate. His response time always meet the OLA. Mario follows through his assignment, ensuring each task is completed professionally. Mario is great teammate and an asset to any IT team.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E03AQEs13sBa3hfYg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1558700311127?e=1776902400&v=beta&t=AuL6z7ANkThzdTgkE4XDfooaVVQo9Vh5-fPvatXg1xo",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E03AQEs13sBa3hfYg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1558700311127?e=1776902400&v=beta&t=AuL6z7ANkThzdTgkE4XDfooaVVQo9Vh5-fPvatXg1xo",
+              "width": 500,
+              "height": 500,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E03AQEs13sBa3hfYg/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1558700311378?e=1776902400&v=beta&t=AVrFHcTvUK1gWssKPdvMj4Hmh67Oge5m5WxS1wtyuIQ",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E03AQEs13sBa3hfYg/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1558700310840?e=1776902400&v=beta&t=KW-z-WXxa3VKHSyszgIRb_y9cvj32guIojhWdxIuCD0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E03AQEs13sBa3hfYg/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1558700310877?e=1776902400&v=beta&t=xjhg4wiEkcfNomZ2GnZbbdg1pmv1RD6UtNAeI1AIBbM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "skills": [
+      {
+        "name": "iLife",
+        "positions": [
+          "Endorsed by 18 colleagues at Apple"
+        ],
+        "endorsements": "26 endorsements"
+      },
+      {
+        "name": "iWork",
+        "positions": [
+          "Endorsed by 10 colleagues at Apple"
+        ],
+        "endorsements": "15 endorsements"
+      },
+      {
+        "name": "Apple Certified Technician",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Aperture",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Apple Certified",
+        "endorsements": "25 endorsements"
+      },
+      {
+        "name": "iPod",
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "Mac OS X",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Apple Aperture",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Mac OS X Server",
+        "endorsements": "11 endorsements"
+      },
+      {
+        "name": "Apple Remote Desktop",
+        "endorsements": "10 endorsements"
+      },
+      {
+        "name": "Mac",
+        "endorsements": "23 endorsements"
+      },
+      {
+        "name": "iPhoto",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Macintosh hardware",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "iPhone",
+        "endorsements": "17 endorsements"
+      },
+      {
+        "name": "Keynote",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "iTunes",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Mac OS",
+        "endorsements": "10 endorsements"
+      },
+      {
+        "name": "Computer Repair",
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "Logic Pro",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "iOS",
+        "endorsements": "28 endorsements"
+      },
+      {
+        "name": "Troubleshooting",
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "Mobile Device Management",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "System Deployment",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Help Desk Support",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "VMware Fusion",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Parallels",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Hardware Support",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "OS X",
+        "endorsements": "27 endorsements"
+      },
+      {
+        "name": "Remote Desktop"
+      },
+      {
+        "name": "Active Directory",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Linux",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Windows",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Servers",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Computer Hardware",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "Windows 7",
+        "endorsements": "10 endorsements"
+      },
+      {
+        "name": "iPad",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "iPhone Support",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "Data Center",
+        "endorsements": "4 endorsements"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAABEmYXYB5f-3ZmFG8dI-n9XAlqySBqO-2PA",
+        "firstName": "Luke",
+        "lastName": "Carlson",
+        "publicIdentifier": "jlukecarlson",
+        "linkedinUrl": "https://www.linkedin.com/in/jlukecarlson"
+      },
+      {
+        "id": "ACoAAATAFhsB-MSu8aXWUBacbi6fvU_SaAqdBH4",
+        "firstName": "Jeff",
+        "lastName": "Hanson",
+        "publicIdentifier": "jshanson7",
+        "linkedinUrl": "https://www.linkedin.com/in/jshanson7"
+      },
+      {
+        "id": "ACoAAEZnBtoBb1Us7ZKgHfOXAYT764pKcDQy848",
+        "firstName": "Songlin",
+        "lastName": "Yang",
+        "publicIdentifier": "songlin-yang-b8a69728b",
+        "linkedinUrl": "https://www.linkedin.com/in/songlin-yang-b8a69728b"
+      },
+      {
+        "id": "ACoAACaOARIBRO2EEH12QWQO29L__oI3N2K4u14",
+        "firstName": "Mingjie",
+        "lastName": "Sun",
+        "publicIdentifier": "mingjie-sun-06a761160",
+        "linkedinUrl": "https://www.linkedin.com/in/mingjie-sun-06a761160"
+      },
+      {
+        "id": "ACoAAByqXXUBEhOg629uCLeNJjh_JXVoDI80KAo",
+        "firstName": "Danilo",
+        "lastName": "Carvalho",
+        "publicIdentifier": "danilo-carvalho-35908a115",
+        "linkedinUrl": "https://www.linkedin.com/in/danilo-carvalho-35908a115"
+      },
+      {
+        "id": "ACoAABGzJXcBFaJqVFgqgYNbhaPVKRkP3iG33dA",
+        "firstName": "Noah",
+        "lastName": "Shpak",
+        "publicIdentifier": "nshpak",
+        "linkedinUrl": "https://www.linkedin.com/in/nshpak"
+      },
+      {
+        "id": "ACoAABebSPMByZP3ZnuWuJpWKhAcOO8xLxhLatU",
+        "firstName": "Alicia",
+        "lastName": "P.",
+        "publicIdentifier": "aliciacphan",
+        "linkedinUrl": "https://www.linkedin.com/in/aliciacphan"
+      },
+      {
+        "id": "ACoAAEAbBpQBT4luNj8gPYU6CgQ_GNJey3AJTiE",
+        "firstName": "Rajat",
+        "lastName": "Goel",
+        "publicIdentifier": "rajatgoel2010",
+        "linkedinUrl": "https://www.linkedin.com/in/rajatgoel2010"
+      },
+      {
+        "id": "ACoAACKNVUMBztbhQ3RUYQ-Mg89xUJ39N-XJpM4",
+        "firstName": "Long",
+        "lastName": "Lian",
+        "publicIdentifier": "longlian",
+        "linkedinUrl": "https://www.linkedin.com/in/longlian"
+      },
+      {
+        "id": "ACoAAA8JdrgBK-ShYTbFkZL80wSafgw-uaGsb9Q",
+        "firstName": "Kevin",
+        "lastName": "B.",
+        "publicIdentifier": "kevin-b-5885a270",
+        "linkedinUrl": "https://www.linkedin.com/in/kevin-b-5885a270"
+      },
+      {
+        "id": "ACoAABLLpuMBU7a9WPW-GubLTIkDjAF6hz7Ujkc",
+        "firstName": "Daniel",
+        "lastName": "Xu",
+        "publicIdentifier": "daniel-xu-42b73289",
+        "linkedinUrl": "https://www.linkedin.com/in/daniel-xu-42b73289"
+      },
+      {
+        "id": "ACoAABoG0oUBl986ZaMrLUASG1NhDoJyVlav4Po",
+        "firstName": "Eric",
+        "lastName": "Zhang",
+        "publicIdentifier": "ekzhang",
+        "linkedinUrl": "https://www.linkedin.com/in/ekzhang"
+      },
+      {
+        "id": "ACoAADwrCKUB0FU7B3O7AIg9j_wieI-QOvJrtEE",
+        "firstName": "Katy",
+        "lastName": "Liemandt",
+        "publicIdentifier": "katy-liemandt-399092242",
+        "linkedinUrl": "https://www.linkedin.com/in/katy-liemandt-399092242"
+      },
+      {
+        "id": "ACoAAASw4agBEh4EouNNX7oAaDsiSNj0_E2dF6k",
+        "firstName": "Kraig",
+        "lastName": "Hengst",
+        "publicIdentifier": "kraighengst",
+        "linkedinUrl": "https://www.linkedin.com/in/kraighengst"
+      },
+      {
+        "id": "ACoAAC9rfpYB9euIDgF4Yyk3m40DRa2_3dEv1gM",
+        "firstName": "Wade",
+        "lastName": "Hickey",
+        "publicIdentifier": "wade-hickey-69a5291a2",
+        "linkedinUrl": "https://www.linkedin.com/in/wade-hickey-69a5291a2"
+      },
+      {
+        "id": "ACoAAB4qbUUBsc9H_NLZN2duLUOOyyFDm-k_ACo",
+        "firstName": "Riley",
+        "lastName": "Shanahan",
+        "publicIdentifier": "rileyshanny",
+        "linkedinUrl": "https://www.linkedin.com/in/rileyshanny"
+      },
+      {
+        "id": "ACoAAAqPUXUB26nPtwJxJLy_Ar7H-YLBlb44QnY",
+        "firstName": "Neal",
+        "lastName": "Wu",
+        "publicIdentifier": "nealwu",
+        "linkedinUrl": "https://www.linkedin.com/in/nealwu"
+      },
+      {
+        "id": "ACoAAAeoHjYB_Lo5sUFlpZpz2L74oe9nEIKztQA",
+        "firstName": "Jenya",
+        "lastName": "L.",
+        "publicIdentifier": "jenya-l",
+        "linkedinUrl": "https://www.linkedin.com/in/jenya-l"
+      },
+      {
+        "id": "ACoAAEWISqkBsSmXKPSyJai6rQwhRBUoHgtqFBA",
+        "firstName": "Feng",
+        "lastName": "Yao",
+        "publicIdentifier": "feng-yao-661818286",
+        "linkedinUrl": "https://www.linkedin.com/in/feng-yao-661818286"
+      },
+      {
+        "id": "ACoAAAAdzCEB9t8wLSGcpoQ71RdetK75KW7RgS4",
+        "firstName": "Mark",
+        "lastName": "Jen",
+        "publicIdentifier": "markjen",
+        "linkedinUrl": "https://www.linkedin.com/in/markjen"
+      },
+      {
+        "id": "ACoAAGKDsJgBWsokuuSZfKWRPVa7hBXeQTfrA0Q",
+        "firstName": "Nourhan",
+        "lastName": "Hany",
+        "position": "‏Freelance Graphic Designer‏ في ‏Freelancer.com‏",
+        "publicIdentifier": "nourhan-hany-1086283a1",
+        "linkedinUrl": "https://www.linkedin.com/in/nourhan-hany-1086283a1"
+      },
+      {
+        "id": "ACoAAGDWIksBlJBQ6yLB1D8aji0XfjRiW84siqc",
+        "firstName": "Akinbola",
+        "lastName": "Lateef",
+        "position": "Thinker  at Thinking Machines Lab",
+        "publicIdentifier": "akinbola-lateef-94b110394",
+        "linkedinUrl": "https://www.linkedin.com/in/akinbola-lateef-94b110394"
+      },
+      {
+        "id": "ACoAAF1g88AB-G-z-kA00gmZAGbH1CebbGsdmjQ",
+        "firstName": "Jason",
+        "lastName": "Morales",
+        "position": "Certified Phlebotomist at Thinking Machines Lab",
+        "publicIdentifier": "jason-morales-5407b5378",
+        "linkedinUrl": "https://www.linkedin.com/in/jason-morales-5407b5378"
+      },
+      {
+        "id": "ACoAACA8zv0BTVWLSUHsPJrWsUI10jzn0F57pHo",
+        "firstName": "Damir",
+        "lastName": "Sartayev",
+        "position": "AI CTO & Founder | MY project LNN+LLM+QML=AGI | Quantum, Neuro-symbolic AI | Liquid Neural Networks | RWKV | Mamba(SSM)  | Pharmacy AI, Minerals AI | Full‑Stack AI (LLMs, Agents, Fine‑Tuning, RAG, Vision) | Q-Day Q-ark",
+        "publicIdentifier": "damir-q-day-q-ark",
+        "linkedinUrl": "https://www.linkedin.com/in/damir-q-day-q-ark"
+      },
+      {
+        "id": "ACoAADYMzQABdXTSxolT2YjHmNBBSeT6YrGSQmQ",
+        "firstName": "Tarushii",
+        "lastName": "Goel",
+        "position": "Member of Technical Staff @ Thinking Machines",
+        "publicIdentifier": "tarushii-goel",
+        "linkedinUrl": "https://www.linkedin.com/in/tarushii-goel"
+      },
+      {
+        "id": "ACoAAGQmJecBBj5BzIeaidgEvD9pNT8ekbyvAA8",
+        "firstName": "Micky",
+        "lastName": "Mnaree",
+        "position": "Engineer at Thinking Machines Lab",
+        "publicIdentifier": "micky-mnaree-6078523aa",
+        "linkedinUrl": "https://www.linkedin.com/in/micky-mnaree-6078523aa"
+      },
+      {
+        "id": "ACoAACxX5AEBYonmfz9M8tQ8jO7Nx3jIXe_VSjw",
+        "firstName": "Sophie Rose",
+        "lastName": "Shapiro",
+        "position": "Creative Operations",
+        "publicIdentifier": "sophie-rose-shapiro",
+        "linkedinUrl": "https://www.linkedin.com/in/sophie-rose-shapiro"
+      },
+      {
+        "id": "ACoAAGO6_kYBSWZ_9llmmeAdGrKehnbJ15hsMm4",
+        "firstName": "Li",
+        "lastName": "James",
+        "position": "Social Researcher at Thinking Machines Lab",
+        "publicIdentifier": "li-james-6864263a8",
+        "linkedinUrl": "https://www.linkedin.com/in/li-james-6864263a8"
+      },
+      {
+        "id": "ACoAAFrO2hYBQn9I3leFzBjeUmgehOiK_AGSCr8",
+        "firstName": "Muhammad",
+        "lastName": "Adam Usman",
+        "position": "Electrician at Thinking Machines Lab",
+        "publicIdentifier": "muhammad-adam-usman-472276366",
+        "linkedinUrl": "https://www.linkedin.com/in/muhammad-adam-usman-472276366"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAAbBBJsB7BKjeoHuiwf0vzQeqO8JE_y6JIQ"
+    }
+  }
+}

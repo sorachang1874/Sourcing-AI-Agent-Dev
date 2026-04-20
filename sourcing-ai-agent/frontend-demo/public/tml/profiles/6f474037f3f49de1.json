@@ -1,0 +1,861 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAAPH3hkBKUY1ASVVPprZyWswaNg5KbLT1eU",
+    "profile_url": "https://www.linkedin.com/in/ACwAAAPH3hkBKUY1ASVVPprZyWswaNg5KbLT1eU"
+  },
+  "item": {
+    "id": "ACoAAAPH3hkBD4YvYU1lCbTlnKlqFvJCZxL3KlQ",
+    "publicIdentifier": "weiheng-zhang",
+    "linkedinUrl": "https://www.linkedin.com/in/weiheng-zhang",
+    "firstName": "Weiheng",
+    "lastName": "Zhang",
+    "emails": [
+      {
+        "email": "weiheng.zhang@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Founding Head of Finance at Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco Bay Area",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "63430169",
+    "registeredAt": "2010-01-11T08:01:25.000Z",
+    "topSkills": null,
+    "connectionsCount": 2621,
+    "followerCount": 3795,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 7,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "18062",
+        "companyId": "4794",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/4794/",
+        "schoolName": "Georgetown University"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/C5603AQFueXsU_nNHFg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1634756809961?e=1776902400&v=beta&t=p9xQXnIecY6Ryl9MRxVxOaARXKalb3BQi3He6ycLUlk",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQFueXsU_nNHFg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1634756809961?e=1776902400&v=beta&t=p9xQXnIecY6Ryl9MRxVxOaARXKalb3BQi3He6ycLUlk",
+          "width": 600,
+          "height": 600,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQFueXsU_nNHFg/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1634756809961?e=1776902400&v=beta&t=jtuHVAcE4bhJXMKl0gLqt19m1Xpu9MRgdL0gccIqVjQ",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQFueXsU_nNHFg/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1634756809961?e=1776902400&v=beta&t=GkB-1tUcyJEDu043sylbxWn38T4kVDboYDjhLwPpdyc",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQFueXsU_nNHFg/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1634756809961?e=1776902400&v=beta&t=yxGtpIvarjYNz42diuPkYRCNiTMMOwJLcIxWItf7K7c",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": {
+      "url": "https://media.licdn.com/dms/image/v2/C4D16AQGe1_8Rp4_YMA/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1516805925756?e=1776902400&v=beta&t=bt9BwrFBslUZcwObyJOzvrtK2DtgSyvjdEIotpkQwgY",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4D16AQGe1_8Rp4_YMA/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1516805925756?e=1776902400&v=beta&t=bt9BwrFBslUZcwObyJOzvrtK2DtgSyvjdEIotpkQwgY",
+          "width": 1400,
+          "height": 350,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4D16AQGe1_8Rp4_YMA/profile-displaybackgroundimage-shrink_200_800/profile-displaybackgroundimage-shrink_200_800/0/1516805925720?e=1776902400&v=beta&t=ZR-bnZ_x4m1wI_gT6ydhWzAVlPBsSBJN8L4YP8NisIc",
+          "width": 800,
+          "height": 200,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "photo": "https://media.licdn.com/dms/image/v2/C5603AQFueXsU_nNHFg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1634756809961?e=1776902400&v=beta&t=p9xQXnIecY6Ryl9MRxVxOaARXKalb3BQi3He6ycLUlk",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Founding Head of Finance at Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Founding Head of Finance",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "10 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jul",
+          "year": 2025,
+          "text": "Jul 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Angel Investor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "WZ",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/109042968/",
+        "companyId": "109042968",
+        "duration": "5 yrs 4 mos",
+        "description": "Various AI companies",
+        "skills": null,
+        "startDate": {
+          "year": 2021,
+          "text": "2021"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQFTvsT0RZNQWQ/company-logo_400_400/B56ZmhEmCbI0AY-/0/1759343960865?e=1776902400&v=beta&t=kRD5OFDZlsUnZQJa0PCoVptF1N8I3gD-AH8GJzOi6C8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFTvsT0RZNQWQ/company-logo_400_400/B56ZmhEmCbI0AY-/0/1759343960865?e=1776902400&v=beta&t=kRD5OFDZlsUnZQJa0PCoVptF1N8I3gD-AH8GJzOi6C8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFTvsT0RZNQWQ/company-logo_200_200/B56ZmhEmCbI0AI-/0/1759343960865?e=1776902400&v=beta&t=NhGCk3A2V8IdQ5oMSM4fizBvrwsvBfvbJuO5JlotA7g",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFTvsT0RZNQWQ/company-logo_100_100/B56ZmhEmCbI0AQ-/0/1759343960865?e=1776902400&v=beta&t=5e2Wm4BofWfXp6jb67vJZ0-AIXClR6VNxNjEys5IuAU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Advisor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "AngelList",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1806556/",
+        "companyId": "1806556",
+        "duration": "3 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "1eba943f43910a3c3adaeec01b8a1e4aa7642672",
+        "startDate": {
+          "month": "Jul",
+          "year": 2025,
+          "text": "Jul 2025"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2025,
+          "text": "Sep 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHK8OClv0DLwA/company-logo_400_400/company-logo_400_400/0/1668476594231/angellist_logo?e=1776902400&v=beta&t=Ia1G9pTzMr42xKpbE939jAWRsu8zqm3JAxWIN6Fek7A",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHK8OClv0DLwA/company-logo_400_400/company-logo_400_400/0/1668476594231/angellist_logo?e=1776902400&v=beta&t=Ia1G9pTzMr42xKpbE939jAWRsu8zqm3JAxWIN6Fek7A",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHK8OClv0DLwA/company-logo_200_200/company-logo_200_200/0/1668476594231/angellist_logo?e=1776902400&v=beta&t=ht0r67sRiyK4GNmoWyVvfxxhfzN8RJRdECr5e_GSDA8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHK8OClv0DLwA/company-logo_100_100/company-logo_100_100/0/1668476594231/angellist_logo?e=1776902400&v=beta&t=rKzi8SeQ1QOeg8YTGIUfVtLVcZIH6oWc5OU9TNaKCSc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "CFO & COO",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "AngelList",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1806556/",
+        "companyId": "1806556",
+        "duration": "3 yrs 11 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "1eba943f43910a3c3adaeec01b8a1e4aa7642672",
+        "startDate": {
+          "month": "Sep",
+          "year": 2021,
+          "text": "Sep 2021"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2025,
+          "text": "Jul 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHK8OClv0DLwA/company-logo_400_400/company-logo_400_400/0/1668476594231/angellist_logo?e=1776902400&v=beta&t=Ia1G9pTzMr42xKpbE939jAWRsu8zqm3JAxWIN6Fek7A",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHK8OClv0DLwA/company-logo_400_400/company-logo_400_400/0/1668476594231/angellist_logo?e=1776902400&v=beta&t=Ia1G9pTzMr42xKpbE939jAWRsu8zqm3JAxWIN6Fek7A",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHK8OClv0DLwA/company-logo_200_200/company-logo_200_200/0/1668476594231/angellist_logo?e=1776902400&v=beta&t=ht0r67sRiyK4GNmoWyVvfxxhfzN8RJRdECr5e_GSDA8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHK8OClv0DLwA/company-logo_100_100/company-logo_100_100/0/1668476594231/angellist_logo?e=1776902400&v=beta&t=rKzi8SeQ1QOeg8YTGIUfVtLVcZIH6oWc5OU9TNaKCSc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Head of Finance & Business Operations",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Notion",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/30898036/",
+        "companyId": "30898036",
+        "duration": "2 yrs 1 mo",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2019,
+          "text": "Sep 2019"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2021,
+          "text": "Sep 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGwvcv_1tHZ4w/company-logo_400_400/B4EZW25gE2GgAY-/0/1742530282185/notionhq_logo?e=1776902400&v=beta&t=xqLu-DNjFBqxtNKXzk2R3aTJAgZ1b35Rs_diXCv2HH4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGwvcv_1tHZ4w/company-logo_400_400/B4EZW25gE2GgAY-/0/1742530282185/notionhq_logo?e=1776902400&v=beta&t=xqLu-DNjFBqxtNKXzk2R3aTJAgZ1b35Rs_diXCv2HH4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGwvcv_1tHZ4w/company-logo_200_200/B4EZW25gE2GgAI-/0/1742530282185/notionhq_logo?e=1776902400&v=beta&t=sZJ8Fo1lAIDTpHahTe4de5gsYIUTOH9nG6sXb1fjv70",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGwvcv_1tHZ4w/company-logo_100_100/B4EZW25gE2GgAQ-/0/1742530282185/notionhq_logo?e=1776902400&v=beta&t=pNQbQ9CM3tiCYXfxtwEwtsx1DeaoBSaZqN007ZPieTc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Strategic Finance Lead & Chief of Staff",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Stripe",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/2135371/",
+        "companyId": "2135371",
+        "duration": "2 yrs 3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jul",
+          "year": 2017,
+          "text": "Jul 2017"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2019,
+          "text": "Sep 2019"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQE2ZfJyfn-VCg/company-logo_400_400/B56ZlyKwpUKIAY-/0/1758557047806/stripe_logo?e=1776902400&v=beta&t=flaM5KtAekc-eCrsPt6jUJseCn4TVJ_2mGnh7a4mhfs",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQE2ZfJyfn-VCg/company-logo_400_400/B56ZlyKwpUKIAY-/0/1758557047806/stripe_logo?e=1776902400&v=beta&t=flaM5KtAekc-eCrsPt6jUJseCn4TVJ_2mGnh7a4mhfs",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQE2ZfJyfn-VCg/company-logo_200_200/B56ZlyKwpUKIAI-/0/1758557047806/stripe_logo?e=1776902400&v=beta&t=r4K4PUiGBdc2o59oMpdtYpYF-XbxPTZGNLeDzmYjFHQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQE2ZfJyfn-VCg/company-logo_100_100/B56ZlyKwpUKIAQ-/0/1758557047806/stripe_logo?e=1776902400&v=beta&t=iOBPxSpWTqzlwIvkbpLE3q6QJZMHgZGC6i8-Q8SCOao",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Private Equity Investor",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Silver Lake",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/27335/",
+        "companyId": "27335",
+        "duration": "2 yrs 5 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2015,
+          "text": "Mar 2015"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2017,
+          "text": "Jul 2017"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEnT-naTUbooA/company-logo_400_400/company-logo_400_400/0/1666817864248/silver_lake_logo?e=1776902400&v=beta&t=YYd-FTENDCzsO1KP9Z3TZmzzF1ZFJu2ooJhQqnrXpS4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEnT-naTUbooA/company-logo_400_400/company-logo_400_400/0/1666817864248/silver_lake_logo?e=1776902400&v=beta&t=YYd-FTENDCzsO1KP9Z3TZmzzF1ZFJu2ooJhQqnrXpS4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEnT-naTUbooA/company-logo_200_200/company-logo_200_200/0/1666817864248/silver_lake_logo?e=1776902400&v=beta&t=Zo2H7Ytxta_adcNcnylDlSLZo1Fq-cWav_v9x0wDMyc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEnT-naTUbooA/company-logo_100_100/company-logo_100_100/0/1666817864248/silver_lake_logo?e=1776902400&v=beta&t=2ZQgiBB5nPsc6ZYhgTgjiGkYlcV6MGwFrpcvq_7_lN0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Investment Banking",
+        "location": "New York, New York",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Goldman Sachs & Co.",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1382/",
+        "companyId": "1382",
+        "duration": "2 yrs 9 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jul",
+          "year": 2012,
+          "text": "Jul 2012"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2015,
+          "text": "Mar 2015"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQG9L7InIQVZrQ/company-logo_400_400/company-logo_400_400/0/1722506756452/goldman_sachs_logo?e=1776902400&v=beta&t=DTAHHIGqk0-6NwsKozo49cf7cSVIkRjik6PWy7n4Igo",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQG9L7InIQVZrQ/company-logo_400_400/company-logo_400_400/0/1722506756452/goldman_sachs_logo?e=1776902400&v=beta&t=DTAHHIGqk0-6NwsKozo49cf7cSVIkRjik6PWy7n4Igo",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQG9L7InIQVZrQ/company-logo_200_200/company-logo_200_200/0/1722506756452/goldman_sachs_logo?e=1776902400&v=beta&t=LbXgUBqLTG8WC8WiqJUDLbH1pEMH9-To7Q0kl24pF-o",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQG9L7InIQVZrQ/company-logo_100_100/company-logo_100_100/0/1722506756452/goldman_sachs_logo?e=1776902400&v=beta&t=t2QyjuxlieK0VUXv2C-gha4bouSKyf1_T6PIC1uBDic",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Georgetown University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/4794/",
+        "schoolId": "4794",
+        "degree": "BA",
+        "fieldOfStudy": "Economics",
+        "skills": [],
+        "description": "Activities and societies: \nGeorge F. Baker Scholar\nPresident of Class Committee\nGeorgetown University Student Investment Fund\nAlpha Sigma Nu\nGeorgetown Social Innovation and Public Service Fund",
+        "insights": "Grade: Phi Beta Kappa",
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQEnN4XznomLJw/company-logo_400_400/company-logo_400_400/0/1631309453384?e=1776902400&v=beta&t=1ViIMtCkFS_tWeqHz4G4yXYh6rZxlgMmFcWUW3oPn5g",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEnN4XznomLJw/company-logo_400_400/company-logo_400_400/0/1631309453384?e=1776902400&v=beta&t=1ViIMtCkFS_tWeqHz4G4yXYh6rZxlgMmFcWUW3oPn5g",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEnN4XznomLJw/company-logo_200_200/company-logo_200_200/0/1631309453384?e=1776902400&v=beta&t=XbeOmNw1IkVBt5DTOPYAqRjsse5jbno69FE3gyg_vmE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEnN4XznomLJw/company-logo_100_100/company-logo_100_100/0/1631309453384?e=1776902400&v=beta&t=Tyx5IDgWKudntZCyC7I8PK6CVjgU-NFLHSYvHL-KZv8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Investment Banking",
+        "positions": [
+          "Endorsed by 3 colleagues at Goldman Sachs"
+        ],
+        "endorsements": "15 endorsements"
+      },
+      {
+        "name": "Financial Modeling",
+        "positions": [
+          "Endorsed by 2 colleagues at Goldman Sachs"
+        ],
+        "endorsements": "10 endorsements"
+      },
+      {
+        "name": "Valuation",
+        "endorsements": "8 endorsements"
+      },
+      {
+        "name": "Financial Analysis",
+        "endorsements": "7 endorsements"
+      },
+      {
+        "name": "Corporate Finance",
+        "endorsements": "7 endorsements"
+      },
+      {
+        "name": "Economics",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Analysis",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Risk Management",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Strategic Planning",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Financial Markets",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Trading",
+        "endorsements": "1 endorsement"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [
+      {
+        "name": "English",
+        "proficiency": "Native or bilingual proficiency"
+      },
+      {
+        "name": "Mandarin Chinese",
+        "proficiency": "Native or bilingual proficiency"
+      }
+    ],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAACzw60BUBcf9q40tAUpQs0mHqSqAsuPFc8",
+        "firstName": "Sangeen",
+        "lastName": "Zeb",
+        "position": "General Partner at GV (Google Ventures)",
+        "publicIdentifier": "sangeen-zeb-891b413",
+        "linkedinUrl": "https://www.linkedin.com/in/sangeen-zeb-891b413"
+      },
+      {
+        "id": "ACoAAEZnBtoBb1Us7ZKgHfOXAYT764pKcDQy848",
+        "firstName": "Songlin",
+        "lastName": "Yang",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "songlin-yang-b8a69728b",
+        "linkedinUrl": "https://www.linkedin.com/in/songlin-yang-b8a69728b"
+      },
+      {
+        "id": "ACoAABJF4mQBVJYIx7g-ASuPnmo5mH2mDuWdwQg",
+        "firstName": "Erika",
+        "lastName": "Byun",
+        "position": "Thinking Machines Lab",
+        "publicIdentifier": "erika-nakamatsu-byun",
+        "linkedinUrl": "https://www.linkedin.com/in/erika-nakamatsu-byun"
+      },
+      {
+        "id": "ACoAAAoDkzgBOjd_V9dYcTipq4XPeXJ9HOPji90",
+        "firstName": "Lisa",
+        "lastName": "Han",
+        "position": "Partner at Lightspeed Venture Partners",
+        "publicIdentifier": "lisabethhan",
+        "linkedinUrl": "https://www.linkedin.com/in/lisabethhan"
+      },
+      {
+        "id": "ACoAAAUWoI8B2JmGNGJ7n_cSY_XhiGbjGVgKVzI",
+        "firstName": "James",
+        "lastName": "Lee",
+        "position": "Finance Executive at MarqVision",
+        "publicIdentifier": "jooholee",
+        "linkedinUrl": "https://www.linkedin.com/in/jooholee"
+      },
+      {
+        "id": "ACoAAAncnq0BajmeOrLikO5AAincnDzuRDUXFjw",
+        "firstName": "Soumith",
+        "lastName": "Chintala",
+        "publicIdentifier": "soumith",
+        "linkedinUrl": "https://www.linkedin.com/in/soumith"
+      },
+      {
+        "id": "ACoAAACQBzQB5nk5kOpFWQRtK4pv3RaL5q2G-pA",
+        "firstName": "Jonathan",
+        "lastName": "Lachman",
+        "position": "Founding Head of Operations at Thinking Machines Lab",
+        "publicIdentifier": "jonathan-lachman-4981b23",
+        "linkedinUrl": "https://www.linkedin.com/in/jonathan-lachman-4981b23"
+      },
+      {
+        "id": "ACoAABfpzRgBC8JzrSmOYbQZHVBzwXaUKtqNXdw",
+        "firstName": "Adam",
+        "lastName": "Strouss",
+        "position": "Finance @ Cognition",
+        "publicIdentifier": "adam-strouss-b8843ab2",
+        "linkedinUrl": "https://www.linkedin.com/in/adam-strouss-b8843ab2"
+      },
+      {
+        "id": "ACoAAAF70jABH9DSpgp0gn2kmhMF2O2_dXo363Y",
+        "firstName": "Lauren Escher",
+        "lastName": "Lennon",
+        "position": "Legal @ Thinking Machines Lab",
+        "publicIdentifier": "lauren-escher-lennon-0944058",
+        "linkedinUrl": "https://www.linkedin.com/in/lauren-escher-lennon-0944058"
+      },
+      {
+        "id": "ACoAACaOARIBRO2EEH12QWQO29L__oI3N2K4u14",
+        "firstName": "Mingjie",
+        "lastName": "Sun",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "mingjie-sun-06a761160",
+        "linkedinUrl": "https://www.linkedin.com/in/mingjie-sun-06a761160"
+      },
+      {
+        "id": "ACoAAAM07-gB20Vg4hTVwpax2eyLJhzmkVGgucg",
+        "firstName": "Katie",
+        "lastName": "Slattery",
+        "position": "Accounting @ Thinking Machines Lab",
+        "publicIdentifier": "katieslattery",
+        "linkedinUrl": "https://www.linkedin.com/in/katieslattery"
+      },
+      {
+        "id": "ACoAACm7XfIB5EjqiHQv8SJP7Y18c3jLrmpNWZI",
+        "firstName": "Caroline",
+        "lastName": "Ricksen",
+        "position": "Operations @ Thinking Machines Lab",
+        "publicIdentifier": "caroline-ricksen-702588176",
+        "linkedinUrl": "https://www.linkedin.com/in/caroline-ricksen-702588176"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "position": "Co-Founder and CEO at Thinking Machines Lab",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAABPg53YBHdOvmp7pU72eDhcho-7cnwyxk1o",
+        "firstName": "Pia",
+        "lastName": "Santos",
+        "position": "Founding Team at Thinking Machines Lab",
+        "publicIdentifier": "piafsantos",
+        "linkedinUrl": "https://www.linkedin.com/in/piafsantos"
+      },
+      {
+        "id": "ACoAAF3SWDYB6aZAqtjbw1-LDNZ4qxxHLFKTL0g",
+        "firstName": "Md",
+        "lastName": "Mdamaz",
+        "position": "Company work at Thinking Machines Lab",
+        "publicIdentifier": "md-mdamaz-b5a19937b",
+        "linkedinUrl": "https://www.linkedin.com/in/md-mdamaz-b5a19937b"
+      },
+      {
+        "id": "ACoAADDB7DABJK3fhQa97pAxpbFcGbMtI2pA2Ek",
+        "firstName": "Ruila",
+        "lastName": "M.",
+        "position": "Recruiting@Thinking Machines Lab",
+        "publicIdentifier": "ruilama",
+        "linkedinUrl": "https://www.linkedin.com/in/ruilama"
+      },
+      {
+        "id": "ACoAAADvBMsBDu9kWM7EtGKS_E3cvffXhKJXhvI",
+        "firstName": "Mike",
+        "lastName": "Lim",
+        "position": "Senior Director & Global Head - Data Center Infrastructure VC / M&A @ Cisco Investments",
+        "publicIdentifier": "mike-lim-00b2b55",
+        "linkedinUrl": "https://www.linkedin.com/in/mike-lim-00b2b55"
+      },
+      {
+        "id": "ACoAAB3BApkB38H4Z__jKDDFBfF7jt7w16vD0Xs",
+        "firstName": "Rafael",
+        "lastName": "Rafailov",
+        "position": "Member Of Technical Staff - Thinking Machines Lab",
+        "publicIdentifier": "rafael-rafailov-1b521611b",
+        "linkedinUrl": "https://www.linkedin.com/in/rafael-rafailov-1b521611b"
+      },
+      {
+        "id": "ACoAAAM8-CoB4EuoMEQ2LLngdqMnC4lLbEgxTy8",
+        "firstName": "Andrew",
+        "lastName": "Straub",
+        "position": "Finance at Thinking Machines Lab",
+        "publicIdentifier": "andrew-straub-52223b16",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-straub-52223b16"
+      },
+      {
+        "id": "ACoAABlmzjQBVjoKjtvMYsc1vU9b107j_fam1Xs",
+        "firstName": "James",
+        "lastName": "Alcorn",
+        "position": "Partner at Lightspeed",
+        "publicIdentifier": "james-alcorn-b04880ba",
+        "linkedinUrl": "https://www.linkedin.com/in/james-alcorn-b04880ba"
+      },
+      {
+        "id": "ACoAAAmK1fUBlPqH2OmlMGtQbaksHolhdPR845I",
+        "firstName": "Amy",
+        "lastName": "Lopez",
+        "position": "Owner at Clarksville Vacations",
+        "publicIdentifier": "amyelopez",
+        "linkedinUrl": "https://www.linkedin.com/in/amyelopez"
+      },
+      {
+        "id": "ACoAABDM9qUB37QmDQgQ7PwtffqDThWdePAniXQ",
+        "firstName": "Lacey",
+        "lastName": "McIntyre",
+        "position": "Owner at Leaping Lizards Reptile Experience",
+        "publicIdentifier": "lacey-mcintyre-0314927a",
+        "linkedinUrl": "https://www.linkedin.com/in/lacey-mcintyre-0314927a"
+      },
+      {
+        "id": "ACoAAEe1UBcBAqj0j8alAjLLdrm-RgBTb5zyXXI",
+        "firstName": "Grace",
+        "lastName": "Golembieski ",
+        "position": "Communication & Media Studies Graduate | Marketing Intern & Administrative Assistant | Digital, Social & Event Experience",
+        "publicIdentifier": "grace-golembieski-107aa2296",
+        "linkedinUrl": "https://www.linkedin.com/in/grace-golembieski-107aa2296"
+      },
+      {
+        "id": "ACoAAAaLO1IB8fmzlzkCSYO_9ArpYnllSvj1zv4",
+        "firstName": "Rebecca",
+        "lastName": "Liu",
+        "position": "FedEx Business Operations",
+        "publicIdentifier": "rebecca-liu-86a92630",
+        "linkedinUrl": "https://www.linkedin.com/in/rebecca-liu-86a92630"
+      },
+      {
+        "id": "ACoAADMMdl4B4q8FHTjzG3J99XVCpP7wgcMBZX8",
+        "firstName": "Sarah",
+        "lastName": "Ricards",
+        "position": "Administrative Assistant at Mental Health ",
+        "publicIdentifier": "sarah-ricards-6529a91ba",
+        "linkedinUrl": "https://www.linkedin.com/in/sarah-ricards-6529a91ba"
+      },
+      {
+        "id": "ACoAADBaBBQBSYk7bhT3Fxe1CTgIG4jITFq_spk",
+        "firstName": "Kaci",
+        "lastName": "Scharman",
+        "position": "Administrative Assistant at Connor Group",
+        "publicIdentifier": "kacischarman",
+        "linkedinUrl": "https://www.linkedin.com/in/kacischarman"
+      },
+      {
+        "id": "ACoAADKQ7fQBtaikIMyeZ1vli7SJukF6Q_ovStE",
+        "firstName": "Steven",
+        "lastName": "Wen",
+        "position": "Data Analyst @ RF for SUNY at UB| Ex-President of UB Management Information Systems Association | Private Pilot Student | Master in Data Sciences and Applications",
+        "publicIdentifier": "steven-wen-",
+        "linkedinUrl": "https://www.linkedin.com/in/steven-wen-"
+      },
+      {
+        "id": "ACoAACbIJe8BUaJI6fgozi3d7aSW-SXByQqHDAw",
+        "firstName": "Sydney Jean",
+        "lastName": "Rice",
+        "position": "Chief Operating Officer at Rice Residential Design, L.L.C.",
+        "publicIdentifier": "sydneyjeanrice",
+        "linkedinUrl": "https://www.linkedin.com/in/sydneyjeanrice"
+      },
+      {
+        "id": "ACoAAAtdVEgB9Cd2eBc6HVeLhb7UCAVfi_UFUy0",
+        "firstName": "Tari",
+        "lastName": "Coniglio",
+        "position": "Material Analyst/Buyer at Standard Textile",
+        "publicIdentifier": "tari-coniglio-008a2b53",
+        "linkedinUrl": "https://www.linkedin.com/in/tari-coniglio-008a2b53"
+      },
+      {
+        "id": "ACoAAEjG-oEBv3xY7QTrnV1R9roauYZ9HxHGIeo",
+        "firstName": "Danilo",
+        "lastName": "Nunes da Silva",
+        "position": "Legal Support Recruiter | Administrative Assistant | Soccer Coach ⚽️ New Dad",
+        "publicIdentifier": "danilo-nunes-da-silva-141ab12a0",
+        "linkedinUrl": "https://www.linkedin.com/in/danilo-nunes-da-silva-141ab12a0"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAAPH3hkBKUY1ASVVPprZyWswaNg5KbLT1eU"
+    }
+  }
+}

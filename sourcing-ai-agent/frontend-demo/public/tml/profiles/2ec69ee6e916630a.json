@@ -1,0 +1,367 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAFweSs4BnP9aToYhfFg5qi-b6w0l8p_CUYY",
+    "profile_url": "https://www.linkedin.com/in/ACwAAFweSs4BnP9aToYhfFg5qi-b6w0l8p_CUYY"
+  },
+  "item": {
+    "id": "ACoAAFweSs4BSnfHfBhAs2wqJGrLnupOZnT0Obg",
+    "publicIdentifier": "noureldin-farid-3266b8371",
+    "linkedinUrl": "https://www.linkedin.com/in/noureldin-farid-3266b8371",
+    "firstName": "Noureldin",
+    "lastName": "Farid",
+    "emails": [
+      {
+        "email": "noureldin.farid@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "--",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Newark, New Jersey, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "Newark, NJ, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "New Jersey",
+        "city": "Newark"
+      }
+    },
+    "objectUrn": "1545489102",
+    "registeredAt": "2025-06-24T22:37:59.113Z",
+    "topSkills": null,
+    "connectionsCount": 0,
+    "followerCount": 2,
+    "verified": false,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": null,
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5603AQFpXFgvgCnrIw/profile-displayphoto-shrink_100_100/B56ZekF0quHEAY-/0/1750804679913?e=1776902400&v=beta&t=p9ndIg3-PuxjS_D-Q8so7bnbFdQYXWvN2Z8Omy5IR70",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQFpXFgvgCnrIw/profile-displayphoto-shrink_100_100/B56ZekF0quHEAY-/0/1750804679913?e=1776902400&v=beta&t=p9ndIg3-PuxjS_D-Q8so7bnbFdQYXWvN2Z8Omy5IR70",
+          "width": 96,
+          "height": 96,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQFpXFgvgCnrIw/profile-displayphoto-shrink_800_800/B56ZekF0quHEAg-/0/1750804679913?e=1776902400&v=beta&t=s1Z1Lc6nvVCpnFhkGYjMn_rHetK57y2nF8Oue4Zp2tM",
+          "width": 96,
+          "height": 96,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQFpXFgvgCnrIw/profile-displayphoto-shrink_400_400/B56ZekF0quHEAk-/0/1750804679913?e=1776902400&v=beta&t=jiKamuPWHwddo9D55PTuOuwwKhLQEykHy3HvKZ2CGd8",
+          "width": 96,
+          "height": 96,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQFpXFgvgCnrIw/profile-displayphoto-shrink_200_200/B56ZekF0quHEAc-/0/1750804679914?e=1776902400&v=beta&t=13iwOG5n2eT-gM693aEOf427502wSg51zQNSNj-6ASs",
+          "width": 96,
+          "height": 96,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D5603AQFpXFgvgCnrIw/profile-displayphoto-shrink_100_100/B56ZekF0quHEAY-/0/1750804679913?e=1776902400&v=beta&t=p9ndIg3-PuxjS_D-Q8so7bnbFdQYXWvN2Z8Omy5IR70",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "--",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Computer Science Engineer",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": null,
+        "description": null,
+        "skills": null,
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAABdiD8wB6kRnYIexa14Wj4-n5DvJpjBFhJU",
+        "firstName": "Robert",
+        "lastName": "Tinn",
+        "publicIdentifier": "robert-tinn",
+        "linkedinUrl": "https://www.linkedin.com/in/robert-tinn"
+      },
+      {
+        "id": "ACoAAAQ4Q7kByw3YKf2rFlmWzRMF7P8Gw4S9PIU",
+        "firstName": "Yinghai",
+        "lastName": "L.",
+        "publicIdentifier": "yinghai83",
+        "linkedinUrl": "https://www.linkedin.com/in/yinghai83"
+      },
+      {
+        "id": "ACoAABGBzRQBZfQ1gmEqIJ1VEYxv5hSJ_TA9yvM",
+        "firstName": "Chelsea",
+        "lastName": "Hu",
+        "publicIdentifier": "chelsea-tsaiszuhu",
+        "linkedinUrl": "https://www.linkedin.com/in/chelsea-tsaiszuhu"
+      },
+      {
+        "id": "ACoAABgwxtcBfqsJJUHPwsSPuBE4K9oKyRqUp5o",
+        "firstName": "Lia",
+        "lastName": "Guy",
+        "publicIdentifier": "aureliaguy",
+        "linkedinUrl": "https://www.linkedin.com/in/aureliaguy"
+      },
+      {
+        "id": "ACoAAAB3zpYBoeqwoacrzkSKAqrCgBHb5JEz6oo",
+        "firstName": "Josh",
+        "lastName": "Gwyther",
+        "publicIdentifier": "joshgwyther",
+        "linkedinUrl": "https://www.linkedin.com/in/joshgwyther"
+      },
+      {
+        "id": "ACoAAAbBBJsBnpIQdOsJB5IMpR7ePIGOlRam73w",
+        "firstName": "Mario",
+        "lastName": "Saltarelli",
+        "publicIdentifier": "msaltarelli",
+        "linkedinUrl": "https://www.linkedin.com/in/msaltarelli"
+      },
+      {
+        "id": "ACoAABLLpuMBU7a9WPW-GubLTIkDjAF6hz7Ujkc",
+        "firstName": "Daniel",
+        "lastName": "Xu",
+        "publicIdentifier": "daniel-xu-42b73289",
+        "linkedinUrl": "https://www.linkedin.com/in/daniel-xu-42b73289"
+      },
+      {
+        "id": "ACoAABA0sF8BJqwmfoms3veu9TE72tj8JMUQEFA",
+        "firstName": "Sam",
+        "lastName": "Shleifer",
+        "publicIdentifier": "sam-shleifer-a5307a77",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-shleifer-a5307a77"
+      },
+      {
+        "id": "ACoAAAGodpkBgUeEbykpkrd24_KrTmLLhLqnhT8",
+        "firstName": "Jeremy",
+        "lastName": "Bloom",
+        "publicIdentifier": "jeremybloom11",
+        "linkedinUrl": "https://www.linkedin.com/in/jeremybloom11"
+      },
+      {
+        "id": "ACoAAABnAccB9h1LTKUrBFif76qxLwe9k7nyE_s",
+        "firstName": "Ian",
+        "lastName": "O'Connell",
+        "publicIdentifier": "ianoc",
+        "linkedinUrl": "https://www.linkedin.com/in/ianoc"
+      },
+      {
+        "id": "ACoAABhIg7YBYN2NPIu8voYj5D7JQVZGxonqHvc",
+        "firstName": "Ruiqi",
+        "lastName": "Zhong",
+        "publicIdentifier": "ruiqi-zhong-09a533b4",
+        "linkedinUrl": "https://www.linkedin.com/in/ruiqi-zhong-09a533b4"
+      },
+      {
+        "id": "ACoAACcKUOYBgtjVa25SfDbcdtMu65P5xvgHdII",
+        "firstName": "Minhajul",
+        "lastName": "Hoque",
+        "publicIdentifier": "minhajul-hoque-83242b163",
+        "linkedinUrl": "https://www.linkedin.com/in/minhajul-hoque-83242b163"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAABN1wSsB6gn_rR3_ITaEuGRJvLTvvykvGWo",
+        "firstName": "Felix",
+        "lastName": "Mutzl",
+        "publicIdentifier": "felix-mutzl",
+        "linkedinUrl": "https://www.linkedin.com/in/felix-mutzl"
+      },
+      {
+        "id": "ACoAAAAvO9wBKZ43vRJx-l6ueaHUrZrzwvFqYyg",
+        "firstName": "Bob",
+        "lastName": "Vecchione",
+        "publicIdentifier": "bob-vecchione-4780531",
+        "linkedinUrl": "https://www.linkedin.com/in/bob-vecchione-4780531"
+      },
+      {
+        "id": "ACoAACHgqNcBO7G9QHjfnTyp5v6rVbPMJ19f1dc",
+        "firstName": "Claire",
+        "lastName": "Fu",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "clairecfu",
+        "linkedinUrl": "https://www.linkedin.com/in/clairecfu"
+      },
+      {
+        "id": "ACoAADF01hQBAdnnY3e-d5DabF4JQAaK7hIXY80",
+        "firstName": "Tianle",
+        "lastName": "Li",
+        "position": "Member of Technical Staff @ Thinking Machines | prev. RL @ xAI",
+        "publicIdentifier": "tianleli",
+        "linkedinUrl": "https://www.linkedin.com/in/tianleli"
+      },
+      {
+        "id": "ACoAACKNVUMBztbhQ3RUYQ-Mg89xUJ39N-XJpM4",
+        "firstName": "Long",
+        "lastName": "Lian",
+        "position": "Member of Technical Staff at Thinking Machines Lab | Post-training Team | Large-scale RL | Multi-agent Systems | Real-time Multi-modal Models",
+        "publicIdentifier": "longlian",
+        "linkedinUrl": "https://www.linkedin.com/in/longlian"
+      },
+      {
+        "id": "ACoAACHG180BXiyeZ2qJgoggx27e4iM3ajxvp18",
+        "firstName": "Andy",
+        "lastName": "Hwang",
+        "position": "thinking machines",
+        "publicIdentifier": "andrewnhwang",
+        "linkedinUrl": "https://www.linkedin.com/in/andrewnhwang"
+      },
+      {
+        "id": "ACoAABoG0oUBl986ZaMrLUASG1NhDoJyVlav4Po",
+        "firstName": "Eric",
+        "lastName": "Zhang",
+        "position": "MTS, Thinking Machines",
+        "publicIdentifier": "ekzhang",
+        "linkedinUrl": "https://www.linkedin.com/in/ekzhang"
+      },
+      {
+        "id": "ACoAABL1VWgBlgDKQJBWgzSxRNJRKn9XJJ23hvQ",
+        "firstName": "Volker",
+        "lastName": "Seeker",
+        "position": "AI Research Engineer",
+        "publicIdentifier": "vseeker",
+        "linkedinUrl": "https://www.linkedin.com/in/vseeker"
+      },
+      {
+        "id": "ACoAAAF70jABH9DSpgp0gn2kmhMF2O2_dXo363Y",
+        "firstName": "Lauren Escher",
+        "lastName": "Lennon",
+        "position": "Legal @ Thinking Machines Lab",
+        "publicIdentifier": "lauren-escher-lennon-0944058",
+        "linkedinUrl": "https://www.linkedin.com/in/lauren-escher-lennon-0944058"
+      },
+      {
+        "id": "ACoAADYMzQABdXTSxolT2YjHmNBBSeT6YrGSQmQ",
+        "firstName": "Tarushii",
+        "lastName": "Goel",
+        "position": "Member of Technical Staff @ Thinking Machines",
+        "publicIdentifier": "tarushii-goel",
+        "linkedinUrl": "https://www.linkedin.com/in/tarushii-goel"
+      },
+      {
+        "id": "ACoAACxX5AEBYonmfz9M8tQ8jO7Nx3jIXe_VSjw",
+        "firstName": "Sophie Rose",
+        "lastName": "Shapiro",
+        "position": "Creative Operations",
+        "publicIdentifier": "sophie-rose-shapiro",
+        "linkedinUrl": "https://www.linkedin.com/in/sophie-rose-shapiro"
+      },
+      {
+        "id": "ACoAABqU8psBncgwN-WH-D8F1Jq9i7OsFmcPDt4",
+        "firstName": "Jeffrey",
+        "lastName": "Tao",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "jeffrey-tao",
+        "linkedinUrl": "https://www.linkedin.com/in/jeffrey-tao"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAFweSs4BnP9aToYhfFg5qi-b6w0l8p_CUYY"
+    }
+  }
+}

@@ -1,0 +1,851 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAACGaRsoBl-FdZsALv8FBt2j0UH-QFUxZJmY",
+    "profile_url": "https://www.linkedin.com/in/ACwAACGaRsoBl-FdZsALv8FBt2j0UH-QFUxZJmY"
+  },
+  "item": {
+    "id": "ACoAACGaRsoBrqJ6QM3uRMeWAlD1sftySwfOaNw",
+    "publicIdentifier": "victorialinml",
+    "linkedinUrl": "https://www.linkedin.com/in/victorialinml",
+    "firstName": "Victoria",
+    "lastName": "Lin",
+    "emails": [
+      {
+        "email": "victoria.lin@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "⚒️ Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": true,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco Bay Area",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "563758794",
+    "registeredAt": "2017-03-30T06:02:23.246Z",
+    "topSkills": null,
+    "connectionsCount": 1097,
+    "followerCount": 2423,
+    "verified": true,
+    "about": "I am passionate about building general intelligent systems that process information at scale and assist humans in various knowledge-intensive tasks. For more of my research, please visit 🌐 https://victorialin.org",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 9,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "19657",
+        "companyId": "2584",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2584/",
+        "schoolName": "University of Washington"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/C5603AQEz_mVwtPJ_gw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1663432834056?e=1776902400&v=beta&t=2sNdvpt8DXPa3FJXHXuKAI1qlDuIYdnYt4YAZsOAWJE",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQEz_mVwtPJ_gw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1663432834056?e=1776902400&v=beta&t=2sNdvpt8DXPa3FJXHXuKAI1qlDuIYdnYt4YAZsOAWJE",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQEz_mVwtPJ_gw/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1663432834056?e=1776902400&v=beta&t=Wd8_3lPrRofbzRtbR2F2qEJo9-RVr4vDwT7oxGebTG0",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQEz_mVwtPJ_gw/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1663432834056?e=1776902400&v=beta&t=pXjsIf5Whl_bPtNiBn6ZU_F7lyZE7OvmEeOpVk1GeoQ",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQEz_mVwtPJ_gw/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1663432834056?e=1776902400&v=beta&t=EyCCk7X9XEDg8HG2FVWmmQRUV98894zqbJRUvikwP8Y",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5616AQFwSoKTRnPWlg/profile-displaybackgroundimage-shrink_200_800/profile-displaybackgroundimage-shrink_200_800/0/1733635081587?e=1776902400&v=beta&t=Iv3Hs6bbn_fiTycwz5o_wSAJRfWirx5NOn_Uf24g1FE",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5616AQFwSoKTRnPWlg/profile-displaybackgroundimage-shrink_200_800/profile-displaybackgroundimage-shrink_200_800/0/1733635081587?e=1776902400&v=beta&t=Iv3Hs6bbn_fiTycwz5o_wSAJRfWirx5NOn_Uf24g1FE",
+          "width": 757,
+          "height": 189,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5616AQFwSoKTRnPWlg/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1733635081587?e=1776902400&v=beta&t=HD8Swq24pnolEg_B2ouyaKbiGViowBW7id2Qo8Nt7SY",
+          "width": 757,
+          "height": 189,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "photo": "https://media.licdn.com/dms/image/v2/C5603AQEz_mVwtPJ_gw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1663432834056?e=1776902400&v=beta&t=2sNdvpt8DXPa3FJXHXuKAI1qlDuIYdnYt4YAZsOAWJE",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "⚒️ Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco Bay Area",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "8 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2025,
+          "text": "Sep 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "AI Research Scientist",
+        "location": "Menlo Park, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "4 yrs 9 mos",
+        "description": "⚪ Llama4 Multimodal Pretraining: scaling laws and data curriculum\n⚪ [FAIR] Sparse architecture for early-fusion multimodal LLMs: Mixture-of-transformers, MoMa\n⚪ [FAIR] End-to-end RAG training, neural information retrieval: RA-DIT, NEST\n⚪ [FAIR] LLM fine-tuning and few-shot learning: OPT-IML, XGLM, OPT",
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2021,
+          "text": "Jan 2021"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2025,
+          "text": "Sep 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "AI Research Scientist",
+        "location": "Palo Alto, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Salesforce",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3185/",
+        "companyId": "3185",
+        "duration": "3 yrs 4 mos",
+        "description": "☁️ Deep Learning",
+        "skills": null,
+        "startDate": {
+          "month": "Oct",
+          "year": 2017,
+          "text": "Oct 2017"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2021,
+          "text": "Jan 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHZ9xYomLW7zg/company-logo_400_400/company-logo_400_400/0/1630658255326/salesforce_logo?e=1776902400&v=beta&t=kDhYIGt6-dWNq403gtqMzbHS1eWrCwk_2PW31JWlg0Q",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHZ9xYomLW7zg/company-logo_400_400/company-logo_400_400/0/1630658255326/salesforce_logo?e=1776902400&v=beta&t=kDhYIGt6-dWNq403gtqMzbHS1eWrCwk_2PW31JWlg0Q",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHZ9xYomLW7zg/company-logo_200_200/company-logo_200_200/0/1630658255326/salesforce_logo?e=1776902400&v=beta&t=mkqxTjbjYJXprsi7heJMSp_KpvYIyTSSYgkmgn3ulG8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHZ9xYomLW7zg/company-logo_100_100/company-logo_100_100/0/1630658255326/salesforce_logo?e=1776902400&v=beta&t=BLvg89py-spe_Ad5RdAkw3anwO7u-p7DmpIp3Tzx3xU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Intern",
+        "location": "Greater Seattle Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Microsoft",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1035/",
+        "companyId": "1035",
+        "duration": "3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2015,
+          "text": "Jun 2015"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2015,
+          "text": "Aug 2015"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_400_400/B56ZYQ0mrGGoAc-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=47BifJmZk2QcSo7UM_a7lFIk5vBFq49cOHVWx8Pu2dE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_400_400/B56ZYQ0mrGGoAc-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=47BifJmZk2QcSo7UM_a7lFIk5vBFq49cOHVWx8Pu2dE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_200_200/B56ZYQ0mrGGoAM-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=z3mTaKdLV9rmnHGq4MakEXZj6vY7Y9TWAjx0_U7y0X0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_100_100/B56ZYQ0mrGGoAU-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=tKqX5UTArC3FajWCGY-yk-mpPeeR1obx-D3VehmNycQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "University of Washington",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2584/",
+        "schoolId": "2584",
+        "degree": "Doctor of Philosophy - PhD",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEMmhF9TqUCgA/company-logo_400_400/company-logo_400_400/0/1630545704089/university_of_washington_logo?e=1776902400&v=beta&t=UgMit_quQ3GsgGT3-3A6kXvDwnn-KVRW_u_HRd4RLTg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEMmhF9TqUCgA/company-logo_400_400/company-logo_400_400/0/1630545704089/university_of_washington_logo?e=1776902400&v=beta&t=UgMit_quQ3GsgGT3-3A6kXvDwnn-KVRW_u_HRd4RLTg",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEMmhF9TqUCgA/company-logo_200_200/company-logo_200_200/0/1630545704089/university_of_washington_logo?e=1776902400&v=beta&t=oLn8mUaUFi_GW9rfy_TVuoJ0FPajqWaQ14uovZsGklk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEMmhF9TqUCgA/company-logo_100_100/company-logo_100_100/0/1630545704089/university_of_washington_logo?e=1776902400&v=beta&t=RUr9ZHiq7JXufQGL_LdkRWkSpWGB-J-AGwcl4F0cy6Y",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "University of Oxford",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/4477/",
+        "schoolId": "4477",
+        "degree": "Master of Science - MS",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "insights": "Grade: Distinction",
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGnc4qXLbE8Sg/company-logo_400_400/company-logo_400_400/0/1709206435851/oxforduni_logo?e=1776902400&v=beta&t=AXsTLCnoM-MtK_qfegfcWqTKXeiQHFVk1TGzbT-7c9I",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGnc4qXLbE8Sg/company-logo_400_400/company-logo_400_400/0/1709206435851/oxforduni_logo?e=1776902400&v=beta&t=AXsTLCnoM-MtK_qfegfcWqTKXeiQHFVk1TGzbT-7c9I",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGnc4qXLbE8Sg/company-logo_200_200/company-logo_200_200/0/1709206435851/oxforduni_logo?e=1776902400&v=beta&t=RUGuxqHt7dcxY7dPA6ABWeLsxjQkOnMkRcH7cIqkRyY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGnc4qXLbE8Sg/company-logo_100_100/company-logo_100_100/0/1709206435851/oxforduni_logo?e=1776902400&v=beta&t=QdUn4pQEfNdcNA7XZRjfDdpG4RyAfmFoHc3FxjFW3LU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "The Hong Kong Polytechnic University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/13359/",
+        "schoolId": "13359",
+        "degree": "Bachelor of Engineering - BE",
+        "fieldOfStudy": "Electronic and Information Engineering",
+        "skills": [],
+        "insights": "Grade: 4.0/4.0",
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHfkFuCq-cvmw/company-logo_400_400/B56Zr0Euo0HYAY-/0/1765031472242/hong_kong_polytechnic_university_logo?e=1776902400&v=beta&t=jN1sHe1Mpr_X3z1MiCVZRpZay7A_DFim-x1lAUVuuYk",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHfkFuCq-cvmw/company-logo_400_400/B56Zr0Euo0HYAY-/0/1765031472242/hong_kong_polytechnic_university_logo?e=1776902400&v=beta&t=jN1sHe1Mpr_X3z1MiCVZRpZay7A_DFim-x1lAUVuuYk",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHfkFuCq-cvmw/company-logo_200_200/B56Zr0Euo0HYAI-/0/1765031472242/hong_kong_polytechnic_university_logo?e=1776902400&v=beta&t=H9sjPWCDc4FLbH0lsHFlSP79Vb8_oZUVRiozRlWQU5A",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHfkFuCq-cvmw/company-logo_100_100/B56Zr0Euo0HYAQ-/0/1765031472242/hong_kong_polytechnic_university_logo?e=1776902400&v=beta&t=cTsfWQoREAZ_0K2P0pzat22Cf0rgNjQi4hYKiZofNMM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Machine Learning",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Deep Learning",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Natural Language Processing",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Software Engineering",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Algorithms",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "User Experience",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Front-end Development",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Research",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Python",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Tensorflow",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Torch",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Django",
+        "endorsements": "1 endorsement"
+      }
+    ],
+    "publications": [
+      {
+        "title": "Mixture-of-Transformers: A Sparse and Scalable Architecture for Multi-Modal Foundation Models",
+        "publishedAt": "TMLR · Apr 8, 2025",
+        "description": null,
+        "link": "https://arxiv.org/abs/2411.04996"
+      },
+      {
+        "title": "MoMa: Efficient Early-Fusion Pre-training with Mixture of Modality-Aware Experts",
+        "publishedAt": "ArXiv · Jul 31, 2024",
+        "description": "We introduce MoMa, a novel modality-aware mixture-of-experts (MoE) architecture designed for pre-training mixed-modal, early-fusion language models. MoMa processes images and text in arbitrary sequences by dividing expert modules into modality-specific groups. These groups exclusively process designated tokens while employing learned routing within each group to maintain semantically informed adaptivity. Our empirical results reveal substantial pre-training efficiency gains through this modality-specific parameter allocation. Under a 1-trillion-token training budget, the MoMa 1.4B model, featuring 4 text experts and 4 image experts, achieves impressive FLOPs savings: 3.7x overall, with 2.6x for text and 5.2x for image processing compared to a compute-equivalent dense baseline, measured by pre-training loss. This outperforms the standard expert-choice MoE with 8 mixed-modal experts, which achieves 3x overall FLOPs savings (3x for text, 2.8x for image). Combining MoMa with mixture-of-depths (MoD) further improves pre-training FLOPs savings to 4.2x overall (text: 3.4x, image: 5.3x), although this combination hurts performance in causal inference due to increased sensitivity to router accuracy. These results demonstrate MoMa's potential to significantly advance the efficiency of mixed-modal, early-fusion language model pre-training, paving the way for more resource-efficient and capable multimodal AI systems.",
+        "link": "https://arxiv.org/abs/2407.21770"
+      },
+      {
+        "title": "Nearest Neighbor Speculative Decoding for LLM Generation and Attribution",
+        "publishedAt": "ArXiv · May 29, 2024",
+        "description": "Large language models (LLMs) often hallucinate and lack the ability to provide attribution for their generations. Semi-parametric LMs, such as kNN-LM, approach these limitations by refining the output of an LM for a given prompt using its nearest neighbor matches in a non-parametric data store. However, these models often exhibit slow inference speeds and produce non-fluent texts. In this paper, we introduce Nearest Neighbor Speculative Decoding (NEST), a novel semi-parametric language modeling approach that is capable of incorporating real-world text spans of arbitrary length into the LM generations and providing attribution to their sources. NEST performs token-level retrieval at each inference step to compute a semi-parametric mixture distribution and identify promising span continuations in a corpus. It then uses an approximate speculative decoding procedure that accepts a prefix of the retrieved span or generates a new token. NEST significantly enhances the generation quality and attribution rate of the base LM across a variety of knowledge-intensive tasks, surpassing the conventional kNN-LM method and performing competitively with in-context retrieval augmentation. In addition, NEST substantially improves the generation speed, achieving a 1.8x speedup in inference time when applied to Llama-2-Chat 70B.",
+        "link": "https://arxiv.org/abs/2405.19325"
+      },
+      {
+        "title": "RA-DIT: Retrieval-Augmented Dual Instruction Tuning",
+        "publishedAt": "Proceedings of the 12th International Conference on Learning Representations (ICLR) · May 6, 2024",
+        "description": "Retrieval-augmented language models (RALMs) improve performance by accessing long-tail and up-to-date knowledge from external data stores, but are challenging to build. Existing approaches require either expensive retrieval-specific modifications to LM pre-training or use post-hoc integration of the data store that leads to suboptimal performance. We introduce Retrieval-Augmented Dual Instruction Tuning (RA-DIT), a lightweight fine-tuning methodology that provides a third option by retrofitting any LLM with retrieval capabilities. Our approach operates in two distinct fine-tuning steps: (1) one updates a pre-trained LM to better use retrieved information, while (2) the other updates the retriever to return more relevant results, as preferred by the LM. By fine-tuning over tasks that require both knowledge utilization and contextual awareness, we demonstrate that each stage yields significant performance improvements, and using both leads to additional gains. Our best model, RA-DIT 65B, achieves state-of-the-art performance across a range of knowledge-intensive zero- and few-shot learning benchmarks, significantly outperforming existing in-context RALM approaches by up to +8.9% in 0-shot setting and +1.4% in 5-shot setting on average.",
+        "link": "https://arxiv.org/abs/2310.01352"
+      },
+      {
+        "title": "OPT-IML: Scaling Language Model Instruction Meta Learning through the Lens of Generalization",
+        "publishedAt": "https://arxiv.org/abs/2212.12017 · Dec 22, 2022",
+        "description": "Recent work has shown that fine-tuning large pre-trained language models on a collection of tasks described via instructions, a.k.a. instruction-tuning, improves their zero and few-shot generalization to unseen tasks. However, there is a limited understanding of the performance trade-offs of different decisions made during the instruction-tuning process. These decisions include the scale and diversity of the instruction-tuning benchmark, different task sampling strategies, fine-tuning with and without demonstrations, training using specialized datasets for reasoning and dialogue, and finally, the fine-tuning objectives themselves. In this paper, we characterize the effect of instruction-tuning decisions on downstream task performance when scaling both model and benchmark sizes. To this end, we create OPT-IML Bench: a large benchmark for Instruction Meta-Learning (IML) of 2000 NLP tasks consolidated into task categories from 8 existing benchmarks, and prepare an evaluation framework to measure three types of model generalizations: to tasks from fully held-out categories, to held-out tasks from seen categories, and to held-out instances from seen tasks. Through the lens of this framework, we first present insights about instruction-tuning decisions as applied to OPT-30B and further exploit these insights to train OPT-IML 30B and 175B, which are instruction-tuned versions of OPT. OPT-IML demonstrates all three generalization abilities at both scales on four different evaluation benchmarks with diverse tasks and input formats -- PromptSource, FLAN, Super-NaturalInstructions, and UnifiedSKG. Not only does it significantly outperform OPT on all benchmarks but is also highly competitive with existing models fine-tuned on each specific benchmark. We release OPT-IML at both scales, together with the OPT-IML Bench evaluation framework.",
+        "link": "https://arxiv.org/abs/2212.12017"
+      },
+      {
+        "title": "Few-shot Learning with Multilingual Generative Language Models",
+        "publishedAt": "Proceedings of the 2022 Conference on Empirical Methods in Natural Language Processing · Nov 10, 2022",
+        "description": "Large-scale generative language models such as GPT-3 are competitive few-shot learners. While these models are known to be able to jointly represent many different languages, their training data is dominated by English, potentially limiting their cross-lingual generalization. In this work, we train multilingual generative language models on a corpus covering a diverse set of languages, and study their few- and zero-shot learning capabilities in a wide range of tasks. Our largest model with 7.5 billion parameters sets new state of the art in few-shot learning in more than 20 representative languages, outperforming GPT-3 of comparable size in multilingual commonsense reasoning (with +7.4% absolute accuracy improvement in 0-shot settings and +9.4% in 4-shot settings) and natural language inference (+5.4% in each of 0-shot and 4-shot settings). On the FLORES-101 machine translation benchmark, our model outperforms GPT-3 on 171 out of 182 directions with 32 training examples, while surpassing the official supervised baseline in 45 directions. We conduct an in-depth analysis of different multilingual prompting approaches, showing in particular that strong few-shot learning performance across languages can be achieved via cross-lingual transfer through both templates and demonstration examples.",
+        "link": "https://aclanthology.org/2022.emnlp-main.616/"
+      },
+      {
+        "title": "OPT: Open Pre-trained Transformer Language Models",
+        "publishedAt": "ArXiv · May 2, 2022",
+        "description": "Large language models, which are often trained for hundreds of thousands of compute days, have shown remarkable capabilities for zero- and few-shot learning. Given their computational cost, these models are difficult to replicate without significant capital. For the few that are available through APIs, no access is granted to the full model weights, making them difficult to study. We present Open Pre-trained Transformers (OPT), a suite of decoder-only pre-trained transformers ranging from 125M to 175B parameters, which we aim to fully and responsibly share with interested researchers. We show that OPT-175B is comparable to GPT-3, while requiring only 1/7th the carbon footprint to develop. We are also releasing our logbook detailing the infrastructure challenges we faced, along with code for experimenting with all of the released models.",
+        "link": "https://arxiv.org/abs/2205.01068"
+      },
+      {
+        "title": "Bridging Textual and Tabular Data for Cross-Domain Text-to-SQL Semantic Parsing",
+        "publishedAt": "EMNLP Findings 2020 · Nov 11, 2020",
+        "description": "We present BRIDGE, a powerful sequential architecture for modeling dependencies between natural language questions and relational databases in cross-DB semantic parsing. BRIDGE represents the question and DB schema in a tagged sequence where a subset of the fields are augmented with cell values mentioned in the question. The hybrid sequence is encoded by BERT with minimal subsequent layers and the text-DB contextualization is realized via the fine-tuned deep attention in BERT. Combined with a pointer-generator decoder with schema-consistency driven search space pruning, BRIDGE attained state-of-the-art performance on popular cross-DB text-to-SQL benchmarks, Spider (71.1\\% dev, 67.5\\% test with ensemble model) and WikiSQL (92.6\\% dev, 91.9\\% test). Our analysis shows that BRIDGE effectively captures the desired cross-modal dependencies and has the potential to generalize to more text-DB related tasks. Our implementation is available at https://github.com/salesforce/TabularSemanticParsing.",
+        "link": "https://arxiv.org/abs/2012.12627"
+      },
+      {
+        "title": "Multi-Hop Knowledge Graph Reasoning with Reward Shaping",
+        "publishedAt": "Proceedings of the 2018 Conference on Empirical Methods in Natural Language Processing · Aug 27, 2018",
+        "description": "Multi-hop reasoning is an effective approach for query answering (QA) over incomplete knowledge graphs (KGs). The problem can be formulated in a reinforcement learning (RL) setup, where a policy-based agent sequentially extends its inference path until it reaches a target. However, in an incomplete KG environment, the agent receives low-quality rewards corrupted by false negatives in the training data, which harms generalization at test time. Furthermore, since no golden action sequence is used for training, the agent can be misled by spurious search trajectories that incidentally lead to the correct answer. We propose two modeling advances to address both issues: (1) we reduce the impact of false negative supervision by adopting a pretrained one-hop embedding model to estimate the reward of unobserved facts; (2) we counter the sensitivity to spurious paths of on-policy RL by forcing the agent to explore a diverse set of paths using randomly generated edge masks. Our approach significantly improves over existing path-based KGQA models on several benchmark datasets and is comparable or better than embedding-based models.",
+        "link": "https://arxiv.org/pdf/1808.10568.pdf"
+      },
+      {
+        "title": "NL2Bash: A Corpus and Semantic Parser for Natural Language Interface to the Linux Operating System",
+        "publishedAt": "Proceedings of the 11th International Conference on Language Resources and Evaluation · Feb 25, 2018",
+        "description": "We present new data and semantic parsing methods for the problem of mapping English sentences to Bash commands (NL2Bash). Our long-term goal is to enable any user to perform operations such as file manipulation, search, and application-specific scripting by simply stating their goals in English. We take a first step in this domain, by providing a new dataset of challenging but commonly used Bash commands and expert-written English descriptions, along with baseline methods to establish performance levels on this task.",
+        "link": "https://arxiv.org/pdf/1802.08979.pdf"
+      },
+      {
+        "title": "Program Synthesis from Natural Language Using Recurrent Neural Networks",
+        "publishedAt": "Paul G. Allen School for Computer Science and Engineering, University of Washington · Mar 1, 2017",
+        "description": "Even if a competent programmer knows what she wants to do and can describe it in English, it can still be difficult to write code to achieve the goal. Existing resources, such as question-and-answer websites, tabulate specific operations that someone has wanted to perform in the past, but they are not effective in generalizing to new tasks, to compound tasks that require combining previous questions, or sometimes even to variations of listed tasks.\n\nOur goal is to make programming easier and more productive by letting programmers use their own words and concepts to express the intended operation, rather than forcing them to accommodate the machine by memorizing its grammar. We have built a system that lets a programmer describe a desired operation in natural language, then automatically translates it to a programming language for review and approval by the programmer. Our system, Tellina, does the translation using recurrent neural networks (RNNs), a state-of-the-art natural language processing technique that we augmented with slot (argument) filling and other enhancements.\n\nWe evaluated Tellina in the context of shell scripting. We trained Tellina's RNNs on textual descriptions of file system operations and bash one-liners, scraped from the web. Although recovering completely correct commands is challenging, Tellina achieves top-3 accuracy of 80% for producing the correct command structure. In a controlled study, programmers who had access to Tellina outperformed those who did not, even when Tellina's predictions were not completely correct, to a statistically significant degree.",
+        "link": "http://victorialin.net/pubs/tellina_tr_2017.pdf"
+      }
+    ],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": {
+      "images": [
+        "https://media.licdn.com/dms/image/v2/D5622AQGvcQ9fzLKULg/feedshare-shrink_2048_1536/feedshare-shrink_2048_1536/0/1726851736084?e=1776902400&v=beta&t=8ZFtDSypR5IF4-Is6dlYp-RmMV8cpIW0kmo26WSJq9k"
+      ],
+      "link": "https://www.linkedin.com/feed/update/urn:li:activity:7242941148254633986",
+      "title": "New research from Meta FAIR: MoMa — Efficient Early-Fusion Pre-training…",
+      "subtitle": "linkedin.com",
+      "slides": [
+        {
+          "title": "New research from Meta FAIR: MoMa — Efficient Early-Fusion Pre-training…",
+          "subtitle": "linkedin.com",
+          "description": null,
+          "url": "https://www.linkedin.com/feed/update/urn:li:activity:7242941148254633986",
+          "image": {
+            "url": "https://media.licdn.com/dms/image/v2/D5622AQGvcQ9fzLKULg/feedshare-shrink_2048_1536/feedshare-shrink_2048_1536/0/1726851736084?e=1776902400&v=beta&t=8ZFtDSypR5IF4-Is6dlYp-RmMV8cpIW0kmo26WSJq9k"
+          }
+        },
+        {
+          "title": "DeepLearning.AI on LinkedIn: Meta's RA-DIT Boosts Language Model Output by Optimizing Content Retrieval",
+          "subtitle": "linkedin.com",
+          "description": null,
+          "url": "https://www.linkedin.com/feed/update/urn:li:activity:7188672996255973377",
+          "image": {
+            "url": "https://media.licdn.com/dms/image/v2/D5610AQFLglyNBxrt8A/image-shrink_1280/image-shrink_1280/0/1713913201953?e=1776160800&v=beta&t=ncy-npV7A9BvI8-AhQGmoJyQNvU9zFkg--TqjRYTB8A"
+          }
+        },
+        {
+          "title": "Meta AI on LinkedIn: GitHub - facebookresearch/metaseq: Repo for external large-scale work | 38 comments",
+          "subtitle": "linkedin.com",
+          "description": null,
+          "url": "https://www.linkedin.com/feed/update/urn:li:activity:7011756870910578689",
+          "image": {
+            "url": "https://media.licdn.com/dms/image/v2/D5634AQEYUIcBo1wn1g/ugc-proxy-shrink_1280_800/ugc-proxy-shrink_1280_800/0/1671733111598?e=1776160800&v=beta&t=L38o45BRWSrKEcCODiz4I5t7rZTnGHXG13iqaVJSp7M"
+          }
+        },
+        {
+          "title": "Salesforce Research: Knowledge graphs and machine learning to power Einstein",
+          "subtitle": "ZDNET",
+          "description": "Some months back, a publication from researchers from Salesforce appeared in arXiv, titled \"Multi-Hop Knowledge Graph Reasoning with Reward Shaping.\" The paper elaborates on a technique for using knowledge graphs with machine learning; specifically, a branch of machine learning called reinforcement learning. This is something that holds great promise as a way to get the best of both worlds: Curated, top-down knowledge representation, and emergent, bottom-up pattern recognition (machine learning).",
+          "url": "https://www.linkedin.com/in/victorialinml/overlay/1735250290000/single-media-viewer?type=LINK&profileId=ACoAACGaRsoBrqJ6QM3uRMeWAlD1sftySwfOaNw",
+          "image": {
+            "url": "https://media.licdn.com/dms/image/sync/v2/D5627AQF4e7wUIiarlw/articleshare-shrink_1280_800/articleshare-shrink_1280_800/0/1716072159471?e=1776160800&v=beta&t=gNno6-QY2BsU8TdiPbezutQBKgEwO99_itZrc-MxNKI"
+          }
+        }
+      ]
+    },
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAACmzAtgBiDGd-HW1TzeGD6e3xWxnqDi9o-0",
+        "firstName": "Zitong",
+        "lastName": "Yang",
+        "position": "Continually self-improving AI",
+        "publicIdentifier": "zitongyang",
+        "linkedinUrl": "https://www.linkedin.com/in/zitongyang"
+      },
+      {
+        "id": "ACoAAEZnBtoBb1Us7ZKgHfOXAYT764pKcDQy848",
+        "firstName": "Songlin",
+        "lastName": "Yang",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "songlin-yang-b8a69728b",
+        "linkedinUrl": "https://www.linkedin.com/in/songlin-yang-b8a69728b"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABnLX1IB8hIAjg2IlA_6DHsRjL_bO56WmvE",
+        "firstName": "Jifan",
+        "lastName": "Zhang",
+        "position": "MTS @ Thinking Machines | Prev. Anthropic, xAI",
+        "publicIdentifier": "jifan-zhang-016b1b100",
+        "linkedinUrl": "https://www.linkedin.com/in/jifan-zhang-016b1b100"
+      },
+      {
+        "id": "ACoAABMugyUBsZ9MwIVIzmOSzlvmO6TOFL-mfAU",
+        "firstName": "Chih-Kuan (Jason)",
+        "lastName": "Yeh",
+        "position": "building LLMs",
+        "publicIdentifier": "chih-kuan-jason-yeh-8859378b",
+        "linkedinUrl": "https://www.linkedin.com/in/chih-kuan-jason-yeh-8859378b"
+      },
+      {
+        "id": "ACoAACaOARIBRO2EEH12QWQO29L__oI3N2K4u14",
+        "firstName": "Mingjie",
+        "lastName": "Sun",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "mingjie-sun-06a761160",
+        "linkedinUrl": "https://www.linkedin.com/in/mingjie-sun-06a761160"
+      },
+      {
+        "id": "ACoAAA6pVIcB_iFqE_N7wQhmisZ7W_7tGpS_VQ8",
+        "firstName": "Tessa",
+        "lastName": "Barton",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "theresacbarton",
+        "linkedinUrl": "https://www.linkedin.com/in/theresacbarton"
+      },
+      {
+        "id": "ACoAABebSPMByZP3ZnuWuJpWKhAcOO8xLxhLatU",
+        "firstName": "Alicia",
+        "lastName": "P.",
+        "position": "IT",
+        "publicIdentifier": "aliciacphan",
+        "linkedinUrl": "https://www.linkedin.com/in/aliciacphan"
+      },
+      {
+        "id": "ACoAACEREG4BA1IeeJBq06tuHFUlIUr_Dl4tU4A",
+        "firstName": "Jungyeon",
+        "lastName": "Park",
+        "position": "Member of Technical Staff @ Thinking Machines",
+        "publicIdentifier": "parkjungyeon",
+        "linkedinUrl": "https://www.linkedin.com/in/parkjungyeon"
+      },
+      {
+        "id": "ACoAACA1ZlYBhPNODsf7Z3UNo1tLYMShFQ7OQJw",
+        "firstName": "Yujia",
+        "lastName": "Bao",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "yujia-bao-506b76130",
+        "linkedinUrl": "https://www.linkedin.com/in/yujia-bao-506b76130"
+      },
+      {
+        "id": "ACoAAAENQhgBH8wIeS6hMrUoWlbKk5L9GWNNQCE",
+        "firstName": "Andrii",
+        "lastName": "Grynenko",
+        "position": "Software Engineer",
+        "publicIdentifier": "andrii-grynenko-a48aab5",
+        "linkedinUrl": "https://www.linkedin.com/in/andrii-grynenko-a48aab5"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAAB3BApkB38H4Z__jKDDFBfF7jt7w16vD0Xs",
+        "firstName": "Rafael",
+        "lastName": "Rafailov",
+        "position": "Member Of Technical Staff - Thinking Machines Lab",
+        "publicIdentifier": "rafael-rafailov-1b521611b",
+        "linkedinUrl": "https://www.linkedin.com/in/rafael-rafailov-1b521611b"
+      },
+      {
+        "id": "ACoAACEKIcoBlH0R5ZT_TKQuJ4i3ZD4WlI1-rME",
+        "firstName": "Jacob",
+        "lastName": "Menick",
+        "position": "Thinking Machines, Founding Team",
+        "publicIdentifier": "jacob-menick-5a277a135",
+        "linkedinUrl": "https://www.linkedin.com/in/jacob-menick-5a277a135"
+      },
+      {
+        "id": "ACoAADCkfncB4P7VWZ-S1Ojv9-aHq_bFsA6LBQY",
+        "firstName": "Ziqiao",
+        "lastName": "Ma",
+        "publicIdentifier": "ziqiao-ma",
+        "linkedinUrl": "https://www.linkedin.com/in/ziqiao-ma"
+      },
+      {
+        "id": "ACoAABhIg7YBYN2NPIu8voYj5D7JQVZGxonqHvc",
+        "firstName": "Ruiqi",
+        "lastName": "Zhong",
+        "position": "AI researcher. LLM + human collaboration.",
+        "publicIdentifier": "ruiqi-zhong-09a533b4",
+        "linkedinUrl": "https://www.linkedin.com/in/ruiqi-zhong-09a533b4"
+      },
+      {
+        "id": "ACoAAAhY-psBFcHXNbjunn6_QnPfV6Bo6w4yzug",
+        "firstName": "Kenny",
+        "lastName": "Yu",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "kenny-yu-aa3a9a3a",
+        "linkedinUrl": "https://www.linkedin.com/in/kenny-yu-aa3a9a3a"
+      },
+      {
+        "id": "ACoAACy2BxwB9fCrfCBI06w0X-gHyQTFLJIpJGc",
+        "firstName": "Guangxuan",
+        "lastName": "X.",
+        "publicIdentifier": "xgx",
+        "linkedinUrl": "https://www.linkedin.com/in/xgx"
+      },
+      {
+        "id": "ACoAAA4HVN4BOZg5espOvMVoO3OY04NZmuqvMCo",
+        "firstName": "Shaojie",
+        "lastName": "Bai",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "shaojie-bai",
+        "linkedinUrl": "https://www.linkedin.com/in/shaojie-bai"
+      },
+      {
+        "id": "ACoAAAeoHjYB_Lo5sUFlpZpz2L74oe9nEIKztQA",
+        "firstName": "Jenya",
+        "lastName": "L.",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "jenya-l",
+        "linkedinUrl": "https://www.linkedin.com/in/jenya-l"
+      },
+      {
+        "id": "ACoAADahoE4BhYMBktRSxM-e_4ZMFuiqlefcs8U",
+        "firstName": "Nitu",
+        "lastName": "Kumari",
+        "position": "☁️3x Certified Salesforce Administrator | Quality Analyst | ex-Concentrix",
+        "publicIdentifier": "nituk1398",
+        "linkedinUrl": "https://www.linkedin.com/in/nituk1398"
+      },
+      {
+        "id": "ACoAAC5fZBYB1ZVviCXtq-ogrmzjHYLdEOmdClU",
+        "firstName": "Muhammad",
+        "lastName": "Adil",
+        "position": "Network Engineer | IT network  | IT support | penetration testing | cyber security | php developer",
+        "publicIdentifier": "networkadil",
+        "linkedinUrl": "https://www.linkedin.com/in/networkadil"
+      },
+      {
+        "id": "ACoAADc7u7cBudW0n4C_ySuGGZsxi1DJDIiqfjM",
+        "firstName": "Nora",
+        "lastName": "Ndichia yung",
+        "position": "Senior Sql Server Database Administrator",
+        "publicIdentifier": "nora-ndichia-yung-58740621a",
+        "linkedinUrl": "https://www.linkedin.com/in/nora-ndichia-yung-58740621a"
+      },
+      {
+        "id": "ACoAAGJeWrsBFEwZo5Tap5iKThftJAAzN4bJKz0",
+        "firstName": "Sven",
+        "lastName": "Kalkbrenner",
+        "position": "Senior Network-Engineer bei kyberio GmbH | Netzwerkadministration, Consulting",
+        "publicIdentifier": "sven-kalkbrenner-1378483a0",
+        "linkedinUrl": "https://www.linkedin.com/in/sven-kalkbrenner-1378483a0"
+      },
+      {
+        "id": "ACoAAEE1GOYB_bhexkwZwQcpH0Qt7rkNsGGR37M",
+        "firstName": "Justin",
+        "lastName": "Schmidt",
+        "position": "IT-Systemadministrator",
+        "publicIdentifier": "justin-schmidt-206465266",
+        "linkedinUrl": "https://www.linkedin.com/in/justin-schmidt-206465266"
+      },
+      {
+        "id": "ACoAAAhMqxIBu7f8nyAzlRttHHenkMqVyEi9F2M",
+        "firstName": "Cord",
+        "lastName": "Bansemer",
+        "position": ".",
+        "publicIdentifier": "cord-bansemer-0167703a",
+        "linkedinUrl": "https://www.linkedin.com/in/cord-bansemer-0167703a"
+      },
+      {
+        "id": "ACoAAEW9BZwB6mSc8yNi8h624z0apf_QC2GOXxk",
+        "firstName": "sandeep",
+        "lastName": "sareen",
+        "position": "IT system administrator / Desktop support engineer",
+        "publicIdentifier": "sandeep-sareen-478a04287",
+        "linkedinUrl": "https://www.linkedin.com/in/sandeep-sareen-478a04287"
+      },
+      {
+        "id": "ACoAADaXbtkBWmm_u3HAhV_CM9mFA1p-8waLmbM",
+        "firstName": "Aaron",
+        "lastName": "Womack",
+        "position": "Systems Engineer | CCNA | CASP | SEC+",
+        "publicIdentifier": "aaron-womack-2a1893216",
+        "linkedinUrl": "https://www.linkedin.com/in/aaron-womack-2a1893216"
+      },
+      {
+        "id": "ACoAABWoohoB7K-WbNxgBpBNvUXeAcpRBAigVHQ",
+        "firstName": "Nevyana",
+        "lastName": "Antonova",
+        "position": "Linux System Administrator at Hostway Services, Inc",
+        "publicIdentifier": "nevyana-antonova-422839a1",
+        "linkedinUrl": "https://www.linkedin.com/in/nevyana-antonova-422839a1"
+      },
+      {
+        "id": "ACoAAACBkSEB_KL0iO-Pk6kWh5kUF9T-wuoPt2s",
+        "firstName": "Achilleas",
+        "lastName": "Anastasiadis",
+        "position": "Senior Key Account Consultant at kyberio GmbH",
+        "publicIdentifier": "achanast",
+        "linkedinUrl": "https://www.linkedin.com/in/achanast"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAACGaRsoBl-FdZsALv8FBt2j0UH-QFUxZJmY"
+    }
+  }
+}

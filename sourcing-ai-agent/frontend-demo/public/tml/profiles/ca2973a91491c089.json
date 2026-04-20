@@ -1,0 +1,223 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAF2mynABTB1bCdFHji5eoSXFXBj04HyVgPM",
+    "profile_url": "https://www.linkedin.com/in/ACwAAF2mynABTB1bCdFHji5eoSXFXBj04HyVgPM"
+  },
+  "item": {
+    "id": "ACoAAF2mynABntOEJamRWC9MhNpK8QWl0B0uGuM",
+    "publicIdentifier": "ok365golive",
+    "linkedinUrl": "https://www.linkedin.com/in/ok365golive",
+    "firstName": "Thuan",
+    "lastName": "Pham",
+    "emails": [
+      {
+        "email": "thuan.pham@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Board Member at Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Ho Chi Minh City, Ho Chi Minh City, Vietnam",
+      "countryCode": "VN",
+      "parsed": {
+        "text": "Ho Chi Minh City, Vietnam",
+        "countryCode": "VN",
+        "regionCode": null,
+        "country": "Vietnam",
+        "countryFull": "Vietnam",
+        "state": "Hồ Chí Minh",
+        "city": "Ho Chi Minh City"
+      }
+    },
+    "objectUrn": "1571211888",
+    "registeredAt": "2025-08-12T06:44:38.180Z",
+    "topSkills": null,
+    "connectionsCount": 0,
+    "followerCount": 0,
+    "verified": false,
+    "about": "OK365GO.LIVE – Nhà Cái Uy Tín Cho Game Thủ Việt 2025 \nOK365GO là cổng game trực tuyến đáng tin cậy, cung cấp trải nghiệm cá cược toàn diện từ nổ hũ, xổ số, thể thao đến casino và bắn cá.\n\nWebsite: https://ok365go.live/\n\nĐịa chỉ: Số 18 Đường Nguyễn Văn Trỗi, Phường 8, Quận Phú Nhuận, TP. Hồ Chí Minh, Việt Nam\n\nPhone: 0963399936\n\nEmail: ok365golive@gmail.com\n\nTags: #ok365go, #ok365golive,\n\nGoogle Sites: https://sites.google.com/view/ok365golive",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": null,
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4E03AQH9cJLVRMtrxg/profile-displayphoto-crop_800_800/B4EZitQLvXHgAM-/0/1755253358316?e=1776902400&v=beta&t=b0G0c85F5mHLujp25EinI_yd1FpnNrDIhfffO_RKCj8",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQH9cJLVRMtrxg/profile-displayphoto-crop_800_800/B4EZitQLvXHgAM-/0/1755253358316?e=1776902400&v=beta&t=b0G0c85F5mHLujp25EinI_yd1FpnNrDIhfffO_RKCj8",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQH9cJLVRMtrxg/profile-displayphoto-scale_400_400/B4EZitQLvXHgAk-/0/1755253358402?e=1776902400&v=beta&t=4tfL2b9xdPz6Qq3fBvXlVtzkCLFtbMGNBqg-g_aoLZg",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQH9cJLVRMtrxg/profile-displayphoto-scale_200_200/B4EZitQLvXHgAc-/0/1755253358402?e=1776902400&v=beta&t=Q54I2CFmESY6LNWVWtdW77VlKWVnFOawl1y_jvf6Xys",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQH9cJLVRMtrxg/profile-displayphoto-scale_100_100/B4EZitQLvXHgAg-/0/1755253358402?e=1776902400&v=beta&t=0hywPBYcEUGUo4k9XYa5vHHsApXG3P5s-lAFbuHhfOo",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4E16AQGWMKxB7vGFSg/profile-displaybackgroundimage-shrink_350_1400/B4EZitPm_SHgAY-/0/1755253211192?e=1776902400&v=beta&t=8MDfPWd_qtfueVQrbCZhkWA6JT80KE5Fv6Bejgk-m98",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E16AQGWMKxB7vGFSg/profile-displaybackgroundimage-shrink_350_1400/B4EZitPm_SHgAY-/0/1755253211192?e=1776902400&v=beta&t=8MDfPWd_qtfueVQrbCZhkWA6JT80KE5Fv6Bejgk-m98",
+          "width": 1400,
+          "height": 349,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E16AQGWMKxB7vGFSg/profile-displaybackgroundimage-shrink_200_800/B4EZitPm_SHgAU-/0/1755253211192?e=1776902400&v=beta&t=CUfqFmLztYxuwp1b_RID2hbKDl90fFWTfgf7rJNrRTE",
+          "width": 800,
+          "height": 199,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "photo": "https://media.licdn.com/dms/image/v2/D4E03AQH9cJLVRMtrxg/profile-displayphoto-crop_800_800/B4EZitQLvXHgAM-/0/1755253358316?e=1776902400&v=beta&t=b0G0c85F5mHLujp25EinI_yd1FpnNrDIhfffO_RKCj8",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Board Member at Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Board Member",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": null,
+        "description": null,
+        "skills": null,
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAGKqvJIBftp7ELK9qtL6HX_Qj2sOlV7g7lY",
+        "firstName": "Rosalina",
+        "lastName": "belia",
+        "position": "Project manager",
+        "publicIdentifier": "rosalina-belia-b824603a2",
+        "linkedinUrl": "https://www.linkedin.com/in/rosalina-belia-b824603a2"
+      },
+      {
+        "id": "ACoAADn_JC8B7Sme2ar0hhzRp9wSk4-_vrh00yw",
+        "firstName": "Francisco",
+        "lastName": "Escrivão",
+        "position": "IT Project Manager | PMI PMO-CP™ 🏅 || Project Summit Angola",
+        "publicIdentifier": "franciscoescrivao77",
+        "linkedinUrl": "https://www.linkedin.com/in/franciscoescrivao77"
+      },
+      {
+        "id": "ACoAABbRr7cBlMDH1VQ00RMwNDAYGDLAiClJ2fc",
+        "firstName": "Priya",
+        "lastName": "Jain",
+        "position": "Project Manager at nuPSYS",
+        "publicIdentifier": "priya-jain-447267a8",
+        "linkedinUrl": "https://www.linkedin.com/in/priya-jain-447267a8"
+      },
+      {
+        "id": "ACoAACLQoqYBVhgkNcuv8afKWLOj5vytKvQ1lIg",
+        "firstName": "Dálcio",
+        "lastName": "Garcia",
+        "position": "🚀 Fullstack Dev & Project Manager | 5+ years of experience | React.js | React Native | Next.js | Node.js | PHP | Laravel | Java | AWS | Google Cloud | DevOps | PM at Mirantes",
+        "publicIdentifier": "dalcio-garcia",
+        "linkedinUrl": "https://www.linkedin.com/in/dalcio-garcia"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAF2mynABTB1bCdFHji5eoSXFXBj04HyVgPM"
+    }
+  }
+}

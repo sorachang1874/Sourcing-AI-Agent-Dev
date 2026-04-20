@@ -1,0 +1,738 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAB44HngBYV8KWhZleCMaGiCb9vVVnv4olPs",
+    "profile_url": "https://www.linkedin.com/in/ACwAAB44HngBYV8KWhZleCMaGiCb9vVVnv4olPs"
+  },
+  "item": {
+    "id": "ACoAAB44HngBUCHFyPWzb7z5GQiC8FODQpn-4gU",
+    "publicIdentifier": "alexrobey",
+    "linkedinUrl": "https://www.linkedin.com/in/alexrobey",
+    "firstName": "Alex",
+    "lastName": "Robey",
+    "emails": [
+      {
+        "email": "alex.robey@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "AI safety research @ Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "506994296",
+    "registeredAt": "2016-05-28T18:11:49.062Z",
+    "topSkills": null,
+    "connectionsCount": 359,
+    "followerCount": 397,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 1,
+            "year": 2026,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "19328",
+        "companyId": "3165",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3165/",
+        "schoolName": "University of Pennsylvania"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4D03AQEWaIMHj9sqEA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1638882317092?e=1776902400&v=beta&t=G--aI5BwndcPQqe4CdyVl4fejIIEyyZkBxpwjz88mJ4",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4D03AQEWaIMHj9sqEA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1638882317092?e=1776902400&v=beta&t=G--aI5BwndcPQqe4CdyVl4fejIIEyyZkBxpwjz88mJ4",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4D03AQEWaIMHj9sqEA/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1638882317092?e=1776902400&v=beta&t=RQv_wGgIFRiNeZV3wxP6Lx-0G2-Klbu_HcWs0CkYS-8",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4D03AQEWaIMHj9sqEA/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1638882317092?e=1776902400&v=beta&t=jOlK7ABUOSNnp3-hokqds2Ee4eGvONOroMz0glunhZY",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4D03AQEWaIMHj9sqEA/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1638882317092?e=1776902400&v=beta&t=rJWu1tBESFRJyaZPepD4ICicwEak8r1susby_1SSxSM",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D4D03AQEWaIMHj9sqEA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1638882317092?e=1776902400&v=beta&t=G--aI5BwndcPQqe4CdyVl4fejIIEyyZkBxpwjz88mJ4",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "AI safety research @ Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of the technical staff",
+        "location": "San Francisco, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2026,
+          "text": "Jan 2026"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Postdoctoral Fellow",
+        "location": "Pittsburgh, Pennsylvania, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Carnegie Mellon University",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3147/",
+        "companyId": "3147",
+        "duration": "1 yr 5 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2024,
+          "text": "Sep 2024"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2026,
+          "text": "Jan 2026"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_200_200/company-logo_200_200/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Cr9dcgM6gBeNici6XTUDQUKQfYAc8US2OXBC0P5yB-Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_100_100/company-logo_100_100/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=iJiUJ2BhQORJLlvMYFhw22Mq44Z-z45Fza4_dNRwHSs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research contractor",
+        "location": "Pittsburgh, Pennsylvania, United States",
+        "employmentType": "Part-time",
+        "workplaceType": null,
+        "companyName": "Gray Swan AI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/104685042/",
+        "companyId": "104685042",
+        "duration": "1 yr 5 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2024,
+          "text": "Sep 2024"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2026,
+          "text": "Jan 2026"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHJ1cOLwIV66w/company-logo_400_400/company-logo_400_400/0/1721058153506?e=1776902400&v=beta&t=O1VX96WDJW8igOpJ3Apg3-QxtiKW261bCq9lU2PRtSg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHJ1cOLwIV66w/company-logo_400_400/company-logo_400_400/0/1721058153506?e=1776902400&v=beta&t=O1VX96WDJW8igOpJ3Apg3-QxtiKW261bCq9lU2PRtSg",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHJ1cOLwIV66w/company-logo_200_200/company-logo_200_200/0/1721058153506?e=1776902400&v=beta&t=Gg2Nv8gly6QAJKcACle_biQnP8gc27UFbmwJ6Yajxl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHJ1cOLwIV66w/company-logo_100_100/company-logo_100_100/0/1721058153506?e=1776902400&v=beta&t=gu6z5KlqlRr-oPjp511UAHr8adAwUm9CCa6CYdKpHe0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Visiting Instructor",
+        "location": "Swarthmore, Pennsylvania, United States",
+        "employmentType": "Part-time",
+        "workplaceType": null,
+        "companyName": "Swarthmore College",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/16443/",
+        "companyId": "16443",
+        "duration": "5 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2024,
+          "text": "Jan 2024"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2024,
+          "text": "May 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQGkMo8SKTa1NQ/company-logo_400_400/company-logo_400_400/0/1631310092831?e=1776902400&v=beta&t=RggBqHoyzZRyLfW8GKYR_f0NfG9zJY-1cDgJ7WhwJRU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGkMo8SKTa1NQ/company-logo_400_400/company-logo_400_400/0/1631310092831?e=1776902400&v=beta&t=RggBqHoyzZRyLfW8GKYR_f0NfG9zJY-1cDgJ7WhwJRU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGkMo8SKTa1NQ/company-logo_200_200/company-logo_200_200/0/1631310092831?e=1776902400&v=beta&t=r-fLWMrK50GVXEjHZE0PvqwJnKlVyrpxxBPiyuvHDMU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGkMo8SKTa1NQ/company-logo_100_100/company-logo_100_100/0/1631310092831?e=1776902400&v=beta&t=rcsqR6OCoqSKLdkvwf0ZBgdKouUzOgzsrYA2uNx3e7g",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Intern",
+        "location": "Sunnyvale, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Google",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1441/",
+        "companyId": "1441",
+        "duration": "9 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2022,
+          "text": "Jun 2022"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2023,
+          "text": "Feb 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_200_200/B4EZmhegXHGcAM-/0/1759350753990/google_logo?e=1776902400&v=beta&t=CTzyZ9kqXiycW6UU0lJPQmCNKxu5QeAaPL_y9ftsJX0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_100_100/B4EZmhegXHGcAU-/0/1759350753990/google_logo?e=1776902400&v=beta&t=LRCYpUl9rmgdri4awRP4FVlvccNARAtgcfqxtRHdedI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Intern",
+        "location": "Livermore, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Lawrence Livermore National Laboratory",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/4994/",
+        "companyId": "4994",
+        "duration": "4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2017,
+          "text": "May 2017"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2017,
+          "text": "Aug 2017"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGZ1AGlF1C6EQ/company-logo_400_400/company-logo_400_400/0/1735838179675/lawrence_livermore_national_laboratory_logo?e=1776902400&v=beta&t=4NZWh0u4YAT9FWQR5F9i1-V4iHFz3GtYEw-XP2jCJVs",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGZ1AGlF1C6EQ/company-logo_400_400/company-logo_400_400/0/1735838179675/lawrence_livermore_national_laboratory_logo?e=1776902400&v=beta&t=4NZWh0u4YAT9FWQR5F9i1-V4iHFz3GtYEw-XP2jCJVs",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGZ1AGlF1C6EQ/company-logo_200_200/company-logo_200_200/0/1735838179675/lawrence_livermore_national_laboratory_logo?e=1776902400&v=beta&t=79WactGEHHmVNhMfM9kfv4dEouGF-bTe9oSxM-zmSFs",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGZ1AGlF1C6EQ/company-logo_100_100/company-logo_100_100/0/1735838179675/lawrence_livermore_national_laboratory_logo?e=1776902400&v=beta&t=bD-wrw0vdK-jBCTXVgwFDBMV5g3_VIKKvtYKcYHezK4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "University of Pennsylvania",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3165/",
+        "schoolId": "3165",
+        "degree": "Doctor of Philosophy - PhD",
+        "fieldOfStudy": "Electrical and Systems Engineering",
+        "skills": [],
+        "startDate": {
+          "month": "Aug",
+          "year": 2018,
+          "text": "Aug 2018"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2024,
+          "text": "May 2024"
+        },
+        "period": "Aug 2018 - May 2024",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFJvX-Ed9d2gA/company-logo_400_400/B4EZxITZrAGwAY-/0/1770739574173/university_of_pennsylvania_logo?e=1776902400&v=beta&t=NqApUTsFuJ55rlTdjX27Ne_VczdX5akkwt7i8ufO8wM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFJvX-Ed9d2gA/company-logo_400_400/B4EZxITZrAGwAY-/0/1770739574173/university_of_pennsylvania_logo?e=1776902400&v=beta&t=NqApUTsFuJ55rlTdjX27Ne_VczdX5akkwt7i8ufO8wM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFJvX-Ed9d2gA/company-logo_200_200/B4EZxITZrAGwAI-/0/1770739574173/university_of_pennsylvania_logo?e=1776902400&v=beta&t=cg3-mPp1m-LJhlqJ0b_m8O0x6IBh1SgOmBTdRI_1Eew",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFJvX-Ed9d2gA/company-logo_100_100/B4EZxITZrAGwAQ-/0/1770739574173/university_of_pennsylvania_logo?e=1776902400&v=beta&t=1q0sGBWa1tFpUxWwOGq0XSkwJW96PO4xDVsuPChtplw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Swarthmore College",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/16443/",
+        "schoolId": "16443",
+        "degree": "Bachelor’s Degree",
+        "fieldOfStudy": "Engineering",
+        "skills": [],
+        "startDate": {
+          "year": 2014,
+          "text": "2014"
+        },
+        "endDate": {
+          "year": 2018,
+          "text": "2018"
+        },
+        "period": "2014 - 2018",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQGkMo8SKTa1NQ/company-logo_400_400/company-logo_400_400/0/1631310092831?e=1776902400&v=beta&t=RggBqHoyzZRyLfW8GKYR_f0NfG9zJY-1cDgJ7WhwJRU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGkMo8SKTa1NQ/company-logo_400_400/company-logo_400_400/0/1631310092831?e=1776902400&v=beta&t=RggBqHoyzZRyLfW8GKYR_f0NfG9zJY-1cDgJ7WhwJRU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGkMo8SKTa1NQ/company-logo_200_200/company-logo_200_200/0/1631310092831?e=1776902400&v=beta&t=r-fLWMrK50GVXEjHZE0PvqwJnKlVyrpxxBPiyuvHDMU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGkMo8SKTa1NQ/company-logo_100_100/company-logo_100_100/0/1631310092831?e=1776902400&v=beta&t=rcsqR6OCoqSKLdkvwf0ZBgdKouUzOgzsrYA2uNx3e7g",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAABEmYXYB5f-3ZmFG8dI-n9XAlqySBqO-2PA",
+        "firstName": "Luke",
+        "lastName": "Carlson",
+        "position": "Thinking Machines | Member of Technical Staff",
+        "publicIdentifier": "jlukecarlson",
+        "linkedinUrl": "https://www.linkedin.com/in/jlukecarlson"
+      },
+      {
+        "id": "ACoAAATAFhsB-MSu8aXWUBacbi6fvU_SaAqdBH4",
+        "firstName": "Jeff",
+        "lastName": "Hanson",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "jshanson7",
+        "linkedinUrl": "https://www.linkedin.com/in/jshanson7"
+      },
+      {
+        "id": "ACoAABQ5lJUBry2byQYf_TtxDF9Rha9l-RqYsaM",
+        "firstName": "Guang-He",
+        "lastName": "Lee",
+        "position": "Thinking Machines Lab | Prev: Anthropic, Citadel, MIT",
+        "publicIdentifier": "guang-he-lee-64577895",
+        "linkedinUrl": "https://www.linkedin.com/in/guang-he-lee-64577895"
+      },
+      {
+        "id": "ACoAACE2EIwB3vNVX9rm6ce5juOGovFUzVvIsCc",
+        "firstName": "Kevin",
+        "lastName": "Lu",
+        "position": "thinking machines",
+        "publicIdentifier": "kzl",
+        "linkedinUrl": "https://www.linkedin.com/in/kzl"
+      },
+      {
+        "id": "ACoAAAD31hIBw1cv2XYrDVayVz8iLQ523DzSOWk",
+        "firstName": "Amin",
+        "lastName": "Karbasi",
+        "position": "Senior Director of AI research at Cisco Foundation AI, Former Chief Scientist at Robust Intelligence (acquired by Cisco), ex Professor at Yale University,  ex Staff Research Scientist at Google, ex Microsoft.",
+        "publicIdentifier": "amin-karbasi-5025335",
+        "linkedinUrl": "https://www.linkedin.com/in/amin-karbasi-5025335"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAABYfvJgBJleUy0X6j9_x1Ali-KX0HC9OGyM",
+        "firstName": "Zico",
+        "lastName": "Kolter",
+        "publicIdentifier": "zico-kolter-560382a4",
+        "linkedinUrl": "https://www.linkedin.com/in/zico-kolter-560382a4"
+      },
+      {
+        "id": "ACoAACHClpoBP-oCeCNMC7sNEru2AmuLJT7GelU",
+        "firstName": "Jessi",
+        "lastName": "Mazzoni",
+        "position": "Operations | Gray Swan AI",
+        "publicIdentifier": "jessimazzoni",
+        "linkedinUrl": "https://www.linkedin.com/in/jessimazzoni"
+      },
+      {
+        "id": "ACoAADjg4EEBzWHmbaIgm5RdBGEJZSy1SyL9iKU",
+        "firstName": "Eliot Krzysztof",
+        "lastName": "Jones",
+        "position": "AI Safety & Security",
+        "publicIdentifier": "eliot-krzysztof-jones",
+        "linkedinUrl": "https://www.linkedin.com/in/eliot-krzysztof-jones"
+      },
+      {
+        "id": "ACoAABYs4-IB5mHx5eVfOHzu1e8xlO3q_kb38IM",
+        "firstName": "Brydon",
+        "lastName": "Eastman",
+        "position": "Nerd @ Thinking Machines Labs | Formerly Member of Technical Staff @ OpenAI | PhD in Mathematical Oncology",
+        "publicIdentifier": "brydon-eastman-396719a4",
+        "linkedinUrl": "https://www.linkedin.com/in/brydon-eastman-396719a4"
+      },
+      {
+        "id": "ACoAAFRqWp0Bd-_na1i8tEcUGHw_9BZ0bTwQqso",
+        "firstName": "Jared",
+        "lastName": "Perlo",
+        "position": "AI Reporter",
+        "publicIdentifier": "jperlo",
+        "linkedinUrl": "https://www.linkedin.com/in/jperlo"
+      },
+      {
+        "id": "ACoAAAGx6jUBKeo2mCZqJOmAmzlfS3srA_CPlJc",
+        "firstName": "Matt",
+        "lastName": "Fredrikson",
+        "position": "Associate Professor at Carnegie Mellon University & CEO at Gray Swan AI",
+        "publicIdentifier": "matt-fredrikson-7596349",
+        "linkedinUrl": "https://www.linkedin.com/in/matt-fredrikson-7596349"
+      },
+      {
+        "id": "ACoAABV61Q0BF3ER-196Zc9GK5TviMrbbIlVGqg",
+        "firstName": "Samuel",
+        "lastName": "Schoenholz",
+        "position": "Thinking Machines Lab | Ex: OpenAI, Google Brain",
+        "publicIdentifier": "samuel-schoenholz-379830a0",
+        "linkedinUrl": "https://www.linkedin.com/in/samuel-schoenholz-379830a0"
+      },
+      {
+        "id": "ACoAABpvtasBhOhGc3xBJTjrO9b974nRR3hJPXU",
+        "firstName": "Hamed",
+        "lastName": "Hassani",
+        "position": "Postdoctoral Fellow - Lecturer at ETH Zurich",
+        "publicIdentifier": "hamed-hassani-7a3653104",
+        "linkedinUrl": "https://www.linkedin.com/in/hamed-hassani-7a3653104"
+      },
+      {
+        "id": "ACoAACPt4SYBjnT3NzXYBUg29E9lILjQTX5luls",
+        "firstName": "Piotr",
+        "lastName": "Dollar",
+        "position": "Technical Staff",
+        "publicIdentifier": "pdollar",
+        "linkedinUrl": "https://www.linkedin.com/in/pdollar"
+      },
+      {
+        "id": "ACoAABJF4mQBVJYIx7g-ASuPnmo5mH2mDuWdwQg",
+        "firstName": "Erika",
+        "lastName": "Byun",
+        "position": "Thinking Machines Lab",
+        "publicIdentifier": "erika-nakamatsu-byun",
+        "linkedinUrl": "https://www.linkedin.com/in/erika-nakamatsu-byun"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "position": "Co-Founder and CEO at Thinking Machines Lab",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAAAONcoIB-1uAsEq07uowfjWbAk9eU6N0jVU",
+        "firstName": "Yaron",
+        "lastName": "Singer",
+        "publicIdentifier": "yaron-singer-76ab6317",
+        "linkedinUrl": "https://www.linkedin.com/in/yaron-singer-76ab6317"
+      },
+      {
+        "id": "ACoAAAO-j_IBXcvIzhZtQ7QNkky6tlnQTcFl9qI",
+        "firstName": "Myle",
+        "lastName": "Ott",
+        "position": "ML infra at Thinking Machines",
+        "publicIdentifier": "myleott",
+        "linkedinUrl": "https://www.linkedin.com/in/myleott"
+      },
+      {
+        "id": "ACoAAAji1bkB1eLX4z2Jb9-N2nMhEGNLWptSnqU",
+        "firstName": "Clare",
+        "lastName": "Birch",
+        "publicIdentifier": "clarebirch42",
+        "linkedinUrl": "https://www.linkedin.com/in/clarebirch42"
+      },
+      {
+        "id": "ACoAAGbDqw4Bfj9sY8VP7lrlTEL5BzKF8s7QJbk",
+        "firstName": "John",
+        "lastName": "Barnes",
+        "position": "Co-Founder at Wells Fargo",
+        "publicIdentifier": "john-barnes-812492401",
+        "linkedinUrl": "https://www.linkedin.com/in/john-barnes-812492401"
+      },
+      {
+        "id": "ACoAAGbItdMBkHjRQBRvziAYPG8GLnGHGOgkwDA",
+        "firstName": "Lorimcpherson",
+        "lastName": "MrDocTor",
+        "position": "Co-Founder at Wells Fargo",
+        "publicIdentifier": "lorimcpherson-mrdoctor-a97611401",
+        "linkedinUrl": "https://www.linkedin.com/in/lorimcpherson-mrdoctor-a97611401"
+      },
+      {
+        "id": "ACoAAAGA9kgBZyuiQvpo-YttpipzJUGYNxjn2J0",
+        "firstName": "Phil",
+        "lastName": "Johnson DipPFS",
+        "position": "Investor and Mentor to established business owners",
+        "publicIdentifier": "philjohnsonfinancialservicesltd",
+        "linkedinUrl": "https://www.linkedin.com/in/philjohnsonfinancialservicesltd"
+      },
+      {
+        "id": "ACoAABLONcEBt-QskCSSg3vEjszjw9JTrZWff9o",
+        "firstName": "Adeiza",
+        "lastName": "Suleman",
+        "position": "Founder @10Alytics, Co-Founder @Amdari | Data Scientist | Facilitator | Public Speaker",
+        "publicIdentifier": "adeiza-suleman-4557b389",
+        "linkedinUrl": "https://www.linkedin.com/in/adeiza-suleman-4557b389"
+      },
+      {
+        "id": "ACoAAGbD_SwBBmx7XwhkMDMbeckKCuge4X0_EI0",
+        "firstName": "Jan",
+        "lastName": "Forster",
+        "position": "Senior Vice President at Wells Fargo",
+        "publicIdentifier": "jan-forster-a104a2401",
+        "linkedinUrl": "https://www.linkedin.com/in/jan-forster-a104a2401"
+      },
+      {
+        "id": "ACoAAGbO4dcBz8H1AiCdf2t_u-x_qN34MH71Pfw",
+        "firstName": "Kenneth",
+        "lastName": "Martinez",
+        "position": "Co-Founder at Wells Fargo",
+        "publicIdentifier": "kenneth-martinez-b87787401",
+        "linkedinUrl": "https://www.linkedin.com/in/kenneth-martinez-b87787401"
+      },
+      {
+        "id": "ACoAAC_2qaoBE9s4UNnq4ZA8YKup1nQXqabPtk8",
+        "firstName": "Mario",
+        "lastName": "Niszler",
+        "position": "Co-Founder at Nutry Nuts",
+        "publicIdentifier": "mario-niszler-7a25a71a5",
+        "linkedinUrl": "https://www.linkedin.com/in/mario-niszler-7a25a71a5"
+      },
+      {
+        "id": "ACoAAGbE71kB3IoYZsGIerfprMnXNT-XBUvHsHE",
+        "firstName": "Benedict ",
+        "lastName": "Beckenbauer",
+        "position": "General Manager at Wells Fargo",
+        "publicIdentifier": "benedict-beckenbauer-875512401",
+        "linkedinUrl": "https://www.linkedin.com/in/benedict-beckenbauer-875512401"
+      },
+      {
+        "id": "ACoAAGbEvuIBPRNOwcdWaWy5WEsYr09lGlm2ghA",
+        "firstName": "Blaise ",
+        "lastName": "Blackwood",
+        "position": "General Manager at Wells Fargo",
+        "publicIdentifier": "blaise-blackwood-656507401",
+        "linkedinUrl": "https://www.linkedin.com/in/blaise-blackwood-656507401"
+      },
+      {
+        "id": "ACoAAGbD3C4BwZYpF3cCBFiSMkehxzT_iCTAsdc",
+        "firstName": "Kevin",
+        "lastName": "HernandeRs",
+        "position": "Co-Founder at Wells Fargo",
+        "publicIdentifier": "kevin-hernanders-b52499401",
+        "linkedinUrl": "https://www.linkedin.com/in/kevin-hernanders-b52499401"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAB44HngBYV8KWhZleCMaGiCb9vVVnv4olPs"
+    }
+  }
+}

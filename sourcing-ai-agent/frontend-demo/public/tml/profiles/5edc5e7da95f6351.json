@@ -1,0 +1,2506 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAAAcKtUB0UQkURc4hR90w8OOwIMrVMg_CpI",
+    "profile_url": "https://www.linkedin.com/in/ACwAAAAcKtUB0UQkURc4hR90w8OOwIMrVMg_CpI"
+  },
+  "item": {
+    "id": "ACoAAAAcKtUBhnEmIuzVht2H3oqhJ9tKrO4NQIY",
+    "publicIdentifier": "georgerider",
+    "linkedinUrl": "https://www.linkedin.com/in/georgerider",
+    "firstName": "George",
+    "lastName": "Rider",
+    "emails": [
+      {
+        "email": "george.rider@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Recruiting @ Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": true,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "1845973",
+    "registeredAt": "2005-01-26T10:30:41.000Z",
+    "topSkills": null,
+    "connectionsCount": 2685,
+    "followerCount": 2864,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 12,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "17825",
+        "companyId": "9317",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/9317/",
+        "schoolName": null
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/C5603AQGIs_WPvbaADA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1559702469915?e=1776902400&v=beta&t=2nwib0-hdRi40jnidV9mHD6OfTZb4VlD0arvv-Fxo6A",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQGIs_WPvbaADA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1559702469915?e=1776902400&v=beta&t=2nwib0-hdRi40jnidV9mHD6OfTZb4VlD0arvv-Fxo6A",
+          "width": 500,
+          "height": 500,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQGIs_WPvbaADA/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1559702469980?e=1776902400&v=beta&t=fI4PDuWiZsf1FumOdFRTGOLXuK6ETJaQcB3YWr-21fk",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQGIs_WPvbaADA/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1559702469965?e=1776902400&v=beta&t=5h7yUp8pa8IajkzXHGwTAVsvWoLL2pCQ27kpqszRRmw",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQGIs_WPvbaADA/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1559702469868?e=1776902400&v=beta&t=wo-NXPkFXZvFGG2wJUND1261AJ1vSLno24Bd7ckFFis",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/C5603AQGIs_WPvbaADA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1559702469915?e=1776902400&v=beta&t=2nwib0-hdRi40jnidV9mHD6OfTZb4VlD0arvv-Fxo6A",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Recruiting @ Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Recruiting",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "5 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Dec",
+          "year": 2025,
+          "text": "Dec 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Head of Recruiting",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "AngelList",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1806556/",
+        "companyId": "1806556",
+        "duration": "8 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "2629d0ea0798b3fa9696563e900b8687426f3d27",
+        "startDate": {
+          "month": "May",
+          "year": 2025,
+          "text": "May 2025"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2025,
+          "text": "Dec 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHK8OClv0DLwA/company-logo_400_400/company-logo_400_400/0/1668476594231/angellist_logo?e=1776902400&v=beta&t=Ia1G9pTzMr42xKpbE939jAWRsu8zqm3JAxWIN6Fek7A",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHK8OClv0DLwA/company-logo_400_400/company-logo_400_400/0/1668476594231/angellist_logo?e=1776902400&v=beta&t=Ia1G9pTzMr42xKpbE939jAWRsu8zqm3JAxWIN6Fek7A",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHK8OClv0DLwA/company-logo_200_200/company-logo_200_200/0/1668476594231/angellist_logo?e=1776902400&v=beta&t=ht0r67sRiyK4GNmoWyVvfxxhfzN8RJRdECr5e_GSDA8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHK8OClv0DLwA/company-logo_100_100/company-logo_100_100/0/1668476594231/angellist_logo?e=1776902400&v=beta&t=rKzi8SeQ1QOeg8YTGIUfVtLVcZIH6oWc5OU9TNaKCSc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Technical Recruiting",
+        "location": "San Francisco, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "AngelList",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1806556/",
+        "companyId": "1806556",
+        "duration": "4 yrs",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "2629d0ea0798b3fa9696563e900b8687426f3d27",
+        "startDate": {
+          "month": "May",
+          "year": 2021,
+          "text": "May 2021"
+        },
+        "endDate": {
+          "month": "Apr",
+          "year": 2025,
+          "text": "Apr 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHK8OClv0DLwA/company-logo_400_400/company-logo_400_400/0/1668476594231/angellist_logo?e=1776902400&v=beta&t=Ia1G9pTzMr42xKpbE939jAWRsu8zqm3JAxWIN6Fek7A",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHK8OClv0DLwA/company-logo_400_400/company-logo_400_400/0/1668476594231/angellist_logo?e=1776902400&v=beta&t=Ia1G9pTzMr42xKpbE939jAWRsu8zqm3JAxWIN6Fek7A",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHK8OClv0DLwA/company-logo_200_200/company-logo_200_200/0/1668476594231/angellist_logo?e=1776902400&v=beta&t=ht0r67sRiyK4GNmoWyVvfxxhfzN8RJRdECr5e_GSDA8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHK8OClv0DLwA/company-logo_100_100/company-logo_100_100/0/1668476594231/angellist_logo?e=1776902400&v=beta&t=rKzi8SeQ1QOeg8YTGIUfVtLVcZIH6oWc5OU9TNaKCSc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "VP, Recruiting",
+        "location": "Oakland, CA",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Marqeta, Inc",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1030330/",
+        "companyId": "1030330",
+        "duration": "1 yr 10 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2019,
+          "text": "Mar 2019"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2020,
+          "text": "Dec 2020"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGbFMpZcIiKvw/company-logo_400_400/B4EZf5u7etHsAY-/0/1752241519702/marqeta_logo?e=1776902400&v=beta&t=SIM34iTdEtMWPzL6ypJ5-Xv59DVIAdzQuJmoapPeEII",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGbFMpZcIiKvw/company-logo_400_400/B4EZf5u7etHsAY-/0/1752241519702/marqeta_logo?e=1776902400&v=beta&t=SIM34iTdEtMWPzL6ypJ5-Xv59DVIAdzQuJmoapPeEII",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGbFMpZcIiKvw/company-logo_200_200/B4EZf5u7etHsAI-/0/1752241519702/marqeta_logo?e=1776902400&v=beta&t=pHDyp_PPKMrMd5Al3XdfmbuNjrtKCZSEEvDw52oYJoo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGbFMpZcIiKvw/company-logo_100_100/B4EZf5u7etHsAQ-/0/1752241519703/marqeta_logo?e=1776902400&v=beta&t=obTdvwODXx2nEA3q6x0rbbuvK6PdOp-JXSIe7eeu9Fc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Engineering Staffing",
+        "location": "Menlo Park, CA",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Facebook",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/76987811/",
+        "companyId": "76987811",
+        "duration": "4 yrs 5 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Nov",
+          "year": 2014,
+          "text": "Nov 2014"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2019,
+          "text": "Mar 2019"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_200_200/company-logo_200_200/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=CL3OcEUIyBJFm9Wkw4iT9gJoWpsvGBIAhhNM0DjZx_A",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_100_100/company-logo_100_100/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=sZq9Sard1kGYVIprgBkNhUvJRTI7tf3pXOCP1bQBfpM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Technical Recruiting",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Oculus VR",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/2763277/",
+        "companyId": "2763277",
+        "duration": "3 yrs 2 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Nov",
+          "year": 2014,
+          "text": "Nov 2014"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2017,
+          "text": "Dec 2017"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGfRVqLT0_Djg/company-logo_400_400/company-logo_400_400/0/1631327431300?e=1776902400&v=beta&t=THRa2jMjPy3KevJaKgLMvf5yh4sUTt3amEZFKOlfSgA",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGfRVqLT0_Djg/company-logo_400_400/company-logo_400_400/0/1631327431300?e=1776902400&v=beta&t=THRa2jMjPy3KevJaKgLMvf5yh4sUTt3amEZFKOlfSgA",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGfRVqLT0_Djg/company-logo_200_200/company-logo_200_200/0/1631327431300?e=1776902400&v=beta&t=kWuxnCtzXwIkBtWsl9nIKjaWtk3mYRChpW46oq1dH2U",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGfRVqLT0_Djg/company-logo_100_100/company-logo_100_100/0/1631327431300?e=1776902400&v=beta&t=slrzJVrLawUoQ4pUOqvdPLDtfueRGf_tJOFKvUvjMXM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Talent Lead, Engineering",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Square Inc.",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/675562/",
+        "companyId": "675562",
+        "duration": "3 yrs 6 mos",
+        "description": "- Product and Engineering\n- Staffing Manager\n- Strategic and Engineering Leadership Staffing\n- Sr. Technical Recruiter",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2011,
+          "text": "May 2011"
+        },
+        "endDate": {
+          "month": "Oct",
+          "year": 2014,
+          "text": "Oct 2014"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHikN6EXPd23Q/company-logo_400_400/company-logo_400_400/0/1630646872203/joinsquare_logo?e=1776902400&v=beta&t=Za0jyjcCdUXmCccbQwhhiOYr27NOqzcK01rpQA-xRp4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHikN6EXPd23Q/company-logo_400_400/company-logo_400_400/0/1630646872203/joinsquare_logo?e=1776902400&v=beta&t=Za0jyjcCdUXmCccbQwhhiOYr27NOqzcK01rpQA-xRp4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHikN6EXPd23Q/company-logo_200_200/company-logo_200_200/0/1630646872203/joinsquare_logo?e=1776902400&v=beta&t=aCGTqtm_ujvGVzeRkVX0SOJ7OnizMlDqJKiV13yhPPQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHikN6EXPd23Q/company-logo_100_100/company-logo_100_100/0/1630646872203/joinsquare_logo?e=1776902400&v=beta&t=E4WHYzhaCDACxyir6gE4JgukQsjZ5jksMMPSVsAmJi4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Sr. Technical Recruiter - iOS Wireless Technologies",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Apple",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/162479/",
+        "companyId": "162479",
+        "duration": "1 yr 11 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jul",
+          "year": 2009,
+          "text": "Jul 2009"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2011,
+          "text": "May 2011"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_400_400/company-logo_400_400/0/1630637844948/apple_logo?e=1776902400&v=beta&t=KteXM40NNLQ3nz21Do-neoy-f7lbDDA7kJmtS5wwrL4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_400_400/company-logo_400_400/0/1630637844948/apple_logo?e=1776902400&v=beta&t=KteXM40NNLQ3nz21Do-neoy-f7lbDDA7kJmtS5wwrL4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_200_200/company-logo_200_200/0/1630637844948/apple_logo?e=1776902400&v=beta&t=I8RMorsmHMk3gA9b3fT4m2HDgfVtfdB6se4bEZcMHb8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_100_100/company-logo_100_100/0/1630637844948/apple_logo?e=1776902400&v=beta&t=8c3EpxT43tZMihGirOM7eBnDzFHAGiYV-OxaRj_xfjo",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Sr. Associate",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Walker Talent Group @ Facebook Engineering",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/76987811/",
+        "companyId": "76987811",
+        "duration": "7 mos",
+        "description": "Company founded by Dan Walker, former Chief Talent Officer at Apple.",
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2009,
+          "text": "Jan 2009"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2009,
+          "text": "Jul 2009"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_200_200/company-logo_200_200/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=CL3OcEUIyBJFm9Wkw4iT9gJoWpsvGBIAhhNM0DjZx_A",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_100_100/company-logo_100_100/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=sZq9Sard1kGYVIprgBkNhUvJRTI7tf3pXOCP1bQBfpM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Sr. Recruiter - iPod/iPhone Engineering",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Apple",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/162479/",
+        "companyId": "162479",
+        "duration": "6 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jul",
+          "year": 2008,
+          "text": "Jul 2008"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2008,
+          "text": "Dec 2008"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_400_400/company-logo_400_400/0/1630637844948/apple_logo?e=1776902400&v=beta&t=KteXM40NNLQ3nz21Do-neoy-f7lbDDA7kJmtS5wwrL4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_400_400/company-logo_400_400/0/1630637844948/apple_logo?e=1776902400&v=beta&t=KteXM40NNLQ3nz21Do-neoy-f7lbDDA7kJmtS5wwrL4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_200_200/company-logo_200_200/0/1630637844948/apple_logo?e=1776902400&v=beta&t=I8RMorsmHMk3gA9b3fT4m2HDgfVtfdB6se4bEZcMHb8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_100_100/company-logo_100_100/0/1630637844948/apple_logo?e=1776902400&v=beta&t=8c3EpxT43tZMihGirOM7eBnDzFHAGiYV-OxaRj_xfjo",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Sr. Technical Recruiter - Yahoo! Search and Advertising Technology",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Yahoo! Inc",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1288/",
+        "companyId": "1288",
+        "duration": "1 yr 4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Apr",
+          "year": 2007,
+          "text": "Apr 2007"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2008,
+          "text": "Jul 2008"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHZRIvlF1NvZA/company-logo_400_400/company-logo_400_400/0/1734629033465/yahoo_logo?e=1776902400&v=beta&t=tyoKWOjjRA2BeufKGvXBFBWHkbTEaAWCK1LH1mzBGgw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHZRIvlF1NvZA/company-logo_400_400/company-logo_400_400/0/1734629033465/yahoo_logo?e=1776902400&v=beta&t=tyoKWOjjRA2BeufKGvXBFBWHkbTEaAWCK1LH1mzBGgw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHZRIvlF1NvZA/company-logo_200_200/company-logo_200_200/0/1734629033465/yahoo_logo?e=1776902400&v=beta&t=1nVR5z7fxUI0LuIAhrouqrG2RA6tMBwjBnzu0e3vdLM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHZRIvlF1NvZA/company-logo_100_100/company-logo_100_100/0/1734629033465/yahoo_logo?e=1776902400&v=beta&t=qzVdd30zO1ELed5xdznH0nO-72k4t64sThqn6__upgI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Sr. Staffing Consultant",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Sony Computer Entertainment America",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/57993393/",
+        "companyId": "57993393",
+        "duration": "5 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Nov",
+          "year": 2006,
+          "text": "Nov 2006"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2007,
+          "text": "Mar 2007"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFJO00VqEb3Vg/company-logo_400_400/company-logo_400_400/0/1630540194089/sony_interactive_entertainment_llc_logo?e=1776902400&v=beta&t=j83fTSMRJEJkz44_DP5yFQWy54MeVd8_r8JHA14TrEo",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFJO00VqEb3Vg/company-logo_400_400/company-logo_400_400/0/1630540194089/sony_interactive_entertainment_llc_logo?e=1776902400&v=beta&t=j83fTSMRJEJkz44_DP5yFQWy54MeVd8_r8JHA14TrEo",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFJO00VqEb3Vg/company-logo_200_200/company-logo_200_200/0/1630540194089/sony_interactive_entertainment_llc_logo?e=1776902400&v=beta&t=9J66ltuPOzbqurVpdzfqV2yW3o2cogy3MJph55SJoqQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFJO00VqEb3Vg/company-logo_100_100/company-logo_100_100/0/1630540194089/sony_interactive_entertainment_llc_logo?e=1776902400&v=beta&t=Ytw_eXrbldVAzcg0y1ssc6mFTPYKADzuhhAClZZ6ABs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Sr. Contract Recruiter - Partner Solutions Organization",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Google, Inc",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1441/",
+        "companyId": "1441",
+        "duration": "5 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jul",
+          "year": 2006,
+          "text": "Jul 2006"
+        },
+        "endDate": {
+          "month": "Nov",
+          "year": 2006,
+          "text": "Nov 2006"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_200_200/B4EZmhegXHGcAM-/0/1759350753990/google_logo?e=1776902400&v=beta&t=CTzyZ9kqXiycW6UU0lJPQmCNKxu5QeAaPL_y9ftsJX0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_100_100/B4EZmhegXHGcAU-/0/1759350753990/google_logo?e=1776902400&v=beta&t=LRCYpUl9rmgdri4awRP4FVlvccNARAtgcfqxtRHdedI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Sr. Recruiter",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Sony Computer Entertainment America",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/57993393/",
+        "companyId": "57993393",
+        "duration": "1 yr 3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2005,
+          "text": "May 2005"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2006,
+          "text": "Jul 2006"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFJO00VqEb3Vg/company-logo_400_400/company-logo_400_400/0/1630540194089/sony_interactive_entertainment_llc_logo?e=1776902400&v=beta&t=j83fTSMRJEJkz44_DP5yFQWy54MeVd8_r8JHA14TrEo",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFJO00VqEb3Vg/company-logo_400_400/company-logo_400_400/0/1630540194089/sony_interactive_entertainment_llc_logo?e=1776902400&v=beta&t=j83fTSMRJEJkz44_DP5yFQWy54MeVd8_r8JHA14TrEo",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFJO00VqEb3Vg/company-logo_200_200/company-logo_200_200/0/1630540194089/sony_interactive_entertainment_llc_logo?e=1776902400&v=beta&t=9J66ltuPOzbqurVpdzfqV2yW3o2cogy3MJph55SJoqQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFJO00VqEb3Vg/company-logo_100_100/company-logo_100_100/0/1630540194089/sony_interactive_entertainment_llc_logo?e=1776902400&v=beta&t=Ytw_eXrbldVAzcg0y1ssc6mFTPYKADzuhhAClZZ6ABs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Contract Technical Recruiter",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Idetic/MobiTV",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Idetic%2FMobiTV",
+        "duration": "4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2005,
+          "text": "Feb 2005"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2005,
+          "text": "May 2005"
+        }
+      },
+      {
+        "position": "Lead Recruiter",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Techlink Systems",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/19182/",
+        "companyId": "19182",
+        "duration": "2 yrs 1 mo",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2003,
+          "text": "Feb 2003"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2005,
+          "text": "Feb 2005"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGoJ8UFjNxqqQ/company-logo_400_400/company-logo_400_400/0/1709592463919/techlink_systems_logo?e=1776902400&v=beta&t=r7COY29jDLEKVD032VNwqtCxl3y0jRy_CY8CdKNGpI4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGoJ8UFjNxqqQ/company-logo_400_400/company-logo_400_400/0/1709592463919/techlink_systems_logo?e=1776902400&v=beta&t=r7COY29jDLEKVD032VNwqtCxl3y0jRy_CY8CdKNGpI4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGoJ8UFjNxqqQ/company-logo_200_200/company-logo_200_200/0/1709592463919/techlink_systems_logo?e=1776902400&v=beta&t=NDPcgNTww72ERx3G1oQNwoRzkHlHOm3iO4DMims_5Nw",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGoJ8UFjNxqqQ/company-logo_100_100/company-logo_100_100/0/1709592463919/techlink_systems_logo?e=1776902400&v=beta&t=6YY93DNBd5ehJW37mMQFYE-2KfHzJxb4KRyzyrujmuw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Account Executive",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "NTT/Verio",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3491/",
+        "companyId": "3491",
+        "duration": "7 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2002,
+          "text": "Jun 2002"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2002,
+          "text": "Dec 2002"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHnsRgbMupdoQ/company-logo_400_400/company-logo_400_400/0/1631318379790?e=1776902400&v=beta&t=QxBCH2s5UQ_78VkVEO8QvfSbI17FVHwE1D_Ud0VofNE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHnsRgbMupdoQ/company-logo_400_400/company-logo_400_400/0/1631318379790?e=1776902400&v=beta&t=QxBCH2s5UQ_78VkVEO8QvfSbI17FVHwE1D_Ud0VofNE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHnsRgbMupdoQ/company-logo_200_200/company-logo_200_200/0/1631318379790?e=1776902400&v=beta&t=fusHq_qo8MNNGmi2ZAN8RsQGHiA5aRzSr83-CAQsKRc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHnsRgbMupdoQ/company-logo_100_100/company-logo_100_100/0/1631318379790?e=1776902400&v=beta&t=miNQQAZQIQ9OmwKrpiEoxq6Z2Dyah3AKIb4XyCug1Is",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Technical Recruiter",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Donohue Group Inc dba Consultant Online",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Donohue+Group+Inc+dba+Consultant+Online",
+        "duration": "2 yrs 1 mo",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Dec",
+          "year": 1999,
+          "text": "Dec 1999"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2001,
+          "text": "Dec 2001"
+        }
+      },
+      {
+        "position": "Technical Recruiter",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Kforce",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3076/",
+        "companyId": "3076",
+        "duration": "11 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 1999,
+          "text": "Feb 1999"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 1999,
+          "text": "Dec 1999"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEtonVHDHqAZQ/company-logo_400_400/company-logo_400_400/0/1639415775313/kforce_logo?e=1776902400&v=beta&t=FgtA8BbTSMzyil3GpwyHHk0xJoBh1dbHHq1RjFOrdSo",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEtonVHDHqAZQ/company-logo_400_400/company-logo_400_400/0/1639415775313/kforce_logo?e=1776902400&v=beta&t=FgtA8BbTSMzyil3GpwyHHk0xJoBh1dbHHq1RjFOrdSo",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEtonVHDHqAZQ/company-logo_200_200/company-logo_200_200/0/1639415775313/kforce_logo?e=1776902400&v=beta&t=CcQJnmdxQlbJGG1JpQ9GxYdC3zz4x854NdBZ0eSlRrk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQEtonVHDHqAZQ/company-logo_100_100/company-logo_100_100/0/1639415775313/kforce_logo?e=1776902400&v=beta&t=CrridUUKwp79aq_gvq2-A0himBjdeOTkjtcTADCScXs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "California State University - East Bay",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/9317/",
+        "schoolId": "9317",
+        "degree": "Business Administration",
+        "fieldOfStudy": null,
+        "skills": [],
+        "insights": "Activities and societies: Delta Chi Fraternity",
+        "startDate": {
+          "year": 1995,
+          "text": "1995"
+        },
+        "endDate": {
+          "year": 1997,
+          "text": "1997"
+        },
+        "period": "1995 - 1997",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQETkGyBN3W3rQ/company-logo_400_400/company-logo_400_400/0/1723830385960/csueastbay_logo?e=1776902400&v=beta&t=lSGZhB079hlcQ5BXz-vOY5x3JfiWlYbaJP_OIwnTxfk",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQETkGyBN3W3rQ/company-logo_400_400/company-logo_400_400/0/1723830385960/csueastbay_logo?e=1776902400&v=beta&t=lSGZhB079hlcQ5BXz-vOY5x3JfiWlYbaJP_OIwnTxfk",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQETkGyBN3W3rQ/company-logo_200_200/company-logo_200_200/0/1723830385960/csueastbay_logo?e=1776902400&v=beta&t=Gd5BqxZXqn7LvaoLpC-C-O5b1ugE7PF92ioVuOuppMY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQETkGyBN3W3rQ/company-logo_100_100/company-logo_100_100/0/1723830385960/csueastbay_logo?e=1776902400&v=beta&t=wR6Mtn-YaKfw4LDOSbGXUrQv0oB9kJO5u9Cs5JLSG2Q",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [
+      {
+        "givenBy": "Dan Post",
+        "givenByHeadline": "VP of Engineering at Okta | Driving Scalable Systems & Product Strategy | Building High-Performance, Customer-Centered Teams",
+        "givenAt": "March 13, 2012, Dan worked with George but on different teams",
+        "givenByLink": "https://www.linkedin.com/in/djpost",
+        "description": "George is by far the best technical recruiter I've had the privilege of working with.\r\n\r\nHe strives for and achieves understanding of people as individuals and the technology they work with, and is incredibly good at assessing fit and potential.",
+        "givenByPicture": {
+          "url": null,
+          "sizes": []
+        }
+      },
+      {
+        "givenBy": "Sonu Nayyar",
+        "givenByHeadline": "SVP & CIO at NVIDIA",
+        "givenAt": "April 7, 2010, Sonu worked with George on the same team",
+        "givenByLink": "https://www.linkedin.com/in/sonunayyar",
+        "description": "George and I worked together for about 8 months in 2008 at Yahoo!  He is one of the most effective recruiters that I have ever worked with.  He is professional, personable, smart, diligent and focused on getting the job done.  He took the time to understand our diverse needs in Production Operations and in a short period of time delivered exceptional results.  He made things happen in a complex environment.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQE6kXDxZeQfpw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1652387733196?e=1776902400&v=beta&t=j5uICu5OCuFO9sD_dw4eG09UqGWBkdI2mPDYQzE99Ps",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQE6kXDxZeQfpw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1652387733196?e=1776902400&v=beta&t=j5uICu5OCuFO9sD_dw4eG09UqGWBkdI2mPDYQzE99Ps",
+              "width": 450,
+              "height": 450,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQE6kXDxZeQfpw/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1652387733196?e=1776902400&v=beta&t=gYHMLHy6S93XcIyYVBRQqxjIcjdqY24agKVrZi-Z6zM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQE6kXDxZeQfpw/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1652387733196?e=1776902400&v=beta&t=QKX4baLyA1OM5gIYGG_ne0Bec5r1bJjb6_hQ908ikNs",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQE6kXDxZeQfpw/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1652387733196?e=1776902400&v=beta&t=IVIChKxlFmczw5Rmusn3wkDqEOFkb681Tu7OWkuzCwI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Robert C.",
+        "givenByHeadline": "I love what I do",
+        "givenAt": "March 10, 2010, Robert worked with George but on different teams",
+        "givenByLink": "https://www.linkedin.com/in/rchiniquy",
+        "description": "George builds great teams. He's good for the teams he's sourcing for, finding good technical and personal matches, and that's great for the people he's bringing on-board. He's definitely the best recruiter I've worked with.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQHyaH_StxQosw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1516324555414?e=1776902400&v=beta&t=jNoVDRxGQgwPOpMYOP_RfNss4gajFlAsyJgVbvHmuFg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQHyaH_StxQosw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1516324555414?e=1776902400&v=beta&t=jNoVDRxGQgwPOpMYOP_RfNss4gajFlAsyJgVbvHmuFg",
+              "width": 450,
+              "height": 450,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQHyaH_StxQosw/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1516324555485?e=1776902400&v=beta&t=59pXDpeJubbStcJyaOj6u9vE9Tbgdfqc58bYDCTXVKU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQHyaH_StxQosw/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1516324555487?e=1776902400&v=beta&t=6N0u2iJks7j-yVovYrQ4nbv3ad3zJF5eSmdycp3hSzA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQHyaH_StxQosw/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1516324555432?e=1776902400&v=beta&t=rYLWtMS9EnAjYEHhVHo-qCVxPE2dXd6IcVtv29tBvik",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Fred Bitter",
+        "givenByHeadline": "retired",
+        "givenAt": "February 20, 2010, Fred managed George directly",
+        "givenByLink": "https://www.linkedin.com/in/fredbitter",
+        "description": "George is solid in all facets of the role of sr. recruiter (client facing, sourcing, closing, etc).  Able to take on the most challenging of assignments and client groups.  Deep understanding of the technology variations and nuances of the roles he recruited for, across a broad spectrum of software and internet related realms.  Consistently recvd feedback that reflected the high degree his client groups/managers valued his efforts.  Excellent work ethic, great team player and team member.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQEIvRlVCUl99g/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1564521511262?e=1776902400&v=beta&t=KkBEDDVWv_vrfUk6aVtotjPNiOT6v9H5JmGImisO1KY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQEIvRlVCUl99g/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1564521511262?e=1776902400&v=beta&t=KkBEDDVWv_vrfUk6aVtotjPNiOT6v9H5JmGImisO1KY",
+              "width": 450,
+              "height": 450,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQEIvRlVCUl99g/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1564521511231?e=1776902400&v=beta&t=bIG9kHgFfguGNCjnWxlVSfRBQROQQ2hS5WEXwO47Q9w",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQEIvRlVCUl99g/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1564521511169?e=1776902400&v=beta&t=uhoSHbBVuTaYFJrJb4fz8k-33sil7RDB0iKJgpkeF1w",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQEIvRlVCUl99g/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1564521511197?e=1776902400&v=beta&t=_K54CaTESfQkM0qYY1xMR1uIpooewrC2rOQPGA7ReDw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Tim Daly",
+        "givenByHeadline": "Co-Founder & Chief Architect at Plus",
+        "givenAt": "February 17, 2010, Tim worked with George but on different teams",
+        "givenByLink": "https://www.linkedin.com/in/tim-daly-1b41635",
+        "description": "George is the recruiter that brought me into Yahoo.  It was a top notch, professional experience all the way.  He is a clear communicator and a thorough worker.  It started me off with a very favorable first impression of the company.",
+        "givenByPicture": {
+          "url": null,
+          "sizes": []
+        }
+      },
+      {
+        "givenBy": "Bob Schulman",
+        "givenByHeadline": "Apple Intelligence at Apple",
+        "givenAt": "February 16, 2010, Bob worked with George but on different teams",
+        "givenByLink": "https://www.linkedin.com/in/rmschulman",
+        "description": "George is a stellar recruiter.  He is one of the few I've ever worked with who understands the candidate, the hiring manager, and the organization.  He was always well-informed about the job market, the candidate's priorities, strengths/weaknesses, and my priorities.  I was comfortable with the recruiting process in his hands.  He managed the situation extremely effectively -- every time.  His departure was a significant loss to our organization.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E03AQH4NFZlxVImNA/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1516200295222?e=1776902400&v=beta&t=gDdcZexOYTHoZWk5g9cepqQ552VwJODhH-TvuSPTV7k",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E03AQH4NFZlxVImNA/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1516200295222?e=1776902400&v=beta&t=gDdcZexOYTHoZWk5g9cepqQ552VwJODhH-TvuSPTV7k",
+              "width": 278,
+              "height": 278,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E03AQH4NFZlxVImNA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1516200295024?e=1776902400&v=beta&t=Q4E49DCH1AgKF94tlw0eQNE48C2HhSRitoT5q5hpxt0",
+              "width": 278,
+              "height": 278,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E03AQH4NFZlxVImNA/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1516200294864?e=1776902400&v=beta&t=5c5jl-9O_JUn7oIGsxAtuoDT4QUqDtKxaZ2Gw_nMi44",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E03AQH4NFZlxVImNA/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1516200298729?e=1776902400&v=beta&t=rKTaeXFWeUyeBXmuJt3N__aEzj49imUQ4kNdhTrtFEE",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "David Henke",
+        "givenByHeadline": "Board of Trustees Member at University of California, Santa Barbara",
+        "givenAt": "February 13, 2010, David worked with George but on different teams",
+        "givenByLink": "https://www.linkedin.com/in/drhenke",
+        "description": "George was an excellent recruiter for the Production Operations team at Yahoo, a diverse group of talent with needs in Datacenters, Networking, Computing, Storage, and Software Development. Professional, diligent, focused, and requested by the Senior Operations leadership.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D03AQHSaOmdGhpelA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1516272668940?e=1776902400&v=beta&t=BPEaN-Mwl2i2HnldxTRvjAuq503CUjhhQFcObPuE2is",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D03AQHSaOmdGhpelA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1516272668940?e=1776902400&v=beta&t=BPEaN-Mwl2i2HnldxTRvjAuq503CUjhhQFcObPuE2is",
+              "width": 450,
+              "height": 450,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D03AQHSaOmdGhpelA/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1516272825080?e=1776902400&v=beta&t=zzYeFGihHG7HF-DY5MbEx1xvXVmHYEnwbiMC5IEg4zo",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D03AQHSaOmdGhpelA/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1516272521869?e=1776902400&v=beta&t=1mn1GMVQ-uz71EpR78AwgI_Kn7Gz0BKSeiWA3QpsXMc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D03AQHSaOmdGhpelA/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1516272749448?e=1776902400&v=beta&t=s0Ay_A_0QGFKkUs3WJWqzvhndAxNLHCruypWEC0f_zM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Ivan Batanov",
+        "givenByHeadline": "Operating Executive | Scaling SaaS & Fintech Platforms | AI-Driven Transformation & Value Creation | CTO/CPO Leadership | Repeated High-Growth Exits & Org Turnarounds | ex-Microsoft, ServiceNow, Yahoo",
+        "givenAt": "February 12, 2010, Ivan worked with George but on different teams",
+        "givenByLink": "https://www.linkedin.com/in/ivanb",
+        "description": "George is an exceptional recruiter and dealmaker - smart, savvy, personable and easy to work with. He was an invaluable resource in sourcing, recruiting and closing on top talent.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQGKObXUoEjYtA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1703654627271?e=1776902400&v=beta&t=dT_p6uZDNb34OFGpG5yNBto0oOuEfwMmdYGsKXqVcSY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQGKObXUoEjYtA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1703654627271?e=1776902400&v=beta&t=dT_p6uZDNb34OFGpG5yNBto0oOuEfwMmdYGsKXqVcSY",
+              "width": 680,
+              "height": 680,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQGKObXUoEjYtA/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1703654627271?e=1776902400&v=beta&t=FKBHpLrwPqI7UCYlyskxEJ3moStfDsUgLwmrojIH5HY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQGKObXUoEjYtA/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1703654627271?e=1776902400&v=beta&t=-ENKrmhZtSMjdXvSah3bpQu0AQDv06LTfJqBcxliTfU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQGKObXUoEjYtA/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1703654627271?e=1776902400&v=beta&t=MDvQBEc_f5gUGAhX49gZwX1x-G2SjtoZJ8P19dB2sv4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Austin David",
+        "givenByHeadline": "R&D, procyon horology",
+        "givenAt": "February 12, 2010, Austin worked with George but on different teams",
+        "givenByLink": "https://www.linkedin.com/in/austin-david-4a89b2",
+        "description": "I met George when he recruited me at Mobi, and he helped hire a bunch of my guys there.  Later, when it was time to leave Mobi, I linked up with George again and he brought me into Yahoo!  And, again, he helped me hire a bunch of guys.\r\n\r\nGeorge is the best technical recruiter I've worked with, on both sides of the equation.  He's pretty good at leveling candidates (better than any other recruiter) and has a great sense of 'fit' between teams, and for routing candidates on the first pass.\r\n\r\nIn addition to straight hiring & sourcing, he helped drive process improvements within Yahoo! to limit the 'noise' and help deliver qualified resumes; no other recruiters have been able to do this before or since.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQE96GIm3n5DoA/profile-displayphoto-shrink_800_800/B4EZPR_s3tHwAg-/0/1734394957677?e=1776902400&v=beta&t=wJDkDRJ33LrkMtP-2pv3QgEiT5Bm5xvyLmf9WDBffrg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E03AQE96GIm3n5DoA/profile-displayphoto-shrink_800_800/B4EZPR_s3tHwAg-/0/1734394957677?e=1776902400&v=beta&t=wJDkDRJ33LrkMtP-2pv3QgEiT5Bm5xvyLmf9WDBffrg",
+              "width": 800,
+              "height": 800,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E03AQE96GIm3n5DoA/profile-displayphoto-shrink_400_400/B4EZPR_s3tHwAk-/0/1734394957619?e=1776902400&v=beta&t=y0sq1mfv3euelva83k2WiMeGvDXtRizHSN9Ae_Bizlg",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E03AQE96GIm3n5DoA/profile-displayphoto-shrink_200_200/B4EZPR_s3tHwAc-/0/1734394957677?e=1776902400&v=beta&t=fJFOZZ7bEgIgX2WCngGevcBWvMRvIvRXeiHt87WkuBU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E03AQE96GIm3n5DoA/profile-displayphoto-shrink_100_100/B4EZPR_s3tHwAY-/0/1734394957677?e=1776902400&v=beta&t=Ot07mCwHk7Pyo-Ma3bn3AHbuKfrMtabIThN6YjB4AVA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Susan Gao",
+        "givenByHeadline": "Part-time CxO, full-time Doer",
+        "givenAt": "October 14, 2009, Susan worked with George but they were at different companies",
+        "givenByLink": "https://www.linkedin.com/in/susan-gao-324a496",
+        "description": "George is definitely the best recruiter I've ever worked with. He is professional, personal and very helpful. He is excellent communication skills and humorous personality. It is very pleasant to work with George.",
+        "givenByPicture": {
+          "url": null,
+          "sizes": []
+        }
+      },
+      {
+        "givenBy": "Gina Scoralle",
+        "givenByHeadline": "Strategic Sourcing - IT Vendor Management & Professional Services Contracts  at Albertsons",
+        "givenAt": "June 15, 2009, Gina worked with George on the same team",
+        "givenByLink": "https://www.linkedin.com/in/gscoralle",
+        "description": "George was not afraid to make the cold calls and tackle any job that came at him. He would learn any technology necessary that would enable him in making the placement. George was a pleasure to work with.",
+        "givenByPicture": {
+          "url": null,
+          "sizes": []
+        }
+      },
+      {
+        "givenBy": "James Burnash",
+        "givenByHeadline": "Senior Systems Administrator at NOAA",
+        "givenAt": "December 16, 2008, James worked with George but on different teams",
+        "givenByLink": "https://www.linkedin.com/in/james-burnash-63101a4",
+        "description": "George is quite frankly the best recruiter I've ever had the pleasure to work with. His negotiating skills, professionalism and wit made our conversations both productive and a pleasure.\r\n\r\nI heartily and unreservedly recommend George to anyone.",
+        "givenByPicture": {
+          "url": null,
+          "sizes": []
+        }
+      },
+      {
+        "givenBy": "Nathan North",
+        "givenByHeadline": "Global Payroll Leader | Global Payroll Advisor | Board Member | Thought Leader",
+        "givenAt": "September 29, 2007, Nathan was senior to George but didn't manage George directly",
+        "givenByLink": "https://www.linkedin.com/in/nathannorth",
+        "description": "George is an excellent and creative recruiter. George has a good understanding of recruiting and quality principals. I recommend George Rider to any organization that wants to grow quickly.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQGbBs4fvv0MUg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1670985916339?e=1776902400&v=beta&t=hDcE07aqXYts84sJSF8-oYv9P-5igK8ISCVRdgkOrxU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQGbBs4fvv0MUg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1670985916339?e=1776902400&v=beta&t=hDcE07aqXYts84sJSF8-oYv9P-5igK8ISCVRdgkOrxU",
+              "width": 800,
+              "height": 800,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQGbBs4fvv0MUg/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1670985916339?e=1776902400&v=beta&t=9-F_jpkpEJthCbCf0bFZyppAqcbp99FTfKgqA_vc7kE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQGbBs4fvv0MUg/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1670985916339?e=1776902400&v=beta&t=xODbxoiOyibATP3i4QTxfSpbuDHJuHw0nfBRSn3g_J8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQGbBs4fvv0MUg/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1670985916339?e=1776902400&v=beta&t=H5KXSkoQhjjl0gWiAV6f0O-BtZ370gYU3QpxUZTXhuY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Dennis Gentry",
+        "givenByHeadline": "CTO, Director, Senior Principal Engineer",
+        "givenAt": "September 17, 2007, Dennis worked with George but they were at different companies",
+        "givenByLink": "https://www.linkedin.com/in/dennisgentry",
+        "description": "George was persistent and persuasive, and was a significant factor in my decision to join Google instead of Apple when I was leaving TiVo.  He's also a great guy.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQHb6dAdhocm3g/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1596698147817?e=1776902400&v=beta&t=jWEh8XnHp5pxN7aJnIyu0YCKc6ETBoLHeWL5w8OtuBo",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQHb6dAdhocm3g/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1596698147817?e=1776902400&v=beta&t=jWEh8XnHp5pxN7aJnIyu0YCKc6ETBoLHeWL5w8OtuBo",
+              "width": 800,
+              "height": 800,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQHb6dAdhocm3g/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1596698147817?e=1776902400&v=beta&t=jIgSULoAcwuxBsqUVfNuVQtn4xqiKZe5DnidTSycB7s",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQHb6dAdhocm3g/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1596698147817?e=1776902400&v=beta&t=5utHEFisFrwuv8hIs59KqGFm9vIkQRVSjEMb2-A07g0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQHb6dAdhocm3g/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1596698147817?e=1776902400&v=beta&t=vTRe6ocmVM7x59kJS0hsxTbnm5Xu_HfnNDvb0PCCvo4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Bruno Matzdorf",
+        "givenByHeadline": "Director of Technical Production at Sony Interactive Entertainment",
+        "givenAt": "September 14, 2007, Bruno worked with George but on different teams",
+        "givenByLink": "https://www.linkedin.com/in/brunomatzdorf",
+        "description": "George,\r\n\r\nWhat better for a recommendation that to say I miss your great work when it came to hiring and working through process.  I wish you would be back at Sony, especially now that we need to grow our team.\r\n\r\nYou can direct anyone that needs to know more about your great work to me.\r\n\r\nsincerely,\r\n\r\n-Bruno",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQG2S1_7GygVcg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1592342419246?e=1776902400&v=beta&t=xdFD1AHWD5IFL9NMOKWWlOYA32MintwBwHuG2uuLbJg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQG2S1_7GygVcg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1592342419246?e=1776902400&v=beta&t=xdFD1AHWD5IFL9NMOKWWlOYA32MintwBwHuG2uuLbJg",
+              "width": 800,
+              "height": 800,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQG2S1_7GygVcg/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1592342419246?e=1776902400&v=beta&t=ZL0sBWvGiH_TxCR8le4xLC6BUJ0rj0MLreYNNAb2FJA",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQG2S1_7GygVcg/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1592342419246?e=1776902400&v=beta&t=RpY5QgNe4yVkBvTo-fLuvnBbhsylo7LtwGfu9_cXueo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQG2S1_7GygVcg/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1592342419246?e=1776902400&v=beta&t=qqb1XkVFOYy2kqlllmVPFXfm_6bNOzXM5g08mnjF8YM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Paul Neto",
+        "givenByHeadline": "COO, building something great...",
+        "givenAt": "September 6, 2007, Paul managed George directly",
+        "givenByLink": "https://www.linkedin.com/in/paulsneto",
+        "description": "George has a very good understanding of recruiting and fundamentally knows his stuff. He has a very good approach towards finding the \"A\" players and knows how to close them on the position. I would easilly recommend George to anyone looking for a solid senior technical recruiter.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQER6BPrnAXEVA/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1553585201227?e=1776902400&v=beta&t=wH7M66IH_gZsifYMDAjv98yyO2AHQLguFjFrySc8rJg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQER6BPrnAXEVA/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1553585201227?e=1776902400&v=beta&t=wH7M66IH_gZsifYMDAjv98yyO2AHQLguFjFrySc8rJg",
+              "width": 214,
+              "height": 214,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQER6BPrnAXEVA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1553585201337?e=1776902400&v=beta&t=P_Oh0SMgPfIaAdNaLWGMgvYh3gajHDkt20Cf51Ekgn4",
+              "width": 214,
+              "height": 214,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQER6BPrnAXEVA/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1553585201214?e=1776902400&v=beta&t=I6k2CR9hccqqE7nJQyWGxoqyYDlWGzwISQcAdr9qo3w",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQER6BPrnAXEVA/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1553585201225?e=1776902400&v=beta&t=b1dE7usQYA7AlBdyUiS2MDDYA_RzL9mgLclvwr7mcfY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Carter Lipscomb",
+        "givenByHeadline": "Dr. Business at Iron Galaxy Studios",
+        "givenAt": "May 1, 2007, Carter worked with George but on different teams",
+        "givenByLink": "https://www.linkedin.com/in/carterthegreat",
+        "description": "George is by far and away one of the best of the best in his field!  Simply put, I would NOT have gotten to where I am today without his help and guidence!  George is a smart straight shooter who exemplifies the term MAKE IT HAPPEN!",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E03AQFQg3P-7EwBPg/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1527969519141?e=1776902400&v=beta&t=IwDYlsw04ZSQKDagyXURa69KyP9zq-mz36jphX9Y8IY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E03AQFQg3P-7EwBPg/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1527969519141?e=1776902400&v=beta&t=IwDYlsw04ZSQKDagyXURa69KyP9zq-mz36jphX9Y8IY",
+              "width": 323,
+              "height": 323,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E03AQFQg3P-7EwBPg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1527969519085?e=1776902400&v=beta&t=4hTIB8Uv4tkJLX2g2amuK5nzrTHfNHvCgdCDTcrwGEA",
+              "width": 323,
+              "height": 323,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E03AQFQg3P-7EwBPg/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1527969519011?e=1776902400&v=beta&t=_IoZBK-uMN4IkXFXhON8ikOzPrdNOxFC3tTojS4V3Z4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E03AQFQg3P-7EwBPg/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1527969519127?e=1776902400&v=beta&t=Iiy_UyH2ExROANgibS5kB1BntXHcJgWW8caoRjBks2o",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Marc Racine",
+        "givenByHeadline": "Product, Program, Process & Team Leader | Process Improvement, Leadership Development, Agile, Kanban, Waterfall",
+        "givenAt": "April 24, 2007, Marc worked with George but they were at different companies",
+        "givenByLink": "https://www.linkedin.com/in/marcracine",
+        "description": "It is a true pleasure to work with George.  He is professional, personable, upfront and of the highest caliber.  John Quincy Adams once said that “If your actions inspire others to dream more, learn more, do more and become more, you are a leader.”  George is a true leader in his profession and I am grateful to have met his acquaintance.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQEIS8bgP596bg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1704214543788?e=1776902400&v=beta&t=jPHcOIKqtaISyquNHBZJifQO1B5dXBIgjmD0F6hCDMw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQEIS8bgP596bg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1704214543788?e=1776902400&v=beta&t=jPHcOIKqtaISyquNHBZJifQO1B5dXBIgjmD0F6hCDMw",
+              "width": 800,
+              "height": 800,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQEIS8bgP596bg/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1704214543788?e=1776902400&v=beta&t=gjGpcjywcZooF7X7sHPhsagpG7GQ6qvqOksZLPgU6m4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQEIS8bgP596bg/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1704214543788?e=1776902400&v=beta&t=pQNYHDe1YUEytwWcD1y65Hm_8O7xo84_s0E7lr1YS38",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQEIS8bgP596bg/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1704214543788?e=1776902400&v=beta&t=1vhn4c5rkrT7LDTp49cTNQW9qcmMFK3gdekBPGD-KSw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Serban Porumbescu",
+        "givenByHeadline": "Project Scientist at University of California, Davis",
+        "givenAt": "March 14, 2007, Serban worked with George but on different teams",
+        "givenByLink": "https://www.linkedin.com/in/serbanp",
+        "description": "George was instrumental in my decision to join SCEA's R&D group as a Visiting Researcher.  Various issues arose that lead me to seriously reconsider joining Sony.  George quite literally came in and saved the day.  He took the time to explain the situation when no one else would and put all my fears to rest.  Here is one of the most interesting aspects of the situation:  it was not even George's responsibility to be dealing with me!  I think that action alone speaks volumes about George.  He is the type of person that just steps up and gets things done.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/C5103AQFlIMfoV9y5Bw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1516344584999?e=1776902400&v=beta&t=OE_zrhH_cPFY4e02ra8JNUzcCVGoOpS4bKOcoXFbzSY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5103AQFlIMfoV9y5Bw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1516344584999?e=1776902400&v=beta&t=OE_zrhH_cPFY4e02ra8JNUzcCVGoOpS4bKOcoXFbzSY",
+              "width": 450,
+              "height": 450,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5103AQFlIMfoV9y5Bw/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1516344585088?e=1776902400&v=beta&t=sNkdsIZCbUcrRX7-adjMrwopdtuzvMawd-Eu-21SBX8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5103AQFlIMfoV9y5Bw/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1516344585007?e=1776902400&v=beta&t=jGULTCleF2VOJQhT8B9KM4KW45eX-igGMmj_uXfUP0A",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5103AQFlIMfoV9y5Bw/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1516344584951?e=1776902400&v=beta&t=IYie8OwWEM3oeUEfv5pMC2FzqLsIUuh8AQPJXHv7FkE",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Jim Steele",
+        "givenByHeadline": "Founder at Stealth AI Startup",
+        "givenAt": "February 12, 2007, Jim worked with George but they were at different companies",
+        "givenByLink": "https://www.linkedin.com/in/dijieming",
+        "description": "George's technical acumen allows him to assess and obtain the most competent talent upfront.  He is attentive to candidates' needs throughout the interview process, which provides a personal touch.  George is a great company representative to potential hires.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQGNWwm5y0Cy1Q/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1692312400701?e=1776902400&v=beta&t=cKlW8mOaNfeEv73mbUaxF5aOzlAielMy33nKP8LyOAE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQGNWwm5y0Cy1Q/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1692312400701?e=1776902400&v=beta&t=cKlW8mOaNfeEv73mbUaxF5aOzlAielMy33nKP8LyOAE",
+              "width": 800,
+              "height": 800,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQGNWwm5y0Cy1Q/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1692312400701?e=1776902400&v=beta&t=kha0BkycziZok7JyEaydmjnQz2sYuWSVr8nsT8HY0Wo",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQGNWwm5y0Cy1Q/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1692312400701?e=1776902400&v=beta&t=uN73oLPdxahyPmznG2p-VuAa0aGNKeuZ8F0z5tk2fzI",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQGNWwm5y0Cy1Q/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1692312400701?e=1776902400&v=beta&t=TnJMLWmRl2p2dBGbJrc8_hRCs4z1JXbdK6Y0D-bondA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Todd Stiers",
+        "givenByHeadline": "A Creative, Collaborative, Customer-Driven Engineer",
+        "givenAt": "February 1, 2007, Todd was senior to George but didn't manage George directly",
+        "givenByLink": "https://www.linkedin.com/in/toddstiers",
+        "description": "George was thoughtful and effective recruiter during his time at Idetic. He was very efficient with my time while finding and pre-screening appropriate candidates.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQG2Lw1MpH0bzA/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1621023098461?e=1776902400&v=beta&t=MXyt2grQuvPQZ-teteSbbTstZzxposgrLC2fJCa0Hdk",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQG2Lw1MpH0bzA/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1621023098461?e=1776902400&v=beta&t=MXyt2grQuvPQZ-teteSbbTstZzxposgrLC2fJCa0Hdk",
+              "width": 321,
+              "height": 321,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQG2Lw1MpH0bzA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1621023098461?e=1776902400&v=beta&t=UPvzL3ACsxLeKTTNK9mb2JT6Qyje3XRrmsjl6hhLHOI",
+              "width": 321,
+              "height": 321,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQG2Lw1MpH0bzA/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1621023098461?e=1776902400&v=beta&t=2x4lW0lKGD81kxhlq28WB71IuR4KKdB4cHBQ5nt3qtY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQG2Lw1MpH0bzA/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1621023098461?e=1776902400&v=beta&t=4g2FiVD8m7BztsiNO01aOhUObB4Vwo3fgdV84BPBksw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Jeff Blaize",
+        "givenByHeadline": "aka \"Jefe\", Solutions Architect, Owner – Company A",
+        "givenAt": "January 31, 2007, Jeff was senior to George but didn't manage George directly",
+        "givenByLink": "https://www.linkedin.com/in/jblaize",
+        "description": "George was one of our senior recruiters at the time I worked with him here at MobiTV.  He was very smart, knew the ins and outs of technical recruiting, and was the only resource that was good enough to consistently get me competent new interviewees.  George understands the technology, which makes him a great asset as a technical recruiter.",
+        "givenByPicture": {
+          "url": null,
+          "sizes": []
+        }
+      },
+      {
+        "givenBy": "ChinChin Lin",
+        "givenByHeadline": "VP, HR @ Hayden AI - We're Hiring!",
+        "givenAt": "January 24, 2007, ChinChin managed George directly",
+        "givenByLink": "https://www.linkedin.com/in/chinchinlin",
+        "description": "George has always demonstrated a great talent for connecting with hiring managers and candidates alike. He takes the time to truly understand not only the technology at stake, but the needs of the hiring manager as well. He is proactive and energetic, and will do what needs to be done to get the job filled with the right candidate.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQHPZcJa9Wt0gw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1721259269144?e=1776902400&v=beta&t=_Ae2JSm8u1reFJSd6AZIpAw4pTErlWY3YLxBiEP1pT8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQHPZcJa9Wt0gw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1721259269144?e=1776902400&v=beta&t=_Ae2JSm8u1reFJSd6AZIpAw4pTErlWY3YLxBiEP1pT8",
+              "width": 692,
+              "height": 692,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQHPZcJa9Wt0gw/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1721259269115?e=1776902400&v=beta&t=KG1ig80Wq7HBpkq_JfQ68c6tbzSzPqHAGMnlwL1lSYg",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQHPZcJa9Wt0gw/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1721259269115?e=1776902400&v=beta&t=RYTmPTVsu837sIFc7BKgxI6VaB3e_q89_-Nm18wP43Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQHPZcJa9Wt0gw/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1721259269115?e=1776902400&v=beta&t=p8qZfy-PId9eGo-zJbu88maCDd1G3UAZaTr6ruvyhmc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Bret Mogilefsky",
+        "givenByHeadline": "Agile Product Wrangler",
+        "givenAt": "November 9, 2006, Bret worked with George but on different teams",
+        "givenByLink": "https://www.linkedin.com/in/bretmogilefsky",
+        "description": "George is the kind of recruiter who takes the time to understand both the position he's filling and the kind of person who's needed, then zooms off and brings back standout candidates before you've blinked.  He's sharp, on top of tech, pays attention to details, and always gets his man.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQH3LTeLKXWvbw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1561254664357?e=1776902400&v=beta&t=Jao1BntRY-c0M7RCC10UOithVBEGOZ7DHcDBV7wBJTA",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQH3LTeLKXWvbw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1561254664357?e=1776902400&v=beta&t=Jao1BntRY-c0M7RCC10UOithVBEGOZ7DHcDBV7wBJTA",
+              "width": 500,
+              "height": 500,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQH3LTeLKXWvbw/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1561254664501?e=1776902400&v=beta&t=SXn_raHW8lqy6f1scSQVpbHmOhrabEKui2Ke75jUICw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQH3LTeLKXWvbw/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1561254664296?e=1776902400&v=beta&t=0S4sznA5nNbnNIaHl-kUQoN1K73XIunAnUQNM3_3KmI",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQH3LTeLKXWvbw/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1561254664285?e=1776902400&v=beta&t=j5v_rb0ZfQHWgx2s8X7EKrcAYliibJG-R2pM60IRQLg",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Kevin Lym",
+        "givenByHeadline": "Part-time Musician and Recording Engineer",
+        "givenAt": "November 5, 2006, Kevin worked with George but on different teams",
+        "givenByLink": "https://www.linkedin.com/in/kevinlym",
+        "description": "George is one of the easiest recruiters to work with. George quickly understood what type of engineer I was looking for, and usually came back with the pretty good resumes.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/C5103AQHx0mRksrsacA/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1516332188113?e=1776902400&v=beta&t=2h0OsIIYdYKajWxW9Lj1wIACPjRkN_gEZVg5YW6yO64",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5103AQHx0mRksrsacA/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1516332188113?e=1776902400&v=beta&t=2h0OsIIYdYKajWxW9Lj1wIACPjRkN_gEZVg5YW6yO64",
+              "width": 160,
+              "height": 160,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5103AQHx0mRksrsacA/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1516332188124?e=1776902400&v=beta&t=vERlYtHDTt2o7BeXUstXE4hqjErmcH3qFxYE293nXrc",
+              "width": 160,
+              "height": 160,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5103AQHx0mRksrsacA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1516332188108?e=1776902400&v=beta&t=K-mCLTy6X61I7i1ecKZA77EDDIgwElXTdinq83J-Gxw",
+              "width": 160,
+              "height": 160,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5103AQHx0mRksrsacA/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1516332188243?e=1776902400&v=beta&t=1yBUgpIFoV7jKq8YkwtHFqHds2IdKAJI0fb8Lqhe7Oo",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Seth Dawson",
+        "givenByHeadline": "Fractional Head of Recruiting - Startup Recruiting Expert - 1st Recruiter - Trackonomy  - Crunchyroll - Node - Motiv",
+        "givenAt": "October 31, 2006, Seth was senior to George but didn't manage George directly",
+        "givenByLink": "https://www.linkedin.com/in/sethjdawson",
+        "description": "I can't think of any recruiter I would recommend more than George Rider. I have worked with him at two companies that he has absolutely exceeded their expectations. I actively recruited him from Sony because I knew he was a solid performer and would excel here. He's thorough, has a stronger technical acument than most recruiters and really enjoys the projects and roles he works on. He's very easy to work with and has a good sense of humor and outlook. There is no question that I would work with him again.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQGYyuQdh6eB_Q/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1718250654240?e=1776902400&v=beta&t=4x8pP4jmqkffbm1FV-i33eBAbhM54cKSPfC-ZaW3QpM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQGYyuQdh6eB_Q/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1718250654240?e=1776902400&v=beta&t=4x8pP4jmqkffbm1FV-i33eBAbhM54cKSPfC-ZaW3QpM",
+              "width": 800,
+              "height": 800,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQGYyuQdh6eB_Q/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1718264211514?e=1776902400&v=beta&t=syB0ZBfMHYcFSZ5ssU2FHN6Whxi0tVvO4_CtEJACrus",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQGYyuQdh6eB_Q/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1718324723047?e=1776902400&v=beta&t=OilKaE7fDVm9kN_iIOor3zAgTUWQuf7wgL7ZgG4NsT0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQGYyuQdh6eB_Q/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1718276773987?e=1776902400&v=beta&t=jvsqdOnTYjvPryj1Na_5Oszm2I-Xp4tr1yn7mCW4pD4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Andy Lipshultz 🎙 Voice Talent",
+        "givenByHeadline": "Fun, conversational SOVAS-award nominated, Source-Connected home studio voiceover for commercials/explainers, e-learning, animation, video games, political, audio dramas, narration and podcasts",
+        "givenAt": "October 31, 2006, Andy worked with George but they were at different companies",
+        "givenByLink": "https://www.linkedin.com/in/andysaysit",
+        "description": "George takes the time to get to know his candidates and look for the best fit, not just any fit.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D03AQFoebS6wSdRPg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1611057896648?e=1776902400&v=beta&t=gUxEVo1o_eZA75C76vpGykDr1MvE8FjcZK_m_7uM6hk",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D03AQFoebS6wSdRPg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1611057896648?e=1776902400&v=beta&t=gUxEVo1o_eZA75C76vpGykDr1MvE8FjcZK_m_7uM6hk",
+              "width": 800,
+              "height": 800,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D03AQFoebS6wSdRPg/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1611057896647?e=1776902400&v=beta&t=sjrYwKLdtYo9wESpTCeR7WMilZK4nTOq86UXMCzTXew",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D03AQFoebS6wSdRPg/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1611057896647?e=1776902400&v=beta&t=vTfxzFE3kw7qxEDD-XF4ZGphLorRAIvkwro6CRc3-TE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D03AQFoebS6wSdRPg/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1611057896647?e=1776902400&v=beta&t=2TARF5wN1ohd7Op5zm0biuLT9G8UBkwpkyNki-NmzEk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Dennis Watts",
+        "givenByHeadline": "Technical Recruiter at Denali Advanced Integration",
+        "givenAt": "October 30, 2006, Dennis worked with George on the same team",
+        "givenByLink": "https://www.linkedin.com/in/dennis-watts-a530061",
+        "description": "George has a good understanding of technology and he's more technical than most recruiters.  George has great people skills and he's the kind of guy you just like to be around!  George and I made a great impact at MobiTV and hired over 30 people in about 6 months.  George is an innovative recruiter who is as internet savvy as they come!  George is a unique asset in the staffing industry.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D03AQFSW2ve7sxezQ/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1516276887347?e=1776902400&v=beta&t=lJyVOP29JvlpWC48vbvlijD1LA7c2De7rf8lQ7w6vvQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D03AQFSW2ve7sxezQ/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1516276887347?e=1776902400&v=beta&t=lJyVOP29JvlpWC48vbvlijD1LA7c2De7rf8lQ7w6vvQ",
+              "width": 239,
+              "height": 239,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D03AQFSW2ve7sxezQ/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1516276887373?e=1776902400&v=beta&t=klpmw4GejGnavAZ108H6crjc8Up23NUkixVpFs_e19M",
+              "width": 239,
+              "height": 239,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D03AQFSW2ve7sxezQ/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1516276887387?e=1776902400&v=beta&t=1y0qVeJdlwQhy15zm_ik4au6sYTBpZp5yWsmj4Jgvlk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D03AQFSW2ve7sxezQ/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1516276887422?e=1776902400&v=beta&t=EXZ0w6HRZP0uKdPcIYsVnNtEYQ_YvoV7tcUr2Trg43I",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Austin David",
+        "givenByHeadline": "R&D, procyon horology",
+        "givenAt": "October 30, 2006, Austin worked with George but on different teams",
+        "givenByLink": "https://www.linkedin.com/in/austin-david-4a89b2",
+        "description": "George was a great recruiter for us. Not only did he bring in my boss and myself, but he also helped bring over most of my current co-workers.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQE96GIm3n5DoA/profile-displayphoto-shrink_800_800/B4EZPR_s3tHwAg-/0/1734394957677?e=1776902400&v=beta&t=wJDkDRJ33LrkMtP-2pv3QgEiT5Bm5xvyLmf9WDBffrg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E03AQE96GIm3n5DoA/profile-displayphoto-shrink_800_800/B4EZPR_s3tHwAg-/0/1734394957677?e=1776902400&v=beta&t=wJDkDRJ33LrkMtP-2pv3QgEiT5Bm5xvyLmf9WDBffrg",
+              "width": 800,
+              "height": 800,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E03AQE96GIm3n5DoA/profile-displayphoto-shrink_400_400/B4EZPR_s3tHwAk-/0/1734394957619?e=1776902400&v=beta&t=y0sq1mfv3euelva83k2WiMeGvDXtRizHSN9Ae_Bizlg",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E03AQE96GIm3n5DoA/profile-displayphoto-shrink_200_200/B4EZPR_s3tHwAc-/0/1734394957677?e=1776902400&v=beta&t=fJFOZZ7bEgIgX2WCngGevcBWvMRvIvRXeiHt87WkuBU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E03AQE96GIm3n5DoA/profile-displayphoto-shrink_100_100/B4EZPR_s3tHwAY-/0/1734394957677?e=1776902400&v=beta&t=Ot07mCwHk7Pyo-Ma3bn3AHbuKfrMtabIThN6YjB4AVA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Rémi Arnaud",
+        "givenByHeadline": "@Meta",
+        "givenAt": "October 30, 2006, Rémi worked with George but on different teams",
+        "givenByLink": "https://www.linkedin.com/in/r%C3%A9mi-arnaud-002200",
+        "description": "George is a great person to work with. Always going the extra step to make sure things are going smoothly.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQHby-2kDsAg2g/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1567669844349?e=1776902400&v=beta&t=Nek1zmPeVb_SLWwL2b2EelnDR_Ee_bIaOLYMT2kheVU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQHby-2kDsAg2g/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1567669844349?e=1776902400&v=beta&t=Nek1zmPeVb_SLWwL2b2EelnDR_Ee_bIaOLYMT2kheVU",
+              "width": 800,
+              "height": 800,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQHby-2kDsAg2g/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1567669844311?e=1776902400&v=beta&t=0mdJyzkwDA2MXamSTIkMSLN7khAONLEInUjKumeKE_Q",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQHby-2kDsAg2g/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1567669844251?e=1776902400&v=beta&t=rl5eSIhEYOpQuBb4oCvf4XI6f77nXAsmpmHRgcR6Ar4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQHby-2kDsAg2g/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1567669844279?e=1776902400&v=beta&t=W7Hvi_VyWSp6V0lq96eER7xw96Qf5HmihMjy2QR5IbM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Mark DeLoura",
+        "givenByHeadline": "Exec Director, GDC Festival of Gaming | Games & Education Technology",
+        "givenAt": "October 30, 2006, Mark worked with George but on different teams",
+        "givenByLink": "https://www.linkedin.com/in/markdeloura",
+        "description": "When I was getting ready to jump out of that plane over 'nam, George was there to make sure my parachute had been packed properly by those monkeys we'd hired together.  After that, I knew that any time I needed to find some really great technical people, I could go to George and he'd have my back.  While at Sony we worked hard to find some great engineers and developer relations staff, and I could always count on George to find some great people, and also make sure we had fun and laughed a lot in the process!",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQHcI8YV9KRe1w/profile-displayphoto-crop_800_800/B56ZpvbR82IcAI-/0/1762806016003?e=1776902400&v=beta&t=kdt16P37r1pkOirwMJ9w0dBhTeOs8APFEE9wdLXlWF4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQHcI8YV9KRe1w/profile-displayphoto-crop_800_800/B56ZpvbR82IcAI-/0/1762806016003?e=1776902400&v=beta&t=kdt16P37r1pkOirwMJ9w0dBhTeOs8APFEE9wdLXlWF4",
+              "width": 800,
+              "height": 800,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQHcI8YV9KRe1w/profile-displayphoto-scale_400_400/B56ZpvbR82IcAg-/0/1762806016100?e=1776902400&v=beta&t=RHRvFDAMeCtAkIWv8iOE2m5LY5lzJfTvmx93Qlzgx5s",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQHcI8YV9KRe1w/profile-displayphoto-scale_200_200/B56ZpvbR82IcAY-/0/1762806016100?e=1776902400&v=beta&t=cDy3Erl2dTWL8xcNyeSobNRzNgzP906hEdY5BsfyV3s",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQHcI8YV9KRe1w/profile-displayphoto-scale_100_100/B56ZpvbR82IcAc-/0/1762806016101?e=1776902400&v=beta&t=O68lcRhkQn0kEPow7tNtnqCLvAo2JVnybhogODUiC8U",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Mark P.",
+        "givenByHeadline": "Chief Pursuer of Passion Projects (ret.)",
+        "givenAt": "October 29, 2006, Mark worked with George but on different teams",
+        "givenByLink": "https://www.linkedin.com/in/plutowski",
+        "description": "George is a great listener and insightful person who has a firm grasp of the industry and its players.  He excels at appreciating the perspective of the person at the other end of the conversation.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQG5vJya0f02Pw/profile-displayphoto-crop_800_800/B56Z02kSt2IMAI-/0/1774736978273?e=1776902400&v=beta&t=ViQnS2TLS-GsZWVJc03UZMfYb2aimyvFwPIqcAT0CMg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQG5vJya0f02Pw/profile-displayphoto-crop_800_800/B56Z02kSt2IMAI-/0/1774736978273?e=1776902400&v=beta&t=ViQnS2TLS-GsZWVJc03UZMfYb2aimyvFwPIqcAT0CMg",
+              "width": 800,
+              "height": 800,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQG5vJya0f02Pw/profile-displayphoto-scale_400_400/B56Z02kSt2IMAg-/0/1774736978466?e=1776902400&v=beta&t=QlFygX7Jmnx8FIGVDGGZHZ63HjBgzwtfmH-JEgv_caQ",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQG5vJya0f02Pw/profile-displayphoto-scale_200_200/B56Z02kSt2IMAY-/0/1774736978466?e=1776902400&v=beta&t=ZLFVnUzGcIto3ACt-w1RWe6GamF3Jw6PhREgVSqXDNY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQG5vJya0f02Pw/profile-displayphoto-scale_100_100/B56Z02kSt2IMAc-/0/1774736978466?e=1776902400&v=beta&t=MbMV0V15IC1jmHGnum3VCa4U8EpCT2zlxQKybC_l0kY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Drew Thaler",
+        "givenByHeadline": "Engineer",
+        "givenAt": "October 27, 2006, Drew worked with George but on different teams",
+        "givenByLink": "https://www.linkedin.com/in/drewthaler",
+        "description": "George is very competent, has a good grasp of technical issues, and has an easygoing, friendly demeanor. How do they say it on eBay? A++++. ;-)",
+        "givenByPicture": {
+          "url": null,
+          "sizes": []
+        }
+      },
+      {
+        "givenBy": "Leilani A.",
+        "givenByHeadline": "Global TA Leader | Ex-Cybersecurity, Ex-Storage | Keeping Candidates, Hiring Managers and Finance Aligned | Startup, PE, Private & Public Experience | Built Cost-Effective Recruiting Systems That Scale",
+        "givenAt": "October 27, 2006, Leilani worked with George on the same team",
+        "givenByLink": "https://www.linkedin.com/in/leilanialejo",
+        "description": "George was always the go to person when anyone wanted to \"get the ball rolling\".  He was always willing to go the extra mile to make sure his candidates and hiring managers were happy and taken care of.  George has extensive knowledge and expertise in the staffing industry and I would highly recommend him, as he would be an asset to any corporation.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQGSgs1MFaFROQ/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1690250954972?e=1776902400&v=beta&t=BotpvnIckUjQ7jZpcAB6uZEssfIL-YdoS1OIxkVlcPQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQGSgs1MFaFROQ/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1690250954972?e=1776902400&v=beta&t=BotpvnIckUjQ7jZpcAB6uZEssfIL-YdoS1OIxkVlcPQ",
+              "width": 800,
+              "height": 800,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQGSgs1MFaFROQ/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1690250954972?e=1776902400&v=beta&t=2j1y444M-XMgmluSAEBatPuxydnoVi1cmyh1D5MX7D4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQGSgs1MFaFROQ/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1690250954971?e=1776902400&v=beta&t=T_z7E9OXDxBeGkLbZ9c_UXdqnRvp34LmEd-q18DRusQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQGSgs1MFaFROQ/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1690250954971?e=1776902400&v=beta&t=OJLcvIlF2A1ory9AwXQHZ6NSfBIcczbjf0V1hns6HvI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Sylvia Trammel",
+        "givenByHeadline": "Fashion Designer with strong hands-on experience",
+        "givenAt": "October 27, 2006, Sylvia worked with George on the same team",
+        "givenByLink": "https://www.linkedin.com/in/sylviatrammel",
+        "description": "Having worked with George previously, I can attest to his skills as an excellent Technical Recruiter. He is very knowledgeable in\r\ntechnology, software engineering, and game development and was often the 'go to guy' for our department.  He has an excellent rapport with hiring\r\nmanagers and is willing to go above and beyond to get the job done.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/C5103AQHwNrOx6-Wvtg/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1516321404550?e=1776902400&v=beta&t=o8wUpmku7OgBRISMekjKFGS5tV4B4QuXKaMaxXVtgRo",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5103AQHwNrOx6-Wvtg/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1516321404550?e=1776902400&v=beta&t=o8wUpmku7OgBRISMekjKFGS5tV4B4QuXKaMaxXVtgRo",
+              "width": 318,
+              "height": 318,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5103AQHwNrOx6-Wvtg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1516321404533?e=1776902400&v=beta&t=h1wugNdURdvhAbdJHErt7oHet8jJblRlMIbcuSN4qQ4",
+              "width": 318,
+              "height": 318,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5103AQHwNrOx6-Wvtg/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1516321404790?e=1776902400&v=beta&t=_d9_PB8XbnZvg3vT7-JFcbf9zadQdCO7d8I-IGlTDG8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5103AQHwNrOx6-Wvtg/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1516321404651?e=1776902400&v=beta&t=QpyAgc69A7pbnvQodsXY8kCby2Gthg-S3xqQ5WTMPuk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Antoine L.",
+        "givenByHeadline": "Principal Engineer at Waymo",
+        "givenAt": "October 27, 2006, Antoine worked with George but on different teams",
+        "givenByLink": "https://www.linkedin.com/in/antoine-l-6733791",
+        "description": "George is a very talented recruiter, going much beyond just sorting resumes, he can find good matches and is good at picking the precious needle out of the haystack.",
+        "givenByPicture": {
+          "url": null,
+          "sizes": []
+        }
+      },
+      {
+        "givenBy": "Brian Watson",
+        "givenByHeadline": "Senior Software Engineer at Phaserlock Interactive",
+        "givenAt": "October 27, 2006, Brian worked with George but on different teams",
+        "givenByLink": "https://www.linkedin.com/in/brian-watson-aa83201",
+        "description": "George basically helped me find the perfect job for me. I was in a fortunate situation where there was about 8 jobs at Sony that I would have been good with, he helped me find the right one.\r\n\r\nThanks George!",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQF4KjBS6pOoSw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1521217077136?e=1776902400&v=beta&t=Dhou2CHLBm5Z9yeAyPWT2qBRM86UIGY9pJ3wE3xxsBQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQF4KjBS6pOoSw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1521217077136?e=1776902400&v=beta&t=Dhou2CHLBm5Z9yeAyPWT2qBRM86UIGY9pJ3wE3xxsBQ",
+              "width": 500,
+              "height": 500,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQF4KjBS6pOoSw/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1521217077541?e=1776902400&v=beta&t=zVvnycdJk_5sAqznq1FM6ox9dveSjoYYHt32nZ4Y4SU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQF4KjBS6pOoSw/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1521217077207?e=1776902400&v=beta&t=1fUCqMcsSQG_-o2qoGB71Py4hBHAhjzRGYugPtdEQDs",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQF4KjBS6pOoSw/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1521217078118?e=1776902400&v=beta&t=P42S-70rbVKOGi7_Lby2tca0CChASnwWJWgIwrBPLx4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Allen Gooch",
+        "givenByHeadline": "Software engineer with experience across systems development and operations lifecycle with many technology stacks, currently passionate about platform engineering and improving developer experience and reducing costs.",
+        "givenAt": "August 7, 2006, Allen worked with George but on different teams",
+        "givenByLink": "https://www.linkedin.com/in/allen-gooch-2914281",
+        "description": "George is a fantastic recruiter.  In addition to his passion and instincts for bringing in the right people, he possesses a degree of technical knowledge which goes far beyond those of most.  George was my recruiter, and made sure to go the distance and ensure that I had everything I needed to do my job well.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQEiahtT9fB0_w/profile-displayphoto-crop_800_800/B56ZvZYPoPKIAI-/0/1768878570609?e=1776902400&v=beta&t=yYFQ4pJluiHvhhFxuACAHllEjPwLgVMr2RLdyzBlFj0",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQEiahtT9fB0_w/profile-displayphoto-crop_800_800/B56ZvZYPoPKIAI-/0/1768878570609?e=1776902400&v=beta&t=yYFQ4pJluiHvhhFxuACAHllEjPwLgVMr2RLdyzBlFj0",
+              "width": 800,
+              "height": 800,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQEiahtT9fB0_w/profile-displayphoto-scale_400_400/B56ZvZYPoPKIAg-/0/1768878570691?e=1776902400&v=beta&t=wprK3EO-b5PQ3150jBe9iRcM83zJfI4ho1VzGdhsn_4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQEiahtT9fB0_w/profile-displayphoto-scale_200_200/B56ZvZYPoPKIAY-/0/1768878570692?e=1776902400&v=beta&t=Lyg2rdcK0INerUP371xAnrMzmDt590pQfGuTMazBwfE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQEiahtT9fB0_w/profile-displayphoto-scale_100_100/B56ZvZYPoPKIAc-/0/1768878570692?e=1776902400&v=beta&t=qYeeOLbm_7Olrsgi97rlq14_LFOiDrgCa1f7Xhzx4O8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Oliver Marks",
+        "givenByHeadline": "Business strategy & advisory\n",
+        "givenAt": "July 14, 2006, Oliver worked with George but on different teams",
+        "givenByLink": "https://www.linkedin.com/in/olivermarks",
+        "description": "George is very professional and efficient and it was a pleasure working with him",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D03AQHfCz7LKntRhQ/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1571802216540?e=1776902400&v=beta&t=6jG0YEtCuDzqel0YsOHPph7uuZ3op3pH-VctXsSC2DQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D03AQHfCz7LKntRhQ/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1571802216540?e=1776902400&v=beta&t=6jG0YEtCuDzqel0YsOHPph7uuZ3op3pH-VctXsSC2DQ",
+              "width": 500,
+              "height": 500,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D03AQHfCz7LKntRhQ/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1571802216505?e=1776902400&v=beta&t=J778zkikPL9VLF7uCgHayi4ettT1UHhR6wQup2tESTU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D03AQHfCz7LKntRhQ/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1571802216430?e=1776902400&v=beta&t=8fEr1VAWgqQpeBxPmgrXUbGDow-7cbjAQR9MtubJQG4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D03AQHfCz7LKntRhQ/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1571802216461?e=1776902400&v=beta&t=V2rgHorLLI4szhPFN5tHhn0vq76SInQvUXflwP1In8o",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "skills": [
+      {
+        "name": "Applicant Tracking Systems",
+        "positions": [
+          "Endorsed by 3 colleagues at Apple"
+        ],
+        "endorsements": "13 endorsements"
+      },
+      {
+        "name": "Talent Acquisition",
+        "positions": [
+          "Endorsed by 4 colleagues at Marqeta"
+        ],
+        "endorsements": "44 endorsements"
+      },
+      {
+        "name": "Technical Recruiting",
+        "positions": [
+          "Endorsed by 3 colleagues at Marqeta"
+        ],
+        "endorsements": "57 endorsements"
+      },
+      {
+        "name": "Recruiting",
+        "endorsements": "33 endorsements"
+      },
+      {
+        "name": "Sourcing",
+        "endorsements": "23 endorsements"
+      },
+      {
+        "name": "Human Resources",
+        "endorsements": "10 endorsements"
+      },
+      {
+        "name": "Leadership",
+        "endorsements": "7 endorsements"
+      },
+      {
+        "name": "Interviews",
+        "endorsements": "10 endorsements"
+      },
+      {
+        "name": "Business Development",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Management",
+        "endorsements": "18 endorsements"
+      },
+      {
+        "name": "Networking",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Talent Management",
+        "endorsements": "8 endorsements"
+      },
+      {
+        "name": "Cold Calling",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Temporary Placement",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "Strategy",
+        "endorsements": "9 endorsements"
+      },
+      {
+        "name": "Software Development",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Interviewing",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Consulting",
+        "endorsements": "2 endorsements"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "moreProfiles": [
+      {
+        "id": "ACoAAAmf5bQBE9zWTvtIZlqQPzW22G4Tss9cb0E",
+        "firstName": "Andrew",
+        "lastName": "Lee",
+        "publicIdentifier": "alhyunsoo",
+        "linkedinUrl": "https://www.linkedin.com/in/alhyunsoo"
+      },
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAAEZnBtoBb1Us7ZKgHfOXAYT764pKcDQy848",
+        "firstName": "Songlin",
+        "lastName": "Yang",
+        "publicIdentifier": "songlin-yang-b8a69728b",
+        "linkedinUrl": "https://www.linkedin.com/in/songlin-yang-b8a69728b"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABV61Q0BF3ER-196Zc9GK5TviMrbbIlVGqg",
+        "firstName": "Samuel",
+        "lastName": "Schoenholz",
+        "publicIdentifier": "samuel-schoenholz-379830a0",
+        "linkedinUrl": "https://www.linkedin.com/in/samuel-schoenholz-379830a0"
+      },
+      {
+        "id": "ACoAAAxGRfkBiwYBo900g0bqQJ0eN3x1_RNaqI8",
+        "firstName": "Devon",
+        "lastName": "Lloyd",
+        "publicIdentifier": "devon-lloyd-761b7158",
+        "linkedinUrl": "https://www.linkedin.com/in/devon-lloyd-761b7158"
+      },
+      {
+        "id": "ACoAAAQ1QI4Bex6mqv5SgvahWcZuzAuWiTKciBo",
+        "firstName": "Bi",
+        "lastName": "Xue",
+        "publicIdentifier": "bi-xue-9527871b",
+        "linkedinUrl": "https://www.linkedin.com/in/bi-xue-9527871b"
+      },
+      {
+        "id": "ACoAAACQBzQB5nk5kOpFWQRtK4pv3RaL5q2G-pA",
+        "firstName": "Jonathan",
+        "lastName": "Lachman",
+        "publicIdentifier": "jonathan-lachman-4981b23",
+        "linkedinUrl": "https://www.linkedin.com/in/jonathan-lachman-4981b23"
+      },
+      {
+        "id": "ACoAAAF70jABH9DSpgp0gn2kmhMF2O2_dXo363Y",
+        "firstName": "Lauren Escher",
+        "lastName": "Lennon",
+        "publicIdentifier": "lauren-escher-lennon-0944058",
+        "linkedinUrl": "https://www.linkedin.com/in/lauren-escher-lennon-0944058"
+      },
+      {
+        "id": "ACoAACaOARIBRO2EEH12QWQO29L__oI3N2K4u14",
+        "firstName": "Mingjie",
+        "lastName": "Sun",
+        "publicIdentifier": "mingjie-sun-06a761160",
+        "linkedinUrl": "https://www.linkedin.com/in/mingjie-sun-06a761160"
+      },
+      {
+        "id": "ACoAABE9sVMBCH0i964WlvecDNyGKTviqyXKcTY",
+        "firstName": "Hannah",
+        "lastName": "T.",
+        "publicIdentifier": "hannahnth",
+        "linkedinUrl": "https://www.linkedin.com/in/hannahnth"
+      },
+      {
+        "id": "ACoAAAM07-gB20Vg4hTVwpax2eyLJhzmkVGgucg",
+        "firstName": "Katie",
+        "lastName": "Slattery",
+        "publicIdentifier": "katieslattery",
+        "linkedinUrl": "https://www.linkedin.com/in/katieslattery"
+      },
+      {
+        "id": "ACoAABkLKUYByAOee-kS8Y50aew-KZlfncDfZ5M",
+        "firstName": "Rebecca",
+        "lastName": "Y.",
+        "publicIdentifier": "rebecca-y-286865b8",
+        "linkedinUrl": "https://www.linkedin.com/in/rebecca-y-286865b8"
+      },
+      {
+        "id": "ACoAABPg53YBHdOvmp7pU72eDhcho-7cnwyxk1o",
+        "firstName": "Pia",
+        "lastName": "Santos",
+        "publicIdentifier": "piafsantos",
+        "linkedinUrl": "https://www.linkedin.com/in/piafsantos"
+      },
+      {
+        "id": "ACoAAF3SWDYB6aZAqtjbw1-LDNZ4qxxHLFKTL0g",
+        "firstName": "Md",
+        "lastName": "Mdamaz",
+        "publicIdentifier": "md-mdamaz-b5a19937b",
+        "linkedinUrl": "https://www.linkedin.com/in/md-mdamaz-b5a19937b"
+      },
+      {
+        "id": "ACoAAAqQQsEBwKqJ_m6UFGubnc-1mO5W-0QBSm8",
+        "firstName": "Meredith",
+        "lastName": "Alvin",
+        "publicIdentifier": "meredithalvin",
+        "linkedinUrl": "https://www.linkedin.com/in/meredithalvin"
+      },
+      {
+        "id": "ACoAADDB7DABJK3fhQa97pAxpbFcGbMtI2pA2Ek",
+        "firstName": "Ruila",
+        "lastName": "M.",
+        "publicIdentifier": "ruilama",
+        "linkedinUrl": "https://www.linkedin.com/in/ruilama"
+      },
+      {
+        "id": "ACoAAAM8-CoB4EuoMEQ2LLngdqMnC4lLbEgxTy8",
+        "firstName": "Andrew",
+        "lastName": "Straub",
+        "publicIdentifier": "andrew-straub-52223b16",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-straub-52223b16"
+      },
+      {
+        "id": "ACoAABVAP64BY4RszeJt11vohsLM-gj1PiARl2o",
+        "firstName": "Jiaming",
+        "lastName": "Cui",
+        "publicIdentifier": "jiaming-cui-57a49a9b",
+        "linkedinUrl": "https://www.linkedin.com/in/jiaming-cui-57a49a9b"
+      },
+      {
+        "id": "ACoAAGHdk64BSn3dnjcTnNNN69h8Br1tbVsYbWU",
+        "firstName": "Kimara",
+        "lastName": "Malveaux",
+        "position": "CCMA Student | ACLS & HIPAA Certified | Medication Administration & Patient Safety | Aspiring Medical Assistant",
+        "publicIdentifier": "kimara-malveaux-126a58399",
+        "linkedinUrl": "https://www.linkedin.com/in/kimara-malveaux-126a58399"
+      },
+      {
+        "id": "ACoAAGPzOc8BkhRKFSavuc4_Uxqz0j_zcmN3gCs",
+        "firstName": "Christina",
+        "lastName": "Anderson",
+        "position": "Assistant Principal at Oakland Unified School District",
+        "publicIdentifier": "christina-anderson-2937033a9",
+        "linkedinUrl": "https://www.linkedin.com/in/christina-anderson-2937033a9"
+      },
+      {
+        "id": "ACoAAGK3jJUBwANI1kR547zuZ1pnWwj1CV2wx8E",
+        "firstName": "Megan",
+        "lastName": "Campbell",
+        "position": "Seeking Passion Work in Reno, NV",
+        "publicIdentifier": "megan-campbell-profile",
+        "linkedinUrl": "https://www.linkedin.com/in/megan-campbell-profile"
+      },
+      {
+        "id": "ACoAAFsL5KQB5G38jiUf9IPG2i-CMrromW0_KwA",
+        "firstName": "Jennifer",
+        "lastName": "Nguyen",
+        "position": "--",
+        "publicIdentifier": "jennifer-nguyen-518685367",
+        "linkedinUrl": "https://www.linkedin.com/in/jennifer-nguyen-518685367"
+      },
+      {
+        "id": "ACoAAGXC1XoBb1YIJF-4a5xV0ssCQwmztxe3Nig",
+        "firstName": "Kindly",
+        "lastName": "How",
+        "position": "Student at California State University - East Bay",
+        "publicIdentifier": "kindly-how-bb69153b7",
+        "linkedinUrl": "https://www.linkedin.com/in/kindly-how-bb69153b7"
+      },
+      {
+        "id": "ACoAAGS5XVcB5BqjmofoubccnGgWieie9ZsGPhk",
+        "firstName": "Pop",
+        "lastName": "Wizzy",
+        "position": "Student at California State University - East Bay",
+        "publicIdentifier": "pop-wizzy-9b3b253b1",
+        "linkedinUrl": "https://www.linkedin.com/in/pop-wizzy-9b3b253b1"
+      },
+      {
+        "id": "ACoAAGRppIkBL1bXRsSccO0LtENmCEpRVGeip2A",
+        "firstName": "Organizer",
+        "lastName": "Kate",
+        "position": "Student at California State University - East Bay",
+        "publicIdentifier": "organizer-kate-3752263b0",
+        "linkedinUrl": "https://www.linkedin.com/in/organizer-kate-3752263b0"
+      },
+      {
+        "id": "ACoAAF4VHUwBubm5QNpi1IxOYW5Z-YHCn4Yrb1k",
+        "firstName": "Lekhasree",
+        "lastName": "P",
+        "position": "Data Analyst",
+        "publicIdentifier": "lekhasree27",
+        "linkedinUrl": "https://www.linkedin.com/in/lekhasree27"
+      },
+      {
+        "id": "ACoAAFejErgBDZb_vtvS2vOWUZHdaIwukDjyi5k",
+        "firstName": "Danielle",
+        "lastName": "Sugaran",
+        "position": "Student at California State University - East Bay",
+        "publicIdentifier": "danielle-sugaran-b0849a350",
+        "linkedinUrl": "https://www.linkedin.com/in/danielle-sugaran-b0849a350"
+      },
+      {
+        "id": "ACoAAGYyk88BzK6kVWmXeDHPzHR9keyYvYXCSJE",
+        "firstName": "Elena",
+        "lastName": "Pimenova",
+        "position": "On a mission to connect storefront entrepreneurs via BizNeighbors.com\nJoin me for online community and local to you offline meetups 🍻",
+        "publicIdentifier": "bizneighbors",
+        "linkedinUrl": "https://www.linkedin.com/in/bizneighbors"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAAAcKtUB0UQkURc4hR90w8OOwIMrVMg_CpI"
+    }
+  }
+}

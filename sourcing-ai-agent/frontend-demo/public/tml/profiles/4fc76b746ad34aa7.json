@@ -1,0 +1,919 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAAhY-psB4rRGKC_5zy8RnAUXhHClh0MuJGo",
+    "profile_url": "https://www.linkedin.com/in/ACwAAAhY-psB4rRGKC_5zy8RnAUXhHClh0MuJGo"
+  },
+  "item": {
+    "id": "ACoAAAhY-psBFcHXNbjunn6_QnPfV6Bo6w4yzug",
+    "publicIdentifier": "kenny-yu-aa3a9a3a",
+    "linkedinUrl": "https://www.linkedin.com/in/kenny-yu-aa3a9a3a",
+    "firstName": "Kenny",
+    "lastName": "Yu",
+    "emails": [
+      {
+        "email": "kenny.yu@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Member of Technical Staff @ Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "140049051",
+    "registeredAt": "2011-09-09T18:10:15.167Z",
+    "topSkills": null,
+    "connectionsCount": 551,
+    "followerCount": 633,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 9,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "18483",
+        "companyId": "1646",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1646/",
+        "schoolName": "Harvard University"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/C5603AQEkhAasWE1AVw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1531720711252?e=1776902400&v=beta&t=0Z-qa2kGOKYcMzyMajMuSFf0gXabHbnfFEFfUUgqwso",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQEkhAasWE1AVw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1531720711252?e=1776902400&v=beta&t=0Z-qa2kGOKYcMzyMajMuSFf0gXabHbnfFEFfUUgqwso",
+          "width": 500,
+          "height": 500,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQEkhAasWE1AVw/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1531720711202?e=1776902400&v=beta&t=KGuojIalhWV7mid09jov-a87fz0eSfJjbYJ1Bzm1dbw",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQEkhAasWE1AVw/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1531720711248?e=1776902400&v=beta&t=0DjgClpYbC-LuWIKBB7yPslrfCEkk5ZNHQ7AkqDeYqY",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQEkhAasWE1AVw/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1531720711186?e=1776902400&v=beta&t=yL2jZM1dhZhmMNCc7raDxuOjUMWP6xIeSzskLlHS69A",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/C5603AQEkhAasWE1AVw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1531720711252?e=1776902400&v=beta&t=0Z-qa2kGOKYcMzyMajMuSFf0gXabHbnfFEFfUUgqwso",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Member of Technical Staff @ Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco, CA",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "8 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2025,
+          "text": "Sep 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer",
+        "location": "Menlo Park, CA",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "11 yrs 2 mos",
+        "description": "2025: TBD Lab\n2024-2025: I was on the AI & Systems Co-design team, focusing on llama training.\n2014-2024: I worked on Tupperware (externally called Twine), Meta's cluster management system. During this time, I also built concurrency and asynchronous programming debugging tools. Some of my work:\n\n\"Conveyor: One-Tool-Fits-All Continuous Software Deployment at Meta\", OSDI 2023 (Co-Author)\nPaper: https://www.usenix.org/conference/osdi23/presentation/grubic\n\n\"Global Capacity Management at Meta\", Systems @Scale 2022 Summer (Co-Presenter)\nVideo: https://atscaleconference.com/videos/global-capacity-management-at-meta/\nBlog Post: https://engineering.fb.com/2022/09/06/data-center-engineering/viewing-the-world-as-a-computer-global-capacity-management/\n\n\"Async stack traces in folly: Improving debugging in the developer lifecycle\", FB Engineering Blog, Oct 2021 (Co-Author)\nBlog Post: https://developers.facebook.com/blog/post/2021/10/21/async-stack-traces-folly-improving-debugging-developer-lifecycle/\n\n\"Twine: A Unified Cluster Management System for Shared Infrastructure\", OSDI 2020 (Presenter & Co-Author)\nPaper: https://www.usenix.org/conference/osdi20/presentation/tang\nVideo: https://youtu.be/_-K-DeA7n5s\n\n\"Scaling Cluster Management at Facebook with Tupperware\", Systems @Scale 2019 (Presenter & Co-Author)\nVideo: https://atscaleconference.com/videos/systems-scale-2019-scaling-cluster-management-at-facebook-with-tupperware/\nBlog Post: https://code.fb.com/data-center-engineering/tupperware/\n\n\"How do you deploy a service at scale?\", Harvard University, Oct 2018 (Presenter)\nVideo: https://youtu.be/9mCioTV1eOg\n\n\"Containers at Web Scale Panel\", QCon NYC 2018 (Panelist)\nVideo: https://www.infoq.com/presentations/panel-containers-scalability\n\n\"End-to-end Deadlock Debugging Tools at Facebook\", CppCon 2017 (Presenter)\nVideo: https://youtu.be/Pz4ILxtPKMs\nPoster: https://github.com/CppCon/CppCon2017/tree/master/Posters",
+        "skills": null,
+        "startDate": {
+          "month": "Aug",
+          "year": 2014,
+          "text": "Aug 2014"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2025,
+          "text": "Sep 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Teaching Fellow",
+        "location": "Cambridge, MA",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Harvard School of Engineering and Applied Sciences",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1711270/",
+        "companyId": "1711270",
+        "duration": "2 yrs 10 mos",
+        "description": "CS161: Operating Systems (Spring 2014)\nCS61: Systems Programming and Machine Organization (Fall 2012, Fall 2013)\nCS51: Abstraction and Design (Spring 2012, Spring 2013)\nCS50: Introduction to Computer Science (Fall 2011)",
+        "skills": null,
+        "startDate": {
+          "month": "Aug",
+          "year": 2011,
+          "text": "Aug 2011"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2014,
+          "text": "May 2014"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF26un2IGhsYg/company-logo_400_400/company-logo_400_400/0/1630609147706/harvard_school_of_engineering_and_applied_sciences_logo?e=1776902400&v=beta&t=ipdFzN6uuBBql5ZdhcT-wRdqQijfYf0Ugw-wDc6Y2w8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF26un2IGhsYg/company-logo_400_400/company-logo_400_400/0/1630609147706/harvard_school_of_engineering_and_applied_sciences_logo?e=1776902400&v=beta&t=ipdFzN6uuBBql5ZdhcT-wRdqQijfYf0Ugw-wDc6Y2w8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF26un2IGhsYg/company-logo_200_200/company-logo_200_200/0/1630609147706/harvard_school_of_engineering_and_applied_sciences_logo?e=1776902400&v=beta&t=XLcHUkOGlCMdLiaeAaSY-xoKeV_Uv5Qh-jRgt1n_hKk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF26un2IGhsYg/company-logo_100_100/company-logo_100_100/0/1630609147706/harvard_school_of_engineering_and_applied_sciences_logo?e=1776902400&v=beta&t=6uKVf4vPbvJ0KNVEorRCdTOZjf9Gb1mpxGyXwEI37mU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer Intern",
+        "location": "Menlo Park, CA",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Facebook",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/76987811/",
+        "companyId": "76987811",
+        "duration": "3 mos",
+        "description": "Android Infrastructure. Built a debugging app to inspect the Facebook Android app using the Chrome Web Inspector.",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2013,
+          "text": "Jun 2013"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2013,
+          "text": "Aug 2013"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_200_200/company-logo_200_200/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=CL3OcEUIyBJFm9Wkw4iT9gJoWpsvGBIAhhNM0DjZx_A",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_100_100/company-logo_100_100/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=sZq9Sard1kGYVIprgBkNhUvJRTI7tf3pXOCP1bQBfpM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Developer Intern",
+        "location": "New York, NY",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Jane Street Capital",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Jane+Street+Capital",
+        "duration": "1 mo",
+        "description": "Hacking in OCaml. Improved benchmarking library and automated setup of electronic mock trading system.",
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2013,
+          "text": "Jan 2013"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2013,
+          "text": "Jan 2013"
+        }
+      },
+      {
+        "position": "Software Engineer in Test Intern",
+        "location": "New York, NY",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Google",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1441/",
+        "companyId": "1441",
+        "duration": "4 mos",
+        "description": "AdWords Optimization. Played with Google's MapReduce to analyze AdWords opportunities and report buggy opportunities.",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2012,
+          "text": "May 2012"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2012,
+          "text": "Aug 2012"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_400_400/B4EZmhegXHGcAc-/0/1759350753990/google_logo?e=1776902400&v=beta&t=1NjSGaaVCLeiOricIvAOkH-34wNGrsiwPZk5I2adpcU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_200_200/B4EZmhegXHGcAM-/0/1759350753990/google_logo?e=1776902400&v=beta&t=CTzyZ9kqXiycW6UU0lJPQmCNKxu5QeAaPL_y9ftsJX0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGv3cqOuUMY7g/company-logo_100_100/B4EZmhegXHGcAU-/0/1759350753990/google_logo?e=1776902400&v=beta&t=LRCYpUl9rmgdri4awRP4FVlvccNARAtgcfqxtRHdedI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer Intern",
+        "location": "New York, NY",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Knewton",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/248400/",
+        "companyId": "248400",
+        "duration": "1 mo",
+        "description": "Design and created a domain specific language for graph validation. Blog post about it here: http://www.knewton.com/tech/blog/2012/02/graphlint-creating-a-domain-specific-language-for-graph-validation/",
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2012,
+          "text": "Jan 2012"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2012,
+          "text": "Jan 2012"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHJIyIo0SSKLQ/company-logo_400_400/company-logo_400_400/0/1708004293371/knewton_logo?e=1776902400&v=beta&t=hLCL-zjE_90pLEISRv9O4ShowFaEhLULloVI7FvjeYY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHJIyIo0SSKLQ/company-logo_400_400/company-logo_400_400/0/1708004293371/knewton_logo?e=1776902400&v=beta&t=hLCL-zjE_90pLEISRv9O4ShowFaEhLULloVI7FvjeYY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHJIyIo0SSKLQ/company-logo_200_200/company-logo_200_200/0/1708004293371/knewton_logo?e=1776902400&v=beta&t=VlPuU_cGRvAYIrZFqSWsvRJIMkj3peXsR29eyUByRDY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHJIyIo0SSKLQ/company-logo_100_100/company-logo_100_100/0/1708004293371/knewton_logo?e=1776902400&v=beta&t=83fNdMqF6JxGe1JpA2IQWvyv2STtcWEz1A2rJyKfGL8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer Intern",
+        "location": "New York, NY",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Knewton",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/248400/",
+        "companyId": "248400",
+        "duration": "4 mos",
+        "description": "Setup continuous integration system with AWS, Jenkins, Gerrit, and Git.",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2011,
+          "text": "May 2011"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2011,
+          "text": "Aug 2011"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHJIyIo0SSKLQ/company-logo_400_400/company-logo_400_400/0/1708004293371/knewton_logo?e=1776902400&v=beta&t=hLCL-zjE_90pLEISRv9O4ShowFaEhLULloVI7FvjeYY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHJIyIo0SSKLQ/company-logo_400_400/company-logo_400_400/0/1708004293371/knewton_logo?e=1776902400&v=beta&t=hLCL-zjE_90pLEISRv9O4ShowFaEhLULloVI7FvjeYY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHJIyIo0SSKLQ/company-logo_200_200/company-logo_200_200/0/1708004293371/knewton_logo?e=1776902400&v=beta&t=VlPuU_cGRvAYIrZFqSWsvRJIMkj3peXsR29eyUByRDY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHJIyIo0SSKLQ/company-logo_100_100/company-logo_100_100/0/1708004293371/knewton_logo?e=1776902400&v=beta&t=83fNdMqF6JxGe1JpA2IQWvyv2STtcWEz1A2rJyKfGL8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Harvard University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1646/",
+        "schoolId": "1646",
+        "degree": "Bachelor's",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "description": "Cum Laude in Computer Science. Phi Beta Kappa. Awarded Harvard University Certificate of Distinction in Teaching (CS51 Spring 2013, CS61 Fall 2012, CS61 Fall 2013, CS161 Spring 2014).",
+        "insights": "Activities and societies: Harvard Computer Society, PBHA Chinatown Afterschool",
+        "startDate": {
+          "year": 2010,
+          "text": "2010"
+        },
+        "endDate": {
+          "year": 2014,
+          "text": "2014"
+        },
+        "period": "2010 - 2014",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF5t62bcL0e9g/company-logo_400_400/company-logo_400_400/0/1631318058235?e=1776902400&v=beta&t=RkTNKHKBHCNAI5CNo-HAGQ7uOxrr8GBSdP6Mhal50gg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF5t62bcL0e9g/company-logo_400_400/company-logo_400_400/0/1631318058235?e=1776902400&v=beta&t=RkTNKHKBHCNAI5CNo-HAGQ7uOxrr8GBSdP6Mhal50gg",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF5t62bcL0e9g/company-logo_200_200/company-logo_200_200/0/1631318058235?e=1776902400&v=beta&t=y8dfVnr4duhkYkxwxXb0xTfyu2DFsZFXt5hsz507GaM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQF5t62bcL0e9g/company-logo_100_100/company-logo_100_100/0/1631318058235?e=1776902400&v=beta&t=LVLwVc7yBweIB3_TixXGZZEymyF01yoePCCl9P-3kb0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Stuyvesant High School",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/8830270/",
+        "schoolId": "8830270",
+        "degree": "High School",
+        "fieldOfStudy": null,
+        "skills": [],
+        "description": "Phi Beta Kappa. Awarded Harry Van Arsdale Jr. Memorial Scholarship, Robert C. Byrd Scholarship, and OCA-AXA Achievement Scholarship.",
+        "insights": "Activities and societies: Stuyvesant Math Team, New York City Math Team",
+        "startDate": {
+          "year": 2006,
+          "text": "2006"
+        },
+        "endDate": {
+          "year": 2010,
+          "text": "2010"
+        },
+        "period": "2006 - 2010",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGcc9ovpuWFzw/company-logo_400_400/company-logo_400_400/0/1631314229693?e=1776902400&v=beta&t=Np2yHPIEQQqRUALz28N11BD4py7eYYOo9itNO5iTFyA",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGcc9ovpuWFzw/company-logo_400_400/company-logo_400_400/0/1631314229693?e=1776902400&v=beta&t=Np2yHPIEQQqRUALz28N11BD4py7eYYOo9itNO5iTFyA",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGcc9ovpuWFzw/company-logo_200_200/company-logo_200_200/0/1631314229693?e=1776902400&v=beta&t=_AUwmQ1GEsD15Q_6y1cPiEs9pClfqDJKQoNyfB5EfD4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGcc9ovpuWFzw/company-logo_100_100/company-logo_100_100/0/1631314229693?e=1776902400&v=beta&t=hXRDhcvPrvW8wRfhL8HNMUAn7IEZArjG2_vz03w2e2M",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [
+      {
+        "title": "tiniBot",
+        "duration": "May 2014 - Present",
+        "startDate": {
+          "month": "May",
+          "year": 2014,
+          "text": "May 2014"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "associatedWith": "Associated with Harvard University",
+        "associatedWithLink": "https://www.linkedin.com/company/1646/",
+        "description": "tiniBot: A Voice Activated Drink Mixer!\n\nGithub: https://github.com/kennyyu/tinibot\nDemo: https://www.youtube.com/watch?v=xetTOXwaTmc\nBlog Post: http://kennyyu.me/blog/2014/06/04/tinibot-a-voice-activated-drink-mixer/",
+        "link": "http://kennyyu.me/blog/2014/06/04/tinibot-a-voice-activated-drink-mixer/"
+      },
+      {
+        "title": "Harvard Computer Society Bootcamps",
+        "duration": "Aug 2013 - Dec 2013",
+        "startDate": {
+          "month": "Aug",
+          "year": 2013,
+          "text": "Aug 2013"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2013,
+          "text": "Dec 2013"
+        },
+        "associatedWith": "Associated with Harvard University",
+        "associatedWithLink": "https://www.linkedin.com/company/1646/",
+        "description": "I created a suite of hands-on exercises and tutorials to teach new computer science students useful software engineering skills.\n\nLink to bootcamps: https://github.com/hcs/bootcamp-main\nBlog Post: http://kennyyu.me/blog/2013/11/18/bootcamps/",
+        "link": "http://kennyyu.me/blog/2013/11/18/bootcamps/"
+      },
+      {
+        "title": "Pipeline for Improving Accuracy of Hand Tracking with a Poorly Trained Haar Cascade Detector",
+        "duration": "Dec 2012 - Dec 2012",
+        "startDate": {
+          "month": "Dec",
+          "year": 2012,
+          "text": "Dec 2012"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2012,
+          "text": "Dec 2012"
+        },
+        "associatedWith": "Associated with Harvard University",
+        "associatedWithLink": "https://www.linkedin.com/company/1646/",
+        "description": "Control Google Maps with your hand and a webcam!\nThis was my final project for CS283: Computer Vision (Fall 2012).\n\nGithub: https://github.com/kennyyu/cs283-project\nDemo: http://www.youtube.com/watch?v=DFPg-9D46kE\nWriteup: https://github.com/kennyyu/cs283-project/blob/master/writeup/yu-writeup.pdf\n\nThe goal of this project is to improve hand tracking accuracy, given a poorly trained Haar Cascade Classifier (250 positive samples and 100 negative samples) to recognize hands. To do this, I built a pipeline of several stages to improve the quality of the tracking. In addition, I built a sample web app using this hand tracking pipeline to control Google Maps using your hand and a webcam.\n\n",
+        "link": "http://www.youtube.com/watch?v=DFPg-9D46kE"
+      }
+    ],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Java",
+        "positions": [
+          "Endorsed by 2 colleagues at Google"
+        ],
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "C",
+        "positions": [
+          "Endorsed by 3 colleagues at Google"
+        ],
+        "endorsements": "8 endorsements"
+      },
+      {
+        "name": "OCaml",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Python",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Software Engineering",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Git",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Teaching",
+        "endorsements": "2 endorsements"
+      }
+    ],
+    "publications": [
+      {
+        "title": "Conveyor: One-Tool-Fits-All Continuous Software Deployment at Meta",
+        "publishedAt": "OSDI (Operating Systems Design & Implementation) · Jul 10, 2023",
+        "description": "Abstract:\nWe present Conveyor, Meta's software deployment tool, along with the valuable data obtained from managing over 30,000 deployment pipelines that deploy all kinds of services at Meta across millions of machines. We describe a wide range of deployment scenarios that Conveyor supports to achieve universal coverage. At Meta, out of all the deployment pipelines for services deployed via containers, 97% of them employ fully automated deployments without manual intervention: 55% utilize continuous deployment, instantly deploying every code change to production after passing automated tests, and the remaining 42% are automatically deployed on a fixed schedule (mostly daily or weekly) without manual validation. We highlight several distinguishing features of Conveyor, including safe in-place updates to reduce hardware costs, analysis of code dependencies to prevent faulty releases, and the capability to deploy complex ML models at scale.",
+        "link": "https://www.usenix.org/conference/osdi23/presentation/grubic"
+      },
+      {
+        "title": "Global Capacity Management at Meta",
+        "publishedAt": "Systems @Scale · Sep 6, 2022",
+        "description": "This is the accompanying blog post for my talk at Systems @Scale 2022 Summer.\nVideo: https://atscaleconference.com/videos/global-capacity-management-at-meta/\n\nDescription for the talk:\nMeta currently operates more than 15 data center regions around the world. This rapidly expanding global datacenter footprint poses new challenges for service owners and for our infrastructure management systems. In this talk, we will present the challenges with managing a global-scale infrastructure and our approach for global service and capacity management. In particular, we’ll focus on the abstractions and guarantees we present to service owners with global capacity, and we’ll walk through our current design and implementation for how we manage our workloads across 10s of regions. We’ll also present our future plans with Infra Cloud as we build towards our longer term vision of transparent automated global capacity management.",
+        "link": "https://engineering.fb.com/2022/09/06/data-center-engineering/viewing-the-world-as-a-computer-global-capacity-management/"
+      },
+      {
+        "title": "Twine: A Unified Cluster Management System for Shared Infrastructure",
+        "publishedAt": "OSDI (Operating Systems Design & Implementation) · Nov 1, 2020",
+        "description": "Presentation Video: https://www.youtube.com/watch?v=_-K-DeA7n5s\n\nAbstract:\nWe present Twine, Facebook's cluster management system which has been running in production for the past decade. Twine has helped convert our infrastructure from a collection of siloed pools of customized machines dedicated to individual workloads, into a large-scale shared infrastructure with fungible hardware.\n\nOur goal of ubiquitous shared infrastructure leads us to some decisions counter to common practices. For instance, rather than deploying an isolated control plane per cluster, Twine scales a single control plane to manage one million machines across all data centers in a geographic region and transparently move jobs across clusters.\n\nTwine accommodates workload-specific customization in shared infrastructure, and this approach further departs from common practices. The TaskControl API allows an application to collaborate with Twine to handle container lifecycle events, e.g., restarting a ZooKeeper deployment's followers first and its leader last during a rolling upgrade. Host profiles capture hardware and OS settings that workloads can tune to improve performance and reliability; Twine dynamically allocates machines to workloads and switches host profiles accordingly.\n\nFinally, going against the conventional wisdom of prioritizing stacking workloads on big machines to increase utilization, we universally deploy power-efficient small machines outfit with a single CPU and 64GB RAM to achieve higher performance per watt, and we leverage autoscaling to improve machine utilization.\n\nWe describe the design of Twine and share our experience in migrating Facebook's workloads onto shared infrastructure.",
+        "link": "https://www.usenix.org/conference/osdi20/presentation/tang"
+      },
+      {
+        "title": "Efficient, reliable cluster management at scale with Tupperware",
+        "publishedAt": "Systems @Scale · Jun 6, 2019",
+        "description": "This is the accompanying blog post for my talk at Systems @Scale 2019.\nVideo: https://atscaleconference.com/videos/systems-scale-2019-scaling-cluster-management-at-facebook-with-tupperware/\n\nDescription for the talk:\nTupperware is Facebook's cluster management system and container platform, and it has been running in production since 2011. Today, Tupperware manages millions of containers, and almost all backend services at Facebook are deployed through Tupperware. In this talk, we will explore the challenges we encountered over the past eight years as we evolved our system to scale to our global fleet. We will discuss scalability challenges we faced, stateful services and how we support them, our approach for opportunistic compute, and upcoming challenges we are tackling next.",
+        "link": "https://code.fb.com/data-center-engineering/tupperware/"
+      },
+      {
+        "title": "End-to-end Deadlock Debugging Tools at Facebook",
+        "publishedAt": "CppCon · Sep 29, 2017",
+        "description": "Facebook has developed tooling to help quickly find and debug several classes of concurrency bugs in Facebook's large C++ codebase. In this talk, we will focus specifically on deadlocks and the tools we use to detect and prevent them. We will explore the various tools we use — some open source tools we have deployed and some we have developed — and how they work by walking through several examples of real-world bugs found by these tools in Facebook's large production systems. \n\nTopics include: \n* How we deploy and utilize ThreadSanitizer on Facebook's large codebase \n* Linux eBPF tools to detect potential deadlocks on running binaries \n* gdb extensions to examine mutex internals to detect deadlocks \n* folly::Synchronized and other libraries that make it more difficult to introduce concurrency bugs \n\nPresented at CppCon 2017\nVideo: https://www.youtube.com/watch?v=Pz4ILxtPKMs\nSlides and Poster: https://github.com/CppCon/CppCon2017",
+        "link": "https://www.youtube.com/watch?v=Pz4ILxtPKMs"
+      }
+    ],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [
+      {
+        "title": "Harvard University Certificate of Distinction in Teaching",
+        "issuedBy": "Harvard University",
+        "issuedAt": "Dec 2013",
+        "description": "CS161 Spring 2014\nCS61 Fall 2013\nCS51 Spring 2013\nCS61 Fall 2012",
+        "associatedWith": "Associated with Harvard School of Engineering and Applied Sciences",
+        "associatedWithLink": null
+      }
+    ],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAEZnBtoBb1Us7ZKgHfOXAYT764pKcDQy848",
+        "firstName": "Songlin",
+        "lastName": "Yang",
+        "publicIdentifier": "songlin-yang-b8a69728b",
+        "linkedinUrl": "https://www.linkedin.com/in/songlin-yang-b8a69728b"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABqSHaUBgoPu_j2NSmNfYyGkrcUvLn5mbbo",
+        "firstName": "Jacob",
+        "lastName": "van Gogh",
+        "publicIdentifier": "jacobvangogh",
+        "linkedinUrl": "https://www.linkedin.com/in/jacobvangogh"
+      },
+      {
+        "id": "ACoAACaOARIBRO2EEH12QWQO29L__oI3N2K4u14",
+        "firstName": "Mingjie",
+        "lastName": "Sun",
+        "publicIdentifier": "mingjie-sun-06a761160",
+        "linkedinUrl": "https://www.linkedin.com/in/mingjie-sun-06a761160"
+      },
+      {
+        "id": "ACoAABebSPMByZP3ZnuWuJpWKhAcOO8xLxhLatU",
+        "firstName": "Alicia",
+        "lastName": "P.",
+        "publicIdentifier": "aliciacphan",
+        "linkedinUrl": "https://www.linkedin.com/in/aliciacphan"
+      },
+      {
+        "id": "ACoAAEAbBpQBT4luNj8gPYU6CgQ_GNJey3AJTiE",
+        "firstName": "Rajat",
+        "lastName": "Goel",
+        "publicIdentifier": "rajatgoel2010",
+        "linkedinUrl": "https://www.linkedin.com/in/rajatgoel2010"
+      },
+      {
+        "id": "ACoAAAENQhgBH8wIeS6hMrUoWlbKk5L9GWNNQCE",
+        "firstName": "Andrii",
+        "lastName": "Grynenko",
+        "publicIdentifier": "andrii-grynenko-a48aab5",
+        "linkedinUrl": "https://www.linkedin.com/in/andrii-grynenko-a48aab5"
+      },
+      {
+        "id": "ACoAACKNVUMBztbhQ3RUYQ-Mg89xUJ39N-XJpM4",
+        "firstName": "Long",
+        "lastName": "Lian",
+        "publicIdentifier": "longlian",
+        "linkedinUrl": "https://www.linkedin.com/in/longlian"
+      },
+      {
+        "id": "ACoAABYs4-IB5mHx5eVfOHzu1e8xlO3q_kb38IM",
+        "firstName": "Brydon",
+        "lastName": "Eastman",
+        "publicIdentifier": "brydon-eastman-396719a4",
+        "linkedinUrl": "https://www.linkedin.com/in/brydon-eastman-396719a4"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAABA0sF8BJqwmfoms3veu9TE72tj8JMUQEFA",
+        "firstName": "Sam",
+        "lastName": "Shleifer",
+        "publicIdentifier": "sam-shleifer-a5307a77",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-shleifer-a5307a77"
+      },
+      {
+        "id": "ACoAACEKIcoBlH0R5ZT_TKQuJ4i3ZD4WlI1-rME",
+        "firstName": "Jacob",
+        "lastName": "Menick",
+        "position": "Thinking Machines, Founding Team",
+        "publicIdentifier": "jacob-menick-5a277a135",
+        "linkedinUrl": "https://www.linkedin.com/in/jacob-menick-5a277a135"
+      },
+      {
+        "id": "ACoAABhIg7YBYN2NPIu8voYj5D7JQVZGxonqHvc",
+        "firstName": "Ruiqi",
+        "lastName": "Zhong",
+        "publicIdentifier": "ruiqi-zhong-09a533b4",
+        "linkedinUrl": "https://www.linkedin.com/in/ruiqi-zhong-09a533b4"
+      },
+      {
+        "id": "ACoAABqU8psBncgwN-WH-D8F1Jq9i7OsFmcPDt4",
+        "firstName": "Jeffrey",
+        "lastName": "Tao",
+        "publicIdentifier": "jeffrey-tao",
+        "linkedinUrl": "https://www.linkedin.com/in/jeffrey-tao"
+      },
+      {
+        "id": "ACoAACy2BxwB9fCrfCBI06w0X-gHyQTFLJIpJGc",
+        "firstName": "Guangxuan",
+        "lastName": "X.",
+        "publicIdentifier": "xgx",
+        "linkedinUrl": "https://www.linkedin.com/in/xgx"
+      },
+      {
+        "id": "ACoAAA4HVN4BOZg5espOvMVoO3OY04NZmuqvMCo",
+        "firstName": "Shaojie",
+        "lastName": "Bai",
+        "publicIdentifier": "shaojie-bai",
+        "linkedinUrl": "https://www.linkedin.com/in/shaojie-bai"
+      },
+      {
+        "id": "ACoAABxxSOoBxMid0wd8m2NDb9w5zTY2lQbrNz4",
+        "firstName": "Leon",
+        "lastName": "G.",
+        "publicIdentifier": "yazhi-gao",
+        "linkedinUrl": "https://www.linkedin.com/in/yazhi-gao"
+      },
+      {
+        "id": "ACoAAB4qbUUBsc9H_NLZN2duLUOOyyFDm-k_ACo",
+        "firstName": "Riley",
+        "lastName": "Shanahan",
+        "publicIdentifier": "rileyshanny",
+        "linkedinUrl": "https://www.linkedin.com/in/rileyshanny"
+      },
+      {
+        "id": "ACoAAAeoHjYB_Lo5sUFlpZpz2L74oe9nEIKztQA",
+        "firstName": "Jenya",
+        "lastName": "L.",
+        "publicIdentifier": "jenya-l",
+        "linkedinUrl": "https://www.linkedin.com/in/jenya-l"
+      },
+      {
+        "id": "ACoAABVAP64BY4RszeJt11vohsLM-gj1PiARl2o",
+        "firstName": "Jiaming",
+        "lastName": "Cui",
+        "publicIdentifier": "jiaming-cui-57a49a9b",
+        "linkedinUrl": "https://www.linkedin.com/in/jiaming-cui-57a49a9b"
+      },
+      {
+        "id": "ACoAAALh9JEBR4ETOGffssUBbfya32S2XfxBN7U",
+        "firstName": "Bernhard",
+        "lastName": "Schmidt",
+        "position": "Strategic Marketing & Growth Leader I Driving Scalable Growth I Portfolio Strategy I Market Development I Go-to-Market Excellence I Coach & Mentor",
+        "publicIdentifier": "passionforshapingpatienthealthcare",
+        "linkedinUrl": "https://www.linkedin.com/in/passionforshapingpatienthealthcare"
+      },
+      {
+        "id": "ACoAABf9a7YBxbRK38GTjo3uZRVMw9rBJF3fYUA",
+        "firstName": "Fernando",
+        "lastName": "J. S. Teixeira",
+        "position": "Empowering Financial Leaders with Q4’s Investor Intelligence & IR Solutions 💡",
+        "publicIdentifier": "fernando-j-s-teixeira",
+        "linkedinUrl": "https://www.linkedin.com/in/fernando-j-s-teixeira"
+      },
+      {
+        "id": "ACoAAAv6AY8BS22CAfAzYlXuKkyArrH5ZAcGxe4",
+        "firstName": "Sandra",
+        "lastName": "Bütow",
+        "position": "Research & Project Coordination at RKI | ZKI-PH // Medical Affairs Advisor",
+        "publicIdentifier": "sandra-buetow",
+        "linkedinUrl": "https://www.linkedin.com/in/sandra-buetow"
+      },
+      {
+        "id": "ACoAAA5BRfkBpnUYHzUq-vDWahO3pFniQWcLb_E",
+        "firstName": "Hesam",
+        "lastName": "Nikzad Jamnani",
+        "position": "Software Engineer",
+        "publicIdentifier": "hesam-nikzad-jamnani-0a111668",
+        "linkedinUrl": "https://www.linkedin.com/in/hesam-nikzad-jamnani-0a111668"
+      },
+      {
+        "id": "ACoAABj7c9UBJ55bJPUsmkTlsq5zJc3tlL5U_RU",
+        "firstName": "Dr. Nikolai",
+        "lastName": "Falk",
+        "position": "--",
+        "publicIdentifier": "dr-nikolai-falk-559449b8",
+        "linkedinUrl": "https://www.linkedin.com/in/dr-nikolai-falk-559449b8"
+      },
+      {
+        "id": "ACoAABOYtpkBxI_I7-T63TBi37lMR0SSaXUAXzU",
+        "firstName": "Dr. Jan",
+        "lastName": "Schaefer",
+        "position": "Building in preventive medicine | Physician & healthcare executive who scaled healthcare businesses across Europe | Longevity science, translated",
+        "publicIdentifier": "dr-jan-schaefer",
+        "linkedinUrl": "https://www.linkedin.com/in/dr-jan-schaefer"
+      },
+      {
+        "id": "ACoAAB9FIiYB-B-Q6OoyoifJI7CK7nEPH8_0VXk",
+        "firstName": "Melanie",
+        "lastName": "Stürzer",
+        "position": "Associate Director - Client Lifecycle Management",
+        "publicIdentifier": "melanie-stürzer-11a842127",
+        "linkedinUrl": "https://www.linkedin.com/in/melanie-stürzer-11a842127"
+      },
+      {
+        "id": "ACoAAB9uFVYBboFAlxcRNhR6PZ5m-m9PXhyUU_o",
+        "firstName": "Ruben",
+        "lastName": "Brabenec",
+        "position": "Medical Doctor | Dissertation @Helmholtz & @LMU",
+        "publicIdentifier": "ruben-brabenec",
+        "linkedinUrl": "https://www.linkedin.com/in/ruben-brabenec"
+      },
+      {
+        "id": "ACoAAAKiTl8Bu0IDongFup5NHEmPVu0PhE_5Rdw",
+        "firstName": "Anne",
+        "lastName": "Neto (Diamantidis)",
+        "position": "CEO eLoc Smart Solutions GmbH, your premium translation & localisation partner since 2016 for 30+ languages🌍| Medical, Healthtech, Medtech, Biotech |🩺 French Medical, Veterinarian & Life Sciences Translator | BDÜ",
+        "publicIdentifier": "annediamantidis",
+        "linkedinUrl": "https://www.linkedin.com/in/annediamantidis"
+      },
+      {
+        "id": "ACoAABSMqugBkLPVHToM4S4nWOwPgLnNXnTq76o",
+        "firstName": "Stefan",
+        "lastName": "Foser",
+        "position": "Pharma & MedTech Leader inspiring digital innovation and patient care with proven R&D and commercialization expertise",
+        "publicIdentifier": "stefan-foser",
+        "linkedinUrl": "https://www.linkedin.com/in/stefan-foser"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAAhY-psB4rRGKC_5zy8RnAUXhHClh0MuJGo"
+    }
+  }
+}

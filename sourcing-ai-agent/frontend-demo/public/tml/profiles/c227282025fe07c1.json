@@ -1,0 +1,689 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAACa7LRgBZubPAg4KDmvbcfRDCTxkmO8EmNI",
+    "profile_url": "https://www.linkedin.com/in/ACwAACa7LRgBZubPAg4KDmvbcfRDCTxkmO8EmNI"
+  },
+  "item": {
+    "id": "ACoAACa7LRgB3GDtWsdisN9BuLw9mfXhZE2Wins",
+    "publicIdentifier": "alex-h-liu",
+    "linkedinUrl": "https://www.linkedin.com/in/alex-h-liu",
+    "firstName": "Alexander H",
+    "lastName": "Liu",
+    "emails": [
+      {
+        "email": "alexander.liu@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Thinking Machines Lab | Prev: Mistral AI, MIT",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America"
+      }
+    },
+    "objectUrn": "649800984",
+    "registeredAt": "2018-04-07T12:39:08.774Z",
+    "topSkills": null,
+    "connectionsCount": 245,
+    "followerCount": 263,
+    "verified": true,
+    "about": "Researcher @ Thinking Machines Lab, building things one auto-accept-edit-on at a time .\n\nPast:\n- Mistral: laid the foundation of full audio stack, core contributor to data pipeline, tokenizer, pretraining, post-training, and audio-out inference. also worked on small LLMs. all results open-sourced with report.\n- Nvidia: research intern, multiple publications in audio foundation models.\n- FAIR: research intern, published in (1) unsupervised learning methods for speech; (2) pretraining framework for audio generation. The technique was later productized for Meta's multimodal generative models.\n- MIT: doctoral research in speech representation learning and generative models.\n\nSee personal webpage for more info: https://alexander-h-liu.github.io/",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 2,
+            "year": 2026,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "18494",
+        "companyId": "1503",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1503/",
+        "schoolName": "Massachusetts Institute of Technology"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": null,
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "TW",
+        "language": "zh"
+      }
+    ],
+    "primaryLocale": {
+      "country": "TW",
+      "language": "zh"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Thinking Machines Lab | Prev: Mistral AI, MIT",
+        "locale": "zh_TW"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2026,
+          "text": "Feb 2026"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Assistant",
+        "location": "Cambridge, Massachusetts, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "MIT Computer Science and Artificial Intelligence Laboratory (CSAIL)",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/8060229/",
+        "companyId": "8060229",
+        "duration": "5 yrs 7 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2020,
+          "text": "Sep 2020"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2026,
+          "text": "Mar 2026"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEGRPOLADdMtg/company-logo_400_400/company-logo_400_400/0/1640006078259/mit_csail_logo?e=1776902400&v=beta&t=NTLJawRaOdSAXo_PebC8_CSSvy1Vinvv2QhC5MivCjU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEGRPOLADdMtg/company-logo_400_400/company-logo_400_400/0/1640006078259/mit_csail_logo?e=1776902400&v=beta&t=NTLJawRaOdSAXo_PebC8_CSSvy1Vinvv2QhC5MivCjU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEGRPOLADdMtg/company-logo_200_200/company-logo_200_200/0/1640006078259/mit_csail_logo?e=1776902400&v=beta&t=b_H1AGCW_PpKP_U4W2RTfrzLjwfbkPL6IcpiPa2XeDg",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEGRPOLADdMtg/company-logo_100_100/company-logo_100_100/0/1640006078259/mit_csail_logo?e=1776902400&v=beta&t=wvkgcSG-fgHPLlz4TV6Am8rurCw_z6yGk0feTezwTZM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Scientist",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Mistral AI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/94273421/",
+        "companyId": "94273421",
+        "duration": "1 yr 2 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2025,
+          "text": "Jan 2025"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2026,
+          "text": "Feb 2026"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHEMPM6gZY2kQ/company-logo_400_400/B4EZqSkjBRKsAc-/0/1763395645877/mistralai_logo?e=1776902400&v=beta&t=bRmR_hAosRPx2QnINzjsq9be9L1olRwlDPWQQDFfu6M",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHEMPM6gZY2kQ/company-logo_400_400/B4EZqSkjBRKsAc-/0/1763395645877/mistralai_logo?e=1776902400&v=beta&t=bRmR_hAosRPx2QnINzjsq9be9L1olRwlDPWQQDFfu6M",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHEMPM6gZY2kQ/company-logo_200_200/B4EZqSkjBRKsAM-/0/1763395645877/mistralai_logo?e=1776902400&v=beta&t=ct70MlwzA97OSeM9iYXWi-WyDvzGSbntIst93HpfS1A",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHEMPM6gZY2kQ/company-logo_100_100/B4EZqSkjBRKsAU-/0/1763395645877/mistralai_logo?e=1776902400&v=beta&t=Iwbqsgy2PYVa7WB_J8e6gbWQgy1e29bUIn3eElmLhsY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Intern",
+        "location": null,
+        "employmentType": "Internship",
+        "workplaceType": null,
+        "companyName": "NVIDIA",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3608/",
+        "companyId": "3608",
+        "duration": "8 mos",
+        "description": "Worked on audio foundation models\n- UniWav: Towards Unified Pre-training for Speech Representation Learning and Generation (ICLR2025)\n- Fugatto 1 - Foundational Generative Audio Transformer Opus 1 (ICLR2025)\n- Generative Speech Foundation Model Pretraining for High-Quality Speech Extraction and Restoration (ICASSP2025)",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2025,
+          "text": "May 2025"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2025,
+          "text": "Dec 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGV36q2EowSyw/company-logo_400_400/company-logo_400_400/0/1724881581208/nvidia_logo?e=1776902400&v=beta&t=C4mWS6vTQukkUtFskEc75guVQWnxYpncWO_y7nNqVeY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGV36q2EowSyw/company-logo_400_400/company-logo_400_400/0/1724881581208/nvidia_logo?e=1776902400&v=beta&t=C4mWS6vTQukkUtFskEc75guVQWnxYpncWO_y7nNqVeY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGV36q2EowSyw/company-logo_200_200/company-logo_200_200/0/1724881581208/nvidia_logo?e=1776902400&v=beta&t=3Eb3ojsmrCjgggr-i-ceH5i78HKTHMfU_Sw6-_Qwl9I",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGV36q2EowSyw/company-logo_100_100/company-logo_100_100/0/1724881581208/nvidia_logo?e=1776902400&v=beta&t=J1fAnNhA-iMhp5no8LIGLr70F4jKZs6zO4pSLqTQaFc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Intern",
+        "location": null,
+        "employmentType": "Internship",
+        "workplaceType": null,
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "8 mos",
+        "description": "Worked on generative pretraining of speech model:\n- Generative Pre-training for Speech with Flow Matching (ICLR2024)",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2024,
+          "text": "May 2024"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2024,
+          "text": "Dec 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Intern",
+        "location": null,
+        "employmentType": "Internship",
+        "workplaceType": "Remote",
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "8 mos",
+        "description": "Worked on unsupervised speech processing:\n- Simple and Effective Unsupervised Speech Synthesis (Interspeech2022)\n- Towards End-to-end Unsupervised Speech Recognition (SLT2022)",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2021,
+          "text": "May 2021"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2021,
+          "text": "Dec 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Massachusetts Institute of Technology",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1503/",
+        "schoolId": "1503",
+        "degree": "Doctor of Philosophy - PhD",
+        "fieldOfStudy": "Computer Science and Artificial Intelligence",
+        "skills": [],
+        "description": "Thesis: Pretraining Methods for Speech Representation Learning and Generation",
+        "startDate": {
+          "month": "Sep",
+          "year": 2020,
+          "text": "Sep 2020"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2026,
+          "text": "Mar 2026"
+        },
+        "period": "Sep 2020 - Mar 2026",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_400_400/company-logo_400_400/0/1689799729035/mit_logo?e=1776902400&v=beta&t=u1PKvlsURdjuQj6vGwgPDc-3muz7cCQ6oGJISjoWshw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_400_400/company-logo_400_400/0/1689799729035/mit_logo?e=1776902400&v=beta&t=u1PKvlsURdjuQj6vGwgPDc-3muz7cCQ6oGJISjoWshw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_200_200/company-logo_200_200/0/1689799729035/mit_logo?e=1776902400&v=beta&t=AB2cY7dhuIbLPIWAjqEjazLVeMiSD5C3JNuYh9NjBw4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_100_100/company-logo_100_100/0/1689799729035/mit_logo?e=1776902400&v=beta&t=IuM-xZiymxMvWzGrHXnXupiD9lk70R68nAJaX2-9P8Y",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "National Taiwan University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=National+Taiwan+University",
+        "schoolId": null,
+        "degree": "Bachelor's & Master's degree",
+        "fieldOfStudy": "Computer Science and Information Engineering",
+        "skills": [],
+        "startDate": {
+          "year": 2014,
+          "text": "2014"
+        },
+        "endDate": {
+          "year": 2020,
+          "text": "2020"
+        },
+        "period": "2014 - 2020",
+        "schoolLogo": null
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "position": "AI Researcher, Co-founder @ Thinking Machines Lab",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAAAXzQRoBXin6ukxEFSLdm3kJ-V3tW9XX2oE",
+        "firstName": "Pavankumar Reddy",
+        "lastName": "M",
+        "position": "Research Scientist @ Mistral AI | Multimodal Audio Lead",
+        "publicIdentifier": "mupavan",
+        "linkedinUrl": "https://www.linkedin.com/in/mupavan"
+      },
+      {
+        "id": "ACoAAEZnBtoBb1Us7ZKgHfOXAYT764pKcDQy848",
+        "firstName": "Songlin",
+        "lastName": "Yang",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "songlin-yang-b8a69728b",
+        "linkedinUrl": "https://www.linkedin.com/in/songlin-yang-b8a69728b"
+      },
+      {
+        "id": "ACoAABQ5lJUBry2byQYf_TtxDF9Rha9l-RqYsaM",
+        "firstName": "Guang-He",
+        "lastName": "Lee",
+        "position": "Thinking Machines Lab | Prev: Anthropic, Citadel, MIT",
+        "publicIdentifier": "guang-he-lee-64577895",
+        "linkedinUrl": "https://www.linkedin.com/in/guang-he-lee-64577895"
+      },
+      {
+        "id": "ACoAACE2EIwB3vNVX9rm6ce5juOGovFUzVvIsCc",
+        "firstName": "Kevin",
+        "lastName": "Lu",
+        "position": "thinking machines",
+        "publicIdentifier": "kzl",
+        "linkedinUrl": "https://www.linkedin.com/in/kzl"
+      },
+      {
+        "id": "ACoAACvH6eUBxkgROslW5La6qN2HYUhW_bVUbiA",
+        "firstName": "Cheol Jun",
+        "lastName": "Cho",
+        "position": "PhD candidate | EECS @ UCB",
+        "publicIdentifier": "cheol-jun-cho-605ba6185",
+        "linkedinUrl": "https://www.linkedin.com/in/cheol-jun-cho-605ba6185"
+      },
+      {
+        "id": "ACoAAERmzGwBElsyamnN3pbQKhPLC7qLvAY8lnM",
+        "firstName": "Henry",
+        "lastName": "Hong",
+        "position": "CS and CogSci @ UC Berkeley | ML @ BAIR",
+        "publicIdentifier": "henryyhong",
+        "linkedinUrl": "https://www.linkedin.com/in/henryyhong"
+      },
+      {
+        "id": "ACoAAACgqE4Bjzdm7TimPMO39U_1Gd0Vz_myVUw",
+        "firstName": "Gopala Krishna",
+        "lastName": "Anumanchipalli",
+        "position": "Robert E. and Beverly A. Brooks Assistant Professor",
+        "publicIdentifier": "gopala-anumanchipalli",
+        "linkedinUrl": "https://www.linkedin.com/in/gopala-anumanchipalli"
+      },
+      {
+        "id": "ACoAAAPscIcBFusuopS1I8ZOmO-urPb2Vw1rJkU",
+        "firstName": "Alexei",
+        "lastName": "Baevski",
+        "position": "Principal AI Researcher at Google Deepmind",
+        "publicIdentifier": "alexei-baevski-3730661a",
+        "linkedinUrl": "https://www.linkedin.com/in/alexei-baevski-3730661a"
+      },
+      {
+        "id": "ACoAAByMFC4BKTxAsiOdk5s9SH0Bm9m5zDr20sM",
+        "firstName": "Anastasis",
+        "lastName": "Stathopoulos",
+        "position": "Research Scientist at FAIR, Meta",
+        "publicIdentifier": "astathopoulos",
+        "linkedinUrl": "https://www.linkedin.com/in/astathopoulos"
+      },
+      {
+        "id": "ACoAAB5vaZ0BLGfMX87jalpXknO-eLCleHct-L8",
+        "firstName": "Sinjini",
+        "lastName": "Mitra",
+        "position": "AI Research Scientist @ GTA || Boston",
+        "publicIdentifier": "sinjini-mitra",
+        "linkedinUrl": "https://www.linkedin.com/in/sinjini-mitra"
+      },
+      {
+        "id": "ACoAACRnMSMBNxclIlzo4ap7YAlKbnmKGdthit8",
+        "firstName": "Pei-Ling (Anita)",
+        "lastName": "Chiang",
+        "position": "Software engineer at Oracle",
+        "publicIdentifier": "peilingchiang",
+        "linkedinUrl": "https://www.linkedin.com/in/peilingchiang"
+      },
+      {
+        "id": "ACoAACA1ZlYBhPNODsf7Z3UNo1tLYMShFQ7OQJw",
+        "firstName": "Yujia",
+        "lastName": "Bao",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "yujia-bao-506b76130",
+        "linkedinUrl": "https://www.linkedin.com/in/yujia-bao-506b76130"
+      },
+      {
+        "id": "ACoAAEjjJbABaBru83f0RwaD-P31KjaZfL1DDW4",
+        "firstName": "Xuanru",
+        "lastName": "Zhou",
+        "position": "Undergrad @Zhejiang University | Intern @ Tencent AI Lab | Research Intern @ Berkeley Speech Group",
+        "publicIdentifier": "xuanru-zhou-5286412a1",
+        "linkedinUrl": "https://www.linkedin.com/in/xuanru-zhou-5286412a1"
+      },
+      {
+        "id": "ACoAACcGz3UBRVt30AwKUL84_OjLGEdyH8SpKa4",
+        "firstName": "Chao-Wei",
+        "lastName": "Huang",
+        "position": "Research Scientist at Meta",
+        "publicIdentifier": "chao-wei-huang-89933a163",
+        "linkedinUrl": "https://www.linkedin.com/in/chao-wei-huang-89933a163"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "position": "Co-Founder and CEO at Thinking Machines Lab",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAACy2BxwB9fCrfCBI06w0X-gHyQTFLJIpJGc",
+        "firstName": "Guangxuan",
+        "lastName": "X.",
+        "publicIdentifier": "xgx",
+        "linkedinUrl": "https://www.linkedin.com/in/xgx"
+      },
+      {
+        "id": "ACoAAADI46YBWh88M7Ya9COrnUwZOrUcOKz0mjQ",
+        "firstName": "Christian",
+        "lastName": "Vigne",
+        "position": "Product Marketing Manager | Turning AI into GTM and sales adoption  | Ex-Google  | Helping companies imagine their AI‑powered future through corporate fictions with Narra",
+        "publicIdentifier": "christianvigne",
+        "linkedinUrl": "https://www.linkedin.com/in/christianvigne"
+      },
+      {
+        "id": "ACoAABf2uE0BtrHx-8A_9UP-wzKUM2eepiZTyKY",
+        "firstName": "Cheng-I Jeff",
+        "lastName": "Lai",
+        "position": "Research Scientist @ Meta Superintelligence Lab",
+        "publicIdentifier": "jefflai108",
+        "linkedinUrl": "https://www.linkedin.com/in/jefflai108"
+      },
+      {
+        "id": "ACoAAC6JVGcB9vxS1_KRtH0DATiMiBvI2kZhQKo",
+        "firstName": "Heng-Jui",
+        "lastName": "Chang",
+        "publicIdentifier": "heng-jui-chang",
+        "linkedinUrl": "https://www.linkedin.com/in/heng-jui-chang"
+      },
+      {
+        "id": "ACoAABVYyvcBZA9NM8wGWoAjvUtBt4mG3KP0tUc",
+        "firstName": "Alex",
+        "lastName": "Nazzaro",
+        "position": "Account Executive at Salesforce",
+        "publicIdentifier": "alexandernazzaro",
+        "linkedinUrl": "https://www.linkedin.com/in/alexandernazzaro"
+      },
+      {
+        "id": "ACoAABmrpdgBIVaw_GkVOPPr--GPhO5oUkB0BV4",
+        "firstName": "Chris",
+        "lastName": "Corso",
+        "position": "Account Management Leader | Building Lasting Client Relationships for Mutual Success",
+        "publicIdentifier": "ccorso",
+        "linkedinUrl": "https://www.linkedin.com/in/ccorso"
+      },
+      {
+        "id": "ACoAADXrWf4BYEdnc7TjYyfKhXzYUR6jurD5-so",
+        "firstName": "Izu",
+        "lastName": "Onyekachi",
+        "position": "Account Executive @ Bolt |",
+        "publicIdentifier": "izuonyekachi",
+        "linkedinUrl": "https://www.linkedin.com/in/izuonyekachi"
+      },
+      {
+        "id": "ACoAABtd0fUB5B7pIKvWnpB_RjUP6YSI54GMhgI",
+        "firstName": "Doenya E.",
+        "lastName": "Rios",
+        "position": "Account Executive | Salesforce",
+        "publicIdentifier": "doenya-e-rios-27191a109",
+        "linkedinUrl": "https://www.linkedin.com/in/doenya-e-rios-27191a109"
+      },
+      {
+        "id": "ACoAACVYuZkBsM4bo4_Qob4dpKIaqxRKe0gfLpw",
+        "firstName": "AJ",
+        "lastName": "Gainwell, MBA",
+        "position": "Territory Account Executive at Salesforce",
+        "publicIdentifier": "again34",
+        "linkedinUrl": "https://www.linkedin.com/in/again34"
+      },
+      {
+        "id": "ACoAABZj-cgBQoz1hG6hNJ9BDlauBwo42U3JzIo",
+        "firstName": "Libby",
+        "lastName": "Van Pelt",
+        "position": "Account Executive at Salesforce",
+        "publicIdentifier": "libby-van-pelt-5a097aa5",
+        "linkedinUrl": "https://www.linkedin.com/in/libby-van-pelt-5a097aa5"
+      },
+      {
+        "id": "ACoAADdV9EkBLOjZbsxQvmY2HaTSDvUYrOnUbq0",
+        "firstName": "Deja",
+        "lastName": "Wright",
+        "position": "Account Executive, Financial Services at Salesforce ",
+        "publicIdentifier": "dejawright",
+        "linkedinUrl": "https://www.linkedin.com/in/dejawright"
+      },
+      {
+        "id": "ACoAAAkppYYBxGCmvCK9pXpMQAWYn8zg9YPJgR8",
+        "firstName": "Matt",
+        "lastName": "Hartman",
+        "position": "Account Executive @ Salesforce",
+        "publicIdentifier": "matthartman1",
+        "linkedinUrl": "https://www.linkedin.com/in/matthartman1"
+      },
+      {
+        "id": "ACoAABKdtXQBZXKYrQcSRw4zVd5dRYYfTfxrzVE",
+        "firstName": "Michael",
+        "lastName": "A.",
+        "position": "Sr. Product Owner | Sr Program Manager | Sr. Scrum Master | Software & Infrastructure Environment | Driving Innovation & Customer Value. | B2B, B2C, B2B2C",
+        "publicIdentifier": "michaellewisabraham",
+        "linkedinUrl": "https://www.linkedin.com/in/michaellewisabraham"
+      },
+      {
+        "id": "ACoAACQ8uCYBmOmpJQ96bN8wCtG0qJhEb3YhDew",
+        "firstName": "Conor",
+        "lastName": "Gatton",
+        "position": "Account Director, Financial Services",
+        "publicIdentifier": "conor-gatton-20673014b",
+        "linkedinUrl": "https://www.linkedin.com/in/conor-gatton-20673014b"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAACa7LRgBZubPAg4KDmvbcfRDCTxkmO8EmNI"
+    }
+  }
+}

@@ -1,0 +1,458 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAGFB6sMBurWAA-iF6ztWm_i1JxpQPpQ8qVI",
+    "profile_url": "https://www.linkedin.com/in/ACwAAGFB6sMBurWAA-iF6ztWm_i1JxpQPpQ8qVI"
+  },
+  "item": {
+    "id": "ACoAAGFB6sMBeGc284GTDLIyoA-ZC-jKBAqhnCI",
+    "publicIdentifier": "manikanta-dudam-683558396",
+    "linkedinUrl": "https://www.linkedin.com/in/manikanta-dudam-683558396",
+    "firstName": "manikanta",
+    "lastName": "dudam",
+    "emails": [
+      {
+        "email": "manikanta.dudam@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Laboratory Technician at Thinking Machines Lab",
+    "openToWork": true,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Karimnagar, Telangana, India",
+      "countryCode": "IN",
+      "parsed": {
+        "text": "Karīmnagar, India",
+        "countryCode": "IN",
+        "regionCode": null,
+        "country": "India",
+        "countryFull": "India",
+        "state": "Telangana",
+        "city": "Karīmnagar"
+      }
+    },
+    "objectUrn": "1631709891",
+    "registeredAt": "2025-11-15T14:00:31.798Z",
+    "topSkills": null,
+    "connectionsCount": 1,
+    "followerCount": 2,
+    "verified": false,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": null,
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4E03AQEWmOWOmUvbig/profile-displayphoto-crop_800_800/B4EZqIicmpHoAI-/0/1763227323807?e=1776902400&v=beta&t=zxY0wBi-2vU4cV5orAQOIVoQUFtD-r-XhC_5HFp4p8E",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQEWmOWOmUvbig/profile-displayphoto-crop_800_800/B4EZqIicmpHoAI-/0/1763227323807?e=1776902400&v=beta&t=zxY0wBi-2vU4cV5orAQOIVoQUFtD-r-XhC_5HFp4p8E",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQEWmOWOmUvbig/profile-displayphoto-scale_400_400/B4EZqIicmpHoAg-/0/1763227323895?e=1776902400&v=beta&t=ObRDvTb1qZ-BZ6RnCo1cLLLY4ekksWyeGcg--vtEh34",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQEWmOWOmUvbig/profile-displayphoto-scale_200_200/B4EZqIicmpHoAY-/0/1763227323895?e=1776902400&v=beta&t=_3tS7tRe8xIhrMDNg2-TwUk6wiTGYGiXkCRpveoqIME",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQEWmOWOmUvbig/profile-displayphoto-scale_100_100/B4EZqIicmpHoAc-/0/1763227323895?e=1776902400&v=beta&t=oj7fhFIwZn8XRtgTCzL0LzNCdCg4Dh5-tvusaKE1Dbk",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D4E03AQEWmOWOmUvbig/profile-displayphoto-crop_800_800/B4EZqIicmpHoAI-/0/1763227323807?e=1776902400&v=beta&t=zxY0wBi-2vU4cV5orAQOIVoQUFtD-r-XhC_5HFp4p8E",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Laboratory Technician at Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Laboratory Technician",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": null,
+        "description": null,
+        "skills": [
+          "Lab Testing",
+          "Pipetting",
+          "LabTech",
+          "Laboratory Equipment",
+          "Malaria",
+          "Biochemistry",
+          "Patient details collection",
+          "Dressing",
+          "Time Management",
+          "Video Editing",
+          "Self-Motivation"
+        ],
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "TMREIS BOYS-3 JUNIOR COLLEGE",
+        "schoolLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=TMREIS+BOYS-3+JUNIOR+COLLEGE",
+        "schoolId": null,
+        "degree": "INTER-MLT Voc.",
+        "fieldOfStudy": null,
+        "skills": [],
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": null
+      },
+      {
+        "schoolName": "TMREIS BOYS-3 SCHOOL",
+        "schoolLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=TMREIS+BOYS-3+SCHOOL",
+        "schoolId": null,
+        "degree": "High School Diploma",
+        "fieldOfStudy": null,
+        "skills": [],
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": null
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Medical Meetings"
+      },
+      {
+        "name": "Chess"
+      },
+      {
+        "name": "Image Editing"
+      },
+      {
+        "name": "High Technical Aptitude"
+      },
+      {
+        "name": "Black-and-White Photography"
+      },
+      {
+        "name": "High Level Of Accuracy"
+      },
+      {
+        "name": "Quality Patient Care"
+      },
+      {
+        "name": "Lab Testing",
+        "positions": [
+          "Laboratory Technician at Thinking Machines Lab"
+        ]
+      },
+      {
+        "name": "Pipetting",
+        "positions": [
+          "Laboratory Technician at Thinking Machines Lab"
+        ]
+      },
+      {
+        "name": "LabTech",
+        "positions": [
+          "Laboratory Technician at Thinking Machines Lab"
+        ]
+      },
+      {
+        "name": "Laboratory Equipment",
+        "positions": [
+          "Laboratory Technician at Thinking Machines Lab"
+        ]
+      },
+      {
+        "name": "Malaria",
+        "positions": [
+          "Laboratory Technician at Thinking Machines Lab"
+        ]
+      },
+      {
+        "name": "Biochemistry",
+        "positions": [
+          "Laboratory Technician at Thinking Machines Lab"
+        ]
+      },
+      {
+        "name": "Time Management",
+        "positions": [
+          "Laboratory Technician at Thinking Machines Lab"
+        ]
+      },
+      {
+        "name": "Video Editing",
+        "positions": [
+          "Laboratory Technician at Thinking Machines Lab"
+        ]
+      },
+      {
+        "name": "Telugu"
+      },
+      {
+        "name": "Organization Skills"
+      },
+      {
+        "name": "Possess strong analytical"
+      },
+      {
+        "name": "Skilled Multi-tasker"
+      },
+      {
+        "name": "Patient details collection ",
+        "positions": [
+          "Laboratory Technician at Thinking Machines Lab"
+        ]
+      },
+      {
+        "name": "Dressing ",
+        "positions": [
+          "Laboratory Technician at Thinking Machines Lab"
+        ]
+      },
+      {
+        "name": "Self-Motivation",
+        "positions": [
+          "Laboratory Technician at Thinking Machines Lab"
+        ]
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAEMQ5vIBbIQr5NT7IHLu5rCt3oIHDooezrY",
+        "firstName": "Challa Mokesh",
+        "lastName": "Lakshman",
+        "position": "Technical Intern @ Cisco | Java & Python Developer | DSA | AI & Backend",
+        "publicIdentifier": "challa-mokesh-lakshman-6169a2274",
+        "linkedinUrl": "https://www.linkedin.com/in/challa-mokesh-lakshman-6169a2274"
+      },
+      {
+        "id": "ACoAAFajIwsBg99O7QYdjSFwBtIrbqXGMt0CzhQ",
+        "firstName": "Harshini",
+        "lastName": "Vallala",
+        "position": "Attended SR University",
+        "publicIdentifier": "harshini-vallala-377950346",
+        "linkedinUrl": "https://www.linkedin.com/in/harshini-vallala-377950346"
+      },
+      {
+        "id": "ACoAAE6d_8wBO-V9p5-1LKYzU3YdTEGQCFYA30g",
+        "firstName": "Vaishnavi",
+        "lastName": "K",
+        "position": "Pre-Final Year @SSMIET || B.E - CSE ( CyberSecurity ) || Exploring in VAPT || CCEP",
+        "publicIdentifier": "vaishnavi0313",
+        "linkedinUrl": "https://www.linkedin.com/in/vaishnavi0313"
+      },
+      {
+        "id": "ACoAAFaZPnoBSFWzcZsDNLfMmD-XSy5yPgKJAHM",
+        "firstName": "Mettu",
+        "lastName": "Raviteja",
+        "position": "Attended SR University",
+        "publicIdentifier": "mettu-raviteja-136699346",
+        "linkedinUrl": "https://www.linkedin.com/in/mettu-raviteja-136699346"
+      },
+      {
+        "id": "ACoAAEeJC7wBc3Rh0IWt1U3ArNCgUezQtmrqNgs",
+        "firstName": "CHELUKALA GANGA",
+        "lastName": "REDDY",
+        "position": "ECE Student | RF & Antenna Engineering  | HFSS | Indian Patent Author (INA)|MATLAB|JAVA",
+        "publicIdentifier": "chelukala-ganga-reddy-278b23295",
+        "linkedinUrl": "https://www.linkedin.com/in/chelukala-ganga-reddy-278b23295"
+      },
+      {
+        "id": "ACoAAE98pPsBYu5LtG2Zg_HmUyqtB5TDgJoDtzo",
+        "firstName": "ARJUN",
+        "lastName": "ITTABOINA",
+        "position": "Graduating Student in Ece  | Interested in Core Domains like VLSI, Embedded Systems | Actively Seeking Internships",
+        "publicIdentifier": "arjun-ittaboina-",
+        "linkedinUrl": "https://www.linkedin.com/in/arjun-ittaboina-"
+      },
+      {
+        "id": "ACoAAFoTYH0BJPpcSh6rEL0ToHVwYv6GMuW1Dwk",
+        "firstName": "Divya",
+        "lastName": "Battu",
+        "position": "Student at Gokaraju Rangaraju Institute of Engineering and Technology",
+        "publicIdentifier": "divya-battu-279130362",
+        "linkedinUrl": "https://www.linkedin.com/in/divya-battu-279130362"
+      },
+      {
+        "id": "ACoAAEErCXMBWPFnN-Kv5EJDWGQ1abmPr0Xilao",
+        "firstName": "Manoj",
+        "lastName": "sai",
+        "position": "Attended Vellore Institute of Technology",
+        "publicIdentifier": "manoj-sai-7571a7266",
+        "linkedinUrl": "https://www.linkedin.com/in/manoj-sai-7571a7266"
+      },
+      {
+        "id": "ACoAABWBdPUBM3Emnq2MC1Oejw3oh3mXoX-TlBk",
+        "firstName": "Dr Ganzamungu",
+        "lastName": "Zihindula",
+        "position": "Implementation Science|Data Analyst | Brain Health research|Global Fellow for Health Equity|Motivation speaker| NCDs prevention strategies | Research Epidemiologist|Mental health| Trauma-Informed Care| Personal Coach|",
+        "publicIdentifier": "dr-ganzamungu-zihindula-6719bba0",
+        "linkedinUrl": "https://www.linkedin.com/in/dr-ganzamungu-zihindula-6719bba0"
+      },
+      {
+        "id": "ACoAADNfLc0BrnyMMagu1Ya2weboGsGvfToh7NM",
+        "firstName": "Oluwayomi",
+        "lastName": "Akinfenwa",
+        "position": "PhD in Data Science🔹Bayesian Modeling & Data Visualization Researcher🔹Science Communicator🔹 Research Ireland-CRT in Foundations of Data Science Scholarship Recipient 🔹 Alumna at AIMS-Ghana🔹 Girl-child Advocate",
+        "publicIdentifier": "oluwayomi-akinfenwa",
+        "linkedinUrl": "https://www.linkedin.com/in/oluwayomi-akinfenwa"
+      },
+      {
+        "id": "ACoAABVZoJIB7l6uVHAP2Bl5I-bsKUnNmuAOn5Q",
+        "firstName": "Pilar Luz",
+        "lastName": "Rodrigues, PhD",
+        "position": "Sociologist | Researcher | Lecturer",
+        "publicIdentifier": "pilar-luz-rodrigues",
+        "linkedinUrl": "https://www.linkedin.com/in/pilar-luz-rodrigues"
+      },
+      {
+        "id": "ACoAAEfezXABhZywsxYQFLdnTE3Iq2I1cF_GNZI",
+        "firstName": "Anusree",
+        "lastName": "Mohan",
+        "position": "PhD Teagasc Walsh Scholar 24-28 | Jack Murphy Scholar 23-24 | Agricultural Extension & Innovation | Agricultural Consultancy | Agribusiness, Sustainable Agriculture & Rural Development |",
+        "publicIdentifier": "anusree-mohan-754993297",
+        "linkedinUrl": "https://www.linkedin.com/in/anusree-mohan-754993297"
+      },
+      {
+        "id": "ACoAAA-S2JwBUAWPuUlq1fPw_LW299sMxrL1NmU",
+        "firstName": "Geletaw Sahle",
+        "lastName": "Tegenaw, Ph.D.",
+        "position": "Marie-Curie NeuroInsight Fellow  | Visiting Researcher | Applied AI | Data Scientist",
+        "publicIdentifier": "gtegenaw",
+        "linkedinUrl": "https://www.linkedin.com/in/gtegenaw"
+      },
+      {
+        "id": "ACoAACX81C0Bxg8MoordYsghHDmjRWDkdJ1wBPY",
+        "firstName": "Shaik",
+        "lastName": "Nasir Vali",
+        "position": "Data Analyst at Stantec",
+        "publicIdentifier": "shaik-nasir-vali-179533159",
+        "linkedinUrl": "https://www.linkedin.com/in/shaik-nasir-vali-179533159"
+      },
+      {
+        "id": "ACoAAArVkSEB4vdz2ZSeMJ8DJ5kPp0jfSgKPdj0",
+        "firstName": "Jim",
+        "lastName": "Scheer",
+        "position": "Head of Department, Data and Insights, at Sustainable Energy Authority of Ireland (SEAI).\nMember, National Statistics Board, Ireland.\nChair, Energy Efficiency Working Party (EEWP) - International Energy Agency (IEA)",
+        "publicIdentifier": "jimscheer",
+        "linkedinUrl": "https://www.linkedin.com/in/jimscheer"
+      },
+      {
+        "id": "ACoAABFvweQBfqcNVpYvtJIfTowlydptnJHZwVU",
+        "firstName": "Muireann",
+        "lastName": "Ní Raghallaigh",
+        "position": "Associate Professor of Social Work at University College Dublin, conducting research on refugees, particularly unaccompanied minors; Co-convener of SCERN; Co-Chair UCD University of Sanctuary group",
+        "publicIdentifier": "muireannnir",
+        "linkedinUrl": "https://www.linkedin.com/in/muireannnir"
+      },
+      {
+        "id": "ACoAAEJbGwQBC4bkxECqETIvpISYxXnHT9Rg_dg",
+        "firstName": "Sinead",
+        "lastName": "Ryan",
+        "position": "MPH Epidemiology | Statistician | Health Researcher",
+        "publicIdentifier": "sinead-ryan-8589b7270",
+        "linkedinUrl": "https://www.linkedin.com/in/sinead-ryan-8589b7270"
+      },
+      {
+        "id": "ACoAAC2svC8B4-exggrrfI7DO7myQVTFbidblSA",
+        "firstName": "Amanthee",
+        "lastName": "Pussepitiya",
+        "position": "Senior Researcher, Eneclann Ltd. Dublin, Ireland",
+        "publicIdentifier": "amanthee-pussepitiya-97b769194",
+        "linkedinUrl": "https://www.linkedin.com/in/amanthee-pussepitiya-97b769194"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAGFB6sMBurWAA-iF6ztWm_i1JxpQPpQ8qVI"
+    }
+  }
+}

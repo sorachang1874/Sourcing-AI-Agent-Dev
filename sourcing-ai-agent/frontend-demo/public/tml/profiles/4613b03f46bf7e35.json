@@ -1,0 +1,961 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAADPGf08BNsyS-C6NCOhA8sC6g-dK9Ke2c0c",
+    "profile_url": "https://www.linkedin.com/in/ACwAADPGf08BNsyS-C6NCOhA8sC6g-dK9Ke2c0c"
+  },
+  "item": {
+    "id": "ACoAADPGf08Bpe9DkqUEFaOOS-z2VzO5YXTGX-c",
+    "publicIdentifier": "jasminemcsantos",
+    "linkedinUrl": "https://www.linkedin.com/in/jasminemcsantos",
+    "firstName": "Jasmine",
+    "lastName": "Santos",
+    "emails": [
+      {
+        "email": "jasmine.santos@medgrocer.com",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "http://www.medgrocer.com",
+        "domain": "medgrocer.com",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Tech for Equitable Cities & Health Innovation | Special Ops @ MedGrocer | Duke Scholar & ASEAN Urbanist",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Quezon City, National Capital Region, Philippines",
+      "countryCode": "PH",
+      "parsed": {
+        "text": "Quezon City, Philippines",
+        "countryCode": "PH",
+        "regionCode": null,
+        "country": "Philippines",
+        "countryFull": "Philippines",
+        "state": "Metro Manila",
+        "city": "Quezon City"
+      }
+    },
+    "objectUrn": "868646735",
+    "registeredAt": "2021-01-04T10:30:23.252Z",
+    "topSkills": null,
+    "connectionsCount": 730,
+    "followerCount": 758,
+    "verified": true,
+    "about": "Healthcare for All and Cities for People\n\nI am a designer at heart and find joy in reconfiguring systems so that wellbeing is built into the way we live. As a Special Ops Analyst on MedGrocer’s Population Health team, I lead innovation and capacity-building initiatives that strengthen healthcare for over 20,000 patients, testing first-of-kind models that inform the future of healthcare delivery in the country. \n\nAt Duke University and Duke Kunshan University, I specialized in computational research across labs in U.S. and China that aim to reduce inequality in the Global South. These projects spanned co-developing antibiotic alternatives to combat drug-resistant infections, examining the effects of lesser studied product additives on coastal populations, and evaluating the impact of digital health tools. \n\nBeyond the clinical, I see wellbeing as a relational practice that emerges in the co-creation of space and culture. At Branch Out for Justice, I interviewed feminist leaders to document movement-building across Latin America. As the Lead of Young Urbanists Philippines, I implement platforms and programming that empower youth to advocate for inclusive planning education and youth-led tactical interventions within their cities. \n\nAcross organizational, biological, and urban systems, I see capacity-building—and by extension, self-making—as the art of understanding disparate parts and rewiring them into interconnected strengths, by design.",
+    "currentPosition": [
+      {
+        "companyId": "4872653",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/4872653/",
+        "companyName": "MedGrocer",
+        "dateRange": {
+          "start": {
+            "month": 8,
+            "year": 2024,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "18765",
+        "companyId": "3356",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3356/",
+        "schoolName": "Duke University"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5603AQFWC1ihf_Q_yQ/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1721736188427?e=1776902400&v=beta&t=BrCeyBUCgXEoEcLlJZm4_6qC2LSin0RhtVhGZvxbm5o",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQFWC1ihf_Q_yQ/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1721736188427?e=1776902400&v=beta&t=BrCeyBUCgXEoEcLlJZm4_6qC2LSin0RhtVhGZvxbm5o",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQFWC1ihf_Q_yQ/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1721736188401?e=1776902400&v=beta&t=fe-kcZvBbJ50cC8Sd63JMNF8akbtaVSpac6En3b-uFo",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQFWC1ihf_Q_yQ/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1721736188401?e=1776902400&v=beta&t=Kk0blta4IKhSaODsl8nQmxRQNI-zPrutlpDltCLNc-Y",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQFWC1ihf_Q_yQ/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1721736188401?e=1776902400&v=beta&t=sBlCySj9WQPTajt_dzIwhX8lZxwZSLfookWn4vxuAho",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5616AQFTaYbLd3hMkQ/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1689338486538?e=1776902400&v=beta&t=OF0XOsPN-CgE7ZRH6dChdS5eFwMAhTaj1JZlFYr-qa0",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5616AQFTaYbLd3hMkQ/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1689338486538?e=1776902400&v=beta&t=OF0XOsPN-CgE7ZRH6dChdS5eFwMAhTaj1JZlFYr-qa0",
+          "width": 1400,
+          "height": 349,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5616AQFTaYbLd3hMkQ/profile-displaybackgroundimage-shrink_200_800/profile-displaybackgroundimage-shrink_200_800/0/1689338486538?e=1776902400&v=beta&t=df0v76uI7CtTCuMb-I3X-4p_dbZJbER24gQQQ0zm2Ok",
+          "width": 800,
+          "height": 199,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "photo": "https://media.licdn.com/dms/image/v2/D5603AQFWC1ihf_Q_yQ/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1721736188427?e=1776902400&v=beta&t=BrCeyBUCgXEoEcLlJZm4_6qC2LSin0RhtVhGZvxbm5o",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Tech for Equitable Cities & Health Innovation | Special Ops @ MedGrocer | Duke Scholar & ASEAN Urbanist",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Population Health Supervisor",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "MedGrocer",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/medgrocer/",
+        "companyId": "4872653",
+        "companyUniversalName": "medgrocer",
+        "duration": "1 yr 9 mos",
+        "description": "The Population Health (PH) unit is MedGrocer's central division specializing in analytics, programs, and innovative solutions for integrated healthcare",
+        "skills": null,
+        "startDate": {
+          "month": "Aug",
+          "year": 2024,
+          "text": "Aug 2024"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C510BAQFjkcx3yECxSQ/company-logo_400_400/company-logo_400_400/0/1630599982651/medgrocer_logo?e=1776902400&v=beta&t=OkLIVfVfg8BGDfyeYVWnfXszY30ae5T5f0mODKBT3TA",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQFjkcx3yECxSQ/company-logo_400_400/company-logo_400_400/0/1630599982651/medgrocer_logo?e=1776902400&v=beta&t=OkLIVfVfg8BGDfyeYVWnfXszY30ae5T5f0mODKBT3TA",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQFjkcx3yECxSQ/company-logo_200_200/company-logo_200_200/0/1630599982651/medgrocer_logo?e=1776902400&v=beta&t=ZUpm1nxUI1flWfOmkVvVAatdscXA5JLBe6P7iK6Lqro",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQFjkcx3yECxSQ/company-logo_100_100/company-logo_100_100/0/1630599982651/medgrocer_logo?e=1776902400&v=beta&t=OZxNNhNhgi_4kJiePYrBVHzJsH0wOX7wPsAQ8bHLGd8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Geospatial Analytics Intern",
+        "location": null,
+        "employmentType": "Internship",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Data Science",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/13190014/",
+        "companyId": "13190014",
+        "duration": "3 mos",
+        "description": "Conducted geospatial analysis to identify healthcare accessibility gaps in the Philippines, and population coverage by municipal health facilities over defined time periods. Performed correlation and regional network clustering analysis on disease prevalence to inform targeted strategies.",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2024,
+          "text": "Jun 2024"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2024,
+          "text": "Aug 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQEstI8MP-Cbpw/company-logo_400_400/company-logo_400_400/0/1649158174180/thinking_machines_data_science_logo?e=1776902400&v=beta&t=4An45QB2KTLF0reiu82G-yo79cv0ZYjaEXZz3sHcTmo",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEstI8MP-Cbpw/company-logo_400_400/company-logo_400_400/0/1649158174180/thinking_machines_data_science_logo?e=1776902400&v=beta&t=4An45QB2KTLF0reiu82G-yo79cv0ZYjaEXZz3sHcTmo",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEstI8MP-Cbpw/company-logo_200_200/company-logo_200_200/0/1649158174180/thinking_machines_data_science_logo?e=1776902400&v=beta&t=77mcsp8WLfHJZNzY6Nql3MmfMVxS0bGFr_jO_gqdGz8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEstI8MP-Cbpw/company-logo_100_100/company-logo_100_100/0/1649158174180/thinking_machines_data_science_logo?e=1776902400&v=beta&t=8umW-luz5nbmt2Of1Ej__6NEQssgLC8KlX0fZpBW21M",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Data Analyst ",
+        "location": "Philippines",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Duke University, Bass Connections",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/69334517/",
+        "companyId": "69334517",
+        "duration": "3 yrs 1 mo",
+        "description": "• Helped build a library of plastic chemicals from web data, identifying health risks for immune function, obesity, and cancer in lesser-known chemicals, relevant to 1400+ Philippine coastal municipalities\n• Designed visualizations and a web tool to educate the public on plastic chemicals, co-authored three publications under Duke University Medical Center",
+        "skills": null,
+        "startDate": {
+          "month": "Aug",
+          "year": 2021,
+          "text": "Aug 2021"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2024,
+          "text": "Aug 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQH-Musc0GsGjQ/company-logo_400_400/company-logo_400_400/0/1716318090234/duke_bass_connections_logo?e=1776902400&v=beta&t=nxnlr8IYVzM4c-RIUg_7hcwIAeCO1Dv8ktYz3TofsgY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQH-Musc0GsGjQ/company-logo_400_400/company-logo_400_400/0/1716318090234/duke_bass_connections_logo?e=1776902400&v=beta&t=nxnlr8IYVzM4c-RIUg_7hcwIAeCO1Dv8ktYz3TofsgY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQH-Musc0GsGjQ/company-logo_200_200/company-logo_200_200/0/1716318090234/duke_bass_connections_logo?e=1776902400&v=beta&t=c3CJm3zbOK-oKwrKMac3VwhUVbFSKVGcuuG10hAzkaM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQH-Musc0GsGjQ/company-logo_100_100/company-logo_100_100/0/1716318090234/duke_bass_connections_logo?e=1776902400&v=beta&t=P-x0djqqvMHG1KNKisUHf__vPTtsc8OSNE9DLsXQpds",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "R&D Assistant",
+        "location": null,
+        "employmentType": "Apprenticeship",
+        "workplaceType": null,
+        "companyName": "Beckford Lab (Pharmacology)",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Beckford+Lab+%28Pharmacology%29",
+        "duration": "2 mos",
+        "description": "• Designed and synthesized a library of hybridized chalcone-thiosemicarbazone structures for metal complexation chemistry\n• Demonstrated proof-of-concept in design and synthetic protocols\n• Investigated photochemical and antitumour properties of metal complexes",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2023,
+          "text": "Jun 2023"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2023,
+          "text": "Jul 2023"
+        }
+      },
+      {
+        "position": "Consulting Intern",
+        "location": null,
+        "employmentType": "Internship",
+        "workplaceType": null,
+        "companyName": "心擎医疗 magAssist",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/74699788/",
+        "companyId": "74699788",
+        "duration": "3 mos",
+        "description": "•  Conducted case studies on ESG strategies implemented by top and mid-sized cardiac life-support companies in the United States and China\n• Engaged in weekly meetings and presentations with on-site employees; discussed opportunities for improving company’s operational efficiency and commitment to environmental sustainability\n• Made recommendations focused on leveraging 5G technology for smart healthcare initiatives, aiming to enhance the company's social impact",
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2023,
+          "text": "Mar 2023"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2023,
+          "text": "May 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGcSiKmYqHg7g/company-logo_400_400/B56ZqUptllJwAY-/0/1763430554350/magassistcn_logo?e=1776902400&v=beta&t=-r2bY6B9Zih7CccwipHye23hGHGh-Xk-AtpqHFsDix0",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGcSiKmYqHg7g/company-logo_400_400/B56ZqUptllJwAY-/0/1763430554350/magassistcn_logo?e=1776902400&v=beta&t=-r2bY6B9Zih7CccwipHye23hGHGh-Xk-AtpqHFsDix0",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGcSiKmYqHg7g/company-logo_200_200/B56ZqUptllJwAI-/0/1763430554350/magassistcn_logo?e=1776902400&v=beta&t=w6rMW77N-8PZDMJNW2ChJIWj-kf4_jitq7owTGadN5E",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGcSiKmYqHg7g/company-logo_100_100/B56ZqUptllJwAQ-/0/1763430554350/magassistcn_logo?e=1776902400&v=beta&t=zS9EwzxBAIenWmHK16U1_FZYn_EIddw3Vpk5eSDY_jE",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Private Equity Extern",
+        "location": null,
+        "employmentType": "Internship",
+        "workplaceType": null,
+        "companyName": "Enhanced Healthcare Partners",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3791360/",
+        "companyId": "3791360",
+        "duration": "3 mos",
+        "description": "• Created predictive model for cosmetic surgeon ratings, analyzed the correlation of review ratings with different service features, and other variables (HQ location, surgeon's years of experience, gender, etc.) and visualized results via R, Excel and Tableau\n• Constructed a market map outlining sector-specific macro trends, drivers, and market segments of the U.S. cosmetic surgery and medspa industry \n• Profiled 15 attractive investment targets based on the investment thesis and evaluated their fit\n• Delivered a presentation with the 3 best investment targets and market landscape research summary",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2022,
+          "text": "Jun 2022"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2022,
+          "text": "Aug 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQFbuxdX-cAfqw/company-logo_400_400/company-logo_400_400/0/1631362641857?e=1776902400&v=beta&t=kfVTsW9xJ2vzLRjq9oumTEPq61z2DvPPq1S02nYVIbE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFbuxdX-cAfqw/company-logo_400_400/company-logo_400_400/0/1631362641857?e=1776902400&v=beta&t=kfVTsW9xJ2vzLRjq9oumTEPq61z2DvPPq1S02nYVIbE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFbuxdX-cAfqw/company-logo_200_200/company-logo_200_200/0/1631362641857?e=1776902400&v=beta&t=LhMDJRFuSqn6kwnYBxJKPa1So1avA8sKFtvT1NYyQWc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFbuxdX-cAfqw/company-logo_100_100/company-logo_100_100/0/1631362641857?e=1776902400&v=beta&t=4BtJslxKr0mCthslS6WgpdO452BFsCY9AWSiEB3kGYE",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "eHealth Implementation Researcher, Global Liaison  ",
+        "location": null,
+        "employmentType": "Part-time",
+        "workplaceType": null,
+        "companyName": "Duke Kunshan Global Health Research Center",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Duke+Kunshan+Global+Health+Research+Center",
+        "duration": "4 mos",
+        "description": "Investigated the impact of E-health technologies on diabetes management in lower-middle income countries. Results show positive outcomes on patient behavior and health service provision, served as liaison for PH and CN teams",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2022,
+          "text": "May 2022"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2022,
+          "text": "Aug 2022"
+        }
+      },
+      {
+        "position": "Engineering & Design Intern",
+        "location": null,
+        "employmentType": "Internship",
+        "workplaceType": null,
+        "companyName": "Cloop",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/28703895/",
+        "companyId": "28703895",
+        "duration": "5 mos",
+        "description": "•Ideated and prototyped marketable products from plastic waste for the Barangay Piñeda community\n•Launched the firm’s product pipelines for plastic trays and hanging planters, upcycling ~100g and ~200g of plastic per item, respectively",
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2021,
+          "text": "Feb 2021"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2021,
+          "text": "Jun 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C510BAQGup4Q0LGWqOA/company-logo_400_400/company-logo_400_400/0/1630608923639?e=1776902400&v=beta&t=V8J-3gB2qm4Y8ZKMtT2gbdQay7EUfSYS4Yqdl2wuLr0",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQGup4Q0LGWqOA/company-logo_400_400/company-logo_400_400/0/1630608923639?e=1776902400&v=beta&t=V8J-3gB2qm4Y8ZKMtT2gbdQay7EUfSYS4Yqdl2wuLr0",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQGup4Q0LGWqOA/company-logo_200_200/company-logo_200_200/0/1630608923639?e=1776902400&v=beta&t=sLUiZ1XVHD1WbRCDk-m0mtZR9BeWGLf391N2_TrUBWI",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQGup4Q0LGWqOA/company-logo_100_100/company-logo_100_100/0/1630608923639?e=1776902400&v=beta&t=gspa2Os6V8XoobFJWf1D7HgtVousyLCj-7DXy94Pme4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Publicity & Operations",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "GoodStop MNL",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=GoodStop+MNL",
+        "duration": "4 mos",
+        "description": "•Led digital transformation of a traditional retail business during the pandemic\n•Integrated in-store and online systems to establish a hybrid retail model, launching a go-to-market strategy for online growth \n•Managed inventory and coordinated cross-city deliveries via third-party couriers",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2020,
+          "text": "May 2020"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2020,
+          "text": "Aug 2020"
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Duke University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3356/",
+        "schoolId": "3356",
+        "degree": "Bachelor of Science - BS",
+        "fieldOfStudy": "Multi/Interdisciplinary Studies",
+        "skills": [],
+        "description": "Duke Scholar in Marine Medicine\nAwarded Cum Laude latin honor",
+        "insights": "Grade: 3.8/4\nActivities and societies: The Chronicle, Duke Bassconnections, HackDuke",
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGVn2MO4DWnLg/company-logo_400_400/B56ZbZv8i_H4AY-/0/1747409948261?e=1776902400&v=beta&t=YjUkHHHz_fOPwq3na8HG5WKVtnHdpr91m0LbQ2iqF_U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGVn2MO4DWnLg/company-logo_400_400/B56ZbZv8i_H4AY-/0/1747409948261?e=1776902400&v=beta&t=YjUkHHHz_fOPwq3na8HG5WKVtnHdpr91m0LbQ2iqF_U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGVn2MO4DWnLg/company-logo_200_200/B56ZbZv8i_H4AI-/0/1747409948261?e=1776902400&v=beta&t=8nBgtMzjbGg4feKeV4DgO9BrfTEMTODViDU0N2mxfG0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGVn2MO4DWnLg/company-logo_100_100/B56ZbZv8i_H4AQ-/0/1747409948261?e=1776902400&v=beta&t=JEo8j6zlzVnlRkNPP5z5X2Xc82w9kJZuGQK9EpdYUrE",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Duke Kunshan University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3569707/",
+        "schoolId": "3569707",
+        "degree": "Bachelor of Science - BS",
+        "fieldOfStudy": "Molecular Biology (Genetics & Genomics)",
+        "skills": [],
+        "description": "Academic Merit Scholarship\nFall 2020, Spring 2022, Fall 2022 Dean's List\nAwarded Cum Laude latin honor\nBachelor of Science Graduation Gonfalonier",
+        "insights": "Grade: 3.8/4\nActivities and societies: The LilyPad Publication, Campus Activities Board, MediHealth Podcast, DKU iGEM Club",
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFE0v0Kus_xpA/company-logo_400_400/company-logo_400_400/0/1630468177579/duke_kunshan_university_logo?e=1776902400&v=beta&t=FWFKzsm8wewyAgRJ8Sb5PZTG8Oj3_ASOunbz4w7XN-8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFE0v0Kus_xpA/company-logo_400_400/company-logo_400_400/0/1630468177579/duke_kunshan_university_logo?e=1776902400&v=beta&t=FWFKzsm8wewyAgRJ8Sb5PZTG8Oj3_ASOunbz4w7XN-8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFE0v0Kus_xpA/company-logo_200_200/company-logo_200_200/0/1630468177579/duke_kunshan_university_logo?e=1776902400&v=beta&t=tTQNoRRAg3Ct18g9m4R9vf3wcfvMgPwqZ6-pXsWzhvM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFE0v0Kus_xpA/company-logo_100_100/company-logo_100_100/0/1630468177579/duke_kunshan_university_logo?e=1776902400&v=beta&t=_CQ1MkwI9ow7a9A2Uz3pFyO5tGcxZWYEsaDEaIUnhCE",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "International Baccalaureate",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/22614/",
+        "schoolId": "22614",
+        "degree": "International Baccalaureate Diploma Programme",
+        "fieldOfStudy": null,
+        "skills": [],
+        "description": "Coursework:\nHL - Biology, Chemistry, Business Management\nSL - Mathematics, Literature, Spanish Ab Initio\n\nSemestral/Year-end awards:\nGold Merit Awardee, Fr. Peter Yang Excellence Award \nSubject Excellence in Biology, Business Management, Creativity Activity and Service (CAS) \nHigh Distinction in Theory of Knowledge (TOK) \nOutstanding TOK Presentation",
+        "insights": "Grade: 41/45",
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQH1trVeMU7kyA/company-logo_400_400/company-logo_400_400/0/1631325578760?e=1776902400&v=beta&t=djO5nOSDVTEHPzoBaYTCvhqN17_OSlUDJ-R-CHbsgkI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQH1trVeMU7kyA/company-logo_400_400/company-logo_400_400/0/1631325578760?e=1776902400&v=beta&t=djO5nOSDVTEHPzoBaYTCvhqN17_OSlUDJ-R-CHbsgkI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQH1trVeMU7kyA/company-logo_200_200/company-logo_200_200/0/1631325578760?e=1776902400&v=beta&t=3VqBqFyAqvGss7GmhQ4MUL4CsAW7U2gSm4VKfOwnZLQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQH1trVeMU7kyA/company-logo_100_100/company-logo_100_100/0/1631325578760?e=1776902400&v=beta&t=q0wyGC1BpRWK5ZMqm7AuCzX00A-rTHYDKNQUW4kkqk4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [
+      {
+        "role": "Young Leader for Inclusion Fellow",
+        "description": "Selected as 1 of 30 fellows for a social impact consulting incubator led by McKinsey consultants\n\nAwarded the sole grant for the most impact-driven end-to-end project for Best Buddies, ranked top among 6 finalist teams",
+        "duration": "Sep 2024 - Present · 1 yr 8 mos",
+        "startDate": {
+          "month": "Sep",
+          "year": 2024,
+          "text": "Sep 2024"
+        },
+        "endDate": {
+          "text": "Present · 1 yr 8 mos"
+        },
+        "organizationName": "McKinsey & Company",
+        "organizationLinkedinUrl": "https://www.linkedin.com/company/1371/"
+      },
+      {
+        "role": "Field Researcher and Interviewer",
+        "description": "As part of the research cohort, helped launch \"Understanding Movement Building: An Analysis of TREMENDAS\", a project rooted in dialogue with activists and nonprofits to better understand the dynamics of regional feminism and human rights work in Latin America",
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "organizationName": "Branch Out for Justice",
+        "organizationLinkedinUrl": null,
+        "cause": "Human Rights"
+      }
+    ],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [
+      {
+        "title": "McCall MacBain Leadership Finalist Awardee",
+        "issuedBy": "McCall MacBain Scholarship Foundation",
+        "issuedAt": "Mar 2024",
+        "description": "•top Canadian full-ride graduate leadership scholarship\n•1 of 37 finalists from pool of youth leaders (age 30 and under) from over 2,250 universities\n•based on exceptional character, community engagement, leadership potential, entrepreneurial spirit, academic strength and curiosity",
+        "mediaName": "McCall MacBain Scholarship Finalists",
+        "mediaUrl": "https://mccallmacbainscholars.org/2024-finalists/",
+        "associatedWith": null,
+        "associatedWithLink": null
+      },
+      {
+        "title": "Silver Medal, 2022 iGEM Synthetic Biology Competition",
+        "issuedBy": "International Genetically Engineered Machine Competition",
+        "issuedAt": "Dec 2022",
+        "description": "•Built protein docking models for 7 candidate microbes via Alphafold and Haddock, in an effort to develop a novel antibiotic alternative for gastrointestinal diseases\n•Evaluated fidelity of each case via multiple quantitative metrics (Ramachandran plot, overall G-factors, atomic z-score RMS, etc.) and determined the optimal model",
+        "mediaName": "1679131952938-1.jpg",
+        "mediaUrl": "https://www.linkedin.com/in/jasminemcsantos/details/honors/439013343/multiple-media-viewer?profileId=ACoAADPGf08Bpe9DkqUEFaOOS-z2VzO5YXTGX-c&treasuryMediaId=1744447984165&type=IMAGE",
+        "associatedWith": null,
+        "associatedWithLink": null
+      },
+      {
+        "title": "National Champion, Next Bright Idea Elevator Pitch Competition",
+        "issuedBy": "Jan 2019",
+        "description": "Prototyped a working pollution control device and marker from a component of Jeepney fumes, planned marketing and distribution of sister products, raised PHP 50,000",
+        "associatedWith": null,
+        "associatedWithLink": null
+      },
+      {
+        "title": "National Champion, University of the Philippines Chemistry Quiz Bee",
+        "issuedBy": "Jan 2019",
+        "associatedWith": null,
+        "associatedWithLink": null
+      },
+      {
+        "title": "National Finalist, FedEx Trade Challenge",
+        "issuedBy": "FedEx",
+        "issuedAt": "Aug 2018",
+        "description": "Waste-to-product innovation and strategy for commercialization: transforming rice husk waste from farming into vanilla spice for Indian housewives",
+        "associatedWith": null,
+        "associatedWithLink": null
+      },
+      {
+        "title": "Silver Medal, Asian Mathematics Engineering Challenge (Singapore)",
+        "issuedBy": "Jun 2017",
+        "associatedWith": null,
+        "associatedWithLink": null
+      }
+    ],
+    "languages": [],
+    "causes": [],
+    "featured": {
+      "images": [
+        "https://media.licdn.com/dms/image/v2/D5622AQEIqGQLpU3s1w/feedshare-shrink_2048_1536/B56ZsXu0SdHIAw-/0/1765629708880?e=1776902400&v=beta&t=U6QJwP3GcJ-lhuXRgY9DX5JGWy3EK0UTaBPcZS9H7yg"
+      ],
+      "link": "https://www.linkedin.com/feed/update/urn:li:activity:7405596106774134784?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A7405596106774134784%29",
+      "slides": [
+        {
+          "title": null,
+          "subtitle": null,
+          "description": null,
+          "url": "https://www.linkedin.com/feed/update/urn:li:activity:7405596106774134784?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A7405596106774134784%29",
+          "image": {
+            "url": "https://media.licdn.com/dms/image/v2/D5622AQEIqGQLpU3s1w/feedshare-shrink_2048_1536/B56ZsXu0SdHIAw-/0/1765629708880?e=1776902400&v=beta&t=U6QJwP3GcJ-lhuXRgY9DX5JGWy3EK0UTaBPcZS9H7yg"
+          }
+        },
+        {
+          "title": null,
+          "subtitle": null,
+          "description": null,
+          "url": "https://www.linkedin.com/feed/update/urn:li:activity:7271452604155490305?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A7271452604155490305%29",
+          "image": {
+            "url": "https://media.licdn.com/dms/image/v2/D5622AQEezqmtGw5lXg/feedshare-shrink_2048_1536/feedshare-shrink_2048_1536/0/1733649396867?e=1776902400&v=beta&t=gUtIWRMnEWQg0YjxAuxNPM8GLQ3sFscojmMw5-q1XwM"
+          }
+        },
+        {
+          "title": "Another DKU student makes it to McCall MacBain Scholars final",
+          "subtitle": "news.dukekunshan.edu.cn",
+          "description": null,
+          "url": "https://news.dukekunshan.edu.cn/campus-news/another-dku-student-makes-it-to-mccall-macbain-scholars-final/",
+          "image": {
+            "url": "https://media.licdn.com/dms/image/sync/v2/D4E27AQFqansazOqFnA/articleshare-shrink_1280_800/articleshare-shrink_1280_800/0/1766304005575?e=1776164400&v=beta&t=lIqiNL8_WGB6Hutr6BtyuGEWgrKtxEggD927Ojl2V64"
+          }
+        },
+        {
+          "title": "DKU iGEM 2022 Team Designs \"GutGuard\" Therapeutic Microbe Against Shigella, Bags Silver at Global Competition",
+          "subtitle": "DKU Innovation and Entrepreneurship Initiative",
+          "description": null,
+          "url": "https://ine.dukekunshan.edu.cn/project/igem-dku-teams-won-two-silver-medals/",
+          "image": {
+            "url": "https://media.licdn.com/dms/image/v2/D562DAQEERJGSK7Iyhg/profile-treasury-image-shrink_800_800/profile-treasury-image-shrink_800_800/0/1716277739580?e=1776164400&v=beta&t=C6eIAUkztRY4KsADR84WfFf1Ikj9ms4JmCFPuUXWkqc"
+          }
+        },
+        {
+          "title": "10 Duke Undergrads Named 2022 Scholars in Marine Medicine",
+          "subtitle": "Nicholas School of the Environment",
+          "description": null,
+          "url": "https://nicholas.duke.edu/news/10-duke-undergrads-named-2022-scholars-marine-medicine",
+          "image": {
+            "url": "https://media.licdn.com/dms/image/sync/v2/D4E27AQEEljET5v-3UQ/articleshare-shrink_800/articleshare-shrink_800/0/1727904328417?e=1776164400&v=beta&t=uIhJlATAuA7jD9v-pnarl0oQDoTFYI3mXBvBCDOPgSA"
+          }
+        }
+      ]
+    },
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAEdUAJ4BemmSqHPOnmManDVRbXi2VBAKJJ0",
+        "firstName": "Michelle",
+        "lastName": "Go",
+        "position": "Mental Health Specialist @ MedGrocer | BS Psychology Graduate ’23 ",
+        "publicIdentifier": "michellelgo",
+        "linkedinUrl": "https://www.linkedin.com/in/michellelgo"
+      },
+      {
+        "id": "ACoAAEOPAsIBF9XG9HaeEbIpytVP3H7vreS276w",
+        "firstName": "Aga",
+        "lastName": "Villaroman",
+        "position": "Associate Psychologist at MedGrocer | MA Counseling Psychology Student at the Ateneo de Manila University | Registered Psychometrician",
+        "publicIdentifier": "aga-villaroman-36a709277",
+        "linkedinUrl": "https://www.linkedin.com/in/aga-villaroman-36a709277"
+      },
+      {
+        "id": "ACoAABUexhwBthSGlGu5nsNURherhFshb3w90uo",
+        "firstName": "Kim",
+        "lastName": "Morano",
+        "position": "Head of IT at MedGrocer",
+        "publicIdentifier": "ksmorano",
+        "linkedinUrl": "https://www.linkedin.com/in/ksmorano"
+      },
+      {
+        "id": "ACoAAEECQpYBBkSiDy_UQ7Hud1U23pgX_AHWzdM",
+        "firstName": "Hidaya",
+        "lastName": "Ougui",
+        "position": "MiM Candidate at Advantere | Duke University & DKU Alumna | Business Strategy & Consulting",
+        "publicIdentifier": "hidaya-ougui",
+        "linkedinUrl": "https://www.linkedin.com/in/hidaya-ougui"
+      },
+      {
+        "id": "ACoAACoz8XABa0NS61TvxXbCbNjzB7Txg-4hfwg",
+        "firstName": "Raphael Philip",
+        "lastName": "Chua",
+        "position": "Population Health and Medicine Access Lead at MedGrocer",
+        "publicIdentifier": "rpmchua",
+        "linkedinUrl": "https://www.linkedin.com/in/rpmchua"
+      },
+      {
+        "id": "ACoAAEqOQLcB3Ylr5ilf41fSSenQe_2YliKkFQk",
+        "firstName": "Zan",
+        "lastName": "Cuevas, RPm, CHRA",
+        "position": "HR Specialist at MedGrocer | Registered Psychometrician | Certified Human Resource Associate | BS Psychology",
+        "publicIdentifier": "zncuevas",
+        "linkedinUrl": "https://www.linkedin.com/in/zncuevas"
+      },
+      {
+        "id": "ACoAABKt5gABZrm1Dq8C0_xJdY-Z0SoXsx0oKkk",
+        "firstName": "Nic",
+        "lastName": "Cabahug, MP, RPsy, CMHFR",
+        "position": "Industrial Engineer Turned Psychologist | Empowering Lives Through Better Mental Health and Well-being ",
+        "publicIdentifier": "niccabahug",
+        "linkedinUrl": "https://www.linkedin.com/in/niccabahug"
+      },
+      {
+        "id": "ACoAAFS8O6cB-Az2v7krz5WBzQQ96jkey_NlLzY",
+        "firstName": "Carla",
+        "lastName": "Perez",
+        "position": "Registered Nurse at The Medical City Ortigas",
+        "publicIdentifier": "carla-perez-033122338",
+        "linkedinUrl": "https://www.linkedin.com/in/carla-perez-033122338"
+      },
+      {
+        "id": "ACoAADnmyD4By5m8LqDnupuLDhnCLU-pM7ETGiA",
+        "firstName": "Andi",
+        "lastName": "Roque",
+        "position": "Ops @ MedGrocer | ADMU Health Sciences ‘24 | Barefoot Philippines President ‘24",
+        "publicIdentifier": "andiroque127",
+        "linkedinUrl": "https://www.linkedin.com/in/andiroque127"
+      },
+      {
+        "id": "ACoAACiWuMYBWUMwG-i6aHuSoG7r8BhTJnm1qko",
+        "firstName": "Ryen Gabriel M.",
+        "lastName": "Dizon",
+        "position": "Developer at MedGrocer",
+        "publicIdentifier": "rgmdizon",
+        "linkedinUrl": "https://www.linkedin.com/in/rgmdizon"
+      },
+      {
+        "id": "ACoAAEod430BJ3Bop9LE9o3bSiURQybX8CEmdHI",
+        "firstName": "Jan Patrice",
+        "lastName": "Nuevas",
+        "position": "Customer Experience Manager at MedGrocer | Pharmacist",
+        "publicIdentifier": "jan-patrice-nuevas-36552a2a8",
+        "linkedinUrl": "https://www.linkedin.com/in/jan-patrice-nuevas-36552a2a8"
+      },
+      {
+        "id": "ACoAADdCzPABZO3Gq2WzefyQ1rFKdIMITwog9XM",
+        "firstName": "Kelly",
+        "lastName": "Chang",
+        "position": "Telehealth Associate Manager at MedGrocer | Project & Operations Management",
+        "publicIdentifier": "chang-kelly",
+        "linkedinUrl": "https://www.linkedin.com/in/chang-kelly"
+      },
+      {
+        "id": "ACoAAFJ16vsBPsmVu9XZ6Z8aaUJqPgAfE8zV63M",
+        "firstName": "Erika Therese \"Aries\"",
+        "lastName": "Diño",
+        "position": "BS Management Engineering Graduate at Ateneo de Manila University",
+        "publicIdentifier": "erika-therese-aries-dino",
+        "linkedinUrl": "https://www.linkedin.com/in/erika-therese-aries-dino"
+      },
+      {
+        "id": "ACoAADVNoygBC0tIHuPViTBamcUJkagTWyXtWWc",
+        "firstName": "Leandro Miguel",
+        "lastName": "Miranda",
+        "position": "Population Health Officer at MedGrocer | Licensed Chemical Engineer",
+        "publicIdentifier": "leandro-miguel-miranda-5205ab20b",
+        "linkedinUrl": "https://www.linkedin.com/in/leandro-miguel-miranda-5205ab20b"
+      },
+      {
+        "id": "ACoAADV_N30BTKw1ZnSJ6MmaXrQoQf56yuGmluM",
+        "firstName": "Jeanine",
+        "lastName": "Gaudia",
+        "position": "Population Health Officer",
+        "publicIdentifier": "jeanine-gaudia-9396b7210",
+        "linkedinUrl": "https://www.linkedin.com/in/jeanine-gaudia-9396b7210"
+      },
+      {
+        "id": "ACoAADhsktABa-Gjfh4kbgEVHK_APAl7kdZgYRI",
+        "firstName": "Rafael",
+        "lastName": "Flores",
+        "position": "Occupational Health Physician / General Practitioner",
+        "publicIdentifier": "raffloresjr",
+        "linkedinUrl": "https://www.linkedin.com/in/raffloresjr"
+      },
+      {
+        "id": "ACoAACKCPosBeXypxbWJ_O-PkZhPqcgNgiroY0k",
+        "firstName": "Czarina",
+        "lastName": "Contreras",
+        "position": "Psychometrician ",
+        "publicIdentifier": "contrerasczarina",
+        "linkedinUrl": "https://www.linkedin.com/in/contrerasczarina"
+      },
+      {
+        "id": "ACoAADJCrZ8B9dFzvCMhIJVLToX-lSwJ7mswZbk",
+        "firstName": "Ryza",
+        "lastName": "Rabino",
+        "position": "Digital Health Operations Lead at MedGrocer | UPD BS BAA",
+        "publicIdentifier": "ryzarabino",
+        "linkedinUrl": "https://www.linkedin.com/in/ryzarabino"
+      },
+      {
+        "id": "ACoAABDs4iMBznqB3G3bO88FHGqFjcraQ2qC13E",
+        "firstName": "Noel Bryan",
+        "lastName": "Castillo",
+        "position": "Member, International Commission on Occupational Health (ICOH), Medical Specialist III | Occupational Health and Safety Physician | Senior Clinical Research Specialist | Part-time Professor | MBA in Health Student",
+        "publicIdentifier": "noel-bryan-castillo-7431207b",
+        "linkedinUrl": "https://www.linkedin.com/in/noel-bryan-castillo-7431207b"
+      },
+      {
+        "id": "ACoAAET0h8UBEFg2V85FjLIsZIEtHdmiZGebqIg",
+        "firstName": "Irish Anne Eunice",
+        "lastName": "Obor",
+        "position": "Population Health Specialist at MedGrocer |  Former President of PLM Mathematical Society | Mathematics Graduate",
+        "publicIdentifier": "irishobor",
+        "linkedinUrl": "https://www.linkedin.com/in/irishobor"
+      },
+      {
+        "id": "ACoAAGV-7L4BgJzXuWUNbNEt0IVeuf5sAi3U4Xo",
+        "firstName": "Mary Jane",
+        "lastName": "Manaois",
+        "position": "Registered Nurse at MedGrocer",
+        "publicIdentifier": "mary-jane-manaois-59232a3b6",
+        "linkedinUrl": "https://www.linkedin.com/in/mary-jane-manaois-59232a3b6"
+      },
+      {
+        "id": "ACoAABYuE_YBKCzXSwP6_V10gW3-iA0xaIv_u-Y",
+        "firstName": "Angel",
+        "lastName": "Beroin, RPsy, RPm",
+        "position": "Clinical Psychologist | Psychology Professor",
+        "publicIdentifier": "angel-beroin-rpsy-rpm-446756a4",
+        "linkedinUrl": "https://www.linkedin.com/in/angel-beroin-rpsy-rpm-446756a4"
+      },
+      {
+        "id": "ACoAACSQqncBqJjHNzLXd2Ty1Rni-qGsFn4afKE",
+        "firstName": "Agape Joy",
+        "lastName": "Caro",
+        "position": "Registered Nutritionist-Dietitian",
+        "publicIdentifier": "agapejoycaro",
+        "linkedinUrl": "https://www.linkedin.com/in/agapejoycaro"
+      },
+      {
+        "id": "ACoAAC2jADABOshQcasTmEgDcPItpc1J5vCg2oU",
+        "firstName": "Gwendolene Yzavelle",
+        "lastName": "Cruz",
+        "position": "Registered Nurse • Clinical Research",
+        "publicIdentifier": "golfyankeecharlie",
+        "linkedinUrl": "https://www.linkedin.com/in/golfyankeecharlie"
+      },
+      {
+        "id": "ACoAABZ5HjgBmihFr8EQgtCrsGe4YkbX_3UGeKQ",
+        "firstName": "Lani",
+        "lastName": "L. Tiglao, MAPsy, RPsy",
+        "position": "Clinical Psychologist",
+        "publicIdentifier": "lanitiglaorpsy",
+        "linkedinUrl": "https://www.linkedin.com/in/lanitiglaorpsy"
+      },
+      {
+        "id": "ACoAADZ1pIYBJdbbY7EvlGJRlRQwzIQgIH90OX4",
+        "firstName": "Elsa Mae",
+        "lastName": "Flotildes",
+        "position": "Registered Psychologist and Guidance Counselor",
+        "publicIdentifier": "elsa-mae-flotildes-85aba5215",
+        "linkedinUrl": "https://www.linkedin.com/in/elsa-mae-flotildes-85aba5215"
+      },
+      {
+        "id": "ACoAAGPH-akBz5wwWO01k--GP2CwWARPt_I7NZg",
+        "firstName": "Queenstiene",
+        "lastName": "Baltonado",
+        "position": "Physician at MedGrocer",
+        "publicIdentifier": "queenstiene-baltonado-ab57763a8",
+        "linkedinUrl": "https://www.linkedin.com/in/queenstiene-baltonado-ab57763a8"
+      },
+      {
+        "id": "ACoAABl-uawBM_mV8kVdrYWDt5z5ID9e4hn3goI",
+        "firstName": "Brennan",
+        "lastName": "Padilla, RPsy, RPm",
+        "position": "Coaching / Counseling / Assessment / Therapy",
+        "publicIdentifier": "jbrennanpadilla",
+        "linkedinUrl": "https://www.linkedin.com/in/jbrennanpadilla"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAADPGf08BNsyS-C6NCOhA8sC6g-dK9Ke2c0c"
+    }
+  }
+}

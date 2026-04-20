@@ -1,0 +1,747 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAAmf5bQBFDXJO-5uIM0vDCIIKP5yuJyVZ54",
+    "profile_url": "https://www.linkedin.com/in/ACwAAAmf5bQBFDXJO-5uIM0vDCIIKP5yuJyVZ54"
+  },
+  "item": {
+    "id": "ACoAAAmf5bQBE9zWTvtIZlqQPzW22G4Tss9cb0E",
+    "publicIdentifier": "alhyunsoo",
+    "linkedinUrl": "https://www.linkedin.com/in/alhyunsoo",
+    "firstName": "Andrew",
+    "lastName": "Lee",
+    "emails": [
+      {
+        "email": "andrew.lee@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Design at Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": true,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "161473972",
+    "registeredAt": "2012-01-11T18:00:02.581Z",
+    "topSkills": null,
+    "connectionsCount": 1530,
+    "followerCount": 2074,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 7,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "17971",
+        "companyId": "3084",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3084/",
+        "schoolName": "University of Southern California"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": {
+      "url": "https://media.licdn.com/dms/image/v2/C4D16AQHcZJo1F-dpqw/profile-displaybackgroundimage-shrink_200_800/profile-displaybackgroundimage-shrink_200_800/0/1582344266169?e=1776902400&v=beta&t=LXzqj5-Y1FzPOeQn6Rkyx6qmdxJrkyO6-yqmB0izqh0",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4D16AQHcZJo1F-dpqw/profile-displaybackgroundimage-shrink_200_800/profile-displaybackgroundimage-shrink_200_800/0/1582344266169?e=1776902400&v=beta&t=LXzqj5-Y1FzPOeQn6Rkyx6qmdxJrkyO6-yqmB0izqh0",
+          "width": 594,
+          "height": 148,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4D16AQHcZJo1F-dpqw/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1582344266198?e=1776902400&v=beta&t=MiiKhcQbYCtS8NkLYQULeZ-QAJ8O6brZVtno5x6s93w",
+          "width": 594,
+          "height": 148,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Design at Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Founding Designer",
+        "location": "San Francisco, CA",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "10 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jul",
+          "year": 2025,
+          "text": "Jul 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Design Director",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Notion",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/30898036/",
+        "companyId": "30898036",
+        "duration": "1 yr 8 mos",
+        "description": "I was the hiring manager and group lead for a 80-person product org across AI and core product (Editor, Navigation, Search, Collaboration, Mobile). Built Notion's overall design team from 2 to 20 designers.",
+        "skills": null,
+        "experienceGroupId": "dc15f6ebfed696eebac73f73d1e14c867575e073",
+        "startDate": {
+          "month": "Nov",
+          "year": 2023,
+          "text": "Nov 2023"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2025,
+          "text": "Jun 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGwvcv_1tHZ4w/company-logo_400_400/B4EZW25gE2GgAY-/0/1742530282185/notionhq_logo?e=1776902400&v=beta&t=xqLu-DNjFBqxtNKXzk2R3aTJAgZ1b35Rs_diXCv2HH4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGwvcv_1tHZ4w/company-logo_400_400/B4EZW25gE2GgAY-/0/1742530282185/notionhq_logo?e=1776902400&v=beta&t=xqLu-DNjFBqxtNKXzk2R3aTJAgZ1b35Rs_diXCv2HH4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGwvcv_1tHZ4w/company-logo_200_200/B4EZW25gE2GgAI-/0/1742530282185/notionhq_logo?e=1776902400&v=beta&t=sZJ8Fo1lAIDTpHahTe4de5gsYIUTOH9nG6sXb1fjv70",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGwvcv_1tHZ4w/company-logo_100_100/B4EZW25gE2GgAQ-/0/1742530282185/notionhq_logo?e=1776902400&v=beta&t=pNQbQ9CM3tiCYXfxtwEwtsx1DeaoBSaZqN007ZPieTc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Staff Product Designer",
+        "location": "New York, NY",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Notion",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/30898036/",
+        "companyId": "30898036",
+        "duration": "3 yrs 6 mos",
+        "description": "Joined as the second designer. Worked on every part of the product.",
+        "skills": null,
+        "experienceGroupId": "dc15f6ebfed696eebac73f73d1e14c867575e073",
+        "startDate": {
+          "month": "Jun",
+          "year": 2020,
+          "text": "Jun 2020"
+        },
+        "endDate": {
+          "month": "Nov",
+          "year": 2023,
+          "text": "Nov 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGwvcv_1tHZ4w/company-logo_400_400/B4EZW25gE2GgAY-/0/1742530282185/notionhq_logo?e=1776902400&v=beta&t=xqLu-DNjFBqxtNKXzk2R3aTJAgZ1b35Rs_diXCv2HH4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGwvcv_1tHZ4w/company-logo_400_400/B4EZW25gE2GgAY-/0/1742530282185/notionhq_logo?e=1776902400&v=beta&t=xqLu-DNjFBqxtNKXzk2R3aTJAgZ1b35Rs_diXCv2HH4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGwvcv_1tHZ4w/company-logo_200_200/B4EZW25gE2GgAI-/0/1742530282185/notionhq_logo?e=1776902400&v=beta&t=sZJ8Fo1lAIDTpHahTe4de5gsYIUTOH9nG6sXb1fjv70",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQGwvcv_1tHZ4w/company-logo_100_100/B4EZW25gE2GgAQ-/0/1742530282185/notionhq_logo?e=1776902400&v=beta&t=pNQbQ9CM3tiCYXfxtwEwtsx1DeaoBSaZqN007ZPieTc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Product Designer",
+        "location": "London, Palo Alto, New York",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Palantir Technologies",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/20708/",
+        "companyId": "20708",
+        "duration": "3 yrs 9 mos",
+        "description": "Designed Gaia, an AI multiplayer map tool, and Foundry, a data analysis tool for enterprises and governments.",
+        "skills": null,
+        "startDate": {
+          "month": "Oct",
+          "year": 2016,
+          "text": "Oct 2016"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2020,
+          "text": "Jun 2020"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFj435hYi7p1A/company-logo_400_400/B4EZXS7uMcHcAY-/0/1743000626250/palantir_technologies_logo?e=1776902400&v=beta&t=zSjOi8D5UpaPcNpJdFck2unJQFnNu8Tl8wEaQq0lLcQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFj435hYi7p1A/company-logo_400_400/B4EZXS7uMcHcAY-/0/1743000626250/palantir_technologies_logo?e=1776902400&v=beta&t=zSjOi8D5UpaPcNpJdFck2unJQFnNu8Tl8wEaQq0lLcQ",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFj435hYi7p1A/company-logo_200_200/B4EZXS7uMcHcAI-/0/1743000626250/palantir_technologies_logo?e=1776902400&v=beta&t=QJkRzIFQCE869PwG-R94p1Ns7me_ayxlKCgEbZUSWaQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFj435hYi7p1A/company-logo_100_100/B4EZXS7uMcHcAQ-/0/1743000626250/palantir_technologies_logo?e=1776902400&v=beta&t=5P3_h55G8JVEjycEui5Bvu2wMZKvNtkJngCVQFxHr6o",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Product Designer",
+        "location": "Los Angeles, CA",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Acorns",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3231773/",
+        "companyId": "3231773",
+        "duration": "1 yr 3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Aug",
+          "year": 2015,
+          "text": "Aug 2015"
+        },
+        "endDate": {
+          "month": "Oct",
+          "year": 2016,
+          "text": "Oct 2016"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFPCL6sas4iAQ/company-logo_400_400/company-logo_400_400/0/1646339254391/acorns_grow_inc__logo?e=1776902400&v=beta&t=WNAD7xmPORCWwmy8kRjJYrwkTBiAbJR8DHE1ALiY3T8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFPCL6sas4iAQ/company-logo_400_400/company-logo_400_400/0/1646339254391/acorns_grow_inc__logo?e=1776902400&v=beta&t=WNAD7xmPORCWwmy8kRjJYrwkTBiAbJR8DHE1ALiY3T8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFPCL6sas4iAQ/company-logo_200_200/company-logo_200_200/0/1646339254391/acorns_grow_inc__logo?e=1776902400&v=beta&t=jxOoc6MJ9lcsC9jsuqcnCI_qKvnJ-i7YzYhKfS07jB0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFPCL6sas4iAQ/company-logo_100_100/company-logo_100_100/0/1646339254391/acorns_grow_inc__logo?e=1776902400&v=beta&t=W2d37TWK9slt3QUkadG33kw2_mvtdSPebQobXIfgo3Y",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "University of Southern California",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3084/",
+        "schoolId": "3084",
+        "degree": "BS",
+        "fieldOfStudy": "Business Administration",
+        "skills": [],
+        "description": "Additional courses in graphic design and architecture",
+        "startDate": {
+          "year": 2011,
+          "text": "2011"
+        },
+        "endDate": {
+          "year": 2015,
+          "text": "2015"
+        },
+        "period": "2011 - 2015",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHatTfEv4Af6w/company-logo_400_400/company-logo_400_400/0/1631312619853?e=1776902400&v=beta&t=acUDmvZaK8PKGwzBL2PDmP5MpB2WpNlxl9anjfWIfzY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHatTfEv4Af6w/company-logo_400_400/company-logo_400_400/0/1631312619853?e=1776902400&v=beta&t=acUDmvZaK8PKGwzBL2PDmP5MpB2WpNlxl9anjfWIfzY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHatTfEv4Af6w/company-logo_200_200/company-logo_200_200/0/1631312619853?e=1776902400&v=beta&t=MuIUkCOPJIvZPnVveULEAC7dDgT6APY_fBJS8--Oilo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHatTfEv4Af6w/company-logo_100_100/company-logo_100_100/0/1631312619853?e=1776902400&v=beta&t=PM65biH5xdj0HQ2A0YCEaQwUXIakNQ8TFCWVOBfvcN0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Canadian Academy",
+        "schoolLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Canadian+Academy",
+        "schoolId": null,
+        "degree": "IB Diploma",
+        "fieldOfStudy": null,
+        "skills": [],
+        "description": "International school in Kobe, Japan",
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": null
+      }
+    ],
+    "certifications": [
+      {
+        "title": "Design Fellow",
+        "issuedAt": "Issued Oct 2018",
+        "issuedBy": "IDEO",
+        "issuedByLink": "https://www.linkedin.com/company/164291/",
+        "issuedByLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGsU2TNh3Zh2A/company-logo_400_400/B56Zuewo9iIcAY-/0/1767895110007/ideo_logo?e=1776902400&v=beta&t=6aDpqZnO1XJktMZiKWh-xuN8HPZgnIhWkNklpY6JRB8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGsU2TNh3Zh2A/company-logo_400_400/B56Zuewo9iIcAY-/0/1767895110007/ideo_logo?e=1776902400&v=beta&t=6aDpqZnO1XJktMZiKWh-xuN8HPZgnIhWkNklpY6JRB8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGsU2TNh3Zh2A/company-logo_200_200/B56Zuewo9iIcAI-/0/1767895110007/ideo_logo?e=1776902400&v=beta&t=CFH-M4kgBoUXBrPsWMSzGg_ULoI0WPLEc4aPrSUbED0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGsU2TNh3Zh2A/company-logo_100_100/B56Zuewo9iIcAQ-/0/1767895110007/ideo_logo?e=1776902400&v=beta&t=Lqs7Ea7tnN4qqTIX45-YNJColJqazuvQhWD9Fv6a26I",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Product Design",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "User Interface Design",
+        "endorsements": "8 endorsements"
+      },
+      {
+        "name": "Rapid Prototyping",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Sketch",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Graphic Design",
+        "endorsements": "18 endorsements"
+      },
+      {
+        "name": "Entrepreneurship",
+        "endorsements": "7 endorsements"
+      },
+      {
+        "name": "Web Design",
+        "endorsements": "8 endorsements"
+      },
+      {
+        "name": "Logo Design",
+        "endorsements": "7 endorsements"
+      },
+      {
+        "name": "Research",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "Business Development",
+        "endorsements": "7 endorsements"
+      },
+      {
+        "name": "Consulting",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Usability Testing"
+      },
+      {
+        "name": "Photoshop",
+        "endorsements": "16 endorsements"
+      },
+      {
+        "name": "HTML",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Public Speaking",
+        "endorsements": "18 endorsements"
+      },
+      {
+        "name": "Leadership",
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "Pitching Ideas",
+        "endorsements": "8 endorsements"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [
+      {
+        "name": "English",
+        "proficiency": "Native or bilingual proficiency"
+      },
+      {
+        "name": "Japanese",
+        "proficiency": "Elementary proficiency"
+      },
+      {
+        "name": "Korean",
+        "proficiency": "Limited working proficiency"
+      },
+      {
+        "name": "Spanish",
+        "proficiency": "Elementary proficiency"
+      }
+    ],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAAATAFhsB-MSu8aXWUBacbi6fvU_SaAqdBH4",
+        "firstName": "Jeff",
+        "lastName": "Hanson",
+        "publicIdentifier": "jshanson7",
+        "linkedinUrl": "https://www.linkedin.com/in/jshanson7"
+      },
+      {
+        "id": "ACoAAEZnBtoBb1Us7ZKgHfOXAYT764pKcDQy848",
+        "firstName": "Songlin",
+        "lastName": "Yang",
+        "publicIdentifier": "songlin-yang-b8a69728b",
+        "linkedinUrl": "https://www.linkedin.com/in/songlin-yang-b8a69728b"
+      },
+      {
+        "id": "ACoAABVEu2EBDCNlTs6F-edkRhy5JLo6pfRPHYs",
+        "firstName": "Ankit (Rikki)",
+        "lastName": "Mukherjee",
+        "publicIdentifier": "mukherjeeankit",
+        "linkedinUrl": "https://www.linkedin.com/in/mukherjeeankit"
+      },
+      {
+        "id": "ACoAACaOARIBRO2EEH12QWQO29L__oI3N2K4u14",
+        "firstName": "Mingjie",
+        "lastName": "Sun",
+        "publicIdentifier": "mingjie-sun-06a761160",
+        "linkedinUrl": "https://www.linkedin.com/in/mingjie-sun-06a761160"
+      },
+      {
+        "id": "ACoAABGzJXcBFaJqVFgqgYNbhaPVKRkP3iG33dA",
+        "firstName": "Noah",
+        "lastName": "Shpak",
+        "publicIdentifier": "nshpak",
+        "linkedinUrl": "https://www.linkedin.com/in/nshpak"
+      },
+      {
+        "id": "ACoAABtHRBsBfISdj2kAsbtwZbDSYbPE88JQr_8",
+        "firstName": "Shannon",
+        "lastName": "Rhee",
+        "publicIdentifier": "shannon-rhee-9b7326109",
+        "linkedinUrl": "https://www.linkedin.com/in/shannon-rhee-9b7326109"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAAA8JdrgBK-ShYTbFkZL80wSafgw-uaGsb9Q",
+        "firstName": "Kevin",
+        "lastName": "B.",
+        "publicIdentifier": "kevin-b-5885a270",
+        "linkedinUrl": "https://www.linkedin.com/in/kevin-b-5885a270"
+      },
+      {
+        "id": "ACoAAF3SWDYB6aZAqtjbw1-LDNZ4qxxHLFKTL0g",
+        "firstName": "Md",
+        "lastName": "Mdamaz",
+        "publicIdentifier": "md-mdamaz-b5a19937b",
+        "linkedinUrl": "https://www.linkedin.com/in/md-mdamaz-b5a19937b"
+      },
+      {
+        "id": "ACoAADDB7DABJK3fhQa97pAxpbFcGbMtI2pA2Ek",
+        "firstName": "Ruila",
+        "lastName": "M.",
+        "publicIdentifier": "ruilama",
+        "linkedinUrl": "https://www.linkedin.com/in/ruilama"
+      },
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAABV61Q0BF3ER-196Zc9GK5TviMrbbIlVGqg",
+        "firstName": "Samuel",
+        "lastName": "Schoenholz",
+        "publicIdentifier": "samuel-schoenholz-379830a0",
+        "linkedinUrl": "https://www.linkedin.com/in/samuel-schoenholz-379830a0"
+      },
+      {
+        "id": "ACoAABJF4mQBVJYIx7g-ASuPnmo5mH2mDuWdwQg",
+        "firstName": "Erika",
+        "lastName": "Byun",
+        "publicIdentifier": "erika-nakamatsu-byun",
+        "linkedinUrl": "https://www.linkedin.com/in/erika-nakamatsu-byun"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAAAAcKtUBhnEmIuzVht2H3oqhJ9tKrO4NQIY",
+        "firstName": "George",
+        "lastName": "Rider",
+        "publicIdentifier": "georgerider",
+        "linkedinUrl": "https://www.linkedin.com/in/georgerider"
+      },
+      {
+        "id": "ACoAAB4qbUUBsc9H_NLZN2duLUOOyyFDm-k_ACo",
+        "firstName": "Riley",
+        "lastName": "Shanahan",
+        "publicIdentifier": "rileyshanny",
+        "linkedinUrl": "https://www.linkedin.com/in/rileyshanny"
+      },
+      {
+        "id": "ACoAAAji1bkB1eLX4z2Jb9-N2nMhEGNLWptSnqU",
+        "firstName": "Clare",
+        "lastName": "Birch",
+        "publicIdentifier": "clarebirch42",
+        "linkedinUrl": "https://www.linkedin.com/in/clarebirch42"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAABVAP64BY4RszeJt11vohsLM-gj1PiARl2o",
+        "firstName": "Jiaming",
+        "lastName": "Cui",
+        "publicIdentifier": "jiaming-cui-57a49a9b",
+        "linkedinUrl": "https://www.linkedin.com/in/jiaming-cui-57a49a9b"
+      },
+      {
+        "id": "ACoAAF8a-tgBsWqvtTuM92mboyLWNKtBoUa9tIU",
+        "firstName": "Liyan",
+        "lastName": "Chen",
+        "position": "--",
+        "publicIdentifier": "liyan-chen-908445386",
+        "linkedinUrl": "https://www.linkedin.com/in/liyan-chen-908445386"
+      },
+      {
+        "id": "ACoAAF-wKU0B0ntoadXt7VUjWK9yj5o52dHzVKA",
+        "firstName": "Kaif",
+        "lastName": "Rehman",
+        "position": "Laboratory Technician at Thinking Machines Lab",
+        "publicIdentifier": "kaif-rehman-72577b389",
+        "linkedinUrl": "https://www.linkedin.com/in/kaif-rehman-72577b389"
+      },
+      {
+        "id": "ACoAAF1g88AB-G-z-kA00gmZAGbH1CebbGsdmjQ",
+        "firstName": "Jason",
+        "lastName": "Morales",
+        "position": "Certified Phlebotomist at Thinking Machines Lab",
+        "publicIdentifier": "jason-morales-5407b5378",
+        "linkedinUrl": "https://www.linkedin.com/in/jason-morales-5407b5378"
+      },
+      {
+        "id": "ACoAACA8zv0BTVWLSUHsPJrWsUI10jzn0F57pHo",
+        "firstName": "Damir",
+        "lastName": "Sartayev",
+        "position": "AI CTO & Founder | MY project LNN+LLM+QML=AGI | Quantum, Neuro-symbolic AI | Liquid Neural Networks | RWKV | Mamba(SSM)  | Pharmacy AI, Minerals AI | Full‑Stack AI (LLMs, Agents, Fine‑Tuning, RAG, Vision) | Q-Day Q-ark",
+        "publicIdentifier": "damir-q-day-q-ark",
+        "linkedinUrl": "https://www.linkedin.com/in/damir-q-day-q-ark"
+      },
+      {
+        "id": "ACoAADopuTsBh9lDxOJzJsV8jI_KfOrsc6Tu7aQ",
+        "firstName": "Aashitosh",
+        "lastName": "Swami",
+        "position": "Lab assistant",
+        "publicIdentifier": "aashitosh-swami-67796a232",
+        "linkedinUrl": "https://www.linkedin.com/in/aashitosh-swami-67796a232"
+      },
+      {
+        "id": "ACoAADwrCKUB0FU7B3O7AIg9j_wieI-QOvJrtEE",
+        "firstName": "Katy",
+        "lastName": "Liemandt",
+        "position": "TML | San Francisco",
+        "publicIdentifier": "katy-liemandt-399092242",
+        "linkedinUrl": "https://www.linkedin.com/in/katy-liemandt-399092242"
+      },
+      {
+        "id": "ACoAACxX5AEBYonmfz9M8tQ8jO7Nx3jIXe_VSjw",
+        "firstName": "Sophie Rose",
+        "lastName": "Shapiro",
+        "position": "Creative Operations",
+        "publicIdentifier": "sophie-rose-shapiro",
+        "linkedinUrl": "https://www.linkedin.com/in/sophie-rose-shapiro"
+      },
+      {
+        "id": "ACoAAFUBvsYBMskyWP5r-Lf7ZUccZSuFy2nCqkA",
+        "firstName": "Ankit",
+        "lastName": "Baghel",
+        "position": "--DMLT lab technician\nb.sc chemistry chemical industry lab",
+        "publicIdentifier": "ankit-baghel-40675a339",
+        "linkedinUrl": "https://www.linkedin.com/in/ankit-baghel-40675a339"
+      },
+      {
+        "id": "ACoAAFrO2hYBQn9I3leFzBjeUmgehOiK_AGSCr8",
+        "firstName": "Muhammad",
+        "lastName": "Adam Usman",
+        "position": "Electrician at Thinking Machines Lab",
+        "publicIdentifier": "muhammad-adam-usman-472276366",
+        "linkedinUrl": "https://www.linkedin.com/in/muhammad-adam-usman-472276366"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAAmf5bQBFDXJO-5uIM0vDCIIKP5yuJyVZ54"
+    }
+  }
+}

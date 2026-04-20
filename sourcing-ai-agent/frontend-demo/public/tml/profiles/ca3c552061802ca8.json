@@ -1,0 +1,992 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAABQ5lJUBLFfL4Rkw6JGJvyWthxjKCA9visU",
+    "profile_url": "https://www.linkedin.com/in/ACwAABQ5lJUBLFfL4Rkw6JGJvyWthxjKCA9visU"
+  },
+  "item": {
+    "id": "ACoAABQ5lJUBry2byQYf_TtxDF9Rha9l-RqYsaM",
+    "publicIdentifier": "guang-he-lee-64577895",
+    "linkedinUrl": "https://www.linkedin.com/in/guang-he-lee-64577895",
+    "firstName": "Guang-He",
+    "lastName": "Lee",
+    "emails": [
+      {
+        "email": "guanghe.lee@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Thinking Machines Lab | Prev: Anthropic, Citadel, MIT",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America"
+      }
+    },
+    "objectUrn": "339317909",
+    "registeredAt": "2014-04-21T14:24:48.500Z",
+    "topSkills": null,
+    "connectionsCount": 345,
+    "followerCount": 481,
+    "verified": false,
+    "about": "Building training data for LLMs. Previously in quant research, machine learning, and NLP.",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": null,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "18494",
+        "companyId": "1503",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1503/",
+        "schoolName": "Massachusetts Institute of Technology"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": null,
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Thinking Machines Lab | Prev: Anthropic, Citadel, MIT",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "1 yr 4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "year": 2025,
+          "text": "2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Anthropic",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/74126343/",
+        "companyId": "74126343",
+        "duration": "1 yr",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "year": 2024,
+          "text": "2024"
+        },
+        "endDate": {
+          "year": 2025,
+          "text": "2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_400_400/company-logo_400_400/0/1719256729905/anthropicresearch_logo?e=1776902400&v=beta&t=6sv-GagnF1G5d4B4rN1Yu3sq6fln2BP_9tb0s6bARoY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_400_400/company-logo_400_400/0/1719256729905/anthropicresearch_logo?e=1776902400&v=beta&t=6sv-GagnF1G5d4B4rN1Yu3sq6fln2BP_9tb0s6bARoY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_200_200/company-logo_200_200/0/1719256413073/anthropicresearch_logo?e=1776902400&v=beta&t=cPQIIISEsrdyXB00bI4BYAdxnK2Mx72yV0BDdzg3baM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFMhKgeR7EYAg/company-logo_100_100/company-logo_100_100/0/1719256989269/anthropicresearch_logo?e=1776902400&v=beta&t=6343WBiudLAu8QSHWrlzIJOnlExxTT9uZZpuCs-AeLk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Garden leave",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Citadel",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/163056/",
+        "companyId": "163056",
+        "duration": "2 yrs",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "0661b5462416cd524510528e6fa4df6e7dff0835",
+        "startDate": {
+          "year": 2023,
+          "text": "2023"
+        },
+        "endDate": {
+          "year": 2025,
+          "text": "2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEr0zQ5jE04zA/company-logo_400_400/company-logo_400_400/0/1688575029322/citadel_llc_logo?e=1776902400&v=beta&t=xKzCGiu2piYSb0UaSaDP2uBShnytT140mi0lqojUEfU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEr0zQ5jE04zA/company-logo_400_400/company-logo_400_400/0/1688575029322/citadel_llc_logo?e=1776902400&v=beta&t=xKzCGiu2piYSb0UaSaDP2uBShnytT140mi0lqojUEfU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEr0zQ5jE04zA/company-logo_200_200/company-logo_200_200/0/1688575029322/citadel_llc_logo?e=1776902400&v=beta&t=AfVFuwrZ378zNv2cmwIcF87gBxb-n-dNQT3Jf95LpDw",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEr0zQ5jE04zA/company-logo_100_100/company-logo_100_100/0/1688575029322/citadel_llc_logo?e=1776902400&v=beta&t=NV8UrlIp37FxOK7BWzCj_YuwppNl0z3v6k9TP-RX8mY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Quantitative Researcher",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Citadel",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/163056/",
+        "companyId": "163056",
+        "duration": "2 yrs",
+        "description": "Global quantitative strategies",
+        "skills": null,
+        "experienceGroupId": "0661b5462416cd524510528e6fa4df6e7dff0835",
+        "startDate": {
+          "year": 2021,
+          "text": "2021"
+        },
+        "endDate": {
+          "year": 2023,
+          "text": "2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEr0zQ5jE04zA/company-logo_400_400/company-logo_400_400/0/1688575029322/citadel_llc_logo?e=1776902400&v=beta&t=xKzCGiu2piYSb0UaSaDP2uBShnytT140mi0lqojUEfU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEr0zQ5jE04zA/company-logo_400_400/company-logo_400_400/0/1688575029322/citadel_llc_logo?e=1776902400&v=beta&t=xKzCGiu2piYSb0UaSaDP2uBShnytT140mi0lqojUEfU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEr0zQ5jE04zA/company-logo_200_200/company-logo_200_200/0/1688575029322/citadel_llc_logo?e=1776902400&v=beta&t=AfVFuwrZ378zNv2cmwIcF87gBxb-n-dNQT3Jf95LpDw",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEr0zQ5jE04zA/company-logo_100_100/company-logo_100_100/0/1688575029322/citadel_llc_logo?e=1776902400&v=beta&t=NV8UrlIp37FxOK7BWzCj_YuwppNl0z3v6k9TP-RX8mY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Assistant",
+        "location": "United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "MIT Computer Science and Artificial Intelligence Laboratory (CSAIL)",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/8060229/",
+        "companyId": "8060229",
+        "duration": "4 yrs",
+        "description": "Machine learning, interpretability, and robustness.",
+        "skills": null,
+        "startDate": {
+          "year": 2017,
+          "text": "2017"
+        },
+        "endDate": {
+          "year": 2021,
+          "text": "2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEGRPOLADdMtg/company-logo_400_400/company-logo_400_400/0/1640006078259/mit_csail_logo?e=1776902400&v=beta&t=NTLJawRaOdSAXo_PebC8_CSSvy1Vinvv2QhC5MivCjU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEGRPOLADdMtg/company-logo_400_400/company-logo_400_400/0/1640006078259/mit_csail_logo?e=1776902400&v=beta&t=NTLJawRaOdSAXo_PebC8_CSSvy1Vinvv2QhC5MivCjU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEGRPOLADdMtg/company-logo_200_200/company-logo_200_200/0/1640006078259/mit_csail_logo?e=1776902400&v=beta&t=b_H1AGCW_PpKP_U4W2RTfrzLjwfbkPL6IcpiPa2XeDg",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQEGRPOLADdMtg/company-logo_100_100/company-logo_100_100/0/1640006078259/mit_csail_logo?e=1776902400&v=beta&t=wvkgcSG-fgHPLlz4TV6Am8rurCw_z6yGk0feTezwTZM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Quantitative Research Intern",
+        "location": "Chicago, Illinois, United States",
+        "employmentType": "Internship",
+        "workplaceType": null,
+        "companyName": "Citadel",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/163056/",
+        "companyId": "163056",
+        "duration": "3 mos",
+        "description": "Global quantitative strategies",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2020,
+          "text": "Jun 2020"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2020,
+          "text": "Aug 2020"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEr0zQ5jE04zA/company-logo_400_400/company-logo_400_400/0/1688575029322/citadel_llc_logo?e=1776902400&v=beta&t=xKzCGiu2piYSb0UaSaDP2uBShnytT140mi0lqojUEfU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEr0zQ5jE04zA/company-logo_400_400/company-logo_400_400/0/1688575029322/citadel_llc_logo?e=1776902400&v=beta&t=xKzCGiu2piYSb0UaSaDP2uBShnytT140mi0lqojUEfU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEr0zQ5jE04zA/company-logo_200_200/company-logo_200_200/0/1688575029322/citadel_llc_logo?e=1776902400&v=beta&t=AfVFuwrZ378zNv2cmwIcF87gBxb-n-dNQT3Jf95LpDw",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEr0zQ5jE04zA/company-logo_100_100/company-logo_100_100/0/1688575029322/citadel_llc_logo?e=1776902400&v=beta&t=NV8UrlIp37FxOK7BWzCj_YuwppNl0z3v6k9TP-RX8mY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research intern",
+        "location": null,
+        "employmentType": "Internship",
+        "workplaceType": null,
+        "companyName": "Intel Labs",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/727974/",
+        "companyId": "727974",
+        "duration": "4 mos",
+        "description": "Machine learning and wireless sensing (4 patents delivered)",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2015,
+          "text": "Jun 2015"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2015,
+          "text": "Sep 2015"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHMPl1uyCtoIw/company-logo_400_400/company-logo_400_400/0/1735061733939/intel_labs_logo?e=1776902400&v=beta&t=bYWWZ0rwbbETtbpqGfIYJA5FxKpjDWigE1muEvNGapE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHMPl1uyCtoIw/company-logo_400_400/company-logo_400_400/0/1735061733939/intel_labs_logo?e=1776902400&v=beta&t=bYWWZ0rwbbETtbpqGfIYJA5FxKpjDWigE1muEvNGapE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHMPl1uyCtoIw/company-logo_200_200/company-logo_200_200/0/1735061733939/intel_labs_logo?e=1776902400&v=beta&t=RqNbLNu73YfhY1bbJHFpazXWt05MwUsW_o-p0Ko2-rM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHMPl1uyCtoIw/company-logo_100_100/company-logo_100_100/0/1735061733939/intel_labs_logo?e=1776902400&v=beta&t=mBbomg-fu-9M1C0VGwE4UjATR_MYHgGQWOWvGWEWTe4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Massachusetts Institute of Technology",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1503/",
+        "schoolId": "1503",
+        "degree": "Doctor of Philosophy - PhD",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "description": "Research focus: Machine Learning, Interpretability, and Robustness\nMinor: Statistics and Optimization",
+        "startDate": {
+          "year": 2017,
+          "text": "2017"
+        },
+        "endDate": {
+          "year": 2021,
+          "text": "2021"
+        },
+        "period": "2017 - 2021",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_400_400/company-logo_400_400/0/1689799729035/mit_logo?e=1776902400&v=beta&t=u1PKvlsURdjuQj6vGwgPDc-3muz7cCQ6oGJISjoWshw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_400_400/company-logo_400_400/0/1689799729035/mit_logo?e=1776902400&v=beta&t=u1PKvlsURdjuQj6vGwgPDc-3muz7cCQ6oGJISjoWshw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_200_200/company-logo_200_200/0/1689799729035/mit_logo?e=1776902400&v=beta&t=AB2cY7dhuIbLPIWAjqEjazLVeMiSD5C3JNuYh9NjBw4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH-UXRfIDIKug/company-logo_100_100/company-logo_100_100/0/1689799729035/mit_logo?e=1776902400&v=beta&t=IuM-xZiymxMvWzGrHXnXupiD9lk70R68nAJaX2-9P8Y",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "National Taiwan University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/554182/",
+        "schoolId": "554182",
+        "degree": "Master of Science - MS",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "description": "Thesis: Unsupervised Sense Representation by Reinforcement Learning\nBest Master Thesis Award, ACLCLP, 2017\nBest Master Thesis Award, TAAI, 2017",
+        "startDate": {
+          "year": 2016,
+          "text": "2016"
+        },
+        "endDate": {
+          "year": 2017,
+          "text": "2017"
+        },
+        "period": "2016 - 2017",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQGAh08jkWo23Q/company-logo_400_400/company-logo_400_400/0/1679904708552/national_taiwan_university_logo?e=1776902400&v=beta&t=ARPaJG8obVhqinZ_oQo3ZX4OoAcbTdUSKpqqOymba-w",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGAh08jkWo23Q/company-logo_400_400/company-logo_400_400/0/1679904708552/national_taiwan_university_logo?e=1776902400&v=beta&t=ARPaJG8obVhqinZ_oQo3ZX4OoAcbTdUSKpqqOymba-w",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGAh08jkWo23Q/company-logo_200_200/company-logo_200_200/0/1679904708552/national_taiwan_university_logo?e=1776902400&v=beta&t=t9yHaXMl6LU68TYropjSyZqI7_eLeIu_msFKlH-Ryu4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGAh08jkWo23Q/company-logo_100_100/company-logo_100_100/0/1679904708552/national_taiwan_university_logo?e=1776902400&v=beta&t=Lq68VZSRhpyyAcYd74Z9FpfJyq6z8-uaDiotMHbq7hU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "National Taiwan University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/554182/",
+        "schoolId": "554182",
+        "degree": "Bachelor of Science (BS)",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "description": "Rank: 2/111. Straight A+ in all the undergraduate CS courses\nPhi Tau Phi",
+        "startDate": {
+          "year": 2011,
+          "text": "2011"
+        },
+        "endDate": {
+          "year": 2015,
+          "text": "2015"
+        },
+        "period": "2011 - 2015",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQGAh08jkWo23Q/company-logo_400_400/company-logo_400_400/0/1679904708552/national_taiwan_university_logo?e=1776902400&v=beta&t=ARPaJG8obVhqinZ_oQo3ZX4OoAcbTdUSKpqqOymba-w",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGAh08jkWo23Q/company-logo_400_400/company-logo_400_400/0/1679904708552/national_taiwan_university_logo?e=1776902400&v=beta&t=ARPaJG8obVhqinZ_oQo3ZX4OoAcbTdUSKpqqOymba-w",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGAh08jkWo23Q/company-logo_200_200/company-logo_200_200/0/1679904708552/national_taiwan_university_logo?e=1776902400&v=beta&t=t9yHaXMl6LU68TYropjSyZqI7_eLeIu_msFKlH-Ryu4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGAh08jkWo23Q/company-logo_100_100/company-logo_100_100/0/1679904708552/national_taiwan_university_logo?e=1776902400&v=beta&t=Lq68VZSRhpyyAcYd74Z9FpfJyq6z8-uaDiotMHbq7hU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Machine Learning",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Research",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Computer Science",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Algorithms",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Programming",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Deep Learning"
+      },
+      {
+        "name": "Data Mining"
+      },
+      {
+        "name": "Optimization"
+      },
+      {
+        "name": "Natural Language Processing (NLP)"
+      },
+      {
+        "name": "Python",
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "LaTeX",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Linux",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Matlab",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "C++",
+        "endorsements": "9 endorsements"
+      },
+      {
+        "name": "C",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "Interpretability"
+      }
+    ],
+    "publications": [
+      {
+        "title": "Oblique Decision Trees from Derivatives of ReLU Networks",
+        "publishedAt": "International Conference on Learning Representations (ICLR) · Jan 1, 2020",
+        "description": "We show how neural models can be used to realize piece-wise constant functions such as decision trees. The proposed architecture, which we call locally constant networks, builds on ReLU networks that are piece-wise linear and hence their associated gradients with respect to the inputs are locally constant. We formally establish the equivalence between the classes of locally constant networks and decision trees. Moreover, we highlight several advantageous properties of locally constant networks, including how they realize decision trees with parameter sharing across branching / leaves. Indeed, only M neurons suffice to implicitly model an oblique decision tree with 2M leaf nodes. The neural representation also enables us to adopt many tools developed for deep networks (e.g., DropConnect (Wan et al., 2013)) while implicitly training decision trees. We demonstrate that our method outperforms alternative techniques for training oblique decision trees in the context of molecular property classification and regression tasks.",
+        "link": "https://guanghelee.github.io/pub/Lee_etal_iclr20.pdf"
+      },
+      {
+        "title": "Self-Supervised Learning of Appliance Usage",
+        "publishedAt": "International Conference on Learning Representations (ICLR) · Jan 1, 2020",
+        "description": "Learning home appliance usage is important for understanding people’s activities and optimizing energy consumption. The problem is modeled as an event detection task, where the objective is to learn when a user turns an appliance on, and which appliance it is (microwave, hair dryer, etc.). Ideally, we would like to solve the problem in an unsupervised way so that the method can be applied to new homes and new appliances without any labels. To this end, we introduce a new deep learning model that takes input from two home sensors: 1) a smart electricity meter that outputs the total energy consumed by the home as a function of time, and 2) a motion sensor that outputs the locations of the residents over time. The model learns the distribution of the residents’ locations conditioned on the home energy signal. We show that this cross-modal prediction task allows us to detect when a particular appliance is used, and the location of the appliance in the home, all in a self-supervised manner, without any labeled data.",
+        "link": "https://openreview.net/pdf?id=B1lJzyStvS"
+      },
+      {
+        "title": "Enabling Identification and Behavioral Sensing in Homes using Radio Reflections",
+        "publishedAt": "ACM Conference on Human Factors in Computing Systems (CHI) · Jan 1, 2019",
+        "description": "Understanding users’ behavior at home is central to behavioral research. For example, social researchers are interested in studying domestic abuse, and healthcare professionals are interested in caregiver-patient interaction. Today, such studies rely on diaries and questionnaires, which are subjective, erroneous, and hard to sustain in longitudinal studies. We introduce Marko, a system that automatically collects behavior-related data, without asking people to write diaries or wear sensors. Marko transmits a low power wireless signal and analyses its reflections from the environment. It maps those reflections to how users interact with the environment (e.g., access to medication cabinet) and with each other (e.g., watch TV together). It provides novel algorithms for identifying who-does-what, and bootstrapping the system in new homes without asking users for new annotations. We evaluate Marko with a one-month deployment in six homes, and demonstrate its value for studying couple relationships and caregiver-patient interaction.",
+        "link": "https://guanghelee.github.io/pub/Hsu_etal_chi19.pdf"
+      },
+      {
+        "title": "Functional Transparency for Structured Data: a Game-Theoretic Approach",
+        "publishedAt": "International Conference on Machine Learning (ICML) · Jan 1, 2019",
+        "description": "We provide a new approach to training neural models to exhibit transparency in a well-defined, functional manner. Our approach naturally operates over structured data and tailors the predictor, functionally, towards a chosen family of (local) witnesses. The estimation problem is setup as a co-operative game between an unrestricted predictor such as a neural network, and a set of witnesses chosen from the desired transparent family. The goal of the witnesses is to highlight, locally, how well the predictor conforms to the chosen family of functions, while the predictor is trained to minimize the highlighted discrepancy. We emphasize that the predictor remains globally powerful as it is only encouraged to agree locally with locally adapted witnesses. We analyze the effect of the proposed approach, provide example formulations in the context of deep graph and sequence models, and empirically illustrate the idea in chemical property prediction, temporal modeling, and molecule representation learning.",
+        "link": "https://guanghelee.github.io/pub/Lee_etal_icml19.pdf"
+      },
+      {
+        "title": "ProbGAN: Towards Probabilistic GAN with Theoretical Guarantees",
+        "publishedAt": "International Conference on Learning Representations (ICLR) · Jan 1, 2019",
+        "description": "Probabilistic modelling is a principled framework to perform model aggregation, which has been a primary mechanism to combat mode collapse in the context of Generative Adversarial Networks (GAN). In this paper, we propose a novel probabilistic framework for GANs, ProbGAN, which iteratively learns a distribution over generators with a carefully crafted prior. Learning is efficiently triggered by a tailored stochastic gradient Hamiltonian Monte Carlo with a novel gradient approximation to perform Bayesian inference. Our theoretical analysis further reveals that our treatment is the first probabilistic framework that yields an equilibrium where generator distributions are faithful to the data distribution. Empirical evidence on synthetic high-dimensional multi-modal data and image databases (CIFAR-10, STL-10, and ImageNet) demonstrates the superiority of our method over both start-of-the-art multi-generator GANs and other probabilistic treatment for GANs.",
+        "link": "https://openreview.net/pdf?id=H1l7bnR5Ym"
+      },
+      {
+        "title": "Tight Certificates of Adversarial Robustness for Randomly Smoothed Classifiers",
+        "publishedAt": "Neural Information Processing Systems (NeurIPS) · Jan 1, 2019",
+        "description": "Strong theoretical guarantees of robustness can be given for ensembles of classifiers generated by input randomization. Specifically, an L2 bounded adversary cannot alter the ensemble prediction generated by an additive isotropic Gaussian noise, where the radius for the adversary depends on both the variance of the distribution as well as the ensemble margin at the point of interest. We build on and considerably expand this work across broad classes of distributions. In particular, we offer adversarial robustness guarantees and associated algorithms for the discrete case where the adversary is L0 bounded. Moreover, we exemplify how the guarantees can be tightened with specific assumptions about the function class of the classifier such as a decision tree. We empirically illustrate these results with and without functional restrictions across image and molecule datasets.",
+        "link": "https://guanghelee.github.io/pub/Lee_etal_neurips19.pdf"
+      },
+      {
+        "title": "Towards Robust, Locally Linear Deep Networks",
+        "publishedAt": "International Conference on Learning Representations (ICLR) · Jan 1, 2019",
+        "description": "Deep networks realize complex mappings that are often understood by their locally linear behavior at or around points of interest. For example, we use the derivative of the mapping with respect to its inputs for sensitivity analysis, or to explain (obtain coordinate relevance for) a prediction. One key challenge is that such derivatives are themselves inherently unstable. In this paper, we propose a new learning problem to encourage deep networks to have stable derivatives over larger regions. While the problem is challenging in general, we focus on networks with piecewise linear activation functions. Our algorithm consists of an inference step that identifies a region around a point where linear approximation is provably stable, and an optimization step to expand such regions. We propose a novel relaxation to scale the algorithm to realistic models. We illustrate our method with residual and recurrent networks on image and sequence datasets.",
+        "link": "https://guanghelee.github.io/pub/Lee_etal_iclr19.pdf"
+      },
+      {
+        "title": "RF-Based Fall Monitoring Using Convolutional Neural Networks",
+        "publishedAt": "ACM International Joint Conference on Pervasive and Ubiquitous Computing (Ubicomp’18 / IMWUT) · Jan 1, 2018",
+        "description": "Falls are the top reason for fatal and non-fatal injuries among seniors. Existing solutions are based on wearable fall-alert sensors, but medical research has shown that they are ineffective, mostly because seniors do not wear them. These revelations have led to new passive sensors that infer falls by analyzing Radio Frequency (RF) signals in homes. Seniors can go about their lives as usual without the need to wear any device. While passive monitoring has made major advances, current approaches still cannot deal with the complexities of real-world scenarios. They typically train and test their classifiers on the same people in the same environments, and cannot generalize to new people or new environments. Further, they cannot separate motions from different people and can easily miss a fall in the presence of other motions.\n\nTo overcome these limitations, we introduce Aryokee, an RF-based fall detection system that uses convolutional neural networks governed by a state machine. Aryokee works with new people and environments unseen in the training set. It also separates different sources of motion to increase robustness. Results from testing Aryokee with over 140 people performing 40 types of activities in 57 different environments show a recall of 94% and a precision of 92% in detecting falls.",
+        "link": "https://guanghelee.github.io/pub/aryokee.pdf"
+      },
+      {
+        "title": "MUSE: Modularizing Unsupervised Sense Embeddings",
+        "publishedAt": "Empirical Methods in Natural Language Processing (EMNLP) · Jan 1, 2017",
+        "description": "This paper proposes to address the word sense ambiguity issue in an unsupervised manner, where word sense representations are learned along a word sense selection mechanism given contexts. Prior work focused on designing a single model to deliver both mechanisms, and thus suffered from either coarse-grained representation learning or inefficient sense selection. The proposed modular approach, MUSE, implements flexible modules to optimize distinct mechanisms, achieving the first purely sense-level representation learning system with linear-time sense selection. We leverage reinforcement learning to enable joint training on the proposed modules, and introduce various exploration techniques on sense selection for better robustness. The experiments on benchmark data show that the proposed approach achieves the state-of-the-art performance on synonym selection as well as on contextual word similarities in terms of MaxSimC.",
+        "link": "https://www.aclweb.org/anthology/D17-1034.pdf"
+      },
+      {
+        "title": "LambdaMF: Learning Nonsmooth Ranking Functions in Matrix Factorization Using Lambda",
+        "publishedAt": "International Conference on Data Mining (ICDM) · Jan 1, 2015",
+        "description": "This paper emphasizes optimizing ranking measures in a recommendation problem. Since ranking measures are nondifferentiable, previous works have been proposed to deal with this problem via approximations or lower/upper bounding of the loss. However, such mismatch between ranking measures and approximations/bounds can lead to non-optimal ranking results. To solve this problem, we propose to model the gradient of non-differentiable ranking measure based on the idea of virtual gradient, which is called lambda in learning to rank. In addition, noticing the difference between learning to rank and recommendation models, we prove that under certain circumstance the existence of popular items can lead to unlimited norm growing of the latent factors in a matrix factorization model. We further create a novel regularization term to remedy such concern. Finally, we demonstrate that our model, LambdaMF, outperforms several state-of-the-art methods. We further show in experiments that in all cases our model achieves global optimum of normalized discount cumulative gain during training.",
+        "link": "https://guanghelee.github.io/pub/icdm15-lambdaMF.pdf"
+      }
+    ],
+    "courses": [
+      {
+        "title": "Algorithm Design and Analysis"
+      },
+      {
+        "title": "Algorithms for Inference"
+      },
+      {
+        "title": "Applied Machine Learning"
+      },
+      {
+        "title": "Data Structures and Algorithms"
+      },
+      {
+        "title": "Fundamentals of Probability"
+      },
+      {
+        "title": "Information Retrieval"
+      },
+      {
+        "title": "Information and Inference"
+      },
+      {
+        "title": "Intelligent Conversational Bot"
+      },
+      {
+        "title": "Machine Discovery"
+      },
+      {
+        "title": "Machine Learning"
+      },
+      {
+        "title": "Machine Learning and Having it Deep and Structured"
+      },
+      {
+        "title": "Machine Learning: Theory and Practice"
+      },
+      {
+        "title": "Mathematical Analysis"
+      },
+      {
+        "title": "Natural Language Processing"
+      },
+      {
+        "title": "Nonlinear Optimization"
+      },
+      {
+        "title": "Statistical Learning Theories and Applications"
+      }
+    ],
+    "patents": [],
+    "honorsAndAwards": [
+      {
+        "title": "IEEE & MSRA Young Fellowship",
+        "description": "Recognize top young undergraduate researcher in Asia by Microsoft Research Asia & IEEE",
+        "associatedWith": "Associated with National Taiwan University",
+        "associatedWithLink": "https://www.linkedin.com/company/554182/"
+      },
+      {
+        "title": "Irving T.Ho Fellowship",
+        "description": "Recognize undergraduate in EECS with excellent academic performance",
+        "associatedWith": "Associated with National Taiwan University",
+        "associatedWithLink": "https://www.linkedin.com/company/554182/"
+      },
+      {
+        "title": "Presidential Awards (a.k.a., Book Coupon Awards, highest distinction) x 8 (every semester)",
+        "issuedBy": "National Taiwan University",
+        "description": "Recognize top 5% student in Department of Computer Science & Information Engineering, National Taiwan University. ",
+        "associatedWith": "Associated with National Taiwan University",
+        "associatedWithLink": "https://www.linkedin.com/company/554182/"
+      }
+    ],
+    "languages": [
+      {
+        "name": "Chinese",
+        "proficiency": "Native or bilingual proficiency"
+      },
+      {
+        "name": "English",
+        "proficiency": "Full professional proficiency"
+      },
+      {
+        "name": "Japanese",
+        "proficiency": "Elementary proficiency"
+      }
+    ],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "position": "AI Researcher, Co-founder @ Thinking Machines Lab",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAABEmYXYB5f-3ZmFG8dI-n9XAlqySBqO-2PA",
+        "firstName": "Luke",
+        "lastName": "Carlson",
+        "position": "Thinking Machines | Member of Technical Staff",
+        "publicIdentifier": "jlukecarlson",
+        "linkedinUrl": "https://www.linkedin.com/in/jlukecarlson"
+      },
+      {
+        "id": "ACoAAEZnBtoBb1Us7ZKgHfOXAYT764pKcDQy848",
+        "firstName": "Songlin",
+        "lastName": "Yang",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "songlin-yang-b8a69728b",
+        "linkedinUrl": "https://www.linkedin.com/in/songlin-yang-b8a69728b"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABgwxtcBfqsJJUHPwsSPuBE4K9oKyRqUp5o",
+        "firstName": "Lia",
+        "lastName": "Guy",
+        "position": "Research @ OpenAI",
+        "publicIdentifier": "aureliaguy",
+        "linkedinUrl": "https://www.linkedin.com/in/aureliaguy"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAAAJzsfoBp0MxssQYMgmy0ZNO2U3sA58ugwc",
+        "firstName": "Joshua",
+        "lastName": "Gross",
+        "position": "Engineering Leadership, Meta Superintelligence Lab",
+        "publicIdentifier": "joshgross",
+        "linkedinUrl": "https://www.linkedin.com/in/joshgross"
+      },
+      {
+        "id": "ACoAABYs4-IB5mHx5eVfOHzu1e8xlO3q_kb38IM",
+        "firstName": "Brydon",
+        "lastName": "Eastman",
+        "position": "Nerd @ Thinking Machines Labs | Formerly Member of Technical Staff @ OpenAI | PhD in Mathematical Oncology",
+        "publicIdentifier": "brydon-eastman-396719a4",
+        "linkedinUrl": "https://www.linkedin.com/in/brydon-eastman-396719a4"
+      },
+      {
+        "id": "ACoAAACo1tYBGy9sT2OWZuEULOMe4K_b2Y22-F8",
+        "firstName": "Alex",
+        "lastName": "Gartrell",
+        "position": "Engineering @ Thinking Machines, Ex-Meta/Facebook",
+        "publicIdentifier": "alexgartrell",
+        "linkedinUrl": "https://www.linkedin.com/in/alexgartrell"
+      },
+      {
+        "id": "ACoAACHG180BXiyeZ2qJgoggx27e4iM3ajxvp18",
+        "firstName": "Andy",
+        "lastName": "Hwang",
+        "position": "thinking machines",
+        "publicIdentifier": "andrewnhwang",
+        "linkedinUrl": "https://www.linkedin.com/in/andrewnhwang"
+      },
+      {
+        "id": "ACoAABA0sF8BJqwmfoms3veu9TE72tj8JMUQEFA",
+        "firstName": "Sam",
+        "lastName": "Shleifer",
+        "position": "The Biggest Legend",
+        "publicIdentifier": "sam-shleifer-a5307a77",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-shleifer-a5307a77"
+      },
+      {
+        "id": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+        "firstName": "Saurabh",
+        "lastName": "Garg",
+        "position": "Thinking Machines Lab | Prev: Mistral AI, CMU, IIT-B",
+        "publicIdentifier": "saurabh-garg-b680b5b8",
+        "linkedinUrl": "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+      },
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "position": "Thinking about machines",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAABhKWCYBiuV3Zv9Hbt8t0j-xMRqxawBcSgw",
+        "firstName": "Kurt",
+        "lastName": "Shuster",
+        "position": "AI Research Engineer",
+        "publicIdentifier": "kurtshuster1",
+        "linkedinUrl": "https://www.linkedin.com/in/kurtshuster1"
+      },
+      {
+        "id": "ACoAAAl87CYBWKLLyGNTbomy6oqIPv-5n34CXIY",
+        "firstName": "Andrew",
+        "lastName": "Tulloch",
+        "position": "AI Research @ Meta",
+        "publicIdentifier": "andrew-tulloch-17238745",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-tulloch-17238745"
+      },
+      {
+        "id": "ACoAABhIg7YBYN2NPIu8voYj5D7JQVZGxonqHvc",
+        "firstName": "Ruiqi",
+        "lastName": "Zhong",
+        "position": "AI researcher. LLM + human collaboration.",
+        "publicIdentifier": "ruiqi-zhong-09a533b4",
+        "linkedinUrl": "https://www.linkedin.com/in/ruiqi-zhong-09a533b4"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "position": "Co-Founder and CEO at Thinking Machines Lab",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAAA4HVN4BOZg5espOvMVoO3OY04NZmuqvMCo",
+        "firstName": "Shaojie",
+        "lastName": "Bai",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "shaojie-bai",
+        "linkedinUrl": "https://www.linkedin.com/in/shaojie-bai"
+      },
+      {
+        "id": "ACoAAAO-j_IBXcvIzhZtQ7QNkky6tlnQTcFl9qI",
+        "firstName": "Myle",
+        "lastName": "Ott",
+        "position": "ML infra at Thinking Machines",
+        "publicIdentifier": "myleott",
+        "linkedinUrl": "https://www.linkedin.com/in/myleott"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAAGV9Q5oB8hi5kmuasXRSjm9_riOLXWsfMM4",
+        "firstName": "Shawn",
+        "lastName": "Walden",
+        "position": "--",
+        "publicIdentifier": "shawn-walden-5b62973b6",
+        "linkedinUrl": "https://www.linkedin.com/in/shawn-walden-5b62973b6"
+      },
+      {
+        "id": "ACoAAGVdQ44Bqj2_4Rs5gjbGqbyT-nqFX7tiAhg",
+        "firstName": "Michael",
+        "lastName": "Alcaraz",
+        "position": "--",
+        "publicIdentifier": "michael-alcaraz-a3a6453b5",
+        "linkedinUrl": "https://www.linkedin.com/in/michael-alcaraz-a3a6453b5"
+      },
+      {
+        "id": "ACoAAEA_61cBFMM5p-hGqmQ3ucKQqHGvKClDZlA",
+        "firstName": "Curtis",
+        "lastName": "Steward jr",
+        "position": "--",
+        "publicIdentifier": "curtis-steward-jr-69bbb6260",
+        "linkedinUrl": "https://www.linkedin.com/in/curtis-steward-jr-69bbb6260"
+      },
+      {
+        "id": "ACoAAEE-mXwBE_bOc1Hi2758W6suHM_afDH6diQ",
+        "firstName": "Rio",
+        "lastName": "Sundown",
+        "position": "--",
+        "publicIdentifier": "rio-sundown-678705266",
+        "linkedinUrl": "https://www.linkedin.com/in/rio-sundown-678705266"
+      },
+      {
+        "id": "ACoAAGLq0HwBAoZ0ciT3hDBcVj5OmTzkMZvmBNQ",
+        "firstName": "Angela",
+        "lastName": "Mestayer",
+        "position": "--",
+        "publicIdentifier": "angela-mestayer-2249473a3",
+        "linkedinUrl": "https://www.linkedin.com/in/angela-mestayer-2249473a3"
+      },
+      {
+        "id": "ACoAAGRETYcBvz_Jr8NEJfRZ40_kiwlOpjNM5WQ",
+        "firstName": "John",
+        "lastName": "Vierra",
+        "position": "--",
+        "publicIdentifier": "john-vierra-19b4463ab",
+        "linkedinUrl": "https://www.linkedin.com/in/john-vierra-19b4463ab"
+      },
+      {
+        "id": "ACoAAGRnvK8B8PWxzIg4WWyitjnggM9kloBI6Jw",
+        "firstName": "Gina",
+        "lastName": "Medina",
+        "position": "--",
+        "publicIdentifier": "gina-medina-03b1863b0",
+        "linkedinUrl": "https://www.linkedin.com/in/gina-medina-03b1863b0"
+      },
+      {
+        "id": "ACoAAGWkr9QBoJEcpuSoOKC71o2WLBJItENDcEU",
+        "firstName": "Corey",
+        "lastName": "Anders",
+        "position": "--",
+        "publicIdentifier": "corey-anders-7841223b7",
+        "linkedinUrl": "https://www.linkedin.com/in/corey-anders-7841223b7"
+      },
+      {
+        "id": "ACoAAGWz66EBlgYyLQxwmX9y6ml9nuF6kTFsE28",
+        "firstName": "Rod",
+        "lastName": "Zook",
+        "position": "--",
+        "publicIdentifier": "rod-zook-4815243b7",
+        "linkedinUrl": "https://www.linkedin.com/in/rod-zook-4815243b7"
+      },
+      {
+        "id": "ACoAAGScJA0BvgGfa7nfZE6kSol3csS3mAEDInw",
+        "firstName": "Steven",
+        "lastName": "Hess",
+        "position": "--",
+        "publicIdentifier": "steven-hess-5a53613b1",
+        "linkedinUrl": "https://www.linkedin.com/in/steven-hess-5a53613b1"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAABQ5lJUBLFfL4Rkw6JGJvyWthxjKCA9visU"
+    }
+  }
+}

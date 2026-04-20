@@ -1,0 +1,296 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAGDWIksBPpo38xxmQmdCAufz9Osay54IFmo",
+    "profile_url": "https://www.linkedin.com/in/ACwAAGDWIksBPpo38xxmQmdCAufz9Osay54IFmo"
+  },
+  "item": {
+    "id": "ACoAAGDWIksBlJBQ6yLB1D8aji0XfjRiW84siqc",
+    "publicIdentifier": "akinbola-lateef-94b110394",
+    "linkedinUrl": "https://www.linkedin.com/in/akinbola-lateef-94b110394",
+    "firstName": "Akinbola",
+    "lastName": "Lateef",
+    "emails": [
+      {
+        "email": "akinbola.lateef@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Thinker  at Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Lagos, Lagos State, Nigeria",
+      "countryCode": "NG",
+      "parsed": {
+        "text": "Lagos, Nigeria",
+        "countryCode": "NG",
+        "regionCode": null,
+        "country": "Nigeria",
+        "countryFull": "Nigeria",
+        "state": "Lagos",
+        "city": "Lagos"
+      }
+    },
+    "objectUrn": "1624646219",
+    "registeredAt": "2025-12-13T21:00:49.409Z",
+    "topSkills": null,
+    "connectionsCount": 0,
+    "followerCount": 0,
+    "verified": false,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": null,
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": null,
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Thinker  at Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Thinker ",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": null,
+        "description": null,
+        "skills": null,
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAD2_TcEBcuIAn7iihS524629l7DxYZ9Uulk",
+        "firstName": "Israel",
+        "lastName": "Taiwo",
+        "position": "--",
+        "publicIdentifier": "israel-taiwo-769b2a24a",
+        "linkedinUrl": "https://www.linkedin.com/in/israel-taiwo-769b2a24a"
+      },
+      {
+        "id": "ACoAADnVbb0BGcSp9y6Iau8CbN8WmvwxOvVRjoM",
+        "firstName": "Joshua",
+        "lastName": "Kushner",
+        "position": "Thrive Capital",
+        "publicIdentifier": "joshua-kushner-711b45230",
+        "linkedinUrl": "https://www.linkedin.com/in/joshua-kushner-711b45230"
+      },
+      {
+        "id": "ACoAAFNnuUUBL-lVwthjTOrScy4Zrng38nIjgnQ",
+        "firstName": "Sharon",
+        "lastName": "Esanoluwa",
+        "position": "HR Operations | Project Coordination | Administrative & People Support",
+        "publicIdentifier": "sharon-esanoluwa-a8575b330",
+        "linkedinUrl": "https://www.linkedin.com/in/sharon-esanoluwa-a8575b330"
+      },
+      {
+        "id": "ACoAAAl87CYBWKLLyGNTbomy6oqIPv-5n34CXIY",
+        "firstName": "Andrew",
+        "lastName": "Tulloch",
+        "position": "AI Research @ Meta",
+        "publicIdentifier": "andrew-tulloch-17238745",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-tulloch-17238745"
+      },
+      {
+        "id": "ACoAABSdzpkBl-iN8VHaihR2VfCTJZuI9BIRpC8",
+        "firstName": "Alexandr",
+        "lastName": "Wang",
+        "publicIdentifier": "alexandrwang",
+        "linkedinUrl": "https://www.linkedin.com/in/alexandrwang"
+      },
+      {
+        "id": "ACoAABsbN_kBxGneiwQ-Q7jsfHKBmlGynREPJvk",
+        "firstName": "Bankole",
+        "lastName": "ADELEYE",
+        "position": "Attended Obafemi Awolowo University",
+        "publicIdentifier": "bankole-adeleye-361374108",
+        "linkedinUrl": "https://www.linkedin.com/in/bankole-adeleye-361374108"
+      },
+      {
+        "id": "ACoAAAcOYvEBu6eMGNJYsH7-EqBJTA4Cq1xRf7A",
+        "firstName": "Tony O.",
+        "lastName": "Elumelu, C.F.R",
+        "publicIdentifier": "tonyelumelu",
+        "linkedinUrl": "https://www.linkedin.com/in/tonyelumelu"
+      },
+      {
+        "id": "ACoAADkmInkBYaTarlUHCXod_7v7FNizptJ0uyc",
+        "firstName": "Prince",
+        "lastName": "Ajuzie",
+        "publicIdentifier": "princeajuzie",
+        "linkedinUrl": "https://www.linkedin.com/in/princeajuzie"
+      },
+      {
+        "id": "ACoAAB5vLJUBlc-0g5mxCKXmyF6qDqp_Jl9PrxI",
+        "firstName": "Michael",
+        "lastName": "T.",
+        "position": "Building Cursor",
+        "publicIdentifier": "michael-t-5b1bbb122",
+        "linkedinUrl": "https://www.linkedin.com/in/michael-t-5b1bbb122"
+      },
+      {
+        "id": "ACoAAA_nDvABsGGFTysZtsJ7tvmaNSVMYPnA7KY",
+        "firstName": "Catherine",
+        "lastName": "Coballes",
+        "position": "Estimator/Project Manager/Quantity Surveyor",
+        "publicIdentifier": "catherine-coballes-7a842675",
+        "linkedinUrl": "https://www.linkedin.com/in/catherine-coballes-7a842675"
+      },
+      {
+        "id": "ACoAAA_vO7QBEJ31WdS6__TfWVhX_XXwNPBM9x0",
+        "firstName": "arnel",
+        "lastName": "sanmiguel",
+        "position": "Civil engr/quantity surveyor/estimator",
+        "publicIdentifier": "arnel-sanmiguel-84464475",
+        "linkedinUrl": "https://www.linkedin.com/in/arnel-sanmiguel-84464475"
+      },
+      {
+        "id": "ACoAADZeWqwBi63YVpZsnvHh0NO-vAzAXejRCCA",
+        "firstName": "A",
+        "lastName": "B",
+        "position": "Quantity Surveyor",
+        "publicIdentifier": "a-b-57858a215",
+        "linkedinUrl": "https://www.linkedin.com/in/a-b-57858a215"
+      },
+      {
+        "id": "ACoAAAjn_XUBY5PUV0eJKfqx8xXYLwOFs3qipOY",
+        "firstName": "Vernon",
+        "lastName": "Fox",
+        "position": "AWP Planner/Quantity Surveyor at Footbridge/Marathon Petroleum",
+        "publicIdentifier": "vernon-fox-89905a42",
+        "linkedinUrl": "https://www.linkedin.com/in/vernon-fox-89905a42"
+      },
+      {
+        "id": "ACoAADqEK2MB4mf7xULxG0IdM0KJy2NMhr_T--Y",
+        "firstName": "Emmanuel",
+        "lastName": "Umezinne",
+        "position": "Quantity Surveyor/ Building Construction.",
+        "publicIdentifier": "emmanuel-umezinne-96b948234",
+        "linkedinUrl": "https://www.linkedin.com/in/emmanuel-umezinne-96b948234"
+      },
+      {
+        "id": "ACoAAAvTpbQBQKRmmQ9pPyBZ2yBe9rdYDES5Gco",
+        "firstName": "Adams",
+        "lastName": "Amponsah-Addo",
+        "position": "Quantity Surveyor at GS International Development",
+        "publicIdentifier": "adams-amponsah-addo-3b054a56",
+        "linkedinUrl": "https://www.linkedin.com/in/adams-amponsah-addo-3b054a56"
+      },
+      {
+        "id": "ACoAAC8PmisBi9rarhDyKPgifp1WexBMlpGlWxw",
+        "firstName": "Noe",
+        "lastName": "Htwe",
+        "position": "Quantity Surveyor at Crown Advanced Construction Co., Ltd",
+        "publicIdentifier": "noe-htwe-5775041a0",
+        "linkedinUrl": "https://www.linkedin.com/in/noe-htwe-5775041a0"
+      },
+      {
+        "id": "ACoAABhA5IcBhkuluICMR3zrwuOSxlX45bx_N40",
+        "firstName": "Nasrul",
+        "lastName": "Ahamed",
+        "position": "Quantity Surveyor at Sanken Power Systems (UK) Ltd.",
+        "publicIdentifier": "nasrul-ahamed-007332b4",
+        "linkedinUrl": "https://www.linkedin.com/in/nasrul-ahamed-007332b4"
+      },
+      {
+        "id": "ACoAABfO7X0Brna8IWDjfTX9_hDHM3LwYpOoPY0",
+        "firstName": "Israel",
+        "lastName": "Kilumbu",
+        "position": "MBA & Quantity Surveyor ",
+        "publicIdentifier": "israel-kilumbu-93992bb1",
+        "linkedinUrl": "https://www.linkedin.com/in/israel-kilumbu-93992bb1"
+      },
+      {
+        "id": "ACoAACvnAzsBADc4C5LECbIT0DqVLM14--Oi7Vk",
+        "firstName": "John",
+        "lastName": "Tito",
+        "position": "--QUANTITY SURVEYOR",
+        "publicIdentifier": "john-tito-b63809186",
+        "linkedinUrl": "https://www.linkedin.com/in/john-tito-b63809186"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAGDWIksBPpo38xxmQmdCAufz9Osay54IFmo"
+    }
+  }
+}

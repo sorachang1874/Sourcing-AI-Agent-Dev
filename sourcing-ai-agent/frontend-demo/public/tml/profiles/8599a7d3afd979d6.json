@@ -1,0 +1,794 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAA8JdrgBBaa_ZfXSIzoHYVvozJMA_zlv4Q0",
+    "profile_url": "https://www.linkedin.com/in/ACwAAA8JdrgBBaa_ZfXSIzoHYVvozJMA_zlv4Q0"
+  },
+  "item": {
+    "id": "ACoAAA8JdrgBK-ShYTbFkZL80wSafgw-uaGsb9Q",
+    "publicIdentifier": "kevin-b-5885a270",
+    "linkedinUrl": "https://www.linkedin.com/in/kevin-b-5885a270",
+    "firstName": "Kevin",
+    "lastName": "B.",
+    "emails": [
+      {
+        "email": "kevin@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Security at Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": true,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "252278456",
+    "registeredAt": "2013-05-05T19:52:41.821Z",
+    "topSkills": null,
+    "connectionsCount": 604,
+    "followerCount": 598,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 3,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "18765",
+        "companyId": "3356",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3356/",
+        "schoolName": "Duke University"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": null,
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Security at Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "1 yr 2 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2025,
+          "text": "Mar 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "OpenAI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/11130470/",
+        "companyId": "11130470",
+        "duration": "3 yrs 11 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2021,
+          "text": "May 2021"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2025,
+          "text": "Mar 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_200_200/B56ZT8EYB8HsAI-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=O6RSWlpQ5W4zNCOCTu621qCyTijLuXFJS4pz2_hBQfo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_100_100/B56ZT8EYB8HsAQ-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=y7RA89V9q8GlAjQ1oRU-jf_-n5zlSXRCnykXBIkgHfM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Sr Security Engineer",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Cruise",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/6577635/",
+        "companyId": "6577635",
+        "duration": "1 yr 5 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "ed0d692f03f0d72ebd8ec39eb80d8275c37418ca",
+        "startDate": {
+          "month": "Jan",
+          "year": 2020,
+          "text": "Jan 2020"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2021,
+          "text": "May 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQEeMRk0ZPGOMg/company-logo_400_400/company-logo_400_400/0/1630605924177/cruise_automation_inc__logo?e=1776902400&v=beta&t=dstA5oeYDvGP9RnMyJ2AhQ6wnlQkjiVt2kfSuKlvqEQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEeMRk0ZPGOMg/company-logo_400_400/company-logo_400_400/0/1630605924177/cruise_automation_inc__logo?e=1776902400&v=beta&t=dstA5oeYDvGP9RnMyJ2AhQ6wnlQkjiVt2kfSuKlvqEQ",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEeMRk0ZPGOMg/company-logo_200_200/company-logo_200_200/0/1630605924177/cruise_automation_inc__logo?e=1776902400&v=beta&t=REqjyE222M-TFCFb7URqvvjD4TdDLeTd2Q4nfeKEQrs",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEeMRk0ZPGOMg/company-logo_100_100/company-logo_100_100/0/1630605924177/cruise_automation_inc__logo?e=1776902400&v=beta&t=osImG4YNQTgb_zcpWMuSMOCOiVd7TQEujJbt0dwEOAM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Security Engineer",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Cruise",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/6577635/",
+        "companyId": "6577635",
+        "duration": "11 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "ed0d692f03f0d72ebd8ec39eb80d8275c37418ca",
+        "startDate": {
+          "month": "Mar",
+          "year": 2019,
+          "text": "Mar 2019"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2020,
+          "text": "Jan 2020"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQEeMRk0ZPGOMg/company-logo_400_400/company-logo_400_400/0/1630605924177/cruise_automation_inc__logo?e=1776902400&v=beta&t=dstA5oeYDvGP9RnMyJ2AhQ6wnlQkjiVt2kfSuKlvqEQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEeMRk0ZPGOMg/company-logo_400_400/company-logo_400_400/0/1630605924177/cruise_automation_inc__logo?e=1776902400&v=beta&t=dstA5oeYDvGP9RnMyJ2AhQ6wnlQkjiVt2kfSuKlvqEQ",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEeMRk0ZPGOMg/company-logo_200_200/company-logo_200_200/0/1630605924177/cruise_automation_inc__logo?e=1776902400&v=beta&t=REqjyE222M-TFCFb7URqvvjD4TdDLeTd2Q4nfeKEQrs",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEeMRk0ZPGOMg/company-logo_100_100/company-logo_100_100/0/1630605924177/cruise_automation_inc__logo?e=1776902400&v=beta&t=osImG4YNQTgb_zcpWMuSMOCOiVd7TQEujJbt0dwEOAM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Principal Associate",
+        "location": "McLean, Virginia",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Capital One",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1419/",
+        "companyId": "1419",
+        "duration": "1 yr 8 mos",
+        "description": "Internal consultant role in Cyber Security supporting tech, data, and business teams.",
+        "skills": null,
+        "experienceGroupId": "1c2e2988193d9492647f1e52e64d86297cfdbb71",
+        "startDate": {
+          "month": "Jul",
+          "year": 2017,
+          "text": "Jul 2017"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2019,
+          "text": "Feb 2019"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQF0OgQyRZ9yAA/company-logo_400_400/company-logo_400_400/0/1635782718446/capital_one_logo?e=1776902400&v=beta&t=s_uvn2dk_ODyaQzlLDYTkyV4Re4N4nup2GMkGqEulfM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQF0OgQyRZ9yAA/company-logo_400_400/company-logo_400_400/0/1635782718446/capital_one_logo?e=1776902400&v=beta&t=s_uvn2dk_ODyaQzlLDYTkyV4Re4N4nup2GMkGqEulfM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQF0OgQyRZ9yAA/company-logo_200_200/company-logo_200_200/0/1635782718446/capital_one_logo?e=1776902400&v=beta&t=ZEnK5n9cRdHbh5I22NXiKtatgFcETuRcayD_3GQdmj0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQF0OgQyRZ9yAA/company-logo_100_100/company-logo_100_100/0/1635782718446/capital_one_logo?e=1776902400&v=beta&t=bs0d3mjv3Z6n93qIm-wjbY34r254zjCqZy5KZHra7cY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Associate & Sr. Associate",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Capital One",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1419/",
+        "companyId": "1419",
+        "duration": "1 yr 1 mo",
+        "description": "Dynamic Application Security testing and automated AppSec scanning of applications across the enterprise.",
+        "skills": null,
+        "experienceGroupId": "1c2e2988193d9492647f1e52e64d86297cfdbb71",
+        "startDate": {
+          "month": "Jul",
+          "year": 2016,
+          "text": "Jul 2016"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2017,
+          "text": "Jul 2017"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQF0OgQyRZ9yAA/company-logo_400_400/company-logo_400_400/0/1635782718446/capital_one_logo?e=1776902400&v=beta&t=s_uvn2dk_ODyaQzlLDYTkyV4Re4N4nup2GMkGqEulfM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQF0OgQyRZ9yAA/company-logo_400_400/company-logo_400_400/0/1635782718446/capital_one_logo?e=1776902400&v=beta&t=s_uvn2dk_ODyaQzlLDYTkyV4Re4N4nup2GMkGqEulfM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQF0OgQyRZ9yAA/company-logo_200_200/company-logo_200_200/0/1635782718446/capital_one_logo?e=1776902400&v=beta&t=ZEnK5n9cRdHbh5I22NXiKtatgFcETuRcayD_3GQdmj0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQF0OgQyRZ9yAA/company-logo_100_100/company-logo_100_100/0/1635782718446/capital_one_logo?e=1776902400&v=beta&t=bs0d3mjv3Z6n93qIm-wjbY34r254zjCqZy5KZHra7cY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Co-Owner",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "University Shipping and Storage",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/5323280/",
+        "companyId": "5323280",
+        "duration": "2 yrs 3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2014,
+          "text": "Mar 2014"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2016,
+          "text": "May 2016"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C510BAQGEy0PS_RWj1g/company-logo_400_400/company-logo_400_400/0/1631377593947?e=1776902400&v=beta&t=__5Vtdv2MlIxrZbnnpzBuriDpPOYXOD8CAm55D0etR8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQGEy0PS_RWj1g/company-logo_400_400/company-logo_400_400/0/1631377593947?e=1776902400&v=beta&t=__5Vtdv2MlIxrZbnnpzBuriDpPOYXOD8CAm55D0etR8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQGEy0PS_RWj1g/company-logo_200_200/company-logo_200_200/0/1631377593947?e=1776902400&v=beta&t=QNZCndRDm1q4goz1U3jc1OMg8uH1-T7VCc7qZI5UDXQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C510BAQGEy0PS_RWj1g/company-logo_100_100/company-logo_100_100/0/1631377593947?e=1776902400&v=beta&t=nfqHxBSZUj6KduNyD901ujsEwDYkcy48UnJKD5WOqLM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Network Security Intern",
+        "location": "Research Triangle Park, NC",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Cisco",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1063/",
+        "companyId": "1063",
+        "duration": "4 mos",
+        "description": "Internship in Network Security specializing in Advisory Services.",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2015,
+          "text": "May 2015"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2015,
+          "text": "Aug 2015"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQFYnR_Zrm87Dg/company-logo_400_400/B56ZnMyVr4HUAY-/0/1760077372453/cisco_logo?e=1776902400&v=beta&t=dANlxk3gXmg-Qzyo0P1OboZbrXQ02uToGmbIr4HqPmw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFYnR_Zrm87Dg/company-logo_400_400/B56ZnMyVr4HUAY-/0/1760077372453/cisco_logo?e=1776902400&v=beta&t=dANlxk3gXmg-Qzyo0P1OboZbrXQ02uToGmbIr4HqPmw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFYnR_Zrm87Dg/company-logo_200_200/B56ZnMyVr4HUAI-/0/1760077372453/cisco_logo?e=1776902400&v=beta&t=LYt34KgwfAYxI2b4vuRnGeCH02P_oWf0sFPC-9O4LKA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFYnR_Zrm87Dg/company-logo_100_100/B56ZnMyVr4HUAQ-/0/1760077372453/cisco_logo?e=1776902400&v=beta&t=ls1J8kAYmuHeawFhpxCQj2CgZG8t4CW3KPzKnZhe3_k",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Duke University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3356/",
+        "schoolId": "3356",
+        "degree": "Bachelor of Science in Engineering",
+        "fieldOfStudy": "Electrical Engineering",
+        "skills": [],
+        "startDate": {
+          "year": 2012,
+          "text": "2012"
+        },
+        "endDate": {
+          "year": 2016,
+          "text": "2016"
+        },
+        "period": "2012 - 2016",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGVn2MO4DWnLg/company-logo_400_400/B56ZbZv8i_H4AY-/0/1747409948261?e=1776902400&v=beta&t=YjUkHHHz_fOPwq3na8HG5WKVtnHdpr91m0LbQ2iqF_U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGVn2MO4DWnLg/company-logo_400_400/B56ZbZv8i_H4AY-/0/1747409948261?e=1776902400&v=beta&t=YjUkHHHz_fOPwq3na8HG5WKVtnHdpr91m0LbQ2iqF_U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGVn2MO4DWnLg/company-logo_200_200/B56ZbZv8i_H4AI-/0/1747409948261?e=1776902400&v=beta&t=8nBgtMzjbGg4feKeV4DgO9BrfTEMTODViDU0N2mxfG0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGVn2MO4DWnLg/company-logo_100_100/B56ZbZv8i_H4AQ-/0/1747409948261?e=1776902400&v=beta&t=JEo8j6zlzVnlRkNPP5z5X2Xc82w9kJZuGQK9EpdYUrE",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Network Security",
+        "positions": [
+          "Endorsed by 2 colleagues at Capital One"
+        ],
+        "endorsements": "6 endorsements"
+      },
+      {
+        "name": "Security",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Java",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Python"
+      },
+      {
+        "name": "Microsoft Office",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Linux"
+      },
+      {
+        "name": "BASH"
+      },
+      {
+        "name": "Application Security"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAATAFhsB-MSu8aXWUBacbi6fvU_SaAqdBH4",
+        "firstName": "Jeff",
+        "lastName": "Hanson",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "jshanson7",
+        "linkedinUrl": "https://www.linkedin.com/in/jshanson7"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABJRjjUBRj9EXhEAO-4ZyhHgzD0ztjMvrlI",
+        "firstName": "Andrea",
+        "lastName": "Madotto",
+        "position": "Member of Technical Staff at TML",
+        "publicIdentifier": "andrea-madotto-899b1386",
+        "linkedinUrl": "https://www.linkedin.com/in/andrea-madotto-899b1386"
+      },
+      {
+        "id": "ACoAABqSHaUBgoPu_j2NSmNfYyGkrcUvLn5mbbo",
+        "firstName": "Jacob",
+        "lastName": "van Gogh",
+        "position": "ML Research @ Thinking Machines",
+        "publicIdentifier": "jacobvangogh",
+        "linkedinUrl": "https://www.linkedin.com/in/jacobvangogh"
+      },
+      {
+        "id": "ACoAACaOARIBRO2EEH12QWQO29L__oI3N2K4u14",
+        "firstName": "Mingjie",
+        "lastName": "Sun",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "mingjie-sun-06a761160",
+        "linkedinUrl": "https://www.linkedin.com/in/mingjie-sun-06a761160"
+      },
+      {
+        "id": "ACoAAByqXXUBEhOg629uCLeNJjh_JXVoDI80KAo",
+        "firstName": "Danilo",
+        "lastName": "Carvalho",
+        "position": "Scale It Up!",
+        "publicIdentifier": "danilo-carvalho-35908a115",
+        "linkedinUrl": "https://www.linkedin.com/in/danilo-carvalho-35908a115"
+      },
+      {
+        "id": "ACoAABebSPMByZP3ZnuWuJpWKhAcOO8xLxhLatU",
+        "firstName": "Alicia",
+        "lastName": "P.",
+        "position": "IT",
+        "publicIdentifier": "aliciacphan",
+        "linkedinUrl": "https://www.linkedin.com/in/aliciacphan"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAAAD-hTABHsUcZMNYC-D_hAv_HSbY1IIDv3Y",
+        "firstName": "Opher",
+        "lastName": "Lieber",
+        "position": "Thinking Machines",
+        "publicIdentifier": "opherlieber",
+        "linkedinUrl": "https://www.linkedin.com/in/opherlieber"
+      },
+      {
+        "id": "ACoAABA0sF8BJqwmfoms3veu9TE72tj8JMUQEFA",
+        "firstName": "Sam",
+        "lastName": "Shleifer",
+        "position": "The Biggest Legend",
+        "publicIdentifier": "sam-shleifer-a5307a77",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-shleifer-a5307a77"
+      },
+      {
+        "id": "ACoAACEKIcoBlH0R5ZT_TKQuJ4i3ZD4WlI1-rME",
+        "firstName": "Jacob",
+        "lastName": "Menick",
+        "position": "Thinking Machines, Founding Team",
+        "publicIdentifier": "jacob-menick-5a277a135",
+        "linkedinUrl": "https://www.linkedin.com/in/jacob-menick-5a277a135"
+      },
+      {
+        "id": "ACoAADGE-AoBWopX8Yz0_gxbsPDk1rMk6Mx37ZE",
+        "firstName": "Giovanni",
+        "lastName": "D'Antonio",
+        "publicIdentifier": "giovanni-dantonio",
+        "linkedinUrl": "https://www.linkedin.com/in/giovanni-dantonio"
+      },
+      {
+        "id": "ACoAAAQ1QI4Bex6mqv5SgvahWcZuzAuWiTKciBo",
+        "firstName": "Bi",
+        "lastName": "Xue",
+        "position": "Thinking Machines Lab",
+        "publicIdentifier": "bi-xue-9527871b",
+        "linkedinUrl": "https://www.linkedin.com/in/bi-xue-9527871b"
+      },
+      {
+        "id": "ACoAAAhY-psBFcHXNbjunn6_QnPfV6Bo6w4yzug",
+        "firstName": "Kenny",
+        "lastName": "Yu",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "kenny-yu-aa3a9a3a",
+        "linkedinUrl": "https://www.linkedin.com/in/kenny-yu-aa3a9a3a"
+      },
+      {
+        "id": "ACoAABqU8psBncgwN-WH-D8F1Jq9i7OsFmcPDt4",
+        "firstName": "Jeffrey",
+        "lastName": "Tao",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "jeffrey-tao",
+        "linkedinUrl": "https://www.linkedin.com/in/jeffrey-tao"
+      },
+      {
+        "id": "ACoAACy2BxwB9fCrfCBI06w0X-gHyQTFLJIpJGc",
+        "firstName": "Guangxuan",
+        "lastName": "X.",
+        "publicIdentifier": "xgx",
+        "linkedinUrl": "https://www.linkedin.com/in/xgx"
+      },
+      {
+        "id": "ACoAAB4qbUUBsc9H_NLZN2duLUOOyyFDm-k_ACo",
+        "firstName": "Riley",
+        "lastName": "Shanahan",
+        "position": "Eng at Thinking Machines ",
+        "publicIdentifier": "rileyshanny",
+        "linkedinUrl": "https://www.linkedin.com/in/rileyshanny"
+      },
+      {
+        "id": "ACoAAAeoHjYB_Lo5sUFlpZpz2L74oe9nEIKztQA",
+        "firstName": "Jenya",
+        "lastName": "L.",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "jenya-l",
+        "linkedinUrl": "https://www.linkedin.com/in/jenya-l"
+      },
+      {
+        "id": "ACoAAAqPUXUB26nPtwJxJLy_Ar7H-YLBlb44QnY",
+        "firstName": "Neal",
+        "lastName": "Wu",
+        "publicIdentifier": "nealwu",
+        "linkedinUrl": "https://www.linkedin.com/in/nealwu"
+      },
+      {
+        "id": "ACoAAAAdzCEB9t8wLSGcpoQ71RdetK75KW7RgS4",
+        "firstName": "Mark",
+        "lastName": "Jen",
+        "position": "Engineer",
+        "publicIdentifier": "markjen",
+        "linkedinUrl": "https://www.linkedin.com/in/markjen"
+      },
+      {
+        "id": "ACoAAFzzZ4QBw6gkB2eheztmh6qhBa641CGG14o",
+        "firstName": "Andrew ",
+        "lastName": "Pellicciotta",
+        "position": "Student-Athlete at Duke University",
+        "publicIdentifier": "andrew-pellicciotta-8b0312376",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-pellicciotta-8b0312376"
+      },
+      {
+        "id": "ACoAAF2mFPABHGVnGC4Qm6j_V7zpf88KDIXY2j0",
+        "firstName": "Patrick",
+        "lastName": "Dahlstrom",
+        "position": "Founder, Hope For Families | Neuroscience-Informed Addiction Prevention | Recovery & Early Risk Education | Charlotte, NC",
+        "publicIdentifier": "patrick-dahlstrom-30021b37a",
+        "linkedinUrl": "https://www.linkedin.com/in/patrick-dahlstrom-30021b37a"
+      },
+      {
+        "id": "ACoAAF6qS84BeCNpwQb4mOkdxr6K7uP19gU3-SE",
+        "firstName": "Annabel",
+        "lastName": "Silbersher",
+        "position": "Student at University of Michigan",
+        "publicIdentifier": "annabel-silbersher-152a84383",
+        "linkedinUrl": "https://www.linkedin.com/in/annabel-silbersher-152a84383"
+      },
+      {
+        "id": "ACoAAGPiUQwBEp6Bl1zFW99YBlKnNyxQntuoKbA",
+        "firstName": "Charlotte",
+        "lastName": "Wulfsohn",
+        "position": "Student at Ethical Culture Fieldston School",
+        "publicIdentifier": "charlotte-wulfsohn-b242693a9",
+        "linkedinUrl": "https://www.linkedin.com/in/charlotte-wulfsohn-b242693a9"
+      },
+      {
+        "id": "ACoAAF7GQHsBpkBIsyE4rnyYN2zUBhd2RpCfSwA",
+        "firstName": "Andrew",
+        "lastName": "Kim",
+        "position": "Student at Duke University",
+        "publicIdentifier": "andrew-kim-44b608384",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-kim-44b608384"
+      },
+      {
+        "id": "ACoAAGO7sagBlmIWAO8RaGyZN4hFHftA4XFdRVc",
+        "firstName": "Jenna",
+        "lastName": "Rishi",
+        "position": "Student at Pine Crest School",
+        "publicIdentifier": "jenna-rishi-1744493a8",
+        "linkedinUrl": "https://www.linkedin.com/in/jenna-rishi-1744493a8"
+      },
+      {
+        "id": "ACoAAGNlZV0B8q1nB0EzNCA2HjuFYzFnC88avS0",
+        "firstName": "Momina",
+        "lastName": "I.",
+        "position": "Engaging Industry Leaders | Speaker & Panelist Outreach | Anti-Counterfeiting | | Nexus Conference | May 4–5, NJ 2026",
+        "publicIdentifier": "momina-i-2515803a6",
+        "linkedinUrl": "https://www.linkedin.com/in/momina-i-2515803a6"
+      },
+      {
+        "id": "ACoAAGXA8osBrEY01hJFrtdoqsnBDTEWRYFcwC4",
+        "firstName": "Kristina",
+        "lastName": "Durham",
+        "position": "Student at Duke University",
+        "publicIdentifier": "kristina-durham-54b8763b7",
+        "linkedinUrl": "https://www.linkedin.com/in/kristina-durham-54b8763b7"
+      },
+      {
+        "id": "ACoAAF0ao28BIB6PbEOvNM6Bn6QPTx0qXPmayH0",
+        "firstName": "Steven Yichen",
+        "lastName": "Song",
+        "position": "Aspiring Entrepreneur | ISF Student with a Global Vision | Building Tomorrow, Today | Passion for Finance & Innovation | Intern at Greensun Germany GmbH",
+        "publicIdentifier": "steven-yichen-song-893152377",
+        "linkedinUrl": "https://www.linkedin.com/in/steven-yichen-song-893152377"
+      },
+      {
+        "id": "ACoAAF9I6akB4OuXsqQWXJNOKvr02MhiRuGCQVo",
+        "firstName": "Mark",
+        "lastName": "Sereda",
+        "position": "Student at Duke University",
+        "publicIdentifier": "mark-sereda-975457387",
+        "linkedinUrl": "https://www.linkedin.com/in/mark-sereda-975457387"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAA8JdrgBBaa_ZfXSIzoHYVvozJMA_zlv4Q0"
+    }
+  }
+}

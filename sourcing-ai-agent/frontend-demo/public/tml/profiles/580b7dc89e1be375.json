@@ -1,0 +1,796 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAACHgqNcBz8o5d7AoFfNA5tHc0BEOuFbd6Jk",
+    "profile_url": "https://www.linkedin.com/in/ACwAACHgqNcBz8o5d7AoFfNA5tHc0BEOuFbd6Jk"
+  },
+  "item": {
+    "id": "ACoAACHgqNcBO7G9QHjfnTyp5v6rVbPMJ19f1dc",
+    "publicIdentifier": "clairecfu",
+    "linkedinUrl": "https://www.linkedin.com/in/clairecfu",
+    "firstName": "Claire",
+    "lastName": "Fu",
+    "emails": [
+      {
+        "email": "claire.fu@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Member of Technical Staff @ Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": true,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "New York, New York, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "New York City, NY, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "New York",
+        "city": "New York City"
+      }
+    },
+    "objectUrn": "568371415",
+    "registeredAt": "2017-03-24T01:41:43.993Z",
+    "topSkills": null,
+    "connectionsCount": 879,
+    "followerCount": 915,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 12,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "18765",
+        "companyId": "3356",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3356/",
+        "schoolName": "Duke University"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": {
+      "url": "https://media.licdn.com/dms/image/v2/C5616AQGFixThWHgRcQ/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1590965368184?e=1776902400&v=beta&t=_a70yDBXPqo7om7_Wwttc_LU3Zg4E6lBRa_4ZlukKTE",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5616AQGFixThWHgRcQ/profile-displaybackgroundimage-shrink_350_1400/profile-displaybackgroundimage-shrink_350_1400/0/1590965368184?e=1776902400&v=beta&t=_a70yDBXPqo7om7_Wwttc_LU3Zg4E6lBRa_4ZlukKTE",
+          "width": 1024,
+          "height": 256,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5616AQGFixThWHgRcQ/profile-displaybackgroundimage-shrink_200_800/profile-displaybackgroundimage-shrink_200_800/0/1590965368144?e=1776902400&v=beta&t=ymnwj9WGWgPskwUDPNIemvhgg9rPMGS4OGXaQ6x3IOc",
+          "width": 800,
+          "height": 200,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Member of Technical Staff @ Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "5 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Dec",
+          "year": 2025,
+          "text": "Dec 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer",
+        "location": "New York, NY",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Percepta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/108950465/",
+        "companyId": "108950465",
+        "duration": "8 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2025,
+          "text": "Mar 2025"
+        },
+        "endDate": {
+          "month": "Oct",
+          "year": 2025,
+          "text": "Oct 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHcujQjkN2p-g/company-logo_400_400/B4EZy75tSEKIAc-/0/1772678993338/percepta_gc_logo?e=1776902400&v=beta&t=j36NKvn5AfPzyaKVmYV7UdGTU1PJ_ZWLr6u0jRciRtM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHcujQjkN2p-g/company-logo_400_400/B4EZy75tSEKIAc-/0/1772678993338/percepta_gc_logo?e=1776902400&v=beta&t=j36NKvn5AfPzyaKVmYV7UdGTU1PJ_ZWLr6u0jRciRtM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHcujQjkN2p-g/company-logo_200_200/B4EZy75tSEKIAM-/0/1772678993338/percepta_gc_logo?e=1776902400&v=beta&t=U9eCMqSkVcChS9L-T66opaN5foB4EhZGZo-UlTX_VK8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHcujQjkN2p-g/company-logo_100_100/B4EZy75tSEKIAU-/0/1772678993338/percepta_gc_logo?e=1776902400&v=beta&t=niRbILKSzgJeoH63K1IOe-YQuntLqpX2KZpQKKl0e5k",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer",
+        "location": "New York, New York, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Hex",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/69022212/",
+        "companyId": "69022212",
+        "duration": "2 yrs 6 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Oct",
+          "year": 2022,
+          "text": "Oct 2022"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2025,
+          "text": "Mar 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGPSikej9EpbQ/company-logo_400_400/company-logo_400_400/0/1718232346589?e=1776902400&v=beta&t=dxtp_cQpDbsfVqMNjNmcheONGI9DRIfHPa_RxxvXet0",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGPSikej9EpbQ/company-logo_400_400/company-logo_400_400/0/1718232346589?e=1776902400&v=beta&t=dxtp_cQpDbsfVqMNjNmcheONGI9DRIfHPa_RxxvXet0",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGPSikej9EpbQ/company-logo_200_200/company-logo_200_200/0/1718232346589?e=1776902400&v=beta&t=Cn-BXmsF49xpTToklBdmyyi7zS8CVzczuq8qsESbQuA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGPSikej9EpbQ/company-logo_100_100/company-logo_100_100/0/1718232346589?e=1776902400&v=beta&t=hfq6inaD6fXiP_PbjIBbSO9DG1dzl7er4Q9DfqE87V4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Technical Lead",
+        "location": "New York, New York, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Palantir Technologies",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/20708/",
+        "companyId": "20708",
+        "duration": "8 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "3f7536546688b90605b15d0bb5d826fdd01bc9c7",
+        "startDate": {
+          "month": "Feb",
+          "year": 2022,
+          "text": "Feb 2022"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2022,
+          "text": "Sep 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFj435hYi7p1A/company-logo_400_400/B4EZXS7uMcHcAY-/0/1743000626250/palantir_technologies_logo?e=1776902400&v=beta&t=zSjOi8D5UpaPcNpJdFck2unJQFnNu8Tl8wEaQq0lLcQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFj435hYi7p1A/company-logo_400_400/B4EZXS7uMcHcAY-/0/1743000626250/palantir_technologies_logo?e=1776902400&v=beta&t=zSjOi8D5UpaPcNpJdFck2unJQFnNu8Tl8wEaQq0lLcQ",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFj435hYi7p1A/company-logo_200_200/B4EZXS7uMcHcAI-/0/1743000626250/palantir_technologies_logo?e=1776902400&v=beta&t=QJkRzIFQCE869PwG-R94p1Ns7me_ayxlKCgEbZUSWaQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFj435hYi7p1A/company-logo_100_100/B4EZXS7uMcHcAQ-/0/1743000626250/palantir_technologies_logo?e=1776902400&v=beta&t=5P3_h55G8JVEjycEui5Bvu2wMZKvNtkJngCVQFxHr6o",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Forward Deployed Software Engineer",
+        "location": "New York, New York, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Palantir Technologies",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/20708/",
+        "companyId": "20708",
+        "duration": "1 yr 7 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "3f7536546688b90605b15d0bb5d826fdd01bc9c7",
+        "startDate": {
+          "month": "Aug",
+          "year": 2020,
+          "text": "Aug 2020"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2022,
+          "text": "Feb 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFj435hYi7p1A/company-logo_400_400/B4EZXS7uMcHcAY-/0/1743000626250/palantir_technologies_logo?e=1776902400&v=beta&t=zSjOi8D5UpaPcNpJdFck2unJQFnNu8Tl8wEaQq0lLcQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFj435hYi7p1A/company-logo_400_400/B4EZXS7uMcHcAY-/0/1743000626250/palantir_technologies_logo?e=1776902400&v=beta&t=zSjOi8D5UpaPcNpJdFck2unJQFnNu8Tl8wEaQq0lLcQ",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFj435hYi7p1A/company-logo_200_200/B4EZXS7uMcHcAI-/0/1743000626250/palantir_technologies_logo?e=1776902400&v=beta&t=QJkRzIFQCE869PwG-R94p1Ns7me_ayxlKCgEbZUSWaQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFj435hYi7p1A/company-logo_100_100/B4EZXS7uMcHcAQ-/0/1743000626250/palantir_technologies_logo?e=1776902400&v=beta&t=5P3_h55G8JVEjycEui5Bvu2wMZKvNtkJngCVQFxHr6o",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Forward Deployed Software Engineering Intern",
+        "location": "Washington D.C. Metro Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Palantir Technologies",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/20708/",
+        "companyId": "20708",
+        "duration": "4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2019,
+          "text": "May 2019"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2019,
+          "text": "Aug 2019"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFj435hYi7p1A/company-logo_400_400/B4EZXS7uMcHcAY-/0/1743000626250/palantir_technologies_logo?e=1776902400&v=beta&t=zSjOi8D5UpaPcNpJdFck2unJQFnNu8Tl8wEaQq0lLcQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFj435hYi7p1A/company-logo_400_400/B4EZXS7uMcHcAY-/0/1743000626250/palantir_technologies_logo?e=1776902400&v=beta&t=zSjOi8D5UpaPcNpJdFck2unJQFnNu8Tl8wEaQq0lLcQ",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFj435hYi7p1A/company-logo_200_200/B4EZXS7uMcHcAI-/0/1743000626250/palantir_technologies_logo?e=1776902400&v=beta&t=QJkRzIFQCE869PwG-R94p1Ns7me_ayxlKCgEbZUSWaQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQFj435hYi7p1A/company-logo_100_100/B4EZXS7uMcHcAQ-/0/1743000626250/palantir_technologies_logo?e=1776902400&v=beta&t=5P3_h55G8JVEjycEui5Bvu2wMZKvNtkJngCVQFxHr6o",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "R&D Engineering Intern",
+        "location": "Redwood City",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Nevro",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1589941/",
+        "companyId": "1589941",
+        "duration": "4 mos",
+        "description": "Developed an automated test system for verification level testing of neuromodulation devices",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2018,
+          "text": "May 2018"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2018,
+          "text": "Aug 2018"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGHsAtn4Dv8cw/company-logo_400_400/B56Zc8XOONHEAY-/0/1749064410324/nevro_hfx_logo?e=1776902400&v=beta&t=fnuNFmgsLtpBU6_CVfrf0QmsnGWcIFi8NFSPW2cZRb8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGHsAtn4Dv8cw/company-logo_400_400/B56Zc8XOONHEAY-/0/1749064410324/nevro_hfx_logo?e=1776902400&v=beta&t=fnuNFmgsLtpBU6_CVfrf0QmsnGWcIFi8NFSPW2cZRb8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGHsAtn4Dv8cw/company-logo_200_200/B56Zc8XOONHEAI-/0/1749064410324/nevro_hfx_logo?e=1776902400&v=beta&t=p6mik4teMf-RevYoV-lfN74Wwjx4-LC-id2QE4GyQ80",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGHsAtn4Dv8cw/company-logo_100_100/B56Zc8XOONHEAQ-/0/1749064410324/nevro_hfx_logo?e=1776902400&v=beta&t=lGowF_hS_glpCbW0Ex4qGvZ_2F2myZGpGVLYa2i60ug",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Summer Research Intern",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "UCSF Medical Center",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3029/",
+        "companyId": "3029",
+        "duration": "4 mos",
+        "description": "Engineered a transgenic line of zebrafish with specific markers, developed a scientific protocol for quantifying the effect of specific transcription factors on cardiac development",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2017,
+          "text": "May 2017"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2017,
+          "text": "Aug 2017"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQG4mXAdGhQW-A/company-logo_400_400/company-logo_400_400/0/1631306083473?e=1776902400&v=beta&t=Pn0GOCUwHLvvy13BurRKrwqk-REUTHocjHX0xo-dTSE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQG4mXAdGhQW-A/company-logo_400_400/company-logo_400_400/0/1631306083473?e=1776902400&v=beta&t=Pn0GOCUwHLvvy13BurRKrwqk-REUTHocjHX0xo-dTSE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQG4mXAdGhQW-A/company-logo_200_200/company-logo_200_200/0/1631306083473?e=1776902400&v=beta&t=O0gwq1-2UpIXU4a11_OVZWAEX7bwnjAzyxwg-OvneHY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQG4mXAdGhQW-A/company-logo_100_100/company-logo_100_100/0/1631306083473?e=1776902400&v=beta&t=RER4nmTknJZ6Z4s8jXqHxJrAySfjCZ-1_YZQqEczzPw",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Duke University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3356/",
+        "schoolId": "3356",
+        "degree": "BSE",
+        "fieldOfStudy": "Electrical Computer Engineering & Computer Science",
+        "skills": [],
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGVn2MO4DWnLg/company-logo_400_400/B56ZbZv8i_H4AY-/0/1747409948261?e=1776902400&v=beta&t=YjUkHHHz_fOPwq3na8HG5WKVtnHdpr91m0LbQ2iqF_U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGVn2MO4DWnLg/company-logo_400_400/B56ZbZv8i_H4AY-/0/1747409948261?e=1776902400&v=beta&t=YjUkHHHz_fOPwq3na8HG5WKVtnHdpr91m0LbQ2iqF_U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGVn2MO4DWnLg/company-logo_200_200/B56ZbZv8i_H4AI-/0/1747409948261?e=1776902400&v=beta&t=8nBgtMzjbGg4feKeV4DgO9BrfTEMTODViDU0N2mxfG0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGVn2MO4DWnLg/company-logo_100_100/B56ZbZv8i_H4AQ-/0/1747409948261?e=1776902400&v=beta&t=JEo8j6zlzVnlRkNPP5z5X2Xc82w9kJZuGQK9EpdYUrE",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Python",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Java",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Matlab",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Microsoft Office",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Public Speaking",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Management",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Research",
+        "endorsements": "5 endorsements"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "PREMIUM_INMAIL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAC27AzgBltjq9bdJ6BnirYC2ZQ2n0b3KL3A",
+        "firstName": "Aditya",
+        "lastName": "Koneru",
+        "position": "ML @ Percepta",
+        "publicIdentifier": "aditya-koneru",
+        "linkedinUrl": "https://www.linkedin.com/in/aditya-koneru"
+      },
+      {
+        "id": "ACoAAEZnBtoBb1Us7ZKgHfOXAYT764pKcDQy848",
+        "firstName": "Songlin",
+        "lastName": "Yang",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "songlin-yang-b8a69728b",
+        "linkedinUrl": "https://www.linkedin.com/in/songlin-yang-b8a69728b"
+      },
+      {
+        "id": "ACoAAAd3c8cBXKnzqS80_HMaDIGNdqrXbaFbO5g",
+        "firstName": "James",
+        "lastName": "Sun",
+        "position": "Software Engineer",
+        "publicIdentifier": "james5un",
+        "linkedinUrl": "https://www.linkedin.com/in/james5un"
+      },
+      {
+        "id": "ACoAABQ5lJUBry2byQYf_TtxDF9Rha9l-RqYsaM",
+        "firstName": "Guang-He",
+        "lastName": "Lee",
+        "position": "Thinking Machines Lab | Prev: Anthropic, Citadel, MIT",
+        "publicIdentifier": "guang-he-lee-64577895",
+        "linkedinUrl": "https://www.linkedin.com/in/guang-he-lee-64577895"
+      },
+      {
+        "id": "ACoAAA-1igABhbo8Qs1RI1nhVq-uBZZlDAe1Ta0",
+        "firstName": "Hirsh",
+        "lastName": "Jain",
+        "position": "CEO & Co-founder @ Percepta",
+        "publicIdentifier": "hirshjain",
+        "linkedinUrl": "https://www.linkedin.com/in/hirshjain"
+      },
+      {
+        "id": "ACoAABGaEy8Bu1ycKB5WUvyRc69OERCzymW7mxY",
+        "firstName": "Jamie",
+        "lastName": "Cahill",
+        "position": "Member of Technical Staff @ Thinking Machines, Ex-Meta",
+        "publicIdentifier": "james-cahill-093a9582",
+        "linkedinUrl": "https://www.linkedin.com/in/james-cahill-093a9582"
+      },
+      {
+        "id": "ACoAAA07gngBMSAfqnQzqooZlt9NQAye4i3gwt0",
+        "firstName": "Michael",
+        "lastName": "Rochlin",
+        "position": "Co-founder / Builder @ Percepta",
+        "publicIdentifier": "michaelrochlin",
+        "linkedinUrl": "https://www.linkedin.com/in/michaelrochlin"
+      },
+      {
+        "id": "ACoAABbVIiMBiGuBThX77_97Xm2POUcxN49h6Ak",
+        "firstName": "Shohini",
+        "lastName": "Gupta",
+        "position": "product @ percepta // healthcare operator",
+        "publicIdentifier": "shohini-gupta",
+        "linkedinUrl": "https://www.linkedin.com/in/shohini-gupta"
+      },
+      {
+        "id": "ACoAABkBHycBRTe-cw-PuTQDcSew9v0UGKe0C_Y",
+        "firstName": "Joanna K.",
+        "lastName": "Cohen",
+        "position": "Applied AI Engineer @ Percepta",
+        "publicIdentifier": "joannakcohen",
+        "linkedinUrl": "https://www.linkedin.com/in/joannakcohen"
+      },
+      {
+        "id": "ACoAAAP1a5sBmX_1c3MWHdGMCyOivUST5JFsw8Y",
+        "firstName": "Gautam",
+        "lastName": "P.",
+        "position": "Product @ Percepta | ex-Palantir",
+        "publicIdentifier": "gautam-punukollu",
+        "linkedinUrl": "https://www.linkedin.com/in/gautam-punukollu"
+      },
+      {
+        "id": "ACoAABqYocAB_-RIpkDEhEf0w237qh1-Zj_NG-M",
+        "firstName": "Bryan",
+        "lastName": "McLellan",
+        "position": "Engineering @ Percepta",
+        "publicIdentifier": "bryanmcl",
+        "linkedinUrl": "https://www.linkedin.com/in/bryanmcl"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "position": "Co-Founder and CEO at Thinking Machines Lab",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAACHG180BXiyeZ2qJgoggx27e4iM3ajxvp18",
+        "firstName": "Andy",
+        "lastName": "Hwang",
+        "position": "thinking machines",
+        "publicIdentifier": "andrewnhwang",
+        "linkedinUrl": "https://www.linkedin.com/in/andrewnhwang"
+      },
+      {
+        "id": "ACoAAB5DF9EBDtOdxBZyH6EO6XyrHAqYc3oLVRc",
+        "firstName": "Radha",
+        "lastName": "Jain",
+        "position": "Co-founder @ Percepta",
+        "publicIdentifier": "radha-jain-815047122",
+        "linkedinUrl": "https://www.linkedin.com/in/radha-jain-815047122"
+      },
+      {
+        "id": "ACoAAB4qbUUBsc9H_NLZN2duLUOOyyFDm-k_ACo",
+        "firstName": "Riley",
+        "lastName": "Shanahan",
+        "position": "Eng at Thinking Machines ",
+        "publicIdentifier": "rileyshanny",
+        "linkedinUrl": "https://www.linkedin.com/in/rileyshanny"
+      },
+      {
+        "id": "ACoAAA9WAhkB8dOI3mHW07oyd13yBd_PcUBfCag",
+        "firstName": "Thomas",
+        "lastName": "Mathew",
+        "position": "CTO & Co-founder @ Percepta",
+        "publicIdentifier": "thomas-mathew-5b520172",
+        "linkedinUrl": "https://www.linkedin.com/in/thomas-mathew-5b520172"
+      },
+      {
+        "id": "ACoAAAoCp-oBl3aQIVQb2zngDK7Jx6lrZJGpIjw",
+        "firstName": "Vipul",
+        "lastName": "Shekhawat",
+        "position": "CTO @ T51",
+        "publicIdentifier": "vipul-shekhawat",
+        "linkedinUrl": "https://www.linkedin.com/in/vipul-shekhawat"
+      },
+      {
+        "id": "ACoAAApeTPwB4SLwOdJNTKwxT5HLOUXRaH7HUSM",
+        "firstName": "Darren",
+        "lastName": "Zhao",
+        "position": "Software Engineer",
+        "publicIdentifier": "darryqueen",
+        "linkedinUrl": "https://www.linkedin.com/in/darryqueen"
+      },
+      {
+        "id": "ACoAABoG0oUBl986ZaMrLUASG1NhDoJyVlav4Po",
+        "firstName": "Eric",
+        "lastName": "Zhang",
+        "position": "MTS, Thinking Machines",
+        "publicIdentifier": "ekzhang",
+        "linkedinUrl": "https://www.linkedin.com/in/ekzhang"
+      },
+      {
+        "id": "ACoAABXzis4BIpJZ_4S5ChkRhF6RquA6FrhIqko",
+        "firstName": "Athul Paul",
+        "lastName": "Jacob",
+        "position": "Co-founder & Chief AI Officer @ Percepta | General Catalyst",
+        "publicIdentifier": "apjacob",
+        "linkedinUrl": "https://www.linkedin.com/in/apjacob"
+      },
+      {
+        "id": "ACoAAGQAS5gB7czjKt2_ixWVG1rbgMjhyk7inx4",
+        "firstName": "Nate",
+        "lastName": "Lahey",
+        "position": "Air Specialist at Microsoft",
+        "publicIdentifier": "nate-lahey-aa0a563a9",
+        "linkedinUrl": "https://www.linkedin.com/in/nate-lahey-aa0a563a9"
+      },
+      {
+        "id": "ACoAAF3SWDYB6aZAqtjbw1-LDNZ4qxxHLFKTL0g",
+        "firstName": "Md",
+        "lastName": "Mdamaz",
+        "position": "Company work at Thinking Machines Lab",
+        "publicIdentifier": "md-mdamaz-b5a19937b",
+        "linkedinUrl": "https://www.linkedin.com/in/md-mdamaz-b5a19937b"
+      },
+      {
+        "id": "ACoAACA8zv0BTVWLSUHsPJrWsUI10jzn0F57pHo",
+        "firstName": "Damir",
+        "lastName": "Sartayev",
+        "position": "AI CTO & Founder | MY project LNN+LLM+QML=AGI | Quantum, Neuro-symbolic AI | Liquid Neural Networks | RWKV | Mamba(SSM)  | Pharmacy AI, Minerals AI | Full‑Stack AI (LLMs, Agents, Fine‑Tuning, RAG, Vision) | Q-Day Q-ark",
+        "publicIdentifier": "damir-q-day-q-ark",
+        "linkedinUrl": "https://www.linkedin.com/in/damir-q-day-q-ark"
+      },
+      {
+        "id": "ACoAADopuTsBh9lDxOJzJsV8jI_KfOrsc6Tu7aQ",
+        "firstName": "Aashitosh",
+        "lastName": "Swami",
+        "position": "Lab assistant",
+        "publicIdentifier": "aashitosh-swami-67796a232",
+        "linkedinUrl": "https://www.linkedin.com/in/aashitosh-swami-67796a232"
+      },
+      {
+        "id": "ACoAADwrCKUB0FU7B3O7AIg9j_wieI-QOvJrtEE",
+        "firstName": "Katy",
+        "lastName": "Liemandt",
+        "position": "TML | San Francisco",
+        "publicIdentifier": "katy-liemandt-399092242",
+        "linkedinUrl": "https://www.linkedin.com/in/katy-liemandt-399092242"
+      },
+      {
+        "id": "ACoAADYMzQABdXTSxolT2YjHmNBBSeT6YrGSQmQ",
+        "firstName": "Tarushii",
+        "lastName": "Goel",
+        "position": "Member of Technical Staff @ Thinking Machines",
+        "publicIdentifier": "tarushii-goel",
+        "linkedinUrl": "https://www.linkedin.com/in/tarushii-goel"
+      },
+      {
+        "id": "ACoAAAM07-gB20Vg4hTVwpax2eyLJhzmkVGgucg",
+        "firstName": "Katie",
+        "lastName": "Slattery",
+        "position": "Accounting @ Thinking Machines Lab",
+        "publicIdentifier": "katieslattery",
+        "linkedinUrl": "https://www.linkedin.com/in/katieslattery"
+      },
+      {
+        "id": "ACoAACxX5AEBYonmfz9M8tQ8jO7Nx3jIXe_VSjw",
+        "firstName": "Sophie Rose",
+        "lastName": "Shapiro",
+        "position": "Creative Operations",
+        "publicIdentifier": "sophie-rose-shapiro",
+        "linkedinUrl": "https://www.linkedin.com/in/sophie-rose-shapiro"
+      },
+      {
+        "id": "ACoAAFUBvsYBMskyWP5r-Lf7ZUccZSuFy2nCqkA",
+        "firstName": "Ankit",
+        "lastName": "Baghel",
+        "position": "--DMLT lab technician\nb.sc chemistry chemical industry lab",
+        "publicIdentifier": "ankit-baghel-40675a339",
+        "linkedinUrl": "https://www.linkedin.com/in/ankit-baghel-40675a339"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAACHgqNcBz8o5d7AoFfNA5tHc0BEOuFbd6Jk"
+    }
+  }
+}

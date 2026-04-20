@@ -1,0 +1,1918 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAACFV0UQBM-cfx-FBaFs9Y5CMrTj5wOhnX2w",
+    "profile_url": "https://www.linkedin.com/in/ACwAACFV0UQBM-cfx-FBaFs9Y5CMrTj5wOhnX2w"
+  },
+  "item": {
+    "id": "ACoAACFV0UQBNVYxFEtW9ae_anedXG4Xy7X2SLw",
+    "publicIdentifier": "bhandarkar",
+    "linkedinUrl": "https://www.linkedin.com/in/bhandarkar",
+    "firstName": "Pawan",
+    "lastName": "Bhandarkar",
+    "emails": [
+      {
+        "email": "pawan.bhandarkar@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "MTS at Thinky. Prev @xAI",
+    "openToWork": false,
+    "hiring": false,
+    "premium": true,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Mountain View, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "Mountain View, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "Mountain View"
+      }
+    },
+    "objectUrn": "559272260",
+    "registeredAt": "2017-01-25T14:53:53.638Z",
+    "topSkills": "React.js • Go (Programming Language) • TypeScript • Python (Programming Language) • CSS",
+    "connectionsCount": 2733,
+    "followerCount": 4431,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 4,
+            "year": 2026,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "19232",
+        "companyId": "3147",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3147/",
+        "schoolName": "Carnegie Mellon University"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5603AQEvZaxrChPnLg/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1694894213130?e=1776902400&v=beta&t=GNl4AloPREH8yBIIETbCdjwr92C7w4Kg7JTFX15svDo",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQEvZaxrChPnLg/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1694894213130?e=1776902400&v=beta&t=GNl4AloPREH8yBIIETbCdjwr92C7w4Kg7JTFX15svDo",
+          "width": 375,
+          "height": 375,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQEvZaxrChPnLg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1694894213130?e=1776902400&v=beta&t=ABuDZJgWQzj90zBoe_-lghHt0jePz3zDNg36e8VNwgM",
+          "width": 375,
+          "height": 375,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQEvZaxrChPnLg/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1694894213130?e=1776902400&v=beta&t=lt8zl9YFIyNPpcCfaYf7SLd8MSN2TU9AZ5S_d7Phh2U",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQEvZaxrChPnLg/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1694894213130?e=1776902400&v=beta&t=JUdKtqX6kb9Q2LBRVqm8X8s7Mh0XKhq_iz_MD3QEQH4",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D5603AQEvZaxrChPnLg/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1694894213130?e=1776902400&v=beta&t=GNl4AloPREH8yBIIETbCdjwr92C7w4Kg7JTFX15svDo",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "MTS at Thinky. Prev @xAI",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco Bay Area",
+        "employmentType": "Full-time",
+        "workplaceType": "Hybrid",
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "1 mo",
+        "description": "Core Infra (Research)",
+        "skills": null,
+        "startDate": {
+          "month": "Apr",
+          "year": 2026,
+          "text": "Apr 2026"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Member of Technical Staff",
+        "location": "California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "xAI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/96151950/",
+        "companyId": "96151950",
+        "duration": "1 yr 5 mos",
+        "description": "- Human Data Platform Engineering \n- Research Acceleration & Tooling \n- Developer Productivity Agents ",
+        "skills": null,
+        "startDate": {
+          "month": "Dec",
+          "year": 2024,
+          "text": "Dec 2024"
+        },
+        "endDate": {
+          "month": "Apr",
+          "year": 2026,
+          "text": "Apr 2026"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQFGK5Kkd1nUlg/company-logo_400_400/company-logo_400_400/0/1738099065875/xai_logo?e=1776902400&v=beta&t=D9_BxwFh9s6Xs2Cj7r80cNvoc3yl7tyg6f8ZvrbXv64",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFGK5Kkd1nUlg/company-logo_400_400/company-logo_400_400/0/1738099065875/xai_logo?e=1776902400&v=beta&t=D9_BxwFh9s6Xs2Cj7r80cNvoc3yl7tyg6f8ZvrbXv64",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFGK5Kkd1nUlg/company-logo_200_200/company-logo_200_200/0/1738099065875/xai_logo?e=1776902400&v=beta&t=HEoRgaX2hRkDsEbWqIdB85Qph6PAPQDMvqQqOoxhzHc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFGK5Kkd1nUlg/company-logo_100_100/company-logo_100_100/0/1738099065875/xai_logo?e=1776902400&v=beta&t=fPyP5ijKRIbwP3cYP1d0JhCSK_zHRQZxBvUsdDb3vPk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Founding Engineer",
+        "location": "Sunnyvale, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Converge Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/96875433/",
+        "companyId": "96875433",
+        "duration": "1 yr",
+        "description": "• Built an LLM-powered hardware co-designer that allows Field Application Engineers to find, compare, and evaluate electronic components using natural-language\n• Designed and developed a frontend with generative UI, feedback for AI evaluation, tiered access control, and more, with state managed via Hooks + Context API and errors monitored via LogRocket\n• Contributed to developing a RAG backend with tools like Pinecone and Elasticsearch for context retrieval, DynamoDB for storage, and Langchain for the agent.\n• Rapidly iterated on prompt engineering using unit tests for the LLM calls as well as the providers' API consoles\n• Developed data extraction pipelines in Python for online processing of EC datasheets and use in LLM context",
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2024,
+          "text": "Jan 2024"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2024,
+          "text": "Dec 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQFgbFsg1Q2XZQ/company-logo_400_400/company-logo_400_400/0/1693174111070?e=1776902400&v=beta&t=AAxGtqR3GLB3tnXZlo3xt7QLCWVIuRZbgEYn3Fs-spM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFgbFsg1Q2XZQ/company-logo_400_400/company-logo_400_400/0/1693174111070?e=1776902400&v=beta&t=AAxGtqR3GLB3tnXZlo3xt7QLCWVIuRZbgEYn3Fs-spM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFgbFsg1Q2XZQ/company-logo_200_200/company-logo_200_200/0/1693174111070?e=1776902400&v=beta&t=28gE_UhuvzwHqPrfacmVeuya4eLyW2boeKMO_0-UDvY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFgbFsg1Q2XZQ/company-logo_100_100/company-logo_100_100/0/1693174111070?e=1776902400&v=beta&t=IsX26x8qbMiRohadHdOvgiI5Xl7UOLDCjGh5aNPioy8",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Graduate Teaching Assistant",
+        "location": "Silicon Valley, California, United States",
+        "employmentType": "Part-time",
+        "workplaceType": "On-site",
+        "companyName": "Carnegie Mellon University",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/carnegie-mellon-university/",
+        "companyId": "3147",
+        "companyUniversalName": "carnegie-mellon-university",
+        "duration": "6 mos",
+        "description": "18989: Introduction to Graduate Studies",
+        "skills": null,
+        "experienceGroupId": "0d55cd3f6746fe94e8663ba833496201ec8a5e52",
+        "startDate": {
+          "month": "Aug",
+          "year": 2023,
+          "text": "Aug 2023"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2024,
+          "text": "Jan 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_200_200/company-logo_200_200/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Cr9dcgM6gBeNici6XTUDQUKQfYAc8US2OXBC0P5yB-Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_100_100/company-logo_100_100/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=iJiUJ2BhQORJLlvMYFhw22Mq44Z-z45Fza4_dNRwHSs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Graduate Teaching Assistant",
+        "location": "Silicon Valley, California, United States",
+        "employmentType": "Part-time",
+        "workplaceType": "On-site",
+        "companyName": "Carnegie Mellon University",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/carnegie-mellon-university/",
+        "companyId": "3147",
+        "companyUniversalName": "carnegie-mellon-university",
+        "duration": "6 mos",
+        "description": "18658: Software Requirements & Interaction Design",
+        "skills": null,
+        "experienceGroupId": "0d55cd3f6746fe94e8663ba833496201ec8a5e52",
+        "startDate": {
+          "month": "Aug",
+          "year": 2023,
+          "text": "Aug 2023"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2024,
+          "text": "Jan 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_200_200/company-logo_200_200/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Cr9dcgM6gBeNici6XTUDQUKQfYAc8US2OXBC0P5yB-Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_100_100/company-logo_100_100/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=iJiUJ2BhQORJLlvMYFhw22Mq44Z-z45Fza4_dNRwHSs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer Intern, Platform",
+        "location": "San Francisco, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "Hybrid",
+        "companyName": "TuneIn",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/155289/",
+        "companyId": "155289",
+        "duration": "3 mos",
+        "description": "• Contributed to next generation platform by adding support for subscriptions via WebSockets on the GraphQL API gateway backed by micro-services using gRPC communication in Go\n• Expanded the C# (.Net core) monolith codebase with support for live streaming metadata for over 120,000 radio stations\n• Deployed micro-services to staging via CI/CD with Terraform and Kubernetes and monitored them using New Relic\n• Built data communication pipelines using Apache ActiveMQ and Redis Streams (AWS ElastiCache)\n• Wrote comprehensive test suites and load-tested the micro-service using NBomber to ensure production-readiness\n• Collaborated with Product and Data Engineering teams to plan and prioritise related Jira tickets",
+        "skills": [
+          "Amazon Web Services (AWS)",
+          "gRPC",
+          "Apache Kafka",
+          "Go (Programming Language)",
+          "WebSocket",
+          "ASP.NET",
+          "Docker",
+          "C#",
+          "GraphQL",
+          "Redis",
+          "ActiveMQ"
+        ],
+        "startDate": {
+          "month": "Jun",
+          "year": 2023,
+          "text": "Jun 2023"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2023,
+          "text": "Aug 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQF5xRsISGlOog/company-logo_400_400/company-logo_400_400/0/1631317830242?e=1776902400&v=beta&t=mM5nxBxt2UG4rdf7TYUY48AZ6wA3I-Tgt_rwGsTg4xU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQF5xRsISGlOog/company-logo_400_400/company-logo_400_400/0/1631317830242?e=1776902400&v=beta&t=mM5nxBxt2UG4rdf7TYUY48AZ6wA3I-Tgt_rwGsTg4xU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQF5xRsISGlOog/company-logo_200_200/company-logo_200_200/0/1631317830242?e=1776902400&v=beta&t=HUlmzgBX8AFARjTN4LZHJgKM03EllNl9AduWwMT7DHU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQF5xRsISGlOog/company-logo_100_100/company-logo_100_100/0/1631317830242?e=1776902400&v=beta&t=AZXJibj_NqdQdBNJtGhUZKuw7QyJ3DUImlAjdLLURqI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Graduate Teaching Assistant",
+        "location": "Silicon Valley, California, United States",
+        "employmentType": "Part-time",
+        "workplaceType": "On-site",
+        "companyName": "Carnegie Mellon University",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/carnegie-mellon-university/",
+        "companyId": "3147",
+        "companyUniversalName": "carnegie-mellon-university",
+        "duration": "5 mos",
+        "description": "• Supporting professors in teaching Foundations of Software Engineering.\n• Mentoring student teams in their course project to create a responsive web application.\n• Acting as a scrum master and helping students get familiar with agile workflows.\n• Assisting with the grading of assignments, conducting recitations, and facilitating discussions.",
+        "skills": [
+          "JavaScript",
+          "MongoDB",
+          "HTML",
+          "Node.js",
+          "CSS"
+        ],
+        "experienceGroupId": "2efac98588e72d6e9c8363f255a0d3811b6e9ed9",
+        "startDate": {
+          "month": "Jan",
+          "year": 2023,
+          "text": "Jan 2023"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2023,
+          "text": "May 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_200_200/company-logo_200_200/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Cr9dcgM6gBeNici6XTUDQUKQfYAc8US2OXBC0P5yB-Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_100_100/company-logo_100_100/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=iJiUJ2BhQORJLlvMYFhw22Mq44Z-z45Fza4_dNRwHSs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Student Leader ",
+        "location": "Mountain View, California, United States",
+        "employmentType": "Part-time",
+        "workplaceType": null,
+        "companyName": "Carnegie Mellon University",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/carnegie-mellon-university/",
+        "companyId": "3147",
+        "companyUniversalName": "carnegie-mellon-university",
+        "duration": "5 mos",
+        "description": "As a ECE Graduate Organisation Student Leader, my responsibilities include: \n\n• Working closely with Student Affairs to organise events on and off-campus \n• Facilitate Inter-departmental collaborations \n• Co-ordinate regular interactions with the faculty advisors and students",
+        "skills": null,
+        "experienceGroupId": "2efac98588e72d6e9c8363f255a0d3811b6e9ed9",
+        "startDate": {
+          "month": "Sep",
+          "year": 2022,
+          "text": "Sep 2022"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2023,
+          "text": "Jan 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_200_200/company-logo_200_200/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Cr9dcgM6gBeNici6XTUDQUKQfYAc8US2OXBC0P5yB-Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_100_100/company-logo_100_100/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=iJiUJ2BhQORJLlvMYFhw22Mq44Z-z45Fza4_dNRwHSs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer 2",
+        "location": "Fukuoka, Japan",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Team AIBOD",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10583266/",
+        "companyId": "10583266",
+        "duration": "6 mos",
+        "description": "• Developed a comprehensive component library with React and Typescript for an unmanned store\n• Implemented a RESTful payment server using Python, Flask, and PostgreSQL for CRUD operations. \n• Containerized and deployed applications using Docker, and set up AWS Cloudwatch for remote monitoring of unmanned stores\n• Mentored 3 interns, promoting technical and professional growth in a collaborative environment.",
+        "skills": [
+          "Amazon Web Services (AWS)",
+          "Redux.js",
+          "Python (Programming Language)",
+          "Docker",
+          "TypeScript",
+          "React.js"
+        ],
+        "experienceGroupId": "1e84b9cb37c08b2d4e3922c0bcb042c14f792e2b",
+        "startDate": {
+          "month": "Nov",
+          "year": 2021,
+          "text": "Nov 2021"
+        },
+        "endDate": {
+          "month": "Apr",
+          "year": 2022,
+          "text": "Apr 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQHbX9hjhA0aDQ/company-logo_400_400/company-logo_400_400/0/1631303672599?e=1776902400&v=beta&t=WEppFkU8l6ulpaBUMf3zs9oJGlSRBiyN9Gipa4uuu7g",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQHbX9hjhA0aDQ/company-logo_400_400/company-logo_400_400/0/1631303672599?e=1776902400&v=beta&t=WEppFkU8l6ulpaBUMf3zs9oJGlSRBiyN9Gipa4uuu7g",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQHbX9hjhA0aDQ/company-logo_200_200/company-logo_200_200/0/1631303672599?e=1776902400&v=beta&t=BUyNA7AFmqYZhGkeiZ0ls4lfqUxI3UDC6jc4T73vP4E",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQHbX9hjhA0aDQ/company-logo_100_100/company-logo_100_100/0/1631303672599?e=1776902400&v=beta&t=7lZOyhzJqK5VozXuMyf2KdwJeLC20_Jzd0uX9mrocfc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer 1",
+        "location": "Fukuoka, Japan",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Team AIBOD",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10583266/",
+        "companyId": "10583266",
+        "duration": "1 yr 4 mos",
+        "description": "• Created a Python script and a GUI-tool using Tkinter for annotating and visualizing images, increasing the data pre-processing rate from 20 to 200 images/hour and improving team productivity. \n• Designed and implemented a Search System using GraphQL with Apollo and Ariadne, streamlining 3 ongoing projects. \n• Introduced unit and integration tests with Jest which improved team efficiency and reliability with over 80% coverage.",
+        "skills": [
+          "Redux.js",
+          "Python (Programming Language)",
+          "HTML",
+          "Cascading Style Sheets (CSS)",
+          "React.js",
+          "Web Development"
+        ],
+        "experienceGroupId": "1e84b9cb37c08b2d4e3922c0bcb042c14f792e2b",
+        "startDate": {
+          "month": "Jul",
+          "year": 2020,
+          "text": "Jul 2020"
+        },
+        "endDate": {
+          "month": "Oct",
+          "year": 2021,
+          "text": "Oct 2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQHbX9hjhA0aDQ/company-logo_400_400/company-logo_400_400/0/1631303672599?e=1776902400&v=beta&t=WEppFkU8l6ulpaBUMf3zs9oJGlSRBiyN9Gipa4uuu7g",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQHbX9hjhA0aDQ/company-logo_400_400/company-logo_400_400/0/1631303672599?e=1776902400&v=beta&t=WEppFkU8l6ulpaBUMf3zs9oJGlSRBiyN9Gipa4uuu7g",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQHbX9hjhA0aDQ/company-logo_200_200/company-logo_200_200/0/1631303672599?e=1776902400&v=beta&t=BUyNA7AFmqYZhGkeiZ0ls4lfqUxI3UDC6jc4T73vP4E",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQHbX9hjhA0aDQ/company-logo_100_100/company-logo_100_100/0/1631303672599?e=1776902400&v=beta&t=7lZOyhzJqK5VozXuMyf2KdwJeLC20_Jzd0uX9mrocfc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "AI Engineer Intern",
+        "location": "Fukuoka, Fukuoka, Japan",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Team AIBOD",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10583266/",
+        "companyId": "10583266",
+        "duration": "5 mos",
+        "description": "• Applied Feature Engineering to improve the accuracy of a KNN-supervised classifier by 7%, resulting in more effective classification of products in an unmanned store. \n• Experimented with BERT using PyTorch for Named Entity Recognition to automate support request routing in an apartment intercom system and integrated it with the Express API Server to provide AI as a Service. \n• Expertly resolved more than 20 bugs in the API server using NodeJS and Typescript, resulting in improved stability and performance of the server, and also contributed",
+        "skills": [
+          "Pandas (Software)",
+          "Data Science",
+          "Redux.js",
+          "Python (Programming Language)",
+          "PyTorch",
+          "Colab"
+        ],
+        "experienceGroupId": "1e84b9cb37c08b2d4e3922c0bcb042c14f792e2b",
+        "startDate": {
+          "month": "Feb",
+          "year": 2020,
+          "text": "Feb 2020"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2020,
+          "text": "Jun 2020"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQHbX9hjhA0aDQ/company-logo_400_400/company-logo_400_400/0/1631303672599?e=1776902400&v=beta&t=WEppFkU8l6ulpaBUMf3zs9oJGlSRBiyN9Gipa4uuu7g",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQHbX9hjhA0aDQ/company-logo_400_400/company-logo_400_400/0/1631303672599?e=1776902400&v=beta&t=WEppFkU8l6ulpaBUMf3zs9oJGlSRBiyN9Gipa4uuu7g",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQHbX9hjhA0aDQ/company-logo_200_200/company-logo_200_200/0/1631303672599?e=1776902400&v=beta&t=BUyNA7AFmqYZhGkeiZ0ls4lfqUxI3UDC6jc4T73vP4E",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQHbX9hjhA0aDQ/company-logo_100_100/company-logo_100_100/0/1631303672599?e=1776902400&v=beta&t=7lZOyhzJqK5VozXuMyf2KdwJeLC20_Jzd0uX9mrocfc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Exchange Student",
+        "location": "Kusatsu, Shiga, Japan",
+        "employmentType": "Internship",
+        "workplaceType": null,
+        "companyName": "Ritsumeikan University",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/15094578/",
+        "companyId": "15094578",
+        "duration": "1 mo",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Aug",
+          "year": 2019,
+          "text": "Aug 2019"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2019,
+          "text": "Aug 2019"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFnHzi51sYUqw/company-logo_400_400/company-logo_400_400/0/1631315672028?e=1776902400&v=beta&t=NiqwIKsaQNg6S493TYbEzDzS8qsb6tn6PoJnyf2V_8E",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFnHzi51sYUqw/company-logo_400_400/company-logo_400_400/0/1631315672028?e=1776902400&v=beta&t=NiqwIKsaQNg6S493TYbEzDzS8qsb6tn6PoJnyf2V_8E",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFnHzi51sYUqw/company-logo_200_200/company-logo_200_200/0/1631315672028?e=1776902400&v=beta&t=VHajSbeOpq6XU0RKsC6KdYN56X4YNm1Pn8sDK4-m2sw",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQFnHzi51sYUqw/company-logo_100_100/company-logo_100_100/0/1631315672028?e=1776902400&v=beta&t=e8z8ZdOisiplsN6Asvyfg5LUN3_gcF-9GNy9_bR-XHE",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Intern",
+        "location": "Greater Delhi Area",
+        "employmentType": "Internship",
+        "workplaceType": null,
+        "companyName": "Indian Institute of Technology, Delhi",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/157264/",
+        "companyId": "157264",
+        "duration": "1 mo",
+        "description": "I worked the development of a standard dataset on biopsy slides provided\r by AIIMS-Delhi in their gastro-intestinal pathology labs. I also wrote\r code to delineate objects in said biopsies.",
+        "skills": [
+          "Python (Programming Language)",
+          "Web Development"
+        ],
+        "startDate": {
+          "month": "Jun",
+          "year": 2019,
+          "text": "Jun 2019"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2019,
+          "text": "Jun 2019"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4D0BAQHQ5bnnnSexWg/company-logo_400_400/company-logo_400_400/0/1710919737785/iitdelhi_logo?e=1776902400&v=beta&t=gSgZHi8a0ex8mtnIGjDJPeRNpQNCZZcesmudmokciOk",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQHQ5bnnnSexWg/company-logo_400_400/company-logo_400_400/0/1710919737785/iitdelhi_logo?e=1776902400&v=beta&t=gSgZHi8a0ex8mtnIGjDJPeRNpQNCZZcesmudmokciOk",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQHQ5bnnnSexWg/company-logo_200_200/company-logo_200_200/0/1710919737785/iitdelhi_logo?e=1776902400&v=beta&t=raHCuRIX2LFLWKumuGggsuZFf2hgis9zs7I1O8e6fxE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQHQ5bnnnSexWg/company-logo_100_100/company-logo_100_100/0/1710919737785/iitdelhi_logo?e=1776902400&v=beta&t=Zhvjbfv_AnOPh4seFeuU8C2QWfflCDR5jR3kJUNkeS4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Carnegie Mellon University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3147/",
+        "schoolId": "3147",
+        "degree": "Master of Science - MS",
+        "fieldOfStudy": "Software Engineering",
+        "skills": [
+          "Web Development",
+          "Semantic HTML",
+          "HTML",
+          "Python (Programming Language)",
+          "Cascading Style Sheets (CSS)"
+        ],
+        "startDate": {
+          "month": "Aug",
+          "year": 2022,
+          "text": "Aug 2022"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2023,
+          "text": "Dec 2023"
+        },
+        "period": "Aug 2022 - Dec 2023",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_200_200/company-logo_200_200/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Cr9dcgM6gBeNici6XTUDQUKQfYAc8US2OXBC0P5yB-Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_100_100/company-logo_100_100/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=iJiUJ2BhQORJLlvMYFhw22Mq44Z-z45Fza4_dNRwHSs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "N M A M Institute of Technology, NITTE",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/15127512/",
+        "schoolId": "15127512",
+        "degree": "Bachelor of Engineering",
+        "fieldOfStudy": "Computer Science",
+        "skills": [
+          "Web Development",
+          "Semantic HTML",
+          "HTML",
+          "Python (Programming Language)",
+          "Cascading Style Sheets (CSS)"
+        ],
+        "startDate": {
+          "year": 2016,
+          "text": "2016"
+        },
+        "endDate": {
+          "year": 2020,
+          "text": "2020"
+        },
+        "period": "2016 - 2020",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQGgevSJKDc-9g/company-logo_400_400/company-logo_400_400/0/1631317745327?e=1776902400&v=beta&t=x3s350eVRo36SP4v7TNHaftnHNNaLMGTNTrRYM4e83U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGgevSJKDc-9g/company-logo_400_400/company-logo_400_400/0/1631317745327?e=1776902400&v=beta&t=x3s350eVRo36SP4v7TNHaftnHNNaLMGTNTrRYM4e83U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGgevSJKDc-9g/company-logo_200_200/company-logo_200_200/0/1631317745327?e=1776902400&v=beta&t=qkDSSjJhnPtnnrIBO2gKX8fw7pP0IxTcnYHMP10HcUU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQGgevSJKDc-9g/company-logo_100_100/company-logo_100_100/0/1631317745327?e=1776902400&v=beta&t=p1V1bc7oVdOG6tVrMFjNNd_tfw3alcIkKSsy-X5c2lI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Canara College",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/15104532/",
+        "schoolId": "15104532",
+        "degree": "Pre-University Education ",
+        "fieldOfStudy": null,
+        "skills": [
+          "HTML",
+          "Python (Programming Language)"
+        ],
+        "startDate": {
+          "year": 2014,
+          "text": "2014"
+        },
+        "endDate": {
+          "year": 2016,
+          "text": "2016"
+        },
+        "period": "2014 - 2016",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFWaaF5euXkwA/company-logo_400_400/company-logo_400_400/0/1631334213024?e=1776902400&v=beta&t=jysT-Vc0YqhkRBmM1UYZe3hlu9WDNraRvh4OP2Qb7QY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFWaaF5euXkwA/company-logo_400_400/company-logo_400_400/0/1631334213024?e=1776902400&v=beta&t=jysT-Vc0YqhkRBmM1UYZe3hlu9WDNraRvh4OP2Qb7QY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFWaaF5euXkwA/company-logo_200_200/company-logo_200_200/0/1631334213024?e=1776902400&v=beta&t=nAPXoG4ZIxFtq9Sg3XO21Wf0iPpqGbHaEfgbQg_0xfg",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFWaaF5euXkwA/company-logo_100_100/company-logo_100_100/0/1631334213024?e=1776902400&v=beta&t=koKWLck0Q5pWOnQgT8CCjljtPh34w2EEBH-DCQjOmNg",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [
+      {
+        "title": "CSS For Javascript Developers",
+        "issuedAt": "Issued Jun 2022",
+        "link": "https://courses.joshwcomeau.com/certificate/62b603308677061bf769e2ab",
+        "issuedBy": "Josh Comeau",
+        "issuedByLink": null,
+        "issuedByLogo": {
+          "url": null,
+          "sizes": []
+        }
+      },
+      {
+        "title": "The Complete Node.js Developer Course",
+        "issuedAt": "Issued Feb 2020",
+        "link": "https://www.udemy.com/certificate/UC-bc09feaf-112b-4843-9d6f-38756c9f446c/",
+        "issuedBy": "Udemy",
+        "issuedByLink": "https://www.linkedin.com/company/822535/",
+        "issuedByLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQEf_NHzN2yVQg/company-logo_400_400/company-logo_400_400/0/1723593046388/udemy_logo?e=1776902400&v=beta&t=rXNIiW7kly-feMeGrNxOkYemSbHFHs4xWpXoPijSLJw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEf_NHzN2yVQg/company-logo_400_400/company-logo_400_400/0/1723593046388/udemy_logo?e=1776902400&v=beta&t=rXNIiW7kly-feMeGrNxOkYemSbHFHs4xWpXoPijSLJw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEf_NHzN2yVQg/company-logo_200_200/company-logo_200_200/0/1723593046388/udemy_logo?e=1776902400&v=beta&t=znEcZM8WrXHM_6SfJlnPWs9EEgsJ-FMLhMyGggLGJ5U",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEf_NHzN2yVQg/company-logo_100_100/company-logo_100_100/0/1723593046388/udemy_logo?e=1776902400&v=beta&t=qp32jrnm4n-WPTaZdGYZwskLs6WuKU8zWlxC-BtbIg0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "title": "Natural Language Processing with Classification and Vector Spaces",
+        "issuedAt": "Issued Jan 2021",
+        "link": "https://www.coursera.org/account/accomplishments/certificate/STPAJ4J633EN",
+        "issuedBy": "Coursera",
+        "issuedByLink": "https://www.linkedin.com/company/2453129/",
+        "issuedByLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGexnfBxeEG-g/company-logo_400_400/company-logo_400_400/0/1630530042036/coursera_logo?e=1776902400&v=beta&t=PtG-eMZ6cCmwLvSrwXB-IfLehVlBwM8qyLaHFUcaELY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGexnfBxeEG-g/company-logo_400_400/company-logo_400_400/0/1630530042036/coursera_logo?e=1776902400&v=beta&t=PtG-eMZ6cCmwLvSrwXB-IfLehVlBwM8qyLaHFUcaELY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGexnfBxeEG-g/company-logo_200_200/company-logo_200_200/0/1630530042036/coursera_logo?e=1776902400&v=beta&t=Z08jCTEFFPENin_w39Y-a865NkZnuIwjAmVevtjGsWw",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGexnfBxeEG-g/company-logo_100_100/company-logo_100_100/0/1630530042036/coursera_logo?e=1776902400&v=beta&t=EPnmPxR07GLm9G5_FR5AcvlqTQiKTe2NFdSjo-G6wtE",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "title": "Machine Learning Engineer ",
+        "issuedAt": "Issued May 2019",
+        "link": "https://confirm.udacity.com/3MLGTUFF",
+        "issuedBy": "Udacity",
+        "issuedByLink": "https://www.linkedin.com/company/2475568/",
+        "issuedByLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHiNYfm0YHKrg/company-logo_400_400/company-logo_400_400/0/1656621848677/udacity_logo?e=1776902400&v=beta&t=GbwGWILD6i71gci4jAkvbK0Ss-1Mr28vwjmUNaLgVLc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHiNYfm0YHKrg/company-logo_400_400/company-logo_400_400/0/1656621848677/udacity_logo?e=1776902400&v=beta&t=GbwGWILD6i71gci4jAkvbK0Ss-1Mr28vwjmUNaLgVLc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHiNYfm0YHKrg/company-logo_200_200/company-logo_200_200/0/1656621848677/udacity_logo?e=1776902400&v=beta&t=tf8jpoFSFIoMJsJpLQ0DahlT5ZSFvWCkBrYyydyJpmc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHiNYfm0YHKrg/company-logo_100_100/company-logo_100_100/0/1656621848677/udacity_logo?e=1776902400&v=beta&t=3JKANuR-LDsIPvYYNVc5rtSOSkXGFrbMNbUwX6kFK20",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "title": "Machine Learning Foundation Nanodegree",
+        "issuedAt": "Issued May 2018",
+        "link": "https://confirm.udacity.com/XZJWNKV3",
+        "issuedBy": "Udacity",
+        "issuedByLink": "https://www.linkedin.com/company/2475568/",
+        "issuedByLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHiNYfm0YHKrg/company-logo_400_400/company-logo_400_400/0/1656621848677/udacity_logo?e=1776902400&v=beta&t=GbwGWILD6i71gci4jAkvbK0Ss-1Mr28vwjmUNaLgVLc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHiNYfm0YHKrg/company-logo_400_400/company-logo_400_400/0/1656621848677/udacity_logo?e=1776902400&v=beta&t=GbwGWILD6i71gci4jAkvbK0Ss-1Mr28vwjmUNaLgVLc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHiNYfm0YHKrg/company-logo_200_200/company-logo_200_200/0/1656621848677/udacity_logo?e=1776902400&v=beta&t=tf8jpoFSFIoMJsJpLQ0DahlT5ZSFvWCkBrYyydyJpmc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHiNYfm0YHKrg/company-logo_100_100/company-logo_100_100/0/1656621848677/udacity_logo?e=1776902400&v=beta&t=3JKANuR-LDsIPvYYNVc5rtSOSkXGFrbMNbUwX6kFK20",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "projects": [
+      {
+        "title": "Contrast Optimisation using Metaheuristics",
+        "duration": "Apr 2023 - May 2023",
+        "startDate": {
+          "month": "Apr",
+          "year": 2023,
+          "text": "Apr 2023"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2023,
+          "text": "May 2023"
+        },
+        "associatedWith": "Associated with Carnegie Mellon University",
+        "associatedWithLink": "https://www.linkedin.com/company/3147/",
+        "description": "Designed a Genetic Algorithm to optimise colour contrast on web pages to generate colour palettes that conform to WCAG 2.1 guidelines, while minimising deviations from the original design."
+      },
+      {
+        "title": "Emergency Social Network",
+        "duration": "Sep 2022 - Dec 2022",
+        "startDate": {
+          "month": "Sep",
+          "year": 2022,
+          "text": "Sep 2022"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2022,
+          "text": "Dec 2022"
+        },
+        "associatedWith": "Associated with Carnegie Mellon University",
+        "associatedWithLink": "https://www.linkedin.com/company/3147/",
+        "description": "This is a project I worked on as a part of my course : Foundations of Software Engineering (18652). Emergency Social Network or ESN is an application that provides civilians with a social network that they can use during emergency situations. The application is specifically designed to effectively support small communities of civilians seriously affected by natural disasters like earthquakes, tsunamis, tornadoes, wildfires, etc.\n\nAs a part of this project, I: \n- Applied Agile practices like SCRUM and Kanban to drive the software development process\n- Collaborated and occasionally led a team of 5 students\n-  Delivered product increments while adhering to strict timelines during each iteration \n- Learned to identify and implement important Design Patterns like Abstract Factory, Observer and Composites \n- Learned common Architectural styles used in the industry, like MVC & Client-Server\n- Generated a UI/UX prototype using Figma and enabled rapid evolution for the frontend\n- Implemented a significant portion of the user interface using EJS and CSS3\n- Built the backend with an MVC Architecture using Node.js, MongoDB Atlas and Express\n- Delivered code with Maintainability, Usability and Robustness as key Quality Attributes",
+        "link": "https://www.figma.com/proto/ZH2Wlz0W6hXuJEuEZHUxBc/FSE-SB2?page-id=0%3A1&node-id=5%3A433&viewport=376%2C446%2C0.29&scaling=scale-down&starting-point-node-id=5%3A433"
+      },
+      {
+        "title": "Kanban Task Management",
+        "duration": "Sep 2022 - Oct 2022",
+        "startDate": {
+          "month": "Sep",
+          "year": 2022,
+          "text": "Sep 2022"
+        },
+        "endDate": {
+          "month": "Oct",
+          "year": 2022,
+          "text": "Oct 2022"
+        },
+        "associatedWith": null,
+        "associatedWithLink": null,
+        "description": "This is a hobby project I picked up from frontend mentor as it has a lot of interesting front-end problems for me to solve and expand my skill-set. Not only does it present me with some real-world challenges but also serves an opportunity for me to demonstrate my expertise with CSS but also my attention to detail and interest in accessibility on the web. \n\nAs a part of this project, I: \n- Implemented a responsive and accessible Task Manager with React & Styled Components\n- Allowed users to switch between dark and light themes for an improved user experience\n- Wrote highly reusable components using semantic HTML while adhering to WAI-ARIA principles  \n- Integrated API data using a layered architecture for improved modularity\n- Made all the components and pages accessible via keyboard navigation and VoiceOver",
+        "link": "https://github.com/BhandarkarPawan/kanban-task-management"
+      },
+      {
+        "title": "FSE Chat Room",
+        "duration": "Jul 2022 - Aug 2022",
+        "startDate": {
+          "month": "Jul",
+          "year": 2022,
+          "text": "Jul 2022"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2022,
+          "text": "Aug 2022"
+        },
+        "associatedWith": "Associated with Carnegie Mellon University",
+        "associatedWithLink": "https://www.linkedin.com/company/3147/",
+        "description": "A chat room application built as a ramp-up task for 18652: Foundations of Software Engineering. The goal of this project was to build a simple web-app to demonstrate my understand of the tech stack that would be used in the Course\n\nAs a part of this project, I: \n- Implemented a full-stack web application using the Client-Server Architectural Style \n- Build a RESTful API to perform register, login and logout \n- Used Socket.io to establish duplex communication for real-time chat updates \n- Demonstrated a rudimentary understanding of SOLID principles of software development prior to my masters degree",
+        "link": "https://www.youtube.com/watch?v=DCYO4XKVSl8"
+      },
+      {
+        "title": "Refriendo",
+        "duration": "Oct 2021 - Apr 2022",
+        "startDate": {
+          "month": "Oct",
+          "year": 2021,
+          "text": "Oct 2021"
+        },
+        "endDate": {
+          "month": "Apr",
+          "year": 2022,
+          "text": "Apr 2022"
+        },
+        "associatedWith": null,
+        "associatedWithLink": null,
+        "description": "This is a freelance project in which I worked as the frontend developer for Refriendo, a web application for hosting and finding events in your neighbourhood. The project had received an initial round of seed funding but was later paused due to a lack of resources. This project is currently on hold while I make time to finish it. \n\nAs a part of this project, I have so far: \n- Designed and developed a working Figma prototype of the mobile user interface\n- This prototype was crucial to pitch the idea to stakeholders and secure initial funding \n- Implemented the user-interface with React-TS, Tailwind & IO-TS with a mobile-first approach\n- Currently coding the backend using Typescript, Express.js, MongoDB & JWT\n- Deployed the app to Android and iOS using Ionic Capacitor",
+        "link": "https://www.figma.com/proto/FpWVddCZKdJz5V7ADe4eb5/Refriendo?page-id=0%3A1&node-id=134%3A870&viewport=497%2C236%2C0.04&scaling=scale-down&starting-point-node-id=107%3A711&show-proto-sidebar=1"
+      },
+      {
+        "title": "Seedling Classification ",
+        "duration": "Apr 2019 - May 2019",
+        "startDate": {
+          "month": "Apr",
+          "year": 2019,
+          "text": "Apr 2019"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2019,
+          "text": "May 2019"
+        },
+        "associatedWith": null,
+        "associatedWithLink": null,
+        "description": "Built a machine learning model which takes as input, an image of a Seedling classifies it as one of 12 different plant species (including weeds and crops) that are used to train the model. This is a dataset that contains both crops and weeds, many of which might seem indiscernible to the human eye. The resultant model achieved an F1 score of 0.91",
+        "link": "https://github.com/PawanBhandarkar/MLNDCapstone"
+      },
+      {
+        "title": "Creating Customer Segments",
+        "duration": "Oct 2018 - Nov 2018",
+        "startDate": {
+          "month": "Oct",
+          "year": 2018,
+          "text": "Oct 2018"
+        },
+        "endDate": {
+          "month": "Nov",
+          "year": 2018,
+          "text": "Nov 2018"
+        },
+        "associatedWith": null,
+        "associatedWithLink": null,
+        "description": "This was the project that I took up as a part of the Machine Learning Nanodegree course by Udacity. This project helped me learn about the various unsupervised learning concepts such as different clustering algorithms, Principal Component Analysis, Dimensionaliy Reduction etc. In this project, I analysed a  dataset to find customer segments (such as those that prefer fresh produce over frozen, those that buy delicatessen regularly,etc)  and this data was then reported so that it could be use to improve the delivery schedules and cost of the company."
+      },
+      {
+        "title": "Data Analysis: Investigating appointments that were never fulfilled",
+        "duration": "Jun 2018 - Jul 2018",
+        "startDate": {
+          "month": "Jun",
+          "year": 2018,
+          "text": "Jun 2018"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2018,
+          "text": "Jul 2018"
+        },
+        "associatedWith": null,
+        "associatedWithLink": null,
+        "description": "The primary goal of this project is to investigate a dataset consisting of about 100,000 medical appointments that were made by patients from the neighbourhoods of Brazil. Each patient's appointment (row) contain information regarding their Gender, Age, ScheduledDay, AppointmentDay, Scholarship, four diagnosed chronic illnesses and some other general information.\nUsing this data, we analyse the relationship between the data elements and try to establish which characteristics are indicative of whether or not a patient will actually show up for an appointment that they had made.",
+        "link": "https://github.com/PawanBhandarkar/No-Show-Appointments/blob/master/exploring-noshows.ipynb"
+      },
+      {
+        "title": "Exploring US Bikeshare Data",
+        "duration": "May 2018 - Jul 2018",
+        "startDate": {
+          "month": "May",
+          "year": 2018,
+          "text": "May 2018"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2018,
+          "text": "Jul 2018"
+        },
+        "associatedWith": null,
+        "associatedWithLink": null,
+        "description": "Exploring a dataset containing about 300,000 rows of Bikeshare data collected from the Cities of Chicago, New York and Washington. Analysed the data and reported findings using Python and the relevant libraries, and allowed users to navigate through the data. Worked on, as a part of my Udacity - ML Foundation Nanodegree ",
+        "link": "https://github.com/PawanBhandarkar/Exploring-US-Bikeshare-data"
+      }
+    ],
+    "volunteering": [
+      {
+        "role": "Student Leader",
+        "description": "For two years, I worked as a student leader during the Fresher's orientation programmes in college, where I interacted with new students and helped them get accustomed to their new environment. This role also involved serving as a host for multiple activities that aimed to promote student interactions.",
+        "duration": "Aug 2018 - Apr 2020 · 1 yr 9 mos",
+        "startDate": {
+          "month": "Aug",
+          "year": 2018,
+          "text": "Aug 2018"
+        },
+        "endDate": {
+          "month": "Apr",
+          "year": 2020,
+          "text": "Apr 2020 · 1 yr 9 mos"
+        },
+        "organizationName": "N M A M Institute of Technology, NITTE",
+        "organizationLinkedinUrl": "https://www.linkedin.com/company/15127512/",
+        "cause": "Education"
+      },
+      {
+        "role": "Soft Skills Leader",
+        "description": "I was a leader in the Soft Skills and Communication Association of college, where working in a team of 10, we mentors over a hundred students in developing their public speaking and communication skills by conducting workshops, regular meetings and hosting events.",
+        "duration": "Jun 2018 - Apr 2020 · 1 yr 11 mos",
+        "startDate": {
+          "month": "Jun",
+          "year": 2018,
+          "text": "Jun 2018"
+        },
+        "endDate": {
+          "month": "Apr",
+          "year": 2020,
+          "text": "Apr 2020 · 1 yr 11 mos"
+        },
+        "organizationName": "N M A M Institute of Technology, NITTE",
+        "organizationLinkedinUrl": "https://www.linkedin.com/company/15127512/",
+        "cause": "Education"
+      }
+    ],
+    "receivedRecommendations": [
+      {
+        "givenBy": "Peter Tabatt",
+        "givenByHeadline": "Software Engineer",
+        "givenAt": "January 23, 2024, Peter was senior to Pawan but didn't manage Pawan directly",
+        "givenByLink": "https://www.linkedin.com/in/peter-tabatt-253b8a20",
+        "description": "I've had the amazing opportunity to work with Pawan on the Platform team where he interned. From the beginning, I was amazed at the quality and scope of his work and believed whole-heartedly that the deliverables he was putting forth were above and beyond anything you could reasonably expect from an intern in a few months. \n\nI've reviewed his code on several occasions and found his depth of understanding of the languages, frameworks, and domain on par with senior engineers. He possesses a great deal of technical knowledge, and knows how to apply it well with limited direction and help from others. On top of it all, he is a genuinely friendly and kind individual.\n\nWhatever his next role will be, I am convinced beyond all doubt that he will be a top performer.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQF2nPnFUZ5gUQ/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1525532023656?e=1776902400&v=beta&t=OOLaYc9dpA9f2077M67LzdAGSYKSpOF_plM3bM9-DKQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQF2nPnFUZ5gUQ/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1525532023656?e=1776902400&v=beta&t=OOLaYc9dpA9f2077M67LzdAGSYKSpOF_plM3bM9-DKQ",
+              "width": 500,
+              "height": 500,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQF2nPnFUZ5gUQ/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1525532023644?e=1776902400&v=beta&t=r7gpprYyXhZEv4lpPuKosKHlPxWkx5_hZqx83pq4VqY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQF2nPnFUZ5gUQ/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1525532023566?e=1776902400&v=beta&t=UoP38NrjzfeyKWdjh-axewnz5fmLTuMbq_EHCxReuh4",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQF2nPnFUZ5gUQ/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1525532023610?e=1776902400&v=beta&t=R_NszB07E2impxhOG_7pNblEBMdA5ChL7ydqeQG_3Z0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Eugene Masterov",
+        "givenByHeadline": "VP of Platform and Data Engineering at TuneIn",
+        "givenAt": "September 1, 2023, Eugene was senior to Pawan but didn't manage Pawan directly",
+        "givenByLink": "https://www.linkedin.com/in/emasterov",
+        "description": "Looking back at the internship that Pawan has just concluded with one of my teams, I figured I'd share my impressions of the experience since they were nothing short of genuinely remarkable. Not only did Pawan excel in completing a very challenging engineering task of navigating and integrating with our complex architecture and codebase, but he also built production-grade solutions and proactively collaborated both within the team as well as cross-functionally - something that I've seen others spending years to master and do right. \nI'm looking forward to the official launch of his career post-graduation and hope to get involved first-hand in the future applications of his talent!",
+        "givenByPicture": {
+          "url": null,
+          "sizes": []
+        }
+      },
+      {
+        "givenBy": "Leonid Lebedinsky",
+        "givenByHeadline": "Member of Technical Staff at Infinitus Systems",
+        "givenAt": "August 25, 2023, Leonid was senior to Pawan but didn't manage Pawan directly",
+        "givenByLink": "https://www.linkedin.com/in/leonidlebedinsky",
+        "description": "Pawan has been doing an internship in the TuneIn Platform team, and I want to mention his great dedication, enthusiasm, and competency as a microservice developer. His efforts in developing live playing info for stations produced an impressive prototype, which I advocate to be pushed into production as soon as possible, as this adds much value to the user experience. I also want to mention his prowess in mastering new tech stacks, including Golang, Protobufs, messaging, GraphQL subscriptions, and more.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E03AQHryNkKYs2ugQ/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1517544491321?e=1776902400&v=beta&t=yqchdjHcOklZD4X0_Yr249g-_pQerVMDCKkKlGpObRo",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E03AQHryNkKYs2ugQ/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1517544491321?e=1776902400&v=beta&t=yqchdjHcOklZD4X0_Yr249g-_pQerVMDCKkKlGpObRo",
+              "width": 800,
+              "height": 800,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E03AQHryNkKYs2ugQ/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1517544491117?e=1776902400&v=beta&t=BAnX6VWfeqKFmHAhYadDs1Sdy-_FFgzqMkkUec8p7Zg",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E03AQHryNkKYs2ugQ/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1517544491106?e=1776902400&v=beta&t=2tMVfX-TGZyUFG-6Dp_-vz8WkPJwaaAGB4LWF7Pw5rs",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E03AQHryNkKYs2ugQ/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1517544491278?e=1776902400&v=beta&t=qnvpC7NOLd_TGI7RSkiCz95IwBVJpRhVkKVlHYCcfWA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Joseph Altmaier",
+        "givenByHeadline": "Staff Software Engineer at TuneIn",
+        "givenAt": "August 13, 2023, Joseph was Pawan’s mentor",
+        "givenByLink": "https://www.linkedin.com/in/joseph-altmaier-b5203640",
+        "description": "Pawan interned at TuneIn while working on his masters degree.  During his internship Pawan was responsible for redesigning and reimplementing a polling-based API as a real time stream.  He learned an entirely new tech stack, completed a design review, and finished his implementation ahead of schedule.  Pawan's work is of the highest quality and his project enables new and improved workflows in TuneIns client applications.\n\nPawan is a fast learner, an independent worker, a team player, and one of the most talented young engineers I've had the pleasure of working with.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQEIaXQlJomsgg/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1516890714271?e=1776902400&v=beta&t=Bac6PMOuYnd14BPT-XrM9gpu5g6KA04S1Vb2jjGi9Z8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQEIaXQlJomsgg/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1516890714271?e=1776902400&v=beta&t=Bac6PMOuYnd14BPT-XrM9gpu5g6KA04S1Vb2jjGi9Z8",
+              "width": 254,
+              "height": 254,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQEIaXQlJomsgg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1516890714289?e=1776902400&v=beta&t=Xj8nyNhB9NHOk8QWMJI30JJzmw26P7-nKsyhEuCTYPs",
+              "width": 254,
+              "height": 254,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQEIaXQlJomsgg/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1516890714295?e=1776902400&v=beta&t=GdjBXyh6_u3tZhXXHVYP-Mwh76RL4rdTd2-_URsgB7Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQEIaXQlJomsgg/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1516890714360?e=1776902400&v=beta&t=S-a3Obl4aFYBbOhX-iOrCsIyW3Ha0rEgHUq5Cv_0ZzQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Cécile Péraire",
+        "givenByHeadline": "Teaching Professor, Software Engineering, Carnegie Mellon University (Silicon Valley Campus)",
+        "givenAt": "April 4, 2023, Cécile was Pawan’s teacher",
+        "givenByLink": "https://www.linkedin.com/in/cecileperaire",
+        "description": "'Top-performer' is the word that comes to mind when thinking about Pawan Bhandarkar. Therefore, it is my great pleasure to write this recommendation. I am a Professor of software engineering at Carnegie Mellon University (CMU) in Silicon Valley, where I had the chance to have Pawan as one of my Master students in the context of three courses: Foundations of Software Engineering, Software Requirements and Interaction Design, and Software Engineering Methods. As a student, I would rank Pawan in the top 1% among hundreds of CMU software engineering students. Pawan is extremely motivated with outstanding technical and leadership skills. He is very respected by his peers for his work and his volunteering activities as a Student Leader of the CMU ECE Graduate Organization. Because of his overall exceptional performance, I hired Pawan as a Teaching Assistant in Foundations of Software Engineering. I was not disappointed by the decision, as the quality of his work, his dedication, as well as his mentoring skills, made Pawan an outstanding Teaching Assistant. In addition, Pawan is a real pleasure to work with. If I ever have the opportunity, I will hire Pawan again without any hesitation. He will certainly make a great addition to any software team!",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D03AQHeFkc12CInQA/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1516283105868?e=1776902400&v=beta&t=WVjvDKk6iIEf2ZNceEj6CZERp0nqD4-0Tpo5yU8RNjM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D03AQHeFkc12CInQA/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1516283105868?e=1776902400&v=beta&t=WVjvDKk6iIEf2ZNceEj6CZERp0nqD4-0Tpo5yU8RNjM",
+              "width": 300,
+              "height": 300,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D03AQHeFkc12CInQA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1516283085116?e=1776902400&v=beta&t=z84-rSgAoe0XrreyMjpOObm7zRQco6_NUEZRwyrw-DE",
+              "width": 300,
+              "height": 300,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D03AQHeFkc12CInQA/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1516283097209?e=1776902400&v=beta&t=y4gnL6Y2Dwn2r97Zg7ZrIx0R3b6YWWSJrxywV78peqs",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D03AQHeFkc12CInQA/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1516283084055?e=1776902400&v=beta&t=YTVuI0bcdeWqcnlzGFLNOZJ82EPwoj9cbiUMfjYOam0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "skills": [
+      {
+        "name": "ActiveMQ",
+        "positions": [
+          "Software Engineer Intern, Platform at TuneIn"
+        ]
+      },
+      {
+        "name": "WebSocket",
+        "positions": [
+          "Software Engineer Intern, Platform at TuneIn"
+        ]
+      },
+      {
+        "name": "Genetic Algorithms"
+      },
+      {
+        "name": "Go (Programming Language)",
+        "positions": [
+          "Software Engineer Intern, Platform at TuneIn"
+        ]
+      },
+      {
+        "name": "Redis",
+        "positions": [
+          "Software Engineer Intern, Platform at TuneIn"
+        ]
+      },
+      {
+        "name": "Apache Kafka",
+        "positions": [
+          "Software Engineer Intern, Platform at TuneIn"
+        ]
+      },
+      {
+        "name": "Data Science",
+        "positions": [
+          "AI Engineer Intern at Team AIBOD"
+        ]
+      },
+      {
+        "name": "Web Development",
+        "positions": [
+          "2 experiences across Team AIBOD and 1 other company",
+          "2 educational experiences at Carnegie Mellon University and 1 other school",
+          "The Complete Node.js Developer Course"
+        ]
+      },
+      {
+        "name": "Express.js"
+      },
+      {
+        "name": "Front-End Development",
+        "assessments": "Passed LinkedIn Skill Assessment",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "WAI-ARIA"
+      },
+      {
+        "name": "Semantic HTML",
+        "positions": [
+          "2 educational experiences at Carnegie Mellon University and 1 other school"
+        ]
+      },
+      {
+        "name": "Machine Learning",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "TypeScript",
+        "positions": [
+          "Software Engineer 2 at Team AIBOD"
+        ],
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Software Development",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "CSS",
+        "positions": [
+          "Graduate Teaching Assistant at Carnegie Mellon University"
+        ]
+      },
+      {
+        "name": "C#",
+        "positions": [
+          "Software Engineer Intern, Platform at TuneIn"
+        ]
+      },
+      {
+        "name": "ASP.NET",
+        "positions": [
+          "Software Engineer Intern, Platform at TuneIn"
+        ]
+      },
+      {
+        "name": "Frontend"
+      },
+      {
+        "name": "GraphQL",
+        "positions": [
+          "Software Engineer Intern, Platform at TuneIn"
+        ]
+      },
+      {
+        "name": "gRPC",
+        "positions": [
+          "Software Engineer Intern, Platform at TuneIn"
+        ]
+      },
+      {
+        "name": "Redux.js",
+        "positions": [
+          "3 experiences at Team AIBOD"
+        ]
+      },
+      {
+        "name": "PyTorch",
+        "positions": [
+          "AI Engineer Intern at Team AIBOD"
+        ]
+      },
+      {
+        "name": "Pandas (Software)",
+        "positions": [
+          "AI Engineer Intern at Team AIBOD"
+        ]
+      },
+      {
+        "name": "Colab",
+        "positions": [
+          "AI Engineer Intern at Team AIBOD"
+        ]
+      },
+      {
+        "name": "Docker",
+        "positions": [
+          "2 experiences across TuneIn and 1 other company"
+        ]
+      },
+      {
+        "name": "Amazon Web Services (AWS)",
+        "positions": [
+          "2 experiences across TuneIn and 1 other company"
+        ]
+      },
+      {
+        "name": "HTML",
+        "positions": [
+          "2 experiences across Carnegie Mellon University and 1 other company",
+          "3 educational experiences at Carnegie Mellon University and 2 other schools",
+          "The Complete Node.js Developer Course"
+        ]
+      },
+      {
+        "name": "Python (Programming Language)",
+        "positions": [
+          "4 experiences across Team AIBOD and 1 other company",
+          "3 educational experiences at Carnegie Mellon University and 2 other schools",
+          "Machine Learning Foundation Nanodegree"
+        ]
+      },
+      {
+        "name": "Cascading Style Sheets (CSS)",
+        "positions": [
+          "Software Engineer 1 at Team AIBOD",
+          "2 educational experiences at Carnegie Mellon University and 1 other school",
+          "The Complete Node.js Developer Course"
+        ]
+      },
+      {
+        "name": "Figma",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Embedded JavaScript (EJS)",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "MongoDB",
+        "positions": [
+          "Graduate Teaching Assistant at Carnegie Mellon University"
+        ]
+      },
+      {
+        "name": "Next.js"
+      },
+      {
+        "name": "Tailwind CSS"
+      },
+      {
+        "name": "SASS"
+      },
+      {
+        "name": "Node.js",
+        "positions": [
+          "Graduate Teaching Assistant at Carnegie Mellon University"
+        ],
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Mentoring"
+      },
+      {
+        "name": "Leadership",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Public Speaking",
+        "endorsements": "10 endorsements"
+      },
+      {
+        "name": "JavaScript",
+        "positions": [
+          "Graduate Teaching Assistant at Carnegie Mellon University"
+        ]
+      },
+      {
+        "name": "CSS Flexbox"
+      },
+      {
+        "name": "CSS Grid Layout"
+      },
+      {
+        "name": "HTML5"
+      },
+      {
+        "name": "React.js",
+        "positions": [
+          "2 experiences at Team AIBOD"
+        ],
+        "endorsements": "2 endorsements"
+      }
+    ],
+    "publications": [],
+    "courses": [
+      {
+        "title": "Foundations of Software Engineering",
+        "number": "18652",
+        "associatedWith": "Associated with Carnegie Mellon University",
+        "associatedWithLink": "https://www.linkedin.com/company/3147/"
+      },
+      {
+        "title": "Software Requirements & Interaction Design",
+        "number": "18658",
+        "associatedWith": "Associated with Carnegie Mellon University",
+        "associatedWithLink": "https://www.linkedin.com/company/3147/"
+      },
+      {
+        "title": "Software Verification & Testing",
+        "number": "18654",
+        "associatedWith": "Associated with Carnegie Mellon University",
+        "associatedWithLink": "https://www.linkedin.com/company/3147/"
+      }
+    ],
+    "patents": [],
+    "honorsAndAwards": [
+      {
+        "title": "Sakura Science Fellow",
+        "issuedBy": "Japan Science and Technology Agency",
+        "issuedAt": "Jul 2019",
+        "associatedWith": "Associated with Ritsumeikan University",
+        "associatedWithLink": null
+      },
+      {
+        "title": "Youth Icon Karnataka",
+        "issuedBy": "ICT Academy",
+        "issuedAt": "Mar 2019",
+        "description": "The Youth Talk is a massive state-wide talkathon conducted by ICT Academy in various states across India aimed to identify the leaders among youth whose words could potentially make an impact on the current generation.\n\nMy talk about \"How we look is unimportant. It's who we are on the inside that counts\" won me this prestigious title along with a 5-day educational trip to Singapore. ",
+        "associatedWith": null,
+        "associatedWithLink": null
+      }
+    ],
+    "languages": [
+      {
+        "name": "English",
+        "proficiency": "Full professional proficiency"
+      },
+      {
+        "name": "Hindi",
+        "proficiency": "Professional working proficiency"
+      },
+      {
+        "name": "Kannada",
+        "proficiency": "Professional working proficiency"
+      },
+      {
+        "name": "Konkani",
+        "proficiency": "Native or bilingual proficiency"
+      }
+    ],
+    "causes": [],
+    "featured": null,
+    "moreProfiles": [
+      {
+        "id": "ACoAAA6sUmoBQM41pseuX5RgOWjNBJLJ11dU8oQ",
+        "firstName": "Belce",
+        "lastName": "D.",
+        "publicIdentifier": "belce",
+        "linkedinUrl": "https://www.linkedin.com/in/belce"
+      },
+      {
+        "id": "ACoAABpnQxgBvCtK9X4PX1Kl87bjjSMFpShCiiU",
+        "firstName": "Mohit",
+        "lastName": "Reddy",
+        "publicIdentifier": "mohitreddy1996",
+        "linkedinUrl": "https://www.linkedin.com/in/mohitreddy1996"
+      },
+      {
+        "id": "ACoAABdmLFIBynpe7Fupctbe3BuDAewJ_t7wcv8",
+        "firstName": "Ethan",
+        "lastName": "He",
+        "publicIdentifier": "ethanhe42",
+        "linkedinUrl": "https://www.linkedin.com/in/ethanhe42"
+      },
+      {
+        "id": "ACoAABbvc6QBa0bZq6kiAe_lt8NHV3F0UyZ4bq4",
+        "firstName": "Satvik",
+        "lastName": "Ramaprasad",
+        "publicIdentifier": "satvik-ramaprasad",
+        "linkedinUrl": "https://www.linkedin.com/in/satvik-ramaprasad"
+      },
+      {
+        "id": "ACoAAAYjW0oBcpvSP-bnG0acDTKvFr3wogS0qYs",
+        "firstName": "Aman",
+        "lastName": "Madaan",
+        "publicIdentifier": "amnmadaan",
+        "linkedinUrl": "https://www.linkedin.com/in/amnmadaan"
+      },
+      {
+        "id": "ACoAACoA9JsBKOoO0B594t3d8gXLs8YlH377fMc",
+        "firstName": "Aditya",
+        "lastName": "Prerepa",
+        "publicIdentifier": "adiprerepa",
+        "linkedinUrl": "https://www.linkedin.com/in/adiprerepa"
+      },
+      {
+        "id": "ACoAABQ6Qt4B3-GoTuOgt3yUh3tlG19DCMiu3C4",
+        "firstName": "Aditya",
+        "lastName": "Paliwal",
+        "publicIdentifier": "apal95",
+        "linkedinUrl": "https://www.linkedin.com/in/apal95"
+      },
+      {
+        "id": "ACoAACdwj2cBOZKRwSTNQG1mt5i6g5Igl8EBROY",
+        "firstName": "Nidhi",
+        "lastName": "Pai",
+        "publicIdentifier": "pai-nidhi",
+        "linkedinUrl": "https://www.linkedin.com/in/pai-nidhi"
+      },
+      {
+        "id": "ACoAAChGIPsBQXPIw1aMMKGfSFHTDf4KrBYBVr8",
+        "firstName": "Zeeshan",
+        "lastName": "Patel",
+        "publicIdentifier": "zeeshan-patel",
+        "linkedinUrl": "https://www.linkedin.com/in/zeeshan-patel"
+      },
+      {
+        "id": "ACoAABg0GasBFqDI-qcLfoBBvEyHVtuRtvYJfLs",
+        "firstName": "Jinyi",
+        "lastName": "Lu",
+        "publicIdentifier": "jinyi-lu-a0bba8b3",
+        "linkedinUrl": "https://www.linkedin.com/in/jinyi-lu-a0bba8b3"
+      },
+      {
+        "id": "ACoAAByUK34Bs3gZTWv1aqzrNjP7fNFb0ksATDs",
+        "firstName": "Lianmin",
+        "lastName": "Zheng",
+        "publicIdentifier": "lianmin-zheng-6266a8114",
+        "linkedinUrl": "https://www.linkedin.com/in/lianmin-zheng-6266a8114"
+      },
+      {
+        "id": "ACoAACJIwJIB-5VKY6MhuucFemRioVTwxb98w4c",
+        "firstName": "Arash",
+        "lastName": "B.",
+        "publicIdentifier": "abidgoli",
+        "linkedinUrl": "https://www.linkedin.com/in/abidgoli"
+      },
+      {
+        "id": "ACoAAAtt0_MBbuwpPXQbKNZBn0v3La5-jQ82JpI",
+        "firstName": "Arshdeep",
+        "lastName": "Singh",
+        "publicIdentifier": "iamarshdeepsingh",
+        "linkedinUrl": "https://www.linkedin.com/in/iamarshdeepsingh"
+      },
+      {
+        "id": "ACoAACSfwsoBjOYrzflPjIESvOGTncmBP5MAG5Q",
+        "firstName": "SangBin",
+        "lastName": "Cho",
+        "publicIdentifier": "sang-cho",
+        "linkedinUrl": "https://www.linkedin.com/in/sang-cho"
+      },
+      {
+        "id": "ACoAABwv_tABUuP7JaGT-H3-b86wDeODJfFeuzc",
+        "firstName": "Pranjal",
+        "lastName": "Shankhdhar",
+        "publicIdentifier": "pranjal-shankhdhar-380461112",
+        "linkedinUrl": "https://www.linkedin.com/in/pranjal-shankhdhar-380461112"
+      },
+      {
+        "id": "ACoAABaVRtQBhwPrkekfEw7A6MYmZqr_ZSQG65U",
+        "firstName": "Aditya",
+        "lastName": "Gupta",
+        "publicIdentifier": "aditya2211",
+        "linkedinUrl": "https://www.linkedin.com/in/aditya2211"
+      },
+      {
+        "id": "ACoAABHkuyUByNPl3ebZpneB10P5XFDM3pYxFbw",
+        "firstName": "Shimin",
+        "lastName": "Wang",
+        "publicIdentifier": "shimin-wang-57165484",
+        "linkedinUrl": "https://www.linkedin.com/in/shimin-wang-57165484"
+      },
+      {
+        "id": "ACoAAC1tj3wBDTDptwrBe2h366nmPxDsIrgpNUk",
+        "firstName": "Neal",
+        "lastName": "Bayya",
+        "publicIdentifier": "nealbayya",
+        "linkedinUrl": "https://www.linkedin.com/in/nealbayya"
+      },
+      {
+        "id": "ACoAAAgnaYgBLMFo1pkZEUYTD44TlGksNkXvres",
+        "firstName": "Uday",
+        "lastName": "Ruddarraju",
+        "publicIdentifier": "udaykumarraju",
+        "linkedinUrl": "https://www.linkedin.com/in/udaykumarraju"
+      },
+      {
+        "id": "ACoAABUKevABfdB8HYf4-m1Bo6m7yj7gGwOFaU0",
+        "firstName": "Yiwen",
+        "lastName": "Yuan",
+        "publicIdentifier": "yiwen-yuan-30027b9a",
+        "linkedinUrl": "https://www.linkedin.com/in/yiwen-yuan-30027b9a"
+      },
+      {
+        "id": "ACoAADr4AU4BJ57OdOO9PXK5jjy8XZmVtUMm0BY",
+        "firstName": "Taleh",
+        "lastName": "Guluzade",
+        "position": "Bilingual Translator and Interpreter",
+        "publicIdentifier": "taleh-guluzade-b7a3a9237",
+        "linkedinUrl": "https://www.linkedin.com/in/taleh-guluzade-b7a3a9237"
+      },
+      {
+        "id": "ACoAAF-Q8v4BhqDsllIoYVycdBOM7o0GidWebUU",
+        "firstName": "Ulvi",
+        "lastName": "Qasimov",
+        "position": "Head of Technological Economic and Cost Department",
+        "publicIdentifier": "ulvi-qasimov-a26b53388",
+        "linkedinUrl": "https://www.linkedin.com/in/ulvi-qasimov-a26b53388"
+      },
+      {
+        "id": "ACoAABuQansB56ALbu4zfEpNnn8rdKxrAXbqh2c",
+        "firstName": "Sarkhan",
+        "lastName": "Baghirli",
+        "position": "Project Manager, Leading Specialist, Teacher, Astrophysics",
+        "publicIdentifier": "sarkhan-baghirli",
+        "linkedinUrl": "https://www.linkedin.com/in/sarkhan-baghirli"
+      },
+      {
+        "id": "ACoAAE2j17UBBLnQboxnxVs5u7nWwhCClqnMt_A",
+        "firstName": "Huru",
+        "lastName": "Ahmedova",
+        "position": "Visa specialist - ASAN Viza/Visa",
+        "publicIdentifier": "huru-ahmedova-899295304",
+        "linkedinUrl": "https://www.linkedin.com/in/huru-ahmedova-899295304"
+      },
+      {
+        "id": "ACoAAEtcDUABv_bMafyane6OYsVwzixxx7k1OOI",
+        "firstName": "Laman",
+        "lastName": "Shikarova",
+        "position": "International Relations Graduate | Government Agencies | Foreign Affairs & Diplomacy",
+        "publicIdentifier": "laman-shikarova-b145042b3",
+        "linkedinUrl": "https://www.linkedin.com/in/laman-shikarova-b145042b3"
+      },
+      {
+        "id": "ACoAAEwiGf4BAjvEQ2Bvedp0ZzwVaK7JvZS52IU",
+        "firstName": "Allahverdi",
+        "lastName": "Ismayilov",
+        "position": "Leading Visa Specialist @ ASAN Viza/Visa | General Economics",
+        "publicIdentifier": "allahverdi-ismayilov-1929242b7",
+        "linkedinUrl": "https://www.linkedin.com/in/allahverdi-ismayilov-1929242b7"
+      },
+      {
+        "id": "ACoAAFz6uUABa53Deaq9d6PeDTB4IXl3CJpBCao",
+        "firstName": "Ламия",
+        "lastName": "Нураванзаде",
+        "position": "--",
+        "publicIdentifier": "ламия-нураванзаде-400504376",
+        "linkedinUrl": "https://www.linkedin.com/in/ламия-нураванзаде-400504376"
+      },
+      {
+        "id": "ACoAAAkJOwkBmThHSexApPxBHCQ0i4LLmXPQvX0",
+        "firstName": "Ismayil",
+        "lastName": "Abdulazimov",
+        "position": "Results-driven senior professional with 20+ years of experience in public affairs, multilateral relations & operations.",
+        "publicIdentifier": "ismayilabdulazimov",
+        "linkedinUrl": "https://www.linkedin.com/in/ismayilabdulazimov"
+      },
+      {
+        "id": "ACoAACrC4TIBUVCwZ07PQvgVJK-lQqOEqU9eWv0",
+        "firstName": "Nigar",
+        "lastName": "Xasiyeva",
+        "position": "Lead Specialist in Visa Issuance at ASAN Visa",
+        "publicIdentifier": "nigarxasiyeva",
+        "linkedinUrl": "https://www.linkedin.com/in/nigarxasiyeva"
+      },
+      {
+        "id": "ACoAAEyUIq0Bm2axCW0M7TUBAUrbCtf8WSi5O-w",
+        "firstName": "Adela",
+        "lastName": "Bahramova",
+        "position": "MUK Computers - operations manager",
+        "publicIdentifier": "adela-bahramova-ba53282ba",
+        "linkedinUrl": "https://www.linkedin.com/in/adela-bahramova-ba53282ba"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAACFV0UQBM-cfx-FBaFs9Y5CMrTj5wOhnX2w"
+    }
+  }
+}

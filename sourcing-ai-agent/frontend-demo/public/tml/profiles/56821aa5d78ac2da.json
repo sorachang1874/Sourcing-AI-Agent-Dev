@@ -1,0 +1,395 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAFrcMxQB4aeKan4IkK9TQrZVsL12-LFqjsk",
+    "profile_url": "https://www.linkedin.com/in/ACwAAFrcMxQB4aeKan4IkK9TQrZVsL12-LFqjsk"
+  },
+  "item": {
+    "id": "ACoAAFrcMxQBbH8DvYrm1DAowuV7eVqklFk6fR0",
+    "publicIdentifier": "kayleigh-conroy-730618366",
+    "linkedinUrl": "https://www.linkedin.com/in/kayleigh-conroy-730618366",
+    "firstName": "Kayleigh",
+    "lastName": "Conroy",
+    "emails": [
+      {
+        "email": "kayleigh.conroy@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Software Developer at Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Meridian, Mississippi, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "Meridian, MS, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "Mississippi",
+        "city": "Meridian"
+      }
+    },
+    "objectUrn": "1524380436",
+    "registeredAt": "2025-05-19T13:42:01.544Z",
+    "topSkills": null,
+    "connectionsCount": 0,
+    "followerCount": 0,
+    "verified": false,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": null,
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5603AQEG2jFG-Ab3vQ/profile-displayphoto-shrink_100_100/B56Zbox6tlG4AY-/0/1747662122091?e=1776902400&v=beta&t=cOgT9u_KD4eFQPR0oIRBBBHPU9sIhTUXN-xBp46XSkM",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQEG2jFG-Ab3vQ/profile-displayphoto-shrink_100_100/B56Zbox6tlG4AY-/0/1747662122091?e=1776902400&v=beta&t=cOgT9u_KD4eFQPR0oIRBBBHPU9sIhTUXN-xBp46XSkM",
+          "width": 96,
+          "height": 96,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQEG2jFG-Ab3vQ/profile-displayphoto-shrink_400_400/B56Zbox6tlG4Ak-/0/1747662122091?e=1776902400&v=beta&t=IoNgMM5MQa9LywN7Wixh-Q_ZwhdKiK7HzZUrMRTGxNw",
+          "width": 96,
+          "height": 96,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQEG2jFG-Ab3vQ/profile-displayphoto-shrink_800_800/B56Zbox6tlG4Ag-/0/1747662122091?e=1776902400&v=beta&t=gbPEVYTczl-18hRp5BP7zHKKn1wwz_GJY8D9_7ZJH4c",
+          "width": 96,
+          "height": 96,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQEG2jFG-Ab3vQ/profile-displayphoto-shrink_200_200/B56Zbox6tlG4Ac-/0/1747662122094?e=1776902400&v=beta&t=CFqtqT5PM1SG643Dv7-xm0mSNagog5PaC4EwGbO40To",
+          "width": 96,
+          "height": 96,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D5603AQEG2jFG-Ab3vQ/profile-displayphoto-shrink_100_100/B56Zbox6tlG4AY-/0/1747662122091?e=1776902400&v=beta&t=cOgT9u_KD4eFQPR0oIRBBBHPU9sIhTUXN-xBp46XSkM",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Software Developer at Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Software Developer",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": null,
+        "description": null,
+        "skills": null,
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAADiI4skBghY50KOUMdkeGNAEaEGPnWkP8tg",
+        "firstName": "Priyadharshini",
+        "lastName": "M",
+        "publicIdentifier": "priyadharshini-m-721795225",
+        "linkedinUrl": "https://www.linkedin.com/in/priyadharshini-m-721795225"
+      },
+      {
+        "id": "ACoAAEMJOjMBw0QaSr4iGd_OK_yRaqpY4pnRN8w",
+        "firstName": "Nashita",
+        "lastName": "Shakeel Ahmed",
+        "publicIdentifier": "nashita-shakeel-ahmed-52b79b274",
+        "linkedinUrl": "https://www.linkedin.com/in/nashita-shakeel-ahmed-52b79b274"
+      },
+      {
+        "id": "ACoAAAD988EBKY-IqN8rXMj1haRnX3VeXtw1NWI",
+        "firstName": "Bhaskar",
+        "lastName": "Mehta",
+        "publicIdentifier": "bhaskarmehta",
+        "linkedinUrl": "https://www.linkedin.com/in/bhaskarmehta"
+      },
+      {
+        "id": "ACoAABEM7osBPXyGYep6aq2sLfhFwwdJ6wj2n4s",
+        "firstName": "Prafulla",
+        "lastName": "Dhariwal",
+        "publicIdentifier": "prafulladhariwal",
+        "linkedinUrl": "https://www.linkedin.com/in/prafulladhariwal"
+      },
+      {
+        "id": "ACoAAAQMrpUBixQZW4yoVdFYYgrQx7mp2dvJNvQ",
+        "firstName": "Greg",
+        "lastName": "Brockman",
+        "publicIdentifier": "thegdb",
+        "linkedinUrl": "https://www.linkedin.com/in/thegdb"
+      },
+      {
+        "id": "ACoAAC3xZW0Bd2kZsEutNQH5L8zILHhU_uoA8Bw",
+        "firstName": "Harshwardhan",
+        "lastName": "Kumar",
+        "publicIdentifier": "harshwar",
+        "linkedinUrl": "https://www.linkedin.com/in/harshwar"
+      },
+      {
+        "id": "ACoAAAY6cNwB7lblXvQaDTUDoMXPTyFIuyDnMIY",
+        "firstName": "Daniela",
+        "lastName": "Amodei",
+        "publicIdentifier": "daniela-amodei-790bb22a",
+        "linkedinUrl": "https://www.linkedin.com/in/daniela-amodei-790bb22a"
+      },
+      {
+        "id": "ACoAAFzBUR0Bt1zRKAzI8OS7_g6ytwU9UvfJwnI",
+        "firstName": "Lathika",
+        "lastName": "gunasekaran",
+        "publicIdentifier": "lathika-gunasekaran-1651ab375",
+        "linkedinUrl": "https://www.linkedin.com/in/lathika-gunasekaran-1651ab375"
+      },
+      {
+        "id": "ACoAAE6dUmUByULaxAf6Cv1d_YW2fL-egCVAL58",
+        "firstName": "Gitesh",
+        "lastName": "Malik",
+        "publicIdentifier": "giteshmalik1",
+        "linkedinUrl": "https://www.linkedin.com/in/giteshmalik1"
+      },
+      {
+        "id": "ACoAAAl87CYBWKLLyGNTbomy6oqIPv-5n34CXIY",
+        "firstName": "Andrew",
+        "lastName": "Tulloch",
+        "publicIdentifier": "andrew-tulloch-17238745",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-tulloch-17238745"
+      },
+      {
+        "id": "ACoAAABSm5EBI7wCtV9q32Z76FJl2Iegwmv828c",
+        "firstName": "Bob",
+        "lastName": "McGrew",
+        "publicIdentifier": "bobmcgrew",
+        "linkedinUrl": "https://www.linkedin.com/in/bobmcgrew"
+      },
+      {
+        "id": "ACoAAAAARMABZ3YLggJZgJ1HPHW7NN_36TNZ2xA",
+        "firstName": "Adam",
+        "lastName": "D'Angelo",
+        "publicIdentifier": "dangelo",
+        "linkedinUrl": "https://www.linkedin.com/in/dangelo"
+      },
+      {
+        "id": "ACoAAADSAbIBAZnYtjjLeCsXLOP2JjyfXwYda0U",
+        "firstName": "Sam",
+        "lastName": "Altman",
+        "publicIdentifier": "sam-altman-financial-advisor",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-altman-financial-advisor"
+      },
+      {
+        "id": "ACoAAEMJzRoBzaCAfXVpxdQFp7tBIkK3dyWhGTQ",
+        "firstName": "Olaoluwa",
+        "lastName": "Oguneye",
+        "publicIdentifier": "olaoluwa-oguneye",
+        "linkedinUrl": "https://www.linkedin.com/in/olaoluwa-oguneye"
+      },
+      {
+        "id": "ACoAABu1lF8B-5G_kFifMj8NV01qog4WFqRPRms",
+        "firstName": "Patrick",
+        "lastName": "O'Neill",
+        "publicIdentifier": "patrickrecruits",
+        "linkedinUrl": "https://www.linkedin.com/in/patrickrecruits"
+      },
+      {
+        "id": "ACoAACc82fIBGFpPeSnW2lbuMZYIZoqhFIMGiMs",
+        "firstName": "Wojciech",
+        "lastName": "Zaremba",
+        "publicIdentifier": "wojciech-zaremba-356568164",
+        "linkedinUrl": "https://www.linkedin.com/in/wojciech-zaremba-356568164"
+      },
+      {
+        "id": "ACoAABFmakQBEluVepxY639zEmykn0ExwFzLlFI",
+        "firstName": "Ashish",
+        "lastName": "Vaswani",
+        "publicIdentifier": "ashish-vaswani-99892181",
+        "linkedinUrl": "https://www.linkedin.com/in/ashish-vaswani-99892181"
+      },
+      {
+        "id": "ACoAAAAncdkBsK61ncnLhVF5vJOosSCTs232Gyk",
+        "firstName": "Sam",
+        "lastName": "Altman",
+        "publicIdentifier": "sam-altman-b89a47",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-altman-b89a47"
+      },
+      {
+        "id": "ACoAAACFbM8BJP_3CAVzYGvxIGrPJwno6hjA6Nc",
+        "firstName": "Sriya",
+        "lastName": "Santhanam",
+        "publicIdentifier": "sriya-santhanam-327b182",
+        "linkedinUrl": "https://www.linkedin.com/in/sriya-santhanam-327b182"
+      },
+      {
+        "id": "ACoAAAUu5mIBCCLU6ZykDw4kfMH2Rt-B7RRd6cI",
+        "firstName": "Karen",
+        "lastName": "Reid",
+        "position": "Artist",
+        "publicIdentifier": "karen-reid-aaa15725",
+        "linkedinUrl": "https://www.linkedin.com/in/karen-reid-aaa15725"
+      },
+      {
+        "id": "ACoAAAQnDbwBf97LhkzVCdujRuWpEDqT1jBoJCo",
+        "firstName": "Madeline",
+        "lastName": "Meryash",
+        "position": "Artist/Art Consultant",
+        "publicIdentifier": "madeline-meryash-3643b91b",
+        "linkedinUrl": "https://www.linkedin.com/in/madeline-meryash-3643b91b"
+      },
+      {
+        "id": "ACoAAEtlrq0Bzba0WUcccvbuRVidx2NqIvj0eps",
+        "firstName": "Chrissie",
+        "lastName": "Pressman",
+        "position": "Creative Director | AI Film",
+        "publicIdentifier": "chrissie-pressman-21176a2b3",
+        "linkedinUrl": "https://www.linkedin.com/in/chrissie-pressman-21176a2b3"
+      },
+      {
+        "id": "ACoAABTWhS0BTl2FyfXqPQvZfjPHDIMgAH_Epgo",
+        "firstName": "Long",
+        "lastName": "Hoang",
+        "position": "MSc.Architect - Artist - Worldrecordholder",
+        "publicIdentifier": "hoanglongboarc",
+        "linkedinUrl": "https://www.linkedin.com/in/hoanglongboarc"
+      },
+      {
+        "id": "ACoAABJ_XX4BAQ-Tr_aySzDE8VtnRV4t2Ro6W-A",
+        "firstName": "decevio",
+        "lastName": "j'mezah",
+        "position": "artist",
+        "publicIdentifier": "decevio-j-mezah-13ab2187",
+        "linkedinUrl": "https://www.linkedin.com/in/decevio-j-mezah-13ab2187"
+      },
+      {
+        "id": "ACoAADQ3O2kB6JIiT6I8Uq2xCEC6wbqrAGJvvmk",
+        "firstName": "Spirit ",
+        "lastName": "Gorgons ",
+        "position": "Performance Artist exploring ritual, mythology, and digital art. Creator of Spirit Gorgons, a ritual performance project where entities manifest through body, film and digital artifacts.",
+        "publicIdentifier": "spirit-gorgons-7a1470205",
+        "linkedinUrl": "https://www.linkedin.com/in/spirit-gorgons-7a1470205"
+      },
+      {
+        "id": "ACoAABFlhtwBvTygmBJyeWloEsJLUzlvhd_d_K4",
+        "firstName": "Suzanne",
+        "lastName": "Simnick",
+        "position": "Artist/Actor",
+        "publicIdentifier": "suzanne-simnick-1648b481",
+        "linkedinUrl": "https://www.linkedin.com/in/suzanne-simnick-1648b481"
+      },
+      {
+        "id": "ACoAAEEgoiMBSnSamPKCBxOc4tHuocNGpND3Kb0",
+        "firstName": "อมร ",
+        "lastName": "ตรีเมฆ",
+        "position": "Artist",
+        "publicIdentifier": "อมร-ตรีเมฆ-083b19265",
+        "linkedinUrl": "https://www.linkedin.com/in/อมร-ตรีเมฆ-083b19265"
+      },
+      {
+        "id": "ACoAAAKGENoBsBrwNv0X9NvagW1ebdeKPwGA6q4",
+        "firstName": "Stephanie",
+        "lastName": "Jacobs",
+        "position": "Artistic Director, Project Manager, and Professional Model representing brands, products, and service providers through print, commercial, runway, e-comm, and events.",
+        "publicIdentifier": "stephanie-jacobs-719-pro-model-art-director",
+        "linkedinUrl": "https://www.linkedin.com/in/stephanie-jacobs-719-pro-model-art-director"
+      },
+      {
+        "id": "ACoAAD3dc0MBpCKkAJ3_OTc5rk0d4LiK1hdLsQc",
+        "firstName": "Allen",
+        "lastName": "Moehr",
+        "position": "Artist/Muralist",
+        "publicIdentifier": "allen-moehr-b6b72124b",
+        "linkedinUrl": "https://www.linkedin.com/in/allen-moehr-b6b72124b"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAFrcMxQB4aeKan4IkK9TQrZVsL12-LFqjsk"
+    }
+  }
+}

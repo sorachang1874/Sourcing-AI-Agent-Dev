@@ -1,0 +1,695 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAABqU8psBEMRROmjbrEoFMtqTwznnG9FfGrI",
+    "profile_url": "https://www.linkedin.com/in/ACwAABqU8psBEMRROmjbrEoFMtqTwznnG9FfGrI"
+  },
+  "item": {
+    "id": "ACoAABqU8psBncgwN-WH-D8F1Jq9i7OsFmcPDt4",
+    "publicIdentifier": "jeffrey-tao",
+    "linkedinUrl": "https://www.linkedin.com/in/jeffrey-tao",
+    "firstName": "Jeffrey",
+    "lastName": "Tao",
+    "emails": [
+      {
+        "email": "jeffrey.tao@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Member of Technical Staff at Thinking Machines Lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America"
+      }
+    },
+    "objectUrn": "445969051",
+    "registeredAt": "2015-09-13T05:57:19.932Z",
+    "topSkills": null,
+    "connectionsCount": 443,
+    "followerCount": 443,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 11,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "17939",
+        "companyId": "2517",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2517/",
+        "schoolName": "University of California, Berkeley"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": null,
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Member of Technical Staff at Thinking Machines Lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "6 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Nov",
+          "year": 2025,
+          "text": "Nov 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "OpenAI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/11130470/",
+        "companyId": "11130470",
+        "duration": "10 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2025,
+          "text": "Feb 2025"
+        },
+        "endDate": {
+          "month": "Nov",
+          "year": 2025,
+          "text": "Nov 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_200_200/B56ZT8EYB8HsAI-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=O6RSWlpQ5W4zNCOCTu621qCyTijLuXFJS4pz2_hBQfo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_100_100/B56ZT8EYB8HsAQ-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=y7RA89V9q8GlAjQ1oRU-jf_-n5zlSXRCnykXBIkgHfM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Windsurf",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/89680378/",
+        "companyId": "89680378",
+        "duration": "10 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2024,
+          "text": "May 2024"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2025,
+          "text": "Feb 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHEjnGdXZ7kVg/company-logo_400_400/B56ZZ9y9z8GQAc-/0/1745867234905/windsurf_logo?e=1776902400&v=beta&t=LLmZCVf1uIdWr810GGepDZFxvs-ZwAF2llE4wnwi5NU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHEjnGdXZ7kVg/company-logo_400_400/B56ZZ9y9z8GQAc-/0/1745867234905/windsurf_logo?e=1776902400&v=beta&t=LLmZCVf1uIdWr810GGepDZFxvs-ZwAF2llE4wnwi5NU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHEjnGdXZ7kVg/company-logo_200_200/B56ZZ9y9z8GQAM-/0/1745867234905/windsurf_logo?e=1776902400&v=beta&t=3uQ7MFWN6h7jDglUH1R4GhLCAme-5a_Rcne9og7RRHk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHEjnGdXZ7kVg/company-logo_100_100/B56ZZ9y9z8GQAU-/0/1745867234905/windsurf_logo?e=1776902400&v=beta&t=zvEcXxKgo9pVosFMDv04M3fwV-UiAHoIPa1OLZKjrEU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Waymo",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/17900793/",
+        "companyId": "17900793",
+        "duration": "1 yr 8 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2022,
+          "text": "Sep 2022"
+        },
+        "endDate": {
+          "month": "Apr",
+          "year": 2024,
+          "text": "Apr 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQH7oNKotSNJzg/company-logo_400_400/B56ZsEdpviIcAg-/0/1765306440935/waymo_logo?e=1776902400&v=beta&t=0qZFY8bJ2UC-DUgao_dshH2dRxU4g4C1L8c47gKqXY0",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH7oNKotSNJzg/company-logo_400_400/B56ZsEdpviIcAg-/0/1765306440935/waymo_logo?e=1776902400&v=beta&t=0qZFY8bJ2UC-DUgao_dshH2dRxU4g4C1L8c47gKqXY0",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH7oNKotSNJzg/company-logo_200_200/B56ZsEdpviIcAQ-/0/1765306440935/waymo_logo?e=1776902400&v=beta&t=YHkWCJfZsie1D68b2ZUhhx7sV-9D3SeSeB09jTxpbiQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH7oNKotSNJzg/company-logo_100_100/B56ZsEdpviIcAY-/0/1765306440935/waymo_logo?e=1776902400&v=beta&t=1mE9yojclrwA9zCGLwVxxBVKcdGuqcdPD5xkgug_7cY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Undergraduate Researcher",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Berkeley Artificial Intelligence Research",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/19024048/",
+        "companyId": "19024048",
+        "duration": "3 yrs",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "year": 2019,
+          "text": "2019"
+        },
+        "endDate": {
+          "year": 2022,
+          "text": "2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQFr7WkPbEyg8g/company-logo_400_400/company-logo_400_400/0/1630609127403?e=1776902400&v=beta&t=4HbqUpGMihzSQykR1Rg7q-gC5jUCgPE0F0N1Wjp1YzI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFr7WkPbEyg8g/company-logo_400_400/company-logo_400_400/0/1630609127403?e=1776902400&v=beta&t=4HbqUpGMihzSQykR1Rg7q-gC5jUCgPE0F0N1Wjp1YzI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFr7WkPbEyg8g/company-logo_200_200/company-logo_200_200/0/1630609127403?e=1776902400&v=beta&t=us9L72LDLXmxSVncjtI60te8TTdcAhOO7Z026bJyzfc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFr7WkPbEyg8g/company-logo_100_100/company-logo_100_100/0/1630609127403?e=1776902400&v=beta&t=y_BU9Oc3QwDcqMes-Nkw3Rr7uaYaQ5jl9lE0m7y-QOk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Undergraduate Student Instructor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "UC Berkeley Electrical Engineering & Computer Sciences (EECS)",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/18422873/",
+        "companyId": "18422873",
+        "duration": "3 yrs",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "year": 2019,
+          "text": "2019"
+        },
+        "endDate": {
+          "year": 2022,
+          "text": "2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQET4WuLdTzDPQ/company-logo_400_400/company-logo_400_400/0/1731605469670/uc_berkeley_eecs_logo?e=1776902400&v=beta&t=NijwD-HkIBTqEaBL_WxNmkWcNYMgXYpvI9pQEBCyJao",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQET4WuLdTzDPQ/company-logo_400_400/company-logo_400_400/0/1731605469670/uc_berkeley_eecs_logo?e=1776902400&v=beta&t=NijwD-HkIBTqEaBL_WxNmkWcNYMgXYpvI9pQEBCyJao",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQET4WuLdTzDPQ/company-logo_200_200/company-logo_200_200/0/1731605469670/uc_berkeley_eecs_logo?e=1776902400&v=beta&t=eF6_2ltJ-UCHxzOE02JxPgJ9Eifu_L4_7uX23eBsx2E",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQET4WuLdTzDPQ/company-logo_100_100/company-logo_100_100/0/1731605469670/uc_berkeley_eecs_logo?e=1776902400&v=beta&t=SZ8_1EB3mEQDX4k4A08eBRPEMaW2D2lY88DjAOTxRnk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineer Intern",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "X, the moonshot factory",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10440912/",
+        "companyId": "10440912",
+        "duration": "4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2020,
+          "text": "May 2020"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2020,
+          "text": "Aug 2020"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQG0c-2_5IwQ5g/company-logo_400_400/B56Z0DkULbKYAc-/0/1773881345004/x_logo?e=1776902400&v=beta&t=__gvM_2J7gfB4oqEPTe3nM615wmG0yX8aYdxPkn-vwI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQG0c-2_5IwQ5g/company-logo_400_400/B56Z0DkULbKYAc-/0/1773881345004/x_logo?e=1776902400&v=beta&t=__gvM_2J7gfB4oqEPTe3nM615wmG0yX8aYdxPkn-vwI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQG0c-2_5IwQ5g/company-logo_200_200/B56Z0DkULbKYAM-/0/1773881345004/x_logo?e=1776902400&v=beta&t=Eo14m_XooDOYMiFCyYB8zVr2m4iRkAoDuYbtWUe6smU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQG0c-2_5IwQ5g/company-logo_100_100/B56Z0DkULbKYAU-/0/1773881345004/x_logo?e=1776902400&v=beta&t=GSusNLG3lLOGzP3-0lh5Q70fmk7WNQwuY1fzdGst0Zs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "University of California, Berkeley",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2517/",
+        "schoolId": "2517",
+        "degree": "Bachelor of Science - BS",
+        "fieldOfStudy": "Electrical Engineering and Computer Sciences",
+        "skills": [],
+        "startDate": {
+          "year": 2018,
+          "text": "2018"
+        },
+        "endDate": {
+          "year": 2022,
+          "text": "2022"
+        },
+        "period": "2018 - 2022",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_400_400/company-logo_400_400/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=ihsqGpnHzj0nlc8nr3zQwTYbq6GYQDs_WRmOHxXO6Cs",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_400_400/company-logo_400_400/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=ihsqGpnHzj0nlc8nr3zQwTYbq6GYQDs_WRmOHxXO6Cs",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_200_200/company-logo_200_200/0/1732135669730/uc_berkeley_logo?e=1776902400&v=beta&t=99cgQbgSotN9XiK7TbWS3PhqRVGT8S6VKfitEcMn0-E",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_100_100/company-logo_100_100/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=spLtug0cp3xqHCXq1OoZudTryqzyY85FoIZwfJ-_XzA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [
+      {
+        "name": "Chinese"
+      }
+    ],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAACmzAtgBiDGd-HW1TzeGD6e3xWxnqDi9o-0",
+        "firstName": "Zitong",
+        "lastName": "Yang",
+        "publicIdentifier": "zitongyang",
+        "linkedinUrl": "https://www.linkedin.com/in/zitongyang"
+      },
+      {
+        "id": "ACoAAATAFhsB-MSu8aXWUBacbi6fvU_SaAqdBH4",
+        "firstName": "Jeff",
+        "lastName": "Hanson",
+        "publicIdentifier": "jshanson7",
+        "linkedinUrl": "https://www.linkedin.com/in/jshanson7"
+      },
+      {
+        "id": "ACoAAEZnBtoBb1Us7ZKgHfOXAYT764pKcDQy848",
+        "firstName": "Songlin",
+        "lastName": "Yang",
+        "publicIdentifier": "songlin-yang-b8a69728b",
+        "linkedinUrl": "https://www.linkedin.com/in/songlin-yang-b8a69728b"
+      },
+      {
+        "id": "ACoAAAQ4Q7kByw3YKf2rFlmWzRMF7P8Gw4S9PIU",
+        "firstName": "Yinghai",
+        "lastName": "L.",
+        "publicIdentifier": "yinghai83",
+        "linkedinUrl": "https://www.linkedin.com/in/yinghai83"
+      },
+      {
+        "id": "ACoAACE2EIwB3vNVX9rm6ce5juOGovFUzVvIsCc",
+        "firstName": "Kevin",
+        "lastName": "Lu",
+        "publicIdentifier": "kzl",
+        "linkedinUrl": "https://www.linkedin.com/in/kzl"
+      },
+      {
+        "id": "ACoAABGaEy8Bu1ycKB5WUvyRc69OERCzymW7mxY",
+        "firstName": "Jamie",
+        "lastName": "Cahill",
+        "publicIdentifier": "james-cahill-093a9582",
+        "linkedinUrl": "https://www.linkedin.com/in/james-cahill-093a9582"
+      },
+      {
+        "id": "ACoAACHgqNcBO7G9QHjfnTyp5v6rVbPMJ19f1dc",
+        "firstName": "Claire",
+        "lastName": "Fu",
+        "publicIdentifier": "clairecfu",
+        "linkedinUrl": "https://www.linkedin.com/in/clairecfu"
+      },
+      {
+        "id": "ACoAAAgB78IBFrSRvjrM16CT0N8_P9uNs_xP3cw",
+        "firstName": "Aurick",
+        "lastName": "Qiao",
+        "publicIdentifier": "aurickq",
+        "linkedinUrl": "https://www.linkedin.com/in/aurickq"
+      },
+      {
+        "id": "ACoAAAJzsfoBp0MxssQYMgmy0ZNO2U3sA58ugwc",
+        "firstName": "Joshua",
+        "lastName": "Gross",
+        "publicIdentifier": "joshgross",
+        "linkedinUrl": "https://www.linkedin.com/in/joshgross"
+      },
+      {
+        "id": "ACoAACHG180BXiyeZ2qJgoggx27e4iM3ajxvp18",
+        "firstName": "Andy",
+        "lastName": "Hwang",
+        "publicIdentifier": "andrewnhwang",
+        "linkedinUrl": "https://www.linkedin.com/in/andrewnhwang"
+      },
+      {
+        "id": "ACoAADDB7DABJK3fhQa97pAxpbFcGbMtI2pA2Ek",
+        "firstName": "Ruila",
+        "lastName": "M.",
+        "publicIdentifier": "ruilama",
+        "linkedinUrl": "https://www.linkedin.com/in/ruilama"
+      },
+      {
+        "id": "ACoAABLLpuMBU7a9WPW-GubLTIkDjAF6hz7Ujkc",
+        "firstName": "Daniel",
+        "lastName": "Xu",
+        "publicIdentifier": "daniel-xu-42b73289",
+        "linkedinUrl": "https://www.linkedin.com/in/daniel-xu-42b73289"
+      },
+      {
+        "id": "ACoAABoG0oUBl986ZaMrLUASG1NhDoJyVlav4Po",
+        "firstName": "Eric",
+        "lastName": "Zhang",
+        "publicIdentifier": "ekzhang",
+        "linkedinUrl": "https://www.linkedin.com/in/ekzhang"
+      },
+      {
+        "id": "ACoAAAd3c8cBXKnzqS80_HMaDIGNdqrXbaFbO5g",
+        "firstName": "James",
+        "lastName": "Sun",
+        "publicIdentifier": "james5un",
+        "linkedinUrl": "https://www.linkedin.com/in/james5un"
+      },
+      {
+        "id": "ACoAAAQ1QI4Bex6mqv5SgvahWcZuzAuWiTKciBo",
+        "firstName": "Bi",
+        "lastName": "Xue",
+        "publicIdentifier": "bi-xue-9527871b",
+        "linkedinUrl": "https://www.linkedin.com/in/bi-xue-9527871b"
+      },
+      {
+        "id": "ACoAABuhnI0BiTg8hQMSwyg8LxcrYYOowCSOSkM",
+        "firstName": "Brandon",
+        "lastName": "Trabucco",
+        "publicIdentifier": "brandontrabucco",
+        "linkedinUrl": "https://www.linkedin.com/in/brandontrabucco"
+      },
+      {
+        "id": "ACoAAAhY-psBFcHXNbjunn6_QnPfV6Bo6w4yzug",
+        "firstName": "Kenny",
+        "lastName": "Yu",
+        "publicIdentifier": "kenny-yu-aa3a9a3a",
+        "linkedinUrl": "https://www.linkedin.com/in/kenny-yu-aa3a9a3a"
+      },
+      {
+        "id": "ACoAACy2BxwB9fCrfCBI06w0X-gHyQTFLJIpJGc",
+        "firstName": "Guangxuan",
+        "lastName": "X.",
+        "publicIdentifier": "xgx",
+        "linkedinUrl": "https://www.linkedin.com/in/xgx"
+      },
+      {
+        "id": "ACoAAA4HVN4BOZg5espOvMVoO3OY04NZmuqvMCo",
+        "firstName": "Shaojie",
+        "lastName": "Bai",
+        "publicIdentifier": "shaojie-bai",
+        "linkedinUrl": "https://www.linkedin.com/in/shaojie-bai"
+      },
+      {
+        "id": "ACoAAAeoHjYB_Lo5sUFlpZpz2L74oe9nEIKztQA",
+        "firstName": "Jenya",
+        "lastName": "L.",
+        "publicIdentifier": "jenya-l",
+        "linkedinUrl": "https://www.linkedin.com/in/jenya-l"
+      },
+      {
+        "id": "ACoAAGTRGBoBSc_Ydqhx3C69s-xFA9vPfrsCFqw",
+        "firstName": "kate",
+        "lastName": "myroup",
+        "position": "AI & Data Specialist at Freelance/Contracted Data Specialist",
+        "publicIdentifier": "kate-myroup-9625553b2",
+        "linkedinUrl": "https://www.linkedin.com/in/kate-myroup-9625553b2"
+      },
+      {
+        "id": "ACoAAGTbHEABMiqePdlZOGs1dCcS-7WbOhhoBLM",
+        "firstName": "Kamranshafiq",
+        "lastName": "Kamran",
+        "position": "Student at University of California, Berkeley",
+        "publicIdentifier": "kamranshafiq-kamran-8008113b2",
+        "linkedinUrl": "https://www.linkedin.com/in/kamranshafiq-kamran-8008113b2"
+      },
+      {
+        "id": "ACoAAGVVl40BcWSD1EuNZqVHQsj-_hAdAToajaQ",
+        "firstName": "Okoye",
+        "lastName": "Onyinyechi",
+        "position": "Student at University of California, Berkeley",
+        "publicIdentifier": "okoye-onyinyechi-a914423b5",
+        "linkedinUrl": "https://www.linkedin.com/in/okoye-onyinyechi-a914423b5"
+      },
+      {
+        "id": "ACoAAGUhLRkBEDeZORpNA8z6lSfwM2UJ_ydqKcQ",
+        "firstName": "Muhammad",
+        "lastName": "Tahir",
+        "position": "Student at University of California, Berkeley",
+        "publicIdentifier": "muhammad-tahir-b892663b4",
+        "linkedinUrl": "https://www.linkedin.com/in/muhammad-tahir-b892663b4"
+      },
+      {
+        "id": "ACoAAGUzxmcBw-FImMjgFudxxMtlP51qljjR-1E",
+        "firstName": "Lauren",
+        "lastName": "Whitaker",
+        "position": "Marketing Growth Strategist",
+        "publicIdentifier": "lauren-whitaker-4337543b4",
+        "linkedinUrl": "https://www.linkedin.com/in/lauren-whitaker-4337543b4"
+      },
+      {
+        "id": "ACoAAGU15XsBTcVVMjBV8m21VwdC9fJRWJzgigo",
+        "firstName": "Okasha",
+        "lastName": "Kaleem",
+        "position": "Student at University of California, Berkeley",
+        "publicIdentifier": "okasha-kaleem-98b8003b4",
+        "linkedinUrl": "https://www.linkedin.com/in/okasha-kaleem-98b8003b4"
+      },
+      {
+        "id": "ACoAAGVIh30BD9w8lrD-0vwms5tjmtJQTsow87U",
+        "firstName": "Ali",
+        "lastName": "Khan",
+        "position": "Student at University of California, Berkeley",
+        "publicIdentifier": "ali-khan-5910ab3b5",
+        "linkedinUrl": "https://www.linkedin.com/in/ali-khan-5910ab3b5"
+      },
+      {
+        "id": "ACoAAGTrwVEBOveAabmJlYNjq7b3mGqXoYMOI8Q",
+        "firstName": "Eleanor Salter",
+        "lastName": "Thorn",
+        "position": "Student at University of California, Berkeley",
+        "publicIdentifier": "eleanor-salter-thorn-b290583b3",
+        "linkedinUrl": "https://www.linkedin.com/in/eleanor-salter-thorn-b290583b3"
+      },
+      {
+        "id": "ACoAAGT9N-0BfNFBey-rm5UDp670dK7t753D80g",
+        "firstName": "Muhammad",
+        "lastName": "Nazeer",
+        "position": "Student at University of California, Berkeley",
+        "publicIdentifier": "muhammad-nazeer-2b950b3b3",
+        "linkedinUrl": "https://www.linkedin.com/in/muhammad-nazeer-2b950b3b3"
+      },
+      {
+        "id": "ACoAAGTp_jYB76R1YWGatY1M7ZQ7pUqrm_jTnC8",
+        "firstName": "Opener",
+        "lastName": "Kelly",
+        "position": "Student at University of California, Berkeley",
+        "publicIdentifier": "opener-kelly-1320023b3",
+        "linkedinUrl": "https://www.linkedin.com/in/opener-kelly-1320023b3"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAABqU8psBEMRROmjbrEoFMtqTwznnG9FfGrI"
+    }
+  }
+}

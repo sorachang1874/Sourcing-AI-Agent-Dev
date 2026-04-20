@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  
+  <meta name="author" content="Thinking Machines Lab">
+
+  
+  
+  <meta name="description" content="A geometric framework for co-designing neural net optimizers with manifold constraints.">
+  
+
+  
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
+
+  
+  
+  
+  <link rel="preload" href="/fonts/iowan-old-style/iowan-old-style_regular.woff2" as="font" type="font/woff2" crossorigin="anonymous" fetchpriority="high">
+  <link rel="preload" href="/fonts/iowan-old-style/iowan-old-style_bold.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+  <link rel="preload" href="/fonts/iowan-old-style/iowan-old-style_italic.woff2" as="font" type="font/woff2" crossorigin="anonymous" fetchpriority="high">
+  
+  
+  <link rel="preload" href="/fonts/gt-america/GT-America-Standard-Regular.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+  <link rel="preload" href="/fonts/gt-america/GT-America-Standard-Medium.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+  <link rel="preload" href="/fonts/gt-america/GT-America-Standard-Bold.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+  <link rel="preload" href="/fonts/chakra-petch/chakra-petch-v12-latin-regular.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+  <link rel="preload" href="/fonts/chakra-petch/chakra-petch-v12-latin-500.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+  <link rel="preload" href="/fonts/chakra-petch/chakra-petch-v12-latin-600.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+
+  
+  
+  <meta name="keywords" content='thinky thinkingmachines machine learning deep learning ai'>
+  
+
+  
+  
+  
+
+<script>
+  
+  (function() {
+    function pageHasMath() {
+      try {
+        const text = document.body ? document.body.textContent : '';
+        if (!text) return false;
+        
+        const block = /\$\$[\s\S]*?\$\$/;
+        const paren = /\\\([\s\S]*?\\\)/;
+        const bracket = /\\\[[\s\S]*?\\\]/;
+        const inline = /(^|\s)\$(?!\$)[^\n]+?\$(?=\s|[\.,;:!?)]|$)/;
+        return block.test(text) || paren.test(text) || bracket.test(text) || inline.test(text);
+      } catch (e) {
+        return true; 
+      }
+    }
+
+    function loadStyle(href) {
+      var preload = document.createElement('link');
+      preload.rel = 'preload';
+      preload.as = 'style';
+      preload.href = href;
+      document.head.appendChild(preload);
+
+      var link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = href;
+      link.media = 'print';
+      link.onload = function(){ this.media = 'all'; };
+      document.head.appendChild(link);
+
+      var noscript = document.createElement('noscript');
+      noscript.innerHTML = '<link rel="stylesheet" href="' + href + '">';
+      document.head.appendChild(noscript);
+    }
+
+    function loadScript(src) {
+      return new Promise(function(resolve, reject) {
+        var s = document.createElement('script');
+        s.src = src;
+        s.defer = true;
+        s.onload = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    }
+
+    function renderAllMath(root) {
+      if (!window.renderMathInElement) return;
+      window.renderMathInElement(root || document.body, {
+        delimiters: [
+          {left: '$$', right: '$$', display: true},
+          {left: '$', right: '$', display: false},
+          {left: '\\(', right: '\\)', display: false},
+          {left: '\\[', right: '\\]', display: true}
+        ],
+        throwOnError: false,
+        
+        ignoredTags: ['script','noscript','style','textarea','pre','code'],
+      });
+    }
+
+    function init() {
+      if (!pageHasMath()) return;
+      var base = '\/katex\/';
+      var cssHref = base + 'katex.min.css?v=1774892431';
+      var katexJs = base + 'katex.min.js?v=1774892431';
+      var autorenderJs = base + 'contrib/auto-render.min.js?v=1774892431';
+
+      loadStyle(cssHref);
+      loadScript(katexJs)
+        .then(function(){ return loadScript(autorenderJs); })
+        .then(function(){
+          
+          renderAllMath(document.body);
+          
+          setTimeout(function(){ renderAllMath(document.body); }, 0);
+          
+          try {
+            var observer = new MutationObserver(function(mutations){
+              for (var i=0; i<mutations.length; i++) {
+                var m = mutations[i];
+                if (m.addedNodes && m.addedNodes.length) {
+                  for (var j=0; j<m.addedNodes.length; j++) {
+                    var node = m.addedNodes[j];
+                    if (node.nodeType === 1) {
+                      renderAllMath(node);
+                    }
+                  }
+                }
+              }
+            });
+            observer.observe(document.body, { childList: true, subtree: true });
+          } catch (e) {   }
+        })
+        .catch(function(){   });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  })();
+</script>
+
+
+  
+
+  
+  
+  
+  
+    
+  
+
+  
+  
+  
+  
+  
+  
+  
+    
+  
+  
+  
+    
+  
+
+  
+  
+  
+  
+  
+
+  
+  <link rel="canonical" href="https://thinkingmachines.ai/blog/modular-manifolds/">
+
+  
+  
+  
+  <meta itemprop="name" content="Modular Manifolds">
+  <meta itemprop="description" content="A geometric framework for co-designing neural net optimizers with manifold constraints.">
+  <meta itemprop="datePublished" content="2025-09-26T00:00:00+00:00">
+  <meta itemprop="dateModified" content="2025-09-26T00:00:00+00:00">
+  <meta itemprop="wordCount" content="4387">
+
+
+
+  
+  
+  
+  
+  <link rel="stylesheet" href="/css/common.css?v=1774892431" fetchpriority="high">
+  
+  <link rel="stylesheet" href="https://thinkingmachines.ai/css/ui.css?v=1774892431">
+  
+  <link rel="preload" as="style" href="/css/typography.css?v=1774892431">
+  <link rel="stylesheet" href="/css/typography.css?v=1774892431" media="print" onload="this.media='all'">
+  <noscript><link rel="stylesheet" href="/css/typography.css?v=1774892431"></noscript>
+  
+  <link rel="preload" as="style" href="/css/fonts.css?v=1774892431">
+  <link rel="stylesheet" href="/css/fonts.css?v=1774892431" media="print" onload="this.media='all'">
+  <noscript><link rel="stylesheet" href="/css/fonts.css?v=1774892431"></noscript>
+  <link rel="preload" as="style" href="/css/syntax.css?v=1774892431">
+  <link rel="stylesheet" href="/css/syntax.css?v=1774892431" media="print" onload="this.media='all'">
+  <noscript><link rel="stylesheet" href="/css/syntax.css?v=1774892431"></noscript>
+
+  
+  
+  <title>Modular Manifolds - Thinking Machines Lab</title>
+  
+
+  
+  
+  
+  
+  
+  
+    
+    
+    
+      
+        
+          
+          
+          
+          
+        
+      
+    
+  
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+  
+
+  
+  <meta property="og:title" content="Modular Manifolds">
+  <meta property="og:description" content="A geometric framework for co-designing neural net optimizers with manifold constraints.">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://thinkingmachines.ai/blog/modular-manifolds/">
+  <meta property="og:site_name" content="Thinking Machines Lab">
+  <meta property="og:image" content="https://thinkingmachines.ai/blog/modular-manifolds/images/mm-cover-social.png">
+  <meta property="og:image:width" content="3600">
+  <meta property="og:image:height" content="1890">
+  <meta property="og:image:alt" content="Modular Manifolds">
+
+  
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Modular Manifolds">
+  <meta name="twitter:description" content="A geometric framework for co-designing neural net optimizers with manifold constraints.">
+  <meta name="twitter:image" content="https://thinkingmachines.ai/blog/modular-manifolds/images/mm-cover-social.png">
+  <meta name="twitter:image:width" content="3600">
+  <meta name="twitter:image:height" content="1890">
+  <meta name="twitter:image:alt" content="Modular Manifolds">
+
+  
+
+
+
+
+<link rel="preload" as="style" href="/css/blog-post.css?v=1774892431">
+<link rel="stylesheet" href="/css/blog-post.css?v=1774892431" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="/css/blog-post.css?v=1774892431"></noscript>
+
+
+
+</head>
+
+<body>
+  <div id="wrapper">
+    
+
+
+
+
+
+
+<header id="header">
+  
+  <div id="site-header" class="site-header">
+    
+    
+    <div class="navbar-logo">
+      <a href="/">THINKING MACHINES</a>
+    </div>
+    
+
+    
+    <div class="nav-group">
+      
+      <nav class="top-nav">
+        
+        <a href="/tinker/">Tinker</a>
+        
+        <a href="/blog/">Connectionism</a>
+        <a href="/news/">News</a>
+        <a href="/#join-us">Join us</a>
+      </nav>
+
+      
+      <button id="menu-toggle" class="hamburger" aria-label="Open menu" aria-expanded="false" aria-controls="mobile-menu" type="button">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+      
+    </div>
+  </div>
+  
+  
+  <div id="mobile-menu" class="mobile-menu-overlay" aria-hidden="true">
+    <nav class="mobile-menu-nav" role="navigation" aria-label="Mobile">
+      <a href="/">Home</a>
+        
+        <a href="/tinker/">Tinker</a>
+        
+      <a href="/blog/">Connectionism</a>
+      <a href="/news/">News</a>
+      <a href="/#join-us">Join us</a>
+    </nav>
+  </div>
+  
+  
+</header>
+
+    
+
+
+
+
+
+  
+  
+  
+    
+  
+    
+      
+        
+      
+      
+        
+      
+    
+  
+    
+  
+    
+  
+
+
+
+<main id="main" class="post">
+  
+  
+  
+  
+  
+  
+  
+  
+  <div class="post-heading">
+    <h1 class="post-title">Modular Manifolds</h1>
+    
+    <div class="publish-metadata">
+      
+      
+      <span class="author">
+        
+        <a href="https://jeremybernste.in/" rel="me noopener" target="_blank">Jeremy Bernstein</a>
+        
+      </span>
+      
+
+      
+      <span>
+        Sep 26, 2025
+      </span>
+
+      
+
+      
+
+      
+    </div>
+  </div>
+
+  
+
+  
+  <div class="post-cover">
+    
+      
+      <img data-zoomable src="/blog/modular-manifolds/svgs/mm-cube-cover.svg" style="display: block; width: 100%; max-width: 800px; height: auto; margin: 0 auto;" loading="lazy" alt="">
+
+    
+    
+  </div>
+  
+
+  
+
+  <article class="content ">
+    
+    <nav id="left-toc" class="left-toc" aria-label="Table of contents"></nav>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<p>When we train large neural networks, we need to keep them healthy. We do not want the tensors in the network&mdash;either the weights, activations or gradients&mdash;to grow too large or too small. Very small and very large tensors cause a variety of problems not just limited to numerical underflow and overflow. For example, weight matrices changing size during training makes it harder to design training algorithms&mdash;since the relative size of updates to weights has a significant impact on the speed of learning.</p>
+<p>The gold standard for keeping tensors healthy is to normalize them. Normalization is commonplace for activation vectors, where we use techniques like <a href="https://arxiv.org/abs/1607.06450">layer norm</a> to put the activations on a good scale before passing them to the next layer. It is also commonplace to normalize gradient updates, where we can interpret fast training algorithms like the <a href="https://kellerjordan.github.io/posts/muon/">Muon optimizer</a> as spectrally normalizing the updates. Normalization provides us with certainty about the sizes of tensors&mdash;without needing to check Wandb!&mdash;and when training large neural networks with many interacting components, having certainty about the network internals is valuable.</p>
+<p>Normalization is less commonly applied to weight matrices, although it is not unheard of. For example, the <a href="https://github.com/NVlabs/edm2">EDM2</a> diffusion model codebase uses weight constraints and the authors report benefits in <a href="https://arxiv.org/abs/2312.02696">their paper</a>. And <a href="https://arxiv.org/abs/1912.11370">BiT</a> uses <a href="https://arxiv.org/abs/1903.10520">weight standardization</a>. Various other techniques have been proposed but are not common practice in modern large-scale training.<label for="sn1" class="sidenote-number"></label><input type="checkbox" id="sn1" class="margin-toggle"/><span class="sidenote">For some more examples, see <a href="https://arxiv.org/abs/1602.07868">Salimans et al, 2016</a>, <a href="https://arxiv.org/abs/1802.05957">Miyato et al, 2018</a> and our paper <a href="https://arxiv.org/abs/2102.07227">Liu et al, 2021</a>.</span> Normalizing the weight matrices might be a good idea for a few reasons. Weight constraints make understanding the relative size of optimization updates easier. They remove the problem of weight norms exploding. They allow us to focus hyperparameter tuning effort on tensors whose size matters most. They can force matrices to have a small <a href="https://en.wikipedia.org/wiki/Condition_number">condition number</a>, making their behaviour more predictable. And relatedly, weight constraints facilitate <a href="https://theses.hal.science/tel-04674274v1">Lipschitz guarantees</a> for robustness to perturbations.</p>
+<p>This post covers one appealing way to constrain the weight matrices of a neural network&mdash;by keeping the tensors constrained to submanifolds at each layer. This opens the door to re-thinking optimization, as we can co-design optimization algorithms with these manifold constraints. As an example, we propose<label for="sna" class="sidenote-number"></label><input type="checkbox" id="sna" class="margin-toggle"/><span class="sidenote">This algorithm builds on work from Jianlin Su and Franz Louis Cesista, as discussed further below.</span> a manifold version of the Muon optimizer whose weights are constrained to the Stiefel manifold: the manifold of matrices with unit <a href="https://en.wikipedia.org/wiki/Condition_number">condition number</a>. We conclude the post by defining the idea of a <em>modular manifold</em>, which is a composable manifold that attempts to make it easier to scale up and train large networks.</p>
+<p>Our goal in writing this post is to provide an introduction to a research area that we are excited about, and highlight many directions for future work. We would love to see more work from the community on the topics mentioned at the end of the post!</p>
+<h2 id="the-shape-of-a-manifold-optimizer">The shape of a manifold optimizer</h2>
+<p>This section works through the simplest example of learning on a manifold: a vector parameter constrained to a hypersphere in $\mathbb{R}^d$. The vector parameter is trained to minimize a loss function defined over the full space $\mathbb{R}^d$. This setup might be useful for, say, individual embedding vectors in a transformer model. This section will be a good warmup for the following section on <a href="#muon-on-the-stiefel-manifold">manifold Muon</a> that considers matrix parameters.</p>
+<p>We will not be too formal about the definition of a manifold here: it is enough to understand that a manifold is a curved surface that looks flat when you zoom in close enough. The locally flat approximation at a point on the manifold is called the <em>tangent space</em> to the manifold, as visualized in <a href="#fig:tangent-space">Figure <span data-ref="tangent-space"></span></a>:</p>
+<figure id="fig:tangent-space">
+<canvas id="canvas-tangent-space"></canvas>
+<script src="js/tangent.js"></script>
+<figcaption>The sphere in three dimensions—or the hypersphere in higher dimensions—is a manifold. The locally flat approximation at a point on the manifold is called the tangent space to the manifold and is visualized as the red plane in the figure.</figcaption>
+</figure>
+<p>We can characterize the hypersphere in $d$ dimensions as the set of points $w \in \mathbb{R}^d$ of unit Euclidean norm. And the tangent space at a point $w$ on the hypersphere is the set of all vectors $a \in \mathbb{R}^d$ that are orthogonal to $w$.</p>
+<p>To keep the weights constrained to the manifold, we could use a non-manifold optimizer and just project the weights back to the manifold after each step. Instead, we are interested in designing methods that take steps in the tangent space. The reason is that we would like to be able to equate the learning rate of our optimizer with the actual length of the optimization step. But if the optimization steps are pointing significantly off manifold and then being projected back, this nice property does not hold. Similar motivation is given in Section 2.3 of the <a href="https://arxiv.org/abs/2312.02696">EDM2 paper</a>.</p>
+<p>Before we can design a training algorithm for this manifold, something important we need to decide on is how to measure distance<label for="sn3" class="sidenote-number"></label><input type="checkbox" id="sn3" class="margin-toggle"/><span class="sidenote">For a manifold to be &ldquo;Riemannian&rdquo;, the distance measure must be induced by an inner product. The <a href="https://en.wikipedia.org/wiki/Euclidean_distance">Euclidean ($\ell_2$) norm</a> is induced by an inner product, but the <a href="https://en.wikipedia.org/wiki/Taxicab_geometry">Manhattan ($\ell_1$) distance</a> is not.</span> in the tangent space. A common choice is the Euclidean distance, but we could also choose to measure distance in other ways, as visualized in <a href="#fig:inscribed-norm-balls">Figure <span data-ref="inscribed-norm-balls"></span></a>. In the next section, we will talk about choosing a distance measure based on the functionality of the module.</p>
+<figure id="fig:inscribed-norm-balls">
+<canvas id="canvas-inscribed-norm-ball"></canvas>
+<script src="js/inscribed-norm-ball.js"></script>
+<figcaption>Inscribing unit balls in the tangent space for different distance measures. The $\ell_2$ (Euclidean) unit ball is a circle while the $\ell_1$ (Manhattan) unit ball is a diamond.</figcaption>
+</figure>
+<p>Crucially, the choice of distance measure changes the direction of the best optimization step. If the distance measure is non-Euclidean, then for a fixed length step, we may be able to move further in the direction of the gradient<label for="sn4" class="sidenote-number"></label><input type="checkbox" id="sn4" class="margin-toggle"/><span class="sidenote">By gradient, we mean the partial derivative of the loss with respect to the weights. Mathematicians reserve the term gradient for <a href="https://en.wikipedia.org/wiki/Gradient#Riemannian_manifolds">something else</a> in Riemannian geometry.</span> by not following the gradient direction exactly! This concept is visualized in <a href="#fig:tangent-space-with-gradient">Figure <span data-ref="tangent-space-with-gradient"></span></a>.</p>
+<figure id="fig:tangent-space-with-gradient">
+<canvas id="canvas-tangent-with-gradient"></canvas>
+<script src="js/tangent-with-gradient.js"></script>
+<figcaption>How geometry influences the direction of the best optimization step. The pink arrow represents the raw gradient—meaning the partial derivative of the loss with respect to the weights. The yellow diamond denotes the $\ell_1$ unit ball. The green arrow is the unit vector pointing furthest in the direction of the gradient. Notice how the green arrow is not parallel to the pink arrow. (In practice, the pink arrow need not lie in the tangent space, although the green arrow will do by construction.) Try dragging the pink arrow to see how the best update direction changes.</figcaption>
+</figure>
+<p>To see how this works out in math, we can formulate the optimal update direction given a manifold constraint and a distance measure as itself solving a constrained optimization problem. We will demonstrate this for the case of the hypersphere equipped with the Euclidean norm. Letting $g$ denote the gradient, $w$ the current point on the hypersphere, $a$ the update direction and $\eta$ the learning rate, we need to solve:</p>
+$$\min_{a\in\mathbb{R}^d} \quad \underbrace{a^\top g\vphantom{\|a\|_2 = 1}}_{\mathclap{\text{linear change in loss}}} \quad \text{such that} \quad  \underbrace{\|a\|_2 = \eta}_{\mathclap{\text{size constraint}}} \quad \text{and} \quad \underbrace{a^\top w = 0\vphantom{\|a\|_2 = 1}}_{\mathclap{\text{tangent constraint}}}.\tag{$\star$}$$<p>Mapping back to the visual language of Figures <a href="#fig:tangent-space"><span data-ref="tangent-space"></span></a>, <a href="#fig:inscribed-norm-balls"><span data-ref="inscribed-norm-balls"></span></a> and <a href="#fig:tangent-space-with-gradient"><span data-ref="tangent-space-with-gradient"></span></a>, this formula says that the green arrow (optimal value of $a$) must belong to the red tangent hyperplane ($a^\top w = 0$) and must also lie on a yellow circle of radius $\eta$ ($\|a\|_2 = \eta$). To solve $(\star)$, we can apply the <a href="https://en.wikipedia.org/wiki/Lagrange_multiplier">method of Lagrange multipliers</a>. The relevant Lagrangian function is given by:</p>
+$$\mathcal{L}(a, \lambda, \mu) = a^\top g + \frac{\lambda}{2} \cdot (a^\top a - \eta) + \mu \cdot (a^\top w),$$<p>
+where $\lambda$ and $\mu$ are Lagrange multipliers. Setting the derivative of the Lagrangian with respect to $a$ to zero and applying the constraints to solve for $\lambda$ and $\mu$, the optimal update $a_\mathrm{opt}$ ends up being given by the following formula:
+</p>
+$$a_\mathrm{opt} = - \eta \times \frac{g - ww^\top g}{\|g-ww^\top g\|_2}.$$<p>In words, the optimal update is given by subtracting out the radial component from the gradient, normalizing and multiplying by the learning rate. Since this update lies in the tangent space, actually a very small<label for="sn5" class="sidenote-number"></label><input type="checkbox" id="sn5" class="margin-toggle"/><span class="sidenote">For a learning rate $\eta$, the effect of the retraction map is $\mathcal{O}(\eta^2)$ small, so the learning rate <em>almost</em> equals the length of the step.</span> correction is needed to stay on the manifold. The correction is known as a &ldquo;retraction map&rdquo; and is visualized in <a href="#fig:retraction-map">Figure <span data-ref="retraction-map"></span></a>:</p>
+<figure id="fig:retraction-map">
+<canvas id="canvas-retraction-map-2d"></canvas>
+<script src="js/retraction-map-2d.js"></script>
+<figcaption>Visualizing the retraction map. The green arrow is the update taken in the tangent space. Since for large step sizes the tangent space starts to diverge from the manifold, we need to project the updated weights back to the manifold using the retraction map—illustrated by the purple arrow.</figcaption>
+</figure>
+<p>We can solve for the retraction map by applying Pythagoras&rsquo; theorem to <a href="#fig:retraction-map">Figure <span data-ref="retraction-map"></span></a>. For a unit hypersphere and a step of length $\eta$, the hypotenuse has length $\sqrt{1+\eta^2}$ and therefore the retraction map for the hypersphere equipped with the Euclidean norm is simply given by dividing the updated weights through by $\sqrt{1+\eta^2}$. Putting everything together, the full manifold optimization algorithm is then given by:</p>
+$$w \gets \frac{1}{\sqrt{1+\eta^2}} \left[w - \eta \times \frac{g - ww^\top g}{\|g-ww^\top g\|_2}\right].$$<p>As an exercise for the reader: try calculating the Euclidean norm of the updated weight vector and check that the updated weight vector indeed lies on the hypersphere.</p>
+<p>To summarize this section, a first-order manifold optimizer has three steps:</p>
+<ol>
+<li>Find the tangent vector of unit length that goes furthest in the gradient direction.</li>
+<li>Multiply this direction by the learning rate and subtract from the weights;</li>
+<li>Retract the updated weights back to the manifold.</li>
+</ol>
+<p>There are two decisions to make in applying this procedure: what manifold constraint we should use and how we should measure length. By making different decisions, we can generate different optimization algorithms as shown in the following table.</p>
+<table>
+  <thead>
+      <tr>
+          <th>Manifold</th>
+          <th>Norm</th>
+          <th>Optimizer</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Euclidean $\mathbb{R}^n$</td>
+          <td>Euclidean norm</td>
+          <td>vanilla gradient descent</td>
+      </tr>
+      <tr>
+          <td>Euclidean $\mathbb{R}^n$</td>
+          <td>infinity norm</td>
+          <td>sign gradient descent</td>
+      </tr>
+      <tr>
+          <td>hypersphere $S^n$</td>
+          <td>Euclidean norm</td>
+          <td>hyperspherical descent</td>
+      </tr>
+      <tr>
+          <td>matrix space $\mathbb{R}^{m\times n}$</td>
+          <td>spectral norm</td>
+          <td>Muon</td>
+      </tr>
+      <tr>
+          <td>Stiefel manifold $\subset\mathbb{R}^{m\times n}$</td>
+          <td>spectral norm</td>
+          <td>manifold Muon</td>
+      </tr>
+  </tbody>
+</table>
+<p>We will derive the final algorithm in the table, manifold Muon, in the next section. To design a manifold constraint and a distance function for a matrix parameter, we shall think carefully about the role that a weight matrix plays inside a neural network.</p>
+<h2 id="manifold-muon">Manifold Muon</h2>
+<p>A typical weight matrix $W$ in a transformer is a &ldquo;vector-multiplier&rdquo;, meaning that it transforms an input vector $x$ into an output vector $y = Wx$. We will design a manifold constraint and a distance function so that the matrix acts in a good way on input vectors: the matrix should not produce excessively small or large outputs, and updates to the matrix should not cause the output vector to change too much or too little.</p>
+<p>A good way to think about how a matrix acts on vectors is through the <a href="https://en.wikipedia.org/wiki/Singular_value_decomposition">singular value decomposition</a>, illustrated in <a href="#fig:svd">Figure <span data-ref="svd"></span></a>. The SVD decomposes a matrix in a way that tells us how the matrix stretches input vectors along different axes.</p>
+<figure id="fig:svd">
+<img data-zoomable src="/blog/modular-manifolds/svgs/svd.svg" style="display: block; width: 100%; max-width: 800px; height: auto; margin: 0 auto;" loading="lazy" alt="">
+<figcaption>The singular value decomposition. A matrix $M\in\mathbb{R}^{m\times n}$ of rank $k$ can always be decomposed as $M = U \Sigma V^\top$, where $U\in\mathbb{R}^{m\times k}$ and $V\in\mathbb{R}^{n\times k}$ have orthonormal columns and $\Sigma\in\mathbb{R}^{k\times k}$ is a diagonal matrix with only positive entries. The entries of $\Sigma$ are called the singular values of $M$. The singular values measure the stretching effect that the matrix has on vectors that align with the corresponding columns of $U$ and $V$.</figcaption>
+</figure>
+<p>We would like the matrix to have a stretching effect close to one, so we will choose a matrix manifold where all the singular values are exactly one. This matrix manifold is known formally as the <a href="https://en.wikipedia.org/wiki/Stiefel_manifold"><em>Stiefel manifold</em></a>. We can assume without loss of generality that we are dealing with a tall matrix ($m \geq n$), and then the Stiefel manifold can be equivalently defined as the following set:</p>
+$$\mathsf{Stiefel}(m,n) := \left\{ W \in \mathbb{R}^{m \times n} \mid W^T W = I_n \right\}.$$<p>Furthermore, <a href="https://cseweb.ucsd.edu/classes/sp24/cse291-e/papers/StiefelManifold/StiefelNotes.pdf">one may show</a> that a matrix $A \in \mathbb{R}^{m \times n}$ lies tangent<label for="sn-stiefel-tangent" class="sidenote-number"></label><input type="checkbox" id="sn-stiefel-tangent" class="margin-toggle"/><span class="sidenote">Notice that the Stiefel constraint $W^T W = I_n$ directly generalizes the hyperspherical constraint $w^\top w = 1$ from the previous section. Similarly, the tangent space condition generalizes the hyperspherical one that $a^\top w = 0$.</span> to the Stiefel manifold at matrix $W$ if and only if:</p>
+$$A^\top W + W^\top A = 0.$$<p>To design a manifold optimizer for the Stiefel manifold, all that remains is to choose a distance function. To limit the maximum stretching effect the weight update can have on an input vector, we will choose the <em>spectral norm</em>, which measures the largest singular value of a matrix. Although this only limits the maximum effect the update can have, since the optimizer we derive will saturate this bound, it will turn out to prevent the minimum effect of the update from being too small.<label for="sn-stiefel-spectral-norm" class="sidenote-number"></label><input type="checkbox" id="sn-stiefel-spectral-norm" class="margin-toggle"/><span class="sidenote">There are some exceptions to this statement, such as when a weight matrix has a fan-out less than its fan-in, in which case we cannot escape from the matrix and its updates having a null space and mapping some inputs to zero.</span></p>
+<p>The idea of doing gradient descent under a spectral norm constraint is what <a href="https://jeremybernste.in/writing/deriving-muon">led to</a> the Muon optimizer and, when combined with the Stiefel manifold constraint, we obtain a problem that we shall call <em>manifold Muon</em>:</p>
+$$\min_{A\in\mathbb{R}^{m\times n}} \quad \underbrace{\operatorname{trace}(G^T A)}_{\mathclap{\text{linear change in loss}}} \quad \text{such that} \quad \underbrace{\|A\|_{\text{spectral}} \leq \eta}_{\mathclap{\text{size constraint}}} \quad \text{and} \quad \underbrace{A^T W + W^T A = 0\vphantom{\|A\|_{\text{spectral}} = \eta}}_{\mathclap{\text{tangent constraint}}} \tag{$\dagger$}.$$<p>The manifold Muon problem $(\dagger)$ directly generalizes problem $(\star)$ from the previous section. Solving $(\dagger)$ is harder than solving $(\star)$, and here we will present a numerical solution inspired<label for="sn6" class="sidenote-number"></label><input type="checkbox" id="sn6" class="margin-toggle"/><span class="sidenote">I <a href="https://docs.modula.systems/algorithms/manifold/orthogonal/">figured out</a> how to solve manifold Muon in the square case late last year, but I was unable to solve the full rectangular case and thus <a href="https://docs.modula.systems/algorithms/manifold/orthogonal/#open-problem-extending-to-the-stiefel-manifold">posed the problem</a> as an open problem on the Modula docs. Jianlin Su <a href="https://kexue.fm/archives/11221">solved the problem</a> this summer by taking a Lagrangian approach and working out a fixed point iteration on the optimality condition. I saw an early version of Jianlin&rsquo;s work (which did not quite work yet) and also <a href="https://leloykun.github.io/ponder/steepest-descent-stiefel/">related work</a> by Franz Louis Cesista, and I was able to work out the dual ascent algorithm presented here.</span> by work done by Jianlin Su and Franz Louis Cesista.</p>
+<p>Our key insight is that $(\dagger)$ is a convex optimization problem that may be solved via a standard method known as <a href="https://www.cs.cmu.edu/~pradeepr/convexopt/Lecture_Slides/dual-ascent.pdf"><em>dual ascent</em></a>. Here we will just sketch the main idea, but you can find a more detailed derivation <a href="https://docs.modula.systems/algorithms/manifold/stiefel/">on this page</a>.</p>
+<p>Similar to Jianlin&rsquo;s approach, we introduce a matrix of Lagrange multipliers $\Lambda\in\mathbb{R}^{n\times n}$. We then apply a series of transformations to convert the problem $(\dagger)$ from a <em>constrained minimization problem</em> to an <em>unconstrained maximization problem</em>:</p>
+$$
+\begin{align}
+(\dagger) &= \min_{\|A\|_\mathrm{spectral} \leq \eta} \max_{\Lambda} \;\operatorname{trace} G^\top A + \operatorname{trace}\Lambda^\top (A^\top W + W^\top A) \\
+&= \min_{\|A\|_\mathrm{spectral} \leq \eta} \max_{\Lambda}\; \operatorname{trace}A^\top (G + 2W(\Lambda+\Lambda^\top))\\
+&= \max_{\Lambda} \min_{\|A\|_\mathrm{spectral} \leq \eta} \; \operatorname{trace}A^\top (G + 2W(\Lambda+\Lambda^\top))\\
+&= \max_{\Lambda} \; - \eta \times \|G + 2W(\Lambda+\Lambda^\top)\|_\mathrm{nuclear}.
+\end{align}
+$$<p>Equation (1) reformulates the problem as a <a href="https://www-cs.stanford.edu/people/davidknowles/lagrangian_duality.pdf">saddle point problem</a>: the maximization over $\Lambda$ will send the objective to infinity whenever the tangent space condition is violated. Equation (2) follows by applying properties of the trace and equation (3) follows from Sion&rsquo;s minimax theorem. The inner minimization in equation (3) is solved by setting $A_\mathrm{opt}(\Lambda) = - \eta \times \operatorname{msign}(G + 2W(\Lambda+\Lambda^\top))$ where $\operatorname{msign}$ is the <a href="https://docs.modula.systems/algorithms/newton-schulz/">matrix sign function</a>.<label for="sn7" class="sidenote-number"></label><input type="checkbox" id="sn7" class="margin-toggle"/><span class="sidenote">The matrix sign function snaps the singular values of a matrix to one. It may be computed efficiently on GPUs via Newton-Schulz iteration or the recent <a href="https://arxiv.org/abs/2505.16932">Polar Express</a> algorithm.</span> And we obtain equation (4) by substituting this expression for $A_\mathrm{opt}(\Lambda)$ into equation (3). Equation (4) is known as the &ldquo;dual problem&rdquo; to $(\dagger)$ and we can solve it by gradient ascent. After some work, the gradient of the dual function is given by:</p>
+$$
+\begin{align}
+H(\Lambda) &:= - \eta \times \nabla_\Lambda \|G + W (\Lambda+\Lambda^\top)\|_\mathrm{nuclear} \\
+&= - \eta \times [W^\top\mathrm{msign}(G + 2W (\Lambda+\Lambda^\top)) + \operatorname{msign}(G + 2W (\Lambda+\Lambda^\top))^\top W],
+\end{align}
+$$<p>where the nuclear norm $\|\cdot\|_\mathrm{nuclear}$ measures the sum of the singular values of a matrix.</p>
+<p>Finally, we can write down the manifold Muon algorithm:<label for="sn8" class="sidenote-number"></label><input type="checkbox" id="sn8" class="margin-toggle"/><span class="sidenote">Note that this algorithm is closely related to <a href="https://kexue.fm/archives/11221">Jianlin Su&rsquo;s solution</a>. Where we run dual ascent, Jianlin&rsquo;s solution amounts to solving for the maximum of the dual function $H(\Lambda)=0$ via a fixed point iteration.</span></p>
+<ol>
+<li>Run gradient ascent on the dual variable $\Lambda \gets \Lambda + \alpha \times H(\Lambda)$ to solve for $\Lambda_\mathrm{opt}$.</li>
+<li>Compute the update $A_\mathrm{opt} = - \eta \times \operatorname{msign}(G + 2W(\Lambda_{\mathrm{opt}}+\Lambda_\mathrm{opt}^\top))$.</li>
+<li>Apply the update to the weights $W \gets W + A_\mathrm{opt}$.</li>
+<li>Retract the weights back to the manifold $W \gets \operatorname{msign}(W)$.</li>
+</ol>
+<p>We ran a very small experiment to sanity check the algorithm and provide a minimal implementation for students or researchers to play with. Each training run finishes in less than a minute. The code is <a href="https://github.com/thinking-machines-lab/manifolds/">here</a> and see <a href="#fig:cifar10">Figure <span data-ref="cifar10"></span></a> for the setup and results.</p>
+<figure id="fig:cifar10">
+<img data-zoomable src="/blog/modular-manifolds/svgs/cifar10.svg" style="display: block; width: 100%; max-width: 800px; height: auto; margin: 0 auto;" loading="lazy" alt="">
+<figcaption>Training a small MLP for 3 epochs on the CIFAR-10 dataset. The different lightly shaded blue curves show different weight decay settings for AdamW. Results were averaged over 3 random seeds. The manifold Muon optimizer attained higher train and test accuracy than AdamW. The third plot shows the final singular value distribution of the first weight matrix for the best performing learning rate: the singular values after training with manifold Muon are all close to 1. Manifold Muon increased the wall clock time per step compared to AdamW, although this could be improved by running fewer steps of dual ascent or adding momentum to the algorithm and running dual ascent online. Depending on other systems bottlenecks, the overhead may not be an issue.</figcaption>
+</figure>
+<h2 id="modular-manifolds">Modular manifolds</h2>
+<p>So far in this post, we have discussed manifold constraints for individual parameter tensors and co-designed optimization logic for these constraints. A question we have not answered is: what happens when we combine layers to build networks? Can we think about individual layers in isolation&mdash;or do we need to be careful about interactions between layers and modify the optimization logic in response? The goal of this section is to point out that there is a way to extend the reasoning we introduced in the previous two sections to the case of whole networks, and we call this <em>the theory of modular manifolds</em>.<label for="sn-modular-manifolds-1" class="sidenote-number"></label><input type="checkbox" id="sn-modular-manifolds-1" class="margin-toggle"/><span class="sidenote">The theory of modular manifolds builds on research I did with my friend Tim Large, my postdoc advisor Phillip Isola, my PhD advisor Yisong Yue and many other amazing collaborators.</span> At the end of the section, we provide some links to learn more.</p>
+<p>The idea of modular manifolds is to build an abstraction that tells us how to budget learning rates across layers. The actual optimization logic in each layer ends up being the same as what we already worked out, except that the learning rate for a layer is modified depending on where the layer appears in the network. The abstraction rests upon a key observation made in our paper on the <a href="https://arxiv.org/abs/2405.14813">modular norm</a>, that budgeting learning rates&mdash;both across layers and when scaling up individual layers&mdash;is intimately tied to understanding the Lipschitz sensitivity of the network output with respect to the weights. The abstraction tracks this sensitivity as we build the network, and manifold constraints help us get a much tighter understanding of this sensitivity.</p>
+<p>The starting point for the abstraction is to think of any neural network module&mdash;from a layer to a whole transformer&mdash;as a mathematical object with three attributes:</p>
+<ol>
+<li>A forward function $f:\mathcal{W} \times \mathcal{X} \to \mathcal{Y}$ that maps from a parameter space $\mathcal{W} = \mathbb{R}^d$ and an input space $\mathcal{X}$ to an output space $\mathcal{Y}$.</li>
+<li>A submanifold of the weight space $\mathcal{M}\subset\mathcal{W}$ that the weights are constrained to.</li>
+<li>A norm $\|\cdot\| : \mathcal{W} \to \mathbb{R}$ that acts as a measuring stick on weight space.</li>
+</ol>
+<p>For example, a linear module equipped with the spectral norm and constrained to the Stiefel manifold, for which we have already worked out an optimizer, would be written:</p>
+$$ \mathsf{StiefelLinear} = \begin{cases}(W, x) \mapsto Wx, & \text{(forward function)}\\ \mathsf{Stiefel}(m,n), & \text{(manifold)}\\ \|\cdot\|_\mathrm{spectral}. & \text{(norm)}\end{cases}$$<p>Provided that an input $x$ to the $\mathsf{StiefelLinear}$ module has unit $\ell_2$ norm, then $\mathsf{StiefelLinear}$ is Lipschitz with respect to its weights in the module&rsquo;s assigned norm with Lipschitz constant one:<label for="sn-stiefel-lipschitz" class="sidenote-number"></label><input type="checkbox" id="sn-stiefel-lipschitz" class="margin-toggle"/><span class="sidenote">This argument can be extended to the RMS norm on the input and the RMS&ndash;RMS operator norm on the weights.</span></p>
+$$\|(W + \Delta W) x - Wx\|_2 \leq \|\Delta W\|_\mathrm{spectral} \times \|x\|_2 = \|\Delta W\|_\mathrm{spectral}.$$<p>This type of Lipschitz statement helps us understand how to scale weight updates to this module since it gives us a bound on how much the output can change when we perturb the weights. But when we compose two modules, can we automatically compile a Lipschitz statement on the joint weight space of the new module? The answer turns out to be yes, if we follow special rules for building the new module:</p>
+<ol>
+<li>The new forward function $f_3$ is given by composing the two existing forward functions $f_1$ and $f_2$:
+$$f_3((w_1, w_2), x) := f_2(w_2, f_1(w_1, x)). \qquad$$</li>
+<li>The new manifold constraint $\mathcal{M}_3$ is just the Cartesian product (see <a href="#fig:product-manifold">Figure <span data-ref="product-manifold"></span></a> for a fun example) of the two existing manifolds $\mathcal{M}_1$ and $\mathcal{M}_2$:
+$$\mathcal{M}_3 = \mathcal{M}_1 \times \mathcal{M}_2. \qquad$$</li>
+<li>The new norm function is the max of the two existing norm functions weighted by special scalar coefficients $s_1$ and $s_2$. Letting $\|\cdot\|_1$ denote the first module&rsquo;s norm and $\|\cdot\|_2$ denote the second module&rsquo;s norm, the new norm $\|\cdot\|_3$ is given by:
+$$\|(w_1, w_2)\|_3 := \max(s_1\cdot \|w_1\|_1, s_2\cdot \|w_2\|_2). \qquad$$</li>
+</ol>
+<p>When we use this composite norm to derive optimizers&mdash;following the same recipe we used in the first two sections of this post&mdash;we end up deriving separate optimizers for each layer, but the scalar coefficients $s_i$ budget the learning rates across layers.</p>
+<p>We give much more detail on this construction, including extending it to other ways of combining modules, in our paper on the <a href="https://arxiv.org/abs/2405.14813">modular norm</a>&mdash;although the paper does not cover manifold optimization. You can also check out our paper on <a href="https://arxiv.org/abs/2410.21265">modular duality</a> for more on building optimizers in the modular norm. The <a href="https://modula.systems">Modula project</a> builds toward a programmatic implementation of this construction.</p>
+<figure id="fig:product-manifold">
+<img data-zoomable src="/blog/modular-manifolds/svgs/product-manifold.svg" style="display: block; width: 100%; max-width: 800px; height: auto; margin: 0 auto;" loading="lazy" alt="">
+<figcaption>The Cartesian product is a simple way to glue together two manifolds. For example, the product of a line and a disk is a cylinder. We get one copy of the disk at every point on the line.</figcaption>
+</figure>
+<h2 id="directions-for-future-work">Directions for future work</h2>
+<p>We are excited about any research that tries to make neural network training as principled and automatic as the forward pass. The ideas in this post benefitted strongly from interactions with external researchers like Jianlin Su and Franz Louis Cesista. We would love to see more work on these topics from the community.</p>
+<p>Some possible directions for future work are:</p>
+<ul>
+<li><strong>Modularity.</strong> What manifolds should attention heads live on? Should embeddings be constrained differently than unembeddings? We can mix-and-match constraints in different parts of the network, or leave some tensors unconstrained.</li>
+<li><strong>Numerics.</strong> Manifold constraints also place constraints on the range of values that individual weight entries can take. Does this impact numerics, or make low-precision training easier?</li>
+<li><strong>Convex optimization.</strong> The manifold Muon algorithm involves running dual ascent. Can we apply more sophisticated convex optimization techniques to solve the dual problem faster or more reliably?</li>
+<li><strong>Convergence analysis.</strong> How fast do these algorithms converge? Does good conditioning of the weight matrices benefit convergence? Is there more that we can say theoretically?</li>
+<li><strong>Regularization.</strong> Manifold constraints implicitly regularize the model. Could we design constraints or tune their radii to improve generalization?</li>
+<li><strong>Architecture-optimizer co-design.</strong> While hard manifold constraints may not ultimately be the right way to constrain weight matrices, they exemplify the idea of tightly co-designing optimization algorithms with architecural components. Are there more opportunities here?</li>
+<li><strong>Non-Riemannian geometry.</strong> Most work on manifold optimization works in a Riemannian world where distances are induced by inner products and norm balls are ellipsoids. But neural networks are different: matrices act as operators, and operator norms like the spectral norm do not emerge from inner products. This implies, for example, that norm balls can have sharp corners and there is no unique gradient flow. Is there more to be discovered in this non-Riemannian world?</li>
+<li><strong>Practical implementation.</strong> Applying these techniques at scale requires efficient manifold operations on GPUs. The recent <a href="https://arxiv.org/abs/2505.16932">Polar Express</a> paper shows promise for fast matrix sign computation. What other algorithmic innovations do we need?</li>
+</ul>
+<h2 id="further-reading">Further reading</h2>
+<ul>
+<li>
+<p><strong>Manifold optimization.</strong> <a href="https://press.princeton.edu/absil">Absil, Mahony &amp; Sepulchre</a>&rsquo;s textbook is a standard reference. For the Stiefel manifold specifically, see <a href="https://math.mit.edu/~edelman/publications/geometry_of_algorithms.pdf">Edelman et al, 1998</a>. These works live in a Riemannian world. Similarly most machine learning papers that consider optimization on the Stiefel manifold take a Riemannian point of view: see <a href="https://arxiv.org/abs/2002.01113">Li et al, 2020</a>, <a href="https://arxiv.org/abs/2205.14173">Kong et al, 2022</a> and <a href="https://arxiv.org/abs/2508.17901">Park et al, 2025</a> for some examples.</p>
+</li>
+<li>
+<p><strong>Non-Riemannian geometry in machine learning.</strong> <a href="https://arxiv.org/abs/1708.00523">Thomas Flynn&rsquo;s paper</a> from 2017 on duality structure gradient descent characterizes the neural network weight space as a <em>Finsler manifold</em>, meaning a manifold equipped with a norm. It is well worth a read. Also see Jianlin Su&rsquo;s <a href="https://kexue.fm/archives/11221">recent blog post</a> on Stiefel Muon as well as Franz Louis Cesista&rsquo;s <a href="https://leloykun.github.io/ponder/steepest-descent-stiefel/">blog post</a> on a heuristic solution to Muon on the Stiefel manifold. Franz also wrote a <a href="https://leloykun.github.io/ponder/steepest-descent-finsler/">followup blog post</a> generalizing the solution presented here. The <a href="https://arxiv.org/abs/2502.07529">Scion paper</a> imposes weight constraints a different way via convex combinations and <a href="https://papers.nips.cc/paper_files/paper/2015/hash/f50a6c02a3fc5a3a5d4d9391f05f3efc-Abstract.html">Carlson et al, 2015</a> wrote an early paper on (unconstrained) spectral descent.</p>
+</li>
+<li>
+<p><strong>The Modula project.</strong> The goal of the Modula project is to build a library that automatically compiles steepest descent optimizers along with Lipschitz statements for general architectures. Check out the project page at <a href="https://modula.systems">https://modula.systems</a> as well as our paper on the <a href="https://arxiv.org/abs/2405.14813">modular norm</a> and <a href="https://arxiv.org/abs/2410.21265">modular duality</a>. Our <a href="https://arxiv.org/abs/2409.20325">optimization anthology</a> also provides an accessible route into this space of ideas.</p>
+</li>
+<li>
+<p><strong>Lipschitz-constrained deep learning.</strong> There has been a lot of work on this topic. For example, check out <a href="https://theses.hal.science/tel-04674274v1">Louis Béthune</a> and <a href="https://dspace.mit.edu/bitstream/handle/1721.1/129313/1227782217-MIT.pdf?sequence=1&amp;isAllowed=y">Tsui-Wei Weng&rsquo;s</a> PhD theses. Usually work on this topic does not connect weight-Lipschitzness to optimizer design. See also <a href="https://arxiv.org/abs/1811.05381">Anil et al, 2018</a> and our paper <a href="https://arxiv.org/abs/2507.13338">Newhouse et al, 2025</a>.</p>
+</li>
+</ul>
+<h2 id="citation">Citation</h2>
+<p>Please cite this work as:</p>
+<pre tabindex="0"><code>Jeremy Bernstein, &#34;Modular Manifolds&#34;,
+Thinking Machines Lab: Connectionism, Sep 2025.
+</code></pre><p>Or use the BibTeX citation:</p>
+<pre tabindex="0"><code>@article{bernstein2025manifolds,
+  author = {Jeremy Bernstein},
+  title = {Modular Manifolds},
+  journal = {Thinking Machines Lab: Connectionism},
+  year = {2025},
+  note = {https://thinkingmachines.ai/blog/modular-manifolds/},
+  doi = {10.64434/tml.20250926}
+}
+</code></pre><script>
+// Auto-number figure references
+document.addEventListener('DOMContentLoaded', function() {
+  // Find all figures with IDs
+  const figures = document.querySelectorAll('figure[id^="fig:"]');
+  const figureNumbers = new Map();
+
+  // Assign numbers to figures based on document order
+  figures.forEach((fig, index) => {
+    const id = fig.id.replace('fig:', '');
+    figureNumbers.set(id, index + 1);
+  });
+
+  // Update all figure references
+  document.querySelectorAll('span[data-ref]').forEach(span => {
+    const ref = span.getAttribute('data-ref');
+    const num = figureNumbers.get(ref);
+    if (num) {
+      span.textContent = num;
+    }
+  });
+});
+</script>
+    
+  </article>
+
+  <div class="paginator">
+    
+    <a id="post-prev-link" class="link" href="/blog/defeating-nondeterminism-in-llm-inference/" title="Defeating Nondeterminism in LLM Inference">prev</a>
+    
+
+    <a href="#" id="back-to-top" class="link" title="Go to top">back to top</a>
+
+    
+    <a id="post-next-link" class="link" href="/blog/lora/" title="LoRA Without Regret">next</a>
+    
+  </div>
+
+  
+  
+  
+  
+  
+  
+
+  
+  
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const prevLink = document.getElementById('post-prev-link');
+      const nextLink = document.getElementById('post-next-link');
+
+      const prevUrl = prevLink && prevLink.hasAttribute('href') ? prevLink.href : null;
+      const nextUrl = nextLink && nextLink.hasAttribute('href') ? nextLink.href : null;
+
+      
+      document.addEventListener('keydown', function(e) {
+        
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) {
+          return;
+        }
+
+        
+        if (e.keyCode === 37 && !e.ctrlKey && !e.metaKey && prevUrl) {
+          e.preventDefault();
+          window.location.href = prevUrl;
+        }
+
+        
+        if (e.keyCode === 39 && !e.ctrlKey && !e.metaKey && nextUrl) {
+          e.preventDefault();
+          window.location.href = nextUrl;
+        }
+      });
+    });
+  </script>
+  
+
+  
+  
+</main>
+
+
+<script type="module">
+  import mediumZoom from "https://cdnjs.cloudflare.com/ajax/libs/medium-zoom/1.1.0/medium-zoom.esm.min.js";
+
+  mediumZoom('[data-zoomable]');
+</script>
+
+    <footer id="footer">
+  <div>
+    <span><a href="/">Thinking Machines Lab</a> © 2026</span><span class="footer-separator" id="first-footer-separator">·</span><span><a href="/legal/tos/">Terms of service</a></span><span class="footer-separator">·</span><span><a href="/legal/privacy">Privacy notice</a></span>
+  </div>
+</footer>
+
+
+  </div>
+
+  
+  
+  <script src="/js/script.min.79e48178e979316afbc4c9f91d600813a61c813b60e590037a1328c8c94ea91a.js" integrity="sha256-eeSBeOl5MWr7xMn5HWAIE6YcgTtg5ZADehMoyMlOqRo=" defer></script>
+
+  
+  
+
+  
+  
+
+  
+  
+
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"cda777236064450ebb47f38aeb8df789","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+
+</html>

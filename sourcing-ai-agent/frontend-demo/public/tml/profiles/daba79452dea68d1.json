@@ -1,0 +1,891 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAAgB78IBz9ZHYxi-EPYsBJqdc8zkFMCY-HM",
+    "profile_url": "https://www.linkedin.com/in/ACwAAAgB78IBz9ZHYxi-EPYsBJqdc8zkFMCY-HM"
+  },
+  "item": {
+    "id": "ACoAAAgB78IBFrSRvjrM16CT0N8_P9uNs_xP3cw",
+    "publicIdentifier": "aurickq",
+    "linkedinUrl": "https://www.linkedin.com/in/aurickq",
+    "firstName": "Aurick",
+    "lastName": "Qiao",
+    "emails": [
+      {
+        "email": "aurick.qiao@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "AI/ML Systems",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Seattle, Washington, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "Seattle, WA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "Washington",
+        "city": "Seattle"
+      }
+    },
+    "objectUrn": "134344642",
+    "registeredAt": "2011-08-08T18:45:41.488Z",
+    "topSkills": null,
+    "connectionsCount": 1216,
+    "followerCount": 1322,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 11,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "19232",
+        "companyId": "3147",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3147/",
+        "schoolName": "Carnegie Mellon University"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4E03AQGYisr7QiO6pQ/profile-displayphoto-crop_800_800/B4EZpHQsIeHcAI-/0/1762132149722?e=1776902400&v=beta&t=1be4Llo7DsCM-TagHzfJ0D1OBGuz5aHxshWX0ytKgTI",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQGYisr7QiO6pQ/profile-displayphoto-crop_800_800/B4EZpHQsIeHcAI-/0/1762132149722?e=1776902400&v=beta&t=1be4Llo7DsCM-TagHzfJ0D1OBGuz5aHxshWX0ytKgTI",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQGYisr7QiO6pQ/profile-displayphoto-scale_400_400/B4EZpHQsIeHcAg-/0/1762132149918?e=1776902400&v=beta&t=kEiPh3AFWXTQHote0Ha0Leq0hnKqIQKgRumN0UdgWCY",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQGYisr7QiO6pQ/profile-displayphoto-scale_200_200/B4EZpHQsIeHcAY-/0/1762132149917?e=1776902400&v=beta&t=VfxbB0Q48QynEi9FTOOkvM9IF7gxNIRd9nySRwgndHk",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQGYisr7QiO6pQ/profile-displayphoto-scale_100_100/B4EZpHQsIeHcAc-/0/1762132149918?e=1776902400&v=beta&t=WWl9eme2zWYAA993DN5Q8xnqVy2GpG-CiSZHnwCu2t4",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D4E03AQGYisr7QiO6pQ/profile-displayphoto-crop_800_800/B4EZpHQsIeHcAI-/0/1762132149722?e=1776902400&v=beta&t=1be4Llo7DsCM-TagHzfJ0D1OBGuz5aHxshWX0ytKgTI",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "AI/ML Systems",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "6 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Nov",
+          "year": 2025,
+          "text": "Nov 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "AI Researcher",
+        "location": "Bellevue, Washington, United States",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Snowflake",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3653845/",
+        "companyId": "3653845",
+        "duration": "1 yr 11 mos",
+        "description": "Trained Arctic, a 480B parameter mixture-of-experts LLM. Led Arctic Inference and developed several LLM inference optimizations including advanced parallelisms (Shift Parallelism), architecture optimizations (SwiftKV), and speculative decoding (Suffix Decoding).",
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2024,
+          "text": "Jan 2024"
+        },
+        "endDate": {
+          "month": "Nov",
+          "year": 2025,
+          "text": "Nov 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQF3mYS3WqCB3g/company-logo_400_400/company-logo_400_400/0/1688575708630/snowflake_computing_logo?e=1776902400&v=beta&t=SFeWWXV3Dkd8U41E0IovvXHImODQrOcxggIr3TThNR8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQF3mYS3WqCB3g/company-logo_400_400/company-logo_400_400/0/1688575708630/snowflake_computing_logo?e=1776902400&v=beta&t=SFeWWXV3Dkd8U41E0IovvXHImODQrOcxggIr3TThNR8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQF3mYS3WqCB3g/company-logo_200_200/company-logo_200_200/0/1688575708630/snowflake_computing_logo?e=1776902400&v=beta&t=xE7XFruTZzNStUSTQ49oNnfT3_i-mS91lzWK0DMRlD0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQF3mYS3WqCB3g/company-logo_100_100/company-logo_100_100/0/1688575708630/snowflake_computing_logo?e=1776902400&v=beta&t=u7HzEPOzklm-1bScdvb5W5V-6dhL16CgTQpFg5ct4xk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Chief Executive Officer",
+        "location": "Pittsburgh, Pennsylvania, United States",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Petuum, Inc.",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/13197574/",
+        "companyId": "13197574",
+        "duration": "2 yrs",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "62d71776e5ca7db33f2aea7e11a946cb24dcf9fe",
+        "startDate": {
+          "month": "Jan",
+          "year": 2022,
+          "text": "Jan 2022"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2023,
+          "text": "Dec 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQEzz_BI5RcX1g/company-logo_400_400/company-logo_400_400/0/1644446192180/petuum_logo?e=1776902400&v=beta&t=gnJ1znSeVLKxrX_RkwAA58_ZtoBdXvhC4iHaIJwgeqA",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEzz_BI5RcX1g/company-logo_400_400/company-logo_400_400/0/1644446192180/petuum_logo?e=1776902400&v=beta&t=gnJ1znSeVLKxrX_RkwAA58_ZtoBdXvhC4iHaIJwgeqA",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEzz_BI5RcX1g/company-logo_200_200/company-logo_200_200/0/1644446192180/petuum_logo?e=1776902400&v=beta&t=ibgZR8FPm5xLj1TGBwQUrGgK-MhRGN-4bCt8wCQuon8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEzz_BI5RcX1g/company-logo_100_100/company-logo_100_100/0/1644446192180/petuum_logo?e=1776902400&v=beta&t=jZM7-oJBm7ud-2X5k0G5IBsaX6nC4HOpWeHr8u4HD_o",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Founding Engineer",
+        "location": "Pittsburgh, Pennsylvania, United States",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Petuum, Inc.",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/13197574/",
+        "companyId": "13197574",
+        "duration": "5 yrs 1 mo",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "62d71776e5ca7db33f2aea7e11a946cb24dcf9fe",
+        "startDate": {
+          "month": "Jan",
+          "year": 2017,
+          "text": "Jan 2017"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2022,
+          "text": "Jan 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQEzz_BI5RcX1g/company-logo_400_400/company-logo_400_400/0/1644446192180/petuum_logo?e=1776902400&v=beta&t=gnJ1znSeVLKxrX_RkwAA58_ZtoBdXvhC4iHaIJwgeqA",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEzz_BI5RcX1g/company-logo_400_400/company-logo_400_400/0/1644446192180/petuum_logo?e=1776902400&v=beta&t=gnJ1znSeVLKxrX_RkwAA58_ZtoBdXvhC4iHaIJwgeqA",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEzz_BI5RcX1g/company-logo_200_200/company-logo_200_200/0/1644446192180/petuum_logo?e=1776902400&v=beta&t=ibgZR8FPm5xLj1TGBwQUrGgK-MhRGN-4bCt8wCQuon8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEzz_BI5RcX1g/company-logo_100_100/company-logo_100_100/0/1644446192180/petuum_logo?e=1776902400&v=beta&t=jZM7-oJBm7ud-2X5k0G5IBsaX6nC4HOpWeHr8u4HD_o",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "PhD Student",
+        "location": "Pittsburgh, Pennsylvania, United States",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Carnegie Mellon University",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/carnegie-mellon-university/",
+        "companyId": "3147",
+        "companyUniversalName": "carnegie-mellon-university",
+        "duration": "6 yrs 5 mos",
+        "description": "ML systems, best papers OSDI’21 and SoCC’15",
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2014,
+          "text": "Sep 2014"
+        },
+        "endDate": {
+          "year": 2021,
+          "text": "2021"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_200_200/company-logo_200_200/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Cr9dcgM6gBeNici6XTUDQUKQfYAc8US2OXBC0P5yB-Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_100_100/company-logo_100_100/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=iJiUJ2BhQORJLlvMYFhw22Mq44Z-z45Fza4_dNRwHSs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineering Intern",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Dropbox",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/167251/",
+        "companyId": "167251",
+        "duration": "4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2014,
+          "text": "May 2014"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2014,
+          "text": "Aug 2014"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHjnNsmL5L2NA/company-logo_400_400/company-logo_400_400/0/1654114493492/dropbox_logo?e=1776902400&v=beta&t=_72JvfiCX1YU3QD9b2Hj5Xut8arf1_QenHsVTo_xT_Y",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHjnNsmL5L2NA/company-logo_400_400/company-logo_400_400/0/1654114493492/dropbox_logo?e=1776902400&v=beta&t=_72JvfiCX1YU3QD9b2Hj5Xut8arf1_QenHsVTo_xT_Y",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHjnNsmL5L2NA/company-logo_200_200/company-logo_200_200/0/1654114493492/dropbox_logo?e=1776902400&v=beta&t=FMTi9EMRYzUwIHlcCNgPsSXlB-DfnPbHTtvgH53Yc08",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHjnNsmL5L2NA/company-logo_100_100/company-logo_100_100/0/1654114493492/dropbox_logo?e=1776902400&v=beta&t=vxRbolkOdrINwn8-RA7gEwAcAREwKbu28DATX66BlOA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineering Intern",
+        "location": "Greater Seattle Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Microsoft",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1035/",
+        "companyId": "1035",
+        "duration": "4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2013,
+          "text": "May 2013"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2013,
+          "text": "Aug 2013"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_400_400/B56ZYQ0mrGGoAc-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=47BifJmZk2QcSo7UM_a7lFIk5vBFq49cOHVWx8Pu2dE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_400_400/B56ZYQ0mrGGoAc-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=47BifJmZk2QcSo7UM_a7lFIk5vBFq49cOHVWx8Pu2dE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_200_200/B56ZYQ0mrGGoAM-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=z3mTaKdLV9rmnHGq4MakEXZj6vY7Y9TWAjx0_U7y0X0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQH32RJQCl3dDQ/company-logo_100_100/B56ZYQ0mrGGoAU-/0/1744038948046/microsoft_logo?e=1776902400&v=beta&t=tKqX5UTArC3FajWCGY-yk-mpPeeR1obx-D3VehmNycQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineering Intern",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Facebook",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/76987811/",
+        "companyId": "76987811",
+        "duration": "4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2012,
+          "text": "May 2012"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2012,
+          "text": "Aug 2012"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_200_200/company-logo_200_200/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=CL3OcEUIyBJFm9Wkw4iT9gJoWpsvGBIAhhNM0DjZx_A",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_100_100/company-logo_100_100/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=sZq9Sard1kGYVIprgBkNhUvJRTI7tf3pXOCP1bQBfpM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineering Intern",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "imo.im",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=imo%2Eim",
+        "duration": "4 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2011,
+          "text": "Sep 2011"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2011,
+          "text": "Dec 2011"
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Carnegie Mellon University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3147/",
+        "schoolId": "3147",
+        "degree": "Doctor of Philosophy (PhD)",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "description": "Thesis: Elastic Machine Learning Systems with Co-adaptation\nAdvisor:  Eric P. Xing",
+        "startDate": {
+          "year": 2014,
+          "text": "2014"
+        },
+        "endDate": {
+          "year": 2021,
+          "text": "2021"
+        },
+        "period": "2014 - 2021",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_200_200/company-logo_200_200/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Cr9dcgM6gBeNici6XTUDQUKQfYAc8US2OXBC0P5yB-Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_100_100/company-logo_100_100/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=iJiUJ2BhQORJLlvMYFhw22Mq44Z-z45Fza4_dNRwHSs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "University of Waterloo",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/166688/",
+        "schoolId": "166688",
+        "degree": "Bachelor",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "description": "James G. Kalbfleisch National Scholarship",
+        "insights": "Grade: Dean's Honours",
+        "startDate": {
+          "year": 2010,
+          "text": "2010"
+        },
+        "endDate": {
+          "year": 2014,
+          "text": "2014"
+        },
+        "period": "2010 - 2014",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHV472cn2nhMw/company-logo_400_400/B56Zb.Jn2gHwAY-/0/1748020657900/uwaterloo_logo?e=1776902400&v=beta&t=ZSEv7h2rdp04BpN8cDJeyHrNYqE-CvOHEx6l5oYkX4k",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHV472cn2nhMw/company-logo_400_400/B56Zb.Jn2gHwAY-/0/1748020657900/uwaterloo_logo?e=1776902400&v=beta&t=ZSEv7h2rdp04BpN8cDJeyHrNYqE-CvOHEx6l5oYkX4k",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHV472cn2nhMw/company-logo_200_200/B56Zb.Jn2gHwAI-/0/1748020657900/uwaterloo_logo?e=1776902400&v=beta&t=vfj3Ekfh40JyLG4ZDmr1otCF8PT6r9miSmh1aMw306I",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHV472cn2nhMw/company-logo_100_100/B56Zb.Jn2gHwAQ-/0/1748020657900/uwaterloo_logo?e=1776902400&v=beta&t=zNy0IDEkykyb9EgwYWf-4mwmFFiCMP58XvcK3ugmcB4",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [
+      {
+        "givenBy": "Dimitris Konomis",
+        "givenByHeadline": "AI Research Engineer @ Google | ex MIT, CMU, Two Sigma",
+        "givenAt": "August 8, 2016, Dimitris and Aurick studied together",
+        "givenByLink": "https://www.linkedin.com/in/dimitris-konomis-78ab7b65",
+        "description": "Aurick is an amazing computer scientist. He has very deep knowledge of both theory and systems and is very friendly to work with. He built from scratch a full system for distributed Machine Learning in C++, on top of which I implemented a  Gibbs-sampling-based Latent Dirichlet Allocation application. I was personally amazed by his software engineering skills: although he is still a PhD student, his code quality is of extremely high standards, one of the best I have ever seen in academia.\r\n\r\nI deeply enjoy my conversations with him even when we are out for dinner, because I always learn something new.",
+        "givenByPicture": {
+          "url": null,
+          "sizes": []
+        }
+      }
+    ],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [
+      {
+        "title": "Best Paper (OSDI’21)",
+        "issuedBy": "USENIX | The Advanced Computing Systems Association",
+        "issuedAt": "Jul 2021",
+        "mediaName": "Pollux: Co-adaptive Cluster Scheduling for Goodput-Optimized Deep Learning",
+        "mediaUrl": "https://www.usenix.org/conference/osdi21/presentation/qiao",
+        "associatedWith": null,
+        "associatedWithLink": null
+      },
+      {
+        "title": "Gold Medal (IOI’10)",
+        "issuedBy": "International Olympiad in Informatics",
+        "issuedAt": "Aug 2010",
+        "mediaName": "Aurick Qiao - International Olympiad in Informatics",
+        "mediaUrl": "https://stats.ioinformatics.org/people/303",
+        "associatedWith": null,
+        "associatedWithLink": null
+      },
+      {
+        "title": "Alexander Graham Bell Canada Graduate Scholarship (2015-2017)",
+        "issuedBy": "Natural Sciences and Engineering Research Council of Canada",
+        "associatedWith": "Associated with Carnegie Mellon University",
+        "associatedWithLink": "https://www.linkedin.com/company/3147/"
+      },
+      {
+        "title": "Best Paper (SoCC’16)",
+        "issuedBy": "ACM Symposium on Cloud Computing",
+        "description": "Wei, J.; Dai, W.; Qiao, A.; Ho, Q.; Cui, H.; Ganger, G. R.; Gibbons, P. B.; Gibson, G. A.; Xing, E. P.\nManaged communication and consistency for fast data-parallel iterative analytics.",
+        "associatedWith": "Associated with Carnegie Mellon University",
+        "associatedWithLink": "https://www.linkedin.com/company/3147/"
+      },
+      {
+        "title": "James G. Kalbfleisch National Scholarship (2010-2014)",
+        "issuedBy": "University of Waterloo",
+        "associatedWith": "Associated with University of Waterloo",
+        "associatedWithLink": "https://www.linkedin.com/company/166688/"
+      },
+      {
+        "title": "Undergraduate Student Research Award (2013)",
+        "issuedBy": "Natural Sciences and Engineering Research Council of Canada",
+        "associatedWith": "Associated with University of Waterloo",
+        "associatedWithLink": "https://www.linkedin.com/company/166688/"
+      }
+    ],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAABQ5lJUBry2byQYf_TtxDF9Rha9l-RqYsaM",
+        "firstName": "Guang-He",
+        "lastName": "Lee",
+        "publicIdentifier": "guang-he-lee-64577895",
+        "linkedinUrl": "https://www.linkedin.com/in/guang-he-lee-64577895"
+      },
+      {
+        "id": "ACoAAAPxMTsB6AbW45NodBVmmA7QtDdYCGnuR7A",
+        "firstName": "Lili",
+        "lastName": "Yu",
+        "publicIdentifier": "lili-yu-6771961a",
+        "linkedinUrl": "https://www.linkedin.com/in/lili-yu-6771961a"
+      },
+      {
+        "id": "ACoAABhIg7YBYN2NPIu8voYj5D7JQVZGxonqHvc",
+        "firstName": "Ruiqi",
+        "lastName": "Zhong",
+        "publicIdentifier": "ruiqi-zhong-09a533b4",
+        "linkedinUrl": "https://www.linkedin.com/in/ruiqi-zhong-09a533b4"
+      },
+      {
+        "id": "ACoAABmsYasBhsFwXKca6Ooio5i6nRfTRvN4d2Y",
+        "firstName": "Liyuan",
+        "lastName": "Liu",
+        "publicIdentifier": "liyuanlucasliu",
+        "linkedinUrl": "https://www.linkedin.com/in/liyuanlucasliu"
+      },
+      {
+        "id": "ACoAABqSHaUBgoPu_j2NSmNfYyGkrcUvLn5mbbo",
+        "firstName": "Jacob",
+        "lastName": "van Gogh",
+        "publicIdentifier": "jacobvangogh",
+        "linkedinUrl": "https://www.linkedin.com/in/jacobvangogh"
+      },
+      {
+        "id": "ACoAACaOARIBRO2EEH12QWQO29L__oI3N2K4u14",
+        "firstName": "Mingjie",
+        "lastName": "Sun",
+        "publicIdentifier": "mingjie-sun-06a761160",
+        "linkedinUrl": "https://www.linkedin.com/in/mingjie-sun-06a761160"
+      },
+      {
+        "id": "ACoAABGzJXcBFaJqVFgqgYNbhaPVKRkP3iG33dA",
+        "firstName": "Noah",
+        "lastName": "Shpak",
+        "publicIdentifier": "nshpak",
+        "linkedinUrl": "https://www.linkedin.com/in/nshpak"
+      },
+      {
+        "id": "ACoAABebSPMByZP3ZnuWuJpWKhAcOO8xLxhLatU",
+        "firstName": "Alicia",
+        "lastName": "P.",
+        "publicIdentifier": "aliciacphan",
+        "linkedinUrl": "https://www.linkedin.com/in/aliciacphan"
+      },
+      {
+        "id": "ACoAAAENQhgBH8wIeS6hMrUoWlbKk5L9GWNNQCE",
+        "firstName": "Andrii",
+        "lastName": "Grynenko",
+        "publicIdentifier": "andrii-grynenko-a48aab5",
+        "linkedinUrl": "https://www.linkedin.com/in/andrii-grynenko-a48aab5"
+      },
+      {
+        "id": "ACoAAC9rfpYB9euIDgF4Yyk3m40DRa2_3dEv1gM",
+        "firstName": "Wade",
+        "lastName": "Hickey",
+        "publicIdentifier": "wade-hickey-69a5291a2",
+        "linkedinUrl": "https://www.linkedin.com/in/wade-hickey-69a5291a2"
+      },
+      {
+        "id": "ACoAAA4HVN4BOZg5espOvMVoO3OY04NZmuqvMCo",
+        "firstName": "Shaojie",
+        "lastName": "Bai",
+        "publicIdentifier": "shaojie-bai",
+        "linkedinUrl": "https://www.linkedin.com/in/shaojie-bai"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAABA0sF8BJqwmfoms3veu9TE72tj8JMUQEFA",
+        "firstName": "Sam",
+        "lastName": "Shleifer",
+        "publicIdentifier": "sam-shleifer-a5307a77",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-shleifer-a5307a77"
+      },
+      {
+        "id": "ACoAABLLpuMBU7a9WPW-GubLTIkDjAF6hz7Ujkc",
+        "firstName": "Daniel",
+        "lastName": "Xu",
+        "publicIdentifier": "daniel-xu-42b73289",
+        "linkedinUrl": "https://www.linkedin.com/in/daniel-xu-42b73289"
+      },
+      {
+        "id": "ACoAAAqPUXUB26nPtwJxJLy_Ar7H-YLBlb44QnY",
+        "firstName": "Neal",
+        "lastName": "Wu",
+        "publicIdentifier": "nealwu",
+        "linkedinUrl": "https://www.linkedin.com/in/nealwu"
+      },
+      {
+        "id": "ACoAAB3BApkB38H4Z__jKDDFBfF7jt7w16vD0Xs",
+        "firstName": "Rafael",
+        "lastName": "Rafailov",
+        "publicIdentifier": "rafael-rafailov-1b521611b",
+        "linkedinUrl": "https://www.linkedin.com/in/rafael-rafailov-1b521611b"
+      },
+      {
+        "id": "ACoAACHkUNgBogKk7Q3xekxMdWLMSikZY2zgQsU",
+        "firstName": "Stephen",
+        "lastName": "Roller",
+        "publicIdentifier": "stephen-roller-38851513a",
+        "linkedinUrl": "https://www.linkedin.com/in/stephen-roller-38851513a"
+      },
+      {
+        "id": "ACoAACEKIcoBlH0R5ZT_TKQuJ4i3ZD4WlI1-rME",
+        "firstName": "Jacob",
+        "lastName": "Menick",
+        "publicIdentifier": "jacob-menick-5a277a135",
+        "linkedinUrl": "https://www.linkedin.com/in/jacob-menick-5a277a135"
+      },
+      {
+        "id": "ACoAAA47o_IBKkODI0lUz0grCNGIpe6kJO1AqkA",
+        "firstName": "Miro",
+        "lastName": "Berbig",
+        "position": "Datenschutz und Datensicherheit",
+        "publicIdentifier": "miro-berbig",
+        "linkedinUrl": "https://www.linkedin.com/in/miro-berbig"
+      },
+      {
+        "id": "ACoAADu1owABOhOlCkZVeyaMMend9kn6IeYlqJI",
+        "firstName": "Alexander",
+        "lastName": "Neubauer",
+        "position": "KI | E-Akte  | Digitalisierung | Prozessmanagement - Moderne Verwaltung beginnt mit Umsetzung!",
+        "publicIdentifier": "alexander-neubauer-b145a123b",
+        "linkedinUrl": "https://www.linkedin.com/in/alexander-neubauer-b145a123b"
+      },
+      {
+        "id": "ACoAAGIkXGwBoJkQKATi03M-Ne7DL5HzwgWLFd8",
+        "firstName": "Iris",
+        "lastName": "Schulz",
+        "position": "Stellv. VHS-Leitung bei Stadt Norderstedt - VHS",
+        "publicIdentifier": "iris-schulz-7a451439b",
+        "linkedinUrl": "https://www.linkedin.com/in/iris-schulz-7a451439b"
+      },
+      {
+        "id": "ACoAAAe2jy0BQE3H5Wm_MYjqJt8inPP_-lJVemM",
+        "firstName": "Toomaj",
+        "lastName": "G.",
+        "position": "Architect at Hoffmann Messebau Hannover",
+        "publicIdentifier": "toomaj-g-ba540637",
+        "linkedinUrl": "https://www.linkedin.com/in/toomaj-g-ba540637"
+      },
+      {
+        "id": "ACoAAFPq-eQBO-A8deVttlP1YHKXFAvOnW3Quy0",
+        "firstName": "Jan-Niklaas",
+        "lastName": "Unterbäumer",
+        "position": "Digitalisierung | Prozess- & Projektmanagement | Organisationsentwicklung. KI verändert Arbeit. Ich gestalte, was bleibt.",
+        "publicIdentifier": "jan-niklaas-unterbäumer-918609333",
+        "linkedinUrl": "https://www.linkedin.com/in/jan-niklaas-unterbäumer-918609333"
+      },
+      {
+        "id": "ACoAADqmmzYBOWvbRaLNUZ8s1m5n_KRlBNYtO-E",
+        "firstName": "Tim",
+        "lastName": "Bernitt",
+        "position": "Amtsleiter der Gebäudewirtschaft in der Stadt Norderstedt",
+        "publicIdentifier": "tim-bernitt-a1a656235",
+        "linkedinUrl": "https://www.linkedin.com/in/tim-bernitt-a1a656235"
+      },
+      {
+        "id": "ACoAAEiP6rwBwr1KtpFnI9dmQ7LPVTer4BbhTA0",
+        "firstName": "Antje",
+        "lastName": "Hoff",
+        "position": "Personalmanagement & -entwicklung bei Stadt Norderstedt",
+        "publicIdentifier": "antje-hoff-a2485029b",
+        "linkedinUrl": "https://www.linkedin.com/in/antje-hoff-a2485029b"
+      },
+      {
+        "id": "ACoAABCjHLoBHLEgtZpycAjh6KfvXpSCL9XdNZM",
+        "firstName": "Ronny",
+        "lastName": "Zeller",
+        "position": "--",
+        "publicIdentifier": "ronny-zeller-93658a79",
+        "linkedinUrl": "https://www.linkedin.com/in/ronny-zeller-93658a79"
+      },
+      {
+        "id": "ACoAADdbV4sBjLFjNIvif_cgM4zGT-YsPmuYMAk",
+        "firstName": "Simone",
+        "lastName": "Becker",
+        "position": "Controllerin für die Bereiche Verwaltungs- und Beteiligungscontrolling",
+        "publicIdentifier": "simone-becker-32304521b",
+        "linkedinUrl": "https://www.linkedin.com/in/simone-becker-32304521b"
+      },
+      {
+        "id": "ACoAACQFmtABkCRfOmsM_dZWaSLqCcffy83w2k0",
+        "firstName": "Thomas",
+        "lastName": "Grimm",
+        "position": "IT-Administrator bei Stadt Kaltenkirchen ",
+        "publicIdentifier": "thomas-grimm-a9448914a",
+        "linkedinUrl": "https://www.linkedin.com/in/thomas-grimm-a9448914a"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAAgB78IBz9ZHYxi-EPYsBJqdc8zkFMCY-HM"
+    }
+  }
+}

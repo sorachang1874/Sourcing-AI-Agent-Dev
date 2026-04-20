@@ -1,0 +1,892 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAAcgPQIBTNw3V2l5mhQw4H1K_2t0sW7jkDI",
+    "profile_url": "https://www.linkedin.com/in/ACwAAAcgPQIBTNw3V2l5mhQw4H1K_2t0sW7jkDI"
+  },
+  "item": {
+    "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+    "publicIdentifier": "devendra-chaplot-b1605534",
+    "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534",
+    "firstName": "Devendra",
+    "lastName": "Chaplot",
+    "emails": [
+      {
+        "email": "devendra.chaplot@x.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://x.ai",
+        "domain": "x.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Building superintelligence @xAI",
+    "openToWork": false,
+    "hiring": false,
+    "premium": true,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Palo Alto, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "Palo Alto, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "Palo Alto"
+      }
+    },
+    "objectUrn": "119553282",
+    "registeredAt": "2011-05-21T16:53:43.112Z",
+    "topSkills": null,
+    "connectionsCount": 4698,
+    "followerCount": 31486,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "96151950",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/96151950/",
+        "companyName": "xAI",
+        "dateRange": {
+          "start": {
+            "month": 3,
+            "year": 2026,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "19232",
+        "companyId": "3147",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3147/",
+        "schoolName": "Carnegie Mellon University"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4E03AQH6A1alJTyrcQ/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1731394414367?e=1776902400&v=beta&t=UqsXAaS1f0cE8ntI6DbNpjqxnsYEHygY0ppmAG4su3I",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQH6A1alJTyrcQ/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1731394414367?e=1776902400&v=beta&t=UqsXAaS1f0cE8ntI6DbNpjqxnsYEHygY0ppmAG4su3I",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQH6A1alJTyrcQ/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1731394414340?e=1776902400&v=beta&t=yHSIRYgDtPMw5QJxonBvZDOOHzgy4jP90TSBxnHTFKA",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQH6A1alJTyrcQ/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1731394414340?e=1776902400&v=beta&t=eE0w2ibVZwnvA4KFfRlr558-ZrbkB_21l89-MYy6b7k",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQH6A1alJTyrcQ/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1731394414340?e=1776902400&v=beta&t=zCPx6OorOtnedKRoW0wnPfBIX_66BvQmx6K-VYNbIeg",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D4E03AQH6A1alJTyrcQ/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1731394414367?e=1776902400&v=beta&t=UqsXAaS1f0cE8ntI6DbNpjqxnsYEHygY0ppmAG4su3I",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Building superintelligence @xAI",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "Palo Alto, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "xAI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/xai/",
+        "companyId": "96151950",
+        "companyUniversalName": "xai",
+        "duration": "2 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2026,
+          "text": "Mar 2026"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQFGK5Kkd1nUlg/company-logo_400_400/company-logo_400_400/0/1738099065875/xai_logo?e=1776902400&v=beta&t=D9_BxwFh9s6Xs2Cj7r80cNvoc3yl7tyg6f8ZvrbXv64",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFGK5Kkd1nUlg/company-logo_400_400/company-logo_400_400/0/1738099065875/xai_logo?e=1776902400&v=beta&t=D9_BxwFh9s6Xs2Cj7r80cNvoc3yl7tyg6f8ZvrbXv64",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFGK5Kkd1nUlg/company-logo_200_200/company-logo_200_200/0/1738099065875/xai_logo?e=1776902400&v=beta&t=HEoRgaX2hRkDsEbWqIdB85Qph6PAPQDMvqQqOoxhzHc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFGK5Kkd1nUlg/company-logo_100_100/company-logo_100_100/0/1738099065875/xai_logo?e=1776902400&v=beta&t=fPyP5ijKRIbwP3cYP1d0JhCSK_zHRQZxBvUsdDb3vPk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Angel Investor",
+        "location": "San Francisco Bay Area",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Devendra Chaplot",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Devendra+Chaplot",
+        "duration": "1 yr 6 mos",
+        "description": "Investing in AI startups",
+        "skills": null,
+        "startDate": {
+          "month": "Nov",
+          "year": 2024,
+          "text": "Nov 2024"
+        },
+        "endDate": {
+          "text": "Present"
+        }
+      },
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco Bay Area",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyId": "105913171",
+        "duration": "1 yr 2 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2025,
+          "text": "Feb 2025"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2026,
+          "text": "Mar 2026"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "AI Research Scientist",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Mistral AI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/94273421/",
+        "companyId": "94273421",
+        "duration": "1 yr 7 mos",
+        "description": "- Founding team member: Co-creator of Mistral 7B, Mixtral 8x7B, Mistral Large.\n- Head of Multimodal Research: Led the development of Pixtral 12B and Pixtral Large.\n- Established and led Mistral US office.",
+        "skills": null,
+        "startDate": {
+          "month": "Aug",
+          "year": 2023,
+          "text": "Aug 2023"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2025,
+          "text": "Feb 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHEMPM6gZY2kQ/company-logo_400_400/B4EZqSkjBRKsAc-/0/1763395645877/mistralai_logo?e=1776902400&v=beta&t=bRmR_hAosRPx2QnINzjsq9be9L1olRwlDPWQQDFfu6M",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHEMPM6gZY2kQ/company-logo_400_400/B4EZqSkjBRKsAc-/0/1763395645877/mistralai_logo?e=1776902400&v=beta&t=bRmR_hAosRPx2QnINzjsq9be9L1olRwlDPWQQDFfu6M",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHEMPM6gZY2kQ/company-logo_200_200/B4EZqSkjBRKsAM-/0/1763395645877/mistralai_logo?e=1776902400&v=beta&t=ct70MlwzA97OSeM9iYXWi-WyDvzGSbntIst93HpfS1A",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHEMPM6gZY2kQ/company-logo_100_100/B4EZqSkjBRKsAU-/0/1763395645877/mistralai_logo?e=1776902400&v=beta&t=Iwbqsgy2PYVa7WB_J8e6gbWQgy1e29bUIn3eElmLhsY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "AI Research Scientist",
+        "location": "Menlo Park, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Facebook",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/76987811/",
+        "companyId": "76987811",
+        "duration": "2 yrs 9 mos",
+        "description": "Facebook AI Research Lab",
+        "skills": null,
+        "experienceGroupId": "2494aa49a149f172e93fb771f5bc52ea7e1ef559",
+        "startDate": {
+          "month": "Dec",
+          "year": 2020,
+          "text": "Dec 2020"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2023,
+          "text": "Aug 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_200_200/company-logo_200_200/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=CL3OcEUIyBJFm9Wkw4iT9gJoWpsvGBIAhhNM0DjZx_A",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_100_100/company-logo_100_100/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=sZq9Sard1kGYVIprgBkNhUvJRTI7tf3pXOCP1bQBfpM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Intern",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Facebook",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/76987811/",
+        "companyId": "76987811",
+        "duration": "2 yrs 8 mos",
+        "description": "Facebook AI Research",
+        "skills": null,
+        "experienceGroupId": "2494aa49a149f172e93fb771f5bc52ea7e1ef559",
+        "startDate": {
+          "month": "May",
+          "year": 2018,
+          "text": "May 2018"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2020,
+          "text": "Dec 2020"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_200_200/company-logo_200_200/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=CL3OcEUIyBJFm9Wkw4iT9gJoWpsvGBIAhhNM0DjZx_A",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_100_100/company-logo_100_100/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=sZq9Sard1kGYVIprgBkNhUvJRTI7tf3pXOCP1bQBfpM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Intern",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Apple",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/162479/",
+        "companyId": "162479",
+        "duration": "7 mos",
+        "description": "AI Research",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2017,
+          "text": "Jun 2017"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2017,
+          "text": "Dec 2017"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_400_400/company-logo_400_400/0/1630637844948/apple_logo?e=1776902400&v=beta&t=KteXM40NNLQ3nz21Do-neoy-f7lbDDA7kJmtS5wwrL4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_400_400/company-logo_400_400/0/1630637844948/apple_logo?e=1776902400&v=beta&t=KteXM40NNLQ3nz21Do-neoy-f7lbDDA7kJmtS5wwrL4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_200_200/company-logo_200_200/0/1630637844948/apple_logo?e=1776902400&v=beta&t=I8RMorsmHMk3gA9b3fT4m2HDgfVtfdB6se4bEZcMHb8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHdAaarsO-eyA/company-logo_100_100/company-logo_100_100/0/1630637844948/apple_logo?e=1776902400&v=beta&t=8c3EpxT43tZMihGirOM7eBnDzFHAGiYV-OxaRj_xfjo",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Associate",
+        "location": "Suwon, South Korea",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Samsung Electronics HQ",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1753/",
+        "companyId": "1753",
+        "duration": "1 yr",
+        "description": "IoT Intelligence Lab",
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2014,
+          "text": "Sep 2014"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2015,
+          "text": "Aug 2015"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQFsvADfvcJi_A/company-logo_400_400/company-logo_400_400/0/1676336400451/samsung_electronics_logo?e=1776902400&v=beta&t=S8kp-6K8GAfHr94qrqHSzZOCdyCPpygOUjJHucUczwA",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFsvADfvcJi_A/company-logo_400_400/company-logo_400_400/0/1676336400451/samsung_electronics_logo?e=1776902400&v=beta&t=S8kp-6K8GAfHr94qrqHSzZOCdyCPpygOUjJHucUczwA",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFsvADfvcJi_A/company-logo_200_200/company-logo_200_200/0/1676336400451/samsung_electronics_logo?e=1776902400&v=beta&t=PalYkfm8_6lqWCpt5wyFBkXUnfvoDQPNUqiOxrqbGcY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFsvADfvcJi_A/company-logo_100_100/company-logo_100_100/0/1676336400451/samsung_electronics_logo?e=1776902400&v=beta&t=Cd_1lJ_YdcckAXwPLRk7rZn6BGqrJaCYGpWzWu55Fb0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Carnegie Mellon University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3147/",
+        "schoolId": "3147",
+        "degree": "Doctor of Philosophy - PhD",
+        "fieldOfStudy": "Machine Learning",
+        "skills": [],
+        "startDate": {
+          "year": 2017,
+          "text": "2017"
+        },
+        "endDate": {
+          "year": 2020,
+          "text": "2020"
+        },
+        "period": "2017 - 2020",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_200_200/company-logo_200_200/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Cr9dcgM6gBeNici6XTUDQUKQfYAc8US2OXBC0P5yB-Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_100_100/company-logo_100_100/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=iJiUJ2BhQORJLlvMYFhw22Mq44Z-z45Fza4_dNRwHSs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Indian Institute of Technology, Bombay",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/157266/",
+        "schoolId": "157266",
+        "degree": "Bachelor of Technology (BTech)",
+        "fieldOfStudy": "Computer Science and Engineering",
+        "skills": [],
+        "insights": "Activities and societies: Institute Film & Media Secretary",
+        "startDate": {
+          "year": 2010,
+          "text": "2010"
+        },
+        "endDate": {
+          "year": 2014,
+          "text": "2014"
+        },
+        "period": "2010 - 2014",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGmDoDCx_FYpA/company-logo_400_400/company-logo_400_400/0/1660636307357/indian_institute_of_technology_bombay_logo?e=1776902400&v=beta&t=Bz63HIAA5wNBva4W67leu4-7LIrudQraGUOik2FqVWE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGmDoDCx_FYpA/company-logo_400_400/company-logo_400_400/0/1660636307357/indian_institute_of_technology_bombay_logo?e=1776902400&v=beta&t=Bz63HIAA5wNBva4W67leu4-7LIrudQraGUOik2FqVWE",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGmDoDCx_FYpA/company-logo_200_200/company-logo_200_200/0/1660636307357/indian_institute_of_technology_bombay_logo?e=1776902400&v=beta&t=zdNDBzNhHsVM5UeZZwxeCeAMc2vFrNTlZrRYUnHXl4U",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGmDoDCx_FYpA/company-logo_100_100/company-logo_100_100/0/1660636307357/indian_institute_of_technology_bombay_logo?e=1776902400&v=beta&t=tuMA24-sOh5gabGR4X1pe2IcU89anD-DGqrTgYdu4QI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Carnegie Mellon University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3147/",
+        "schoolId": "3147",
+        "degree": "Master’s Degree",
+        "fieldOfStudy": "Language Technologies",
+        "skills": [],
+        "startDate": {
+          "year": 2015,
+          "text": "2015"
+        },
+        "endDate": {
+          "year": 2017,
+          "text": "2017"
+        },
+        "period": "2015 - 2017",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_400_400/company-logo_400_400/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Mul-VSZ8v2cVb_p2bRpAC6o61mxgfB-XCEYf0X3Jjb4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_200_200/company-logo_200_200/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=Cr9dcgM6gBeNici6XTUDQUKQfYAc8US2OXBC0P5yB-Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQH0rMqWuDcNzA/company-logo_100_100/company-logo_100_100/0/1656670432790/carnegie_mellon_university_logo?e=1776902400&v=beta&t=iJiUJ2BhQORJLlvMYFhw22Mq44Z-z45Fza4_dNRwHSs",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [
+      {
+        "title": "Winner CVPR 2020 AI Habitat Object Navigation Challenge",
+        "issuedBy": "CVPR 2020 Embodied Agents Workshop",
+        "issuedAt": "Jun 2020",
+        "associatedWith": "Associated with Carnegie Mellon University",
+        "associatedWithLink": "https://www.linkedin.com/company/3147/"
+      },
+      {
+        "title": "Facebook Fellowship",
+        "issuedBy": "Facebook",
+        "issuedAt": "Jan 2020",
+        "associatedWith": "Associated with Carnegie Mellon University",
+        "associatedWithLink": "https://www.linkedin.com/company/3147/"
+      },
+      {
+        "title": "Winner CVPR 2019 AI Habitat PointGoal Navigation Challenge",
+        "issuedBy": "CVPR 2019 AI Habitat Workshop",
+        "issuedAt": "Jun 2019",
+        "description": "Winner in both RGB and RGBD Tracks.",
+        "associatedWith": "Associated with Carnegie Mellon University",
+        "associatedWithLink": "https://www.linkedin.com/company/3147/"
+      },
+      {
+        "title": "Best Paper Award",
+        "issuedBy": "CVPR 2018 Deep Learning for Visual SLAM Workshop",
+        "issuedAt": "Jun 2018",
+        "associatedWith": "Associated with Carnegie Mellon University",
+        "associatedWithLink": "https://www.linkedin.com/company/3147/"
+      },
+      {
+        "title": "Winner Visual Doom AI Competition, 2017",
+        "issuedBy": "IEEE Computational Intelligence and Games (CIG'17)",
+        "issuedAt": "Aug 2017",
+        "associatedWith": "Associated with Carnegie Mellon University",
+        "associatedWithLink": "https://www.linkedin.com/company/3147/"
+      },
+      {
+        "title": "Best Demo Award",
+        "issuedBy": "AAAI 2017",
+        "issuedAt": "Feb 2017",
+        "associatedWith": "Associated with Carnegie Mellon University",
+        "associatedWithLink": "https://www.linkedin.com/company/3147/"
+      },
+      {
+        "title": "Institute Cultural Special Mention",
+        "issuedBy": "IIT Bombay",
+        "issuedAt": "Apr 2012",
+        "associatedWith": "Associated with Indian Institute of Technology, Bombay",
+        "associatedWithLink": "https://www.linkedin.com/company/157266/"
+      },
+      {
+        "title": "AIEEE Scholar",
+        "issuedBy": "Central Board of Secondary Education (CBSE), Government of India",
+        "issuedAt": "Jan 2010",
+        "associatedWith": null,
+        "associatedWithLink": null
+      },
+      {
+        "title": "NTSE Scholar",
+        "issuedBy": "NCERT, Government of India",
+        "issuedAt": "Jan 2008",
+        "associatedWith": null,
+        "associatedWithLink": null
+      }
+    ],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "PREMIUM_INMAIL",
+    "moreProfiles": [
+      {
+        "id": "ACoAABQ5lJUBry2byQYf_TtxDF9Rha9l-RqYsaM",
+        "firstName": "Guang-He",
+        "lastName": "Lee",
+        "publicIdentifier": "guang-he-lee-64577895",
+        "linkedinUrl": "https://www.linkedin.com/in/guang-he-lee-64577895"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABMugyUBsZ9MwIVIzmOSzlvmO6TOFL-mfAU",
+        "firstName": "Chih-Kuan (Jason)",
+        "lastName": "Yeh",
+        "publicIdentifier": "chih-kuan-jason-yeh-8859378b",
+        "linkedinUrl": "https://www.linkedin.com/in/chih-kuan-jason-yeh-8859378b"
+      },
+      {
+        "id": "ACoAACQq5HoBKvwLgBUlXiVziRWJDXBocy6aOE4",
+        "firstName": "Erik",
+        "lastName": "Wijmans",
+        "publicIdentifier": "erik-wijmans-0a226814b",
+        "linkedinUrl": "https://www.linkedin.com/in/erik-wijmans-0a226814b"
+      },
+      {
+        "id": "ACoAAAx2vtsBVLU4ZITuU29St11G0R1edJUK92o",
+        "firstName": "Kiriti",
+        "lastName": "Badam",
+        "publicIdentifier": "sai-kiriti-badam",
+        "linkedinUrl": "https://www.linkedin.com/in/sai-kiriti-badam"
+      },
+      {
+        "id": "ACoAAACo1tYBGy9sT2OWZuEULOMe4K_b2Y22-F8",
+        "firstName": "Alex",
+        "lastName": "Gartrell",
+        "publicIdentifier": "alexgartrell",
+        "linkedinUrl": "https://www.linkedin.com/in/alexgartrell"
+      },
+      {
+        "id": "ACoAAAQ1QI4Bex6mqv5SgvahWcZuzAuWiTKciBo",
+        "firstName": "Bi",
+        "lastName": "Xue",
+        "publicIdentifier": "bi-xue-9527871b",
+        "linkedinUrl": "https://www.linkedin.com/in/bi-xue-9527871b"
+      },
+      {
+        "id": "ACoAACPjhbwBH6HwFjWKnF1cps-LnX1U6V4hegk",
+        "firstName": "William",
+        "lastName": "Zeng",
+        "publicIdentifier": "william-zeng",
+        "linkedinUrl": "https://www.linkedin.com/in/william-zeng"
+      },
+      {
+        "id": "ACoAAB6Dnq0By58-tkaS1EmuCcNFwORHSJ5EiQs",
+        "firstName": "Aman",
+        "lastName": "Gottumukkala",
+        "publicIdentifier": "amangotchu",
+        "linkedinUrl": "https://www.linkedin.com/in/amangotchu"
+      },
+      {
+        "id": "ACoAAAF57BEBytoBtj0_Jv-zJMa602g97u58ZqY",
+        "firstName": "Matthias",
+        "lastName": "Hendrichs",
+        "publicIdentifier": "matthiashendrichs",
+        "linkedinUrl": "https://www.linkedin.com/in/matthiashendrichs"
+      },
+      {
+        "id": "ACoAAA70QkgB8x3RLt6hP-h5qSZtiyV_d6nfs_M",
+        "firstName": "Andrew",
+        "lastName": "Milich",
+        "publicIdentifier": "amilich",
+        "linkedinUrl": "https://www.linkedin.com/in/amilich"
+      },
+      {
+        "id": "ACoAAEZnBtoBb1Us7ZKgHfOXAYT764pKcDQy848",
+        "firstName": "Songlin",
+        "lastName": "Yang",
+        "publicIdentifier": "songlin-yang-b8a69728b",
+        "linkedinUrl": "https://www.linkedin.com/in/songlin-yang-b8a69728b"
+      },
+      {
+        "id": "ACoAABdmLFIBynpe7Fupctbe3BuDAewJ_t7wcv8",
+        "firstName": "Ethan",
+        "lastName": "He",
+        "publicIdentifier": "ethanhe42",
+        "linkedinUrl": "https://www.linkedin.com/in/ethanhe42"
+      },
+      {
+        "id": "ACoAABgwxtcBfqsJJUHPwsSPuBE4K9oKyRqUp5o",
+        "firstName": "Lia",
+        "lastName": "Guy",
+        "publicIdentifier": "aureliaguy",
+        "linkedinUrl": "https://www.linkedin.com/in/aureliaguy"
+      },
+      {
+        "id": "ACoAABOFiucBT-cm9QzuIlt0Jchk9Jq32lxEFQc",
+        "firstName": "Umesh",
+        "lastName": "Khanna",
+        "publicIdentifier": "umeshkhanna",
+        "linkedinUrl": "https://www.linkedin.com/in/umeshkhanna"
+      },
+      {
+        "id": "ACoAABwPXYYBu6XLd60FWm_b3CN_hF8Cr9e9g8c",
+        "firstName": "Nishant",
+        "lastName": "Rai",
+        "publicIdentifier": "nishantrai18",
+        "linkedinUrl": "https://www.linkedin.com/in/nishantrai18"
+      },
+      {
+        "id": "ACoAADGE-AoBWopX8Yz0_gxbsPDk1rMk6Mx37ZE",
+        "firstName": "Giovanni",
+        "lastName": "D'Antonio",
+        "publicIdentifier": "giovanni-dantonio",
+        "linkedinUrl": "https://www.linkedin.com/in/giovanni-dantonio"
+      },
+      {
+        "id": "ACoAAA4HVN4BOZg5espOvMVoO3OY04NZmuqvMCo",
+        "firstName": "Shaojie",
+        "lastName": "Bai",
+        "publicIdentifier": "shaojie-bai",
+        "linkedinUrl": "https://www.linkedin.com/in/shaojie-bai"
+      },
+      {
+        "id": "ACoAABxxSOoBxMid0wd8m2NDb9w5zTY2lQbrNz4",
+        "firstName": "Leon",
+        "lastName": "G.",
+        "publicIdentifier": "yazhi-gao",
+        "linkedinUrl": "https://www.linkedin.com/in/yazhi-gao"
+      },
+      {
+        "id": "ACoAAB8mjA8BublBnw-hsYdj4qgV0W-6m6Rmbos",
+        "firstName": "Jason",
+        "lastName": "Ginsberg",
+        "publicIdentifier": "jason-ginsberg-0bb036127",
+        "linkedinUrl": "https://www.linkedin.com/in/jason-ginsberg-0bb036127"
+      },
+      {
+        "id": "ACoAADCSOZcBPxubo1Q8yvyOupMvw7AnWOtUbgg",
+        "firstName": "Yasemin",
+        "lastName": "Özer",
+        "position": "Stellvertretende Veranstaltungs- und Restaurantleiterin ",
+        "publicIdentifier": "yasemin-özer-5b3aa31a8",
+        "linkedinUrl": "https://www.linkedin.com/in/yasemin-özer-5b3aa31a8"
+      },
+      {
+        "id": "ACoAADK1VkcB59lEOExiXu305lvZG2rtyzX_HEk",
+        "firstName": "Elisa",
+        "lastName": "Murken",
+        "position": "Restaurantleiterin",
+        "publicIdentifier": "elisa-murken-287ab51b8",
+        "linkedinUrl": "https://www.linkedin.com/in/elisa-murken-287ab51b8"
+      },
+      {
+        "id": "ACoAAC9DxxQB0iBdnMciPlb4H3BDu5WSwOGGqwE",
+        "firstName": "Ivica Ivo",
+        "lastName": "Buljan",
+        "position": "Restaurant Manager / F&B Manager",
+        "publicIdentifier": "ivica-ivo-buljan-3306931a1",
+        "linkedinUrl": "https://www.linkedin.com/in/ivica-ivo-buljan-3306931a1"
+      },
+      {
+        "id": "ACoAADrnfHQBvQIfk069Uh2lHxytyFTrw96kTy0",
+        "firstName": "Bastian",
+        "lastName": "Wilde",
+        "position": "Restaurantleiter",
+        "publicIdentifier": "bastianwilde",
+        "linkedinUrl": "https://www.linkedin.com/in/bastianwilde"
+      },
+      {
+        "id": "ACoAADfjDbwBrW_thRtNV72kiwTGFIamrpwOMlA",
+        "firstName": "Sara",
+        "lastName": "Lembke",
+        "position": "Restaurantleiterin bei Speiesemeisterei Schloss Hohenheim ",
+        "publicIdentifier": "sara-lembke-310014222",
+        "linkedinUrl": "https://www.linkedin.com/in/sara-lembke-310014222"
+      },
+      {
+        "id": "ACoAACTG1Y8Bryw2dtRnljo8zK4T_m5r9ASU5pY",
+        "firstName": "Maximilian",
+        "lastName": "Seyl",
+        "position": "Restaurantleiter",
+        "publicIdentifier": "maximilian-seyl-37b776152",
+        "linkedinUrl": "https://www.linkedin.com/in/maximilian-seyl-37b776152"
+      },
+      {
+        "id": "ACoAACmDDcIBxiL58NqLseS5IkTXX0cGwFDWx18",
+        "firstName": "Tommy",
+        "lastName": "Seidel",
+        "position": "Restaurantleiter ",
+        "publicIdentifier": "tommy-seidel-a2a2a8175",
+        "linkedinUrl": "https://www.linkedin.com/in/tommy-seidel-a2a2a8175"
+      },
+      {
+        "id": "ACoAADCVvBcBjstKyQnKkkgWMuVmT5zU4t91Blc",
+        "firstName": "Recep",
+        "lastName": "Ergün",
+        "position": "Restaurantleiter bei Hausmann's Restaurant Frankfurt",
+        "publicIdentifier": "recep-ergün-733b941a8",
+        "linkedinUrl": "https://www.linkedin.com/in/recep-ergün-733b941a8"
+      },
+      {
+        "id": "ACoAAC5SDggBxGGwwD-gjNUVwuVBg3KFoXy2iZc",
+        "firstName": "Tina",
+        "lastName": "Maurer",
+        "position": "Restaurantleiterin ",
+        "publicIdentifier": "tina-maurer-860313198",
+        "linkedinUrl": "https://www.linkedin.com/in/tina-maurer-860313198"
+      },
+      {
+        "id": "ACoAAFhjFTYBgxEvKf9p-DNZrJSoQ16wvs10Qao",
+        "firstName": "Yannik",
+        "lastName": "Mohr",
+        "position": "Junior Restaurantleiter bei Margarete Restaurant Frankfurt",
+        "publicIdentifier": "yannik-mohr-09a749354",
+        "linkedinUrl": "https://www.linkedin.com/in/yannik-mohr-09a749354"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAAcgPQIBTNw3V2l5mhQw4H1K_2t0sW7jkDI"
+    }
+  }
+}

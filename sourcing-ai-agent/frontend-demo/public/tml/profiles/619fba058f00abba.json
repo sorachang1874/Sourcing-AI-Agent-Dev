@@ -1,0 +1,862 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAAl87CYB51syHouA0_6lVOsv4VY3kpl4IH0",
+    "profile_url": "https://www.linkedin.com/in/ACwAAAl87CYB51syHouA0_6lVOsv4VY3kpl4IH0"
+  },
+  "item": {
+    "id": "ACoAAAl87CYBWKLLyGNTbomy6oqIPv-5n34CXIY",
+    "publicIdentifier": "andrew-tulloch-17238745",
+    "linkedinUrl": "https://www.linkedin.com/in/andrew-tulloch-17238745",
+    "firstName": "Andrew",
+    "lastName": "Tulloch",
+    "emails": [
+      {
+        "email": "andrew.tulloch@meta.com",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://www.metacareers.com/",
+        "domain": "meta.com",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "AI Research @ Meta",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "159181862",
+    "registeredAt": "2011-12-28T08:10:52.918Z",
+    "topSkills": null,
+    "connectionsCount": 1223,
+    "followerCount": 12511,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "10667",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyName": "Meta",
+        "dateRange": {
+          "start": {
+            "month": 10,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "12691",
+        "companyId": "4522",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/4522/",
+        "schoolName": "University of Cambridge"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/C5603AQFZjr44_RgWNw/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1517398675290?e=1776902400&v=beta&t=EZVGQVFQ1rpaXS9WdsbmusR0yPz1Wv7s-hSb3bGM1mw",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQFZjr44_RgWNw/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1517398675290?e=1776902400&v=beta&t=EZVGQVFQ1rpaXS9WdsbmusR0yPz1Wv7s-hSb3bGM1mw",
+          "width": 297,
+          "height": 297,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQFZjr44_RgWNw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1517398675306?e=1776902400&v=beta&t=DtQqCq-t7_rSKvmJDeXzJzBi6FZfMow_87RQnNT-0LA",
+          "width": 297,
+          "height": 297,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQFZjr44_RgWNw/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1517398675313?e=1776902400&v=beta&t=HG8LSvSNGWfBWlpcqRkbNw01YKBe8FVQz65PprY2o1Q",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQFZjr44_RgWNw/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1517398675304?e=1776902400&v=beta&t=lo9NZ1IXU2dYRIXJZdTdoZ6ApOMIEdYidu8mDaG2eYU",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/C5603AQFZjr44_RgWNw/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1517398675290?e=1776902400&v=beta&t=EZVGQVFQ1rpaXS9WdsbmusR0yPz1Wv7s-hSb3bGM1mw",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "AI Research @ Meta",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "AI Researcher",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/meta/",
+        "companyId": "10667",
+        "companyUniversalName": "meta",
+        "duration": "7 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Oct",
+          "year": 2025,
+          "text": "Oct 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyId": "105913171",
+        "duration": "10 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2025,
+          "text": "Jan 2025"
+        },
+        "endDate": {
+          "month": "Oct",
+          "year": 2025,
+          "text": "Oct 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco Bay Area",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "OpenAI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/11130470/",
+        "companyId": "11130470",
+        "duration": "1 yr 2 mos",
+        "description": "ML systems, GPT-4o and GPT-4.5 pretraining, o-series reasoning",
+        "skills": null,
+        "startDate": {
+          "month": "Oct",
+          "year": 2023,
+          "text": "Oct 2023"
+        },
+        "endDate": {
+          "month": "Nov",
+          "year": 2024,
+          "text": "Nov 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_200_200/B56ZT8EYB8HsAI-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=O6RSWlpQ5W4zNCOCTu621qCyTijLuXFJS4pz2_hBQfo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_100_100/B56ZT8EYB8HsAQ-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=y7RA89V9q8GlAjQ1oRU-jf_-n5zlSXRCnykXBIkgHfM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Distinguished Engineer",
+        "location": "San Francisco Bay Area",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/meta/",
+        "companyId": "10667",
+        "companyUniversalName": "meta",
+        "duration": "11 yrs 6 mos",
+        "description": "Machine learning systems. Mostly PyTorch these days.",
+        "skills": null,
+        "startDate": {
+          "month": "Apr",
+          "year": 2012,
+          "text": "Apr 2012"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2023,
+          "text": "Sep 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Strategist",
+        "location": "Sydney, Australia",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Goldman Sachs",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1382/",
+        "companyId": "1382",
+        "duration": "1 yr 4 mos",
+        "description": "Developed and structured financial products and derivatives across the foreign exchange, commodities, and credit asset classes in FICC.\n\nUsed statistical and econometric techniques to detect opportunities and develop statistical arbitrage trading strategies across cash equity, equity derivatives and credit derivatives.",
+        "skills": null,
+        "startDate": {
+          "month": "Nov",
+          "year": 2010,
+          "text": "Nov 2010"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2012,
+          "text": "Feb 2012"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQG9L7InIQVZrQ/company-logo_400_400/company-logo_400_400/0/1722506756452/goldman_sachs_logo?e=1776902400&v=beta&t=DTAHHIGqk0-6NwsKozo49cf7cSVIkRjik6PWy7n4Igo",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQG9L7InIQVZrQ/company-logo_400_400/company-logo_400_400/0/1722506756452/goldman_sachs_logo?e=1776902400&v=beta&t=DTAHHIGqk0-6NwsKozo49cf7cSVIkRjik6PWy7n4Igo",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQG9L7InIQVZrQ/company-logo_200_200/company-logo_200_200/0/1722506756452/goldman_sachs_logo?e=1776902400&v=beta&t=LbXgUBqLTG8WC8WiqJUDLbH1pEMH9-To7Q0kl24pF-o",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQG9L7InIQVZrQ/company-logo_100_100/company-logo_100_100/0/1722506756452/goldman_sachs_logo?e=1776902400&v=beta&t=t2QyjuxlieK0VUXv2C-gha4bouSKyf1_T6PIC1uBDic",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "University of Cambridge",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/4522/",
+        "schoolId": "4522",
+        "degree": "Master of Mathematical Statistics",
+        "fieldOfStudy": "Statistics",
+        "skills": [],
+        "description": "Part III of the Mathematical Tripos at Trinity College, Cambridge.\n\nAwarded prize from Trinity College and a distinction for achieving the top grade in examinations.",
+        "insights": "Grade: Distinction (Top Grade)",
+        "startDate": {
+          "year": 2013,
+          "text": "2013"
+        },
+        "endDate": {
+          "year": 2014,
+          "text": "2014"
+        },
+        "period": "2013 - 2014",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHnnnIo0U9EsA/company-logo_400_400/B4EZXIJKuOHgAY-/0/1742819601734/university_of_cambridge_logo?e=1776902400&v=beta&t=BCpVGuO-1KqI3VvWibnlDKKt_rQcPBITirl0PB1eaqI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHnnnIo0U9EsA/company-logo_400_400/B4EZXIJKuOHgAY-/0/1742819601734/university_of_cambridge_logo?e=1776902400&v=beta&t=BCpVGuO-1KqI3VvWibnlDKKt_rQcPBITirl0PB1eaqI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHnnnIo0U9EsA/company-logo_200_200/B4EZXIJKuOHgAI-/0/1742819601734/university_of_cambridge_logo?e=1776902400&v=beta&t=3aym7xkhFRJ42pTtBmnROd8672Ut8Rc3BaOo9kmfZGc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHnnnIo0U9EsA/company-logo_100_100/B4EZXIJKuOHgAQ-/0/1742819601734/university_of_cambridge_logo?e=1776902400&v=beta&t=yEIZCZ-AubfJ79cJYq7T4vJvsT-k2DDES8uunFKkAec",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "University of Sydney",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/166676/",
+        "schoolId": "166676",
+        "degree": "Bachelor of Science (Advanced Mathematics)",
+        "fieldOfStudy": "Mathematics",
+        "skills": [],
+        "description": "University Medal, awarded to the top honours student in the Faculty of Science.\nScience Achievement prize, for the highest GPA in the Faculty of Science.",
+        "insights": "Grade: First Class Honours, University Medal",
+        "startDate": {
+          "year": 2007,
+          "text": "2007"
+        },
+        "endDate": {
+          "year": 2011,
+          "text": "2011"
+        },
+        "period": "2007 - 2011",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHbPUZaDAMT6g/company-logo_400_400/company-logo_400_400/0/1646696237577/university_of_sydney_logo?e=1776902400&v=beta&t=kWWuxKE3T5kxhtdlhTYsG17XZW_OCf4pmLMfMd6TqY0",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHbPUZaDAMT6g/company-logo_400_400/company-logo_400_400/0/1646696237577/university_of_sydney_logo?e=1776902400&v=beta&t=kWWuxKE3T5kxhtdlhTYsG17XZW_OCf4pmLMfMd6TqY0",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHbPUZaDAMT6g/company-logo_200_200/company-logo_200_200/0/1646696237577/university_of_sydney_logo?e=1776902400&v=beta&t=7DTMvNpPW471uZQjoEOucOCgPh7yjcXDEEnHHg6f3fM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHbPUZaDAMT6g/company-logo_100_100/company-logo_100_100/0/1646696237577/university_of_sydney_logo?e=1776902400&v=beta&t=uXRC6T3wutCGZ87dO8Asmq0BISRA22dPF4WQPuFjkQo",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Christ Church Grammar School, Claremont",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/27454067/",
+        "schoolId": "27454067",
+        "degree": null,
+        "fieldOfStudy": null,
+        "skills": [],
+        "insights": "Grade: TER: 99.95\nActivities and societies: School Vice-Captain\nCaptain of Debating\nCaptain of Mock Trials\n1st XI Cricket, 1st XI Hockey",
+        "startDate": {
+          "year": 2000,
+          "text": "2000"
+        },
+        "endDate": {
+          "year": 2007,
+          "text": "2007"
+        },
+        "period": "2000 - 2007",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGFz-Yjfq3a3Q/company-logo_400_400/company-logo_400_400/0/1631323282043?e=1776902400&v=beta&t=YgvxQzVjKHHHpp0yRzoIQ6g9xlzwc14gID4tMkcF_WM",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGFz-Yjfq3a3Q/company-logo_400_400/company-logo_400_400/0/1631323282043?e=1776902400&v=beta&t=YgvxQzVjKHHHpp0yRzoIQ6g9xlzwc14gID4tMkcF_WM",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGFz-Yjfq3a3Q/company-logo_200_200/company-logo_200_200/0/1631323282043?e=1776902400&v=beta&t=G_Ks5lzzabIfeFREuZ3WDE34iemQ8IJ05ihSZaYbAeQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGFz-Yjfq3a3Q/company-logo_100_100/company-logo_100_100/0/1631323282043?e=1776902400&v=beta&t=qWO2d1qI5UTjx6kfI0nseraQFuqDACT13jGMaV84x24",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Data Visualization"
+      },
+      {
+        "name": "Statistical Arbitrage"
+      },
+      {
+        "name": "Equity Derivatives"
+      },
+      {
+        "name": "Electronic Trading"
+      },
+      {
+        "name": "Investment Banking"
+      },
+      {
+        "name": "Credit Derivatives"
+      },
+      {
+        "name": "C++"
+      },
+      {
+        "name": "Python"
+      },
+      {
+        "name": "JavaScript"
+      },
+      {
+        "name": "PHP"
+      },
+      {
+        "name": "Hadoop"
+      },
+      {
+        "name": "Hive"
+      },
+      {
+        "name": "Statistics"
+      },
+      {
+        "name": "Data Science"
+      },
+      {
+        "name": "Derivatives"
+      },
+      {
+        "name": "Investments"
+      },
+      {
+        "name": "Perl"
+      },
+      {
+        "name": "Bloomberg"
+      },
+      {
+        "name": "Java"
+      },
+      {
+        "name": "Management Consulting"
+      },
+      {
+        "name": "Strategy"
+      },
+      {
+        "name": "C"
+      },
+      {
+        "name": "Trading System"
+      },
+      {
+        "name": "Unix"
+      },
+      {
+        "name": "Ruby on Rails"
+      },
+      {
+        "name": "HTML"
+      },
+      {
+        "name": "VBA"
+      },
+      {
+        "name": "SQL"
+      },
+      {
+        "name": "Matlab"
+      },
+      {
+        "name": "CSS"
+      },
+      {
+        "name": "Equities"
+      },
+      {
+        "name": "Programming"
+      },
+      {
+        "name": "Structured Finance"
+      },
+      {
+        "name": "Asset Managment"
+      },
+      {
+        "name": "Corporate Finance"
+      },
+      {
+        "name": "Foreign Exchange"
+      },
+      {
+        "name": "Data Analysis"
+      },
+      {
+        "name": "Business Strategy"
+      },
+      {
+        "name": "Financial Analysis"
+      },
+      {
+        "name": "Algorithms"
+      },
+      {
+        "name": "Trading Strategies"
+      },
+      {
+        "name": "Financial Modeling"
+      },
+      {
+        "name": "Risk Management"
+      },
+      {
+        "name": "Quantitative Finance"
+      },
+      {
+        "name": "Distributed Systems"
+      },
+      {
+        "name": "Commodity"
+      },
+      {
+        "name": "Economics"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "moreProfiles": [
+      {
+        "id": "ACoAAARTqmoBFFerNDoM1fpmkmBMJHVTQWAaa9k",
+        "firstName": "Yunqiao",
+        "lastName": "Zhang",
+        "publicIdentifier": "yunqiao-zhang-2b638920",
+        "linkedinUrl": "https://www.linkedin.com/in/yunqiao-zhang-2b638920"
+      },
+      {
+        "id": "ACoAABpL1wgB7PYA-XFih9gruYE_p8PeKzhbcv0",
+        "firstName": "Elizabeth",
+        "lastName": "Yang",
+        "publicIdentifier": "elizabeth-yang-3208bb103",
+        "linkedinUrl": "https://www.linkedin.com/in/elizabeth-yang-3208bb103"
+      },
+      {
+        "id": "ACoAAEZnBtoBb1Us7ZKgHfOXAYT764pKcDQy848",
+        "firstName": "Songlin",
+        "lastName": "Yang",
+        "publicIdentifier": "songlin-yang-b8a69728b",
+        "linkedinUrl": "https://www.linkedin.com/in/songlin-yang-b8a69728b"
+      },
+      {
+        "id": "ACoAAAAFajsBEuA-EPkzbcvmqmqMZ1vPGtKZItQ",
+        "firstName": "Aparna",
+        "lastName": "Ramani",
+        "publicIdentifier": "aparnaramani",
+        "linkedinUrl": "https://www.linkedin.com/in/aparnaramani"
+      },
+      {
+        "id": "ACoAABgwxtcBfqsJJUHPwsSPuBE4K9oKyRqUp5o",
+        "firstName": "Lia",
+        "lastName": "Guy",
+        "publicIdentifier": "aureliaguy",
+        "linkedinUrl": "https://www.linkedin.com/in/aureliaguy"
+      },
+      {
+        "id": "ACoAABEz3agBxCe_qZcUZc0-Arwyue5EoiZ65Uk",
+        "firstName": "Natalia",
+        "lastName": "Gimelshein",
+        "publicIdentifier": "natalia-gimelshein-8347a480",
+        "linkedinUrl": "https://www.linkedin.com/in/natalia-gimelshein-8347a480"
+      },
+      {
+        "id": "ACoAABqSHaUBgoPu_j2NSmNfYyGkrcUvLn5mbbo",
+        "firstName": "Jacob",
+        "lastName": "van Gogh",
+        "publicIdentifier": "jacobvangogh",
+        "linkedinUrl": "https://www.linkedin.com/in/jacobvangogh"
+      },
+      {
+        "id": "ACoAADpkgO8BXJ8FFGEYoN1oqfWQlKDy9Fl77GU",
+        "firstName": "Matt",
+        "lastName": "Deitke",
+        "publicIdentifier": "mattdeitke",
+        "linkedinUrl": "https://www.linkedin.com/in/mattdeitke"
+      },
+      {
+        "id": "ACoAAAJzsfoBp0MxssQYMgmy0ZNO2U3sA58ugwc",
+        "firstName": "Joshua",
+        "lastName": "Gross",
+        "publicIdentifier": "joshgross",
+        "linkedinUrl": "https://www.linkedin.com/in/joshgross"
+      },
+      {
+        "id": "ACoAAAAlMOwBKaEA6vwEBf2kQzLeQwRZvOKPTG0",
+        "firstName": "Joseph",
+        "lastName": "Spisak",
+        "publicIdentifier": "jspisak",
+        "linkedinUrl": "https://www.linkedin.com/in/jspisak"
+      },
+      {
+        "id": "ACoAAABSm5EBI7wCtV9q32Z76FJl2Iegwmv828c",
+        "firstName": "Bob",
+        "lastName": "McGrew",
+        "publicIdentifier": "bobmcgrew",
+        "linkedinUrl": "https://www.linkedin.com/in/bobmcgrew"
+      },
+      {
+        "id": "ACoAABmoXmwBQ2VQmykSjjAFcaUPUgBtnitQmM8",
+        "firstName": "Zhiqing",
+        "lastName": "Sun",
+        "publicIdentifier": "zhiqing-sun-5781b3100",
+        "linkedinUrl": "https://www.linkedin.com/in/zhiqing-sun-5781b3100"
+      },
+      {
+        "id": "ACoAAA6jodABB4FFTQD3NzZ7B0vo91j5zOLQQn4",
+        "firstName": "luke",
+        "lastName": "metz",
+        "publicIdentifier": "luke-metz-5003046a",
+        "linkedinUrl": "https://www.linkedin.com/in/luke-metz-5003046a"
+      },
+      {
+        "id": "ACoAAA236ocBYKOrEu4s5R8wE2jknY8UMOHz0aM",
+        "firstName": "Ananya",
+        "lastName": "Kumar",
+        "publicIdentifier": "ananyakumar",
+        "linkedinUrl": "https://www.linkedin.com/in/ananyakumar"
+      },
+      {
+        "id": "ACoAAA4iwx4BsCoK8jRk70y-wa8RXZf-_cUY9oM",
+        "firstName": "Jack",
+        "lastName": "Rae",
+        "publicIdentifier": "jackrae",
+        "linkedinUrl": "https://www.linkedin.com/in/jackrae"
+      },
+      {
+        "id": "ACoAAAsCWZYBjYC8UZ7RF7rp1OCnmQLA4hZp2AI",
+        "firstName": "Trapit",
+        "lastName": "Bansal",
+        "publicIdentifier": "trapit-bansal-646a3451",
+        "linkedinUrl": "https://www.linkedin.com/in/trapit-bansal-646a3451"
+      },
+      {
+        "id": "ACoAAAN0m-IByE33ejCX3xD1cKYxzXABtPt2-jY",
+        "firstName": "Shuchao",
+        "lastName": "B.",
+        "publicIdentifier": "shuchaobi",
+        "linkedinUrl": "https://www.linkedin.com/in/shuchaobi"
+      },
+      {
+        "id": "ACoAABYZRvABMOBi9NDCbo7AIk5sk79CeYNqdcs",
+        "firstName": "Hyung Won",
+        "lastName": "Chung",
+        "publicIdentifier": "hyung-won-chung-5801b9a4",
+        "linkedinUrl": "https://www.linkedin.com/in/hyung-won-chung-5801b9a4"
+      },
+      {
+        "id": "ACoAACwioukBpAOpLCFqI2gCQ5D7tOneD_wUI8Y",
+        "firstName": "Lu",
+        "lastName": "Liu",
+        "publicIdentifier": "lu-liu-2b5b93187",
+        "linkedinUrl": "https://www.linkedin.com/in/lu-liu-2b5b93187"
+      },
+      {
+        "id": "ACoAAALMGwUB3skIBFQGrXHkVg2AatTU34ADPns",
+        "firstName": "Ian",
+        "lastName": "Goodfellow",
+        "publicIdentifier": "ian-goodfellow-b7187213",
+        "linkedinUrl": "https://www.linkedin.com/in/ian-goodfellow-b7187213"
+      },
+      {
+        "id": "ACoAAAkQLKQBjlBVP_0CK9DnUu3umhXaQ9Z1mEo",
+        "firstName": "Joshua",
+        "lastName": "Timm, PE",
+        "position": "Founder of Power Transformations | Protection & Control Engineering Leader | Trainer | Mentor | Consultant",
+        "publicIdentifier": "joshua-timm-pe",
+        "linkedinUrl": "https://www.linkedin.com/in/joshua-timm-pe"
+      },
+      {
+        "id": "ACoAAGJxRQwB8soels9Nxs4CyiIpnxys52sZ9OM",
+        "firstName": "Sheena",
+        "lastName": "Traughber",
+        "position": "Interior Decorator focused on multiple design projects and creating inviting spaces.",
+        "publicIdentifier": "sheena-traughber-5a41453a1",
+        "linkedinUrl": "https://www.linkedin.com/in/sheena-traughber-5a41453a1"
+      },
+      {
+        "id": "ACoAAEHrOBwB6k4U0kFm5UYMMXmP-Nh_SHvq5YA",
+        "firstName": "Jeweled",
+        "lastName": "Interiors",
+        "position": "Interior Designer/Decorator",
+        "publicIdentifier": "jeweled-interiors-39046026a",
+        "linkedinUrl": "https://www.linkedin.com/in/jeweled-interiors-39046026a"
+      },
+      {
+        "id": "ACoAAFoMpG8Bu_dMAxpDZlcwAEvAJa1tbvsBrIE",
+        "firstName": "Amber",
+        "lastName": "Garde",
+        "position": "Interior Decorator ",
+        "publicIdentifier": "amber-garde-",
+        "linkedinUrl": "https://www.linkedin.com/in/amber-garde-"
+      },
+      {
+        "id": "ACoAADC6oVQBXGA2y1Il5AXApecAH3ulWqX34No",
+        "firstName": "JASON",
+        "lastName": "Owens",
+        "position": "Interior Decorator at Self Employed",
+        "publicIdentifier": "jason-owens-a9895b1a9",
+        "linkedinUrl": "https://www.linkedin.com/in/jason-owens-a9895b1a9"
+      },
+      {
+        "id": "ACoAACj51lEBttqBTbZ7d7eoKj8d7eTUnR6BwpA",
+        "firstName": "Yana",
+        "lastName": "Sattarova",
+        "position": "Interior Designer, Architect, Decorator",
+        "publicIdentifier": "yana-sattarova-955290172",
+        "linkedinUrl": "https://www.linkedin.com/in/yana-sattarova-955290172"
+      },
+      {
+        "id": "ACoAABTdVuwB9SJjnNg4EvYHGhBSZKa2Z_nE8Dw",
+        "firstName": "Lilla",
+        "lastName": "Nagy",
+        "position": "Interior Decorator",
+        "publicIdentifier": "lilla-nagy-2b829399",
+        "linkedinUrl": "https://www.linkedin.com/in/lilla-nagy-2b829399"
+      },
+      {
+        "id": "ACoAACoxSa8BDpu8c1SJc7QG6mthPTyrVaN_4qY",
+        "firstName": "Liz",
+        "lastName": "Mayans",
+        "position": "Interior Decorator at Mayans Interior Design",
+        "publicIdentifier": "liz-mayans-a13094179",
+        "linkedinUrl": "https://www.linkedin.com/in/liz-mayans-a13094179"
+      },
+      {
+        "id": "ACoAADxXT7kBE3LOZItAdzlOroygrGbrrn3feJM",
+        "firstName": "Shaina",
+        "lastName": "Bello",
+        "position": "Interior Designer",
+        "publicIdentifier": "shaina-bello",
+        "linkedinUrl": "https://www.linkedin.com/in/shaina-bello"
+      },
+      {
+        "id": "ACoAABDbjNoBO0RyVzOoajw3ASThD_oDXq7CDK8",
+        "firstName": "Eileen",
+        "lastName": "Apparicio",
+        "position": "Interior Designer & Decorator",
+        "publicIdentifier": "eileen-apparicio",
+        "linkedinUrl": "https://www.linkedin.com/in/eileen-apparicio"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAAl87CYB51syHouA0_6lVOsv4VY3kpl4IH0"
+    }
+  }
+}

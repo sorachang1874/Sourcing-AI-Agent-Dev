@@ -1,0 +1,866 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAABE9sVMBGRIvhm05LMxTLikJmrGyX3lofao",
+    "profile_url": "https://www.linkedin.com/in/ACwAABE9sVMBGRIvhm05LMxTLikJmrGyX3lofao"
+  },
+  "item": {
+    "id": "ACoAABE9sVMBCH0i964WlvecDNyGKTviqyXKcTY",
+    "publicIdentifier": "hannahnth",
+    "linkedinUrl": "https://www.linkedin.com/in/hannahnth",
+    "firstName": "Hannah",
+    "lastName": "T.",
+    "emails": [
+      {
+        "email": "hannah@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "recruiting @ thinking machines lab",
+    "openToWork": false,
+    "hiring": false,
+    "premium": true,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "289255763",
+    "registeredAt": "2013-09-20T07:15:00.766Z",
+    "topSkills": null,
+    "connectionsCount": 16963,
+    "followerCount": 16721,
+    "verified": true,
+    "about": "Engineer turned recruiter.",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 10,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "17954",
+        "companyId": "3382",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3382/",
+        "schoolName": "University of California San Diego"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D5616AQHl6cXX3b2wjw/profile-displaybackgroundimage-shrink_350_1400/B56Zw11BK1HIAY-/0/1770429617155?e=1776902400&v=beta&t=I0pJxp-Q3ctiTDi7Y5ZKXKjvsKzgK0ApAxYlD0QzwNM",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5616AQHl6cXX3b2wjw/profile-displaybackgroundimage-shrink_350_1400/B56Zw11BK1HIAY-/0/1770429617155?e=1776902400&v=beta&t=I0pJxp-Q3ctiTDi7Y5ZKXKjvsKzgK0ApAxYlD0QzwNM",
+          "width": 1400,
+          "height": 350,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D5616AQHl6cXX3b2wjw/profile-displaybackgroundimage-shrink_200_800/B56Zw11BK1HIAU-/0/1770429617155?e=1776902400&v=beta&t=CtwIbRrSqmNgFp9hu1RXp9PCNert00YxNyFtzVNC5Ng",
+          "width": 800,
+          "height": 200,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      },
+      {
+        "country": "TR",
+        "language": "tr"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Technical Recruiting, Stripe",
+        "locale": "tr_TR"
+      },
+      {
+        "headline": "recruiting @ thinking machines lab",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "recruiting & operations",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "7 mos",
+        "description": "recruiter #1 -- figuring out how to build everything 0 to 1 again :)\n\nPlease apply if you’re interested; a real human reads each and every application and we do post all open jobs! thinkingmachines.ai/#join-us",
+        "skills": null,
+        "startDate": {
+          "month": "Oct",
+          "year": 2025,
+          "text": "Oct 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Member of Recruiting Staff",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "OpenAI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/11130470/",
+        "companyId": "11130470",
+        "duration": "1 yr 8 mos",
+        "description": "Nov 2024 - Oct 2025: leading recruitment for product research -- post-training, multimodal, agents (deep research and chatGPT Agent), & model behavior. \n\nad-hoc: occasionally helped hire for pre-training, distributed training, RL, safety, codex, our torch stack when a role was urgent. ideated and led quant hiring into research. built embedded infra teams into research (eg post-training infra) to help empower researchers and speed research progress.\n\nmost importantly, sourced and closed the majority of the research recruiting team which was, in my opinion, our crowning achievement: compiling top quant, research, and tech recruiters from the industry and within openAI onto our tiny team that out-performed any other research recruiting team in the industry and received recognition from our executive team.\n\nprev to nov 2024: partnered with our VP of compute! research & eng research platform (supercomputing, runtime ML systems, hardware health, hw / sw codesign, data center hiring, etc) & human data (swe, research engineering, human-ai interaction) and alignment.",
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2024,
+          "text": "Mar 2024"
+        },
+        "endDate": {
+          "month": "Oct",
+          "year": 2025,
+          "text": "Oct 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_200_200/B56ZT8EYB8HsAI-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=O6RSWlpQ5W4zNCOCTu621qCyTijLuXFJS4pz2_hBQfo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_100_100/B56ZT8EYB8HsAQ-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=y7RA89V9q8GlAjQ1oRU-jf_-n5zlSXRCnykXBIkgHfM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Principal Technical Recruiter",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Stripe",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/2135371/",
+        "companyId": "2135371",
+        "duration": "3 yrs 9 mos",
+        "description": "* recruiting lead for Payments recruiting pod, Stripe's largest product engineering org supporting John Affaki; Mobile, Terminal, & Connect hiring.\n* core contributor to our engineering interview committee, running how hiring committee / interviewing operates for engineering at Stripe.\n* built out the recruiting function, levels / ladders, and ATS/operations set up for BBPOS, our hardware company we acquired based out of Hong Kong SAR. worked on talent mapping and selection across Hong Kong & Taiwan.\n\nprev\n\nSenior Technical Recruiter\nJul 2020 - Dec 2021 · 1 yr 6 mos\n* also supporting John Affaki with the groups below!\n* lots of 0 -> 1 recruiting or scaling for Terminal & Hardware in partnership with Rahul Iyer (eng) & Kate Brennan (PM)\n* leading Connect hiring in partnership with Connor Mullen\n* leading Mobile & Express hiring in partnership with Ben Guo\n* you've probably used tap to pay on iphone or android, checked out on a toast device at a restaurant (from BBPOS)",
+        "skills": null,
+        "startDate": {
+          "month": "Jul",
+          "year": 2020,
+          "text": "Jul 2020"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2024,
+          "text": "Mar 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQE2ZfJyfn-VCg/company-logo_400_400/B56ZlyKwpUKIAY-/0/1758557047806/stripe_logo?e=1776902400&v=beta&t=flaM5KtAekc-eCrsPt6jUJseCn4TVJ_2mGnh7a4mhfs",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQE2ZfJyfn-VCg/company-logo_400_400/B56ZlyKwpUKIAY-/0/1758557047806/stripe_logo?e=1776902400&v=beta&t=flaM5KtAekc-eCrsPt6jUJseCn4TVJ_2mGnh7a4mhfs",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQE2ZfJyfn-VCg/company-logo_200_200/B56ZlyKwpUKIAI-/0/1758557047806/stripe_logo?e=1776902400&v=beta&t=r4K4PUiGBdc2o59oMpdtYpYF-XbxPTZGNLeDzmYjFHQ",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQE2ZfJyfn-VCg/company-logo_100_100/B56ZlyKwpUKIAQ-/0/1758557047806/stripe_logo?e=1776902400&v=beta&t=iOBPxSpWTqzlwIvkbpLE3q6QJZMHgZGC6i8-Q8SCOao",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior Technical Recruiter, Engineering Leadership",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Airbnb",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/309694/",
+        "companyId": "309694",
+        "duration": "2 yrs 10 mos",
+        "description": "* on a team hilariously named the cheetah team, led by charlie farrell.\n* 1 of 2 recruiters (the other being marisa garcia, my partner in everything) to work with vanja josifovski (CTO, homes), ari balogh (CTO), ronny kohavi (VP / technical fellow), raymie stata (technical fellow), spike brehm (leading special projects on VR), vijaya kaza (chief security officer), jason sobel (head of infra).\n* worked on defining what L7+ looked like, including creating our TLM track of senior ICs with a small number of reports, and took over ownership of all engineering manager hiring at airbnb when charlie became a manager and redefined manager+ hiring.\n* led our hiring committee and all offer approvals for engineering for all levels.\n* partnered with our head of recruiting in Beijing for Airbnb China to create consistency across eng hiring\n\nprev:\n* promoted to senior recruiter jan 2019 with the least experience on the recruiting team thanks to great mentorship from charlie, jovan, & david rabil - my heros. :)\n* payments hiring with bipin suresh, jiangming yang, and mike schierberl\n* data platform hiring (data infra, analytics infra, ml infra) with aaron siegel & shao xie\n* production platform (compute, api infra, cloud infra, developer infra, SRE) with rahul iyer\n* seattle site office launch & hiring with ari steinberg\n* portland hiring with fred wenzel",
+        "skills": null,
+        "startDate": {
+          "month": "Oct",
+          "year": 2017,
+          "text": "Oct 2017"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2020,
+          "text": "Jul 2020"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQFhfl32crIGIw/company-logo_400_400/company-logo_400_400/0/1630637496980/airbnb_logo?e=1776902400&v=beta&t=-9EBSuoM2qiLzzUeI-QP65UtwxiAn9NJuUx0fILPcYk",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFhfl32crIGIw/company-logo_400_400/company-logo_400_400/0/1630637496980/airbnb_logo?e=1776902400&v=beta&t=-9EBSuoM2qiLzzUeI-QP65UtwxiAn9NJuUx0fILPcYk",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFhfl32crIGIw/company-logo_200_200/company-logo_200_200/0/1630637496980/airbnb_logo?e=1776902400&v=beta&t=-3qQmvj1qu-2zugzDAxthowl38BYrIBN2iZg4JC2SMM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFhfl32crIGIw/company-logo_100_100/company-logo_100_100/0/1630637496980/airbnb_logo?e=1776902400&v=beta&t=NN0xpAq1y-Paivx3-GiRnB4Z3o78xAGKmROKeyAVIZM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Recruiting & Talent Acquisition",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Bina Technologies (acquired by Roche Sequencing)",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Bina+Technologies+%28acquired+by+Roche+Sequencing%29",
+        "duration": "2 yrs 2 mos",
+        "description": "* convinced people come join us to code to cure!\n* the early detection of cancer (when it can be most likely be cured) depends on software and hardware systems, powered by genomic analysis to create things like image analysis algorithms, cancer assays (ctdna / liquid biopsy), tumor board solutions, clinical trial application & enrollment, and search for patient-specific medical literature for the latest data to support treatment decisions.\n* learned how to recruit from tina duccini, how to source from rose owens, and learned why yahoo! had the most cracked early technical teams -- turns out they had the industry best recruiters. eventually built a small team of junior coordinators/sourcers.\n* set up our ATS, sourcing tools, operations, etc from scratch. built an engineering office in buenos aires, argentina in 60 days from 0 to 6 people including renting the office space.\n* hired across bioinformatics research (AI + data + bio) for hugo lam, core engineering hires for sharon, created our new grad and internship program and hired & onboarded our first batch of each one, and built in my opinion the best PM team in the world that could work across research, engineering, and genomics.\n* bina was acquired by roche, you can learn more about what our team released here: \n-- https://usinfo.roche.com/SimplifyOncology.html\n-- https://diagnostics.roche.com/us/en/products/product-category/lab-type.html",
+        "skills": null,
+        "startDate": {
+          "month": "Aug",
+          "year": 2015,
+          "text": "Aug 2015"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2017,
+          "text": "Sep 2017"
+        }
+      },
+      {
+        "position": "CSE Tutor",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "University of California, San Diego",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/ucsandiego/",
+        "companyId": "3382",
+        "companyUniversalName": "ucsandiego",
+        "duration": "1 yr 4 mos",
+        "description": "I led sections & held office hours to teach topics on: discrete mathematics & algorithms, data structures, & OO design. I wrote and graded project assignments, labs, homework, exams.\n\nCSE 21: Mathematics for Algorithms and Systems (under Ron Graham)\nCSE 12:  Data Structures & Object-Oriented Design (under Paul Kube)\nCSE 15L: Software Tools Lab (under Paul Kube)",
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2013,
+          "text": "Jan 2013"
+        },
+        "endDate": {
+          "month": "Apr",
+          "year": 2014,
+          "text": "Apr 2014"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHQYa-3EY_aaQ/company-logo_400_400/company-logo_400_400/0/1630633790917/university_of_california_at_san_diego_logo?e=1776902400&v=beta&t=zzWA-TuQfiXWHBhi1PPEXHdO5_RZARRUGUWuxz9vrDU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHQYa-3EY_aaQ/company-logo_400_400/company-logo_400_400/0/1630633790917/university_of_california_at_san_diego_logo?e=1776902400&v=beta&t=zzWA-TuQfiXWHBhi1PPEXHdO5_RZARRUGUWuxz9vrDU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHQYa-3EY_aaQ/company-logo_200_200/company-logo_200_200/0/1630633790917/university_of_california_at_san_diego_logo?e=1776902400&v=beta&t=tdjQQUwb1beHiMf8xczEGKXBBcIoW5CJ5L948yULvXY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHQYa-3EY_aaQ/company-logo_100_100/company-logo_100_100/0/1630633790917/university_of_california_at_san_diego_logo?e=1776902400&v=beta&t=PrWXY-mSMle4TuAhTdS-qm2T_ltzqM45VeIxYC0c5u0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Technical Intern",
+        "location": null,
+        "employmentType": "Internship",
+        "workplaceType": null,
+        "companyName": "Yahoo",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1288/",
+        "companyId": "1288",
+        "duration": "4 mos",
+        "description": "Software Engineering Intern for Y! Ads.",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2013,
+          "text": "Jun 2013"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2013,
+          "text": "Sep 2013"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHZRIvlF1NvZA/company-logo_400_400/company-logo_400_400/0/1734629033465/yahoo_logo?e=1776902400&v=beta&t=tyoKWOjjRA2BeufKGvXBFBWHkbTEaAWCK1LH1mzBGgw",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHZRIvlF1NvZA/company-logo_400_400/company-logo_400_400/0/1734629033465/yahoo_logo?e=1776902400&v=beta&t=tyoKWOjjRA2BeufKGvXBFBWHkbTEaAWCK1LH1mzBGgw",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHZRIvlF1NvZA/company-logo_200_200/company-logo_200_200/0/1734629033465/yahoo_logo?e=1776902400&v=beta&t=1nVR5z7fxUI0LuIAhrouqrG2RA6tMBwjBnzu0e3vdLM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQHZRIvlF1NvZA/company-logo_100_100/company-logo_100_100/0/1734629033465/yahoo_logo?e=1776902400&v=beta&t=qzVdd30zO1ELed5xdznH0nO-72k4t64sThqn6__upgI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "UC San Diego",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3382/",
+        "schoolId": "3382",
+        "degree": "Bachelor of Science (B.S.)",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "startDate": null,
+        "endDate": {
+          "year": 2014,
+          "text": "2014"
+        },
+        "period": "2014",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHQYa-3EY_aaQ/company-logo_400_400/company-logo_400_400/0/1630633790917/university_of_california_at_san_diego_logo?e=1776902400&v=beta&t=zzWA-TuQfiXWHBhi1PPEXHdO5_RZARRUGUWuxz9vrDU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHQYa-3EY_aaQ/company-logo_400_400/company-logo_400_400/0/1630633790917/university_of_california_at_san_diego_logo?e=1776902400&v=beta&t=zzWA-TuQfiXWHBhi1PPEXHdO5_RZARRUGUWuxz9vrDU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHQYa-3EY_aaQ/company-logo_200_200/company-logo_200_200/0/1630633790917/university_of_california_at_san_diego_logo?e=1776902400&v=beta&t=tdjQQUwb1beHiMf8xczEGKXBBcIoW5CJ5L948yULvXY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHQYa-3EY_aaQ/company-logo_100_100/company-logo_100_100/0/1630633790917/university_of_california_at_san_diego_logo?e=1776902400&v=beta&t=PrWXY-mSMle4TuAhTdS-qm2T_ltzqM45VeIxYC0c5u0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [
+      {
+        "role": "Computer Science Teacher",
+        "description": "Teaching introductory computer science & programming classes to high school students.\n\nBurlingame High School - https://www.tealsk12.org/",
+        "duration": "Jan 2016 - Jan 2017 · 1 yr",
+        "startDate": {
+          "month": "Jan",
+          "year": 2016,
+          "text": "Jan 2016"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2017,
+          "text": "Jan 2017 · 1 yr"
+        },
+        "organizationName": "TEALSK12",
+        "organizationLinkedinUrl": "https://www.linkedin.com/company/3691216/",
+        "cause": "Education"
+      }
+    ],
+    "receivedRecommendations": [
+      {
+        "givenBy": "David Yang",
+        "givenByHeadline": "Product @ Stripe, ex-Google",
+        "givenAt": "March 25, 2023, David reported directly to Hannah",
+        "givenByLink": "https://www.linkedin.com/in/david-yang-b4134311",
+        "description": "Hannah brings the spice",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/C5603AQFa5wskD8oj-g/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1517752612486?e=1776902400&v=beta&t=DVomOs5J7w9DEIIXr9lU-31T2zBO0TbrLCdx0jcHtXE",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQFa5wskD8oj-g/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1517752612486?e=1776902400&v=beta&t=DVomOs5J7w9DEIIXr9lU-31T2zBO0TbrLCdx0jcHtXE",
+              "width": 450,
+              "height": 450,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQFa5wskD8oj-g/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1517752612486?e=1776902400&v=beta&t=EQE0QLNNdIGUp1HUCuObhBr5BNZWSG8itSvcBTiopog",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQFa5wskD8oj-g/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1517752612495?e=1776902400&v=beta&t=CtyStiLrYEL3wqGYgGnGTd7ahbxd6i-nmm3dQq3jbus",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5603AQFa5wskD8oj-g/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1517752612485?e=1776902400&v=beta&t=OxBqJMs3I-4Mkk-6fUU4FroIupPNkhVgJQpEoyKn8qc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Louise Lyu",
+        "givenByHeadline": "Recruiting Leader",
+        "givenAt": "May 10, 2020, Louise was senior to Hannah but didn't manage Hannah directly",
+        "givenByLink": "https://www.linkedin.com/in/louise-lyu-2b343757",
+        "description": "I was highly enjoying working with Hannah. We worked on Eng hiring evolution program and I was super impressed by her expertise of deep understanding of talent market, her passion to drive change, her bias for action! She is for sure a top recruiter, could bring great value to any organization.",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/C5103AQFLJmpmB1v2sg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1560431367816?e=1776902400&v=beta&t=57xSWeItTZ8sUQYJRyQgEWcwSpd_JFJUFKu9HO2Xi14",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5103AQFLJmpmB1v2sg/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1560431367816?e=1776902400&v=beta&t=57xSWeItTZ8sUQYJRyQgEWcwSpd_JFJUFKu9HO2Xi14",
+              "width": 500,
+              "height": 500,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5103AQFLJmpmB1v2sg/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1560431367986?e=1776902400&v=beta&t=ddIzMjg_FljzxZHfRM-NMlxEP66uM1F2Z_h5pzO6IpY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5103AQFLJmpmB1v2sg/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1560431367904?e=1776902400&v=beta&t=hPIKKjhw3HKvTMjlTJfV2fgLJdF3cnzXdUrad4DqlMA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C5103AQFLJmpmB1v2sg/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1560431367813?e=1776902400&v=beta&t=bidIAzJqmBYZZ6IaBiG58DWwdnCzU_eyPZTM_TKVzgg",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Steffanie Davis",
+        "givenByHeadline": "Talent Acquisition Leader @ Anduril",
+        "givenAt": "May 7, 2020, Steffanie worked with Hannah on the same team",
+        "givenByLink": "https://www.linkedin.com/in/steffanieldavis",
+        "description": "Hannah is a fantastic recruiter, having worked with her the last couple of years I can't recommend her enough. She is knowledgeable, charismatic, and a great communicator. She has a great reputation in the recruiting world and go to recruiting partner.  ",
+        "givenByPicture": {
+          "url": "https://media.licdn.com/dms/image/v2/D5603AQHwcSrUZBmEIw/profile-displayphoto-shrink_800_800/B56ZUfMRAjHsAc-/0/1739985064313?e=1776902400&v=beta&t=3JhynhY3A1ChixaYrj7SKtjXB7N4Hd-h89izH5sQf-g",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQHwcSrUZBmEIw/profile-displayphoto-shrink_800_800/B56ZUfMRAjHsAc-/0/1739985064313?e=1776902400&v=beta&t=3JhynhY3A1ChixaYrj7SKtjXB7N4Hd-h89izH5sQf-g",
+              "width": 800,
+              "height": 800,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQHwcSrUZBmEIw/profile-displayphoto-shrink_400_400/B56ZUfMRAjHsAg-/0/1739985064313?e=1776902400&v=beta&t=qr6h8rmNIv-LRjCb2Ksur-L3wXyL4TJZYkaCwj9dpvY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQHwcSrUZBmEIw/profile-displayphoto-shrink_200_200/B56ZUfMRAjHsAY-/0/1739985064271?e=1776902400&v=beta&t=b4vwHEOTUtgQG9WuwS0uTdaF-x7hxvKX3_BAMqfs1ZM",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D5603AQHwcSrUZBmEIw/profile-displayphoto-shrink_100_100/B56ZUfMRAjHsAU-/0/1739985064313?e=1776902400&v=beta&t=c3bvO8e2vUBjPM8kv6PZufqvAeMOz2hStm65ldfMxmU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "givenBy": "Murun G.",
+        "givenByHeadline": "Technical sourcing expert and full cycle recruiter",
+        "givenAt": "April 7, 2020, Murun worked with Hannah but on different teams",
+        "givenByLink": "https://www.linkedin.com/in/murun-g-8126bba3",
+        "description": "Hannah is an amazing recruiter who has a vast insight across engineering and leadership organizations. She is very well versed and knowledgeable about every area in recruiting/candidate experience. She always goes above and beyond and strives to improve the recruiting team with workflows, process changes, and communication with our engineering managers. She has always made herself available to answer any questions I had and I truly believe she is a strong member of the team. Thank you for your leadership Hannah!",
+        "givenByPicture": {
+          "url": null,
+          "sizes": []
+        }
+      }
+    ],
+    "skills": [
+      {
+        "name": "Technical Recruiting"
+      },
+      {
+        "name": "Recruiting"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [
+      {
+        "name": "English",
+        "proficiency": "Native or bilingual proficiency"
+      }
+    ],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "position": "Thinking about machines",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAABbQnzMBcf05h4bpCHreg7aooXUJCxy8QdA",
+        "firstName": "Andrew",
+        "lastName": "Busker",
+        "position": "Member of Recruiting Staff at OpenAI",
+        "publicIdentifier": "andrewbusker",
+        "linkedinUrl": "https://www.linkedin.com/in/andrewbusker"
+      },
+      {
+        "id": "ACoAAACsrX0B2KBcVDsrol-9fm5KKABnYkcW51I",
+        "firstName": "Phuong",
+        "lastName": "Vu",
+        "position": "Recruiting",
+        "publicIdentifier": "phuongvu",
+        "linkedinUrl": "https://www.linkedin.com/in/phuongvu"
+      },
+      {
+        "id": "ACoAABOu21MBpN7A6EMLEnuhAyZvwB7MOlWoszc",
+        "firstName": "Max",
+        "lastName": "Bennett",
+        "position": "Recruiting @ OpenAI",
+        "publicIdentifier": "max-bennett-38371392",
+        "linkedinUrl": "https://www.linkedin.com/in/max-bennett-38371392"
+      },
+      {
+        "id": "ACoAAEZnBtoBb1Us7ZKgHfOXAYT764pKcDQy848",
+        "firstName": "Songlin",
+        "lastName": "Yang",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "songlin-yang-b8a69728b",
+        "linkedinUrl": "https://www.linkedin.com/in/songlin-yang-b8a69728b"
+      },
+      {
+        "id": "ACoAAAhr-bcBPF2QfNBf9vyUsVKkLFo4dpbr9MU",
+        "firstName": "Rick",
+        "lastName": "J.",
+        "position": "Recruiting Leader at OpenAI",
+        "publicIdentifier": "rickjones0",
+        "linkedinUrl": "https://www.linkedin.com/in/rickjones0"
+      },
+      {
+        "id": "ACoAAACQBzQB5nk5kOpFWQRtK4pv3RaL5q2G-pA",
+        "firstName": "Jonathan",
+        "lastName": "Lachman",
+        "position": "Founding Head of Operations at Thinking Machines Lab",
+        "publicIdentifier": "jonathan-lachman-4981b23",
+        "linkedinUrl": "https://www.linkedin.com/in/jonathan-lachman-4981b23"
+      },
+      {
+        "id": "ACoAADwrCKUB0FU7B3O7AIg9j_wieI-QOvJrtEE",
+        "firstName": "Katy",
+        "lastName": "Liemandt",
+        "position": "TML | San Francisco",
+        "publicIdentifier": "katy-liemandt-399092242",
+        "linkedinUrl": "https://www.linkedin.com/in/katy-liemandt-399092242"
+      },
+      {
+        "id": "ACoAAAF70jABH9DSpgp0gn2kmhMF2O2_dXo363Y",
+        "firstName": "Lauren Escher",
+        "lastName": "Lennon",
+        "position": "Legal @ Thinking Machines Lab",
+        "publicIdentifier": "lauren-escher-lennon-0944058",
+        "linkedinUrl": "https://www.linkedin.com/in/lauren-escher-lennon-0944058"
+      },
+      {
+        "id": "ACoAACaOARIBRO2EEH12QWQO29L__oI3N2K4u14",
+        "firstName": "Mingjie",
+        "lastName": "Sun",
+        "position": "Member of Technical Staff @ Thinking Machines Lab",
+        "publicIdentifier": "mingjie-sun-06a761160",
+        "linkedinUrl": "https://www.linkedin.com/in/mingjie-sun-06a761160"
+      },
+      {
+        "id": "ACoAAAClvh8BxQrK0B7-P9r1xzkbNtQOeRWwoCg",
+        "firstName": "Kristen",
+        "lastName": "Dallara",
+        "position": "Recruiting @ OpenAI",
+        "publicIdentifier": "kristen-dallara-b3b7793",
+        "linkedinUrl": "https://www.linkedin.com/in/kristen-dallara-b3b7793"
+      },
+      {
+        "id": "ACoAAAM07-gB20Vg4hTVwpax2eyLJhzmkVGgucg",
+        "firstName": "Katie",
+        "lastName": "Slattery",
+        "position": "Accounting @ Thinking Machines Lab",
+        "publicIdentifier": "katieslattery",
+        "linkedinUrl": "https://www.linkedin.com/in/katieslattery"
+      },
+      {
+        "id": "ACoAAAMu_-cBCVy6A6BN3JJjE0w-fe76PWaFsXg",
+        "firstName": "Karen",
+        "lastName": "Ohri Sharma",
+        "position": "Leadership Recruiting at OpenAI",
+        "publicIdentifier": "karenohri",
+        "linkedinUrl": "https://www.linkedin.com/in/karenohri"
+      },
+      {
+        "id": "ACoAAAqFwR4BlJ7Yu8I7fPuYhO9br19xf6DOg28",
+        "firstName": "Kate",
+        "lastName": "Fahy",
+        "position": "Recruiting at Anthropic",
+        "publicIdentifier": "kated1",
+        "linkedinUrl": "https://www.linkedin.com/in/kated1"
+      },
+      {
+        "id": "ACoAAAAedEgB2l1IsO91NVptlGP3UEb7LkMd-Pg",
+        "firstName": "Sean",
+        "lastName": "Murphy",
+        "position": "Recruiting @OpenAI",
+        "publicIdentifier": "seanmurphyrecruiter",
+        "linkedinUrl": "https://www.linkedin.com/in/seanmurphyrecruiter"
+      },
+      {
+        "id": "ACoAAAAcKtUBhnEmIuzVht2H3oqhJ9tKrO4NQIY",
+        "firstName": "George",
+        "lastName": "Rider",
+        "position": "Recruiting @ Thinking Machines Lab",
+        "publicIdentifier": "georgerider",
+        "linkedinUrl": "https://www.linkedin.com/in/georgerider"
+      },
+      {
+        "id": "ACoAAAqQQsEBwKqJ_m6UFGubnc-1mO5W-0QBSm8",
+        "firstName": "Meredith",
+        "lastName": "Alvin",
+        "position": "Recruiting @ Thinking Machines",
+        "publicIdentifier": "meredithalvin",
+        "linkedinUrl": "https://www.linkedin.com/in/meredithalvin"
+      },
+      {
+        "id": "ACoAADDB7DABJK3fhQa97pAxpbFcGbMtI2pA2Ek",
+        "firstName": "Ruila",
+        "lastName": "M.",
+        "position": "Recruiting@Thinking Machines Lab",
+        "publicIdentifier": "ruilama",
+        "linkedinUrl": "https://www.linkedin.com/in/ruilama"
+      },
+      {
+        "id": "ACoAAAA5_J4BLF_hstAYeDi_1eBOvk0iTD_JqGU",
+        "firstName": "Christian",
+        "lastName": "Sotto",
+        "position": "Recruiting at Grow Therapy",
+        "publicIdentifier": "csotto",
+        "linkedinUrl": "https://www.linkedin.com/in/csotto"
+      },
+      {
+        "id": "ACoAAAM8-CoB4EuoMEQ2LLngdqMnC4lLbEgxTy8",
+        "firstName": "Andrew",
+        "lastName": "Straub",
+        "position": "Finance at Thinking Machines Lab",
+        "publicIdentifier": "andrew-straub-52223b16",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-straub-52223b16"
+      },
+      {
+        "id": "ACoAAGKDsJgBWsokuuSZfKWRPVa7hBXeQTfrA0Q",
+        "firstName": "Nourhan",
+        "lastName": "Hany",
+        "position": "‏Freelance Graphic Designer‏ في ‏Freelancer.com‏",
+        "publicIdentifier": "nourhan-hany-1086283a1",
+        "linkedinUrl": "https://www.linkedin.com/in/nourhan-hany-1086283a1"
+      },
+      {
+        "id": "ACoAACKNVUMBztbhQ3RUYQ-Mg89xUJ39N-XJpM4",
+        "firstName": "Long",
+        "lastName": "Lian",
+        "position": "Member of Technical Staff at Thinking Machines Lab | Post-training Team | Large-scale RL | Multi-agent Systems | Real-time Multi-modal Models",
+        "publicIdentifier": "longlian",
+        "linkedinUrl": "https://www.linkedin.com/in/longlian"
+      },
+      {
+        "id": "ACoAAGDWIksBlJBQ6yLB1D8aji0XfjRiW84siqc",
+        "firstName": "Akinbola",
+        "lastName": "Lateef",
+        "position": "Thinker  at Thinking Machines Lab",
+        "publicIdentifier": "akinbola-lateef-94b110394",
+        "linkedinUrl": "https://www.linkedin.com/in/akinbola-lateef-94b110394"
+      },
+      {
+        "id": "ACoAABoG0oUBl986ZaMrLUASG1NhDoJyVlav4Po",
+        "firstName": "Eric",
+        "lastName": "Zhang",
+        "position": "MTS, Thinking Machines",
+        "publicIdentifier": "ekzhang",
+        "linkedinUrl": "https://www.linkedin.com/in/ekzhang"
+      },
+      {
+        "id": "ACoAABL1VWgBlgDKQJBWgzSxRNJRKn9XJJ23hvQ",
+        "firstName": "Volker",
+        "lastName": "Seeker",
+        "position": "AI Research Engineer",
+        "publicIdentifier": "vseeker",
+        "linkedinUrl": "https://www.linkedin.com/in/vseeker"
+      },
+      {
+        "id": "ACoAADYMzQABdXTSxolT2YjHmNBBSeT6YrGSQmQ",
+        "firstName": "Tarushii",
+        "lastName": "Goel",
+        "position": "Member of Technical Staff @ Thinking Machines",
+        "publicIdentifier": "tarushii-goel",
+        "linkedinUrl": "https://www.linkedin.com/in/tarushii-goel"
+      },
+      {
+        "id": "ACoAACxX5AEBYonmfz9M8tQ8jO7Nx3jIXe_VSjw",
+        "firstName": "Sophie Rose",
+        "lastName": "Shapiro",
+        "position": "Creative Operations",
+        "publicIdentifier": "sophie-rose-shapiro",
+        "linkedinUrl": "https://www.linkedin.com/in/sophie-rose-shapiro"
+      },
+      {
+        "id": "ACoAAGO6_kYBSWZ_9llmmeAdGrKehnbJ15hsMm4",
+        "firstName": "Li",
+        "lastName": "James",
+        "position": "Social Researcher at Thinking Machines Lab",
+        "publicIdentifier": "li-james-6864263a8",
+        "linkedinUrl": "https://www.linkedin.com/in/li-james-6864263a8"
+      },
+      {
+        "id": "ACoAAFrO2hYBQn9I3leFzBjeUmgehOiK_AGSCr8",
+        "firstName": "Muhammad",
+        "lastName": "Adam Usman",
+        "position": "Electrician at Thinking Machines Lab",
+        "publicIdentifier": "muhammad-adam-usman-472276366",
+        "linkedinUrl": "https://www.linkedin.com/in/muhammad-adam-usman-472276366"
+      },
+      {
+        "id": "ACoAABqU8psBncgwN-WH-D8F1Jq9i7OsFmcPDt4",
+        "firstName": "Jeffrey",
+        "lastName": "Tao",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "jeffrey-tao",
+        "linkedinUrl": "https://www.linkedin.com/in/jeffrey-tao"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAABE9sVMBGRIvhm05LMxTLikJmrGyX3lofao"
+    }
+  }
+}

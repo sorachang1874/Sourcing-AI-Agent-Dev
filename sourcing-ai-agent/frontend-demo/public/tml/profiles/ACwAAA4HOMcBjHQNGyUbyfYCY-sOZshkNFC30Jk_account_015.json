@@ -1,0 +1,465 @@
+{
+  "profile_photo_url": null,
+  "background_photo_url": null,
+  "websites": [
+    "https://www.linkedin.com/in/mira-murati-4b39a066"
+  ],
+  "test_scores": {},
+  "profile_url": "https://www.linkedin.com/in/mira-murati-4b39a066",
+  "experience": [
+    {
+      "company_employee_count_range": {
+        "start": 11,
+        "end": 50
+      },
+      "company_industry": "Computer Software",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_employee_count_range": {
+            "start": 11,
+            "end": 50
+          },
+          "company_industry": "Computer Software",
+          "workplace_type": null,
+          "employment_type": null,
+          "location_name": null,
+          "company_name": "Thinking Machines Lab",
+          "description": null,
+          "date_range": {
+            "start": {
+              "iso": "2024-12",
+              "year": 2024,
+              "month": 12,
+              "day": null
+            },
+            "end": null
+          },
+          "company_url": "https://www.linkedin.com/company/thinkingmachinesai/",
+          "title": "Co-Founder and Chief Executive Officer",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "company_id": "105913171"
+        }
+      ],
+      "company_name": "Thinking Machines Lab",
+      "date_range": {
+        "start": {
+          "iso": "2024-12",
+          "year": 2024,
+          "month": 12,
+          "day": null
+        },
+        "end": null
+      },
+      "company_url": "https://www.linkedin.com/company/thinkingmachinesai/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+      "company_id": "105913171"
+    },
+    {
+      "company_employee_count_range": {
+        "start": 1001,
+        "end": 5000
+      },
+      "company_industry": "Research",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_employee_count_range": {
+            "start": 1001,
+            "end": 5000
+          },
+          "company_industry": "Research",
+          "workplace_type": null,
+          "employment_type": null,
+          "location_name": "San Francisco, California, United States",
+          "company_name": "OpenAI",
+          "description": null,
+          "date_range": {
+            "start": {
+              "iso": "2022-05",
+              "year": 2022,
+              "month": 5,
+              "day": null
+            },
+            "end": null
+          },
+          "company_url": "https://www.linkedin.com/company/openai/",
+          "title": "Chief Technology Officer",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "company_id": "11130470"
+        },
+        {
+          "company_employee_count_range": {
+            "start": 1001,
+            "end": 5000
+          },
+          "company_industry": "Research",
+          "workplace_type": null,
+          "employment_type": null,
+          "location_name": null,
+          "company_name": "OpenAI",
+          "description": null,
+          "date_range": {
+            "start": {
+              "iso": "2020-12",
+              "year": 2020,
+              "month": 12,
+              "day": null
+            },
+            "end": {
+              "iso": "2022-05",
+              "year": 2022,
+              "month": 5,
+              "day": null
+            }
+          },
+          "company_url": "https://www.linkedin.com/company/openai/",
+          "title": "SVP of Research, Product & Partnerships",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "company_id": "11130470"
+        },
+        {
+          "company_employee_count_range": {
+            "start": 1001,
+            "end": 5000
+          },
+          "company_industry": "Research",
+          "workplace_type": null,
+          "employment_type": null,
+          "location_name": null,
+          "company_name": "OpenAI",
+          "description": null,
+          "date_range": {
+            "start": {
+              "iso": "2018-06",
+              "year": 2018,
+              "month": 6,
+              "day": null
+            },
+            "end": {
+              "iso": "2020-12",
+              "year": 2020,
+              "month": 12,
+              "day": null
+            }
+          },
+          "company_url": "https://www.linkedin.com/company/openai/",
+          "title": "VP of Applied AI & Partnerships",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+          "company_id": "11130470"
+        }
+      ],
+      "company_name": "OpenAI",
+      "date_range": {
+        "start": {
+          "iso": "2018-06",
+          "year": 2018,
+          "month": 6,
+          "day": null
+        },
+        "end": null
+      },
+      "company_url": "https://www.linkedin.com/company/openai/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D560BAQHpzXbqSyR74A/company-logo_400_400/B56ZT8EYB8HsAY-/0/1739395793272/openai_logo?e=1776902400&v=beta&t=HyOK3QuWphaQJAoWhaFBBKT0pc6gZNSJSdy938uDWO8",
+      "company_id": "11130470"
+    },
+    {
+      "company_employee_count_range": {
+        "start": 51,
+        "end": 200
+      },
+      "company_industry": "Computer Software",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_employee_count_range": {
+            "start": 51,
+            "end": 200
+          },
+          "company_industry": "Computer Software",
+          "workplace_type": null,
+          "employment_type": null,
+          "location_name": "San Francisco",
+          "company_name": "Leap Motion",
+          "description": null,
+          "date_range": {
+            "start": {
+              "iso": "2016",
+              "year": 2016,
+              "month": null,
+              "day": null
+            },
+            "end": {
+              "iso": "2018",
+              "year": 2018,
+              "month": null,
+              "day": null
+            }
+          },
+          "company_url": "https://www.linkedin.com/company/leap-motion/",
+          "title": "VP of Product & Engineering",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C510BAQG4RkiAtXJ6_A/company-logo_400_400/company-logo_400_400/0/1631367540844?e=1776902400&v=beta&t=H2rHBVfE6mTQzVx2mo9ZMtIlAvFKvUK-hJwOy44xFTM",
+          "company_id": "2871784"
+        }
+      ],
+      "company_name": "Leap Motion (inactive account - see Ultraleap)",
+      "date_range": {
+        "start": {
+          "iso": "2016",
+          "year": 2016,
+          "month": null,
+          "day": null
+        },
+        "end": {
+          "iso": "2018",
+          "year": 2018,
+          "month": null,
+          "day": null
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/leap-motion/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/C510BAQG4RkiAtXJ6_A/company-logo_400_400/company-logo_400_400/0/1631367540844?e=1776902400&v=beta&t=H2rHBVfE6mTQzVx2mo9ZMtIlAvFKvUK-hJwOy44xFTM",
+      "company_id": "2871784"
+    },
+    {
+      "company_employee_count_range": {
+        "start": 10001,
+        "end": null
+      },
+      "company_industry": "Automotive",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_employee_count_range": {
+            "start": 10001,
+            "end": null
+          },
+          "company_industry": "Automotive",
+          "workplace_type": null,
+          "employment_type": null,
+          "location_name": "San Francisco Bay Area",
+          "company_name": "Tesla",
+          "description": null,
+          "date_range": {
+            "start": {
+              "iso": "2013",
+              "year": 2013,
+              "month": null,
+              "day": null
+            },
+            "end": {
+              "iso": "2016",
+              "year": 2016,
+              "month": null,
+              "day": null
+            }
+          },
+          "company_url": "https://www.linkedin.com/company/tesla-motors/",
+          "title": "Senior Product Manager, Model X",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C4D0BAQHUcu98SZ2TVw/company-logo_400_400/company-logo_400_400/0/1630576446368/tesla_motors_logo?e=1776902400&v=beta&t=o2aM3BOsXGOokcr2lHziQZDhypcwzCrU9j8OGYFtoDs",
+          "company_id": "15564"
+        }
+      ],
+      "company_name": "Tesla",
+      "date_range": {
+        "start": {
+          "iso": "2013",
+          "year": 2013,
+          "month": null,
+          "day": null
+        },
+        "end": {
+          "iso": "2016",
+          "year": 2016,
+          "month": null,
+          "day": null
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/tesla-motors/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/C4D0BAQHUcu98SZ2TVw/company-logo_400_400/company-logo_400_400/0/1630576446368/tesla_motors_logo?e=1776902400&v=beta&t=o2aM3BOsXGOokcr2lHziQZDhypcwzCrU9j8OGYFtoDs",
+      "company_id": "15564"
+    },
+    {
+      "company_employee_count_range": {
+        "start": 10001,
+        "end": null
+      },
+      "company_industry": "Aviation & Aerospace",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_employee_count_range": {
+            "start": 10001,
+            "end": null
+          },
+          "company_industry": "Aviation & Aerospace",
+          "workplace_type": null,
+          "employment_type": null,
+          "location_name": "Huntington Beach, CA",
+          "company_name": "Zodiac Aerospace",
+          "description": null,
+          "date_range": {
+            "start": {
+              "iso": "2012",
+              "year": 2012,
+              "month": null,
+              "day": null
+            },
+            "end": {
+              "iso": "2013",
+              "year": 2013,
+              "month": null,
+              "day": null
+            }
+          },
+          "company_url": "https://www.linkedin.com/company/zodiac-aerospace/",
+          "title": "Advanced Concepts Engineer",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQEXGXYK7cARXg/company-logo_400_400/company-logo_400_400/0/1631422127135?e=1776902400&v=beta&t=g4Qy8WmYmj7n-i87XAySQ0TUDy8OX87YoG_nj9cbsls",
+          "company_id": "7749"
+        }
+      ],
+      "company_name": "Zodiac Aerospace",
+      "date_range": {
+        "start": {
+          "iso": "2012",
+          "year": 2012,
+          "month": null,
+          "day": null
+        },
+        "end": {
+          "iso": "2013",
+          "year": 2013,
+          "month": null,
+          "day": null
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/zodiac-aerospace/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/C560BAQEXGXYK7cARXg/company-logo_400_400/company-logo_400_400/0/1631422127135?e=1776902400&v=beta&t=g4Qy8WmYmj7n-i87XAySQ0TUDy8OX87YoG_nj9cbsls",
+      "company_id": "7749"
+    },
+    {
+      "company_employee_count_range": {
+        "start": 10001,
+        "end": null
+      },
+      "company_industry": "Financial Services",
+      "workplace_type": null,
+      "positions": [
+        {
+          "company_employee_count_range": {
+            "start": 10001,
+            "end": null
+          },
+          "company_industry": "Financial Services",
+          "workplace_type": null,
+          "employment_type": null,
+          "location_name": "Tokyo, Japan",
+          "company_name": "Goldman Sachs",
+          "description": null,
+          "date_range": {
+            "start": {
+              "iso": "2011",
+              "year": 2011,
+              "month": null,
+              "day": null
+            },
+            "end": {
+              "iso": "2011",
+              "year": 2011,
+              "month": null,
+              "day": null
+            }
+          },
+          "company_url": "https://www.linkedin.com/company/goldman-sachs/",
+          "title": "Summer Analyst",
+          "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQG9L7InIQVZrQ/company-logo_400_400/company-logo_400_400/0/1722506756452/goldman_sachs_logo?e=1776902400&v=beta&t=DTAHHIGqk0-6NwsKozo49cf7cSVIkRjik6PWy7n4Igo",
+          "company_id": "1382"
+        }
+      ],
+      "company_name": "Goldman Sachs",
+      "date_range": {
+        "start": {
+          "iso": "2011",
+          "year": 2011,
+          "month": null,
+          "day": null
+        },
+        "end": {
+          "iso": "2011",
+          "year": 2011,
+          "month": null,
+          "day": null
+        }
+      },
+      "company_url": "https://www.linkedin.com/company/goldman-sachs/",
+      "company_logo_url": "https://media.licdn.com/dms/image/v2/D4E0BAQG9L7InIQVZrQ/company-logo_400_400/company-logo_400_400/0/1722506756452/goldman_sachs_logo?e=1776902400&v=beta&t=DTAHHIGqk0-6NwsKozo49cf7cSVIkRjik6PWy7n4Igo",
+      "company_id": "1382"
+    }
+  ],
+  "industry": "Computer Software",
+  "badges": {
+    "top_voice": false,
+    "open_to_work": false,
+    "is_hiring": false,
+    "premium": true,
+    "creator": false,
+    "influencer": false
+  },
+  "contact_info": null,
+  "message": "For high volume usage and custom pricing, visit https://app.enrichgraph.io or contact us at support@enrichgraph.io",
+  "verifications": {
+    "is_verified": false,
+    "joined_date": null,
+    "sections": null
+  },
+  "courses": {},
+  "languages": {},
+  "volunteer_experiences": {},
+  "projects": {},
+  "patents": {},
+  "member_urn": "235354311",
+  "honors": {},
+  "entity_urn": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+  "skills": [
+    "Product Development",
+    "Product Design",
+    "Product Management",
+    "Strategy",
+    "Catia",
+    "Statistics",
+    "Finite Element Analysis",
+    "Mechanical Engineering",
+    "Engineering",
+    "Management",
+    "Leadership"
+  ],
+  "public_identifier": "mira-murati-4b39a066",
+  "organizations": {},
+  "first_name": "Mira",
+  "certifications": {},
+  "last_name": "Murati",
+  "location": {
+    "country_code": "US",
+    "country": "United States",
+    "name": "San Francisco Bay Area",
+    "city": null
+  },
+  "headline": "Co-Founder and CEO at Thinking Machines Lab",
+  "summary": null,
+  "publications": {},
+  "education": [
+    {
+      "school_name": "Dartmouth College",
+      "school_id": "18839",
+      "school_url": "https://www.linkedin.com/school/dartmouth-college/",
+      "description": null,
+      "degree": "Bachelor of Engineering (B.E.)",
+      "field_of_study": "Mechanical Engineering",
+      "date_range": null,
+      "activities": null,
+      "grade": null,
+      "school_logo_url": "https://media.licdn.com/dms/image/v2/C4D0BAQELVZKDzlGDzA/company-logo_400_400/company-logo_400_400/0/1631325633796?e=1776902400&v=beta&t=QytJ1JVt1-lGcRjKbcg-MmYu_WZHPZ1dPOe22atX_Zc"
+    }
+  ],
+  "network_info": null
+}

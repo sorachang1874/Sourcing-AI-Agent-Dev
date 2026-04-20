@@ -1,0 +1,1182 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAABL1VWgBMP0PRdl0AzcTZu_mHScjG5upAyc",
+    "profile_url": "https://www.linkedin.com/in/ACwAABL1VWgBMP0PRdl0AzcTZu_mHScjG5upAyc"
+  },
+  "item": {
+    "id": "ACoAABL1VWgBlgDKQJBWgzSxRNJRKn9XJJ23hvQ",
+    "publicIdentifier": "vseeker",
+    "linkedinUrl": "https://www.linkedin.com/in/vseeker",
+    "firstName": "Volker",
+    "lastName": "Seeker",
+    "emails": [
+      {
+        "email": "volker.seeker@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "AI Research Engineer",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "Redwood City, California, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "Redwood City, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "Redwood City"
+      }
+    },
+    "objectUrn": "318068072",
+    "registeredAt": "2014-01-22T11:25:20.076Z",
+    "topSkills": null,
+    "connectionsCount": 1070,
+    "followerCount": 1181,
+    "verified": true,
+    "about": "I am a machine learning engineer and researcher with a PhD in computer science. As one of the first engineers at Axiom, I drive research in machine learning for mathematics, focusing on scaling and advancing AI models. Previously at FAIR, I co-developed LLM Compiler and Code World Model. LLM Compiler is a family of foundation models trained on compiler intermediate representations and assembly code to automate and improve optimization tasks. Code World Model is Meta’s 32B open-weights code LLM mid-trained on execution traces and agent–environment trajectories to model program state and improve code generation and reasoning. My academic and industry work includes multiple peer-reviewed and distinguished publications on large language models, compiler optimization, and machine learning for systems.",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 3,
+            "year": 2026,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "12665",
+        "companyId": "5738",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/5738/",
+        "schoolName": "The University of Edinburgh"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": null,
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "AI Research Engineer",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": "San Francisco Bay Area",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "2 mos",
+        "description": "lots of thinking about machines",
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2026,
+          "text": "Mar 2026"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Member of Technical Staff | AI for Mathematics",
+        "location": "Palo Alto, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Axiom Math",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/107512214/",
+        "companyId": "107512214",
+        "duration": "10 mos",
+        "description": "As one of the first engineers on the team I contribute across the stack with a primary focus on developing and scaling AI models for mathematics.",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2025,
+          "text": "Jun 2025"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2026,
+          "text": "Mar 2026"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHtTroxWYIptA/company-logo_400_400/B56ZmazC1bJ8AY-/0/1759238697367?e=1776902400&v=beta&t=yvtq5RUuTeGpY20gywrydk1S9ZeYSZSv6sr3eEQ7IPU",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHtTroxWYIptA/company-logo_400_400/B56ZmazC1bJ8AY-/0/1759238697367?e=1776902400&v=beta&t=yvtq5RUuTeGpY20gywrydk1S9ZeYSZSv6sr3eEQ7IPU",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHtTroxWYIptA/company-logo_200_200/B56ZmazC1bJ8AI-/0/1759238697367?e=1776902400&v=beta&t=P9CEGjMzX2rhlFjP6fq952OKeQfKmYNXaiMfIhL1K14",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHtTroxWYIptA/company-logo_100_100/B56ZmazC1bJ8AQ-/0/1759238697367?e=1776902400&v=beta&t=F2betJvYzZoPpMuT78v6aYi4HaoVRnZSGfKwQSUib0I",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Engineer",
+        "location": "Menlo Park, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "1 yr 3 mos",
+        "description": "Progressing in the field of AI research to boost the efficiency and functionality of computer systems, encompassing operating systems and compilers, by incorporating state-of-the-art machine learning methodologies.",
+        "skills": null,
+        "experienceGroupId": "7eef2faddddd06a07e49350f0308efb52859a439",
+        "startDate": {
+          "month": "Apr",
+          "year": 2024,
+          "text": "Apr 2024"
+        },
+        "endDate": {
+          "month": "Jun",
+          "year": 2025,
+          "text": "Jun 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Visiting Researcher",
+        "location": "Menlo Park, California, United States",
+        "employmentType": "Indirect Contract",
+        "workplaceType": "On-site",
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "1 yr",
+        "description": "Advancing AI research to enhance the effectiveness and performance of computer systems, including operating systems and compilers, through the integration of cutting-edge machine learning techniques.",
+        "skills": null,
+        "experienceGroupId": "7eef2faddddd06a07e49350f0308efb52859a439",
+        "startDate": {
+          "month": "May",
+          "year": 2023,
+          "text": "May 2023"
+        },
+        "endDate": {
+          "month": "Apr",
+          "year": 2024,
+          "text": "Apr 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Associate",
+        "location": "Edinburgh, Scotland, United Kingdom",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "The University of Edinburgh",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/university-of-edinburgh/",
+        "companyId": "5738",
+        "companyUniversalName": "university-of-edinburgh",
+        "duration": "3 yrs 1 mo",
+        "description": "The position is part of a project funded by Huawei Technologies and involves conducting research on how parallel programming patterns can be leveraged for adaptive workload scheduling on heterogeneous systems.",
+        "skills": null,
+        "experienceGroupId": "f03ff7434615c65c8de2c7b48ef74c1c9f18ca67",
+        "startDate": {
+          "month": "Apr",
+          "year": 2020,
+          "text": "Apr 2020"
+        },
+        "endDate": {
+          "month": "Apr",
+          "year": 2023,
+          "text": "Apr 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFSi1nlisxTcg/company-logo_400_400/company-logo_400_400/0/1631312234132?e=1776902400&v=beta&t=c4cRVWdoIIFUIEVGuvSBCqag9jwRd9aO1CP_1tP13BY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFSi1nlisxTcg/company-logo_400_400/company-logo_400_400/0/1631312234132?e=1776902400&v=beta&t=c4cRVWdoIIFUIEVGuvSBCqag9jwRd9aO1CP_1tP13BY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFSi1nlisxTcg/company-logo_200_200/company-logo_200_200/0/1631312234132?e=1776902400&v=beta&t=ssZpxoxCmkJoykSIL5oaVuT6qVI0EZPQ3ew8UZeCv-8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFSi1nlisxTcg/company-logo_100_100/company-logo_100_100/0/1631312234132?e=1776902400&v=beta&t=25yLL4Pn25SmIS7hw6u3aV5RrigxeBbj_iWCY-Ate2M",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "University Teacher",
+        "location": "Edinburgh, United Kingdom",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "The University of Edinburgh",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/university-of-edinburgh/",
+        "companyId": "5738",
+        "companyUniversalName": "university-of-edinburgh",
+        "duration": "2 yrs 9 mos",
+        "description": "I am teaching computer science at the University of Edinburgh and engage in cutting edge research projects focusing on energy efficient mobile systems.",
+        "skills": null,
+        "experienceGroupId": "f03ff7434615c65c8de2c7b48ef74c1c9f18ca67",
+        "startDate": {
+          "month": "Aug",
+          "year": 2017,
+          "text": "Aug 2017"
+        },
+        "endDate": {
+          "month": "Apr",
+          "year": 2020,
+          "text": "Apr 2020"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFSi1nlisxTcg/company-logo_400_400/company-logo_400_400/0/1631312234132?e=1776902400&v=beta&t=c4cRVWdoIIFUIEVGuvSBCqag9jwRd9aO1CP_1tP13BY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFSi1nlisxTcg/company-logo_400_400/company-logo_400_400/0/1631312234132?e=1776902400&v=beta&t=c4cRVWdoIIFUIEVGuvSBCqag9jwRd9aO1CP_1tP13BY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFSi1nlisxTcg/company-logo_200_200/company-logo_200_200/0/1631312234132?e=1776902400&v=beta&t=ssZpxoxCmkJoykSIL5oaVuT6qVI0EZPQ3ew8UZeCv-8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFSi1nlisxTcg/company-logo_100_100/company-logo_100_100/0/1631312234132?e=1776902400&v=beta&t=25yLL4Pn25SmIS7hw6u3aV5RrigxeBbj_iWCY-Ate2M",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Associate",
+        "location": "Lancaster, United Kingdom",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Lancaster University",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10250/",
+        "companyId": "10250",
+        "duration": "1 yr 4 mos",
+        "description": "I am part of the Dividend project team which aims to develop energy efficient data centres by exploiting heterogeneous computing architecture. I implemented a server and client system which distributes the execution of OpenCL applications across available network resources. It makes use of OpenCL energy accounting on server side and a machine learning model on client side to find the most energy efficient and highest performing workload to execution device (CPU,GPU) mapping for the distributed application.",
+        "skills": null,
+        "startDate": {
+          "month": "Apr",
+          "year": 2016,
+          "text": "Apr 2016"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2017,
+          "text": "Jul 2017"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGKio0Euee3Lw/company-logo_400_400/company-logo_400_400/0/1631301666319?e=1776902400&v=beta&t=CGqCTLgrg-7ft2wGaeLNnSzxCdctiLFRTcCKmsVoVII",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGKio0Euee3Lw/company-logo_400_400/company-logo_400_400/0/1631301666319?e=1776902400&v=beta&t=CGqCTLgrg-7ft2wGaeLNnSzxCdctiLFRTcCKmsVoVII",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGKio0Euee3Lw/company-logo_200_200/company-logo_200_200/0/1631301666319?e=1776902400&v=beta&t=cpnZ-NEJiHXmVKl_EdZwH5i1Pz43TYOtxSETr-uaynE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGKio0Euee3Lw/company-logo_100_100/company-logo_100_100/0/1631301666319?e=1776902400&v=beta&t=OO29e8eL8p8qe7TpB6iA9DylbkSesPp88CloJ44gubM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Postgraduate Student",
+        "location": "Edinburgh, United Kingdom",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "The University of Edinburgh",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/university-of-edinburgh/",
+        "companyId": "5738",
+        "companyUniversalName": "university-of-edinburgh",
+        "duration": "5 yrs 6 mos",
+        "description": "Thesis: User Experience Driven CPU Frequency Scaling on Mobile Devices Towards Better Energy Efficiency\n\ndeveloped a record and replay mechanism to deterministically replay realistic interactive Android workloads on the same/another mobile device with a micro second accuracy\n\ndeveloped a mechanism to automatically detect user interaction lag based on nonintrusive analysis of video output and device event queues with a speedup of 2700x compared to manual detection\n\nidentified energy saving potential of up to 27% whilst delivering a better user experience than the current standard Android CPU frequency governors\n\ndeveloped a reinforcement learning based CPU frequency governor for interactive Android workloads which achieved up to 22% energy savings compared to current mobile solutions whilst providing a fluid user experience\n\ndeveloped a simulator for interactive Android workloads with simulation speeds up to 100x faster than real time\n\nBest Paper Award for publication at IISWC 2014 conference",
+        "skills": null,
+        "startDate": {
+          "month": "Oct",
+          "year": 2011,
+          "text": "Oct 2011"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2017,
+          "text": "Mar 2017"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFSi1nlisxTcg/company-logo_400_400/company-logo_400_400/0/1631312234132?e=1776902400&v=beta&t=c4cRVWdoIIFUIEVGuvSBCqag9jwRd9aO1CP_1tP13BY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFSi1nlisxTcg/company-logo_400_400/company-logo_400_400/0/1631312234132?e=1776902400&v=beta&t=c4cRVWdoIIFUIEVGuvSBCqag9jwRd9aO1CP_1tP13BY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFSi1nlisxTcg/company-logo_200_200/company-logo_200_200/0/1631312234132?e=1776902400&v=beta&t=ssZpxoxCmkJoykSIL5oaVuT6qVI0EZPQ3ew8UZeCv-8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFSi1nlisxTcg/company-logo_100_100/company-logo_100_100/0/1631312234132?e=1776902400&v=beta&t=25yLL4Pn25SmIS7hw6u3aV5RrigxeBbj_iWCY-Ate2M",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Internship",
+        "location": "Edinburgh, United Kingdom",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Critical Blue",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1244638/",
+        "companyId": "1244638",
+        "duration": "4 mos",
+        "description": "- Android Display Stack\n- Android Input Subsystem\n- Linux Scheduler",
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2013,
+          "text": "Sep 2013"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2013,
+          "text": "Dec 2013"
+        },
+        "companyLogo": null
+      },
+      {
+        "position": "Internship",
+        "location": "Cambridge, United Kingdom",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "ARM",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/4472/",
+        "companyId": "4472",
+        "duration": "4 mos",
+        "description": "In a close collaboration with the responsible team for the development and Linux integration of the big.little processor I had the chance to get an insight into development process and the research state of the team concerning the power efficiency of the big.little board.\n- Designed and implemented an Android application to collect mobile workload statistics\n- Designed and implemented a modular analysis tool chain to analyse collected workload data",
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2012,
+          "text": "Sep 2012"
+        },
+        "endDate": {
+          "month": "Dec",
+          "year": 2012,
+          "text": "Dec 2012"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEeZEj_YnYWeg/company-logo_400_400/B4EZXss3rjGgAc-/0/1743432940736/arm_logo?e=1776902400&v=beta&t=1YI6ic_0b4ZtKf94wxQwvjMqwuAyzcl4kEexw9GPPaI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEeZEj_YnYWeg/company-logo_400_400/B4EZXss3rjGgAc-/0/1743432940736/arm_logo?e=1776902400&v=beta&t=1YI6ic_0b4ZtKf94wxQwvjMqwuAyzcl4kEexw9GPPaI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEeZEj_YnYWeg/company-logo_200_200/B4EZXss3rjGgAM-/0/1743432940736/arm_logo?e=1776902400&v=beta&t=30nlSSrN7KkT2DetpCaqB8eX6upC1ajSVCjY-kCgUfo",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEeZEj_YnYWeg/company-logo_100_100/B4EZXss3rjGgAU-/0/1743432940736/arm_logo?e=1776902400&v=beta&t=VRxQb4qEH8XtjmESF1WqUfkwEUMlUngDWEeXZQLMU3A",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Student Assistant in the MeMo project Group",
+        "location": "Berlin Area, Germany",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Technische Universität Berlin",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1188458/",
+        "companyId": "1188458",
+        "duration": "7 mos",
+        "description": "The MeMo project was aiming to develop a correctness model for graphical modeling and simulation\nsoftware such as Matlab, Simulink and Stateflow\n- Designed and implemented a parser for Simulink-models\n- Designed and implemented a prototype application to summarise model statistics",
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2010,
+          "text": "Mar 2010"
+        },
+        "endDate": {
+          "month": "Sep",
+          "year": 2010,
+          "text": "Sep 2010"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGMPWp-fo0MWA/company-logo_400_400/company-logo_400_400/0/1675944963271/tuberlin_logo?e=1776902400&v=beta&t=I2kUk1i6dm3nvBPfGGzXsJUiNEny57_POzg-BVTxAeY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGMPWp-fo0MWA/company-logo_400_400/company-logo_400_400/0/1675944963271/tuberlin_logo?e=1776902400&v=beta&t=I2kUk1i6dm3nvBPfGGzXsJUiNEny57_POzg-BVTxAeY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGMPWp-fo0MWA/company-logo_200_200/company-logo_200_200/0/1675944963271/tuberlin_logo?e=1776902400&v=beta&t=T8_smgnFdfwan-vzoAodqjdy8mlqmA-N4IeBlbi63wc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGMPWp-fo0MWA/company-logo_100_100/company-logo_100_100/0/1675944963271/tuberlin_logo?e=1776902400&v=beta&t=Xj_rDST1nyHUluudBdSv79WP5vFq8z02MHxnMa74G48",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Co-Founder, Programmer and Project Manager",
+        "location": "Berlin",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Brightside Games UG",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Brightside+Games+UG",
+        "duration": "9 mos",
+        "description": "successfully presented the business idea to gain an EXIST Business Start-up Grant worth 63,000 € from the German government, office space and a collaboration with the international production house RCP in Munich\n\ndrove the agile project management for the Xbox 360 game Zeit2 which lead to successful publication by Ubisoft\n\nimplemented content loading pipeline, XML-interface to level editor, localisation, menu screens, game state transitions and various parts of the game logic\n\noptimised the C# code base to cope with Xbox 360 garbage collection using object pooling and other techniques",
+        "skills": null,
+        "startDate": {
+          "month": "Jun",
+          "year": 2009,
+          "text": "Jun 2009"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2010,
+          "text": "Feb 2010"
+        }
+      },
+      {
+        "position": "Software developer for automation systems and mobile game level designer",
+        "location": "Berlin",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Bit-Side GmbH",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Bit-Side+GmbH",
+        "duration": "1 yr 8 mos",
+        "description": "developed modules for decoding and processing signals based on the energy efficient EnOcean wireless protocol for embedded automation software which controls lights, window blinds and ventilation systems\n\ndeveloped a machine learning algorithm to control radiator valves by using features such as past and present room temperature, weather reports and room occupancies",
+        "skills": null,
+        "startDate": {
+          "month": "Oct",
+          "year": 2007,
+          "text": "Oct 2007"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2009,
+          "text": "May 2009"
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "The University of Edinburgh",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/5738/",
+        "schoolId": "5738",
+        "degree": "Doctor of Philosophy (PhD)",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "description": "User Experience Driven CPU Frequency Scaling On Mobile Devices Towards Better Energy Efficiency",
+        "startDate": {
+          "year": 2011,
+          "text": "2011"
+        },
+        "endDate": {
+          "year": 2017,
+          "text": "2017"
+        },
+        "period": "2011 - 2017",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFSi1nlisxTcg/company-logo_400_400/company-logo_400_400/0/1631312234132?e=1776902400&v=beta&t=c4cRVWdoIIFUIEVGuvSBCqag9jwRd9aO1CP_1tP13BY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFSi1nlisxTcg/company-logo_400_400/company-logo_400_400/0/1631312234132?e=1776902400&v=beta&t=c4cRVWdoIIFUIEVGuvSBCqag9jwRd9aO1CP_1tP13BY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFSi1nlisxTcg/company-logo_200_200/company-logo_200_200/0/1631312234132?e=1776902400&v=beta&t=ssZpxoxCmkJoykSIL5oaVuT6qVI0EZPQ3ew8UZeCv-8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQFSi1nlisxTcg/company-logo_100_100/company-logo_100_100/0/1631312234132?e=1776902400&v=beta&t=25yLL4Pn25SmIS7hw6u3aV5RrigxeBbj_iWCY-Ate2M",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Technische Universität Berlin",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1188458/",
+        "schoolId": "1188458",
+        "degree": "Diplom Ingenieur",
+        "fieldOfStudy": "Computer Engineering",
+        "skills": [],
+        "description": "Thesis: Design and Implementation of an Efficient Instruction Set Simulator for an Embedded Multi-Core Architecture\n\nextended existing instruction set simulator code base to allow multi-core architecture simulation by synchronising and managing the code interpretation and execution on multiple core instances\n\nfinal simulation speeds went up to 25,307 Mips on a 32-core x86 host for as many as 2048 simulated cores\n\nWon the UK wide Science Engineering and Technology Student of the Year Award 2011 for Msc thesis\n\nPublished corresponding papers at the IC-SAMOS’11 conference and in the IJPP’12 journal",
+        "insights": "Grade: 1.2 with distinction",
+        "startDate": {
+          "year": 2005,
+          "text": "2005"
+        },
+        "endDate": {
+          "year": 2011,
+          "text": "2011"
+        },
+        "period": "2005 - 2011",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGMPWp-fo0MWA/company-logo_400_400/company-logo_400_400/0/1675944963271/tuberlin_logo?e=1776902400&v=beta&t=I2kUk1i6dm3nvBPfGGzXsJUiNEny57_POzg-BVTxAeY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGMPWp-fo0MWA/company-logo_400_400/company-logo_400_400/0/1675944963271/tuberlin_logo?e=1776902400&v=beta&t=I2kUk1i6dm3nvBPfGGzXsJUiNEny57_POzg-BVTxAeY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGMPWp-fo0MWA/company-logo_200_200/company-logo_200_200/0/1675944963271/tuberlin_logo?e=1776902400&v=beta&t=T8_smgnFdfwan-vzoAodqjdy8mlqmA-N4IeBlbi63wc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGMPWp-fo0MWA/company-logo_100_100/company-logo_100_100/0/1675944963271/tuberlin_logo?e=1776902400&v=beta&t=Xj_rDST1nyHUluudBdSv79WP5vFq8z02MHxnMa74G48",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [
+      {
+        "title": "PASTA-2",
+        "duration": "Aug 2011 - Present",
+        "startDate": {
+          "month": "Aug",
+          "year": 2011,
+          "text": "Aug 2011"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "associatedWith": null,
+        "associatedWithLink": null,
+        "contributors": [
+          {
+            "linkedinUrl": "https://www.linkedin.com/in/ACoAAADZzUkBiH2Fujra2MhR_gHsKA8PG5uqwmM"
+          },
+          {
+            "linkedinUrl": "https://www.linkedin.com/in/ACoAAAx1IVUBJ9bD-aoWnZa_L-63YKBUZxWoEys"
+          }
+        ],
+        "link": "http://groups.inf.ed.ac.uk/pasta/"
+      },
+      {
+        "title": "ARM Centre of Excellence",
+        "startDate": null,
+        "endDate": {
+          "text": ""
+        },
+        "associatedWith": "Associated with The University of Edinburgh",
+        "associatedWithLink": "https://www.linkedin.com/company/5738/"
+      }
+    ],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Data Analysis",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Algorithms",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Software Development",
+        "positions": [
+          "Endorsed by 2 colleagues at Technische Universität Berlin"
+        ],
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "Programming",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Statistics"
+      },
+      {
+        "name": "Research"
+      },
+      {
+        "name": "Object-Oriented Programming (OOP)"
+      },
+      {
+        "name": "Project Planning"
+      },
+      {
+        "name": "Android",
+        "endorsements": "5 endorsements"
+      },
+      {
+        "name": "Python",
+        "endorsements": "7 endorsements"
+      },
+      {
+        "name": "Java",
+        "endorsements": "7 endorsements"
+      },
+      {
+        "name": "C++",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "C",
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "C#"
+      },
+      {
+        "name": "R",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "LaTeX",
+        "endorsements": "8 endorsements"
+      },
+      {
+        "name": "Bash",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Microsoft Office",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Linux",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Hadoop"
+      },
+      {
+        "name": "MapReduce"
+      },
+      {
+        "name": "Time Management"
+      },
+      {
+        "name": "Compilers"
+      },
+      {
+        "name": "Parallel Programming"
+      },
+      {
+        "name": "OpenCl"
+      },
+      {
+        "name": "Linux Kernel",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Linear Models",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Kung Fu",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Software Engineering Practices"
+      },
+      {
+        "name": "CUDA"
+      },
+      {
+        "name": "Machine Learning",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Team Management"
+      },
+      {
+        "name": "Interpersonal Communication"
+      },
+      {
+        "name": "Heterogeneous Programming"
+      }
+    ],
+    "publications": [
+      {
+        "title": "BEST PAPER: Measuring QoE of Interactive Workloads and Characterising Frequency Governors on Mobile Devices",
+        "publishedAt": "Proceedings of the 2014 IEEE International Symposium on Workload Characterization, Raleigh, North Carolina, USA · Oct 1, 2014",
+        "description": null,
+        "link": "http://homepages.inf.ed.ac.uk/s1160444/papers/measuring_qoe_IISWC2014.pdf"
+      },
+      {
+        "title": "A Parallel Dynamic Binary Translator for Efficient Multi-Core Simulation.",
+        "publishedAt": "International Journal of Parallel Programming (IJPP'12) · Jan 1, 2012",
+        "description": null
+      },
+      {
+        "title": "Scalable Multi-Core Simulation Using Parallel Dynamic Binary Translation",
+        "publishedAt": "Proceedings of the 11th International Conference on Embedded Computer Systems: Architectures, Modelling, and Simulation (SAMOS'2011) · Jul 1, 2011",
+        "description": null
+      }
+    ],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [
+      {
+        "title": "Best Paper Award",
+        "issuedBy": "IISWC 2014",
+        "issuedAt": "Oct 2014",
+        "description": "I won the Best Paper Award for my publication: Measuring QoE of Interactive Workloads and Characterising Frequency Governors on Mobile Devices at the IEEE international symposium on workload characterisation in Raleigh USA",
+        "associatedWith": "Associated with The University of Edinburgh",
+        "associatedWithLink": null
+      },
+      {
+        "title": "SET Award 2011",
+        "issuedBy": "Jan 2011",
+        "description": "Science Engineering & Technology Student of the Year Award in the category Best Information Technology Student 2011  for contributing my Undergraduate thesis: Simulator for an embedded multi-core architecture",
+        "associatedWith": "Associated with Technische Universität Berlin",
+        "associatedWithLink": "https://www.linkedin.com/company/1188458/"
+      },
+      {
+        "title": "Indie Game Challenge Finalist",
+        "issuedBy": "Jan 2010",
+        "description": "with the game Zeit2 in Las Vegas",
+        "associatedWith": "Associated with Brightside Games UG",
+        "associatedWithLink": null
+      },
+      {
+        "title": "Founders Competition – Multimedia 2009 winner at the IFA in Berlin",
+        "issuedBy": "Jan 2009",
+        "associatedWith": "Associated with Brightside Games UG",
+        "associatedWithLink": null
+      },
+      {
+        "title": "Independent Games Festival Student Showcase Finalist",
+        "issuedBy": "Jan 2009",
+        "description": "The game Zeit2 was showcased at the Independent Games Festival Student Showcase in San Francisco\n",
+        "associatedWith": "Associated with Brightside Games UG",
+        "associatedWithLink": null
+      }
+    ],
+    "languages": [
+      {
+        "name": "English"
+      },
+      {
+        "name": "German"
+      }
+    ],
+    "causes": [],
+    "featured": {
+      "images": [
+        "https://media.licdn.com/dms/image/v2/D5612AQE10_C4dr5xhQ/article-cover_image-shrink_600_2000/article-cover_image-shrink_600_2000/0/1719445444838?e=1776902400&v=beta&t=1DKGGCukhLnuiH3ESS0EE5-N-J5S7XQtdKuK_NNSJDQ"
+      ],
+      "link": "https://www.linkedin.com/feed/update/urn:li:activity:7212150531308339200?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A7212150531308339200%29",
+      "title": "LLM Compiler: Foundation models for code optimization",
+      "subtitle": "Chris Cummins on LinkedIn • 4 min read",
+      "slides": [
+        {
+          "title": "LLM Compiler: Foundation models for code optimization",
+          "subtitle": "Chris Cummins on LinkedIn • 4 min read",
+          "description": null,
+          "url": "https://www.linkedin.com/feed/update/urn:li:activity:7212150531308339200?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A7212150531308339200%29",
+          "image": {
+            "url": "https://media.licdn.com/dms/image/v2/D5612AQE10_C4dr5xhQ/article-cover_image-shrink_600_2000/article-cover_image-shrink_600_2000/0/1719445444838?e=1776902400&v=beta&t=1DKGGCukhLnuiH3ESS0EE5-N-J5S7XQtdKuK_NNSJDQ"
+          }
+        }
+      ]
+    },
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAEOKSWcBlr0BLhjZLu6S2rkvTuecZ9rJYrA",
+        "firstName": "Vedant",
+        "lastName": "Rathi",
+        "publicIdentifier": "vrathi101",
+        "linkedinUrl": "https://www.linkedin.com/in/vrathi101"
+      },
+      {
+        "id": "ACoAAAug3GEB61ZgmNrdCz5yNIjWRt3TU7PkQQ0",
+        "firstName": "Chris",
+        "lastName": "Cummins",
+        "publicIdentifier": "chris-cummins-25540455",
+        "linkedinUrl": "https://www.linkedin.com/in/chris-cummins-25540455"
+      },
+      {
+        "id": "ACoAAC_oe9MBh0LzwLzWeQasmGu3-Tl26Aq6pOs",
+        "firstName": "Ken",
+        "lastName": "Ono",
+        "publicIdentifier": "ken-ono-a972191a5",
+        "linkedinUrl": "https://www.linkedin.com/in/ken-ono-a972191a5"
+      },
+      {
+        "id": "ACoAACMN3jsBHp744jsLpmaoaUt3MIFLQcG2Hsk",
+        "firstName": "Simon",
+        "lastName": "Mahns",
+        "publicIdentifier": "simonmahns",
+        "linkedinUrl": "https://www.linkedin.com/in/simonmahns"
+      },
+      {
+        "id": "ACoAAAAEJHABlSmi8W16cCXElcD-vXNdf2Zmk5o",
+        "firstName": "Hugh",
+        "lastName": "Leather",
+        "publicIdentifier": "hugh-leather-128111",
+        "linkedinUrl": "https://www.linkedin.com/in/hugh-leather-128111"
+      },
+      {
+        "id": "ACoAADTqzP0Bdmc39oDRfp_-ysoM3eNh5934qSY",
+        "firstName": "Gaurang",
+        "lastName": "Pendharkar",
+        "publicIdentifier": "gaurangpp",
+        "linkedinUrl": "https://www.linkedin.com/in/gaurangpp"
+      },
+      {
+        "id": "ACoAAB59vAkBsxqu9_AqbVyaC-ui1ytTnjaRGHI",
+        "firstName": "Alex",
+        "lastName": "S.",
+        "publicIdentifier": "alexmarkschneidman",
+        "linkedinUrl": "https://www.linkedin.com/in/alexmarkschneidman"
+      },
+      {
+        "id": "ACoAAAKtyIMB8HrWSWgpOdcvLtcZ86F7HGBToH0",
+        "firstName": "Aram",
+        "lastName": "H. Markosyan, PhD",
+        "publicIdentifier": "markosyanaram",
+        "linkedinUrl": "https://www.linkedin.com/in/markosyanaram"
+      },
+      {
+        "id": "ACoAADiCasABajIs2h8-E8h4eEIio_HaE3YGIjM",
+        "firstName": "Arthur",
+        "lastName": "P.",
+        "publicIdentifier": "arthur-pogosian",
+        "linkedinUrl": "https://www.linkedin.com/in/arthur-pogosian"
+      },
+      {
+        "id": "ACoAAB3tBHABSZwxIq10I_qfv5cC14UGRJfPJGY",
+        "firstName": "François",
+        "lastName": "Charton",
+        "publicIdentifier": "françois-charton-214187120",
+        "linkedinUrl": "https://www.linkedin.com/in/françois-charton-214187120"
+      },
+      {
+        "id": "ACoAABuEdtgB5G4CMD_M13hTnE5cDDAcTiMz50o",
+        "firstName": "Alberto",
+        "lastName": "Alfarano",
+        "publicIdentifier": "alberto-alfarano",
+        "linkedinUrl": "https://www.linkedin.com/in/alberto-alfarano"
+      },
+      {
+        "id": "ACoAADDW8TsBlKY96GdAyctGTDCuaMT2r26h_mc",
+        "firstName": "Ishan",
+        "lastName": "Sinha",
+        "publicIdentifier": "ishan-sinha-7b74b51aa",
+        "linkedinUrl": "https://www.linkedin.com/in/ishan-sinha-7b74b51aa"
+      },
+      {
+        "id": "ACoAAAAVtSAB2ttR_mGkGFbQa1es8ZY3l4r4kjM",
+        "firstName": "Shubho",
+        "lastName": "Sengupta",
+        "publicIdentifier": "shubho-sengupta-340587",
+        "linkedinUrl": "https://www.linkedin.com/in/shubho-sengupta-340587"
+      },
+      {
+        "id": "ACoAAAAdUBoBkv9cWgZMc7-Fiq9-juyI0tJTRTY",
+        "firstName": "Myoung",
+        "lastName": "Kang",
+        "publicIdentifier": "myoungkang",
+        "linkedinUrl": "https://www.linkedin.com/in/myoungkang"
+      },
+      {
+        "id": "ACoAAAAEmTEBjvZYSVxNMwEaXMJbtL5FFW5HSMI",
+        "firstName": "Marcie",
+        "lastName": "Vu",
+        "publicIdentifier": "marcievu",
+        "linkedinUrl": "https://www.linkedin.com/in/marcievu"
+      },
+      {
+        "id": "ACoAABxEdqoB4JzSoMcg8JtGJ108njxislcet3U",
+        "firstName": "Carina",
+        "lastName": "Hong",
+        "publicIdentifier": "carina-hong",
+        "linkedinUrl": "https://www.linkedin.com/in/carina-hong"
+      },
+      {
+        "id": "ACoAACQgZlMBq2INIPGHqDmvTG1x_vl4bhWm2FY",
+        "firstName": "Dejan",
+        "lastName": "Grubišić",
+        "publicIdentifier": "dejan-grubišić-157b9614a",
+        "linkedinUrl": "https://www.linkedin.com/in/dejan-grubišić-157b9614a"
+      },
+      {
+        "id": "ACoAAElpRYEBdC818aIsE2isZZyh-O8iSzoMjUM",
+        "firstName": "Rithikesh",
+        "lastName": "Muddana",
+        "publicIdentifier": "rithikeshmudd",
+        "linkedinUrl": "https://www.linkedin.com/in/rithikeshmudd"
+      },
+      {
+        "id": "ACoAACCQvnABRDvf3u9IVDX-z8hnG9OKg-6LXt0",
+        "firstName": "Manooshree",
+        "lastName": "Patel",
+        "publicIdentifier": "manooshree",
+        "linkedinUrl": "https://www.linkedin.com/in/manooshree"
+      },
+      {
+        "id": "ACoAAEjzJHIBityo4l4B7DnTwSGPSPYpUpNvyTI",
+        "firstName": "Justin",
+        "lastName": "Asher",
+        "publicIdentifier": "justin-asher",
+        "linkedinUrl": "https://www.linkedin.com/in/justin-asher"
+      },
+      {
+        "id": "ACoAAGJX4EIBNGXwODlRJNzmXOGeBV2QOCIaWO0",
+        "firstName": "Dmitriy",
+        "lastName": "Yu",
+        "position": "Senior Golang Engineer | High-Load & FinTech Systems",
+        "publicIdentifier": "dmitriy-yusupov-go",
+        "linkedinUrl": "https://www.linkedin.com/in/dmitriy-yusupov-go"
+      },
+      {
+        "id": "ACoAAGMq1-QBlAYLiFoVHgw48myK4i5ESPAeLzE",
+        "firstName": "Isabel",
+        "lastName": "Worthington",
+        "position": "Student at The University of Edinburgh",
+        "publicIdentifier": "isabel-worthington-65822b3a5",
+        "linkedinUrl": "https://www.linkedin.com/in/isabel-worthington-65822b3a5"
+      },
+      {
+        "id": "ACoAAGOeq0oBsVJQZs3PI_kHRvviIiSRgcIV0J4",
+        "firstName": "Chloé",
+        "lastName": "Bensaude",
+        "position": "Student at The University of Edinburgh",
+        "publicIdentifier": "chloé-bensaude-40a8903a7",
+        "linkedinUrl": "https://www.linkedin.com/in/chloé-bensaude-40a8903a7"
+      },
+      {
+        "id": "ACoAAGPFwc0BDptdzhF91gjMrIRmUn0tcv4SAjk",
+        "firstName": "Abigeal",
+        "lastName": "Cronan",
+        "position": "MSc Food Security | Sustainable and Resilient Agrifood Systems | Data Collection and Analysis | Special Interest in the Intersection of Food, Agriculture, and Education",
+        "publicIdentifier": "abigeal-cronan-9517063a8",
+        "linkedinUrl": "https://www.linkedin.com/in/abigeal-cronan-9517063a8"
+      },
+      {
+        "id": "ACoAAGLXd_oBKFWv_LmMHc2gFB8-ck75QZzGgj4",
+        "firstName": "Virginia",
+        "lastName": "Durcan",
+        "position": "Student & Undergraduate Research at Bryn Mawr College",
+        "publicIdentifier": "virginia-durcan-58a4353a3",
+        "linkedinUrl": "https://www.linkedin.com/in/virginia-durcan-58a4353a3"
+      },
+      {
+        "id": "ACoAAGJXaU8BzVH5FxxlMupS0P3LG70MpYw91vM",
+        "firstName": "Ivan",
+        "lastName": "Marakov",
+        "position": "CTO (Transformation) | Make cloud cost reduction real: up to 70%\nI align finance + engineering to deliver savings fast, without operational chaos",
+        "publicIdentifier": "ivan-marakov-9536683a0",
+        "linkedinUrl": "https://www.linkedin.com/in/ivan-marakov-9536683a0"
+      },
+      {
+        "id": "ACoAAGSZCKwB8gH1MF6Nw6D-_4krpCUhrZy5iEY",
+        "firstName": "Cafer",
+        "lastName": "Kılıç",
+        "position": "Lecturer at Usak University",
+        "publicIdentifier": "cafer-kılıç-7a42833b1",
+        "linkedinUrl": "https://www.linkedin.com/in/cafer-kılıç-7a42833b1"
+      },
+      {
+        "id": "ACoAAGNK3yYBMzXw7qkW0y1JV4Pjd4z3FHza3P4",
+        "firstName": "Sasha",
+        "lastName": "Edye-Lindner",
+        "position": "Audio Producer",
+        "publicIdentifier": "sasha-edye-lindner-2b2a823a5",
+        "linkedinUrl": "https://www.linkedin.com/in/sasha-edye-lindner-2b2a823a5"
+      },
+      {
+        "id": "ACoAAGRo_50BUSHyyuytefIPU6qhNNjT3bxn2kM",
+        "firstName": "Poppy",
+        "lastName": "Lawley",
+        "position": "Business Development Manager at Shropshire Trading Ltd",
+        "publicIdentifier": "poppy-lawley-a512053b0",
+        "linkedinUrl": "https://www.linkedin.com/in/poppy-lawley-a512053b0"
+      },
+      {
+        "id": "ACoAAGOi99kBM3mTL7MXy9VNjbqJWTfFKW8SnvY",
+        "firstName": "Beatrice",
+        "lastName": "Gifford",
+        "position": "Second Year Law and Spanish Student at the University of Edinburgh",
+        "publicIdentifier": "beatrice-gifford-4759a73a7",
+        "linkedinUrl": "https://www.linkedin.com/in/beatrice-gifford-4759a73a7"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAABL1VWgBMP0PRdl0AzcTZu_mHScjG5upAyc"
+    }
+  }
+}

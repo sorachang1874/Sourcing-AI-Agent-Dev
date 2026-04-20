@@ -1,0 +1,704 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAACHkUNgBuZNg-x3wai2i1etBnuxsXIXNdW4",
+    "profile_url": "https://www.linkedin.com/in/ACwAACHkUNgBuZNg-x3wai2i1etBnuxsXIXNdW4"
+  },
+  "item": {
+    "id": "ACoAACHkUNgBogKk7Q3xekxMdWLMSikZY2zgQsU",
+    "publicIdentifier": "stephen-roller-38851513a",
+    "linkedinUrl": "https://www.linkedin.com/in/stephen-roller-38851513a",
+    "firstName": "Stephen",
+    "lastName": "Roller",
+    "emails": [
+      {
+        "email": "stephen.roller@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "AI Researcher",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "New York, New York, United States",
+      "countryCode": "US",
+      "parsed": {
+        "text": "New York City, NY, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "New York",
+        "city": "New York City"
+      }
+    },
+    "objectUrn": "568611032",
+    "registeredAt": "2017-02-28T19:49:50.267Z",
+    "topSkills": null,
+    "connectionsCount": 646,
+    "followerCount": 872,
+    "verified": true,
+    "about": "AI Researcher and ML infra builder. Proponent of scale. Working on language models since 2018.",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 2,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "19518",
+        "companyId": "3162",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3162/",
+        "schoolName": "The University of Texas at Austin"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": null,
+    "coverPicture": null,
+    "photo": null,
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "AI Researcher",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "1 yr 3 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Feb",
+          "year": 2025,
+          "text": "Feb 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior Staff Research Scientist",
+        "location": "New York, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Google DeepMind",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/1594050/",
+        "companyId": "1594050",
+        "duration": "7 mos",
+        "description": "Member of Gemini Large Scale Pretraining team. Contributed to Gemini 2.0 Flash and Gemini 2.5 Pro.",
+        "skills": null,
+        "startDate": {
+          "month": "Aug",
+          "year": 2024,
+          "text": "Aug 2024"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2025,
+          "text": "Feb 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_400_400/company-logo_400_400/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=r_t5nQiM8A2L0aUP5m-PXCGPiKrvOklfisLwUFyoqwc",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_400_400/company-logo_400_400/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=r_t5nQiM8A2L0aUP5m-PXCGPiKrvOklfisLwUFyoqwc",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_200_200/company-logo_200_200/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=2BilPPrSvxkF02b9uz-N6ccku99E3v2Y8bAOBExGcFA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4E0BAQEntrYwxPlbQA/company-logo_100_100/company-logo_100_100/0/1692960425188/googledeepmind_logo?e=1776902400&v=beta&t=TS688J1rsD8hLhjNZfNOSDSKLf9q38j5d5Qgo7HUC_0",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Member of Technical Staff",
+        "location": "New York, New York, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "Hybrid",
+        "companyName": "Character.AI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/89486558/",
+        "companyId": "89486558",
+        "duration": "1 yr 8 mos",
+        "description": "Pretraining",
+        "skills": null,
+        "startDate": {
+          "month": "Jan",
+          "year": 2023,
+          "text": "Jan 2023"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2024,
+          "text": "Aug 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGNjbHSXwgRxA/company-logo_400_400/B56ZkQoTyrG0AY-/0/1756920626627/character_ai_logo?e=1776902400&v=beta&t=iIjQFZ2p-mxKhZ5rdC-PmhG_N1FxyZZ-zhCc61gsMt4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGNjbHSXwgRxA/company-logo_400_400/B56ZkQoTyrG0AY-/0/1756920626627/character_ai_logo?e=1776902400&v=beta&t=iIjQFZ2p-mxKhZ5rdC-PmhG_N1FxyZZ-zhCc61gsMt4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGNjbHSXwgRxA/company-logo_200_200/B56ZkQoTyrG0AI-/0/1756920626627/character_ai_logo?e=1776902400&v=beta&t=ktdgZyhXyFclt7dry6ukj1GvX5WbOFbqWa9ONRs2dlE",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGNjbHSXwgRxA/company-logo_100_100/B56ZkQoTyrG0AQ-/0/1756920626627/character_ai_logo?e=1776902400&v=beta&t=S7cBW5d-I9ubNwlka8z5Abge45lXx9yYBgRdE6pgd0M",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Senior Staff Research Engineer",
+        "location": "New York, New York",
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Facebook AI",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/76987811/",
+        "companyId": "76987811",
+        "duration": "5 yrs 7 mos",
+        "description": "Work on large language models and social chatbots. Participated in OPT-175B, FAIR’s first attempt at a large language model. Worked on BlenderBot, a series of public-facing, open-source Social Chatbots.",
+        "skills": null,
+        "startDate": {
+          "month": "Jul",
+          "year": 2017,
+          "text": "Jul 2017"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2023,
+          "text": "Jan 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_400_400/company-logo_400_400/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=ItJOsMWZdPrX95wVYUwX_N1dwTIiCHGeUSLDDO2jOWY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_200_200/company-logo_200_200/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=CL3OcEUIyBJFm9Wkw4iT9gJoWpsvGBIAhhNM0DjZx_A",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQHi-wrXiQcbxw/company-logo_100_100/company-logo_100_100/0/1635988509331/facebook__logo?e=1776902400&v=beta&t=sZq9Sard1kGYVIprgBkNhUvJRTI7tf3pXOCP1bQBfpM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "The University of Texas at Austin",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3162/",
+        "schoolId": "3162",
+        "degree": "Doctor of Philosophy (PhD)",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "description": "Thesis: Identifying Lexical Relationships and Entailments with Distributional Semantics\nAdvisor: Katrin Erk",
+        "startDate": {
+          "year": 2010,
+          "text": "2010"
+        },
+        "endDate": {
+          "year": 2017,
+          "text": "2017"
+        },
+        "period": "2010 - 2017",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQEREeDg1PACXA/company-logo_400_400/company-logo_400_400/0/1630670868977/theuniversityoftexasataustin__logo?e=1776902400&v=beta&t=F8avbgGb79wpuxdFupNqVhGZ33P-eI6eq_AKNdI3r_M",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEREeDg1PACXA/company-logo_400_400/company-logo_400_400/0/1630670868977/theuniversityoftexasataustin__logo?e=1776902400&v=beta&t=F8avbgGb79wpuxdFupNqVhGZ33P-eI6eq_AKNdI3r_M",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEREeDg1PACXA/company-logo_200_200/company-logo_200_200/0/1630670868977/theuniversityoftexasataustin__logo?e=1776902400&v=beta&t=Qv8SlRmp0VATJa1eMNxlVyW_QkJ-WuL6dxKihx5r2l0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEREeDg1PACXA/company-logo_100_100/company-logo_100_100/0/1630670868977/theuniversityoftexasataustin__logo?e=1776902400&v=beta&t=_kdDyxLv4iUPhm25zcSLpll7QZGrMEPuhzvhG7KbGIU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "The University of Texas at Austin",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3162/",
+        "schoolId": "3162",
+        "degree": "Master of Science (MS)",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "description": "Specialty in Natural Language Processing and Machine Learning",
+        "startDate": {
+          "year": 2010,
+          "text": "2010"
+        },
+        "endDate": {
+          "year": 2014,
+          "text": "2014"
+        },
+        "period": "2010 - 2014",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQEREeDg1PACXA/company-logo_400_400/company-logo_400_400/0/1630670868977/theuniversityoftexasataustin__logo?e=1776902400&v=beta&t=F8avbgGb79wpuxdFupNqVhGZ33P-eI6eq_AKNdI3r_M",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEREeDg1PACXA/company-logo_400_400/company-logo_400_400/0/1630670868977/theuniversityoftexasataustin__logo?e=1776902400&v=beta&t=F8avbgGb79wpuxdFupNqVhGZ33P-eI6eq_AKNdI3r_M",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEREeDg1PACXA/company-logo_200_200/company-logo_200_200/0/1630670868977/theuniversityoftexasataustin__logo?e=1776902400&v=beta&t=Qv8SlRmp0VATJa1eMNxlVyW_QkJ-WuL6dxKihx5r2l0",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEREeDg1PACXA/company-logo_100_100/company-logo_100_100/0/1630670868977/theuniversityoftexasataustin__logo?e=1776902400&v=beta&t=_kdDyxLv4iUPhm25zcSLpll7QZGrMEPuhzvhG7KbGIU",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "University of Stuttgart",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/15141415/",
+        "schoolId": "15141415",
+        "degree": "Visiting PhD Student",
+        "fieldOfStudy": "Natural Language Processing",
+        "skills": [],
+        "description": "Temporary visiting student, conducting original research in Natural Language Processing.",
+        "startDate": {
+          "year": 2012,
+          "text": "2012"
+        },
+        "endDate": {
+          "year": 2013,
+          "text": "2013"
+        },
+        "period": "2012 - 2013",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGtWZ9p-TYD0Q/company-logo_400_400/company-logo_400_400/0/1631353449082?e=1776902400&v=beta&t=zXkm6VJ0HFKHsVhTQbDP0l_bScY3MeZXyuBwKBCeU-4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGtWZ9p-TYD0Q/company-logo_400_400/company-logo_400_400/0/1631353449082?e=1776902400&v=beta&t=zXkm6VJ0HFKHsVhTQbDP0l_bScY3MeZXyuBwKBCeU-4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGtWZ9p-TYD0Q/company-logo_200_200/company-logo_200_200/0/1631353449082?e=1776902400&v=beta&t=a__9Wm_Jpjx8XSVnrYtqBRygKS1esyxYKQoV4OAtKEA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQGtWZ9p-TYD0Q/company-logo_100_100/company-logo_100_100/0/1631353449082?e=1776902400&v=beta&t=l0KL7L-6derIEBDmJDatlbjwnRpNjaQK0HrvtgZgKpc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "North Carolina State University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/4813/",
+        "schoolId": "4813",
+        "degree": "Bachelor of Science (BS)",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "description": "Valedictorian/Summa cum laude (GPA 4.0/4.0).",
+        "startDate": {
+          "year": 2006,
+          "text": "2006"
+        },
+        "endDate": {
+          "year": 2010,
+          "text": "2010"
+        },
+        "period": "2006 - 2010",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGaD7AuaL571Q/company-logo_400_400/company-logo_400_400/0/1645128364860/north_carolina_state_university_logo?e=1776902400&v=beta&t=Gaun1U1d2Ccj1fbMprLoTANvee2l11vB1xZ-kFgLSxQ",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGaD7AuaL571Q/company-logo_400_400/company-logo_400_400/0/1645128364860/north_carolina_state_university_logo?e=1776902400&v=beta&t=Gaun1U1d2Ccj1fbMprLoTANvee2l11vB1xZ-kFgLSxQ",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGaD7AuaL571Q/company-logo_200_200/company-logo_200_200/0/1645128364859/north_carolina_state_university_logo?e=1776902400&v=beta&t=v4cplvmlxlQKViO5wXqOgTqLR4McNPLQrMcmVHUFQzY",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGaD7AuaL571Q/company-logo_100_100/company-logo_100_100/0/1645128364859/north_carolina_state_university_logo?e=1776902400&v=beta&t=cGMOwK-5_YhWAYPUg9zCrfpLdnNifqrtpr-taNtgC3s",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAARs8LcBuQLm0W-sdtd-Z9uB65OXoRY_p00",
+        "firstName": "Lilian",
+        "lastName": "Weng",
+        "position": "AI Researcher, Co-founder @ Thinking Machines Lab",
+        "publicIdentifier": "lilianweng",
+        "linkedinUrl": "https://www.linkedin.com/in/lilianweng"
+      },
+      {
+        "id": "ACoAABEmYXYB5f-3ZmFG8dI-n9XAlqySBqO-2PA",
+        "firstName": "Luke",
+        "lastName": "Carlson",
+        "position": "Thinking Machines | Member of Technical Staff",
+        "publicIdentifier": "jlukecarlson",
+        "linkedinUrl": "https://www.linkedin.com/in/jlukecarlson"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABgwxtcBfqsJJUHPwsSPuBE4K9oKyRqUp5o",
+        "firstName": "Lia",
+        "lastName": "Guy",
+        "position": "Research @ OpenAI",
+        "publicIdentifier": "aureliaguy",
+        "linkedinUrl": "https://www.linkedin.com/in/aureliaguy"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAABGzJXcBFaJqVFgqgYNbhaPVKRkP3iG33dA",
+        "firstName": "Noah",
+        "lastName": "Shpak",
+        "position": "Thinking Machines",
+        "publicIdentifier": "nshpak",
+        "linkedinUrl": "https://www.linkedin.com/in/nshpak"
+      },
+      {
+        "id": "ACoAAAJzsfoBp0MxssQYMgmy0ZNO2U3sA58ugwc",
+        "firstName": "Joshua",
+        "lastName": "Gross",
+        "position": "Engineering Leadership, Meta Superintelligence Lab",
+        "publicIdentifier": "joshgross",
+        "linkedinUrl": "https://www.linkedin.com/in/joshgross"
+      },
+      {
+        "id": "ACoAABYs4-IB5mHx5eVfOHzu1e8xlO3q_kb38IM",
+        "firstName": "Brydon",
+        "lastName": "Eastman",
+        "position": "Nerd @ Thinking Machines Labs | Formerly Member of Technical Staff @ OpenAI | PhD in Mathematical Oncology",
+        "publicIdentifier": "brydon-eastman-396719a4",
+        "linkedinUrl": "https://www.linkedin.com/in/brydon-eastman-396719a4"
+      },
+      {
+        "id": "ACoAAACo1tYBGy9sT2OWZuEULOMe4K_b2Y22-F8",
+        "firstName": "Alex",
+        "lastName": "Gartrell",
+        "position": "Engineering @ Thinking Machines, Ex-Meta/Facebook",
+        "publicIdentifier": "alexgartrell",
+        "linkedinUrl": "https://www.linkedin.com/in/alexgartrell"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAABA0sF8BJqwmfoms3veu9TE72tj8JMUQEFA",
+        "firstName": "Sam",
+        "lastName": "Shleifer",
+        "position": "The Biggest Legend",
+        "publicIdentifier": "sam-shleifer-a5307a77",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-shleifer-a5307a77"
+      },
+      {
+        "id": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+        "firstName": "Saurabh",
+        "lastName": "Garg",
+        "position": "Thinking Machines Lab | Prev: Mistral AI, CMU, IIT-B",
+        "publicIdentifier": "saurabh-garg-b680b5b8",
+        "linkedinUrl": "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+      },
+      {
+        "id": "ACoAABhKWCYBiuV3Zv9Hbt8t0j-xMRqxawBcSgw",
+        "firstName": "Kurt",
+        "lastName": "Shuster",
+        "position": "AI Research Engineer",
+        "publicIdentifier": "kurtshuster1",
+        "linkedinUrl": "https://www.linkedin.com/in/kurtshuster1"
+      },
+      {
+        "id": "ACoAAAl87CYBWKLLyGNTbomy6oqIPv-5n34CXIY",
+        "firstName": "Andrew",
+        "lastName": "Tulloch",
+        "position": "AI Research @ Meta",
+        "publicIdentifier": "andrew-tulloch-17238745",
+        "linkedinUrl": "https://www.linkedin.com/in/andrew-tulloch-17238745"
+      },
+      {
+        "id": "ACoAABV61Q0BF3ER-196Zc9GK5TviMrbbIlVGqg",
+        "firstName": "Samuel",
+        "lastName": "Schoenholz",
+        "position": "Thinking Machines Lab | Ex: OpenAI, Google Brain",
+        "publicIdentifier": "samuel-schoenholz-379830a0",
+        "linkedinUrl": "https://www.linkedin.com/in/samuel-schoenholz-379830a0"
+      },
+      {
+        "id": "ACoAAA6jodABB4FFTQD3NzZ7B0vo91j5zOLQQn4",
+        "firstName": "luke",
+        "lastName": "metz",
+        "position": "AI Research + Product",
+        "publicIdentifier": "luke-metz-5003046a",
+        "linkedinUrl": "https://www.linkedin.com/in/luke-metz-5003046a"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "position": "Co-Founder and CEO at Thinking Machines Lab",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAABPg53YBHdOvmp7pU72eDhcho-7cnwyxk1o",
+        "firstName": "Pia",
+        "lastName": "Santos",
+        "position": "Founding Team at Thinking Machines Lab",
+        "publicIdentifier": "piafsantos",
+        "linkedinUrl": "https://www.linkedin.com/in/piafsantos"
+      },
+      {
+        "id": "ACoAAAO-j_IBXcvIzhZtQ7QNkky6tlnQTcFl9qI",
+        "firstName": "Myle",
+        "lastName": "Ott",
+        "position": "ML infra at Thinking Machines",
+        "publicIdentifier": "myleott",
+        "linkedinUrl": "https://www.linkedin.com/in/myleott"
+      },
+      {
+        "id": "ACoAABZu3vEBGglu_p9HYVTNSUtW-S85AjXLF3o",
+        "firstName": "Naman",
+        "lastName": "Goyal",
+        "position": "Member of Technical Staff at Thinking Machines Lab",
+        "publicIdentifier": "ngoyal2707",
+        "linkedinUrl": "https://www.linkedin.com/in/ngoyal2707"
+      },
+      {
+        "id": "ACoAAAEfr_cBRHMjMlzSGASDOeo_I1k2rHaQS8Q",
+        "firstName": "Martina",
+        "lastName": "Roša",
+        "position": "HR Professional I Leadership Coach & Trainer I Talent Development Advisor I ex-Coca-Cola HBC",
+        "publicIdentifier": "martina-roša-9873926",
+        "linkedinUrl": "https://www.linkedin.com/in/martina-roša-9873926"
+      },
+      {
+        "id": "ACoAAAq0rZMBGJjCcXhsLypQ5wAwxAaw4K-0XjY",
+        "firstName": "Trenkwalder",
+        "lastName": "Slovenija",
+        "position": "HR professional & HR solutions",
+        "publicIdentifier": "trenkwalder-slovenija",
+        "linkedinUrl": "https://www.linkedin.com/in/trenkwalder-slovenija"
+      },
+      {
+        "id": "ACoAAAwzVbABMCyzGxM4XILJnc6KE7Xe9jIa960",
+        "firstName": "Julije",
+        "lastName": "Katancevic",
+        "position": "Project Development & EU Funding expert ",
+        "publicIdentifier": "julije-katancevic",
+        "linkedinUrl": "https://www.linkedin.com/in/julije-katancevic"
+      },
+      {
+        "id": "ACoAACXMEHoBjzzF1cTqTjYU8D6gUDrSv_G-QJ4",
+        "firstName": "Ivana",
+        "lastName": "Pavlić Pavlina",
+        "position": "PR @ University of Dubrovnik | PhD student | founder of Perception communication studio | Digital marketing ",
+        "publicIdentifier": "ivana-pavlić-pavlina-84a451158",
+        "linkedinUrl": "https://www.linkedin.com/in/ivana-pavlić-pavlina-84a451158"
+      },
+      {
+        "id": "ACoAADq14cIBkSH3MrFJqCL25wZ-nKzz3r58WwQ",
+        "firstName": "Dino",
+        "lastName": "Okić",
+        "position": "HR Consultant",
+        "publicIdentifier": "dino-okić-22aa5a235",
+        "linkedinUrl": "https://www.linkedin.com/in/dino-okić-22aa5a235"
+      },
+      {
+        "id": "ACoAAAFIuk8BkT-bOlfqzpYoEwoCwEuMpHdH8zg",
+        "firstName": "Breda",
+        "lastName": "Ivanovic",
+        "position": "Strategic Talent &Change Advisor /Executive Coach & Mentor",
+        "publicIdentifier": "breda-ivanovic-37b26b7",
+        "linkedinUrl": "https://www.linkedin.com/in/breda-ivanovic-37b26b7"
+      },
+      {
+        "id": "ACoAAAYBgLABzuTvacxOUFtjILJzbUCS4CBoVGA",
+        "firstName": "Dado",
+        "lastName": "Bjelis",
+        "position": "CEO",
+        "publicIdentifier": "dado-bjelis-2688b329",
+        "linkedinUrl": "https://www.linkedin.com/in/dado-bjelis-2688b329"
+      },
+      {
+        "id": "ACoAACh6eaYBjE-W1Di2NCyFOVVmqhAP_3rvM5s",
+        "firstName": "Neda",
+        "lastName": "Perišić",
+        "position": "COO @ WLDM | Integrator Mindset • Ops Brain • AI(l) Tools When They Help",
+        "publicIdentifier": "nedaperišić",
+        "linkedinUrl": "https://www.linkedin.com/in/nedaperišić"
+      },
+      {
+        "id": "ACoAABSqWd0B17a4-DZ_bizNL96lJepN-IFUjLg",
+        "firstName": "Dejan",
+        "lastName": "Kosić",
+        "position": "Tehnički direktor at Ponikve Krk",
+        "publicIdentifier": "dejan-kosić-56514198",
+        "linkedinUrl": "https://www.linkedin.com/in/dejan-kosić-56514198"
+      },
+      {
+        "id": "ACoAAAaXfa4BCsWRQywHWLmCKNmwwZJRoyOccQ0",
+        "firstName": "Jelena",
+        "lastName": "Janković Radeljić",
+        "position": "Radim s voditeljima i timovima koji žele manje tenzija i više jasne, ljudske komunikacije, suradnje, unutarnje motivacije i smirenosti pod pritiskom",
+        "publicIdentifier": "jelena-janković-radeljić-7a605331",
+        "linkedinUrl": "https://www.linkedin.com/in/jelena-janković-radeljić-7a605331"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAACHkUNgBuZNg-x3wai2i1etBnuxsXIXNdW4"
+    }
+  }
+}

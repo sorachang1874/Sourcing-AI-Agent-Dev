@@ -1,0 +1,1292 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAACKNVUMBykJVfayXy0Gm2CBUV1M0GgE8gKY",
+    "profile_url": "https://www.linkedin.com/in/ACwAACKNVUMBykJVfayXy0Gm2CBUV1M0GgE8gKY"
+  },
+  "item": {
+    "id": "ACoAACKNVUMBztbhQ3RUYQ-Mg89xUJ39N-XJpM4",
+    "publicIdentifier": "longlian",
+    "linkedinUrl": "https://www.linkedin.com/in/longlian",
+    "firstName": "Long",
+    "lastName": "Lian",
+    "emails": [
+      {
+        "email": "long.lian@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Member of Technical Staff at Thinking Machines Lab | Post-training Team | Large-scale RL | Multi-agent Systems | Real-time Multi-modal Models",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco Bay Area",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "579687747",
+    "registeredAt": "2017-07-13T23:23:41.625Z",
+    "topSkills": null,
+    "connectionsCount": 603,
+    "followerCount": 647,
+    "verified": true,
+    "about": "I'm a second-year PhD student in EECS at UC Berkeley. I obtained my B.A. in Computer Science at UC Berkeley. I am primarily interested in multi-modal generative models as well as efficient deep learning.",
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 12,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "17939",
+        "companyId": "2517",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2517/",
+        "schoolName": "University of California, Berkeley"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/D4E03AQG8-loxGc-Qlw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1725864094202?e=1776902400&v=beta&t=dMjcEkdtiPjMqmb2c4NHVAPdjiC3_-uJ_gmE41gP3TI",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQG8-loxGc-Qlw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1725864094202?e=1776902400&v=beta&t=dMjcEkdtiPjMqmb2c4NHVAPdjiC3_-uJ_gmE41gP3TI",
+          "width": 800,
+          "height": 800,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQG8-loxGc-Qlw/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1725864094247?e=1776902400&v=beta&t=GvGOA7hyhWZ4eYLRhloSRf-GEVXunzmeuatbqdOsXP8",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQG8-loxGc-Qlw/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1725864094247?e=1776902400&v=beta&t=TJHQkdEdUiXkMqnBNct4Itjv5k9pDsW5cpXPfMXBd1k",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/D4E03AQG8-loxGc-Qlw/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1725864094247?e=1776902400&v=beta&t=PUL9D4iJFJe2-aclq2lMuJYBOrOR765gmL-r5AeQsig",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/D4E03AQG8-loxGc-Qlw/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1725864094202?e=1776902400&v=beta&t=dMjcEkdtiPjMqmb2c4NHVAPdjiC3_-uJ_gmE41gP3TI",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Member of Technical Staff at Thinking Machines Lab | Post-training Team | Large-scale RL | Multi-agent Systems | Real-time Multi-modal Models",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "5 mos",
+        "description": "Working with post-training team on large-scale reinforcement learning, multi-agent systems, and real-time multi-modal models.",
+        "skills": null,
+        "startDate": {
+          "month": "Dec",
+          "year": 2025,
+          "text": "Dec 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Scientist Intern",
+        "location": "Menlo Park, California, United States",
+        "employmentType": "Internship",
+        "workplaceType": "On-site",
+        "companyName": "Meta",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/10667/",
+        "companyId": "10667",
+        "duration": "10 mos",
+        "description": "Working as a Research Scientist Intern at GenAI Llama Pretraining Team",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2025,
+          "text": "May 2025"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2026,
+          "text": "Feb 2026"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_400_400/B56ZlkdQSaI8AY-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=p49QSb6MLICE45EPVibRAMvjBTFqG9mipbOPcmjb900",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_200_200/B56ZlkdQSaI8AI-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=V4YqtCDjPy_b85qoGkRLNc7lEG9lz4-2Rie9s-FDQHA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQHBmbxCDP0JQQ/company-logo_100_100/B56ZlkdQSaI8AQ-/0/1758327015620/meta_logo?e=1776902400&v=beta&t=QcjnVKL6SDXj2k1gOzX04SC-Gyyr3Fl-UCLiuS1LbuQ",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Graduate Student Researcher",
+        "location": "Berkeley, California, United States",
+        "employmentType": "Full-time",
+        "workplaceType": "On-site",
+        "companyName": "Berkeley Artificial Intelligence Research",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/19024048/",
+        "companyId": "19024048",
+        "duration": "6 yrs 3 mos",
+        "description": "•\tWorking with Prof. Trevor Darrell and Prof. Adam Yala on multi-modal generative models as well as efficient deep learning with medical imaging applications\n•\tPreviously worked with Prof. Stella Yu on unsupervised video segmentation, long-tailed recognition, unsupervised representation learning, and semi-supervised learning",
+        "skills": [
+          "Python (Programming Language)",
+          "Computer Vision",
+          "Scholarly Research"
+        ],
+        "startDate": {
+          "month": "Dec",
+          "year": 2019,
+          "text": "Dec 2019"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2026,
+          "text": "Feb 2026"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQFr7WkPbEyg8g/company-logo_400_400/company-logo_400_400/0/1630609127403?e=1776902400&v=beta&t=4HbqUpGMihzSQykR1Rg7q-gC5jUCgPE0F0N1Wjp1YzI",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFr7WkPbEyg8g/company-logo_400_400/company-logo_400_400/0/1630609127403?e=1776902400&v=beta&t=4HbqUpGMihzSQykR1Rg7q-gC5jUCgPE0F0N1Wjp1YzI",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFr7WkPbEyg8g/company-logo_200_200/company-logo_200_200/0/1630609127403?e=1776902400&v=beta&t=us9L72LDLXmxSVncjtI60te8TTdcAhOO7Z026bJyzfc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQFr7WkPbEyg8g/company-logo_100_100/company-logo_100_100/0/1630609127403?e=1776902400&v=beta&t=y_BU9Oc3QwDcqMes-Nkw3Rr7uaYaQ5jl9lE0m7y-QOk",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Staff",
+        "location": "Berkeley, CA, United States",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Open Computing Facility | UC Berkeley",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Open+Computing+Facility+%7C+UC+Berkeley",
+        "duration": "7 yrs 6 mos",
+        "description": "Helped student groups at Berkeley with website maintenance on Linux servers in staff hours\nDeveloped vivhost, a virtual host configuration validator in Python\nHelped test and optimize the Network File System on Linux servers",
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2018,
+          "text": "Sep 2018"
+        },
+        "endDate": {
+          "month": "Feb",
+          "year": 2026,
+          "text": "Feb 2026"
+        }
+      },
+      {
+        "position": "Research Intern",
+        "location": "Santa Clara, California, United States",
+        "employmentType": "Internship",
+        "workplaceType": "On-site",
+        "companyName": "NVIDIA",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/3608/",
+        "companyId": "3608",
+        "duration": "7 mos",
+        "description": "Working on multi-modal research at NVIDIA Research (Deep Imagination Research team)",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2024,
+          "text": "May 2024"
+        },
+        "endDate": {
+          "month": "Nov",
+          "year": 2024,
+          "text": "Nov 2024"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGV36q2EowSyw/company-logo_400_400/company-logo_400_400/0/1724881581208/nvidia_logo?e=1776902400&v=beta&t=C4mWS6vTQukkUtFskEc75guVQWnxYpncWO_y7nNqVeY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGV36q2EowSyw/company-logo_400_400/company-logo_400_400/0/1724881581208/nvidia_logo?e=1776902400&v=beta&t=C4mWS6vTQukkUtFskEc75guVQWnxYpncWO_y7nNqVeY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGV36q2EowSyw/company-logo_200_200/company-logo_200_200/0/1724881581208/nvidia_logo?e=1776902400&v=beta&t=3Eb3ojsmrCjgggr-i-ceH5i78HKTHMfU_Sw6-_Qwl9I",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGV36q2EowSyw/company-logo_100_100/company-logo_100_100/0/1724881581208/nvidia_logo?e=1776902400&v=beta&t=J1fAnNhA-iMhp5no8LIGLr70F4jKZs6zO4pSLqTQaFc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Research Intern at Berkeley Institute for Data Science",
+        "location": "Berkeley, CA, United States",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "University of California, Berkeley",
+        "companyLinkedinUrl": "https://www.linkedin.com/school/uc-berkeley/",
+        "companyId": "2517",
+        "companyUniversalName": "uc-berkeley",
+        "duration": "3 yrs 9 mos",
+        "description": "- Worked with David Anthroff to develop Queryverse.jl, the core data science software stack for the Julia language\n- Wrote extensions for libraries such as NamedTuple and FileIO in Julia\n",
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2018,
+          "text": "Sep 2018"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2022,
+          "text": "May 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_400_400/company-logo_400_400/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=ihsqGpnHzj0nlc8nr3zQwTYbq6GYQDs_WRmOHxXO6Cs",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_400_400/company-logo_400_400/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=ihsqGpnHzj0nlc8nr3zQwTYbq6GYQDs_WRmOHxXO6Cs",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_200_200/company-logo_200_200/0/1732135669730/uc_berkeley_logo?e=1776902400&v=beta&t=99cgQbgSotN9XiK7TbWS3PhqRVGT8S6VKfitEcMn0-E",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_100_100/company-logo_100_100/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=spLtug0cp3xqHCXq1OoZudTryqzyY85FoIZwfJ-_XzA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Website Manager",
+        "location": "Berkeley, CA, United States",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Berkeley Chinese Students and Scholars Association",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/18252901/",
+        "companyId": "18252901",
+        "duration": "3 yrs 9 mos",
+        "description": "•\tDoing maintenance for the group website (Linux Administration, PHP)",
+        "skills": null,
+        "startDate": {
+          "month": "Sep",
+          "year": 2018,
+          "text": "Sep 2018"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2022,
+          "text": "May 2022"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQF_PXPZI5T8ew/company-logo_400_400/company-logo_400_400/0/1631324090491?e=1776902400&v=beta&t=rcyb_1j0rTCqyL3HAekumm_eITgWGdj17Gmy-NGmy8A",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQF_PXPZI5T8ew/company-logo_400_400/company-logo_400_400/0/1631324090491?e=1776902400&v=beta&t=rcyb_1j0rTCqyL3HAekumm_eITgWGdj17Gmy-NGmy8A",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQF_PXPZI5T8ew/company-logo_200_200/company-logo_200_200/0/1631324090491?e=1776902400&v=beta&t=T77KMi_9mMRp6LR0P4552_vW0fUE3XsH8SwQ8-NfN9E",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQF_PXPZI5T8ew/company-logo_100_100/company-logo_100_100/0/1631324090491?e=1776902400&v=beta&t=D-1gxuRGvhiWyLvWWJNKiVO2Tz9j24h9l4MN6JbZrPI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Software Engineering Intern",
+        "location": "San Francisco, CA, United States",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Yelp",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/31517/",
+        "companyId": "31517",
+        "duration": "4 mos",
+        "description": "•\tDeveloped Verified License for Professionals, which extends existing license verification service to professionals such as doctors and lawyers with React, Node.js, NoSQL, and Python (Pyramid)\n•\tDeveloping enhanced purchase flow for license verification service which intends to improve the license verification rate from 50% to 80%, which is expected to bring Yelp about $2M per year\n•\tImproved internal short URL service so that it gives suggestions when a nonexistent short URL is typed at a corporate hackathon",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2019,
+          "text": "May 2019"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2019,
+          "text": "Aug 2019"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQEZtZ8AGku9DA/company-logo_400_400/company-logo_400_400/0/1631836422115/yelp_com_logo?e=1776902400&v=beta&t=_7jBzwZepBu91K8Da2ZEfwUBCzbwO8c_rh8x7KDV5t4",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEZtZ8AGku9DA/company-logo_400_400/company-logo_400_400/0/1631836422115/yelp_com_logo?e=1776902400&v=beta&t=_7jBzwZepBu91K8Da2ZEfwUBCzbwO8c_rh8x7KDV5t4",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEZtZ8AGku9DA/company-logo_200_200/company-logo_200_200/0/1631836422115/yelp_com_logo?e=1776902400&v=beta&t=y3j7SWed_LWi2FHvQOfauZJa2g2qRpxy0gHzncXxlzk",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQEZtZ8AGku9DA/company-logo_100_100/company-logo_100_100/0/1631836422115/yelp_com_logo?e=1776902400&v=beta&t=Quw6mMwaIn9FYkaBy0jbWXwvsWSShMPhg1ZXGW7NWOM",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Full Stack Engineering Intern",
+        "location": "Xiamen, Fujian, China",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Panopath Education and Technology",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/18300273/",
+        "companyId": "18300273",
+        "duration": "9 mos",
+        "description": "Designed a hybrid mobile app for the organization with 200, 000+ users (Angular, TypeScript, and Laravel)\nDeveloped a student event-sharing platform with 100, 000+ users (Vue.js and Laravel)\nBuilt several web apps for events such as 2018 New Year Offer Generator (generate offer images with Canvas) and Match Your School (match students with suitable schools, with Vue.js and Node.js)\n",
+        "skills": null,
+        "startDate": {
+          "month": "Nov",
+          "year": 2017,
+          "text": "Nov 2017"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2018,
+          "text": "Jul 2018"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGOObOO4DuH_Q/company-logo_400_400/company-logo_400_400/0/1631335476663?e=1776902400&v=beta&t=1BPBOhHS_46exXzOPUN7OF6tR2uyQqzDvA-B1oVpl6g",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGOObOO4DuH_Q/company-logo_400_400/company-logo_400_400/0/1631335476663?e=1776902400&v=beta&t=1BPBOhHS_46exXzOPUN7OF6tR2uyQqzDvA-B1oVpl6g",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGOObOO4DuH_Q/company-logo_200_200/company-logo_200_200/0/1631335476663?e=1776902400&v=beta&t=4tI-bRkrhraQJ9_eNcPwrqcdy88t1rQya5ZicJGOX0Q",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4D0BAQGOObOO4DuH_Q/company-logo_100_100/company-logo_100_100/0/1631335476663?e=1776902400&v=beta&t=icPICVmHlFQ5xZ9do0z7JGAIF7l2AEAOhQc-J7IWX24",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Backend Engineering Intern",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Hongyi Huawei Technology Limited",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Hongyi+Huawei+Technology+Limited",
+        "duration": "3 mos",
+        "description": "Migrated the business logic layer of the city bus e-payment system to a C framework (previously in Pro*C)",
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2018,
+          "text": "Mar 2018"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2018,
+          "text": "May 2018"
+        }
+      },
+      {
+        "position": "Software Engineering Intern",
+        "location": "Xiamen, Fujian, China",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Hex Technology Limited",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Hex+Technology+Limited",
+        "duration": "2 mos",
+        "description": "Developed freight evaluation system which is embedded into their online store now\nWrote the shipping part of the web back-end for the online store with DHL APIs in PHP",
+        "skills": null,
+        "startDate": {
+          "month": "Apr",
+          "year": 2017,
+          "text": "Apr 2017"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2017,
+          "text": "May 2017"
+        }
+      },
+      {
+        "position": "Teaching Assistant",
+        "location": "Xiamen, Fujian, China",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "New Oriental Education & Technology Group",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/624154/",
+        "companyId": "624154",
+        "duration": "3 mos",
+        "description": "Designed and taught the Advanced Placement Computer Science A course (Java)",
+        "skills": null,
+        "startDate": {
+          "month": "Mar",
+          "year": 2017,
+          "text": "Mar 2017"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2017,
+          "text": "May 2017"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C4E0BAQG7ayI8vmrdug/company-logo_400_400/company-logo_400_400/0/1631340283296?e=1776902400&v=beta&t=rEKA7O5XBkiYpsfi1rYSNhKPch8XEvTH7N3TYx5w8sg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQG7ayI8vmrdug/company-logo_400_400/company-logo_400_400/0/1631340283296?e=1776902400&v=beta&t=rEKA7O5XBkiYpsfi1rYSNhKPch8XEvTH7N3TYx5w8sg",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQG7ayI8vmrdug/company-logo_200_200/company-logo_200_200/0/1631340283296?e=1776902400&v=beta&t=awimviRrJOkWLs0jxTgl55U90hGHcQmNSpdSDC26SaA",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C4E0BAQG7ayI8vmrdug/company-logo_100_100/company-logo_100_100/0/1631340283296?e=1776902400&v=beta&t=WHLspHfdihixVSckIKlSjzmSn85xjwI5QLDzIqjXu3M",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "University of California, Berkeley",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2517/",
+        "schoolId": "2517",
+        "degree": "Doctor of Philosophy - PhD",
+        "fieldOfStudy": "Electrical Engineering and Computer Sciences",
+        "skills": [],
+        "description": "Advisors: Prof. Trevor Darrell and Prof. Adam Yala",
+        "startDate": {
+          "month": "Aug",
+          "year": 2022,
+          "text": "Aug 2022"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2027,
+          "text": "May 2027"
+        },
+        "period": "Aug 2022 - May 2027",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_400_400/company-logo_400_400/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=ihsqGpnHzj0nlc8nr3zQwTYbq6GYQDs_WRmOHxXO6Cs",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_400_400/company-logo_400_400/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=ihsqGpnHzj0nlc8nr3zQwTYbq6GYQDs_WRmOHxXO6Cs",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_200_200/company-logo_200_200/0/1732135669730/uc_berkeley_logo?e=1776902400&v=beta&t=99cgQbgSotN9XiK7TbWS3PhqRVGT8S6VKfitEcMn0-E",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_100_100/company-logo_100_100/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=spLtug0cp3xqHCXq1OoZudTryqzyY85FoIZwfJ-_XzA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "University of California, Berkeley",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/2517/",
+        "schoolId": "2517",
+        "degree": "Bachelor of Arts - BA",
+        "fieldOfStudy": "Computer Science and Cognitive Science",
+        "skills": [],
+        "insights": "Grade: 4.0\nActivities and societies: Open Computing Facility, IEEE, Berkeley CSSA, and Undergraduate Research Apprentice Program",
+        "startDate": {
+          "month": "Aug",
+          "year": 2018,
+          "text": "Aug 2018"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2022,
+          "text": "Mar 2022"
+        },
+        "period": "Aug 2018 - Mar 2022",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_400_400/company-logo_400_400/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=ihsqGpnHzj0nlc8nr3zQwTYbq6GYQDs_WRmOHxXO6Cs",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_400_400/company-logo_400_400/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=ihsqGpnHzj0nlc8nr3zQwTYbq6GYQDs_WRmOHxXO6Cs",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_200_200/company-logo_200_200/0/1732135669730/uc_berkeley_logo?e=1776902400&v=beta&t=99cgQbgSotN9XiK7TbWS3PhqRVGT8S6VKfitEcMn0-E",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGwjF_5CYj_JQ/company-logo_100_100/company-logo_100_100/0/1732135669731/uc_berkeley_logo?e=1776902400&v=beta&t=spLtug0cp3xqHCXq1OoZudTryqzyY85FoIZwfJ-_XzA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Stanford University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/1792/",
+        "schoolId": "1792",
+        "degree": "High School Summer College",
+        "fieldOfStudy": null,
+        "skills": [],
+        "startDate": {
+          "year": 2017,
+          "text": "2017"
+        },
+        "endDate": {
+          "year": 2017,
+          "text": "2017"
+        },
+        "period": "2017 - 2017",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_400_400/company-logo_400_400/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=zzE-1MKqCLrmkqb1p2hJqhVuV2hbdZzC0j_ok6Kyhk8",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_400_400/company-logo_400_400/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=zzE-1MKqCLrmkqb1p2hJqhVuV2hbdZzC0j_ok6Kyhk8",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_200_200/company-logo_200_200/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=0xd9OiQTt31rPm8_wUnQNPsZKrh8XBXIidNxV9RaB5s",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/C560BAQHr9suxyJBXMw/company-logo_100_100/company-logo_100_100/0/1635534378870/stanford_university_logo?e=1776902400&v=beta&t=9qvsDNg8-8GHe51pI3kr1K_DGeN_zXJEt0DlOSSFopY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [
+      {
+        "title": "uARM.wasm",
+        "duration": "Oct 2018 - Present",
+        "startDate": {
+          "month": "Oct",
+          "year": 2018,
+          "text": "Oct 2018"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/",
+        "description": "I ported an ARM emulator to WebAssembly which runs Linux in browsers (WebAssembly, C, Emscripten).",
+        "link": "https://github.com/TonyLianLong/uARM.wasm"
+      },
+      {
+        "title": "Queryverse",
+        "duration": "Sep 2018 - Present",
+        "startDate": {
+          "month": "Sep",
+          "year": 2018,
+          "text": "Sep 2018"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": null,
+        "description": "A query library in Julia that enables data scientists to read, query, and manipulate data",
+        "link": "https://github.com/queryverse"
+      },
+      {
+        "title": "Code Recipe, an online interactive textbook platform ",
+        "duration": "Jan 2018 - Present",
+        "startDate": {
+          "month": "Jan",
+          "year": 2018,
+          "text": "Jan 2018"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "associatedWith": null,
+        "associatedWithLink": null,
+        "description": "•\tDesigned a website to host textbooks with interactive features such as embedded coding area in the text (JavaScript, HTML, SCSS, Node.js, Vue, Webpack, Redis, PHP, and Laravel)\n•\tProvide free online resources for students to learn Java, Python, and Graphical Programming \n",
+        "link": "https://coderecipe.cn"
+      },
+      {
+        "title": "Personal Website",
+        "duration": "Nov 2017 - Present",
+        "startDate": {
+          "month": "Nov",
+          "year": 2017,
+          "text": "Nov 2017"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "associatedWith": null,
+        "associatedWithLink": null,
+        "description": "A personal blog built on Jekyll about my personal thoughts and interests.",
+        "link": "https://tonylian.com"
+      },
+      {
+        "title": "Panopath Student-Matching Platform",
+        "duration": "Jan 2018 - Jul 2018",
+        "startDate": {
+          "month": "Jan",
+          "year": 2018,
+          "text": "Jan 2018"
+        },
+        "endDate": {
+          "month": "Jul",
+          "year": 2018,
+          "text": "Jul 2018"
+        },
+        "associatedWith": "Associated with Panopath Education and Technology",
+        "associatedWithLink": null,
+        "description": "This is a hybrid mobile app for iOS and Android devices which acts as a forum for colleges and matches high school students with college students so that they can ask them about experiences in college. This platform now has more than 200, 000 users.",
+        "link": "https://itunes.apple.com/us/app/%E8%BF%87%E6%9D%A5%E4%BA%BA/id1106282246?mt=8"
+      },
+      {
+        "title": "Pano Activity WeChat Mini Program",
+        "duration": "Nov 2017 - May 2018",
+        "startDate": {
+          "month": "Nov",
+          "year": 2017,
+          "text": "Nov 2017"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2018,
+          "text": "May 2018"
+        },
+        "associatedWith": "Associated with Panopath Education and Technology",
+        "associatedWithLink": null,
+        "description": "This is a student event-sharing platform with 100, 000+ users with a Vue-like development stack called WePY as front-end and Laravel as back-end."
+      },
+      {
+        "title": "Minu, a menu translator app",
+        "duration": "Jun 2017 - Nov 2017",
+        "startDate": {
+          "month": "Jun",
+          "year": 2017,
+          "text": "Jun 2017"
+        },
+        "endDate": {
+          "month": "Nov",
+          "year": 2017,
+          "text": "Nov 2017"
+        },
+        "associatedWith": null,
+        "associatedWithLink": null,
+        "description": "This is an iOS app that uses OpenCV to recognize text in the image and to display dish description in multiple languages. It was programmed with Objective-C, Swift, and PHP (backend) as a personal project.\n\nAn article, An English-to-Chinese Menu Scanning and Translating Application Based on Mobile Phone Camera, was published in journal Electronics World about the app.",
+        "link": "https://github.com/TonyLianLong/Minu"
+      }
+    ],
+    "volunteering": [
+      {
+        "role": "Mentor",
+        "description": "Mentored hackers for three days with Python, JavaScript, and Linux in the world's largest collegiate hackathon\nHelped teams solved problems about CORS, Ajax, and React.js",
+        "duration": "Nov 2018 - Present · 7 yrs 6 mos",
+        "startDate": {
+          "month": "Nov",
+          "year": 2018,
+          "text": "Nov 2018"
+        },
+        "endDate": {
+          "text": "Present · 7 yrs 6 mos"
+        },
+        "organizationName": "CalHack 5.0",
+        "organizationLinkedinUrl": null
+      },
+      {
+        "role": "Volunteer",
+        "description": "Helped with habitat restoration, pulled out weeds, and watered grass in Palo Alto area",
+        "duration": "Jul 2017 - Aug 2017 · 2 mos",
+        "startDate": {
+          "month": "Jul",
+          "year": 2017,
+          "text": "Jul 2017"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2017,
+          "text": "Aug 2017 · 2 mos"
+        },
+        "organizationName": "Grassroot Ecology",
+        "organizationLinkedinUrl": null,
+        "cause": "Environment"
+      }
+    ],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Leadership",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Computer Vision",
+        "positions": [
+          "Graduate Student Researcher at Berkeley Artificial Intelligence Research"
+        ]
+      },
+      {
+        "name": "Scholarly Research",
+        "positions": [
+          "Graduate Student Researcher at Berkeley Artificial Intelligence Research"
+        ]
+      },
+      {
+        "name": "Python (Programming Language)",
+        "positions": [
+          "Graduate Student Researcher at Berkeley Artificial Intelligence Research"
+        ]
+      },
+      {
+        "name": "Full-Stack Development",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Mobile Application Development",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "React.js",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Project Management"
+      },
+      {
+        "name": "Node.js"
+      },
+      {
+        "name": "Laravel"
+      },
+      {
+        "name": "JavaScript",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Vue.js"
+      },
+      {
+        "name": "PHP",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "C++",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "HTML"
+      },
+      {
+        "name": "Cascading Style Sheets (CSS)"
+      },
+      {
+        "name": "Ionic Framework"
+      },
+      {
+        "name": "Angular"
+      },
+      {
+        "name": "Arduino"
+      },
+      {
+        "name": "Julia (Programming Language)"
+      },
+      {
+        "name": "Microsoft Word"
+      },
+      {
+        "name": "Microsoft PowerPoint"
+      },
+      {
+        "name": "Microsoft Office"
+      },
+      {
+        "name": "Objective-C"
+      }
+    ],
+    "publications": [
+      {
+        "title": "An English-to-Chinese Menu Scanning and Translating Application Based on Mobile Phone Camera",
+        "publishedAt": "Electronics World · Sep 1, 2017",
+        "link": "https://scholar.google.com/scholar?hl=en&as_sdt=0%2C5&q=%E4%B8%80%E7%A7%8D%E5%9F%BA%E4%BA%8E%E6%89%8B%E6%9C%BA%E6%91%84%E5%83%8F%E5%A4%B4%E7%9A%84%E8%8B%B1%E6%96%87%E8%8F%9C%E5%8D%95%E6%89%AB%E6%8F%8F%E8%AF%86%E5%88%AB%E7%BF%BB%E8%AF%91%E5%BA%94%E7%94%A8"
+      }
+    ],
+    "courses": [
+      {
+        "title": "AP Computer Science A"
+      },
+      {
+        "title": "Client-end Web Technologies",
+        "number": "CS193C",
+        "associatedWith": "Associated with Stanford University",
+        "associatedWithLink": "https://www.linkedin.com/company/1792/"
+      },
+      {
+        "title": "Data Structure",
+        "number": "CS106B",
+        "associatedWith": "Associated with Stanford University",
+        "associatedWithLink": "https://www.linkedin.com/company/1792/"
+      },
+      {
+        "title": "Machine Learning by Stanford University on Coursera",
+        "number": ""
+      },
+      {
+        "title": "Supervised Research: Interdisciplinary Studies",
+        "number": "UGSI 192E",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "Unix Environment",
+        "number": "CS9E",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      }
+    ],
+    "patents": [
+      {
+        "title": "A Copy/Scanning Device with Automatic Image Adjustments",
+        "number": "CN CN201720565893.3",
+        "issuedAt": "Dec 12, 2017"
+      },
+      {
+        "title": "Device and system used for monitoring indoor air quality",
+        "number": "CN CN201620022057.6",
+        "issuedAt": "Jun 15, 2016"
+      }
+    ],
+    "honorsAndAwards": [
+      {
+        "title": "National No. 11 in IEEExtreme",
+        "issuedBy": "IEEExtreme 12.0",
+        "issuedAt": "Oct 2018",
+        "description": "Got national no. 11 in IEEExtreme 12.0 24-hour programming competition in 2018",
+        "associatedWith": "Associated with University of California, Berkeley",
+        "associatedWithLink": "https://www.linkedin.com/company/2517/"
+      },
+      {
+        "title": "AP Scholar with Distinction",
+        "issuedBy": "College Board",
+        "issuedAt": "Jul 2018",
+        "description": "Awarded AP Scholar with Distinction twice in 2017 and 2018 due to performance in 13 AP exams",
+        "associatedWith": null,
+        "associatedWithLink": null
+      },
+      {
+        "title": "Global Top 50 in Microsoft Imagine Cup Big Idea Challenge",
+        "issuedBy": "Microsoft Imagine Cup Big Idea Challenge 2018",
+        "issuedAt": "Jul 2018",
+        "associatedWith": null,
+        "associatedWithLink": null
+      }
+    ],
+    "languages": [
+      {
+        "name": "Chinese",
+        "proficiency": "Native or bilingual proficiency"
+      },
+      {
+        "name": "English",
+        "proficiency": "Full professional proficiency"
+      }
+    ],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAACmzAtgBiDGd-HW1TzeGD6e3xWxnqDi9o-0",
+        "firstName": "Zitong",
+        "lastName": "Yang",
+        "publicIdentifier": "zitongyang",
+        "linkedinUrl": "https://www.linkedin.com/in/zitongyang"
+      },
+      {
+        "id": "ACoAAAvJF7sB5qNmaXeaUL1q1J3nRpTpH7T4uMo",
+        "firstName": "Alane",
+        "lastName": "Suhr",
+        "publicIdentifier": "alane-suhr",
+        "linkedinUrl": "https://www.linkedin.com/in/alane-suhr"
+      },
+      {
+        "id": "ACoAAEZnBtoBb1Us7ZKgHfOXAYT764pKcDQy848",
+        "firstName": "Songlin",
+        "lastName": "Yang",
+        "publicIdentifier": "songlin-yang-b8a69728b",
+        "linkedinUrl": "https://www.linkedin.com/in/songlin-yang-b8a69728b"
+      },
+      {
+        "id": "ACoAAA9FUX0B7a2RENTijlY0CAsLEzIrhxVn1tI",
+        "firstName": "Kumar Krishna",
+        "lastName": "Agrawal",
+        "publicIdentifier": "kumar-krishna-agrawal",
+        "linkedinUrl": "https://www.linkedin.com/in/kumar-krishna-agrawal"
+      },
+      {
+        "id": "ACoAACHgqNcBO7G9QHjfnTyp5v6rVbPMJ19f1dc",
+        "firstName": "Claire",
+        "lastName": "Fu",
+        "publicIdentifier": "clairecfu",
+        "linkedinUrl": "https://www.linkedin.com/in/clairecfu"
+      },
+      {
+        "id": "ACoAACA1ZlYBhPNODsf7Z3UNo1tLYMShFQ7OQJw",
+        "firstName": "Yujia",
+        "lastName": "Bao",
+        "publicIdentifier": "yujia-bao-506b76130",
+        "linkedinUrl": "https://www.linkedin.com/in/yujia-bao-506b76130"
+      },
+      {
+        "id": "ACoAAAJCtdYBRi8BiGFNSZzFVfxFBlEgSSoufTs",
+        "firstName": "Sida",
+        "lastName": "Wang",
+        "publicIdentifier": "sidaw",
+        "linkedinUrl": "https://www.linkedin.com/in/sidaw"
+      },
+      {
+        "id": "ACoAADgLvm4BAaa-N5zNQvfP5qFptuA8bvJs3nM",
+        "firstName": "Yifei",
+        "lastName": "Zhou",
+        "publicIdentifier": "yifei-zhou-57aa9b222",
+        "linkedinUrl": "https://www.linkedin.com/in/yifei-zhou-57aa9b222"
+      },
+      {
+        "id": "ACoAAAcZQskBApzcFjXO_2xd3SoameA9CUzsxPI",
+        "firstName": "Felix Juefei",
+        "lastName": "Xu",
+        "publicIdentifier": "felixu",
+        "linkedinUrl": "https://www.linkedin.com/in/felixu"
+      },
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAAAo8b9ABLZPSq5QOBQVbyWJquRDabhE6VuM",
+        "firstName": "Yin",
+        "lastName": "Cui",
+        "publicIdentifier": "yin-cui-5a861a49",
+        "linkedinUrl": "https://www.linkedin.com/in/yin-cui-5a861a49"
+      },
+      {
+        "id": "ACoAADdhGbIBPtVAyB1chSyygdeMIjV-BCGI2mA",
+        "firstName": "Jiayi",
+        "lastName": "Pan",
+        "publicIdentifier": "jiayi-pan-7aa1a721b",
+        "linkedinUrl": "https://www.linkedin.com/in/jiayi-pan-7aa1a721b"
+      },
+      {
+        "id": "ACoAABhIg7YBYN2NPIu8voYj5D7JQVZGxonqHvc",
+        "firstName": "Ruiqi",
+        "lastName": "Zhong",
+        "publicIdentifier": "ruiqi-zhong-09a533b4",
+        "linkedinUrl": "https://www.linkedin.com/in/ruiqi-zhong-09a533b4"
+      },
+      {
+        "id": "ACoAACZtuXoBhq3wN2mAtNPMbNFoTx13I23z1DE",
+        "firstName": "Yifan",
+        "lastName": "Ding",
+        "publicIdentifier": "yifan-ding-98ab0015b",
+        "linkedinUrl": "https://www.linkedin.com/in/yifan-ding-98ab0015b"
+      },
+      {
+        "id": "ACoAACy2BxwB9fCrfCBI06w0X-gHyQTFLJIpJGc",
+        "firstName": "Guangxuan",
+        "lastName": "X.",
+        "publicIdentifier": "xgx",
+        "linkedinUrl": "https://www.linkedin.com/in/xgx"
+      },
+      {
+        "id": "ACoAAA4HVN4BOZg5espOvMVoO3OY04NZmuqvMCo",
+        "firstName": "Shaojie",
+        "lastName": "Bai",
+        "publicIdentifier": "shaojie-bai",
+        "linkedinUrl": "https://www.linkedin.com/in/shaojie-bai"
+      },
+      {
+        "id": "ACoAAAxCqr4BV5W3LD5YhuVhR5iADP19ep2Ymlo",
+        "firstName": "Adam",
+        "lastName": "Yala",
+        "publicIdentifier": "adamyala1",
+        "linkedinUrl": "https://www.linkedin.com/in/adamyala1"
+      },
+      {
+        "id": "ACoAAAAER4MBpxCHZjGRPSmPqcvvkU8sFNy1fqE",
+        "firstName": "Trevor",
+        "lastName": "Darrell",
+        "publicIdentifier": "trevor-darrell-36b116",
+        "linkedinUrl": "https://www.linkedin.com/in/trevor-darrell-36b116"
+      },
+      {
+        "id": "ACoAACEIeUgBnBwepWHCHJPiNFftF4OAuftO-1I",
+        "firstName": "Yunhao",
+        "lastName": "Ge",
+        "publicIdentifier": "yunhao-ge-720727135",
+        "linkedinUrl": "https://www.linkedin.com/in/yunhao-ge-720727135"
+      },
+      {
+        "id": "ACoAABVAP64BY4RszeJt11vohsLM-gj1PiARl2o",
+        "firstName": "Jiaming",
+        "lastName": "Cui",
+        "publicIdentifier": "jiaming-cui-57a49a9b",
+        "linkedinUrl": "https://www.linkedin.com/in/jiaming-cui-57a49a9b"
+      },
+      {
+        "id": "ACoAABTj5y4BqtC849feiZFbZFhmBMLQXxsABa8",
+        "firstName": "Daniela",
+        "lastName": "Tower",
+        "position": "Environmental Science | Water Resource Management & Coastal Sciences | Triple-Bottom-Line (Planet - People - Prosperity) Frameworks | Comprehensive Resilience Planning | Air Quality",
+        "publicIdentifier": "daniela-tower-21246099",
+        "linkedinUrl": "https://www.linkedin.com/in/daniela-tower-21246099"
+      },
+      {
+        "id": "ACoAAAi7TygBfPWhgjY8dm0pJHwNh8onsBYZRYE",
+        "firstName": "Iordanis",
+        "lastName": "Tzamtzis",
+        "position": "Forester & Environmental Scientist",
+        "publicIdentifier": "iordanis-tzamtzis-20808841",
+        "linkedinUrl": "https://www.linkedin.com/in/iordanis-tzamtzis-20808841"
+      },
+      {
+        "id": "ACoAAEiLXb4B1MiAI9-LkCQJhmubEDxW7TcEWfg",
+        "firstName": "Mil",
+        "lastName": "H.",
+        "position": "Environmental Specialist",
+        "publicIdentifier": "mil-h-31272829b",
+        "linkedinUrl": "https://www.linkedin.com/in/mil-h-31272829b"
+      },
+      {
+        "id": "ACoAAAD2MxwBPRSUhIgs09GoV5ScbHk1R4Cckyo",
+        "firstName": "Bill",
+        "lastName": "Flanagan",
+        "position": "Co-Founder & Director at Aspire Sustainability",
+        "publicIdentifier": "billflanagan-lca",
+        "linkedinUrl": "https://www.linkedin.com/in/billflanagan-lca"
+      },
+      {
+        "id": "ACoAAA82a8cB4f7wUCrL-mffsC4yIyLe3RCQHLw",
+        "firstName": "Siegfried",
+        "lastName": "Möslein",
+        "position": "EHS Consultant",
+        "publicIdentifier": "siegfried-möslein-63358371",
+        "linkedinUrl": "https://www.linkedin.com/in/siegfried-möslein-63358371"
+      },
+      {
+        "id": "ACoAACLTLeQBwUWrTDQaD1XYVHghdVs_cRyPwyU",
+        "firstName": "Leia",
+        "lastName": "Berube",
+        "position": "Manager of Environmental Solutions Team at Solana Center for Environmental Innovation ",
+        "publicIdentifier": "leiaberube",
+        "linkedinUrl": "https://www.linkedin.com/in/leiaberube"
+      },
+      {
+        "id": "ACoAAAJPn3MBU5Pndy73BamAUtLbeLC3ObYbCsM",
+        "firstName": "Lotta",
+        "lastName": "Kanto Oeqvist",
+        "position": "Chief Sustainability Officer @ Solenis",
+        "publicIdentifier": "lotta-kanto-oeqvist-a17b9910",
+        "linkedinUrl": "https://www.linkedin.com/in/lotta-kanto-oeqvist-a17b9910"
+      },
+      {
+        "id": "ACoAAAv7jnwB1aw-UOcgDnci_amjoL1bkvrhk1E",
+        "firstName": "Muhammad",
+        "lastName": "Awais",
+        "position": "Environmental Engineer",
+        "publicIdentifier": "awais15392",
+        "linkedinUrl": "https://www.linkedin.com/in/awais15392"
+      },
+      {
+        "id": "ACoAAEMCjbgBMYcRLp851PVmqCUsEEsTGfDJTys",
+        "firstName": "Natalja",
+        "lastName": "Rube-Roth",
+        "position": "Environmental Engineer at Sto",
+        "publicIdentifier": "natalja-rube-roth-3b460a274",
+        "linkedinUrl": "https://www.linkedin.com/in/natalja-rube-roth-3b460a274"
+      },
+      {
+        "id": "ACoAACb-grsB0qZI3ppVLR-rfsydKRxS8JxwJOQ",
+        "firstName": "Meryl",
+        "lastName": "Winicov",
+        "position": "Environmental Engineer at SOLARCYCLE",
+        "publicIdentifier": "meryl-winicov",
+        "linkedinUrl": "https://www.linkedin.com/in/meryl-winicov"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAACKNVUMBykJVfayXy0Gm2CBUV1M0GgE8gKY"
+    }
+  }
+}

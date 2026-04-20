@@ -1,0 +1,813 @@
+{
+  "_harvest_request": {
+    "kind": "url",
+    "value": "https://www.linkedin.com/in/ACwAAAD-hTABSt9zoyi1K1LCvtvIAEPzFk6M3Yc",
+    "profile_url": "https://www.linkedin.com/in/ACwAAAD-hTABSt9zoyi1K1LCvtvIAEPzFk6M3Yc"
+  },
+  "item": {
+    "id": "ACoAAAD-hTABHsUcZMNYC-D_hAv_HSbY1IIDv3Y",
+    "publicIdentifier": "opherlieber",
+    "linkedinUrl": "https://www.linkedin.com/in/opherlieber",
+    "firstName": "Opher",
+    "lastName": "Lieber",
+    "emails": [
+      {
+        "email": "opher.lieber@thinkingmachines.ai",
+        "catchAllDomain": true,
+        "validEmailServer": true,
+        "free": false,
+        "status": "risky",
+        "qualityScore": 60
+      }
+    ],
+    "companyWebsites": [
+      {
+        "url": "https://thinkingmachines.ai",
+        "domain": "thinkingmachines.ai",
+        "validEmailServer": true
+      }
+    ],
+    "headline": "Thinking Machines",
+    "openToWork": false,
+    "hiring": false,
+    "premium": false,
+    "influencer": false,
+    "memorialized": false,
+    "location": {
+      "linkedinText": "San Francisco Bay Area",
+      "countryCode": "US",
+      "parsed": {
+        "text": "San Francisco, CA, United States",
+        "countryCode": "US",
+        "regionCode": null,
+        "country": "United States",
+        "countryFull": "United States of America",
+        "state": "California",
+        "city": "San Francisco"
+      }
+    },
+    "objectUrn": "16680240",
+    "registeredAt": "2007-10-07T09:42:29.000Z",
+    "topSkills": null,
+    "connectionsCount": 638,
+    "followerCount": 700,
+    "verified": true,
+    "about": null,
+    "currentPosition": [
+      {
+        "companyId": "105913171",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/105913171/",
+        "companyName": "Thinking Machines Lab",
+        "dateRange": {
+          "start": {
+            "month": 8,
+            "year": 2025,
+            "day": null
+          },
+          "end": null
+        }
+      }
+    ],
+    "profileTopEducation": [
+      {
+        "schoolId": "13403",
+        "companyId": "3154",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3154/",
+        "schoolName": "Tel Aviv University"
+      }
+    ],
+    "profileActions": [],
+    "profilePicture": {
+      "url": "https://media.licdn.com/dms/image/v2/C4D03AQG0j1s_t8o1oA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1567870574660?e=1776902400&v=beta&t=1yT1mbV705G3VbMq3OCvLf-ph8gwg0QUH5mbMEDDpQQ",
+      "sizes": [
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4D03AQG0j1s_t8o1oA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1567870574660?e=1776902400&v=beta&t=1yT1mbV705G3VbMq3OCvLf-ph8gwg0QUH5mbMEDDpQQ",
+          "width": 448,
+          "height": 448,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4D03AQG0j1s_t8o1oA/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1567870574605?e=1776902400&v=beta&t=2wLHZc9j5qMarvYlZgCVAGuf3Y_DvbCLpNE21CSvngA",
+          "width": 400,
+          "height": 400,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4D03AQG0j1s_t8o1oA/profile-displayphoto-shrink_200_200/profile-displayphoto-shrink_200_200/0/1567870574532?e=1776902400&v=beta&t=YXNjJLNBn9jZnfIzpoNyfKxr3ZtNDD2r0D46rGa8BFk",
+          "width": 200,
+          "height": 200,
+          "expiresAt": 1776902400000
+        },
+        {
+          "url": "https://media.licdn.com/dms/image/v2/C4D03AQG0j1s_t8o1oA/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1567870574567?e=1776902400&v=beta&t=jX-hSQPBM86qBpsg2FNpKRXVW2bpvQV5Wrsk6rvdlLY",
+          "width": 100,
+          "height": 100,
+          "expiresAt": 1776902400000
+        }
+      ]
+    },
+    "coverPicture": null,
+    "photo": "https://media.licdn.com/dms/image/v2/C4D03AQG0j1s_t8o1oA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1567870574660?e=1776902400&v=beta&t=1yT1mbV705G3VbMq3OCvLf-ph8gwg0QUH5mbMEDDpQQ",
+    "profileLocales": [
+      {
+        "country": "US",
+        "language": "en"
+      }
+    ],
+    "primaryLocale": {
+      "country": "US",
+      "language": "en"
+    },
+    "multiLocaleHeadline": [
+      {
+        "headline": "Thinking Machines",
+        "locale": "en_US"
+      }
+    ],
+    "services": null,
+    "experience": [
+      {
+        "position": "Member of Technical Staff",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "Thinking Machines Lab",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/thinkingmachinesai/",
+        "companyId": "105913171",
+        "companyUniversalName": "thinkingmachinesai",
+        "duration": "9 mos",
+        "description": null,
+        "skills": null,
+        "startDate": {
+          "month": "Aug",
+          "year": 2025,
+          "text": "Aug 2025"
+        },
+        "endDate": {
+          "text": "Present"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_400_400/B56ZUWG7goGoAY-/0/1739832671008?e=1776902400&v=beta&t=d7ytsYPwDhzzYt6_9J172ejc-Qv5gtsEFNM9qA-P51U",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_200_200/B56ZUWG7goGoAI-/0/1739832671008?e=1776902400&v=beta&t=lyBZoOdjj8b2Pgws_Szhf_V11Rx75h2VN08fREUDCl8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQGF9Wzojnc0pA/company-logo_100_100/B56ZUWG7goGoAQ-/0/1739832671008?e=1776902400&v=beta&t=jmsDPykXS7vnasCc9y2f6PlnCdFdAVzd_rCPeLLI3yI",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Principal Engineer",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "AI21 Labs",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/18424078/",
+        "companyId": "18424078",
+        "duration": "2 yrs 1 mo",
+        "description": "LLM training lead",
+        "skills": null,
+        "experienceGroupId": "c144d62bde99d22c1c6a07d97b1c4fb61cecab84",
+        "startDate": {
+          "month": "Aug",
+          "year": 2023,
+          "text": "Aug 2023"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2025,
+          "text": "Aug 2025"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4D0BAQGi7Q43f9KESg/company-logo_400_400/B4DZu2qBPvJgAY-/0/1768296027620/ai21_logo?e=1776902400&v=beta&t=tqCH6qDvWXAugW27XiD9WfEP7ZxGRRGldLugJ00bSKY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQGi7Q43f9KESg/company-logo_400_400/B4DZu2qBPvJgAY-/0/1768296027620/ai21_logo?e=1776902400&v=beta&t=tqCH6qDvWXAugW27XiD9WfEP7ZxGRRGldLugJ00bSKY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQGi7Q43f9KESg/company-logo_200_200/B4DZu2qBPvJgAI-/0/1768296027620/ai21_logo?e=1776902400&v=beta&t=2GVrsY54Jin72cR1JrvN7OrOKhzZvJ5900nOSLkOdT8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQGi7Q43f9KESg/company-logo_100_100/B4DZu2qBPvJgAQ-/0/1768296027620/ai21_logo?e=1776902400&v=beta&t=RP8gfiQ7iFVvv_1UWQUNvvXi7vyRSzDSdf4yHHvUIKY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Tech Lead",
+        "location": null,
+        "employmentType": "Full-time",
+        "workplaceType": null,
+        "companyName": "AI21 Labs",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/18424078/",
+        "companyId": "18424078",
+        "duration": "2 yrs 11 mos",
+        "description": "LLM training lead",
+        "skills": null,
+        "experienceGroupId": "c144d62bde99d22c1c6a07d97b1c4fb61cecab84",
+        "startDate": {
+          "month": "Oct",
+          "year": 2020,
+          "text": "Oct 2020"
+        },
+        "endDate": {
+          "month": "Aug",
+          "year": 2023,
+          "text": "Aug 2023"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4D0BAQGi7Q43f9KESg/company-logo_400_400/B4DZu2qBPvJgAY-/0/1768296027620/ai21_logo?e=1776902400&v=beta&t=tqCH6qDvWXAugW27XiD9WfEP7ZxGRRGldLugJ00bSKY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQGi7Q43f9KESg/company-logo_400_400/B4DZu2qBPvJgAY-/0/1768296027620/ai21_logo?e=1776902400&v=beta&t=tqCH6qDvWXAugW27XiD9WfEP7ZxGRRGldLugJ00bSKY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQGi7Q43f9KESg/company-logo_200_200/B4DZu2qBPvJgAI-/0/1768296027620/ai21_logo?e=1776902400&v=beta&t=2GVrsY54Jin72cR1JrvN7OrOKhzZvJ5900nOSLkOdT8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQGi7Q43f9KESg/company-logo_100_100/B4DZu2qBPvJgAQ-/0/1768296027620/ai21_logo?e=1776902400&v=beta&t=RP8gfiQ7iFVvv_1UWQUNvvXi7vyRSzDSdf4yHHvUIKY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Algorithm Developer",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "AI21 Labs",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/18424078/",
+        "companyId": "18424078",
+        "duration": "8 mos",
+        "description": null,
+        "skills": null,
+        "experienceGroupId": "c144d62bde99d22c1c6a07d97b1c4fb61cecab84",
+        "startDate": {
+          "month": "Mar",
+          "year": 2020,
+          "text": "Mar 2020"
+        },
+        "endDate": {
+          "month": "Oct",
+          "year": 2020,
+          "text": "Oct 2020"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4D0BAQGi7Q43f9KESg/company-logo_400_400/B4DZu2qBPvJgAY-/0/1768296027620/ai21_logo?e=1776902400&v=beta&t=tqCH6qDvWXAugW27XiD9WfEP7ZxGRRGldLugJ00bSKY",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQGi7Q43f9KESg/company-logo_400_400/B4DZu2qBPvJgAY-/0/1768296027620/ai21_logo?e=1776902400&v=beta&t=tqCH6qDvWXAugW27XiD9WfEP7ZxGRRGldLugJ00bSKY",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQGi7Q43f9KESg/company-logo_200_200/B4DZu2qBPvJgAI-/0/1768296027620/ai21_logo?e=1776902400&v=beta&t=2GVrsY54Jin72cR1JrvN7OrOKhzZvJ5900nOSLkOdT8",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQGi7Q43f9KESg/company-logo_100_100/B4DZu2qBPvJgAQ-/0/1768296027620/ai21_logo?e=1776902400&v=beta&t=RP8gfiQ7iFVvv_1UWQUNvvXi7vyRSzDSdf4yHHvUIKY",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Sr. Technologist, Chief Embedded FW Architect",
+        "location": "Israel",
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Western Digital",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/4593/",
+        "companyId": "4593",
+        "duration": "3 yrs 11 mos",
+        "description": "Previously SanDisk",
+        "skills": null,
+        "startDate": {
+          "month": "May",
+          "year": 2016,
+          "text": "May 2016"
+        },
+        "endDate": {
+          "month": "Mar",
+          "year": 2020,
+          "text": "Mar 2020"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQEBjdOLY6zBKQ/company-logo_400_400/B56ZwcO_EgJoAc-/0/1770000216702/western_digital_logo?e=1776902400&v=beta&t=Jo_6poSonCUfYTMD80bfaOHIfuT74T-_kF67F5QoTNg",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEBjdOLY6zBKQ/company-logo_400_400/B56ZwcO_EgJoAc-/0/1770000216702/western_digital_logo?e=1776902400&v=beta&t=Jo_6poSonCUfYTMD80bfaOHIfuT74T-_kF67F5QoTNg",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEBjdOLY6zBKQ/company-logo_200_200/B56ZwcO_EgJoAM-/0/1770000216702/western_digital_logo?e=1776902400&v=beta&t=7iYlZ8LHQbTSNIRLoZucaKIe41kcZm9YjzcTdrb5IxU",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQEBjdOLY6zBKQ/company-logo_100_100/B56ZwcO_EgJoAU-/0/1770000216702/western_digital_logo?e=1776902400&v=beta&t=mGJ1Jj1E19fcpVmuL80ecseT1NtQVwWevUjs1ddJoLc",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "position": "Independent AI Projects and Research",
+        "location": null,
+        "employmentType": "Self-employed",
+        "workplaceType": null,
+        "companyName": "Self-Employed",
+        "companyLinkedinUrl": "https://www.linkedin.com/search/results/all/?keywords=Self-Employed",
+        "duration": "2 yrs 6 mos",
+        "description": "• Open-sourced 'rltime', a scalable reinforcement learning library written in PyTorch, with state-of-the-art q-learning features and results\n• Created a platform for scalable reinforcement learning of Android games\n• Implemented, tuned and scaled Deep Learning models for time series prediction",
+        "skills": null,
+        "startDate": {
+          "month": "Aug",
+          "year": 2017,
+          "text": "Aug 2017"
+        },
+        "endDate": {
+          "month": "Jan",
+          "year": 2020,
+          "text": "Jan 2020"
+        }
+      },
+      {
+        "position": "Sr. Principal, Chief Embedded FW Architect, Engineer and Team Leader",
+        "location": null,
+        "employmentType": null,
+        "workplaceType": null,
+        "companyName": "Sandisk",
+        "companyLinkedinUrl": "https://www.linkedin.com/company/4251/",
+        "companyId": "4251",
+        "duration": "11 yrs 10 mos",
+        "description": "Chief Firmware Architect and Lead Developer for multiple generations of flash controllers for all the companies embedded market flash products.\n\nIssued 8 U.S patents in the flash storage field.",
+        "skills": null,
+        "startDate": {
+          "month": "Aug",
+          "year": 2004,
+          "text": "Aug 2004"
+        },
+        "endDate": {
+          "month": "May",
+          "year": 2016,
+          "text": "May 2016"
+        },
+        "companyLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D560BAQFT3XpBw27MZQ/company-logo_400_400/B56Znem7iXIYAY-/0/1760376371839/sandisk_logo?e=1776902400&v=beta&t=-H3oftT4XqCDsjQGkJfSxd_nJoajWIBb3YxfG5kfj2g",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFT3XpBw27MZQ/company-logo_400_400/B56Znem7iXIYAY-/0/1760376371839/sandisk_logo?e=1776902400&v=beta&t=-H3oftT4XqCDsjQGkJfSxd_nJoajWIBb3YxfG5kfj2g",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFT3XpBw27MZQ/company-logo_200_200/B56Znem7iXIYAI-/0/1760376371839/sandisk_logo?e=1776902400&v=beta&t=1O66UZyV71FlrbiuDNfiVgficaXRy3hQTSy34IpWfuc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D560BAQFT3XpBw27MZQ/company-logo_100_100/B56Znem7iXIYAQ-/0/1760376371839/sandisk_logo?e=1776902400&v=beta&t=kvTRD5gNjj3lelnKfvkmKES0pWlnrBQK7YAwNn_c9AA",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "education": [
+      {
+        "schoolName": "Tel Aviv University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3154/",
+        "schoolId": "3154",
+        "degree": "M.Sc",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "description": "Thesis Area: Distributed Computing. Published in DISC 2009.",
+        "insights": "Grade: 95",
+        "startDate": {
+          "year": 2007,
+          "text": "2007"
+        },
+        "endDate": {
+          "year": 2010,
+          "text": "2010"
+        },
+        "period": "2007 - 2010",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4D0BAQGDm7yBqiPGaQ/company-logo_400_400/B4DZoBIsyxJEAc-/0/1760955649635/tel_aviv_university_logo?e=1776902400&v=beta&t=rDGYc87DTIeUdzDtRRE81n9ttcGHadw_FRsLMdh_Dso",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQGDm7yBqiPGaQ/company-logo_400_400/B4DZoBIsyxJEAc-/0/1760955649635/tel_aviv_university_logo?e=1776902400&v=beta&t=rDGYc87DTIeUdzDtRRE81n9ttcGHadw_FRsLMdh_Dso",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQGDm7yBqiPGaQ/company-logo_200_200/B4DZoBIsyxJEAM-/0/1760955649635/tel_aviv_university_logo?e=1776902400&v=beta&t=vtscmOuCjefJG_dOXwEL-inGxq_DRJlW4EYghnt0YVc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQGDm7yBqiPGaQ/company-logo_100_100/B4DZoBIsyxJEAU-/0/1760955649635/tel_aviv_university_logo?e=1776902400&v=beta&t=Uh69BjugNxS7pS_m80lZzfTArVJGR4y_s6SR_KD6o6U",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      },
+      {
+        "schoolName": "Tel Aviv University",
+        "schoolLinkedinUrl": "https://www.linkedin.com/company/3154/",
+        "schoolId": "3154",
+        "degree": "B.Sc",
+        "fieldOfStudy": "Computer Science",
+        "skills": [],
+        "insights": "Grade: 95 (Summa Cum Laude)",
+        "startDate": {
+          "year": 2003,
+          "text": "2003"
+        },
+        "endDate": {
+          "year": 2006,
+          "text": "2006"
+        },
+        "period": "2003 - 2006",
+        "schoolLogo": {
+          "url": "https://media.licdn.com/dms/image/v2/D4D0BAQGDm7yBqiPGaQ/company-logo_400_400/B4DZoBIsyxJEAc-/0/1760955649635/tel_aviv_university_logo?e=1776902400&v=beta&t=rDGYc87DTIeUdzDtRRE81n9ttcGHadw_FRsLMdh_Dso",
+          "sizes": [
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQGDm7yBqiPGaQ/company-logo_400_400/B4DZoBIsyxJEAc-/0/1760955649635/tel_aviv_university_logo?e=1776902400&v=beta&t=rDGYc87DTIeUdzDtRRE81n9ttcGHadw_FRsLMdh_Dso",
+              "width": 400,
+              "height": 400,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQGDm7yBqiPGaQ/company-logo_200_200/B4DZoBIsyxJEAM-/0/1760955649635/tel_aviv_university_logo?e=1776902400&v=beta&t=vtscmOuCjefJG_dOXwEL-inGxq_DRJlW4EYghnt0YVc",
+              "width": 200,
+              "height": 200,
+              "expiresAt": 1776902400000
+            },
+            {
+              "url": "https://media.licdn.com/dms/image/v2/D4D0BAQGDm7yBqiPGaQ/company-logo_100_100/B4DZoBIsyxJEAU-/0/1760955649635/tel_aviv_university_logo?e=1776902400&v=beta&t=Uh69BjugNxS7pS_m80lZzfTArVJGR4y_s6SR_KD6o6U",
+              "width": 100,
+              "height": 100,
+              "expiresAt": 1776902400000
+            }
+          ]
+        }
+      }
+    ],
+    "certifications": [],
+    "projects": [],
+    "volunteering": [],
+    "receivedRecommendations": [],
+    "skills": [
+      {
+        "name": "Problem Solving",
+        "positions": [
+          "Endorsed by 2 colleagues at Sandisk"
+        ],
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "RTOS",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Embedded Software",
+        "endorsements": "8 endorsements"
+      },
+      {
+        "name": "Device Drivers",
+        "endorsements": "2 endorsements"
+      },
+      {
+        "name": "Embedded Systems",
+        "endorsements": "14 endorsements"
+      },
+      {
+        "name": "Firmware",
+        "endorsements": "14 endorsements"
+      },
+      {
+        "name": "Multithreading",
+        "positions": [
+          "Endorsed by 5 colleagues at WD"
+        ],
+        "endorsements": "8 endorsements"
+      },
+      {
+        "name": "Systems Analysis",
+        "positions": [
+          "Endorsed by 2 colleagues at Sandisk"
+        ],
+        "endorsements": "4 endorsements"
+      },
+      {
+        "name": "Debugging",
+        "endorsements": "8 endorsements"
+      },
+      {
+        "name": "VxWorks",
+        "endorsements": "1 endorsement"
+      },
+      {
+        "name": "Software Design",
+        "endorsements": "12 endorsements"
+      },
+      {
+        "name": "System Architecture",
+        "endorsements": "8 endorsements"
+      },
+      {
+        "name": "Object Oriented Design",
+        "endorsements": "3 endorsements"
+      },
+      {
+        "name": "Semiconductors",
+        "endorsements": "3 endorsements"
+      }
+    ],
+    "publications": [],
+    "courses": [],
+    "patents": [],
+    "honorsAndAwards": [],
+    "languages": [],
+    "causes": [],
+    "featured": null,
+    "composeOptionType": "UPSELL",
+    "moreProfiles": [
+      {
+        "id": "ACoAAEZnBtoBb1Us7ZKgHfOXAYT764pKcDQy848",
+        "firstName": "Songlin",
+        "lastName": "Yang",
+        "publicIdentifier": "songlin-yang-b8a69728b",
+        "linkedinUrl": "https://www.linkedin.com/in/songlin-yang-b8a69728b"
+      },
+      {
+        "id": "ACoAABQ5lJUBry2byQYf_TtxDF9Rha9l-RqYsaM",
+        "firstName": "Guang-He",
+        "lastName": "Lee",
+        "publicIdentifier": "guang-he-lee-64577895",
+        "linkedinUrl": "https://www.linkedin.com/in/guang-he-lee-64577895"
+      },
+      {
+        "id": "ACoAADZ4N-EBA2GJCpSRvoVOAnPpXr03wUUIXrM",
+        "firstName": "Rowan",
+        "lastName": "Zellers",
+        "publicIdentifier": "rowanzellers",
+        "linkedinUrl": "https://www.linkedin.com/in/rowanzellers"
+      },
+      {
+        "id": "ACoAABgwxtcBfqsJJUHPwsSPuBE4K9oKyRqUp5o",
+        "firstName": "Lia",
+        "lastName": "Guy",
+        "publicIdentifier": "aureliaguy",
+        "linkedinUrl": "https://www.linkedin.com/in/aureliaguy"
+      },
+      {
+        "id": "ACoAAAcgPQIBoueJk2YPQsCZ0mXNRfREUqF3d3k",
+        "firstName": "Devendra",
+        "lastName": "Chaplot",
+        "publicIdentifier": "devendra-chaplot-b1605534",
+        "linkedinUrl": "https://www.linkedin.com/in/devendra-chaplot-b1605534"
+      },
+      {
+        "id": "ACoAAEAbBpQBT4luNj8gPYU6CgQ_GNJey3AJTiE",
+        "firstName": "Rajat",
+        "lastName": "Goel",
+        "publicIdentifier": "rajatgoel2010",
+        "linkedinUrl": "https://www.linkedin.com/in/rajatgoel2010"
+      },
+      {
+        "id": "ACoAAAJzsfoBp0MxssQYMgmy0ZNO2U3sA58ugwc",
+        "firstName": "Joshua",
+        "lastName": "Gross",
+        "publicIdentifier": "joshgross",
+        "linkedinUrl": "https://www.linkedin.com/in/joshgross"
+      },
+      {
+        "id": "ACoAABYs4-IB5mHx5eVfOHzu1e8xlO3q_kb38IM",
+        "firstName": "Brydon",
+        "lastName": "Eastman",
+        "publicIdentifier": "brydon-eastman-396719a4",
+        "linkedinUrl": "https://www.linkedin.com/in/brydon-eastman-396719a4"
+      },
+      {
+        "id": "ACoAAACo1tYBGy9sT2OWZuEULOMe4K_b2Y22-F8",
+        "firstName": "Alex",
+        "lastName": "Gartrell",
+        "publicIdentifier": "alexgartrell",
+        "linkedinUrl": "https://www.linkedin.com/in/alexgartrell"
+      },
+      {
+        "id": "ACoAABmEHXwBa8Bq5r91EDHpNt2osgk6rGFWUnQ",
+        "firstName": "Kyle",
+        "lastName": "Luther",
+        "publicIdentifier": "kyle-luther-624448bb",
+        "linkedinUrl": "https://www.linkedin.com/in/kyle-luther-624448bb"
+      },
+      {
+        "id": "ACoAACHG180BXiyeZ2qJgoggx27e4iM3ajxvp18",
+        "firstName": "Andy",
+        "lastName": "Hwang",
+        "publicIdentifier": "andrewnhwang",
+        "linkedinUrl": "https://www.linkedin.com/in/andrewnhwang"
+      },
+      {
+        "id": "ACoAABA0sF8BJqwmfoms3veu9TE72tj8JMUQEFA",
+        "firstName": "Sam",
+        "lastName": "Shleifer",
+        "publicIdentifier": "sam-shleifer-a5307a77",
+        "linkedinUrl": "https://www.linkedin.com/in/sam-shleifer-a5307a77"
+      },
+      {
+        "id": "ACoAABjuY0ABY_rmKE76zCv0KftG57thqXqi6Is",
+        "firstName": "Saurabh",
+        "lastName": "Garg",
+        "publicIdentifier": "saurabh-garg-b680b5b8",
+        "linkedinUrl": "https://www.linkedin.com/in/saurabh-garg-b680b5b8"
+      },
+      {
+        "id": "ACoAABoG0oUBl986ZaMrLUASG1NhDoJyVlav4Po",
+        "firstName": "Eric",
+        "lastName": "Zhang",
+        "publicIdentifier": "ekzhang",
+        "linkedinUrl": "https://www.linkedin.com/in/ekzhang"
+      },
+      {
+        "id": "ACoAAB4OfbMBIi7HBQZ7g7t5gqGWr65AbkzSxJs",
+        "firstName": "Tianyi",
+        "lastName": "Zhang",
+        "publicIdentifier": "tianyi-zhang-843a64120",
+        "linkedinUrl": "https://www.linkedin.com/in/tianyi-zhang-843a64120"
+      },
+      {
+        "id": "ACoAABhKWCYBiuV3Zv9Hbt8t0j-xMRqxawBcSgw",
+        "firstName": "Kurt",
+        "lastName": "Shuster",
+        "publicIdentifier": "kurtshuster1",
+        "linkedinUrl": "https://www.linkedin.com/in/kurtshuster1"
+      },
+      {
+        "id": "ACoAAAhY-psBFcHXNbjunn6_QnPfV6Bo6w4yzug",
+        "firstName": "Kenny",
+        "lastName": "Yu",
+        "publicIdentifier": "kenny-yu-aa3a9a3a",
+        "linkedinUrl": "https://www.linkedin.com/in/kenny-yu-aa3a9a3a"
+      },
+      {
+        "id": "ACoAAA4HOMcBwNrOaz6rzDsRUAlzDkcVWzFh8vk",
+        "firstName": "Mira",
+        "lastName": "Murati",
+        "publicIdentifier": "mira-murati-4b39a066",
+        "linkedinUrl": "https://www.linkedin.com/in/mira-murati-4b39a066"
+      },
+      {
+        "id": "ACoAAA4HVN4BOZg5espOvMVoO3OY04NZmuqvMCo",
+        "firstName": "Shaojie",
+        "lastName": "Bai",
+        "publicIdentifier": "shaojie-bai",
+        "linkedinUrl": "https://www.linkedin.com/in/shaojie-bai"
+      },
+      {
+        "id": "ACoAAAO-j_IBXcvIzhZtQ7QNkky6tlnQTcFl9qI",
+        "firstName": "Myle",
+        "lastName": "Ott",
+        "publicIdentifier": "myleott",
+        "linkedinUrl": "https://www.linkedin.com/in/myleott"
+      },
+      {
+        "id": "ACoAADchatYBsYriSlXX9E20w6OxbWJgERb2Esk",
+        "firstName": "Andrea",
+        "lastName": "Parrino",
+        "position": "Giornalista pubblicista Libero Quotidiano, tessera n°187898",
+        "publicIdentifier": "andrea-parrino-506914219",
+        "linkedinUrl": "https://www.linkedin.com/in/andrea-parrino-506914219"
+      },
+      {
+        "id": "ACoAABP-fjMBPcgY2-w6JQsRtw-R3jAP_MfeMl0",
+        "firstName": "Michele",
+        "lastName": "Monina",
+        "position": "Scrittore, critico musicale, reporter, autore per cinema, teatro, radio e tv. Autore di canzoni",
+        "publicIdentifier": "michele-monina-70340b94",
+        "linkedinUrl": "https://www.linkedin.com/in/michele-monina-70340b94"
+      },
+      {
+        "id": "ACoAAAEQKBUBI8V8h7LNq690qh_npFtw95bAyLs",
+        "firstName": "Marco",
+        "lastName": "Brando",
+        "position": "GIORNALISTA - SCRITTORE - BLOGGER",
+        "publicIdentifier": "marcobrando",
+        "linkedinUrl": "https://www.linkedin.com/in/marcobrando"
+      },
+      {
+        "id": "ACoAAAy-3gIBeKIp6gia728QHAEKgEWpksuwyYU",
+        "firstName": "✍Maria",
+        "lastName": "Martino",
+        "position": "Scrittrice, Poetessa ✍",
+        "publicIdentifier": "maria-martino-",
+        "linkedinUrl": "https://www.linkedin.com/in/maria-martino-"
+      },
+      {
+        "id": "ACoAAA7SDQoB_5eI3OYlEsbnzeEccK_DbMegMIA",
+        "firstName": "Davide",
+        "lastName": "Castellazzi",
+        "position": "Scribacchino: scrittore, giornalista, social media manager, editor, articolista",
+        "publicIdentifier": "davide-castellazzi-a8a3306b",
+        "linkedinUrl": "https://www.linkedin.com/in/davide-castellazzi-a8a3306b"
+      },
+      {
+        "id": "ACoAABTg-dEBcw4XMF5Ldc1P5tKFT8K27bvvE7I",
+        "firstName": "valentina",
+        "lastName": "capogna",
+        "position": "Redattrice editorale/ editor freelance",
+        "publicIdentifier": "valentina-capogna-1a938999",
+        "linkedinUrl": "https://www.linkedin.com/in/valentina-capogna-1a938999"
+      },
+      {
+        "id": "ACoAACm6GrMBMpLb21weVK6CORdm2mcskBkcDoI",
+        "firstName": "Luisella",
+        "lastName": "Pescatori",
+        "position": "Chief Editor, ghostwriter e tutor di scrittura. Consulente per Editoria e Comunicazione. Co-autrice de: “Il femminicidio non è un raptus”",
+        "publicIdentifier": "luisella-pescatori-editor",
+        "linkedinUrl": "https://www.linkedin.com/in/luisella-pescatori-editor"
+      },
+      {
+        "id": "ACoAADrQqigB91A74knATDHj4pZdQiGJG3q7sHM",
+        "firstName": "Edizioni",
+        "lastName": "Underground - profilo",
+        "position": "Editore presso Edizioni Underground? ",
+        "publicIdentifier": "edizioni-underground",
+        "linkedinUrl": "https://www.linkedin.com/in/edizioni-underground"
+      },
+      {
+        "id": "ACoAAAZJjcYBfeq_XISMpYSeqUv7u8m_s1H1i7c",
+        "firstName": "luca",
+        "lastName": "carbonara",
+        "position": "Editore, giornalista, Direttore Responsabile periodico di informazione culturale  \"Cultura e dintorni\", Scrittore, Poeta",
+        "publicIdentifier": "luca-carbonara-99a3ab2b",
+        "linkedinUrl": "https://www.linkedin.com/in/luca-carbonara-99a3ab2b"
+      },
+      {
+        "id": "ACoAABiC-8IBLc3uENpmI0VmTg6ImHFpZkacSc8",
+        "firstName": "Federica",
+        "lastName": "Ermete",
+        "position": "Copywriter, seo editor, articolista",
+        "publicIdentifier": "federica-ermete-682880b5",
+        "linkedinUrl": "https://www.linkedin.com/in/federica-ermete-682880b5"
+      }
+    ],
+    "originalQuery": {
+      "url": "https://www.linkedin.com/in/ACwAAAD-hTABSt9zoyi1K1LCvtvIAEPzFk6M3Yc"
+    }
+  }
+}
