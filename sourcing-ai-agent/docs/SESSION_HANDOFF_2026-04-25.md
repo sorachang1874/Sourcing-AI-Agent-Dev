@@ -18,6 +18,13 @@
   - async `/api/plan/submit` hydration now persists frontend history plan semantics metadata
   - frontend history recovery reads backend `dispatch_preview` and `effective_execution_semantics`
   - `full_company_roster` user-facing strategy label is `全量 live roster`
+- GitHub handoff:
+  - branch: `productization-2026-04-25-stable`
+  - remote tracking: `origin/productization-2026-04-25-stable`
+  - commits:
+    - `ef1ea4c Stabilize productization workflow contracts`
+    - `53d30f1 Add workspace development guardrails`
+  - runtime/cache/vendor/build outputs, generated `object_sync`, and `frontend-demo/public/tml` offline assets were intentionally excluded.
 
 ## Validation Completed
 

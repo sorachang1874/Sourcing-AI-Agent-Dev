@@ -34,7 +34,7 @@ The goal is to turn the remaining TODOs into executable contracts, not one-off f
   - Add throughput benchmark and continuation/export/target-candidate follow-up gates.
 - [x] Product journey regression matrix
   - Cover supplement/manual-review writeback, concurrency isolation, exports, timezone sorting, and SearchPage orchestration.
-- [ ] Session closeout quality pass
+- [x] Session closeout quality pass
   - Review whether the testing system reflects user-relevant workflow quality, not only "tests passed".
   - Run scripted/simulated/browser/full validation and fix any regressions found.
   - Review all Markdown docs for freshness, especially environment, ECS deploy/ops, PG-only/runtime isolation, frontend/backend startup, and testing commands.
@@ -77,11 +77,15 @@ These items were added before the final validation/documentation/push pass so th
     - prefer shared abstractions/modules over one-off fixes
     - update TODO/progress docs while working
     - preserve validated provider/workflow strategies and prevent accidental version rollback
-- [ ] GitHub handoff
+- [x] GitHub handoff
   - Inspect branch/remotes and `.gitignore`.
   - Create a new branch for the stabilized version.
   - Stage intended code/docs/config/test files carefully, excluding runtime/cache/vendor/build output unless intentionally tracked.
   - Commit and push the branch to GitHub.
+  - Pushed branch: `productization-2026-04-25-stable`
+  - Commits:
+    - `ef1ea4c Stabilize productization workflow contracts`
+    - `53d30f1 Add workspace development guardrails`
 - [x] Session handoff
   - Summarize current branch/commit, validation results, remaining risks, environment commands, and next-session resume steps.
 
@@ -178,7 +182,7 @@ These items were added before the final validation/documentation/push pass so th
     - `npm run build`
     - `bash ./scripts/run_python_quality.sh typecheck`
     - `./.venv-tests/bin/python -m pytest -q` -> `1134 passed, 8 skipped, 25 subtests passed`
-- 2026-04-25: Closeout validation/documentation pass completed except GitHub push:
+- 2026-04-25: Closeout validation/documentation/GitHub handoff pass completed:
   - Fixed async plan history recovery semantics:
     - frontend history metadata now persists `dispatch_preview`, `lane_preview`, `asset_reuse_plan`, `organization_execution_profile`, `request_preview`, and `effective_execution_semantics`
     - frontend history recovery maps those fields back into the plan card
@@ -206,6 +210,10 @@ These items were added before the final validation/documentation/push pass so th
     - `docs/RUNTIME_ENVIRONMENT_ISOLATION.md`
     - `docs/INDEX.md`
     - `docs/SESSION_HANDOFF_2026-04-25.md`
+  - GitHub handoff:
+    - branch: `productization-2026-04-25-stable`
+    - pushed to `origin/productization-2026-04-25-stable`
+    - excluded runtime/cache/vendor/build output, generated `object_sync`, and `frontend-demo/public/tml` offline assets from the commit
 
 ## Remaining After First Slice
 

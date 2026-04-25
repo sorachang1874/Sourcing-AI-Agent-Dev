@@ -36,6 +36,13 @@
 - 文档 closeout 已开始：
   - 已确认 54 个一方 Markdown 均有 `> Status:` 头
   - 更新重点是 `AGENTS.md`、测试/运行/ECS 文档、active tracker、handoff，而不是机械改动每个历史 reference 文件
+- GitHub handoff 已完成：
+  - branch: `productization-2026-04-25-stable`
+  - remote tracking: `origin/productization-2026-04-25-stable`
+  - commits:
+    - `ef1ea4c Stabilize productization workflow contracts`
+    - `53d30f1 Add workspace development guardrails`
+  - 已排除 runtime/cache/vendor/build output、generated `object_sync` 和 `frontend-demo/public/tml` 离线资产
 
 ### Productization pass: streaming/materialization reports, scripted scenarios, asset governance, Excel throughput
 

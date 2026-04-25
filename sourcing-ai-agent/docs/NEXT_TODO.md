@@ -79,8 +79,14 @@
   - [x] 验证暴露的 browser plan semantics 问题已按 shared contract 修复并补测试
   - [x] 全量 review Markdown status，重点更新 ECS 操作部署、PG-only/runtime isolation、venv、前后端启动、测试入口和踩坑记录
   - [x] review `AGENTS.md` 与开发习惯文档，补充根因识别、避免双轨制、共享抽象、TODO/进度记录、防止回退错误版本等规则
-  - [ ] 新建 Git branch，谨慎 stage 目标文件，避免把 runtime/cache/vendor/build output 推上 GitHub
-  - [ ] push 到 GitHub 后输出 session summary / handoff，便于用户新开会话继续
+  - [x] 新建 Git branch，谨慎 stage 目标文件，避免把 runtime/cache/vendor/build output 推上 GitHub
+  - [x] push 到 GitHub 后输出 session summary / handoff，便于用户新开会话继续
+- GitHub handoff 已完成：
+  - branch: `productization-2026-04-25-stable`
+  - remote: `origin/productization-2026-04-25-stable`
+  - commits:
+    - `ef1ea4c Stabilize productization workflow contracts`
+    - `53d30f1 Add workspace development guardrails`
 - 新会话 handoff 已落到：
   - [SESSION_HANDOFF_2026-04-25.md](./SESSION_HANDOFF_2026-04-25.md)
 
