@@ -11,6 +11,7 @@
 **/api_accounts.json
 .codex
 .codex/
+.cache/
 TemporaryData/
 example_excel_data/
 sourcing-ai-agent/.vendor/
