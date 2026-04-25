@@ -11,6 +11,7 @@ from .company_shard_planning import (
 )
 from .domain import JobRequest, SourcingPlan
 from .execution_preferences import merge_execution_preferences, normalize_execution_preferences
+from .organization_execution_profile import organization_execution_profile_full_roster_max_pages
 from .planning import (
     FULL_COMPANY_EMPLOYEES_DEFAULT_MAX_PAGES,
     FULL_COMPANY_EMPLOYEES_LARGE_ORG_KEYS,
@@ -28,8 +29,8 @@ def build_plan_review_gate(request: JobRequest, plan: SourcingPlan) -> dict[str,
     execution_mode_hints = _build_execution_mode_hints(plan)
     editable_fields = [
         "company_scope",
+        "target_company_linkedin_url",
         "extra_source_families",
-        "allow_high_cost_sources",
         "precision_recall_bias",
         "acquisition_strategy_override",
         "use_company_employees_lane",
@@ -78,12 +79,6 @@ def build_plan_review_gate(request: JobRequest, plan: SourcingPlan) -> dict[str,
         required_before_execution = True
         reasons.append("investor_firm_population_needs_confirmation")
         suggested_actions.append("Confirm which investor firms or tiers should be covered first.")
-
-    cost_policy = dict(plan.acquisition_strategy.cost_policy or {})
-    if bool(cost_policy.get("high_cost_requires_approval", True)):
-        required_before_execution = True
-        reasons.append("high_cost_sources_need_approval")
-        suggested_actions.append("Approve or deny high-cost source usage before execution.")
 
     publication_families = [str(item.family or "").strip() for item in plan.publication_coverage.source_families]
     if len(publication_families) <= 2:
@@ -146,7 +141,9 @@ def _build_execution_mode_hints(plan: SourcingPlan) -> dict[str, Any]:
             for item in shards
         ]
         hints = {
-            "segmented_company_employee_shard_strategy": str(metadata.get("company_employee_shard_strategy") or "").strip(),
+            "segmented_company_employee_shard_strategy": _external_company_employee_shard_strategy(
+                str(metadata.get("company_employee_shard_strategy") or "").strip()
+            ),
             "segmented_company_employee_shard_count": len(shards),
             "segmented_company_employee_shards": shard_summaries,
         }
@@ -158,7 +155,11 @@ def _build_execution_mode_hints(plan: SourcingPlan) -> dict[str, Any]:
             {
                 "rule_id": str(item.get("rule_id") or "").strip(),
                 "title": str(item.get("title") or item.get("rule_id") or "").strip(),
-                "include_patch": dict(item.get("include_patch") or {}),
+                "include_patch": _external_company_employee_partition_patch(
+                    str(policy.get("strategy_id") or metadata.get("company_employee_shard_strategy") or "").strip(),
+                    dict(policy.get("root_filters") or {}),
+                    dict(item.get("include_patch") or {}),
+                ),
                 "remainder_exclude_patch": dict(item.get("remainder_exclude_patch") or {}),
             }
             for item in list(policy.get("partition_rules") or [])
@@ -178,14 +179,19 @@ def _build_execution_mode_hints(plan: SourcingPlan) -> dict[str, Any]:
                 "strategy_id": str(policy.get("strategy_id") or "").strip(),
                 "mode": str(policy.get("mode") or "").strip(),
                 "root_title": str(policy.get("root_title") or "").strip(),
-                "root_filters": dict(policy.get("root_filters") or {}),
+                "root_filters": _external_company_employee_root_filters(
+                    str(policy.get("strategy_id") or metadata.get("company_employee_shard_strategy") or "").strip(),
+                    dict(policy.get("root_filters") or {}),
+                ),
                 "partition_rules": partition_rules,
                 "keyword_shards": keyword_shards,
                 "max_pages": int(policy.get("max_pages") or 0),
                 "page_limit": int(policy.get("page_limit") or 0),
                 "provider_result_cap": int(policy.get("provider_result_cap") or 0),
             },
-            "segmented_company_employee_shard_strategy": str(policy.get("strategy_id") or metadata.get("company_employee_shard_strategy") or "").strip(),
+            "segmented_company_employee_shard_strategy": _external_company_employee_shard_strategy(
+                str(policy.get("strategy_id") or metadata.get("company_employee_shard_strategy") or "").strip()
+            ),
             "adaptive_probe_required_before_live_roster": True,
         }
         shard_titles = [
@@ -206,6 +212,45 @@ def _build_execution_mode_hints(plan: SourcingPlan) -> dict[str, Any]:
                 f"如果一定要 fresh run，接受按 {' / '.join(shard_titles[:4])} 做 live probe 后再自动分片。",
             ]
     return hints
+
+
+def _external_company_employee_shard_strategy(strategy_id: str) -> str:
+    normalized = str(strategy_id or "").strip()
+    if normalized == "adaptive_us_technical_partition":
+        return "adaptive_us_function_partition"
+    return normalized
+
+
+def _external_company_employee_root_filters(strategy_id: str, root_filters: dict[str, Any]) -> dict[str, Any]:
+    normalized = str(strategy_id or "").strip()
+    filters = dict(root_filters or {})
+    if normalized == "adaptive_us_technical_partition":
+        filters.pop("function_ids", None)
+        filters.pop("exclude_function_ids", None)
+    return filters
+
+
+def _external_company_employee_partition_patch(
+    strategy_id: str,
+    root_filters: dict[str, Any],
+    patch: dict[str, Any],
+) -> dict[str, Any]:
+    normalized = str(strategy_id or "").strip()
+    normalized_patch = dict(patch or {})
+    if normalized != "adaptive_us_technical_partition":
+        return normalized_patch
+    root_function_ids = [str(item).strip() for item in list(dict(root_filters or {}).get("function_ids") or []) if str(item).strip()]
+    excluded = {
+        str(item).strip()
+        for item in list(normalized_patch.get("exclude_function_ids") or [])
+        if str(item).strip()
+    }
+    if root_function_ids and excluded:
+        include_ids = [item for item in root_function_ids if item not in excluded]
+        normalized_patch.pop("exclude_function_ids", None)
+        if include_ids:
+            normalized_patch["function_ids"] = include_ids
+    return normalized_patch
 
 
 def apply_plan_review_decision(
@@ -259,7 +304,6 @@ def apply_plan_review_decision(
 
     extra_source_families = _normalize_list(decision.get("extra_source_families"))
     confirmed_scope = _normalize_list(decision.get("confirmed_company_scope"))
-    allow_high_cost_sources = "allow_high_cost_sources" in decision_preferences
     precision_recall_bias = str(decision_preferences.get("precision_recall_bias") or "").strip().lower()
 
     if extra_source_families:
@@ -306,12 +350,9 @@ def apply_plan_review_decision(
         acquisition_strategy["filter_hints"] = filter_hints
         updated_plan["acquisition_strategy"] = acquisition_strategy
 
-    if allow_high_cost_sources or precision_recall_bias:
+    if precision_recall_bias:
         acquisition_strategy = dict(updated_plan.get("acquisition_strategy") or {})
         cost_policy = dict(acquisition_strategy.get("cost_policy") or {})
-        if "allow_high_cost_sources" in decision_preferences:
-            cost_policy["high_cost_requires_approval"] = False
-            cost_policy["high_cost_sources_approved"] = bool(decision_preferences.get("allow_high_cost_sources"))
         if precision_recall_bias:
             cost_policy["precision_recall_bias"] = precision_recall_bias
         acquisition_strategy["cost_policy"] = cost_policy
@@ -346,13 +387,14 @@ def _sync_task_metadata(plan_payload: dict[str, Any]) -> None:
     strategy_type = str(acquisition_strategy.get("strategy_type") or "").strip()
     search_channel_order = list(acquisition_strategy.get("search_channel_order") or [])
     search_seed_queries = list(acquisition_strategy.get("search_seed_queries") or [])
-    max_pages = _default_review_full_roster_max_pages(target_company) if strategy_type == "full_company_roster" else 10
+    max_pages = _default_review_full_roster_max_pages(target_company, plan_payload) if strategy_type == "full_company_roster" else 10
     shard_policy = _build_review_company_shard_policy(
         strategy_type=strategy_type,
         target_company=target_company,
         company_scope=company_scope,
         filter_hints=filter_hints,
         cost_policy=cost_policy,
+        organization_execution_profile=dict(acquisition_strategy.get("organization_execution_profile") or {}),
         max_pages=max_pages,
     )
     for task in plan_payload.get("acquisition_tasks") or []:
@@ -387,11 +429,20 @@ def _sync_task_metadata(plan_payload: dict[str, Any]) -> None:
         task["metadata"] = _sync_task_intent_view_from_metadata(metadata)
 
 
-def _default_review_full_roster_max_pages(target_company: str) -> int:
-    company_key = normalize_company_key(target_company)
-    if company_key in FULL_COMPANY_EMPLOYEES_LARGE_ORG_KEYS:
-        return FULL_COMPANY_EMPLOYEES_LARGE_ORG_MAX_PAGES
-    return FULL_COMPANY_EMPLOYEES_DEFAULT_MAX_PAGES
+def _default_review_full_roster_max_pages(target_company: str, plan: SourcingPlan | dict[str, Any]) -> int:
+    if isinstance(plan, SourcingPlan):
+        profile = dict(plan.organization_execution_profile or plan.acquisition_strategy.organization_execution_profile or {})
+    else:
+        acquisition_strategy = dict(plan.get("acquisition_strategy") or {})
+        profile = dict(plan.get("organization_execution_profile") or acquisition_strategy.get("organization_execution_profile") or {})
+    if not profile and normalize_company_key(target_company) in FULL_COMPANY_EMPLOYEES_LARGE_ORG_KEYS:
+        profile = {"org_scale_band": "large"}
+    return organization_execution_profile_full_roster_max_pages(
+        profile,
+        default_small=FULL_COMPANY_EMPLOYEES_DEFAULT_MAX_PAGES,
+        default_medium=max(FULL_COMPANY_EMPLOYEES_DEFAULT_MAX_PAGES, 50),
+        default_large=FULL_COMPANY_EMPLOYEES_LARGE_ORG_MAX_PAGES,
+    )
 
 
 def _build_review_company_shard_policy(
@@ -401,6 +452,7 @@ def _build_review_company_shard_policy(
     company_scope: list[str],
     filter_hints: dict[str, Any],
     cost_policy: dict[str, Any],
+    organization_execution_profile: dict[str, Any] | None = None,
     max_pages: int,
 ) -> dict[str, Any]:
     if strategy_type != "full_company_roster":
@@ -421,6 +473,7 @@ def _build_review_company_shard_policy(
         company_key,
         max_pages=max_pages,
         page_limit=FULL_COMPANY_EMPLOYEES_PAGE_LIMIT,
+        organization_execution_profile=organization_execution_profile,
     )
 
 
@@ -572,13 +625,13 @@ def _apply_acquisition_review_preferences(
     if desired_strategy:
         acquisition_strategy["strategy_type"] = desired_strategy
     if desired_strategy == "full_company_roster":
-        acquisition_strategy["roster_sources"] = ["linkedin_company_roster", "company_directory_pages", "the_org"]
+        acquisition_strategy["roster_sources"] = ["harvest_company_employees", "company_directory_pages", "the_org"]
         if target_company:
             acquisition_strategy["company_scope"] = [target_company]
     elif desired_strategy == "scoped_search_roster":
-        acquisition_strategy["roster_sources"] = ["web_search_seed_queries", "linkedin_people_search", "company_suborg_sources"]
+        acquisition_strategy["roster_sources"] = ["harvest_profile_search", "company_suborg_sources"]
     elif desired_strategy == "former_employee_search":
-        acquisition_strategy["roster_sources"] = ["web_search_seed_queries", "linkedin_people_search", "news_and_bio_pages"]
+        acquisition_strategy["roster_sources"] = ["harvest_profile_search", "news_and_bio_pages"]
     elif desired_strategy == "investor_firm_roster":
         acquisition_strategy["roster_sources"] = ["funding_graph", "investor_firm_roster", "linkedin_people_search"]
 
@@ -601,28 +654,21 @@ def _apply_acquisition_review_preferences(
         cost_policy["provider_people_search_max_queries"] = int(preferences.get("provider_people_search_max_queries") or 0)
     if "large_org_keyword_probe_mode" in preferences:
         cost_policy["large_org_keyword_probe_mode"] = bool(preferences.get("large_org_keyword_probe_mode"))
-    if "allow_high_cost_sources" in preferences:
-        cost_policy["high_cost_requires_approval"] = False
-        cost_policy["high_cost_sources_approved"] = bool(preferences.get("allow_high_cost_sources"))
     strategy_for_provider = str(acquisition_strategy.get("strategy_type") or desired_strategy or current_strategy).strip().lower()
-    explicit_high_cost_preference = "allow_high_cost_sources" in preferences
     if strategy_for_provider == "scoped_search_roster":
         if "former_keyword_queries_only" not in preferences:
             cost_policy["former_keyword_queries_only"] = True
-        if bool(cost_policy.get("high_cost_sources_approved")):
-            cost_policy["provider_people_search_mode"] = "primary_only"
-            try:
-                current_min_expected = int(cost_policy.get("provider_people_search_min_expected_results") or 0)
-            except (TypeError, ValueError):
-                current_min_expected = 0
-            try:
-                current_pages = int(cost_policy.get("provider_people_search_pages") or 0)
-            except (TypeError, ValueError):
-                current_pages = 0
-            cost_policy["provider_people_search_min_expected_results"] = max(current_min_expected, 50)
-            cost_policy["provider_people_search_pages"] = max(current_pages, 2)
-        elif explicit_high_cost_preference and not bool(preferences.get("allow_high_cost_sources")):
-            cost_policy["provider_people_search_mode"] = "disabled"
+        cost_policy["provider_people_search_mode"] = "primary_only"
+        try:
+            current_min_expected = int(cost_policy.get("provider_people_search_min_expected_results") or 0)
+        except (TypeError, ValueError):
+            current_min_expected = 0
+        try:
+            current_pages = int(cost_policy.get("provider_people_search_pages") or 0)
+        except (TypeError, ValueError):
+            current_pages = 0
+        cost_policy["provider_people_search_min_expected_results"] = max(current_min_expected, 50)
+        cost_policy["provider_people_search_pages"] = max(current_pages, 2)
     if "precision_recall_bias" in preferences:
         cost_policy["precision_recall_bias"] = str(preferences.get("precision_recall_bias") or "").strip()
     acquisition_strategy["cost_policy"] = cost_policy

@@ -194,6 +194,116 @@ KNOWN_SCOPE_SIGNAL_SPECS: tuple[dict[str, Any], ...] = (
 )
 
 
+KNOWN_THEMATIC_SIGNAL_SPECS: tuple[dict[str, Any], ...] = (
+    {
+        "canonical_label": "Coding",
+        "aliases": ("coding", "coding agent", "coding agents", "programming", "code generation", "编程"),
+        "keyword_labels": ("Coding",),
+        "research_direction_keywords": ("Coding",),
+        "provider_search_aliases": ("Coding",),
+    },
+    {
+        "canonical_label": "Math",
+        "aliases": ("math", "mathematics", "mathematical", "math reasoning", "数学"),
+        "keyword_labels": ("Math",),
+        "research_direction_keywords": ("Math",),
+        "provider_search_aliases": ("Math",),
+    },
+    {
+        "canonical_label": "Text",
+        "aliases": ("text", "language", "nlp", "natural language", "language model", "language models", "文本"),
+        "keyword_labels": ("Text",),
+        "research_direction_keywords": ("Text",),
+        "provider_search_aliases": ("Language Model", "NLP", "Text"),
+    },
+    {
+        "canonical_label": "Audio",
+        "aliases": ("audio", "speech", "voice", "speech audio", "音频", "语音"),
+        "keyword_labels": ("Audio",),
+        "research_direction_keywords": ("Audio",),
+        "provider_search_aliases": ("Audio",),
+    },
+    {
+        "canonical_label": "Infra",
+        "aliases": ("infra", "infrastructure", "基础设施"),
+        "keyword_labels": ("Infra",),
+        "research_direction_keywords": ("Infra",),
+        "provider_search_aliases": ("Infrastructure", "Infra"),
+    },
+    {
+        "canonical_label": "Vision",
+        "aliases": ("vision", "visual", "computer vision", "视觉"),
+        "keyword_labels": ("Vision",),
+        "research_direction_keywords": ("Vision",),
+        "provider_search_aliases": ("Vision", "Computer Vision"),
+    },
+    {
+        "canonical_label": "Multimodal",
+        "aliases": ("multimodal", "multi modal", "multimodality", "多模态"),
+        "keyword_labels": ("Multimodal",),
+        "research_direction_keywords": ("Multimodal",),
+        "facet_labels": ("multimodal",),
+        "provider_search_aliases": ("Multimodal",),
+    },
+    {
+        "canonical_label": "Reasoning",
+        "aliases": ("reasoning", "reasoning model", "reasoning models", "reasoner"),
+        "keyword_labels": ("Reasoning",),
+        "research_direction_keywords": ("Reasoning",),
+        "provider_search_aliases": ("Reasoning",),
+    },
+    {
+        "canonical_label": "RL",
+        "aliases": ("rl", "reinforcement learning", "强化学习"),
+        "keyword_labels": ("RL",),
+        "research_direction_keywords": ("RL",),
+        "provider_search_aliases": ("Reinforcement Learning", "RL"),
+    },
+    {
+        "canonical_label": "Eval",
+        "aliases": ("eval", "evals", "evaluation", "model evaluation", "alignment evaluation", "评估", "评测"),
+        "keyword_labels": ("Eval",),
+        "research_direction_keywords": ("Eval",),
+        "provider_search_aliases": ("Evaluation", "Model Evaluation", "Eval"),
+    },
+    {
+        "canonical_label": "Pre-train",
+        "aliases": ("pre-train", "pre train", "pretraining", "pre-training", "pre training", "预训练"),
+        "keyword_labels": ("Pre-train",),
+        "research_direction_keywords": ("Pre-train",),
+        "provider_search_aliases": ("Pre-train",),
+    },
+    {
+        "canonical_label": "Post-train",
+        "aliases": ("post-train", "post train", "posttraining", "post-training", "post training", "后训练"),
+        "keyword_labels": ("Post-train",),
+        "research_direction_keywords": ("Post-train",),
+        "provider_search_aliases": ("Post-train",),
+    },
+    {
+        "canonical_label": "World model",
+        "aliases": ("world model", "world models", "world modeling", "world-modeling", "世界模型"),
+        "keyword_labels": ("World model",),
+        "research_direction_keywords": ("World model",),
+        "provider_search_aliases": ("World model",),
+    },
+    {
+        "canonical_label": "Alignment",
+        "aliases": ("alignment", "alignments"),
+        "keyword_labels": ("Alignment",),
+        "research_direction_keywords": ("Alignment",),
+        "provider_search_aliases": ("Alignment",),
+    },
+    {
+        "canonical_label": "Safety",
+        "aliases": ("safety",),
+        "keyword_labels": ("Safety",),
+        "research_direction_keywords": ("Safety",),
+        "provider_search_aliases": ("Safety",),
+    },
+)
+
+
 ROLE_BUCKET_KNOWLEDGE: dict[str, dict[str, Any]] = {
     "product_management": {
         "aliases": ("product manager", "product management", "产品经理", "pm"),
@@ -260,6 +370,18 @@ for _canonical_label, _spec in _SCOPE_SIGNAL_BY_CANONICAL.items():
         _normalized = "".join(ch.lower() for ch in str(_value or "") if ch.isalnum())
         if _normalized:
             _SCOPE_SIGNAL_LOOKUP.setdefault(_normalized, _canonical_label)
+
+_THEMATIC_SIGNAL_BY_CANONICAL = {
+    str(spec.get("canonical_label") or "").strip(): dict(spec)
+    for spec in KNOWN_THEMATIC_SIGNAL_SPECS
+    if str(spec.get("canonical_label") or "").strip()
+}
+_THEMATIC_SIGNAL_LOOKUP: dict[str, str] = {}
+for _canonical_label, _spec in _THEMATIC_SIGNAL_BY_CANONICAL.items():
+    for _value in ([_canonical_label] + list(_spec.get("aliases") or [])):
+        _normalized = "".join(ch.lower() for ch in str(_value or "") if ch.isalnum())
+        if _normalized:
+            _THEMATIC_SIGNAL_LOOKUP.setdefault(_normalized, _canonical_label)
 
 
 def canonicalize_scope_signal_label(value: str) -> str:
@@ -372,6 +494,94 @@ def related_company_scope_urls(target_company: str, values: Iterable[str]) -> li
     return _dedupe_strings(urls)
 
 
+def lookup_thematic_signal(value: str) -> dict[str, Any]:
+    canonical = _THEMATIC_SIGNAL_LOOKUP.get(normalize_scope_signal_key(value))
+    if not canonical:
+        return {}
+    return dict(_THEMATIC_SIGNAL_BY_CANONICAL.get(canonical) or {})
+
+
+def canonicalize_thematic_signal_label(value: str) -> str:
+    spec = lookup_thematic_signal(value)
+    if spec:
+        keyword_labels = [str(item).strip() for item in list(spec.get("keyword_labels") or []) if str(item).strip()]
+        if keyword_labels:
+            return keyword_labels[0]
+        canonical = str(spec.get("canonical_label") or "").strip()
+        if canonical:
+            return canonical
+    return " ".join(str(value or "").split()).strip()
+
+
+def thematic_signal_search_query_aliases(value: str) -> list[str]:
+    spec = lookup_thematic_signal(value)
+    if not spec:
+        canonical = canonicalize_thematic_signal_label(value)
+        return [canonical] if canonical else []
+    aliases = [
+        str(item).strip()
+        for item in list(spec.get("provider_search_aliases") or spec.get("keyword_labels") or [])
+        if str(item).strip()
+    ]
+    if not aliases:
+        canonical = str(spec.get("canonical_label") or "").strip()
+        if canonical:
+            aliases = [canonical]
+    return _dedupe_strings(aliases)
+
+
+def naturalize_search_query_term(value: str) -> str:
+    normalized = " ".join(str(value or "").replace("_", " ").split()).strip()
+    if not normalized:
+        return ""
+    scope_aliases = scope_signal_search_query_aliases(normalized)
+    if scope_aliases:
+        return scope_aliases[0]
+    thematic_aliases = thematic_signal_search_query_aliases(normalized)
+    if thematic_aliases:
+        return thematic_aliases[0]
+    canonical_scope = canonicalize_scope_signal_label(normalized)
+    if canonical_scope and canonical_scope != normalized:
+        return canonical_scope
+    canonical_thematic = canonicalize_thematic_signal_label(normalized)
+    if canonical_thematic and canonical_thematic != normalized:
+        return canonical_thematic
+    return normalized
+
+
+def naturalize_search_query_terms(values: Iterable[str]) -> list[str]:
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        normalized = naturalize_search_query_term(str(value or ""))
+        if not normalized:
+            continue
+        signature = _search_phrase_signature(normalized)
+        if signature in seen:
+            continue
+        seen.add(signature)
+        deduped.append(normalized)
+    return deduped
+
+
+def match_thematic_signals(text: str) -> list[dict[str, Any]]:
+    normalized_text = " ".join(str(text or "").lower().split()).strip()
+    if not normalized_text:
+        return []
+    matches: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for spec in KNOWN_THEMATIC_SIGNAL_SPECS:
+        aliases = [str(spec.get("canonical_label") or "").strip(), *list(spec.get("aliases") or [])]
+        if not any(_alias_matches_text(normalized_text, alias) for alias in aliases):
+            continue
+        canonical = str(spec.get("canonical_label") or "").strip()
+        if not canonical or canonical in seen:
+            continue
+        seen.add(canonical)
+        matches.append(dict(spec))
+    return matches
+
+
 def scope_review_hints(target_company: str, values: Iterable[str]) -> list[str]:
     target_key = _scope_parent_company_key(target_company)
     hints: list[str] = []
@@ -476,6 +686,15 @@ def _dedupe_strings(values: Iterable[str]) -> list[str]:
         seen.add(key)
         deduped.append(normalized)
     return deduped
+
+
+def _search_phrase_signature(value: str) -> str:
+    normalized = " ".join(str(value or "").lower().split()).strip()
+    if not normalized:
+        return ""
+    compact = re.sub(r"[\s\-_]+", "", normalized)
+    alnum = re.sub(r"[^0-9a-z]+", "", compact)
+    return alnum or compact
 
 
 def _scope_parent_company_key(value: str) -> str:

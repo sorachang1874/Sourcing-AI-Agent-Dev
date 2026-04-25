@@ -7,6 +7,7 @@ from sourcing_agent.model_provider import (
     OfflineModelClient,
     OpenAICompatibleChatModelClient,
     QwenResponsesModelClient,
+    _build_request_normalization_system_prompt,
     _extract_openai_chat_text,
     _extract_openai_models,
     build_model_client,
@@ -89,6 +90,21 @@ class ModelProviderTest(unittest.TestCase):
         self.assertIsInstance(model_client, OfflineModelClient)
         self.assertEqual(model_client.healthcheck()["provider_mode"], "replay")
 
+    def test_build_model_client_uses_offline_provider_in_scripted_mode(self) -> None:
+        with patch.dict("os.environ", {"SOURCING_EXTERNAL_PROVIDER_MODE": "scripted"}):
+            model_client = build_model_client(
+                ModelProviderSettings(
+                    enabled=True,
+                    provider_name="relay",
+                    api_key="sk-test",
+                    base_url="https://tb.keeps.cc/v1",
+                    model="claude-sonnet-4-6",
+                ),
+                QwenSettings(enabled=True, api_key="sk-qwen"),
+            )
+        self.assertIsInstance(model_client, OfflineModelClient)
+        self.assertEqual(model_client.healthcheck()["provider_mode"], "scripted")
+
     def test_outreach_ai_capability_flags(self) -> None:
         self.assertFalse(DeterministicModelClient().supports_outreach_ai_verification())
         self.assertTrue(
@@ -155,6 +171,19 @@ class ModelProviderTest(unittest.TestCase):
         self.assertIn("keyword_priority_only", system_prompt)
         self.assertIn("provider_people_search_query_strategy", system_prompt)
         self.assertIn("acquisition_strategy_override is only the base roster strategy axis", system_prompt)
+        self.assertIn("prefer categories=['researcher','engineer']", system_prompt)
+        multimodal = next(
+            item for item in supported
+            if isinstance(item, dict) and item.get("rewrite_id") == "multimodal_project_focus"
+        )
+        self.assertEqual(multimodal.get("request_patch", {}).get("keywords"), ["multimodal"])
+
+    def test_request_normalization_prompt_keeps_explicit_thematic_boundary(self) -> None:
+        system_prompt = _build_request_normalization_system_prompt()
+
+        self.assertIn("Do not expand a single direction into sibling, parent, child, or adjacent directions", system_prompt)
+        self.assertIn("if the request says Multimodal", system_prompt)
+        self.assertIn("do not add Text, Vision, vision-language, or video generation", system_prompt)
 
     def test_qwen_normalize_refinement_instruction_includes_supported_rewrite_policies_in_payload(self) -> None:
         captured: dict[str, object] = {}

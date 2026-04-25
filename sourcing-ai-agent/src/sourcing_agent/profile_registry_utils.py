@@ -4,7 +4,6 @@ from hashlib import sha1
 from pathlib import Path
 from typing import Any
 
-
 _UNRECOVERABLE_ERROR_PATTERNS = (
     "member is restricted",
     "restricted profile",
@@ -13,6 +12,7 @@ _UNRECOVERABLE_ERROR_PATTERNS = (
     "forbidden",
     "private profile",
 )
+_PROFILE_WRAPPER_KEYS = ("item", "data", "profile", "result")
 
 
 def extract_profile_registry_aliases_from_payload(
@@ -21,10 +21,16 @@ def extract_profile_registry_aliases_from_payload(
     requested_url: str = "",
 ) -> dict[str, Any]:
     raw_payload = dict(payload or {})
-    request_metadata = raw_payload.get("_harvest_request")
-    request_payload = request_metadata if isinstance(request_metadata, dict) else {}
-    item_payload = raw_payload.get("item")
-    item = item_payload if isinstance(item_payload, dict) else raw_payload
+    layers = _profile_payload_layers(raw_payload)
+    request_payload = next(
+        (
+            dict(layer.get("_harvest_request") or {})
+            for layer in layers
+            if isinstance(layer.get("_harvest_request"), dict)
+        ),
+        {},
+    )
+    item = _first_profile_payload_item(raw_payload)
     candidate_urls = _dedupe_url_list(
         [
             requested_url,
@@ -40,31 +46,25 @@ def extract_profile_registry_aliases_from_payload(
             item.get("sanity_linkedin_url") if isinstance(item, dict) else "",
         ]
     )
-    raw_linkedin_url = (
-        _first_non_empty(
-            [
-                requested_url,
-                request_payload.get("profile_url"),
-                request_payload.get("raw_linkedin_url"),
-                raw_payload.get("raw_linkedin_url"),
-                item.get("raw_linkedin_url") if isinstance(item, dict) else "",
-            ]
-        )
-        or (candidate_urls[0] if candidate_urls else "")
-    )
-    sanity_linkedin_url = (
-        _first_non_empty(
-            [
-                request_payload.get("sanity_linkedin_url"),
-                raw_payload.get("sanity_linkedin_url"),
-                item.get("sanity_linkedin_url") if isinstance(item, dict) else "",
-                item.get("linkedinUrl") if isinstance(item, dict) else "",
-                item.get("profileUrl") if isinstance(item, dict) else "",
-                item.get("url") if isinstance(item, dict) else "",
-            ]
-        )
-        or (candidate_urls[0] if candidate_urls else "")
-    )
+    raw_linkedin_url = _first_non_empty(
+        [
+            requested_url,
+            request_payload.get("profile_url"),
+            request_payload.get("raw_linkedin_url"),
+            raw_payload.get("raw_linkedin_url"),
+            item.get("raw_linkedin_url") if isinstance(item, dict) else "",
+        ]
+    ) or (candidate_urls[0] if candidate_urls else "")
+    sanity_linkedin_url = _first_non_empty(
+        [
+            request_payload.get("sanity_linkedin_url"),
+            raw_payload.get("sanity_linkedin_url"),
+            item.get("sanity_linkedin_url") if isinstance(item, dict) else "",
+            item.get("linkedinUrl") if isinstance(item, dict) else "",
+            item.get("profileUrl") if isinstance(item, dict) else "",
+            item.get("url") if isinstance(item, dict) else "",
+        ]
+    ) or (candidate_urls[0] if candidate_urls else "")
     return {
         "alias_urls": candidate_urls,
         "raw_linkedin_url": raw_linkedin_url,
@@ -88,8 +88,7 @@ def profile_cache_path_candidates(harvest_dir: Path, profile_url: str, normalize
 
 def classify_harvest_profile_payload_status(payload: dict[str, Any] | None) -> str:
     raw_payload = dict(payload or {})
-    item_payload = raw_payload.get("item")
-    item = item_payload if isinstance(item_payload, dict) else raw_payload
+    item = _first_profile_payload_item(raw_payload)
     if _looks_like_harvest_profile_item(item):
         return "fetched"
     if _payload_has_unrecoverable_error(raw_payload):
@@ -97,6 +96,10 @@ def classify_harvest_profile_payload_status(payload: dict[str, Any] | None) -> s
     if _payload_has_any_error(raw_payload):
         return "failed_retryable"
     return "failed_retryable"
+
+
+def harvest_profile_payload_has_usable_content(payload: dict[str, Any] | None) -> bool:
+    return classify_harvest_profile_payload_status(payload) == "fetched"
 
 
 def _looks_like_harvest_profile_item(item: dict[str, Any] | None) -> bool:
@@ -109,7 +112,14 @@ def _looks_like_harvest_profile_item(item: dict[str, Any] | None) -> bool:
         return True
     if payload.get("headline") or payload.get("occupation"):
         return True
-    if payload.get("experience") or payload.get("educations") or payload.get("education"):
+    if (
+        payload.get("experience")
+        or payload.get("experiences")
+        or payload.get("positions")
+        or payload.get("educations")
+        or payload.get("education")
+        or payload.get("schools")
+    ):
         return True
     return False
 
@@ -125,31 +135,68 @@ def _payload_has_unrecoverable_error(payload: dict[str, Any]) -> bool:
 
 
 def _collect_error_texts(payload: dict[str, Any]) -> list[str]:
-    item_payload = payload.get("item")
-    item = item_payload if isinstance(item_payload, dict) else payload
     values: list[str] = []
-    for candidate in [
-        payload.get("error"),
-        payload.get("message"),
-        item.get("error") if isinstance(item, dict) else "",
-        item.get("message") if isinstance(item, dict) else "",
-    ]:
-        value = str(candidate or "").strip().lower()
-        if value:
-            values.append(value)
-    errors = payload.get("errors")
+    for layer in _profile_payload_layers(payload):
+        values.extend(_layer_error_texts(layer))
+    return values
+
+
+def _profile_payload_layers(payload: dict[str, Any] | None) -> list[dict[str, Any]]:
+    layers: list[dict[str, Any]] = []
+    current = dict(payload or {})
+    seen_ids: set[int] = set()
+    depth = 0
+    while isinstance(current, dict) and depth < 8:
+        current_id = id(current)
+        if current_id in seen_ids:
+            break
+        seen_ids.add(current_id)
+        layers.append(current)
+        nested = _next_profile_wrapper_layer(current)
+        if nested is None:
+            break
+        current = nested
+        depth += 1
+    return layers
+
+
+def _next_profile_wrapper_layer(layer: dict[str, Any]) -> dict[str, Any] | None:
+    for key in _PROFILE_WRAPPER_KEYS:
+        candidate = layer.get(key)
+        if isinstance(candidate, dict) and candidate is not layer:
+            return dict(candidate)
+    return None
+
+
+def _first_profile_payload_item(payload: dict[str, Any]) -> dict[str, Any]:
+    layers = _profile_payload_layers(payload)
+    for layer in reversed(layers):
+        if _looks_like_harvest_profile_item(layer):
+            return dict(layer)
+    return dict(layers[-1]) if layers else {}
+
+
+def _layer_error_texts(layer: dict[str, Any]) -> list[str]:
+    values: list[str] = []
+    for key in ("error", "message", "detail", "status", "statusText", "errorMessage", "status_code", "code"):
+        values.extend(_normalize_error_value(layer.get(key)))
+    errors = layer.get("errors")
     if isinstance(errors, list):
         for error_payload in errors:
-            if isinstance(error_payload, dict):
-                for key in ("error", "message", "status"):
-                    value = str(error_payload.get(key) or "").strip().lower()
-                    if value:
-                        values.append(value)
-            else:
-                value = str(error_payload or "").strip().lower()
-                if value:
-                    values.append(value)
+            values.extend(_normalize_error_value(error_payload))
     return values
+
+
+def _normalize_error_value(value: Any) -> list[str]:
+    if isinstance(value, dict):
+        collected: list[str] = []
+        for key in ("error", "message", "detail", "status", "statusText", "errorMessage", "status_code", "code"):
+            nested = str(value.get(key) or "").strip().lower()
+            if nested:
+                collected.append(nested)
+        return collected
+    normalized = str(value or "").strip().lower()
+    return [normalized] if normalized else []
 
 
 def _url_variants(profile_url: str, *, normalized_profile_url: str = "") -> list[str]:

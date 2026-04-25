@@ -10,8 +10,9 @@ from typing import TYPE_CHECKING, Any
 from urllib import error, parse, request
 
 from .asset_logger import AssetLogger
-from .company_registry import BUILTIN_COMPANY_IDENTITIES, COMPANY_ALIASES, normalize_company_key
+from .company_registry import builtin_company_identity, normalize_company_key, resolve_company_alias_key
 from .domain import Candidate, EvidenceRecord, format_display_name, make_evidence_id, normalize_candidate, normalize_name_token
+from .execution_preferences import extract_target_company_linkedin_override
 
 if TYPE_CHECKING:
     from .model_provider import ModelClient
@@ -111,6 +112,76 @@ class CompanyRosterSnapshot:
             "summary_path": str(self.summary_path),
         }
 
+
+def resolve_manual_company_identity(
+    target_company: str,
+    execution_preferences: dict[str, Any] | None,
+    *,
+    legacy_company_ids_path: Path | None = None,
+) -> CompanyIdentity | None:
+    override = extract_target_company_linkedin_override(
+        execution_preferences,
+        target_company=target_company,
+    )
+    linkedin_slug = str(override.get("linkedin_slug") or "").strip()
+    linkedin_company_url = str(override.get("linkedin_company_url") or "").strip()
+    if not linkedin_slug:
+        return None
+
+    base_identity = resolve_company_identity(target_company or linkedin_slug, legacy_company_ids_path)
+    override_company_key, override_builtin = builtin_company_identity(linkedin_slug)
+    override_builtin_slug = str((override_builtin or {}).get("linkedin_slug") or "").strip()
+    override_builtin_matches_slug = normalize_company_key(override_builtin_slug) == normalize_company_key(linkedin_slug)
+
+    canonical_name = (
+        str((override_builtin or {}).get("canonical_name") or "").strip()
+        if override_builtin_matches_slug
+        else ""
+    )
+    if not canonical_name:
+        canonical_name = str(base_identity.canonical_name or target_company or linkedin_slug).strip()
+    company_key = (
+        str(override_company_key or "").strip()
+        if override_builtin_matches_slug and str(override_company_key or "").strip()
+        else str(base_identity.company_key or override.get("company_key_hint") or normalize_company_key(target_company or linkedin_slug)).strip()
+    )
+    aliases = _dedupe_company_aliases(
+        [
+            target_company,
+            canonical_name,
+            linkedin_slug,
+            *list(base_identity.aliases or []),
+            *list((override_builtin or {}).get("aliases") or []),
+        ]
+    )
+    metadata: dict[str, Any] = {}
+    if base_identity.linkedin_slug and normalize_company_key(base_identity.linkedin_slug) != normalize_company_key(linkedin_slug):
+        metadata["resolved_identity_before_override"] = base_identity.to_record()
+    if override_builtin_matches_slug:
+        metadata["override_identity_seed"] = {
+            "company_key": override_company_key,
+            "canonical_name": canonical_name,
+        }
+
+    return CompanyIdentity(
+        requested_name=target_company or base_identity.requested_name or canonical_name,
+        canonical_name=canonical_name,
+        company_key=company_key,
+        linkedin_slug=linkedin_slug,
+        linkedin_company_url=linkedin_company_url or _company_url(linkedin_slug),
+        domain=str((override_builtin or {}).get("domain") or base_identity.domain or "").strip(),
+        aliases=[
+            alias
+            for alias in aliases
+            if normalize_company_key(alias) not in {normalize_company_key(target_company), normalize_company_key(canonical_name)}
+        ],
+        resolver="manual_review_override",
+        confidence="high",
+        notes="LinkedIn company URL was confirmed during review and applied directly.",
+        local_asset_available=bool((override_builtin or {}).get("local_asset_available") or base_identity.local_asset_available),
+        metadata=metadata,
+    )
+
 def resolve_company_identity(
     target_company: str,
     legacy_company_ids_path: Path | None = None,
@@ -119,9 +190,8 @@ def resolve_company_identity(
     observed_companies: list[dict[str, Any]] | None = None,
 ) -> CompanyIdentity:
     requested = target_company.strip()
+    alias_key, builtin = builtin_company_identity(requested)
     company_key = normalize_company_key(requested)
-    alias_key = COMPANY_ALIASES.get(company_key, company_key)
-    builtin = BUILTIN_COMPANY_IDENTITIES.get(alias_key)
     if builtin:
         linkedin_slug = str(builtin.get("linkedin_slug", "")).strip()
         return CompanyIdentity(
@@ -429,7 +499,7 @@ def _canonical_company_key_for_identity(
     for candidate in ordered_candidates:
         if not candidate:
             continue
-        return COMPANY_ALIASES.get(candidate, candidate)
+        return resolve_company_alias_key(candidate)
     return normalize_company_key(fallback_company_key)
 
 
@@ -688,6 +758,18 @@ def build_candidates_from_roster(snapshot: CompanyRosterSnapshot) -> tuple[list[
         location = str(row.get("location", "")).strip()
         linkedin_url = str(row.get("linkedin_url", "")).strip()
         team = _infer_team_from_headline(headline)
+        source_shard_filters = dict(row.get("source_shard_filters") or {})
+        include_function_ids = [
+            str(item).strip()
+            for item in list(row.get("function_ids") or [])
+            if str(item).strip()
+        ]
+        exclude_function_ids = {
+            str(item).strip()
+            for item in list(source_shard_filters.get("exclude_function_ids") or [])
+            if str(item).strip()
+        }
+        function_ids = [item for item in include_function_ids if item not in exclude_function_ids]
         notes = "LinkedIn company roster baseline."
         if location:
             notes += f" Location: {location}."
@@ -718,6 +800,10 @@ def build_candidates_from_roster(snapshot: CompanyRosterSnapshot) -> tuple[list[
                 "location": location,
                 "page": row.get("page"),
                 "source_account_id": row.get("source_account_id", ""),
+                "source_shard_id": row.get("source_shard_id", ""),
+                "source_shard_title": row.get("source_shard_title", ""),
+                "source_shard_filters": source_shard_filters,
+                "function_ids": function_ids,
                 "snapshot_id": snapshot.snapshot_id,
             },
             )
@@ -750,6 +836,10 @@ def build_candidates_from_roster(snapshot: CompanyRosterSnapshot) -> tuple[list[
                     "profile_url": linkedin_url,
                     "page": row.get("page"),
                     "source_account_id": row.get("source_account_id", ""),
+                    "source_shard_id": row.get("source_shard_id", ""),
+                    "source_shard_title": row.get("source_shard_title", ""),
+                    "source_shard_filters": source_shard_filters,
+                    "function_ids": function_ids,
                     "snapshot_id": snapshot.snapshot_id,
                 },
             )

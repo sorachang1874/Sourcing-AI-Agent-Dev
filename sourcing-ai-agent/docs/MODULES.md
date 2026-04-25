@@ -1,5 +1,8 @@
 # Modules
 
+> Status: Current first-party doc. Treat this file as active guidance, but keep it aligned with `docs/INDEX.md` and `PROGRESS.md` when runtime contracts change.
+
+
 ## Goal
 
 这份文档用于快速复盘当前后端各模块的职责、上下游关系，以及在 Thinking Machines Lab 正式测试前已经完成的优化。
@@ -150,19 +153,19 @@ User Request
 - 当前已实现：
   - `export-company-snapshot-bundle`
   - `export-company-handoff-bundle`
-  - `export-sqlite-snapshot`
+  - `export-sqlite-snapshot`（legacy alias，优先导出 `control_plane_snapshot`）
   - `upload-asset-bundle`
   - `download-asset-bundle`
   - `import-cloud-assets`
   - `restore-asset-bundle`
-  - `restore-sqlite-snapshot`
+  - `restore-sqlite-snapshot`（legacy alias）
 - bundle 当前以文件系统目录形式保存：
   - `bundle_manifest.json`
   - `export_summary.json`
   - `payload/<runtime_relative_path>`
 - 设计目标是先把高价值 runtime 资产标准化为 portable bundle，后续再叠加 object storage uploader/downloader
 - 当前默认恢复基线：
-  - `import-cloud-assets` 恢复 `sqlite_snapshot + canonical company_snapshot`
+  - `import-cloud-assets` 恢复 `control_plane_snapshot + canonical company_snapshot`
   - `download-asset-bundle + restore-*` 仅保留为排障链路
 
 ### `object_storage.py`
@@ -175,7 +178,7 @@ User Request
   - 本地开发默认可用 filesystem backend
   - 生产环境可切 OSS/R2/S3-compatible object storage
   - bundle upload/download 不绑定具体云厂商
-  - 默认恢复基线优先使用 `sqlite_snapshot + canonical company_snapshot`
+  - 默认恢复基线优先使用 `control_plane_snapshot + canonical company_snapshot`
 
 ### `acquisition_strategy.py`
 
@@ -246,9 +249,12 @@ User Request
 ### `harvest_connectors.py`
 
 - 对接高质量 HarvestAPI provider
-- 当前主要承载已知 LinkedIn URL 时的 full profile scrape
-- app settings 当前默认启用 email search，且默认 `Full`
-- 若要走低成本路径，仍支持显式切回 no-email 枚举
+- 当前主要承载：
+  - 已知 LinkedIn URL 时的 full profile scrape
+  - company-scoped `profile-search` / `company-employees` live 调用
+- 默认配置应以 no-email profile detail 为主
+- former/company-scoped recall 不应再受通用成本 gate 控制
+- 对零散姓名关键词的人名检索，仍应走专门 targeted lane，而不是滥用 company search
 
 ### `enrichment.py`
 
@@ -294,7 +300,8 @@ User Request
   - 本地 exact / near match 去重
   - direct LinkedIn URL 优先 fetch；否则走 contact search fallback
   - 为 `manual_review_local / manual_review_search` 提供 continuation 入口
-  - 将结果落盘到 `runtime/excel_intake/{intake_id}/` 并回写 SQLite/candidate assets
+  - 将结果落盘到 `runtime/excel_intake/{intake_id}/`，并回写 control-plane store / candidate assets
+  - 前端 bulk intake UI 已重新公开；默认走 same-origin `/api/intake/excel/workflow` 上传并按 company 自动拆成多个 history/job
 
 ### `asset_logger.py`
 
@@ -315,7 +322,7 @@ User Request
 - 基于 candidate multi-field document 做本地 sparse-vector semantic retrieval
 - 在 structured hard filters 后，为 `hybrid / semantic` 检索补 recall 和 rerank
 - 当前通过 term weighting + cosine similarity 为 corner cases 提供 semantic hit
-- external semantic provider 只在显式允许高成本语义能力时参与；默认仍走本地 sparse retrieval
+- external semantic provider 现在只保留为 legacy/experimental supplement path；默认仍走本地 sparse retrieval
 
 ### `semantic_provider.py`
 

@@ -1,0 +1,11 @@
+frontend-demo/node_modules/
+frontend-demo/dist/
+frontend-demo/public/tml/
+runtime/
+output/
+.cache/
+.venv-tests/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+local_asset_packages/

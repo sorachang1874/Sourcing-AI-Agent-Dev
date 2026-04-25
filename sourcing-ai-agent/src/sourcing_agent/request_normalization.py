@@ -1,17 +1,24 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from typing import Any
 
 from .company_registry import builtin_company_identity
-from .domain import JobRequest
+from .connectors import CompanyIdentity, resolve_company_identity, resolve_manual_company_identity
+from .domain import JobRequest, normalize_requested_facet
 from .execution_preferences import merge_execution_preferences, normalize_execution_preferences
 from .query_signal_knowledge import (
     canonicalize_scope_signal_label,
+    canonicalize_thematic_signal_label,
+    lookup_scope_signal,
+    lookup_thematic_signal,
     match_scope_signals,
+    match_thematic_signals,
     resolve_target_company_alias,
     role_buckets_from_text,
 )
+from .semantic_intent import compile_semantic_brief
 
 _GENERIC_QUERY_SIGNAL_TERMS = {
     "ai",
@@ -77,11 +84,11 @@ _INTENT_AXIS_EXECUTION_PREFERENCE_KEYS = {
     "former_keyword_queries_only",
     "large_org_keyword_probe_mode",
     "force_fresh_run",
-    "allow_high_cost_sources",
     "provider_people_search_query_strategy",
     "provider_people_search_max_queries",
     "reuse_existing_roster",
     "run_former_search_seed",
+    "runtime_tuning_profile",
 }
 
 _DIRECTIONAL_QUERY_HINT_TERMS = {
@@ -106,6 +113,85 @@ _DIRECTIONAL_QUERY_HINT_TERMS = {
     "负责",
     "参与",
     "相关",
+}
+
+_LEXICAL_QUERY_SIGNAL_ALIASES = (
+    ("多模态", "Multimodal"),
+    ("预训练", "Pre-train"),
+    ("后训练", "Post-train"),
+    ("强化学习", "RL"),
+    ("评估", "Eval"),
+    ("评测", "Eval"),
+    ("世界模型", "World model"),
+    ("world model", "World model"),
+    ("world models", "World model"),
+    ("world modeling", "World model"),
+)
+
+_SUPPORTED_HARD_FACET_KEYS = {
+    "investor",
+    "founding",
+    "leadership",
+    "recruiting",
+    "ops",
+    "product_management",
+    "infra_systems",
+    "research",
+    "engineering",
+    "multimodal",
+    "safety",
+    "training",
+    "inference",
+    "data",
+    "greater_china_region_experience",
+    "mainland_china_experience_or_chinese_language",
+}
+
+_DEFAULT_TECHNICAL_POPULATION_CATEGORIES = ["researcher", "engineer"]
+_GENERIC_EMPLOYMENT_POPULATION_CATEGORIES = {"employee", "former_employee"}
+_RESEARCH_DIRECTION_DEFAULT_THEMATIC_LABELS = {
+    "Coding",
+    "Math",
+    "Text",
+    "Audio",
+    "Vision",
+    "Multimodal",
+    "Reasoning",
+    "RL",
+    "Eval",
+    "Pre-train",
+    "Post-train",
+    "World model",
+    "Alignment",
+    "Safety",
+}
+_EXPLICIT_RESEARCH_ROLE_TERMS = (
+    "research scientist",
+    "researcher",
+    "scientist",
+    "applied scientist",
+    "研究员",
+    "科学家",
+)
+_EXPLICIT_ENGINEERING_ROLE_TERMS = (
+    "research engineer",
+    "software engineer",
+    "infra engineer",
+    "infrastructure engineer",
+    "engineer",
+    "member of technical staff",
+    "technical staff",
+    "工程师",
+    "技术人员",
+)
+_TECHNICAL_DEFAULT_ROLE_BUCKETS = {"research"}
+_TECHNICAL_DEFAULT_FACETS = {
+    "research",
+    "training",
+    "inference",
+    "multimodal",
+    "safety",
+    "data",
 }
 
 
@@ -263,6 +349,7 @@ def supplement_request_query_signals(
 
 def extract_query_signal_terms(raw_text: str, *, target_company: str) -> dict[str, list[str]]:
     text = str(raw_text or "")
+    normalized_text = " ".join(text.lower().split())
     organization_keywords: list[str] = []
     keywords: list[str] = []
 
@@ -311,6 +398,10 @@ def extract_query_signal_terms(raw_text: str, *, target_company: str) -> dict[st
         _add_keyword(token)
     for token in re.findall(r"\b[A-Z][A-Za-z0-9&._/-]{2,30}(?:\s+[A-Z][A-Za-z0-9&._/-]{2,30})?\b", text):
         _add_keyword(token)
+    for token, label in _LEXICAL_QUERY_SIGNAL_ALIASES:
+        haystack = text if re.search(r"[\u4e00-\u9fff]", token) else normalized_text
+        if token in haystack:
+            _add_keyword(label)
 
     return {
         "organization_keywords": organization_keywords[:6],
@@ -331,6 +422,151 @@ def normalize_request_query_signal(value: str, *, target_company: str) -> str:
                 if suffix:
                     normalized = suffix
     return normalized[:120]
+
+
+def _canonical_thematic_request_keywords(raw_text: str, *, target_company: str) -> list[str]:
+    keyword_labels: list[str] = []
+    for match in match_thematic_signals(raw_text):
+        keyword_labels.extend(list(match.get("research_direction_keywords") or match.get("keyword_labels") or []))
+    return _canonicalize_keyword_field_values(keyword_labels, target_company=target_company)
+
+
+def _canonicalize_keyword_field_value(value: str, *, target_company: str) -> str:
+    normalized = normalize_request_query_signal(value, target_company=target_company)
+    if not normalized:
+        return ""
+    return canonicalize_thematic_signal_label(normalized)
+
+
+def _preserved_keyword_surface_forms(value: str, *, target_company: str) -> list[str]:
+    normalized = normalize_request_query_signal(value, target_company=target_company)
+    if not normalized:
+        return []
+    preserved: list[str] = []
+    if re.search(r"[\u4e00-\u9fff]", normalized):
+        preserved.append(normalized)
+    thematic_signal = lookup_thematic_signal(normalized)
+    canonical_label = str(thematic_signal.get("canonical_label") or "").strip()
+    if canonical_label and re.fullmatch(r"[A-Z]{2,4}", canonical_label) and normalized.lower() != canonical_label.lower():
+        preserved.append(normalized)
+    facet_labels = [
+        normalize_requested_facet(item)
+        for item in list(thematic_signal.get("facet_labels") or [])
+        if normalize_requested_facet(item)
+    ]
+    lowered = normalized.lower()
+    if lowered in facet_labels and lowered not in {item.lower() for item in preserved}:
+        preserved.append(lowered)
+    return preserved
+
+
+def _canonicalize_keyword_field_values(*sources: Any, target_company: str) -> list[str]:
+    merged: list[str] = []
+    seen: set[str] = set()
+    for source in sources:
+        if isinstance(source, str):
+            items = [source]
+        else:
+            items = list(source or [])
+        for item in items:
+            candidate_values = [
+                *_preserved_keyword_surface_forms(str(item or ""), target_company=target_company),
+                _canonicalize_keyword_field_value(str(item or ""), target_company=target_company),
+            ]
+            for value in candidate_values:
+                if not value:
+                    continue
+                key = " ".join(value.lower().split())
+                if key in seen:
+                    continue
+                seen.add(key)
+                merged.append(value)
+    return merged
+
+
+def _prefer_hard_facet_keyword_labels(
+    keywords: list[str],
+    *,
+    hard_facets: list[str],
+    target_company: str,
+) -> list[str]:
+    active_facets = {
+        normalize_requested_facet(item)
+        for item in list(hard_facets or [])
+        if normalize_requested_facet(item)
+    }
+    if not active_facets:
+        return list(keywords or [])
+    normalized_keywords: list[str] = []
+    seen: set[str] = set()
+    for value in list(keywords or []):
+        replacement = str(value or "").strip()
+        thematic_signal = lookup_thematic_signal(
+            normalize_request_query_signal(replacement, target_company=target_company)
+        )
+        facet_labels = [
+            normalize_requested_facet(item)
+            for item in list(thematic_signal.get("facet_labels") or [])
+            if normalize_requested_facet(item)
+        ]
+        matched_facet = next((item for item in facet_labels if item in active_facets), "")
+        if matched_facet:
+            replacement = matched_facet
+        key = " ".join(replacement.lower().split())
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        normalized_keywords.append(replacement)
+    return normalized_keywords
+
+
+def _canonical_preview_keyword_values(*sources: Any, target_company: str) -> list[str]:
+    merged: list[str] = []
+    seen: set[str] = set()
+    for source in sources:
+        if isinstance(source, str):
+            items = [source]
+        else:
+            items = list(source or [])
+        for item in items:
+            value = _canonicalize_keyword_field_value(str(item or ""), target_company=target_company)
+            if not value:
+                continue
+            key = " ".join(value.lower().split())
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(value)
+    return merged
+
+
+def _canonical_scope_request_keywords(*sources: Any, target_company: str) -> list[str]:
+    scope_keywords: list[str] = []
+    seen: set[str] = set()
+    target_normalized = " ".join(str(target_company or "").split()).strip().lower()
+    for source in sources:
+        if isinstance(source, str):
+            items = [source]
+        else:
+            items = list(source or [])
+        for item in items:
+            normalized = normalize_request_query_signal(str(item or ""), target_company=target_company)
+            if not normalized:
+                continue
+            spec = lookup_scope_signal(normalized)
+            if not spec:
+                continue
+            canonical = str(spec.get("canonical_label") or normalized).strip()
+            if not canonical:
+                continue
+            if canonical.lower() == target_normalized:
+                continue
+            key = " ".join(canonical.lower().split())
+            if key in seen:
+                continue
+            seen.add(key)
+            scope_keywords.append(canonical)
+    return scope_keywords
 
 
 def should_skip_query_signal(value: str, *, target_company: str) -> bool:
@@ -389,6 +625,70 @@ def merge_unique_request_string_values(*sources: Any, target_company: str = "") 
     return merged
 
 
+def _facet_key_for_matching(value: str, *, target_company: str) -> str:
+    normalized = normalize_request_query_signal(value, target_company=target_company)
+    if not normalized:
+        return ""
+    return normalized.lower().replace("-", "_").replace(" ", "_")
+
+
+def _normalize_must_have_facets_for_intent_view(
+    must_have_facets: list[str],
+    *,
+    keywords: list[str],
+    target_company: str,
+) -> tuple[list[str], list[str]]:
+    hard_facets: list[str] = []
+    seen_facets: set[str] = set()
+    downgraded_keywords: list[str] = []
+    seen_keyword_keys: set[str] = set()
+
+    for raw_value in list(must_have_facets or []):
+        facet_key = _facet_key_for_matching(str(raw_value or ""), target_company=target_company)
+        if not facet_key:
+            continue
+        if facet_key in _SUPPORTED_HARD_FACET_KEYS:
+            if facet_key not in seen_facets:
+                seen_facets.add(facet_key)
+                hard_facets.append(facet_key)
+            continue
+        keyword_label = canonicalize_thematic_signal_label(str(raw_value or ""))
+        if not keyword_label:
+            keyword_label = normalize_request_query_signal(str(raw_value or ""), target_company=target_company)
+        if not keyword_label:
+            continue
+        keyword_key = " ".join(keyword_label.lower().split())
+        if keyword_key in seen_keyword_keys:
+            continue
+        seen_keyword_keys.add(keyword_key)
+        downgraded_keywords.append(keyword_label)
+
+    normalized_keywords = _canonicalize_keyword_field_values(
+        keywords,
+        downgraded_keywords,
+        target_company=target_company,
+    )
+    normalized_keywords = _prefer_hard_facet_keyword_labels(
+        normalized_keywords,
+        hard_facets=hard_facets,
+        target_company=target_company,
+    )
+    return hard_facets, normalized_keywords
+
+
+def normalize_must_have_facets_for_request_fields(
+    *,
+    must_have_facets: list[str],
+    keywords: list[str],
+    target_company: str,
+) -> tuple[list[str], list[str]]:
+    return _normalize_must_have_facets_for_intent_view(
+        must_have_facets,
+        keywords=keywords,
+        target_company=target_company,
+    )
+
+
 def has_structured_request_signals(payload: dict[str, Any] | None) -> bool:
     if not isinstance(payload, dict):
         return False
@@ -420,17 +720,17 @@ def expand_request_intent_axes_patch(
     *,
     target_company: str = "",
 ) -> dict[str, Any]:
-    axes = dict((payload or {}).get("intent_axes") or {})
+    axes = coerce_intent_axis_mapping((payload or {}).get("intent_axes"))
     if not axes:
         return {}
     resolved_target_company = str(
         target_company
-        or dict(axes.get("scope_boundary") or {}).get("target_company")
+        or coerce_intent_axis_mapping(axes.get("scope_boundary")).get("target_company")
         or ""
     ).strip()
     patch: dict[str, Any] = {}
 
-    population_boundary = dict(axes.get("population_boundary") or {})
+    population_boundary = coerce_intent_axis_mapping(axes.get("population_boundary"))
     categories = merge_unique_request_string_values(population_boundary.get("categories"))
     if categories:
         patch["categories"] = categories
@@ -438,7 +738,7 @@ def expand_request_intent_axes_patch(
     if employment_statuses:
         patch["employment_statuses"] = employment_statuses
 
-    scope_boundary = dict(axes.get("scope_boundary") or {})
+    scope_boundary = coerce_intent_axis_mapping(axes.get("scope_boundary"))
     scope_target_company = str(scope_boundary.get("target_company") or "").strip()
     if scope_target_company:
         patch["target_company"] = scope_target_company
@@ -449,7 +749,7 @@ def expand_request_intent_axes_patch(
     )
     if organization_keywords:
         patch["organization_keywords"] = organization_keywords
-    scope_disambiguation = dict(scope_boundary.get("scope_disambiguation") or {})
+    scope_disambiguation = coerce_intent_axis_mapping(scope_boundary.get("scope_disambiguation"))
     if scope_disambiguation:
         patch["scope_disambiguation"] = scope_disambiguation
 
@@ -462,7 +762,7 @@ def expand_request_intent_axes_patch(
         execution_preferences["confirmed_company_scope"] = confirmed_company_scope
 
     for axis_name in ("acquisition_lane_policy", "fallback_policy"):
-        axis_payload = dict(axes.get(axis_name) or {})
+        axis_payload = coerce_intent_axis_mapping(axes.get(axis_name))
         for key in _INTENT_AXIS_EXECUTION_PREFERENCE_KEYS:
             if key not in axis_payload:
                 continue
@@ -481,7 +781,7 @@ def expand_request_intent_axes_patch(
     if execution_preferences:
         patch["execution_preferences"] = execution_preferences
 
-    thematic_constraints = dict(axes.get("thematic_constraints") or {})
+    thematic_constraints = coerce_intent_axis_mapping(axes.get("thematic_constraints"))
     for key in (
         "keywords",
         "must_have_keywords",
@@ -548,6 +848,35 @@ def apply_high_confidence_request_inference(
                 )
             if merged_scope_disambiguation:
                 updated["scope_disambiguation"] = merged_scope_disambiguation
+
+    thematic_matches = match_thematic_signals(normalized_text)
+    if thematic_matches:
+        target_company = str(updated.get("target_company") or resolved_target_company or "").strip()
+        keyword_labels: list[str] = []
+        research_direction_keywords: list[str] = []
+        facet_labels: list[str] = []
+        for match in thematic_matches:
+            keyword_labels.extend(list(match.get("keyword_labels") or []))
+            research_direction_keywords.extend(list(match.get("research_direction_keywords") or []))
+            facet_labels.extend(list(match.get("facet_labels") or []))
+        if keyword_labels:
+            updated["keywords"] = merge_unique_request_string_values(
+                updated.get("keywords"),
+                keyword_labels,
+                target_company=target_company,
+            )
+        if research_direction_keywords:
+            updated["research_direction_keywords"] = merge_unique_request_string_values(
+                updated.get("research_direction_keywords"),
+                research_direction_keywords,
+                target_company=target_company,
+            )
+        if facet_labels:
+            updated["must_have_facets"] = merge_unique_request_string_values(
+                updated.get("must_have_facets"),
+                facet_labels,
+                target_company=target_company,
+            )
 
     role_buckets = _extract_role_buckets_from_text(raw_text)
     if role_buckets:
@@ -652,6 +981,128 @@ def _resolve_primary_role_bucket_mode(
     return "hard"
 
 
+def _explicit_population_role_categories(raw_text: str) -> list[str]:
+    normalized = " ".join(str(raw_text or "").lower().split()).strip()
+    if not normalized:
+        return []
+    categories: list[str] = []
+    if any(term in normalized for term in _EXPLICIT_RESEARCH_ROLE_TERMS):
+        categories.append("researcher")
+    if any(term in normalized for term in _EXPLICIT_ENGINEERING_ROLE_TERMS):
+        categories.append("engineer")
+    return categories
+
+
+def _looks_like_technical_thematic_people_query(
+    *,
+    keywords: list[str],
+    must_have_keywords: list[str],
+    must_have_facets: list[str],
+    must_have_primary_role_buckets: list[str],
+    raw_text: str,
+    target_company: str,
+) -> bool:
+    normalized_role_buckets = {
+        " ".join(str(item or "").lower().split())
+        for item in list(must_have_primary_role_buckets or [])
+        if str(item or "").strip()
+    }
+    if normalized_role_buckets and normalized_role_buckets.issubset(_TECHNICAL_DEFAULT_ROLE_BUCKETS):
+        return True
+    normalized_facets = {
+        " ".join(str(item or "").lower().split())
+        for item in list(must_have_facets or [])
+        if str(item or "").strip()
+    }
+    if normalized_facets and normalized_facets.issubset(_TECHNICAL_DEFAULT_FACETS):
+        return True
+    thematic_keywords = merge_unique_request_string_values(keywords, must_have_keywords)
+    if any(
+        str(lookup_thematic_signal(normalize_request_query_signal(item, target_company=target_company)).get("canonical_label") or "").strip()
+        in _RESEARCH_DIRECTION_DEFAULT_THEMATIC_LABELS
+        for item in thematic_keywords
+    ):
+        return True
+    return False
+
+
+def _normalize_default_technical_population_categories(
+    *,
+    request: JobRequest,
+    categories: list[str],
+    keywords: list[str],
+    must_have_keywords: list[str],
+    must_have_facets: list[str],
+    must_have_primary_role_buckets: list[str],
+) -> list[str]:
+    normalized_categories = [
+        " ".join(str(item or "").lower().split())
+        for item in list(categories or [])
+        if str(item or "").strip()
+    ]
+    category_set = set(normalized_categories)
+    if "investor" in category_set or category_set == {"former_employee"}:
+        return categories
+    normalized_role_buckets = {
+        " ".join(str(item or "").lower().split())
+        for item in list(must_have_primary_role_buckets or [])
+        if str(item or "").strip()
+    }
+    if normalized_role_buckets and not normalized_role_buckets.issubset(_TECHNICAL_DEFAULT_ROLE_BUCKETS):
+        return categories
+    normalized_facets = {
+        " ".join(str(item or "").lower().split())
+        for item in list(must_have_facets or [])
+        if str(item or "").strip()
+    }
+    if normalized_facets and not normalized_facets.issubset(_TECHNICAL_DEFAULT_FACETS):
+        return categories
+
+    raw_text = " ".join(
+        item
+        for item in [str(request.raw_user_request or "").strip(), str(request.query or "").strip()]
+        if item
+    )
+    explicit_role_categories = _explicit_population_role_categories(raw_text)
+    if explicit_role_categories:
+        return explicit_role_categories
+
+    if (
+        raw_text
+        and category_set
+        and category_set.issubset({"researcher", "engineer"})
+        and len(category_set) == 1
+        and _looks_like_technical_thematic_people_query(
+            keywords=keywords,
+            must_have_keywords=must_have_keywords,
+            must_have_facets=must_have_facets,
+            must_have_primary_role_buckets=must_have_primary_role_buckets,
+            raw_text=raw_text,
+            target_company=str(request.target_company or "").strip(),
+        )
+    ):
+        # Model-assisted normalization can occasionally emit only one side of the
+        # default technical population for directional queries like Post-train.
+        # If the user did not explicitly ask for researcher-only / engineer-only,
+        # widen back to the stable default technical population.
+        return list(_DEFAULT_TECHNICAL_POPULATION_CATEGORIES)
+
+    if category_set and not category_set.issubset(_GENERIC_EMPLOYMENT_POPULATION_CATEGORIES):
+        return categories
+
+    if not _looks_like_technical_thematic_people_query(
+        keywords=keywords,
+        must_have_keywords=must_have_keywords,
+        must_have_facets=must_have_facets,
+        must_have_primary_role_buckets=must_have_primary_role_buckets,
+        raw_text=raw_text,
+        target_company=str(request.target_company or "").strip(),
+    ):
+        return categories
+
+    return list(_DEFAULT_TECHNICAL_POPULATION_CATEGORIES)
+
+
 def build_request_preview_payload(
     *,
     request: JobRequest | dict[str, Any],
@@ -660,6 +1111,7 @@ def build_request_preview_payload(
     requested = _coerce_job_request(request)
     effective = _coerce_job_request(effective_request or requested.to_record())
     preview_intent_view = resolve_request_intent_view(effective)
+    preview_target_company = str(effective.target_company or requested.target_company or "").strip()
 
     preview = {
         "request_view": "effective_request" if _request_preview_changed(requested, effective) else "normalized_request",
@@ -669,14 +1121,17 @@ def build_request_preview_payload(
         "target_scope": str(effective.target_scope or requested.target_scope or "").strip(),
         "asset_view": str(effective.asset_view or requested.asset_view or "").strip(),
         "retrieval_strategy": str(effective.retrieval_strategy or requested.retrieval_strategy or "").strip(),
-        "categories": list(preview_intent_view.get("categories") or effective.categories or []),
-        "employment_statuses": list(preview_intent_view.get("employment_statuses") or effective.employment_statuses or []),
-        "organization_keywords": list(preview_intent_view.get("organization_keywords") or effective.organization_keywords or []),
-        "keywords": list(preview_intent_view.get("keywords") or effective.keywords or []),
-        "must_have_keywords": list(preview_intent_view.get("must_have_keywords") or effective.must_have_keywords or []),
-        "must_have_facets": list(preview_intent_view.get("must_have_facets") or effective.must_have_facets or []),
+        "categories": list(preview_intent_view.get("categories") or []),
+        "employment_statuses": list(preview_intent_view.get("employment_statuses") or []),
+        "organization_keywords": list(preview_intent_view.get("organization_keywords") or []),
+        "keywords": _canonical_preview_keyword_values(
+            list(preview_intent_view.get("keywords") or []),
+            target_company=preview_target_company,
+        ),
+        "must_have_keywords": list(preview_intent_view.get("must_have_keywords") or []),
+        "must_have_facets": list(preview_intent_view.get("must_have_facets") or []),
         "must_have_primary_role_buckets": list(
-            preview_intent_view.get("must_have_primary_role_buckets") or effective.must_have_primary_role_buckets or []
+            preview_intent_view.get("must_have_primary_role_buckets") or []
         ),
         "primary_role_bucket_mode": str(preview_intent_view.get("primary_role_bucket_mode") or "hard"),
         "intent_axes": build_request_intent_axes_payload(request=effective),
@@ -684,6 +1139,41 @@ def build_request_preview_payload(
     scope_disambiguation = dict(effective.scope_disambiguation or {})
     if scope_disambiguation and set(scope_disambiguation.keys()) != {"target_company"}:
         preview["scope_disambiguation"] = scope_disambiguation
+    target_company_identity = _build_target_company_identity_preview(requested=requested, effective=effective)
+    if target_company_identity:
+        preview["target_company_identity"] = target_company_identity
+    return {key: value for key, value in preview.items() if _has_preview_value(value)}
+
+
+def _build_target_company_identity_preview(
+    *,
+    requested: JobRequest,
+    effective: JobRequest,
+) -> dict[str, Any]:
+    target_company = str(effective.target_company or requested.target_company or "").strip()
+    if not target_company:
+        return {}
+    identity = resolve_manual_company_identity(
+        target_company,
+        effective.execution_preferences or requested.execution_preferences,
+    )
+    if identity is None:
+        identity = resolve_company_identity(target_company)
+    return _company_identity_preview_payload(identity)
+
+
+def _company_identity_preview_payload(identity: CompanyIdentity) -> dict[str, Any]:
+    preview = {
+        "requested_name": str(identity.requested_name or "").strip(),
+        "canonical_name": str(identity.canonical_name or "").strip(),
+        "company_key": str(identity.company_key or "").strip(),
+        "linkedin_slug": str(identity.linkedin_slug or "").strip(),
+        "linkedin_company_url": str(identity.linkedin_company_url or "").strip(),
+        "domain": str(identity.domain or "").strip(),
+        "resolver": str(identity.resolver or "").strip(),
+        "confidence": str(identity.confidence or "").strip(),
+        "local_asset_available": bool(identity.local_asset_available),
+    }
     return {key: value for key, value in preview.items() if _has_preview_value(value)}
 
 
@@ -719,11 +1209,11 @@ def build_request_intent_axes_payload(
     }
     fallback_policy = {
         "force_fresh_run": execution_preferences.get("force_fresh_run"),
-        "allow_high_cost_sources": execution_preferences.get("allow_high_cost_sources"),
         "provider_people_search_query_strategy": str(execution_preferences.get("provider_people_search_query_strategy") or "").strip(),
         "provider_people_search_max_queries": execution_preferences.get("provider_people_search_max_queries"),
         "reuse_existing_roster": execution_preferences.get("reuse_existing_roster"),
         "run_former_search_seed": execution_preferences.get("run_former_search_seed"),
+        "runtime_tuning_profile": str(execution_preferences.get("runtime_tuning_profile") or "").strip(),
     }
     thematic_constraints = {
         "keywords": list(normalized.keywords or []),
@@ -771,13 +1261,18 @@ def resolve_request_intent_view(
 ) -> dict[str, Any]:
     normalized = _coerce_job_request(request)
     axes = build_request_intent_axes_payload(request=normalized)
-    population_boundary = dict(axes.get("population_boundary") or {})
-    scope_boundary = dict(axes.get("scope_boundary") or {})
-    acquisition_lane_policy = dict(axes.get("acquisition_lane_policy") or {})
-    fallback_policy = dict(axes.get("fallback_policy") or {})
-    thematic_constraints = dict(axes.get("thematic_constraints") or {})
+    population_boundary = coerce_intent_axis_mapping(axes.get("population_boundary"))
+    scope_boundary = coerce_intent_axis_mapping(axes.get("scope_boundary"))
+    acquisition_lane_policy = coerce_intent_axis_mapping(axes.get("acquisition_lane_policy"))
+    fallback_policy = coerce_intent_axis_mapping(axes.get("fallback_policy"))
+    thematic_constraints = coerce_intent_axis_mapping(axes.get("thematic_constraints"))
 
     target_company = str(scope_boundary.get("target_company") or normalized.target_company or "").strip()
+    raw_signal_text = " ".join(
+        item
+        for item in [str(normalized.raw_user_request or "").strip(), str(normalized.query or "").strip()]
+        if item
+    ).strip()
     categories = merge_unique_request_string_values(
         population_boundary.get("categories") or fallback_categories or normalized.categories
     )
@@ -792,6 +1287,19 @@ def resolve_request_intent_view(
         thematic_constraints.get("keywords") or normalized.keywords,
         target_company=target_company,
     )
+    canonical_thematic_keywords = _canonical_thematic_request_keywords(
+        raw_signal_text,
+        target_company=target_company,
+    )
+    if canonical_thematic_keywords:
+        keywords = _canonicalize_keyword_field_values(
+            canonical_thematic_keywords,
+            _canonical_scope_request_keywords(
+                thematic_constraints.get("keywords") or normalized.keywords,
+                target_company=target_company,
+            ),
+            target_company=target_company,
+        )
     must_have_keywords = merge_unique_request_string_values(
         thematic_constraints.get("must_have_keywords") or normalized.must_have_keywords,
         target_company=target_company,
@@ -800,9 +1308,22 @@ def resolve_request_intent_view(
         thematic_constraints.get("must_have_facets") or normalized.must_have_facets,
         target_company=target_company,
     )
+    must_have_facets, keywords = _normalize_must_have_facets_for_intent_view(
+        must_have_facets,
+        keywords=keywords,
+        target_company=target_company,
+    )
     must_have_primary_role_buckets = merge_unique_request_string_values(
         thematic_constraints.get("must_have_primary_role_buckets") or normalized.must_have_primary_role_buckets,
         target_company=target_company,
+    )
+    categories = _normalize_default_technical_population_categories(
+        request=normalized,
+        categories=categories,
+        keywords=keywords,
+        must_have_keywords=must_have_keywords,
+        must_have_facets=must_have_facets,
+        must_have_primary_role_buckets=must_have_primary_role_buckets,
     )
     primary_role_bucket_mode = str(
         thematic_constraints.get("primary_role_bucket_mode")
@@ -836,6 +1357,24 @@ def resolve_request_intent_view(
             target_company=target_company,
         ),
     )
+    semantic_brief = compile_semantic_brief(
+        raw_text=raw_signal_text,
+        target_company=target_company,
+        target_scope=str(normalized.target_scope or "").strip(),
+        categories=categories,
+        employment_statuses=employment_statuses,
+        organization_keywords=organization_keywords,
+        keywords=keywords,
+        must_have_keywords=must_have_keywords,
+        must_have_facets=must_have_facets,
+        must_have_primary_role_buckets=must_have_primary_role_buckets,
+        execution_preferences=execution_preferences,
+        scope_disambiguation=dict(
+            scope_boundary.get("scope_disambiguation")
+            or normalized.scope_disambiguation
+            or {}
+        ),
+    )
     return {
         "target_company": target_company,
         "categories": categories,
@@ -850,6 +1389,7 @@ def resolve_request_intent_view(
         "acquisition_lane_policy": acquisition_lane_policy,
         "fallback_policy": fallback_policy,
         "execution_preferences": execution_preferences,
+        "semantic_brief": semantic_brief,
         "intent_axes": axes,
     }
 
@@ -876,31 +1416,44 @@ def build_effective_request_payload(
     )
     effective_payload = dict(payload)
     effective_payload["target_company"] = str(resolved_intent_view.get("target_company") or payload.get("target_company") or "").strip()
-    effective_payload["categories"] = list(resolved_intent_view.get("categories") or payload.get("categories") or [])
-    effective_payload["employment_statuses"] = list(
-        resolved_intent_view.get("employment_statuses") or payload.get("employment_statuses") or []
-    )
-    effective_payload["organization_keywords"] = list(
-        resolved_intent_view.get("organization_keywords") or payload.get("organization_keywords") or []
-    )
-    effective_payload["keywords"] = list(resolved_intent_view.get("keywords") or payload.get("keywords") or [])
-    effective_payload["must_have_keywords"] = list(
-        resolved_intent_view.get("must_have_keywords") or payload.get("must_have_keywords") or []
-    )
-    effective_payload["must_have_facets"] = list(
-        resolved_intent_view.get("must_have_facets") or payload.get("must_have_facets") or []
-    )
+    effective_payload["categories"] = list(resolved_intent_view.get("categories") or [])
+    effective_payload["employment_statuses"] = list(resolved_intent_view.get("employment_statuses") or [])
+    effective_payload["organization_keywords"] = list(resolved_intent_view.get("organization_keywords") or [])
+    effective_payload["keywords"] = list(resolved_intent_view.get("keywords") or [])
+    effective_payload["must_have_keywords"] = list(resolved_intent_view.get("must_have_keywords") or [])
+    effective_payload["must_have_facets"] = list(resolved_intent_view.get("must_have_facets") or [])
     effective_payload["must_have_primary_role_buckets"] = list(
-        resolved_intent_view.get("must_have_primary_role_buckets") or payload.get("must_have_primary_role_buckets") or []
+        resolved_intent_view.get("must_have_primary_role_buckets") or []
     )
-    effective_payload["scope_disambiguation"] = dict(
-        resolved_intent_view.get("scope_disambiguation") or payload.get("scope_disambiguation") or {}
-    )
-    effective_payload["execution_preferences"] = dict(
-        resolved_intent_view.get("execution_preferences") or payload.get("execution_preferences") or {}
-    )
-    effective_payload["intent_axes"] = dict(resolved_intent_view.get("intent_axes") or payload.get("intent_axes") or {})
+    effective_payload["scope_disambiguation"] = dict(resolved_intent_view.get("scope_disambiguation") or {})
+    effective_payload["execution_preferences"] = dict(resolved_intent_view.get("execution_preferences") or {})
+    effective_payload["semantic_brief"] = dict(resolved_intent_view.get("semantic_brief") or {})
+    effective_payload["intent_axes"] = dict(resolved_intent_view.get("intent_axes") or {})
     return effective_payload
+
+
+def build_effective_job_request(
+    request: JobRequest | dict[str, Any],
+    *,
+    intent_view: dict[str, Any] | None = None,
+    fallback_categories: list[str] | None = None,
+    fallback_employment_statuses: list[str] | None = None,
+) -> tuple[JobRequest, dict[str, Any]]:
+    resolved_intent_view = dict(
+        intent_view
+        or resolve_request_intent_view(
+            request,
+            fallback_categories=fallback_categories,
+            fallback_employment_statuses=fallback_employment_statuses,
+        )
+    )
+    effective_payload = build_effective_request_payload(
+        request,
+        intent_view=resolved_intent_view,
+        fallback_categories=fallback_categories,
+        fallback_employment_statuses=fallback_employment_statuses,
+    )
+    return JobRequest.from_payload(effective_payload), resolved_intent_view
 
 
 def _coerce_job_request(value: JobRequest | dict[str, Any]) -> JobRequest:
@@ -916,7 +1469,7 @@ def _existing_intent_axes_payload(value: JobRequest | dict[str, Any]) -> dict[st
         payload = value.get("intent_axes")
     else:
         payload = None
-    return dict(payload or {}) if isinstance(payload, dict) else {}
+    return coerce_intent_axis_mapping(payload)
 
 
 def _merge_intent_axis_payload(
@@ -925,14 +1478,22 @@ def _merge_intent_axis_payload(
 ) -> dict[str, Any]:
     merged = {
         key: value
-        for key, value in dict(derived or {}).items()
+        for key, value in coerce_intent_axis_mapping(derived).items()
         if _has_preview_value(value)
     }
-    for key, value in dict(existing or {}).items():
+    for key, value in coerce_intent_axis_mapping(existing).items():
         if not _has_preview_value(value):
             continue
         merged[key] = value
     return merged
+
+
+def coerce_intent_axis_mapping(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return dict(value)
+    if isinstance(value, Mapping):
+        return {str(key): nested_value for key, nested_value in value.items()}
+    return {}
 
 
 def _request_preview_changed(requested: JobRequest, effective: JobRequest) -> bool:

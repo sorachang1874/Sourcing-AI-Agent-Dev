@@ -1,5 +1,8 @@
 # Intent Planning Brief
 
+> Status: Current first-party doc. Treat this file as active guidance, but keep it aligned with `docs/INDEX.md` and `PROGRESS.md` when runtime contracts change.
+
+
 这份文档定义 `plan` 阶段第一段产品原生输出的目标形态。它不是 workflow 内部执行 plan 的替代品，而是给用户看的第一层解释卡片，用来回答：
 
 - 系统识别到了什么请求

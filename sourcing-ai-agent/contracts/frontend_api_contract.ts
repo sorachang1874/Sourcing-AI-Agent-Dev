@@ -415,6 +415,33 @@ export interface SystemProgressWorkflowItem {
   [key: string]: JsonValue | undefined;
 }
 
+export interface CloudAssetOperationItem {
+  ledger_id?: number;
+  operation_type?: string;
+  bundle_kind?: string;
+  bundle_id?: string;
+  sync_run_id?: string;
+  status?: string;
+  manifest_path?: string;
+  target_runtime_dir?: string;
+  target_db_path?: string;
+  scoped_companies?: string[];
+  scoped_snapshot_id?: string;
+  summary?: JsonObject;
+  metadata?: JsonObject;
+  created_at?: string;
+  updated_at?: string;
+  [key: string]: JsonValue | undefined;
+}
+
+export interface CompanyAssetProgress {
+  target_company?: string;
+  asset_view?: string;
+  authoritative_registry?: JsonObject;
+  execution_profile?: JsonObject;
+  [key: string]: JsonValue | undefined;
+}
+
 export interface ObjectSyncTransferProgressItem {
   bundle_id?: string;
   bundle_kind?: string;
@@ -450,6 +477,12 @@ export interface SystemProgressResponse {
     recent_transfers?: ObjectSyncTransferProgressItem[];
     [key: string]: JsonValue | undefined;
   };
+  cloud_asset_operations?: {
+    count?: number;
+    items?: CloudAssetOperationItem[];
+    [key: string]: JsonValue | undefined;
+  };
+  company_asset?: CompanyAssetProgress;
   [key: string]: JsonValue | undefined;
 }
 
@@ -513,6 +546,31 @@ export interface RetrievalJobResponse {
   confidence_policy_control?: JsonObject;
   runtime_policy?: JsonObject;
   artifact_path?: string;
+  [key: string]: JsonValue | undefined;
+}
+
+export interface WorkflowExplainResponse {
+  status: string;
+  reason?: string;
+  request?: JsonObject;
+  request_preview?: JsonObject;
+  intent_rewrite?: IntentRewritePayload;
+  plan_review_gate?: JsonObject;
+  plan_review_session?: JsonObject;
+  organization_execution_profile?: JsonObject;
+  asset_reuse_plan?: JsonObject;
+  ingress_normalization?: JsonObject;
+  planning?: JsonObject;
+  dispatch_matching_normalization?: JsonObject;
+  dispatch_preview?: JsonObject;
+  lane_preview?: JsonObject;
+  generation_watermarks?: JsonObject;
+  cloud_asset_operations?: {
+    count?: number;
+    items?: CloudAssetOperationItem[];
+    [key: string]: JsonValue | undefined;
+  };
+  timings_ms?: JsonObject;
   [key: string]: JsonValue | undefined;
 }
 

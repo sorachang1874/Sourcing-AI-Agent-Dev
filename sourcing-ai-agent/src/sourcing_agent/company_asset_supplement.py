@@ -1,21 +1,36 @@
 from __future__ import annotations
 
-from hashlib import sha1
 import json
+import shutil
 from dataclasses import replace
 from datetime import datetime, timezone
+from hashlib import sha1
 from pathlib import Path
 from typing import Any
 
-from .canonicalization import canonicalize_company_records
-from .connectors import CompanyRosterSnapshot, build_candidates_from_roster
 from .acquisition import _build_former_filter_hints
+from .asset_catalog import AssetCatalog
 from .asset_logger import AssetLogger
-from .candidate_artifacts import _resolve_company_snapshot, build_company_candidate_artifacts
+from .asset_paths import load_company_snapshot_json
+from .candidate_artifacts import (
+    CandidateArtifactError,
+    _resolve_company_snapshot,
+    build_company_candidate_artifacts,
+    build_evidence_records_from_payloads,
+)
+from .canonicalization import canonicalize_company_records
 from .company_asset_completion import CompanyAssetCompletionManager
-from .connectors import CompanyIdentity
-from .domain import Candidate, normalize_name_token
+from .connectors import CompanyIdentity, CompanyRosterSnapshot, build_candidates_from_roster, resolve_company_identity
+from .domain import (
+    Candidate,
+    EvidenceRecord,
+    make_candidate_id,
+    make_evidence_id,
+    normalize_candidate,
+    normalize_name_token,
+)
 from .harvest_connectors import HarvestProfileSearchConnector
+from .ingestion import load_bootstrap_bundle
 from .model_provider import DeterministicModelClient, ModelClient
 from .profile_registry_utils import extract_profile_registry_aliases_from_payload
 from .search_provider import build_search_provider
@@ -152,6 +167,299 @@ class CompanyAssetSupplementManager:
             summary,
             asset_type="company_asset_supplement_summary",
             source_kind="company_asset_supplement",
+            is_raw_asset=False,
+            model_safe=True,
+        )
+        summary["summary_path"] = str(summary_path)
+        return summary
+
+    def import_local_bootstrap_package(
+        self,
+        *,
+        target_company: str,
+        snapshot_id: str = "",
+        sync_project_local_package: bool = True,
+        build_artifacts: bool = True,
+    ) -> dict[str, Any]:
+        normalized_target_company = str(target_company or "").strip() or "Anthropic"
+        if normalize_name_token(normalized_target_company) != normalize_name_token("Anthropic"):
+            return {
+                "status": "invalid",
+                "reason": "local bootstrap package import is currently supported for Anthropic only",
+                "target_company": normalized_target_company,
+            }
+
+        package_sync: dict[str, Any] = {"status": "skipped", "reason": "project_sync_disabled"}
+        if sync_project_local_package:
+            package_sync = self.sync_project_local_anthropic_package()
+            if str(package_sync.get("status") or "") == "failed":
+                return {
+                    "status": "failed",
+                    "reason": str(package_sync.get("reason") or "project_local_package_sync_failed"),
+                    "target_company": normalized_target_company,
+                    "package_sync": package_sync,
+                }
+
+        catalog = AssetCatalog.discover()
+        bundle = load_bootstrap_bundle(catalog)
+        summary = self.merge_candidates_into_snapshot(
+            target_company=normalized_target_company,
+            snapshot_id=snapshot_id,
+            candidates=list(bundle.candidates),
+            evidence=list(bundle.evidence),
+            source_kind="anthropic_local_bootstrap_package",
+            source_summary={
+                "catalog_source": catalog.anthropic_asset_source,
+                "catalog_root": str(catalog.anthropic_root),
+                "project_root": str(catalog.anthropic_project_root or ""),
+                "external_root": str(catalog.anthropic_external_root or ""),
+                "package_sync": package_sync,
+                "bootstrap_assets": dict(bundle.stats.get("assets") or {}),
+                "bootstrap_candidate_breakdown": dict(bundle.stats.get("candidate_counts") or {}),
+                "bootstrap_evidence_count": int(bundle.stats.get("evidence_count") or len(bundle.evidence)),
+            },
+            build_artifacts=build_artifacts,
+            create_snapshot_if_missing=True,
+        )
+        summary["package_sync"] = package_sync
+        return summary
+
+    def sync_project_local_anthropic_package(self) -> dict[str, Any]:
+        catalog = AssetCatalog.discover()
+        project_package_root = self.settings.project_root / "local_asset_packages" / "anthropic"
+        manifest_path = project_package_root / "package_manifest.json"
+        if catalog.anthropic_asset_source == "project_local" and catalog.anthropic_project_root is not None:
+            return {
+                "status": "completed",
+                "mode": "already_project_local",
+                "project_package_root": str(project_package_root),
+                "catalog_root": str(catalog.anthropic_root),
+                "manifest_path": str(manifest_path) if manifest_path.exists() else "",
+            }
+
+        external_root = catalog.anthropic_external_root or catalog.anthropic_root
+        if external_root is None or not Path(external_root).exists():
+            return {
+                "status": "failed",
+                "reason": "external_anthropic_asset_package_not_found",
+                "project_package_root": str(project_package_root),
+            }
+
+        project_package_root.mkdir(parents=True, exist_ok=True)
+        (project_package_root / "data").mkdir(parents=True, exist_ok=True)
+        copied_files: list[dict[str, Any]] = []
+        copy_pairs = {
+            catalog.anthropic_workbook: project_package_root / catalog.anthropic_workbook.name,
+            catalog.anthropic_readme: project_package_root / "README.md",
+            catalog.anthropic_progress: project_package_root / "PROGRESS.md",
+            catalog.legacy_api_accounts: project_package_root / "api_accounts.json",
+            catalog.legacy_company_ids: project_package_root / "company_ids.json",
+            catalog.investor_members_json: project_package_root / "investor_chinese_members_final.json",
+            catalog.anthropic_publications: project_package_root / "data" / "publications_unified.json",
+            catalog.scholar_scan_results: project_package_root / "data" / "scholar_scan_results.json",
+        }
+        for source_path, target_path in copy_pairs.items():
+            if not source_path.exists():
+                continue
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_path, target_path)
+            copied_files.append(
+                {
+                    "source_path": str(source_path),
+                    "target_path": str(target_path),
+                    "size_bytes": int(target_path.stat().st_size or 0),
+                }
+            )
+
+        manifest_payload = {
+            "package": "anthropic",
+            "status": "completed",
+            "source": "external_legacy",
+            "source_root": str(external_root),
+            "project_package_root": str(project_package_root),
+            "copied_at": datetime.now(timezone.utc).isoformat(),
+            "selected_workbook": str(project_package_root / catalog.anthropic_workbook.name),
+            "copied_file_count": len(copied_files),
+            "files": copied_files,
+        }
+        manifest_path.write_text(json.dumps(manifest_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        return {
+            "status": "completed",
+            "mode": "copied_from_external_legacy",
+            "project_package_root": str(project_package_root),
+            "manifest_path": str(manifest_path),
+            "copied_file_count": len(copied_files),
+            "files": copied_files,
+        }
+
+    def merge_candidates_into_snapshot(
+        self,
+        *,
+        target_company: str,
+        snapshot_id: str = "",
+        candidates: list[Candidate],
+        evidence: list[EvidenceRecord],
+        source_kind: str,
+        source_summary: dict[str, Any] | None = None,
+        build_artifacts: bool = True,
+        create_snapshot_if_missing: bool = False,
+    ) -> dict[str, Any]:
+        incoming_candidates = [candidate for candidate in list(candidates or []) if isinstance(candidate, Candidate)]
+        incoming_evidence = [item for item in list(evidence or []) if isinstance(item, EvidenceRecord)]
+        if not incoming_candidates:
+            return {
+                "status": "skipped",
+                "reason": "no_candidates_to_merge",
+                "target_company": target_company,
+                "source_kind": source_kind,
+            }
+
+        company_key, snapshot_dir, identity, snapshot_created = _resolve_or_create_company_snapshot(
+            runtime_dir=self.runtime_dir,
+            target_company=target_company,
+            snapshot_id=snapshot_id,
+            create_if_missing=create_snapshot_if_missing,
+        )
+        logger = AssetLogger(snapshot_dir)
+        candidate_doc_path = snapshot_dir / "candidate_documents.json"
+        existing_payload = dict(load_company_snapshot_json(candidate_doc_path) or {})
+        existing_candidates = _candidate_records_from_payload(existing_payload)
+        existing_evidence = build_evidence_records_from_payloads(list(existing_payload.get("evidence") or []))
+        projected_candidates, projected_evidence, projection_summary = _project_supplement_records_to_snapshot(
+            incoming_candidates,
+            incoming_evidence,
+            target_company=identity.canonical_name or target_company,
+        )
+
+        canonical_candidates, canonical_evidence, canonicalization_summary = canonicalize_company_records(
+            [*existing_candidates, *projected_candidates],
+            [*existing_evidence, *projected_evidence],
+        )
+        for candidate in canonical_candidates:
+            self.store.upsert_candidate(candidate)
+        if canonical_evidence:
+            self.store.upsert_evidence_records(canonical_evidence)
+
+        existing_sources = dict(existing_payload.get("acquisition_sources") or {})
+        source_key = str(source_kind or "supplement_merge").strip() or "supplement_merge"
+        existing_source_summary = dict(existing_sources.get(source_key) or {})
+        merged_source_summary = {
+            **existing_source_summary,
+            **dict(source_summary or {}),
+            "source_kind": source_key,
+            "merged_at": datetime.now(timezone.utc).isoformat(),
+            "projected_candidate_count": len(projected_candidates),
+            "projected_evidence_count": len(projected_evidence),
+            "projection_summary": projection_summary,
+        }
+        existing_sources[source_key] = merged_source_summary
+
+        snapshot_payload = dict(existing_payload.get("snapshot") or {})
+        snapshot_payload.setdefault("snapshot_id", snapshot_dir.name)
+        snapshot_payload.setdefault("target_company", identity.canonical_name or target_company)
+        snapshot_payload["company_identity"] = identity.to_record()
+        snapshot_payload.setdefault("source_kind", source_key)
+
+        candidate_payload = {
+            **existing_payload,
+            "snapshot": snapshot_payload,
+            "acquisition_sources": existing_sources,
+            "candidates": [candidate.to_record() for candidate in canonical_candidates],
+            "evidence": [item.to_record() for item in canonical_evidence],
+            "candidate_count": len(canonical_candidates),
+            "evidence_count": len(canonical_evidence),
+            "enrichment_mode": "incremental_supplement",
+            "enrichment_scope": "supplement",
+            "acquisition_canonicalization": canonicalization_summary,
+            "enrichment_summary": {
+                **dict(existing_payload.get("enrichment_summary") or {}),
+                "rebuild_mode": "incremental_supplement_merge",
+                "last_supplement_source": source_key,
+                "snapshot_authoritative": True,
+            },
+            "acquisition_stage": {
+                **dict(existing_payload.get("acquisition_stage") or {}),
+                "task_type": source_key,
+                "phase": "incremental_supplement",
+                "phase_title": "Incremental Supplement",
+            },
+        }
+
+        candidate_doc_path = logger.write_json(
+            candidate_doc_path,
+            candidate_payload,
+            asset_type="candidate_documents",
+            source_kind=source_key,
+            is_raw_asset=False,
+            model_safe=True,
+        )
+        stage_candidate_doc_path = logger.write_json(
+            snapshot_dir / f"candidate_documents.{_stage_archive_label(source_key)}.json",
+            candidate_payload,
+            asset_type="candidate_documents",
+            source_kind=source_key,
+            is_raw_asset=False,
+            model_safe=True,
+        )
+        manifest_path = logger.write_json(
+            snapshot_dir / "manifest.json",
+            {
+                "snapshot_id": snapshot_dir.name,
+                "company_identity": identity.to_record(),
+                "candidate_count": len(canonical_candidates),
+                "evidence_count": len(canonical_evidence),
+                "normalization_scope": {"mode": "company"},
+                "historical_profile_inheritance": {},
+                "canonicalization": canonicalization_summary,
+                "storage": {
+                    "execution": "local_runtime",
+                    "candidate_store": str(self.store.db_path),
+                },
+            },
+            asset_type="snapshot_manifest",
+            source_kind=source_key,
+            is_raw_asset=False,
+            model_safe=True,
+        )
+
+        artifact_result: dict[str, Any] = {}
+        if build_artifacts:
+            artifact_result = build_company_candidate_artifacts(
+                runtime_dir=self.runtime_dir,
+                store=self.store,
+                target_company=identity.canonical_name or target_company,
+                snapshot_id=snapshot_dir.name,
+            )
+
+        supplement_dir = snapshot_dir / "incremental_supplement"
+        supplement_dir.mkdir(parents=True, exist_ok=True)
+        summary = {
+            "status": "completed",
+            "target_company": identity.canonical_name or target_company,
+            "company_key": identity.company_key or company_key,
+            "snapshot_id": snapshot_dir.name,
+            "snapshot_created": snapshot_created,
+            "performed_at": datetime.now(timezone.utc).isoformat(),
+            "source_kind": source_key,
+            "incoming_candidate_count": len(incoming_candidates),
+            "incoming_evidence_count": len(incoming_evidence),
+            "projected_candidate_count": len(projected_candidates),
+            "projected_evidence_count": len(projected_evidence),
+            "candidate_count": len(canonical_candidates),
+            "evidence_count": len(canonical_evidence),
+            "projection_summary": projection_summary,
+            "canonicalization": canonicalization_summary,
+            "candidate_doc_path": str(candidate_doc_path),
+            "stage_candidate_doc_path": str(stage_candidate_doc_path),
+            "manifest_path": str(manifest_path),
+            "artifact_result": artifact_result,
+            "source_summary": dict(source_summary or {}),
+        }
+        summary_path = logger.write_json(
+            supplement_dir / f"{_stage_archive_label(source_key)}_summary.json",
+            summary,
+            asset_type="company_asset_incremental_supplement_summary",
+            source_kind=source_key,
             is_raw_asset=False,
             model_safe=True,
         )
@@ -699,6 +1007,134 @@ def _first_harvest_query_summary(query_summaries: list[dict[str, Any]]) -> dict[
         if str(item.get("mode") or "").strip() == "harvest_profile_search":
             return dict(item)
     return {}
+
+
+def _resolve_or_create_company_snapshot(
+    *,
+    runtime_dir: str | Path,
+    target_company: str,
+    snapshot_id: str = "",
+    create_if_missing: bool = False,
+) -> tuple[str, Path, CompanyIdentity, bool]:
+    try:
+        company_key, snapshot_dir, identity_payload = _resolve_company_snapshot(runtime_dir, target_company, snapshot_id=snapshot_id)
+        identity = _company_identity_from_payload(
+            identity_payload,
+            fallback_company=target_company,
+            fallback_company_key=company_key,
+        )
+        return company_key, snapshot_dir, identity, False
+    except CandidateArtifactError:
+        if not create_if_missing:
+            raise
+
+    identity = resolve_company_identity(target_company)
+    company_key = str(identity.company_key or "").strip() or normalize_name_token(target_company)
+    normalized_snapshot_id = str(snapshot_id or "").strip() or _utc_snapshot_id()
+    company_dir = Path(runtime_dir) / "company_assets" / company_key
+    snapshot_dir = company_dir / normalized_snapshot_id
+    snapshot_dir.mkdir(parents=True, exist_ok=True)
+    identity_payload = identity.to_record()
+    (snapshot_dir / "identity.json").write_text(
+        json.dumps(identity_payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    (company_dir / "latest_snapshot.json").write_text(
+        json.dumps(
+            {
+                "snapshot_id": normalized_snapshot_id,
+                "snapshot_dir": str(snapshot_dir),
+                "company_identity": identity_payload,
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    return company_key, snapshot_dir, identity, True
+
+
+def _utc_snapshot_id() -> str:
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+
+
+def _candidate_records_from_payload(payload: dict[str, Any]) -> list[Candidate]:
+    candidates: list[Candidate] = []
+    for item in list(payload.get("candidates") or []):
+        if not isinstance(item, dict):
+            continue
+        try:
+            candidates.append(normalize_candidate(Candidate(**item)))
+        except TypeError:
+            continue
+    return candidates
+
+
+def _stage_archive_label(value: str) -> str:
+    normalized = "".join(char if char.isalnum() else "_" for char in str(value or "").strip().lower())
+    normalized = normalized.strip("_")
+    return normalized or "supplement"
+
+
+def _project_supplement_records_to_snapshot(
+    candidates: list[Candidate],
+    evidence: list[EvidenceRecord],
+    *,
+    target_company: str,
+) -> tuple[list[Candidate], list[EvidenceRecord], dict[str, Any]]:
+    target_key = normalize_name_token(target_company)
+    projected_candidates: list[Candidate] = []
+    candidate_id_map: dict[str, str] = {}
+    projected_candidate_ids: set[str] = set()
+    retargeted_candidate_ids: list[str] = []
+
+    for candidate in candidates:
+        source_candidate_id = str(candidate.candidate_id or "").strip()
+        candidate_record = candidate.to_record()
+        metadata = dict(candidate_record.get("metadata") or {})
+        if normalize_name_token(candidate.target_company) != target_key:
+            retargeted_candidate_ids.append(source_candidate_id)
+            projected_candidate_id = make_candidate_id(
+                str(candidate.name_en or candidate.display_name or source_candidate_id).strip(),
+                str(candidate.organization or target_company).strip() or target_company,
+                target_company,
+            )
+            candidate_record["candidate_id"] = projected_candidate_id
+            candidate_record["target_company"] = target_company
+            metadata.setdefault("supplement_source_candidate_id", source_candidate_id)
+            metadata.setdefault("supplement_source_target_company", str(candidate.target_company or "").strip())
+            metadata["supplement_attached_company"] = target_company
+        else:
+            projected_candidate_id = source_candidate_id
+        candidate_record["metadata"] = metadata
+        projected_candidate = normalize_candidate(Candidate(**candidate_record))
+        projected_candidates.append(projected_candidate)
+        projected_candidate_ids.add(projected_candidate.candidate_id)
+        if source_candidate_id:
+            candidate_id_map[source_candidate_id] = projected_candidate.candidate_id
+
+    projected_evidence: list[EvidenceRecord] = []
+    for item in evidence:
+        original_candidate_id = str(item.candidate_id or "").strip()
+        projected_candidate_id = candidate_id_map.get(original_candidate_id, original_candidate_id)
+        if projected_candidate_id not in projected_candidate_ids:
+            continue
+        evidence_record = item.to_record()
+        evidence_record["candidate_id"] = projected_candidate_id
+        if projected_candidate_id != original_candidate_id:
+            evidence_record["evidence_id"] = make_evidence_id(
+                projected_candidate_id,
+                str(item.source_dataset or item.source_type or "").strip(),
+                str(item.title or "").strip(),
+                str(item.url or item.source_path or "").strip(),
+            )
+        projected_evidence.append(EvidenceRecord(**evidence_record))
+
+    return projected_candidates, projected_evidence, {
+        "target_company": target_company,
+        "retargeted_candidate_count": len(retargeted_candidate_ids),
+        "retargeted_candidate_ids": retargeted_candidate_ids[:50],
+    }
 
 
 def _company_identity_from_payload(

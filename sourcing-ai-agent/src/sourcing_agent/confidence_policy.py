@@ -3,7 +3,13 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from .request_matching import MATCH_THRESHOLD, request_family_score, request_family_signature, request_signature
+from .request_matching import (
+    MATCH_THRESHOLD,
+    build_request_matching_bundle,
+    request_family_score,
+    request_family_signature,
+    request_signature,
+)
 
 
 DEFAULT_HIGH_THRESHOLD = 0.75
@@ -53,6 +59,9 @@ def build_confidence_policy(
     scope_kind = "request_family" if request_payload else "company"
     request_sig = request_signature(request_payload or {}) if request_payload else ""
     request_family_sig = request_family_signature(request_payload or {}) if request_payload else ""
+    request_matching = build_request_matching_bundle(request_payload or {}) if request_payload else {}
+    matching_request_sig = str(request_matching.get("matching_request_signature") or request_sig)
+    matching_request_family_sig = str(request_matching.get("matching_request_family_signature") or request_family_sig)
 
     for item in feedback_items:
         feedback_type = str(item.get("feedback_type") or "").strip()
@@ -65,6 +74,8 @@ def build_confidence_policy(
             request_payload=request_payload or {},
             request_sig=request_sig,
             request_family_sig=request_family_sig,
+            matching_request_sig=matching_request_sig,
+            matching_request_family_sig=matching_request_family_sig,
         )
         time_weight, age_days = _time_decay_weight(item.get("created_at"), now=now)
         effective_weight = round(family_weight * time_weight, 4)
@@ -102,8 +113,8 @@ def build_confidence_policy(
         f"precision_pressure={round(precision_pressure, 2)}",
         f"net_delta={round(net_delta, 2)}",
     ]
-    if request_family_sig:
-        summary_reasons.append(f"scope=request_family:{request_family_sig}")
+    if matching_request_family_sig:
+        summary_reasons.append(f"scope=request_family:{matching_request_family_sig}")
     summary_reasons.append(f"half_life_days={DECAY_HALF_LIFE_DAYS}")
     summary_reasons.extend(reasons[:3])
     if not feedback_items:
@@ -126,12 +137,16 @@ def build_confidence_policy(
         "default_medium_threshold": DEFAULT_MEDIUM_THRESHOLD,
         "request_signature": request_sig,
         "request_family_signature": request_family_sig,
+        "matching_request_signature": matching_request_sig,
+        "matching_request_family_signature": matching_request_family_sig,
     }
     return {
         "target_company": target_company,
         "scope_kind": scope_kind,
         "request_signature": request_sig,
         "request_family_signature": request_family_sig,
+        "matching_request_signature": matching_request_sig,
+        "matching_request_family_signature": matching_request_family_sig,
         "high_threshold": round(high_threshold, 2),
         "medium_threshold": round(medium_threshold, 2),
         "summary": summary,
@@ -208,16 +223,29 @@ def _family_relevance_weight(
     request_payload: dict[str, Any],
     request_sig: str,
     request_family_sig: str,
+    matching_request_sig: str,
+    matching_request_family_sig: str,
 ) -> tuple[float, str, str]:
     if not request_payload:
         return 1.0, "company_scope_policy", "company_fallback"
     metadata = dict(item.get("metadata") or {})
     feedback_request = metadata.get("request_payload") if isinstance(metadata.get("request_payload"), dict) else {}
-    feedback_request_sig = str(metadata.get("request_signature") or "").strip()
-    feedback_family_sig = str(metadata.get("request_family_signature") or "").strip()
-    if feedback_request_sig and feedback_request_sig == request_sig:
+    feedback_matching = dict(metadata.get("request_matching") or {})
+    feedback_request_sig = str(
+        metadata.get("matching_request_signature")
+        or feedback_matching.get("matching_request_signature")
+        or metadata.get("request_signature")
+        or ""
+    ).strip()
+    feedback_family_sig = str(
+        metadata.get("matching_request_family_signature")
+        or feedback_matching.get("matching_request_family_signature")
+        or metadata.get("request_family_signature")
+        or ""
+    ).strip()
+    if feedback_request_sig and feedback_request_sig == matching_request_sig:
         return 1.0, "exact_request_feedback", "exact_family"
-    if feedback_family_sig and feedback_family_sig == request_family_sig:
+    if feedback_family_sig and feedback_family_sig == matching_request_family_sig:
         return 1.0, "exact_family_feedback", "exact_family"
     if feedback_request:
         match = request_family_score(request_payload, feedback_request)
@@ -228,7 +256,7 @@ def _family_relevance_weight(
             weight = round(min(0.85, max(0.3, 0.2 + (score / 100.0) * 0.7)), 4)
             return weight, f"related_family_feedback={round(score, 2)}", "related_family"
         return 0.0, f"family_mismatch={round(score, 2)}", "mismatch"
-    if feedback_family_sig:
+    if feedback_family_sig and feedback_family_sig not in {matching_request_family_sig, request_family_sig}:
         return 0.0, "family_signature_mismatch", "mismatch"
     return NO_CONTEXT_FAMILY_WEIGHT, "company_scope_fallback", "company_fallback"
 

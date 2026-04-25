@@ -1,0 +1,16 @@
+{
+  "harvest": {
+    "default": {
+      "execute_pending_rounds": 3,
+      "pending_message": "Scripted xAI Harvest task is still processing the roster shard.",
+      "errors": [
+        {
+          "phase": "execute",
+          "round": 1,
+          "kind": "retryable",
+          "message": "Scripted xAI Harvest transient backpressure; retrying the roster shard."
+        }
+      ]
+    }
+  }
+}

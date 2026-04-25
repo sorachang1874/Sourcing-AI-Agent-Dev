@@ -1,6 +1,10 @@
 # Recovery Tutorial
 
+> Status: Historical reference only. Do not use this file as the default implementation or operations guide; cross-check `docs/INDEX.md` and `PROGRESS.md` first.
+
+
 > Reference note: this tutorial is still useful for environment recovery, but current default entry docs are `../../ONBOARDING.md` and `docs/INDEX.md`.
+> Current default recovery path is `Postgres control plane + control_plane_snapshot + company_snapshot`; `sqlite_snapshot` is a legacy backup-only alias.
 
 ## Goal
 
@@ -18,6 +22,8 @@
 - 不需要重新抓取 Thinking Machines Lab
 - 不需要重新导出 bundle
 - 只需要重新打开 repo、恢复 provider secrets、阅读 handoff 文档即可
+- 如果要确认当前会话是否已经识别到本地 PG，先运行：
+  - `PYTHONPATH=src python3 -m sourcing_agent.cli show-control-plane-runtime`
 
 如果你换了新机器：
 
@@ -99,8 +105,8 @@ PYTHONPATH=src python3 -m sourcing_agent.cli restore-asset-bundle \
 
 ```bash
 PYTHONPATH=src python3 -m sourcing_agent.cli import-cloud-assets \
-  --bundle-kind sqlite_snapshot \
-  --bundle-id <sqlite_bundle_id> \
+  --bundle-kind control_plane_snapshot \
+  --bundle-id <control_plane_snapshot_bundle_id> \
   --output-dir ./runtime/asset_imports
 
 PYTHONPATH=src python3 -m sourcing_agent.cli import-cloud-assets \
@@ -114,16 +120,16 @@ PYTHONPATH=src python3 -m sourcing_agent.cli import-cloud-assets \
 - 已存在且匹配 manifest 的 payload 会被跳过
 - 中断后重跑会优先补剩余缺口
 
-### 4. Restore SQLite if needed
+### 4. Restore legacy sqlite bundle if needed
 
-如果你已经手工拿到了本地 sqlite bundle，才需要直接调用：
+只有在排障、便携恢复、或手头只有旧格式备份时，才需要直接调用：
 
 ```bash
 PYTHONPATH=src python3 -m sourcing_agent.cli restore-sqlite-snapshot \
   --manifest /path/to/sqlite_snapshot_bundle_manifest.json
 ```
 
-默认会先备份当前 DB。
+默认会先备份当前 DB。`sqlite_snapshot` 现在是 legacy backup-only alias，不是 hosted 默认恢复主路径。
 
 ### 5. Validate
 

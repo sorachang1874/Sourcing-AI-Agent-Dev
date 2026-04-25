@@ -66,6 +66,33 @@ class ConfidencePolicyTest(unittest.TestCase):
         self.assertLess(policy["high_threshold"], 0.75)
         self.assertEqual(policy["summary"]["exact_family_feedback_count"], 1)
 
+    def test_request_family_scope_uses_matching_signatures_for_equivalent_requests(self) -> None:
+        raw_request = {
+            "raw_user_request": "我想找 Google Gemini 的产品经理",
+            "target_company": "Google",
+        }
+        structured_request = {
+            "target_company": "Google",
+            "organization_keywords": ["Gemini", "Google DeepMind"],
+            "keywords": ["Gemini"],
+            "must_have_primary_role_buckets": ["product_management"],
+        }
+        policy = build_confidence_policy(
+            target_company="Google",
+            request_payload=raw_request,
+            feedback_items=[
+                {
+                    "feedback_type": "false_negative_pattern",
+                    "metadata": {"request_payload": structured_request},
+                    "created_at": "2026-04-05 00:00:00",
+                }
+            ],
+            now=datetime(2026, 4, 6, tzinfo=timezone.utc),
+        )
+        self.assertEqual(policy["scope_kind"], "request_family")
+        self.assertEqual(policy["summary"]["exact_family_feedback_count"], 1)
+        self.assertTrue(policy["matching_request_family_signature"])
+
     def test_old_feedback_decays_over_time(self) -> None:
         request_payload = {
             "target_company": "xAI",

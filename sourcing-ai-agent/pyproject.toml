@@ -3,6 +3,57 @@ name = "sourcing-ai-agent"
 version = "0.1.0"
 description = "Backend MVP for a criteria-driven sourcing AI agent."
 requires-python = ">=3.12"
+dependencies = [
+    "psycopg[binary]>=3.2,<3.3",
+    "requests>=2.33,<2.34",
+]
+
+[project.optional-dependencies]
+dev = [
+    "mypy>=1.20,<1.21",
+    "ruff>=0.15,<0.16",
+]
+test = [
+    "pytest>=9,<10",
+]
 
 [tool.unittest]
 testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+extend-exclude = [
+    "frontend-demo/dist",
+    "frontend-demo/node_modules",
+    "src/_vendor",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+follow_imports = "skip"
+warn_unused_ignores = true
+warn_redundant_casts = true
+show_error_codes = true
+files = [
+    "src/sourcing_agent/artifact_cache.py",
+    "src/sourcing_agent/asset_paths.py",
+    "src/sourcing_agent/asset_sync.py",
+    "src/sourcing_agent/cloud_asset_import.py",
+    "src/sourcing_agent/company_registry.py",
+    "src/sourcing_agent/control_plane_postgres.py",
+    "src/sourcing_agent/profile_registry_backfill.py",
+    "src/sourcing_agent/profile_registry_utils.py",
+    "src/sourcing_agent/regression_matrix.py",
+    "src/sourcing_agent/excel_intake.py",
+    "src/sourcing_agent/asset_reuse_planning.py",
+    "src/sourcing_agent/candidate_artifacts.py",
+    "src/sourcing_agent/organization_assets.py",
+    "src/sourcing_agent/orchestrator.py",
+    "src/sourcing_agent/smoke_runtime_seed.py",
+    "src/sourcing_agent/workflow_smoke.py",
+]

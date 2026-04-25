@@ -1,6 +1,12 @@
+import json
+from datetime import datetime, timezone
+import os
+from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import patch
 
+import sourcing_agent.search_provider as search_provider_module
 from sourcing_agent.search_provider import (
     BaseSearchProvider,
     BingHtmlSearchProvider,
@@ -22,6 +28,20 @@ from sourcing_agent.settings import SearchProviderSettings
 
 
 class SearchProviderTest(unittest.TestCase):
+    def test_runtime_search_cooldowns_are_read_from_env_without_reload(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "WEB_SEARCH_READY_COOLDOWN_SECONDS": "0",
+                "WEB_SEARCH_FETCH_COOLDOWN_SECONDS": "0",
+                "DATAFORSEO_TASK_GET_BATCH_WORKERS": "3",
+            },
+            clear=False,
+        ):
+            self.assertEqual(search_provider_module._default_lane_ready_cooldown_seconds(), 0)
+            self.assertEqual(search_provider_module._default_lane_fetch_cooldown_seconds(), 0)
+            self.assertEqual(search_provider_module._default_dataforseo_task_get_batch_workers(), 3)
+
     def test_parse_duckduckgo_html_results(self) -> None:
         html = """
         <div class="result">
@@ -725,6 +745,58 @@ class SearchProviderTest(unittest.TestCase):
         self.assertEqual(execution.checkpoint["status"], "ready_cached")
         task_get_mock.assert_not_called()
 
+    def test_dataforseo_provider_execute_with_checkpoint_request_scoped_fast_smoke_bypasses_fetch_cooldown(self) -> None:
+        provider = DataForSeoGoogleOrganicSearchProvider(
+            login="login",
+            password="password",
+            location_name="United States",
+            language_name="English",
+            device="desktop",
+            os="windows",
+            depth=10,
+            timeout_seconds=30,
+        )
+        task_payload = {
+            "tasks": [
+                {
+                    "status_code": 20000,
+                    "result": [
+                        {
+                            "check_url": "https://www.google.com/search?q=Kevin+Lu",
+                            "items_count": 1,
+                            "items": [
+                                {
+                                    "type": "organic",
+                                    "rank_group": 1,
+                                    "rank_absolute": 1,
+                                    "page": 1,
+                                    "domain": "www.linkedin.com",
+                                    "title": "Kevin Lu - LinkedIn",
+                                    "description": "Research Engineer at Thinking Machines Lab.",
+                                    "url": "https://www.linkedin.com/in/kzl/",
+                                    "breadcrumb": "https://www.linkedin.com",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ]
+        }
+        with patch.object(provider.client, "task_get_regular", return_value=task_payload) as task_get_mock:
+            execution = provider.execute_with_checkpoint(
+                "Kevin Lu Thinking Machines Lab LinkedIn",
+                checkpoint={
+                    "provider_name": "dataforseo_google_organic",
+                    "task_id": "task_123",
+                    "status": "ready_cached",
+                    "fetch_attempted_at": datetime.now(timezone.utc).isoformat(),
+                    "runtime_tuning_profile": "fast_smoke",
+                },
+            )
+        self.assertFalse(execution.pending)
+        self.assertEqual(execution.response.results[0].url, "https://www.linkedin.com/in/kzl/")
+        task_get_mock.assert_called_once()
+
     def test_build_search_provider_includes_google_browser_when_enabled(self) -> None:
         settings = SearchProviderSettings(
             provider_order=("google_browser", "bing_html", "duckduckgo_html"),
@@ -783,6 +855,73 @@ class SearchProviderTest(unittest.TestCase):
         self.assertEqual(len(execution.response.results), 0)
         self.assertEqual(ready.tasks[0].checkpoint["status"], "ready_cached")
         self.assertEqual(fetched.tasks[0].checkpoint["status"], "fetched_cached")
+
+    def test_build_search_provider_uses_scripted_provider_mode(self) -> None:
+        settings = SearchProviderSettings(
+            provider_order=("dataforseo_google_organic", "bing_html"),
+            dataforseo_login="login",
+            dataforseo_password="password",
+            enable_dataforseo_google_organic=True,
+            enable_bing_html=True,
+        )
+        with tempfile.TemporaryDirectory() as tempdir:
+            scenario_path = Path(tempdir) / "scripted_search.json"
+            scenario_path.write_text(
+                json.dumps(
+                    {
+                        "search": {
+                            "rules": [
+                                {
+                                    "name": "reflection_infra",
+                                    "match": {"query_contains": ["reflection ai", "infra"]},
+                                    "poll_pending_rounds": 1,
+                                    "results": [
+                                        {
+                                            "title": "Reflection AI infra engineer",
+                                            "url": "https://example.com/reflection-infra",
+                                            "snippet": "Infra engineering at Reflection AI.",
+                                        }
+                                    ],
+                                }
+                            ]
+                        }
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            with patch.dict(
+                "os.environ",
+                {
+                    "SOURCING_EXTERNAL_PROVIDER_MODE": "scripted",
+                    "SOURCING_SCRIPTED_PROVIDER_SCENARIO": str(scenario_path),
+                },
+            ):
+                chain = build_search_provider(settings)
+                provider_names = [provider.provider_name for provider in chain.providers]
+                submitted = chain.submit_batch_queries(
+                    [{"task_key": "q1", "query_text": "Reflection AI infra", "max_results": 10}]
+                )
+                assert submitted is not None
+                waiting = chain.poll_ready_batch(
+                    [{"task_key": "q1", "query_text": "Reflection AI infra", "checkpoint": submitted.tasks[0].checkpoint}]
+                )
+                assert waiting is not None
+                ready = chain.poll_ready_batch(
+                    [{"task_key": "q1", "query_text": "Reflection AI infra", "checkpoint": waiting.tasks[0].checkpoint}]
+                )
+                assert ready is not None
+                fetched = chain.fetch_ready_batch(
+                    [{"task_key": "q1", "query_text": "Reflection AI infra", "checkpoint": ready.tasks[0].checkpoint}]
+                )
+                assert fetched is not None
+
+        self.assertEqual(provider_names, ["scripted_search"])
+        self.assertEqual(waiting.tasks[0].checkpoint["status"], "waiting_for_ready_cached")
+        self.assertEqual(ready.tasks[0].checkpoint["status"], "ready_cached")
+        self.assertEqual(len(fetched.tasks[0].response.results), 1)
+        self.assertEqual(fetched.tasks[0].response.results[0].title, "Reflection AI infra engineer")
 
     def test_build_search_provider_inserts_bing_for_legacy_order(self) -> None:
         settings = SearchProviderSettings(

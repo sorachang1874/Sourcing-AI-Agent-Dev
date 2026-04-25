@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from collections import Counter
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import inspect
 from pathlib import Path
 import time
 from typing import Any, Callable
 
+from .agent_runtime import AgentWorkerHandle
 from .asset_logger import AssetLogger
 from .connectors import CompanyIdentity
 from .domain import Candidate, JobRequest
@@ -14,6 +15,7 @@ from .worker_scheduler import lane_budget_caps_from_plan, lane_limits_from_plan,
 
 
 WorkerExecutor = Callable[[dict[str, Any]], dict[str, Any]]
+WorkerResultCallback = Callable[[dict[str, Any]], None]
 
 
 class AutonomousWorkerDaemon:
@@ -54,7 +56,13 @@ class AutonomousWorkerDaemon:
             retry_limit=int(cost_policy.get("worker_retry_limit", 2) or 2),
         )
 
-    def run(self, specs: list[dict[str, Any]], executor: WorkerExecutor) -> dict[str, Any]:
+    def run(
+        self,
+        specs: list[dict[str, Any]],
+        executor: WorkerExecutor,
+        *,
+        result_callback: WorkerResultCallback | None = None,
+    ) -> dict[str, Any]:
         pending: dict[tuple[str, str], dict[str, Any]] = {
             (str(spec.get("lane_id") or ""), str(spec.get("worker_key") or "")): {**spec}
             for spec in specs
@@ -86,7 +94,8 @@ class AutonomousWorkerDaemon:
                 break
             with ThreadPoolExecutor(max_workers=max(1, min(self.total_limit, len(selected)))) as pool:
                 futures = {pool.submit(executor, spec): spec for spec in selected}
-                for future, spec in futures.items():
+                for future in as_completed(futures):
+                    spec = futures[future]
                     result = future.result()
                     lane_id = str(spec.get("lane_id") or "")
                     worker_key = str(spec.get("worker_key") or "")
@@ -114,6 +123,20 @@ class AutonomousWorkerDaemon:
                         continue
                     pending.pop(key, None)
                     results.append(result)
+                    if result_callback is not None:
+                        try:
+                            result_callback(result)
+                        except Exception as exc:
+                            daemon_events.append(
+                                {
+                                    "cycle": cycles,
+                                    "lane_id": lane_id,
+                                    "worker_key": worker_key,
+                                    "status": status,
+                                    "attempt": int(retry_counts[key]) + 1,
+                                    "callback_error": str(exc),
+                                }
+                            )
             if cycles > max(1, len(specs) * (self.retry_limit + 2)):
                 break
         backlog = list(pending.values())
@@ -136,6 +159,7 @@ class PersistentWorkerRecoveryDaemon:
         agent_runtime,
         acquisition_engine,
         owner_id: str,
+        completion_callback: WorkerResultCallback | None = None,
         lease_seconds: int = 300,
         stale_after_seconds: int = 180,
         total_limit: int = 4,
@@ -145,6 +169,7 @@ class PersistentWorkerRecoveryDaemon:
         self.agent_runtime = agent_runtime
         self.acquisition_engine = acquisition_engine
         self.owner_id = owner_id
+        self.completion_callback = completion_callback
         self.lease_seconds = max(30, int(lease_seconds or 300))
         self.stale_after_seconds = max(1, 180 if stale_after_seconds in {None, ""} else int(stale_after_seconds))
         self.total_limit = max(1, int(total_limit or 4))
@@ -238,6 +263,7 @@ class PersistentWorkerRecoveryDaemon:
                     for worker in claimed_workers
                 ],
                 executor=lambda spec: self._execute_claimed_worker(int(spec.get("worker_id") or 0)),
+                result_callback=self.completion_callback,
             )
             total_executed += len(list(run_summary.get("results") or []))
             job_summaries.append(
@@ -395,6 +421,7 @@ class PersistentWorkerRecoveryDaemon:
                     "worker_status": "skipped",
                     "reason": "unsupported_lane",
                 }
+            self._persist_completed_worker_result_if_needed(worker, result)
             self.store.release_agent_worker_lease(worker_id, lease_owner=self.owner_id)
             return {
                 "worker_id": worker_id,
@@ -421,6 +448,60 @@ class PersistentWorkerRecoveryDaemon:
                 "worker_status": "failed",
                 "error": str(exc),
             }
+
+    def _persist_completed_worker_result_if_needed(
+        self,
+        worker: dict[str, Any],
+        result: dict[str, Any],
+    ) -> None:
+        desired_status = str(result.get("worker_status") or "").strip().lower()
+        if desired_status != "completed":
+            return
+        worker_id = int(worker.get("worker_id") or 0)
+        if worker_id <= 0:
+            return
+        refreshed = self.store.get_agent_worker(worker_id=worker_id) or worker
+        current_status = str(refreshed.get("status") or "").strip().lower()
+        if current_status == "completed":
+            return
+        checkpoint = dict(refreshed.get("checkpoint") or {})
+        output = dict(refreshed.get("output") or {})
+        summary = dict(result.get("summary") or {})
+        if summary:
+            output["summary"] = summary
+        checkpoint["stage"] = "completed"
+        checkpoint["status"] = "completed"
+        metadata = dict(refreshed.get("metadata") or {})
+        recovery_kind = str(metadata.get("recovery_kind") or "").strip()
+        if recovery_kind:
+            checkpoint.setdefault("recovery_kind", recovery_kind)
+        if self.agent_runtime is not None:
+            self.agent_runtime.complete_worker(
+                AgentWorkerHandle(
+                    session_id=int(refreshed.get("session_id") or 0),
+                    span_id=int(refreshed.get("span_id") or 0),
+                    worker_id=worker_id,
+                    lane_id=str(refreshed.get("lane_id") or ""),
+                    worker_key=str(refreshed.get("worker_key") or ""),
+                ),
+                status="completed",
+                checkpoint_payload=checkpoint,
+                output_payload=output,
+            )
+            return
+        span_id = int(refreshed.get("span_id") or 0)
+        if span_id > 0:
+            self.store.complete_agent_trace_span(
+                span_id,
+                status="completed",
+                output_payload=output,
+            )
+        self.store.complete_agent_worker(
+            worker_id,
+            status="completed",
+            checkpoint_payload=checkpoint,
+            output_payload=output,
+        )
 
     def _resume_search_worker(self, worker: dict[str, Any]) -> dict[str, Any]:
         metadata = dict(worker.get("metadata") or {})

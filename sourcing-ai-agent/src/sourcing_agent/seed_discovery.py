@@ -1,25 +1,43 @@
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+import json
+import os
+import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from hashlib import sha1
 from html import unescape
-import json
-import os
 from pathlib import Path
-import re
-from typing import Any
+from typing import Any, Callable
 from urllib import error, parse, request
 
 from .agent_runtime import AgentRuntimeCoordinator
 from .asset_logger import AssetLogger
 from .connectors import CompanyIdentity, RapidApiAccount, search_people_accounts
 from .domain import Candidate, EvidenceRecord, JobRequest, format_display_name, make_evidence_id, normalize_name_token
-from .harvest_connectors import HarvestProfileSearchConnector
+from .harvest_connectors import HarvestProfileSearchConnector, harvest_connector_available
 from .model_provider import DeterministicModelClient, ModelClient
-from .query_signal_knowledge import canonicalize_scope_signal_label
-from .request_normalization import build_effective_request_payload, resolve_request_intent_view
+from .query_signal_knowledge import (
+    canonicalize_scope_signal_label,
+    canonicalize_thematic_signal_label,
+    thematic_signal_search_query_aliases,
+)
+from .request_normalization import (
+    build_effective_job_request,
+    build_effective_request_payload,
+    resolve_request_intent_view,
+)
+from .runtime_tuning import (
+    apply_runtime_timing_overrides_to_search_state,
+    resolved_harvest_people_search_global_inflight,
+    resolve_runtime_timing_overrides,
+    resolved_lane_fetch_cooldown_seconds,
+    resolved_lane_ready_cooldown_seconds,
+    resolved_provider_people_search_parallel_queries,
+    runtime_inflight_slot,
+)
+from .runtime_environment import external_provider_mode
 from .search_provider import (
     BaseSearchProvider,
     DuckDuckGoHtmlSearchProvider,
@@ -28,7 +46,11 @@ from .search_provider import (
     search_response_from_record,
     search_response_to_record,
 )
+from .web_fetch import fetch_search_results_html
 from .worker_daemon import AutonomousWorkerDaemon
+
+SearchSeedIncrementalResultCallback = Callable[[dict[str, Any]], None]
+
 
 def _env_int(name: str, default: int) -> int:
     raw = str(os.getenv(name) or "").strip()
@@ -41,23 +63,34 @@ def _env_int(name: str, default: int) -> int:
 
 
 def _external_provider_mode() -> str:
-    return str(os.getenv("SOURCING_EXTERNAL_PROVIDER_MODE") or "live").strip().lower() or "live"
+    return external_provider_mode()
 
 
-_LANE_READY_POLL_MIN_INTERVAL_SECONDS = max(
-    1,
-    _env_int(
-        "SEED_DISCOVERY_READY_POLL_MIN_INTERVAL_SECONDS",
-        _env_int("WEB_SEARCH_READY_POLL_MIN_INTERVAL_SECONDS", 15),
-    ),
-)
-_LANE_FETCH_MIN_INTERVAL_SECONDS = max(
-    1,
-    _env_int(
-        "SEED_DISCOVERY_FETCH_MIN_INTERVAL_SECONDS",
-        _env_int("WEB_SEARCH_FETCH_MIN_INTERVAL_SECONDS", 15),
-    ),
-)
+def _lane_ready_poll_min_interval_seconds() -> int:
+    return max(
+        0,
+        _env_int(
+            "SEED_DISCOVERY_READY_POLL_MIN_INTERVAL_SECONDS",
+            _env_int("WEB_SEARCH_READY_POLL_MIN_INTERVAL_SECONDS", 15),
+        ),
+    )
+
+
+def _lane_fetch_min_interval_seconds() -> int:
+    return max(
+        0,
+        _env_int(
+            "SEED_DISCOVERY_FETCH_MIN_INTERVAL_SECONDS",
+            _env_int("WEB_SEARCH_FETCH_MIN_INTERVAL_SECONDS", 15),
+        ),
+    )
+
+
+def _runtime_timing_overrides_from_request_payload(request_payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not request_payload:
+        return {}
+    execution_preferences = dict(JobRequest.from_payload(dict(request_payload or {})).execution_preferences or {})
+    return resolve_runtime_timing_overrides(execution_preferences)
 
 
 @dataclass(slots=True)
@@ -73,8 +106,16 @@ class SearchSeedSnapshot:
     stop_reason: str
     summary_path: Path
     entries_path: Path | None = None
+    summary_payload: dict[str, Any] = field(default_factory=dict)
+    lane_payloads: dict[str, dict[str, Any]] = field(default_factory=dict)
+    lane_entries: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
 
     def to_record(self) -> dict[str, Any]:
+        lane_summary_paths = {
+            str(lane).strip(): str(dict(payload or {}).get("summary_path") or "")
+            for lane, payload in dict(self.lane_payloads or {}).items()
+            if str(lane).strip()
+        }
         return {
             "snapshot_id": self.snapshot_id,
             "target_company": self.target_company,
@@ -87,7 +128,54 @@ class SearchSeedSnapshot:
             "stop_reason": self.stop_reason,
             "summary_path": str(self.summary_path),
             "entries_path": str(self.entries_path) if isinstance(self.entries_path, Path) else "",
+            "lane_keys": sorted({*lane_summary_paths.keys(), *[str(key).strip() for key in self.lane_entries.keys()]}),
+            "lane_summary_paths": lane_summary_paths,
         }
+
+
+def normalize_search_seed_employment_scope(value: Any) -> str:
+    normalized = str(value or "").strip().lower()
+    if normalized == "former":
+        return "former"
+    if normalized == "current":
+        return "current"
+    return "all"
+
+
+def _copy_search_seed_filter_hints(payload: dict[str, Any] | None) -> dict[str, Any]:
+    copied: dict[str, Any] = {}
+    for key, value in dict(payload or {}).items():
+        if isinstance(value, list):
+            copied[str(key)] = [item for item in value]
+        else:
+            copied[str(key)] = value
+    return copied
+
+
+def _annotate_search_seed_query_summaries(
+    query_summaries: list[dict[str, Any]],
+    *,
+    employment_status: str,
+    filter_hints: dict[str, Any] | None,
+    strategy_type: str,
+) -> list[dict[str, Any]]:
+    employment_scope = normalize_search_seed_employment_scope(employment_status)
+    copied_filter_hints = _copy_search_seed_filter_hints(filter_hints)
+    annotated: list[dict[str, Any]] = []
+    for item in list(query_summaries or []):
+        if not isinstance(item, dict):
+            continue
+        annotated.append(
+            {
+                **dict(item),
+                "lane": str(item.get("lane") or "profile_search"),
+                "employment_scope": str(item.get("employment_scope") or employment_scope),
+                "employment_status": str(item.get("employment_status") or employment_scope),
+                "strategy_type": str(item.get("strategy_type") or strategy_type),
+                "filter_hints": _copy_search_seed_filter_hints(dict(item.get("filter_hints") or copied_filter_hints)),
+            }
+        )
+    return annotated
 
 
 class SearchSeedAcquirer:
@@ -108,7 +196,10 @@ class SearchSeedAcquirer:
         return _external_provider_mode() == "live" and bool(self.accounts)
 
     def _harvest_people_search_enabled(self) -> bool:
-        return bool(self.harvest_search_connector and self.harvest_search_connector.settings.enabled)
+        return bool(
+            self.harvest_search_connector
+            and harvest_connector_available(self.harvest_search_connector.settings)
+        )
 
     def refresh_background_search_workers(self, workers: list[dict[str, Any]]) -> dict[str, Any]:
         grouped_specs: dict[Path, list[dict[str, Any]]] = {}
@@ -154,6 +245,8 @@ class SearchSeedAcquirer:
                     "prefetched_search_raw_path": str(checkpoint.get("raw_path") or ""),
                     "prefetched_search_manifest_path": str(checkpoint.get("search_manifest_path") or ""),
                     "prefetched_search_manifest_key": str(checkpoint.get("search_manifest_key") or worker_key),
+                    "runtime_timing_overrides": dict(metadata.get("runtime_timing_overrides") or {})
+                    or _runtime_timing_overrides_from_request_payload(dict(metadata.get("request_payload") or {})),
                     "worker_id": int(worker.get("worker_id") or 0),
                 }
             )
@@ -216,6 +309,7 @@ class SearchSeedAcquirer:
         intent_view: dict[str, Any] | None = None,
         delta_execution_plan: dict[str, Any] | None = None,
         lane_context: dict[str, Any] | None = None,
+        on_incremental_query_result: SearchSeedIncrementalResultCallback | None = None,
     ) -> SearchSeedSnapshot:
         discovery_dir = snapshot_dir / "search_seed_discovery"
         discovery_dir.mkdir(parents=True, exist_ok=True)
@@ -225,10 +319,11 @@ class SearchSeedAcquirer:
             or resolve_request_intent_view(request_payload or {})
             or {}
         )
-        effective_request_payload = build_effective_request_payload(
+        effective_request, _ = build_effective_job_request(
             request_payload or {"target_company": identity.canonical_name},
             intent_view=resolved_intent_view,
         )
+        effective_request_payload = effective_request.to_record()
         resolved_filter_hints = _resolve_discovery_filter_hints(
             filter_hints=filter_hints,
             intent_view=resolved_intent_view,
@@ -265,7 +360,34 @@ class SearchSeedAcquirer:
         web_result_target = int(cost_policy.get("provider_people_search_min_expected_results", 10) or 10)
         parallel_limit = max(1, min(int(cost_policy.get("parallel_search_workers", 3) or 3), len(compiled_queries) or 1))
         result_limit = max(1, min(int(cost_policy.get("public_media_results_per_query", 10) or 10), 25))
+        runtime_timing_overrides = _runtime_timing_overrides_from_request_payload(effective_request_payload)
         worker_results: list[dict[str, Any]] = []
+
+        def _emit_incremental_query_result(result: dict[str, Any]) -> None:
+            if on_incremental_query_result is None:
+                return
+            incremental_entries = list(result.get("entries") or [])
+            if not incremental_entries:
+                return
+            summary = dict(result.get("summary") or {})
+            try:
+                on_incremental_query_result(
+                    {
+                        "index": int(result.get("index") or 0),
+                        "entries": incremental_entries,
+                        "summary": summary,
+                        "query": str(summary.get("query") or ""),
+                        "bundle_id": str(summary.get("bundle_id") or ""),
+                        "source_family": str(summary.get("source_family") or ""),
+                        "execution_mode": str(summary.get("execution_mode") or ""),
+                        "mode": str(summary.get("mode") or ""),
+                        "employment_status": employment_status,
+                        "raw_path": str(summary.get("raw_path") or ""),
+                    }
+                )
+            except Exception as exc:
+                errors.append(f"incremental_query_result:{str(exc)[:160]}")
+
         pending_specs = [] if provider_search_only else [
             {
                 "index": index,
@@ -277,6 +399,7 @@ class SearchSeedAcquirer:
                 ),
                 "worker_key": f"{query_spec['bundle_id']}::{index:02d}",
                 "label": str(query_spec.get("query") or ""),
+                "runtime_timing_overrides": dict(runtime_timing_overrides),
             }
             for index, query_spec in enumerate(compiled_queries, start=1)
             if query_spec["execution_mode"] != "paid_fallback"
@@ -328,11 +451,12 @@ class SearchSeedAcquirer:
                         prefetched_search_manifest_path=str(spec.get("prefetched_search_manifest_path") or ""),
                         prefetched_search_manifest_key=str(spec.get("prefetched_search_manifest_key") or ""),
                     ),
+                    result_callback=_emit_incremental_query_result,
                 )
                 worker_results.extend(list(daemon_summary.get("results") or []))
             else:
                 with ThreadPoolExecutor(max_workers=max(1, min(parallel_limit, len(pending_specs)))) as executor:
-                    futures = [
+                    future_to_spec = {
                         executor.submit(
                             self._execute_query_spec,
                             index=int(spec["index"]),
@@ -352,11 +476,13 @@ class SearchSeedAcquirer:
                             prefetched_search_raw_path=str(spec.get("prefetched_search_raw_path") or ""),
                             prefetched_search_manifest_path=str(spec.get("prefetched_search_manifest_path") or ""),
                             prefetched_search_manifest_key=str(spec.get("prefetched_search_manifest_key") or ""),
-                        )
+                        ): spec
                         for spec in pending_specs
-                    ]
-                    for future in futures:
-                        worker_results.append(future.result())
+                    }
+                    for future in as_completed(future_to_spec):
+                        result = future.result()
+                        worker_results.append(result)
+                        _emit_incremental_query_result(result)
 
         worker_results.sort(key=lambda item: int(item.get("index") or 0))
         for result in worker_results:
@@ -396,6 +522,8 @@ class SearchSeedAcquirer:
                 employment_status=employment_status,
                 limit=provider_limit,
                 cost_policy=cost_policy,
+                runtime_timing_overrides=runtime_timing_overrides,
+                on_incremental_query_result=on_incremental_query_result,
             )
             entries.extend(provider_entries)
             entries = _dedupe_seed_entries(entries)
@@ -405,6 +533,13 @@ class SearchSeedAcquirer:
             if provider_entries and not queued_background_search:
                 stop_reason = "provider_people_search_primary" if provider_search_primary else "provider_people_search_fallback"
 
+        strategy_type = str(dict(lane_context or {}).get("strategy_type") or "").strip()
+        query_summaries = _annotate_search_seed_query_summaries(
+            query_summaries,
+            employment_status=employment_status,
+            filter_hints=effective_filter_hints,
+            strategy_type=strategy_type,
+        )
         entries_path = discovery_dir / "entries.json"
         logger.write_json(
             entries_path,
@@ -414,6 +549,42 @@ class SearchSeedAcquirer:
             is_raw_asset=False,
             model_safe=True,
         )
+        employment_scope = normalize_search_seed_employment_scope(employment_status)
+        lane_summary_path = discovery_dir / employment_scope / "summary.json"
+        lane_entries_path = discovery_dir / employment_scope / "entries.json"
+        lane_payload = {
+            "snapshot_id": snapshot_dir.name,
+            "target_company": identity.canonical_name,
+            "company_identity": identity.to_record(),
+            "lane": "profile_search",
+            "employment_scope": employment_scope,
+            "employment_status": employment_scope,
+            "strategy_type": strategy_type,
+            "entry_count": len(entries),
+            "search_seed_queries": list(effective_search_seed_queries),
+            "requested_search_seed_queries": list(resolved_search_seed_queries),
+            "effective_query_bundles": list(effective_query_bundles),
+            "requested_filter_hints": _copy_search_seed_filter_hints(resolved_filter_hints),
+            "effective_filter_hints": _copy_search_seed_filter_hints(effective_filter_hints),
+            "query_summaries": list(query_summaries),
+            "accounts_used": list(accounts_used),
+            "errors": list(errors),
+            "stop_reason": stop_reason,
+            "queued_query_count": queued_query_count,
+            "cost_policy": dict(cost_policy),
+            "intent_view": dict(resolved_intent_view),
+            "delta_execution_plan": dict(delta_execution_plan or {}),
+            "lane_context": dict(lane_context or {}),
+            "summary_path": str(lane_summary_path),
+            "entries_path": str(lane_entries_path),
+            "worker_daemon": {
+                "cycles": int(daemon_summary.get("cycles") or 0),
+                "retried": list(daemon_summary.get("retried") or []),
+                "backlog_count": len(list(daemon_summary.get("backlog") or [])),
+                "lane_budget_used": dict(daemon_summary.get("lane_budget_used") or {}),
+                "lane_budget_caps": dict(daemon_summary.get("lane_budget_caps") or {}),
+            },
+        }
         summary_path = discovery_dir / "summary.json"
         summary_payload = {
             "snapshot_id": snapshot_dir.name,
@@ -434,6 +605,17 @@ class SearchSeedAcquirer:
             "intent_view": resolved_intent_view,
             "delta_execution_plan": dict(delta_execution_plan or {}),
             "lane_context": dict(lane_context or {}),
+            "lane_summaries": {
+                employment_scope: {
+                    "lane": "profile_search",
+                    "employment_scope": employment_scope,
+                    "strategy_type": strategy_type,
+                    "summary_path": str(lane_summary_path),
+                    "entries_path": str(lane_entries_path),
+                    "entry_count": len(entries),
+                    "query_count": len(query_summaries),
+                }
+            },
             "worker_daemon": {
                 "cycles": int(daemon_summary.get("cycles") or 0),
                 "retried": list(daemon_summary.get("retried") or []),
@@ -462,6 +644,9 @@ class SearchSeedAcquirer:
             stop_reason=stop_reason,
             summary_path=summary_path,
             entries_path=entries_path,
+            summary_payload=summary_payload,
+            lane_payloads={employment_scope: lane_payload},
+            lane_entries={employment_scope: list(entries)},
         )
 
     def _execute_query_spec(
@@ -487,6 +672,9 @@ class SearchSeedAcquirer:
     ) -> dict[str, Any]:
         query_text = str(query_spec["query"] or "").strip()
         effective_request_payload = build_effective_request_payload(request_payload or {}) if request_payload else {}
+        runtime_timing_overrides = resolve_runtime_timing_overrides(
+            dict(effective_request_payload.get("execution_preferences") or {})
+        )
         raw_search_path = discovery_dir / f"web_query_{index:02d}.html"
         lane_id = "public_media_specialist" if query_spec["source_family"] in {"public_interviews", "publication_and_blog"} else "search_planner"
         worker_handle = None
@@ -514,6 +702,7 @@ class SearchSeedAcquirer:
                     "plan_payload": plan_payload,
                     "runtime_mode": runtime_mode,
                     "result_limit": result_limit,
+                    "runtime_timing_overrides": dict(runtime_timing_overrides),
                 },
                 handoff_from_lane="search_planner" if lane_id == "public_media_specialist" else "triage_planner",
             )
@@ -597,10 +786,14 @@ class SearchSeedAcquirer:
                     )
             else:
                 if worker_handle:
+                    search_checkpoint = apply_runtime_timing_overrides_to_search_state(
+                        dict(checkpoint.get("search_state") or {}),
+                        runtime_timing_overrides=runtime_timing_overrides,
+                    )
                     search_execution = self.search_provider.execute_with_checkpoint(
                         query_text,
                         max_results=result_limit,
-                        checkpoint=dict(checkpoint.get("search_state") or {}),
+                        checkpoint=search_checkpoint,
                     )
                     artifact_paths = dict(checkpoint.get("search_artifact_paths") or {})
                     for artifact in list(search_execution.artifacts or []):
@@ -919,11 +1112,14 @@ class SearchSeedAcquirer:
         employment_status: str,
         limit: int,
         cost_policy: dict[str, Any],
+        runtime_timing_overrides: dict[str, Any] | None = None,
+        on_incremental_query_result: SearchSeedIncrementalResultCallback | None = None,
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str], list[str]]:
         entries: list[dict[str, Any]] = []
         query_summaries: list[dict[str, Any]] = []
         errors: list[str] = []
         accounts_used: list[str] = []
+        runtime_timing_overrides = dict(runtime_timing_overrides or {})
         page_count = int(cost_policy.get("provider_people_search_pages", 2 if employment_status == "former" else 1) or 1)
         query_strategy = str(cost_policy.get("provider_people_search_query_strategy") or "all_queries_union").strip().lower()
         stop_after_first_hit = query_strategy in {"first_hit", "first_nonempty", "first_non_empty", "first_match"}
@@ -938,12 +1134,18 @@ class SearchSeedAcquirer:
             filter_hints=filter_hints,
             search_seed_queries=search_seed_queries,
         )
+        scoped_paid_queries = [
+            query_text
+            for query_text in paid_queries
+            if not _provider_query_matches_company_identity(query_text, identity=identity)
+        ]
         if (
             employment_status == "former"
             and list(filter_hints.get("past_companies") or [])
             and not bool(cost_policy.get("former_keyword_queries_only"))
+            and (bool(cost_policy.get("former_broad_past_company_only")) or not scoped_paid_queries)
         ):
-            paid_queries = ["", *paid_queries]
+            paid_queries = [""]
         deduped_queries: list[str] = []
         seen_queries: set[str] = set()
         for item in paid_queries:
@@ -955,6 +1157,32 @@ class SearchSeedAcquirer:
             deduped_queries.append(key)
         if max_query_count > 0:
             deduped_queries = deduped_queries[:max_query_count]
+
+        def _emit_incremental_provider_result(
+            *,
+            index: int,
+            query_entries: list[dict[str, Any]],
+            query_summary: dict[str, Any],
+        ) -> None:
+            if on_incremental_query_result is None or not query_entries:
+                return
+            try:
+                on_incremental_query_result(
+                    {
+                        "index": index,
+                        "entries": list(query_entries),
+                        "summary": dict(query_summary),
+                        "query": str(query_summary.get("query") or ""),
+                        "bundle_id": "",
+                        "source_family": "linkedin_people_search",
+                        "execution_mode": "paid_fallback",
+                        "mode": str(query_summary.get("mode") or ""),
+                        "employment_status": employment_status,
+                        "raw_path": str(query_summary.get("raw_path") or ""),
+                    }
+                )
+            except Exception as exc:
+                errors.append(f"incremental_query_result:{str(exc)[:160]}")
 
         precomputed_harvest_plans: dict[str, dict[str, Any]] = {}
         if (
@@ -1054,10 +1282,11 @@ class SearchSeedAcquirer:
                     requested_limit=limit,
                     requested_pages=page_count,
                     allow_shared_provider_cache=bool(cost_policy.get("allow_shared_provider_cache", True)),
+                    runtime_timing_overrides=runtime_timing_overrides,
                 )
             harvest_result = harvest_plan.get("initial_result")
             if harvest_result is None:
-                harvest_result = self.harvest_search_connector.search_profiles(
+                harvest_result = self._search_harvest_profiles_with_budget(
                     query_text=effective_query_text,
                     filter_hints=filter_hints,
                     employment_status=employment_status,
@@ -1067,6 +1296,7 @@ class SearchSeedAcquirer:
                     pages=int(harvest_plan.get("effective_pages") or page_count),
                     allow_shared_provider_cache=bool(cost_policy.get("allow_shared_provider_cache", True)),
                     auto_probe=False,
+                    runtime_timing_overrides=runtime_timing_overrides,
                 )
             if harvest_result is None:
                 return {"query_entries": [], "query_summary": None, "account_used": ""}
@@ -1119,34 +1349,41 @@ class SearchSeedAcquirer:
             }
 
         parallel_harvest_results: dict[int, dict[str, Any]] = {}
+        emitted_incremental_indexes: set[int] = set()
         if (
             deduped_queries
             and not stop_after_first_hit
             and self._harvest_people_search_enabled()
         ):
-            try:
-                configured_parallel_workers = int(cost_policy.get("provider_people_search_parallel_queries") or 4)
-            except (TypeError, ValueError):
-                configured_parallel_workers = 4
-            parallel_query_workers = max(
-                1,
-                min(
-                    len(deduped_queries),
-                    configured_parallel_workers,
-                ),
+            parallel_query_workers = resolved_provider_people_search_parallel_queries(
+                runtime_timing_overrides,
+                cost_policy=cost_policy,
+                query_count=len(deduped_queries),
+                default=4,
             )
             with ThreadPoolExecutor(max_workers=parallel_query_workers) as executor:
-                futures = [
+                future_to_query = {
                     executor.submit(
                         _run_harvest_query,
                         query_text or "__past_company_only__",
                         query_text,
                         precomputed_plan=dict(precomputed_harvest_plans.get(query_text) or {}),
-                    )
-                    for query_text in deduped_queries
-                ]
-                for index, future in enumerate(futures, start=1):
-                    parallel_harvest_results[index] = dict(future.result() or {})
+                    ): (index, query_text)
+                    for index, query_text in enumerate(deduped_queries, start=1)
+                }
+                for future in as_completed(future_to_query):
+                    index, _query_text = future_to_query[future]
+                    harvest_payload = dict(future.result() or {})
+                    parallel_harvest_results[index] = harvest_payload
+                    query_entries = list(harvest_payload.get("query_entries") or [])
+                    query_summary = dict(harvest_payload.get("query_summary") or {})
+                    if query_entries and query_summary:
+                        _emit_incremental_provider_result(
+                            index=index,
+                            query_entries=query_entries,
+                            query_summary=query_summary,
+                        )
+                        emitted_incremental_indexes.add(index)
 
         for index, query_text in enumerate(deduped_queries, start=1):
             summary_query = query_text or "__past_company_only__"
@@ -1169,6 +1406,12 @@ class SearchSeedAcquirer:
                     query_summaries.append(query_summary)
                 if account_used and account_used not in accounts_used:
                     accounts_used.append(account_used)
+                if query_entries and query_summary and index not in emitted_incremental_indexes:
+                    _emit_incremental_provider_result(
+                        index=index,
+                        query_entries=query_entries,
+                        query_summary=query_summary,
+                    )
                 if query_entries and stop_after_first_hit:
                     break
             if not self._rapidapi_people_search_enabled():
@@ -1231,6 +1474,12 @@ class SearchSeedAcquirer:
                     "seed_entry_count": len(query_entries),
                 }
             )
+            if query_entries:
+                _emit_incremental_provider_result(
+                    index=index,
+                    query_entries=query_entries,
+                    query_summary=dict(query_summaries[-1] or {}),
+                )
             if query_entries and stop_after_first_hit:
                 break
         return entries, query_summaries, errors, accounts_used
@@ -1246,6 +1495,7 @@ class SearchSeedAcquirer:
         requested_limit: int,
         requested_pages: int,
         allow_shared_provider_cache: bool,
+        runtime_timing_overrides: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         plan = {
             "probe_performed": False,
@@ -1262,7 +1512,9 @@ class SearchSeedAcquirer:
             "probe_raw_path": "",
             "initial_result": None,
         }
-        if self.harvest_search_connector is None or not self.harvest_search_connector.settings.enabled:
+        if self.harvest_search_connector is None or not harvest_connector_available(
+            self.harvest_search_connector.settings
+        ):
             return plan
         company_scoped_search = bool(
             list(filter_hints.get("past_companies") or [])
@@ -1280,7 +1532,7 @@ class SearchSeedAcquirer:
         should_probe = requested_limit_value > 25 or requested_pages_value > 1 or former_past_company_scan
         if not should_probe:
             return plan
-        probe_result = self.harvest_search_connector.search_profiles(
+        probe_result = self._search_harvest_profiles_with_budget(
             query_text=query_text,
             filter_hints=filter_hints,
             employment_status=employment_status,
@@ -1290,6 +1542,7 @@ class SearchSeedAcquirer:
             pages=1,
             allow_shared_provider_cache=allow_shared_provider_cache,
             auto_probe=False,
+            runtime_timing_overrides=runtime_timing_overrides,
         )
         plan["probe_performed"] = True
         if probe_result is None:
@@ -1311,6 +1564,44 @@ class SearchSeedAcquirer:
             return plan
         plan["initial_result"] = probe_result
         return plan
+
+    def _search_harvest_profiles_with_budget(
+        self,
+        *,
+        query_text: str,
+        filter_hints: dict[str, list[str]],
+        employment_status: str,
+        discovery_dir: Path,
+        asset_logger: AssetLogger | None,
+        limit: int,
+        pages: int,
+        allow_shared_provider_cache: bool,
+        auto_probe: bool,
+        runtime_timing_overrides: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        if self.harvest_search_connector is None:
+            return None
+        budget = resolved_harvest_people_search_global_inflight(runtime_timing_overrides)
+        with runtime_inflight_slot(
+            "harvest_people_search",
+            budget=budget,
+            metadata={
+                "query_text": str(query_text or "").strip(),
+                "employment_status": str(employment_status or "").strip(),
+            },
+        ):
+            return self.harvest_search_connector.search_profiles(
+                query_text=query_text,
+                filter_hints=filter_hints,
+                employment_status=employment_status,
+                discovery_dir=discovery_dir,
+                asset_logger=asset_logger,
+                limit=limit,
+                pages=pages,
+                allow_shared_provider_cache=allow_shared_provider_cache,
+                auto_probe=auto_probe,
+                runtime_timing_overrides=runtime_timing_overrides,
+            )
 
     def _search_people(self, query_text: str, *, limit: int) -> tuple[dict[str, Any] | None, RapidApiAccount | None, list[str]]:
         if not self._rapidapi_people_search_enabled():
@@ -1372,6 +1663,7 @@ def _prepare_batched_search_seed_queries(
                 "task_key": task_key,
                 "query_text": query_text,
                 "max_results": result_limit,
+                "runtime_timing_overrides": dict(spec.get("runtime_timing_overrides") or {}),
             }
         )
     provider_name = str(
@@ -1511,7 +1803,11 @@ def _refresh_batched_search_seed_ready_cache(
             continue
         if str(search_state.get("status") or "").strip() in {"completed", "fetched_cached", "ready_cached"}:
             continue
-        if _timestamp_within_seconds(str(search_state.get("ready_attempted_at") or ""), _LANE_READY_POLL_MIN_INTERVAL_SECONDS):
+        ready_poll_min_interval_seconds = resolved_lane_ready_cooldown_seconds(
+            search_state,
+            default=_lane_ready_poll_min_interval_seconds(),
+        )
+        if _timestamp_within_seconds(str(search_state.get("ready_attempted_at") or ""), ready_poll_min_interval_seconds):
             continue
         search_state["ready_attempted_at"] = attempted_at
         entry["search_state"] = search_state
@@ -1601,10 +1897,14 @@ def _fetch_batched_search_seed_ready_results(
         raw_path = str(entry.get("raw_path") or "").strip()
         if raw_path and Path(raw_path).exists():
             continue
-        if _timestamp_within_seconds(str(search_state.get("fetch_attempted_at") or ""), _LANE_FETCH_MIN_INTERVAL_SECONDS):
+        fetch_min_interval_seconds = resolved_lane_fetch_cooldown_seconds(
+            search_state,
+            default=_lane_fetch_min_interval_seconds(),
+        )
+        if _timestamp_within_seconds(str(search_state.get("fetch_attempted_at") or ""), fetch_min_interval_seconds):
             continue
         search_state["fetch_attempted_at"] = attempted_at
-        search_state["lane_fetch_cooldown_seconds"] = _LANE_FETCH_MIN_INTERVAL_SECONDS
+        search_state["lane_fetch_cooldown_seconds"] = fetch_min_interval_seconds
         entry["search_state"] = search_state
         manifest_entries[task_key] = entry
         fetch_specs.append(
@@ -1663,7 +1963,7 @@ def _fetch_batched_search_seed_ready_results(
         search_state["fetch_attempted_at"] = attempted_at
         search_state["fetched_at"] = _batch_lane_timestamp()
         search_state["fetch_token"] = fetch_token
-        search_state["lane_fetch_cooldown_seconds"] = _LANE_FETCH_MIN_INTERVAL_SECONDS
+        search_state["lane_fetch_cooldown_seconds"] = fetch_min_interval_seconds
         entry["search_state"] = search_state
         entry["raw_path"] = str(raw_path)
         entry_artifact_paths = {
@@ -1886,18 +2186,25 @@ def _timestamp_within_seconds(value: str, seconds: int) -> bool:
     return (datetime.now(timezone.utc) - parsed.astimezone(timezone.utc)).total_seconds() < max(0, int(seconds or 0))
 
 
-def build_candidates_from_seed_snapshot(snapshot: SearchSeedSnapshot) -> tuple[list[Candidate], list[EvidenceRecord]]:
-    source_path = str(snapshot.summary_path)
-    dataset_name = f"{snapshot.company_identity.company_key}_search_seed_candidates"
+def build_candidates_from_seed_entries(
+    *,
+    company_identity: CompanyIdentity,
+    target_company: str,
+    entries: list[dict[str, Any]],
+    source_path: str,
+    dataset_name: str = "",
+) -> tuple[list[Candidate], list[EvidenceRecord]]:
+    normalized_source_path = str(source_path or "").strip()
+    effective_dataset_name = str(dataset_name or "").strip() or f"{company_identity.company_key}_search_seed_candidates"
     candidates: list[Candidate] = []
     evidence_items: list[EvidenceRecord] = []
-    for row in snapshot.entries:
+    for row in list(entries or []):
         full_name = str(row.get("full_name") or "").strip()
         if not full_name:
             continue
-        seed_reference = str(row.get("profile_url") or row.get("slug") or row.get("source_query") or "").strip()
+        seed_reference = str(row.get("profile_url") or row.get("slug") or row.get("source_query") or normalized_source_path).strip()
         candidate_id = sha1(
-            "|".join([normalize_name_token(snapshot.target_company), normalize_name_token(full_name), seed_reference]).encode("utf-8")
+            "|".join([normalize_name_token(target_company), normalize_name_token(full_name), seed_reference]).encode("utf-8")
         ).hexdigest()[:16]
         profile_url = str(row.get("profile_url") or "").strip()
         slug = str(row.get("slug") or "").strip()
@@ -1906,16 +2213,16 @@ def build_candidates_from_seed_snapshot(snapshot: SearchSeedSnapshot) -> tuple[l
             name_en=full_name,
             display_name=format_display_name(full_name, ""),
             category=_seed_candidate_category(row),
-            target_company=snapshot.target_company,
-            organization=snapshot.target_company,
+            target_company=target_company,
+            organization=target_company,
             employment_status=str(row.get("employment_status") or "current"),
             role=str(row.get("headline") or "").strip(),
             team="",
             focus_areas=str(row.get("headline") or "").strip(),
             notes=_build_seed_notes(row),
             linkedin_url=profile_url,
-            source_dataset=dataset_name,
-            source_path=source_path,
+            source_dataset=effective_dataset_name,
+            source_path=normalized_source_path,
             metadata={
                 "seed_slug": slug,
                 "seed_query": str(row.get("source_query") or ""),
@@ -1927,18 +2234,32 @@ def build_candidates_from_seed_snapshot(snapshot: SearchSeedSnapshot) -> tuple[l
         candidates.append(candidate)
         evidence_items.append(
             EvidenceRecord(
-                evidence_id=make_evidence_id(candidate_id, dataset_name, candidate.role or "Search seed", profile_url or source_path),
+                evidence_id=make_evidence_id(
+                    candidate_id,
+                    effective_dataset_name,
+                    candidate.role or "Search seed",
+                    profile_url or normalized_source_path,
+                ),
                 candidate_id=candidate_id,
                 source_type=str(row.get("source_type") or "search_seed"),
                 title=candidate.role or "Search seed",
                 url=profile_url,
-                summary=f"{full_name} was discovered as a search-seed candidate for {snapshot.target_company}.",
-                source_dataset=dataset_name,
-                source_path=source_path,
+                summary=f"{full_name} was discovered as a search-seed candidate for {target_company}.",
+                source_dataset=effective_dataset_name,
+                source_path=normalized_source_path,
                 metadata={"source_query": str(row.get("source_query") or ""), "slug": slug},
             )
         )
     return candidates, evidence_items
+
+
+def build_candidates_from_seed_snapshot(snapshot: SearchSeedSnapshot) -> tuple[list[Candidate], list[EvidenceRecord]]:
+    return build_candidates_from_seed_entries(
+        company_identity=snapshot.company_identity,
+        target_company=snapshot.target_company,
+        entries=list(snapshot.entries or []),
+        source_path=str(snapshot.summary_path),
+    )
 
 
 def extract_web_search_results(html_text: str) -> list[dict[str, str]]:
@@ -2320,16 +2641,45 @@ def _clean_provider_query_text(value: str) -> str:
         flags=re.IGNORECASE,
     )
     stripped = " ".join(stripped.split())
-    return stripped
+    if not stripped:
+        return ""
+    alias = _PROVIDER_QUERY_CANONICAL_ALIASES.get(stripped.lower())
+    if alias:
+        return alias
+    thematic_aliases = thematic_signal_search_query_aliases(stripped)
+    if thematic_aliases:
+        return thematic_aliases[0]
+    thematic = canonicalize_thematic_signal_label(stripped)
+    if thematic and thematic != stripped:
+        return thematic
+    canonical = canonicalize_scope_signal_label(stripped)
+    return canonical or stripped
 
 
 def _provider_query_family_key(value: str) -> str:
     normalized = " ".join(str(value or "").split()).strip()
     if not normalized:
         return ""
+    thematic = canonicalize_thematic_signal_label(normalized)
     scoped = canonicalize_scope_signal_label(normalized)
-    canonical = _PROVIDER_QUERY_CANONICAL_ALIASES.get(normalized.lower(), scoped or normalized)
+    canonical = _PROVIDER_QUERY_CANONICAL_ALIASES.get(normalized.lower(), thematic or scoped or normalized)
     return _search_query_signature(canonical) or canonical.lower()
+
+
+def _provider_query_matches_company_identity(value: str, *, identity: CompanyIdentity) -> bool:
+    normalized = _normalize_company_filter_token(value)
+    if not normalized:
+        return False
+    company_url = str(identity.linkedin_company_url or "").strip()
+    target_tokens = {
+        _normalize_company_filter_token(identity.canonical_name),
+        _normalize_company_filter_token(identity.requested_name),
+        _normalize_company_filter_token(identity.company_key),
+        _normalize_company_filter_token(identity.linkedin_slug),
+        _normalize_company_filter_token(company_url),
+    }
+    target_tokens.discard("")
+    return normalized in target_tokens
 
 
 def _harvest_blocked_query_tokens(*, filter_hints: dict[str, list[str]], identity: CompanyIdentity) -> list[str]:

@@ -34,6 +34,7 @@ import type {
   ServiceStatusPayload,
   SystemProgressResponse,
   SourcingPlanSummary,
+  WorkflowExplainResponse,
   WorkflowStartResponse,
   WorkflowStageSummariesPayload,
   WorkflowStageSummaryItem,
@@ -96,6 +97,10 @@ export class SourcingAgentApiClient {
 
   async startWorkflow(payload: JsonObject): Promise<WorkflowStartResponse> {
     return this.post("/api/workflows", payload, mapWorkflowStartResponse);
+  }
+
+  async explainWorkflow(payload: JsonObject): Promise<WorkflowExplainResponse> {
+    return this.post("/api/workflows/explain", payload, mapWorkflowExplainResponse);
   }
 
   async runJob(payload: JsonObject): Promise<RetrievalJobResponse> {
@@ -229,6 +234,64 @@ export function mapWorkflowStartResponse(payload: unknown): WorkflowStartRespons
   };
 }
 
+export function mapWorkflowExplainResponse(payload: unknown): WorkflowExplainResponse {
+  const source = asObject(payload, "WorkflowExplainResponse");
+  const cloudAssetOperations = asObject(
+    source.cloud_asset_operations ?? {},
+    "WorkflowExplainResponse.cloud_asset_operations",
+  );
+  return {
+    ...(source as JsonObject),
+    status: asString(source.status),
+    reason: asOptionalString(source.reason),
+    request: source.request ? asJsonObject(source.request) : undefined,
+    request_preview: source.request_preview ? asJsonObject(source.request_preview) : undefined,
+    intent_rewrite: source.intent_rewrite ? mapIntentRewritePayload(source.intent_rewrite) : undefined,
+    plan_review_gate: source.plan_review_gate ? asJsonObject(source.plan_review_gate) : undefined,
+    plan_review_session: source.plan_review_session ? asJsonObject(source.plan_review_session) : undefined,
+    organization_execution_profile: source.organization_execution_profile
+      ? asJsonObject(source.organization_execution_profile)
+      : undefined,
+    asset_reuse_plan: source.asset_reuse_plan ? asJsonObject(source.asset_reuse_plan) : undefined,
+    ingress_normalization: source.ingress_normalization ? asJsonObject(source.ingress_normalization) : undefined,
+    planning: source.planning ? asJsonObject(source.planning) : undefined,
+    dispatch_matching_normalization: source.dispatch_matching_normalization
+      ? asJsonObject(source.dispatch_matching_normalization)
+      : undefined,
+    dispatch_preview: source.dispatch_preview ? asJsonObject(source.dispatch_preview) : undefined,
+    lane_preview: source.lane_preview ? asJsonObject(source.lane_preview) : undefined,
+    generation_watermarks: source.generation_watermarks ? asJsonObject(source.generation_watermarks) : undefined,
+    cloud_asset_operations: {
+      ...(cloudAssetOperations as JsonObject),
+      count: asOptionalNumber(cloudAssetOperations.count),
+      items: asArray(cloudAssetOperations.items).map((item) => {
+        const entry = asObject(item, "CloudAssetOperationItem");
+        return {
+          ...(entry as JsonObject),
+          ledger_id: asOptionalNumber(entry.ledger_id),
+          operation_type: asOptionalString(entry.operation_type),
+          bundle_kind: asOptionalString(entry.bundle_kind),
+          bundle_id: asOptionalString(entry.bundle_id),
+          sync_run_id: asOptionalString(entry.sync_run_id),
+          status: asOptionalString(entry.status),
+          manifest_path: asOptionalString(entry.manifest_path),
+          target_runtime_dir: asOptionalString(entry.target_runtime_dir),
+          target_db_path: asOptionalString(entry.target_db_path),
+          scoped_companies: asArray(entry.scoped_companies)
+            .map((value) => asString(value))
+            .filter(Boolean),
+          scoped_snapshot_id: asOptionalString(entry.scoped_snapshot_id),
+          summary: entry.summary ? asJsonObject(entry.summary) : undefined,
+          metadata: entry.metadata ? asJsonObject(entry.metadata) : undefined,
+          created_at: asOptionalString(entry.created_at),
+          updated_at: asOptionalString(entry.updated_at),
+        };
+      }),
+    },
+    timings_ms: source.timings_ms ? asJsonObject(source.timings_ms) : undefined,
+  };
+}
+
 export function mapJobProgressResponse(payload: unknown): JobProgressResponse {
   const source = asObject(payload, "JobProgressResponse");
   return {
@@ -271,6 +334,10 @@ export function mapSystemProgressResponse(payload: unknown): SystemProgressRespo
   const source = asObject(payload, "SystemProgressResponse");
   const workflowJobs = asObject(source.workflow_jobs ?? {}, "SystemProgressResponse.workflow_jobs");
   const objectSync = asObject(source.object_sync ?? {}, "SystemProgressResponse.object_sync");
+  const cloudAssetOperations = asObject(
+    source.cloud_asset_operations ?? {},
+    "SystemProgressResponse.cloud_asset_operations",
+  );
   return {
     ...(source as JsonObject),
     status: asString(source.status),
@@ -324,6 +391,34 @@ export function mapSystemProgressResponse(payload: unknown): SystemProgressRespo
         };
       }),
     },
+    cloud_asset_operations: {
+      ...(cloudAssetOperations as JsonObject),
+      count: asOptionalNumber(cloudAssetOperations.count),
+      items: asArray(cloudAssetOperations.items).map((item) => {
+        const entry = asObject(item, "CloudAssetOperationItem");
+        return {
+          ...(entry as JsonObject),
+          ledger_id: asOptionalNumber(entry.ledger_id),
+          operation_type: asOptionalString(entry.operation_type),
+          bundle_kind: asOptionalString(entry.bundle_kind),
+          bundle_id: asOptionalString(entry.bundle_id),
+          sync_run_id: asOptionalString(entry.sync_run_id),
+          status: asOptionalString(entry.status),
+          manifest_path: asOptionalString(entry.manifest_path),
+          target_runtime_dir: asOptionalString(entry.target_runtime_dir),
+          target_db_path: asOptionalString(entry.target_db_path),
+          scoped_companies: asArray(entry.scoped_companies)
+            .map((value) => asString(value))
+            .filter(Boolean),
+          scoped_snapshot_id: asOptionalString(entry.scoped_snapshot_id),
+          summary: entry.summary ? asJsonObject(entry.summary) : undefined,
+          metadata: entry.metadata ? asJsonObject(entry.metadata) : undefined,
+          created_at: asOptionalString(entry.created_at),
+          updated_at: asOptionalString(entry.updated_at),
+        };
+      }),
+    },
+    company_asset: source.company_asset ? asJsonObject(source.company_asset) : undefined,
   };
 }
 

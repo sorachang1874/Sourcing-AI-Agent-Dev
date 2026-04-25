@@ -3,6 +3,7 @@ import unittest
 from sourcing_agent.query_signal_knowledge import (
     default_large_org_priority_function_ids,
     lookup_scope_signal,
+    match_thematic_signals,
     match_scope_signals_by_rewrite_tag,
     related_company_scope_labels,
     related_company_scope_urls,
@@ -43,6 +44,13 @@ class QuerySignalKnowledgeTest(unittest.TestCase):
         self.assertEqual(role_bucket_function_ids(["product_management"]), ["19"])
         self.assertEqual(role_bucket_matched_terms("Applied Scientist", "research"), ["applied scientist"])
         self.assertEqual(default_large_org_priority_function_ids(), ["8", "9", "19", "24"])
+
+    def test_thematic_signal_knowledge_matches_common_ai_directions(self) -> None:
+        matches = match_thematic_signals("给我Anthropic做Coding、Math、Audio、Vision和Text方向的人")
+        self.assertEqual(
+            [item["canonical_label"] for item in matches],
+            ["Coding", "Math", "Text", "Audio", "Vision"],
+        )
 
 
 if __name__ == "__main__":

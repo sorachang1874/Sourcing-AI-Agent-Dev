@@ -1,10 +1,12 @@
 import json
 import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
 
+import sourcing_agent.seed_discovery as seed_discovery_module
 from sourcing_agent.asset_logger import AssetLogger
 from sourcing_agent.connectors import CompanyIdentity, RapidApiAccount, resolve_company_identity
 from sourcing_agent.search_provider import (
@@ -32,6 +34,53 @@ from sourcing_agent.seed_discovery import (
 
 
 class SeedDiscoveryTest(unittest.TestCase):
+    def _write_seed_catalog(
+        self,
+        *,
+        runtime_dir: Path,
+        records: list[dict[str, object]],
+    ) -> None:
+        seed_path = runtime_dir / "company_identity_seed_catalog.json"
+        seed_path.parent.mkdir(parents=True, exist_ok=True)
+        seed_path.write_text(
+            json.dumps(
+                {
+                    "updated_at": "2026-04-15T00:00:00+00:00",
+                    "company_count": len(records),
+                    "alias_count": 0,
+                    "records": records,
+                    "alias_index": {},
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+    def test_runtime_seed_discovery_poll_intervals_follow_env_without_reload(self) -> None:
+        with mock.patch.dict(
+            os.environ,
+            {
+                "WEB_SEARCH_READY_POLL_MIN_INTERVAL_SECONDS": "0",
+                "WEB_SEARCH_FETCH_MIN_INTERVAL_SECONDS": "0",
+            },
+            clear=False,
+        ):
+            self.assertEqual(seed_discovery_module._lane_ready_poll_min_interval_seconds(), 0)
+            self.assertEqual(seed_discovery_module._lane_fetch_min_interval_seconds(), 0)
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "WEB_SEARCH_READY_POLL_MIN_INTERVAL_SECONDS": "9",
+                "WEB_SEARCH_FETCH_MIN_INTERVAL_SECONDS": "11",
+                "SEED_DISCOVERY_READY_POLL_MIN_INTERVAL_SECONDS": "2",
+                "SEED_DISCOVERY_FETCH_MIN_INTERVAL_SECONDS": "3",
+            },
+            clear=False,
+        ):
+            self.assertEqual(seed_discovery_module._lane_ready_poll_min_interval_seconds(), 2)
+            self.assertEqual(seed_discovery_module._lane_fetch_min_interval_seconds(), 3)
+
     def test_extract_web_search_results_and_slug(self) -> None:
         html = """
         <a class="result__a" href="https://duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.linkedin.com%2Fin%2Fyuntao-bai%2F">
@@ -100,39 +149,69 @@ class SeedDiscoveryTest(unittest.TestCase):
                 }
 
         client = _FakeModelClient()
-        identity = resolve_company_identity(
-            "Humans&",
-            model_client=client,
-            observed_companies=[
-                {
-                    "label": "Humans And AI",
-                    "linkedin_slug": "humansand",
-                    "linkedin_company_url": "https://www.linkedin.com/company/humansand/",
-                }
-            ],
-        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            runtime_dir = Path(temp_dir) / "runtime"
+            self._write_seed_catalog(
+                runtime_dir=runtime_dir,
+                records=[
+                    {
+                        "company_key": "humansand",
+                        "canonical_name": "Humans&",
+                        "linkedin_slug": "humansand",
+                        "aliases": ["humans and", "humansand"],
+                        "confidence": "high",
+                    }
+                ],
+            )
+            with mock.patch.dict(os.environ, {"SOURCING_COMPANY_REGISTRY_RUNTIME_DIR": str(runtime_dir)}):
+                identity = resolve_company_identity(
+                    "Humans&",
+                    model_client=client,
+                    observed_companies=[
+                        {
+                            "label": "Humans And AI",
+                            "linkedin_slug": "humansand",
+                            "linkedin_company_url": "https://www.linkedin.com/company/humansand/",
+                        }
+                    ],
+                )
         self.assertEqual(identity.linkedin_slug, "humansand")
         self.assertEqual(identity.linkedin_company_url, "https://www.linkedin.com/company/humansand/")
         self.assertEqual(identity.company_key, "humansand")
-        self.assertEqual(identity.resolver, "builtin")
+        self.assertEqual(identity.resolver, "seed_catalog")
         self.assertEqual(identity.confidence, "high")
         self.assertFalse(hasattr(client, "payload"))
 
     def test_resolve_company_identity_prefers_builtin_mapping_over_observed_exact_match_without_model_client(self) -> None:
-        identity = resolve_company_identity(
-            "Humans&",
-            observed_companies=[
-                {
-                    "label": "Humans&",
-                    "linkedin_slug": "humansand",
-                    "linkedin_company_url": "https://www.linkedin.com/company/humansand/",
-                }
-            ],
-        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            runtime_dir = Path(temp_dir) / "runtime"
+            self._write_seed_catalog(
+                runtime_dir=runtime_dir,
+                records=[
+                    {
+                        "company_key": "humansand",
+                        "canonical_name": "Humans&",
+                        "linkedin_slug": "humansand",
+                        "aliases": ["humans and", "humansand"],
+                        "confidence": "high",
+                    }
+                ],
+            )
+            with mock.patch.dict(os.environ, {"SOURCING_COMPANY_REGISTRY_RUNTIME_DIR": str(runtime_dir)}):
+                identity = resolve_company_identity(
+                    "Humans&",
+                    observed_companies=[
+                        {
+                            "label": "Humans&",
+                            "linkedin_slug": "humansand",
+                            "linkedin_company_url": "https://www.linkedin.com/company/humansand/",
+                        }
+                    ],
+                )
         self.assertEqual(identity.linkedin_slug, "humansand")
         self.assertEqual(identity.linkedin_company_url, "https://www.linkedin.com/company/humansand/")
         self.assertEqual(identity.company_key, "humansand")
-        self.assertEqual(identity.resolver, "builtin")
+        self.assertEqual(identity.resolver, "seed_catalog")
         self.assertEqual(identity.confidence, "high")
 
     def test_resolve_company_identity_prefers_alias_mapped_linkedin_slug_for_company_key(self) -> None:
@@ -149,24 +228,52 @@ class SeedDiscoveryTest(unittest.TestCase):
         self.assertEqual(identity.linkedin_slug, "thinkingmachinesai")
         self.assertEqual(identity.company_key, "thinkingmachineslab")
 
+    def test_resolve_company_identity_uses_bundled_seed_for_safe_superintelligence_inc(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            runtime_dir = Path(temp_dir) / "runtime"
+            with mock.patch.dict(os.environ, {"SOURCING_COMPANY_REGISTRY_RUNTIME_DIR": str(runtime_dir)}):
+                identity = resolve_company_identity("Safe Superintelligence Inc")
+
+        self.assertEqual(identity.company_key, "safesuperintelligence")
+        self.assertEqual(identity.canonical_name, "Safe Superintelligence")
+        self.assertEqual(identity.linkedin_slug, "ssi-ai")
+        self.assertEqual(identity.linkedin_company_url, "https://www.linkedin.com/company/ssi-ai/")
+        self.assertEqual(identity.resolver, "seed_catalog")
+        self.assertEqual(identity.confidence, "high")
+
     def test_resolve_company_identity_skips_model_for_irrelevant_observed_candidates(self) -> None:
         class _FailIfCalledModelClient:
             def judge_company_equivalence(self, payload):  # noqa: ARG002
                 raise AssertionError("judge_company_equivalence should not be called for irrelevant observed candidates")
 
-        identity = resolve_company_identity(
-            "Humans&",
-            model_client=_FailIfCalledModelClient(),
-            observed_companies=[
-                {
-                    "label": "Completely Different Organization",
-                    "linkedin_slug": "differentorg",
-                    "linkedin_company_url": "https://www.linkedin.com/company/differentorg/",
-                }
-            ],
-        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            runtime_dir = Path(temp_dir) / "runtime"
+            self._write_seed_catalog(
+                runtime_dir=runtime_dir,
+                records=[
+                    {
+                        "company_key": "humansand",
+                        "canonical_name": "Humans&",
+                        "linkedin_slug": "humansand",
+                        "aliases": ["humans and", "humansand"],
+                        "confidence": "high",
+                    }
+                ],
+            )
+            with mock.patch.dict(os.environ, {"SOURCING_COMPANY_REGISTRY_RUNTIME_DIR": str(runtime_dir)}):
+                identity = resolve_company_identity(
+                    "Humans&",
+                    model_client=_FailIfCalledModelClient(),
+                    observed_companies=[
+                        {
+                            "label": "Completely Different Organization",
+                            "linkedin_slug": "differentorg",
+                            "linkedin_company_url": "https://www.linkedin.com/company/differentorg/",
+                        }
+                    ],
+                )
 
-        self.assertEqual(identity.resolver, "builtin")
+        self.assertEqual(identity.resolver, "seed_catalog")
         self.assertEqual(identity.confidence, "high")
 
     def test_former_paid_fallback_prefers_past_company_only_harvest_query(self) -> None:
@@ -416,7 +523,7 @@ class SeedDiscoveryTest(unittest.TestCase):
             self.assertEqual(snapshot.stop_reason, "provider_people_search_fallback")
             self.assertEqual(len(snapshot.entries), 1)
             self.assertEqual(snapshot.entries[0]["full_name"], "Former Example")
-            self.assertEqual(harvest_connector.calls[0]["query_text"], "")
+            self.assertEqual(harvest_connector.calls[0]["query_text"], "Pre-train")
             self.assertEqual(
                 harvest_connector.calls[0]["filter_hints"].get("past_companies"),
                 ["https://www.linkedin.com/company/thinkingmachinesai/"],
@@ -583,6 +690,81 @@ class SeedDiscoveryTest(unittest.TestCase):
         self.assertEqual(len(entries), 2)
         self.assertGreaterEqual(len(summaries), 2)
         self.assertFalse(any(str(item.get("query") or "") == "__past_company_only__" for item in summaries))
+
+    def test_former_paid_fallback_full_roster_uses_broad_past_company_when_not_keyword_only(self) -> None:
+        class _FakeSettings:
+            enabled = True
+            max_paid_items = 25
+
+        class _FakeHarvestConnector:
+            settings = _FakeSettings()
+
+            def __init__(self) -> None:
+                self.queries: list[str] = []
+                self.filters: list[dict[str, list[str]]] = []
+                self.tempdir = Path(".")
+
+            def search_profiles(self, **kwargs):
+                query_text = str(kwargs.get("query_text") or "").strip()
+                self.queries.append(query_text)
+                self.filters.append(dict(kwargs.get("filter_hints") or {}))
+                return {
+                    "raw_path": self.tempdir / f"{query_text or 'blank'}.json",
+                    "rows": [
+                        {
+                            "full_name": "Former Perplexity Person",
+                            "headline": "Research Engineer",
+                            "location": "United States",
+                            "profile_url": "https://www.linkedin.com/in/former-perplexity-person/",
+                            "username": "former-perplexity-person",
+                            "current_company": "Other AI",
+                        }
+                    ],
+                    "pagination": {
+                        "returned_count": 1,
+                        "total_elements": 1,
+                        "total_pages": 1,
+                        "page_number": 1,
+                        "page_size": 25,
+                    },
+                }
+
+        identity = CompanyIdentity(
+            requested_name="Perplexity",
+            canonical_name="Perplexity",
+            company_key="perplexity",
+            linkedin_slug="perplexity-ai",
+            linkedin_company_url="https://www.linkedin.com/company/perplexity-ai/",
+        )
+        with tempfile.TemporaryDirectory() as tempdir:
+            fake = _FakeHarvestConnector()
+            fake.tempdir = Path(tempdir)
+            acquirer = SearchSeedAcquirer([], harvest_search_connector=fake)
+            entries, summaries, errors, accounts = acquirer._provider_people_search_fallback(
+                identity=identity,
+                discovery_dir=Path(tempdir),
+                asset_logger=None,
+                search_seed_queries=["Agent"],
+                filter_hints={
+                    "past_companies": ["https://www.linkedin.com/company/perplexity-ai/"],
+                    "keywords": ["Agent"],
+                    "function_ids": ["24", "8"],
+                },
+                employment_status="former",
+                limit=25,
+                cost_policy={
+                    "provider_people_search_query_strategy": "all_queries_union",
+                    "former_broad_past_company_only": True,
+                },
+            )
+
+        self.assertEqual(errors, [])
+        self.assertEqual(accounts, ["harvest_profile_search"])
+        self.assertEqual(fake.queries, [""])
+        self.assertEqual(fake.filters[0]["past_companies"], ["https://www.linkedin.com/company/perplexity-ai/"])
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(summaries[0]["query"], "__past_company_only__")
+        self.assertEqual(summaries[0]["effective_query_text"], "")
 
     def test_paid_fallback_all_queries_union_runs_all_harvest_queries(self) -> None:
         class _FakeSettings:
@@ -753,6 +935,182 @@ class SeedDiscoveryTest(unittest.TestCase):
             )
 
         self.assertEqual(fake.queries, ["Reasoning"])
+
+    def test_provider_people_search_preserves_canonical_pretrain_label(self) -> None:
+        class _FakeSettings:
+            enabled = True
+            max_paid_items = 25
+
+        class _FakeHarvestConnector:
+            settings = _FakeSettings()
+
+            def __init__(self) -> None:
+                self.queries: list[str] = []
+                self.tempdir = Path(".")
+
+            def search_profiles(self, **kwargs):
+                query_text = str(kwargs.get("query_text") or "").strip()
+                self.queries.append(query_text)
+                return {
+                    "raw_path": self.tempdir / f"{query_text or 'blank'}.json",
+                    "rows": [],
+                }
+
+        identity = CompanyIdentity(
+            requested_name="Anthropic",
+            canonical_name="Anthropic",
+            company_key="anthropic",
+            linkedin_slug="anthropicresearch",
+            linkedin_company_url="https://www.linkedin.com/company/anthropicresearch/",
+        )
+        with tempfile.TemporaryDirectory() as tempdir:
+            fake = _FakeHarvestConnector()
+            fake.tempdir = Path(tempdir)
+            acquirer = SearchSeedAcquirer([], harvest_search_connector=fake)
+            acquirer._provider_people_search_fallback(
+                identity=identity,
+                discovery_dir=Path(tempdir),
+                asset_logger=None,
+                search_seed_queries=["pre_training", "Pre-training", "Pre-train"],
+                filter_hints={"past_companies": ["https://www.linkedin.com/company/anthropicresearch/"]},
+                employment_status="former",
+                limit=25,
+                cost_policy={"provider_people_search_query_strategy": "all_queries_union"},
+            )
+
+        self.assertEqual(fake.queries, ["Pre-train"])
+
+    def test_provider_people_search_prefers_natural_posttrain_label(self) -> None:
+        class _FakeSettings:
+            enabled = True
+            max_paid_items = 25
+
+        class _FakeHarvestConnector:
+            settings = _FakeSettings()
+
+            def __init__(self) -> None:
+                self.queries: list[str] = []
+                self.tempdir = Path(".")
+
+            def search_profiles(self, **kwargs):
+                query_text = str(kwargs.get("query_text") or "").strip()
+                self.queries.append(query_text)
+                return {
+                    "raw_path": self.tempdir / f"{query_text or 'blank'}.json",
+                    "rows": [],
+                }
+
+        identity = CompanyIdentity(
+            requested_name="Reflection AI",
+            canonical_name="Reflection AI",
+            company_key="reflectionai",
+            linkedin_slug="reflectionai",
+            linkedin_company_url="https://www.linkedin.com/company/reflectionai/",
+        )
+        with tempfile.TemporaryDirectory() as tempdir:
+            fake = _FakeHarvestConnector()
+            fake.tempdir = Path(tempdir)
+            acquirer = SearchSeedAcquirer([], harvest_search_connector=fake)
+            acquirer._provider_people_search_fallback(
+                identity=identity,
+                discovery_dir=Path(tempdir),
+                asset_logger=None,
+                search_seed_queries=["post_train", "Post-training", "Post-train"],
+                filter_hints={"current_companies": ["https://www.linkedin.com/company/reflectionai/"]},
+                employment_status="current",
+                limit=25,
+                cost_policy={"provider_people_search_query_strategy": "all_queries_union"},
+            )
+
+        self.assertEqual(fake.queries, ["Post-train"])
+
+    def test_provider_people_search_prefers_natural_rl_eval_infra_labels(self) -> None:
+        class _FakeSettings:
+            enabled = True
+            max_paid_items = 25
+
+        class _FakeHarvestConnector:
+            settings = _FakeSettings()
+
+            def __init__(self) -> None:
+                self.queries: list[str] = []
+                self.tempdir = Path(".")
+
+            def search_profiles(self, **kwargs):
+                query_text = str(kwargs.get("query_text") or "").strip()
+                self.queries.append(query_text)
+                return {
+                    "raw_path": self.tempdir / f"{query_text or 'blank'}.json",
+                    "rows": [],
+                }
+
+        identity = CompanyIdentity(
+            requested_name="OpenAI",
+            canonical_name="OpenAI",
+            company_key="openai",
+            linkedin_slug="openai",
+            linkedin_company_url="https://www.linkedin.com/company/openai/",
+        )
+        with tempfile.TemporaryDirectory() as tempdir:
+            fake = _FakeHarvestConnector()
+            fake.tempdir = Path(tempdir)
+            acquirer = SearchSeedAcquirer([], harvest_search_connector=fake)
+            acquirer._provider_people_search_fallback(
+                identity=identity,
+                discovery_dir=Path(tempdir),
+                asset_logger=None,
+                search_seed_queries=["RL", "Eval", "Infra"],
+                filter_hints={"current_companies": ["https://www.linkedin.com/company/openai/"]},
+                employment_status="current",
+                limit=25,
+                cost_policy={"provider_people_search_query_strategy": "all_queries_union"},
+            )
+
+        self.assertEqual(fake.queries, ["Reinforcement Learning", "Evaluation", "Infrastructure"])
+
+    def test_provider_people_search_normalizes_world_model_and_text_labels(self) -> None:
+        class _FakeSettings:
+            enabled = True
+            max_paid_items = 25
+
+        class _FakeHarvestConnector:
+            settings = _FakeSettings()
+
+            def __init__(self) -> None:
+                self.queries: list[str] = []
+                self.tempdir = Path(".")
+
+            def search_profiles(self, **kwargs):
+                query_text = str(kwargs.get("query_text") or "").strip()
+                self.queries.append(query_text)
+                return {
+                    "raw_path": self.tempdir / f"{query_text or 'blank'}.json",
+                    "rows": [],
+                }
+
+        identity = CompanyIdentity(
+            requested_name="Google",
+            canonical_name="Google",
+            company_key="google",
+            linkedin_slug="google",
+            linkedin_company_url="https://www.linkedin.com/company/google/",
+        )
+        with tempfile.TemporaryDirectory() as tempdir:
+            fake = _FakeHarvestConnector()
+            fake.tempdir = Path(tempdir)
+            acquirer = SearchSeedAcquirer([], harvest_search_connector=fake)
+            acquirer._provider_people_search_fallback(
+                identity=identity,
+                discovery_dir=Path(tempdir),
+                asset_logger=None,
+                search_seed_queries=["world_models", "Text"],
+                filter_hints={"current_companies": ["https://www.linkedin.com/company/google/"]},
+                employment_status="current",
+                limit=25,
+                cost_policy={"provider_people_search_query_strategy": "all_queries_union"},
+            )
+
+        self.assertEqual(fake.queries, ["World model", "Language Model"])
 
     def test_paid_fallback_first_hit_strategy_stops_after_first_harvest_match(self) -> None:
         class _FakeSettings:
@@ -1246,6 +1604,143 @@ class SeedDiscoveryTest(unittest.TestCase):
             self.assertEqual(snapshot.entries[0]["full_name"], "Queued Fallback Candidate")
             self.assertGreaterEqual(harvest_connector.calls, 1)
             self.assertEqual(runtime.completed[0]["status"], "queued")
+
+    def test_discover_emits_incremental_query_results_as_each_query_finishes(self) -> None:
+        class _ParallelSearchProvider:
+            provider_name = "test_parallel"
+
+            def search(self, query, max_results=10):  # noqa: ARG002
+                if "slow" in query.lower():
+                    time.sleep(0.2)
+                    person_name = "Slow Candidate"
+                    slug = "slow-candidate"
+                else:
+                    time.sleep(0.02)
+                    person_name = "Fast Candidate"
+                    slug = "fast-candidate"
+                return SearchResponse(
+                    provider_name=self.provider_name,
+                    query_text=query,
+                    results=[
+                        SearchResultItem(
+                            title=f"{person_name} - Thinking Machines Lab - LinkedIn",
+                            url=f"https://www.linkedin.com/in/{slug}/",
+                            snippet=f"{person_name} at Thinking Machines Lab",
+                        )
+                    ],
+                    raw_payload={},
+                    raw_format="json",
+                )
+
+        identity = CompanyIdentity(
+            requested_name="Thinking Machines Lab",
+            canonical_name="Thinking Machines Lab",
+            company_key="thinkingmachineslab",
+            linkedin_slug="thinkingmachinesai",
+            linkedin_company_url="https://www.linkedin.com/company/thinkingmachinesai/",
+        )
+        incremental_queries: list[str] = []
+        incremental_urls: list[str] = []
+        with tempfile.TemporaryDirectory() as tempdir:
+            snapshot_dir = Path(tempdir) / "thinkingmachineslab" / "snapshot-incremental"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            acquirer = SearchSeedAcquirer([], search_provider=_ParallelSearchProvider())
+            snapshot = acquirer.discover(
+                identity,
+                snapshot_dir,
+                asset_logger=AssetLogger(snapshot_dir),
+                search_seed_queries=["slow query", "fast query"],
+                filter_hints={},
+                cost_policy={"parallel_search_workers": 2, "public_media_results_per_query": 10},
+                employment_status="current",
+                on_incremental_query_result=lambda result: (
+                    incremental_queries.append(str(result.get("query") or "")),
+                    incremental_urls.extend(
+                        [
+                            str(dict(entry or {}).get("profile_url") or "").strip()
+                            for entry in list(result.get("entries") or [])
+                            if str(dict(entry or {}).get("profile_url") or "").strip()
+                        ]
+                    ),
+                ),
+            )
+
+        self.assertEqual(snapshot.stop_reason, "completed")
+        self.assertEqual(len(snapshot.entries), 2)
+        self.assertEqual(incremental_queries[0], "fast query")
+        self.assertEqual(incremental_queries[1], "slow query")
+        self.assertEqual(
+            incremental_urls,
+            [
+                "https://www.linkedin.com/in/fast-candidate/",
+                "https://www.linkedin.com/in/slow-candidate/",
+            ],
+        )
+
+    def test_provider_people_search_fallback_emits_incremental_results_per_query(self) -> None:
+        class _FakeSettings:
+            enabled = True
+            max_paid_items = 25
+
+        class _FakeHarvestConnector:
+            settings = _FakeSettings()
+
+            def search_profiles(self, **kwargs):
+                query_text = str(kwargs.get("query_text") or "").strip()
+                if "slow" in query_text.lower():
+                    time.sleep(0.2)
+                    full_name = "Slow Former"
+                    slug = "slow-former"
+                else:
+                    time.sleep(0.02)
+                    full_name = "Fast Former"
+                    slug = "fast-former"
+                return {
+                    "raw_path": Path(kwargs["discovery_dir"]) / f"{slug}.json",
+                    "rows": [
+                        {
+                            "full_name": full_name,
+                            "headline": "Research Engineer",
+                            "location": "San Francisco",
+                            "profile_url": f"https://www.linkedin.com/in/{slug}/",
+                            "username": slug,
+                            "current_company": "Another Co",
+                        }
+                    ],
+                }
+
+        identity = CompanyIdentity(
+            requested_name="Thinking Machines Lab",
+            canonical_name="Thinking Machines Lab",
+            company_key="thinkingmachineslab",
+            linkedin_slug="thinkingmachinesai",
+            linkedin_company_url="https://www.linkedin.com/company/thinkingmachinesai/",
+        )
+        incremental_queries: list[str] = []
+        with tempfile.TemporaryDirectory() as tempdir:
+            discovery_dir = Path(tempdir)
+            acquirer = SearchSeedAcquirer([], harvest_search_connector=_FakeHarvestConnector())
+            entries, summaries, errors, accounts = acquirer._provider_people_search_fallback(
+                identity=identity,
+                discovery_dir=discovery_dir,
+                asset_logger=AssetLogger(discovery_dir),
+                search_seed_queries=["slow query", "fast query"],
+                filter_hints={"past_companies": ["https://www.linkedin.com/company/thinkingmachinesai/"]},
+                employment_status="former",
+                limit=25,
+                cost_policy={
+                    "provider_people_search_query_strategy": "all_queries_union",
+                    "provider_people_search_overlap_pruning": False,
+                },
+                on_incremental_query_result=lambda result: incremental_queries.append(str(result.get("query") or "")),
+            )
+
+        self.assertEqual(errors, [])
+        self.assertEqual(accounts, ["harvest_profile_search"])
+        self.assertEqual(len(entries), 2)
+        self.assertEqual(len(summaries), 2)
+        self.assertEqual(incremental_queries[0], "fast query")
+        self.assertEqual(incremental_queries[1], "slow query")
 
     def test_discover_does_not_repoll_ready_cached_entries(self) -> None:
         class _BatchSearchProvider:

@@ -1,13 +1,20 @@
 import json
+import os
 import tempfile
 import unittest
+from hashlib import sha1
 from pathlib import Path
-from unittest.mock import patch
+from typing import Any
+from unittest.mock import call, patch
 from urllib import parse as urlparse
 
 from sourcing_agent.settings import HarvestActorSettings
-from sourcing_agent.connectors import CompanyIdentity
-from sourcing_agent.connectors import CompanyRosterSnapshot, build_candidates_from_roster
+from sourcing_agent.connectors import (
+    CompanyIdentity,
+    CompanyRosterSnapshot,
+    _canonical_company_key_for_identity,
+    build_candidates_from_roster,
+)
 from sourcing_agent.domain import Candidate
 from sourcing_agent.enrichment import _classify_profile_membership, _merge_profile_into_candidate, _names_match, _profile_matches_candidate
 from sourcing_agent.harvest_connectors import (
@@ -17,10 +24,12 @@ from sourcing_agent.harvest_connectors import (
     _get_harvest_dataset_items,
     _apply_harvest_search_filters,
     _load_cached_harvest_payload,
+    _persist_shared_harvest_payload,
     _profile_scraper_mode,
     _recommended_harvest_profile_charge_cap_usd,
     _recommended_harvest_profile_timeout_seconds,
     _recommended_harvest_company_timeout_seconds,
+    _runtime_dir_from_path,
     parse_harvest_company_employee_run_log,
     parse_harvest_company_employee_rows,
     parse_harvest_profile_payload,
@@ -46,6 +55,52 @@ class _AliasJudgingModelClient(DeterministicModelClient):
 
 
 class HarvestConnectorTest(unittest.TestCase):
+    def test_runtime_dir_from_path_prefers_configured_nested_test_runtime(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_runtime = Path(tempdir) / "runtime"
+            isolated_runtime = repo_runtime / "test_env" / "scripted_case"
+            snapshot_dir = isolated_runtime / "company_assets" / "google" / "snap-1"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+
+            with patch.dict("os.environ", {"SOURCING_RUNTIME_DIR": str(isolated_runtime)}):
+                self.assertEqual(_runtime_dir_from_path(snapshot_dir), isolated_runtime.resolve())
+
+    def test_canonical_company_key_for_identity_uses_registry_aliases(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            runtime_dir = Path(temp_dir) / "runtime"
+            identity_path = (
+                runtime_dir
+                / "company_assets"
+                / "physicalintelligence"
+                / "20260415T010203"
+                / "identity.json"
+            )
+            identity_path.parent.mkdir(parents=True, exist_ok=True)
+            identity_path.write_text(
+                json.dumps(
+                    {
+                        "requested_name": "Physical Intelligence",
+                        "canonical_name": "Physical Intelligence",
+                        "company_key": "physicalintelligence",
+                        "linkedin_slug": "physical-intelligence-company",
+                        "aliases": ["pi"],
+                        "confidence": "high",
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            with patch.dict(os.environ, {"SOURCING_COMPANY_REGISTRY_RUNTIME_DIR": str(runtime_dir)}):
+                self.assertEqual(
+                    _canonical_company_key_for_identity(
+                        requested_name="PI",
+                        label="Physical Intelligence",
+                        linkedin_slug="physical-intelligence-company",
+                        fallback_company_key="pi",
+                    ),
+                    "physicalintelligence",
+                )
+
     def test_apply_harvest_search_filters_carries_locations_for_former_scope(self) -> None:
         payload = {}
         _apply_harvest_search_filters(
@@ -81,6 +136,14 @@ class HarvestConnectorTest(unittest.TestCase):
             "education": [{"schoolName": "MIT"}],
             "languages": [{"name": "English"}, {"name": "Mandarin"}],
             "skills": [{"name": "Python"}, {"name": "LLMs"}],
+            "emails": [
+                {
+                    "email": "jane@x.ai",
+                    "status": "valid",
+                    "qualityScore": 92,
+                    "foundInLinkedInProfile": True,
+                }
+            ],
             "moreProfiles": [{"url": "https://www.linkedin.com/in/jane-doe-2/"}],
         }
         parsed = parse_harvest_profile_payload(payload)
@@ -88,9 +151,31 @@ class HarvestConnectorTest(unittest.TestCase):
         self.assertEqual(parsed["profile_url"], "https://www.linkedin.com/in/jane-doe/")
         self.assertEqual(parsed["current_company"], "xAI")
         self.assertEqual(parsed["location"], "San Francisco Bay Area")
+        self.assertEqual(parsed["primary_email"], "jane@x.ai")
+        self.assertEqual(parsed["primary_email_metadata"]["source"], "harvestapi")
+        self.assertEqual(parsed["primary_email_metadata"]["qualityScore"], 92)
+        self.assertTrue(parsed["primary_email_metadata"]["foundInLinkedInProfile"])
         self.assertEqual(len(parsed["languages"]), 2)
         self.assertEqual(len(parsed["skills"]), 2)
         self.assertEqual(len(parsed["more_profiles"]), 1)
+
+    def test_parse_harvest_profile_payload_rejects_risky_low_quality_email(self) -> None:
+        payload = {
+            "firstName": "Jane",
+            "lastName": "Doe",
+            "linkedinUrl": "https://www.linkedin.com/in/jane-doe/",
+            "emails": [
+                {
+                    "email": "risky@x.ai",
+                    "status": "risky",
+                    "qualityScore": 60,
+                }
+            ],
+        }
+        parsed = parse_harvest_profile_payload(payload)
+        self.assertEqual(parsed["primary_email"], "")
+        self.assertEqual(parsed["primary_email_metadata"]["status"], "risky")
+        self.assertEqual(parsed["primary_email_metadata"]["qualityScore"], 60)
 
     def test_parse_harvest_profile_payload_keeps_provider_profile_url_even_with_requested_opaque_url(self) -> None:
         payload = {
@@ -275,6 +360,36 @@ class HarvestConnectorTest(unittest.TestCase):
         }
         self.assertTrue(_profile_matches_candidate(profile, candidate, identity))
 
+    def test_profile_match_accepts_requested_opaque_identifier_even_when_profile_name_is_blank(self) -> None:
+        identity = CompanyIdentity(
+            requested_name="Physical Intelligence",
+            canonical_name="Physical Intelligence",
+            company_key="physicalintelligence",
+            linkedin_slug="physical-intelligence-company",
+            aliases=["pi"],
+        )
+        candidate = Candidate(
+            candidate_id="opaque124",
+            name_en="Mallorie Kiunke",
+            display_name="Mallorie Kiunke",
+            category="employee",
+            target_company="Physical Intelligence",
+            employment_status="current",
+            linkedin_url="https://www.linkedin.com/in/ACwAAGHgIsUB7ek0tCifNrkXZIdXlPTOcOVq5k8",
+            source_dataset="test_seed",
+        )
+        profile = {
+            "full_name": "",
+            "requested_profile_url": "https://www.linkedin.com/in/ACwAAGHgIsUB7ek0tCifNrkXZIdXlPTOcOVq5k8",
+            "profile_url": "https://www.linkedin.com/in/mallorie-kiunke-199b19399",
+            "public_identifier": "mallorie-kiunke-199b19399",
+            "experience": [
+                {"companyName": "Physical Intelligence", "title": "Research Engineer"},
+            ],
+            "education": [{"schoolName": "UC Berkeley"}],
+        }
+        self.assertTrue(_profile_matches_candidate(profile, candidate, identity))
+
     def test_profile_match_accepts_company_name_experience_for_former_membership(self) -> None:
         identity = CompanyIdentity(
             requested_name="Thinking Machines Lab",
@@ -448,9 +563,123 @@ class HarvestConnectorTest(unittest.TestCase):
                 self.assertEqual(item["account_id"], "harvest_profile_scraper")
                 self.assertEqual(item["parsed"]["profile_url"], url)
 
+    def test_persist_profiles_from_batch_body_keeps_error_payloads_unresolved(self) -> None:
+        connector = HarvestProfileConnector(
+            HarvestActorSettings(
+                enabled=True,
+                api_token="token",
+                actor_id="actor",
+            )
+        )
+        with tempfile.TemporaryDirectory() as tempdir:
+            snapshot_dir = Path(tempdir)
+            requested_urls = [
+                "https://www.linkedin.com/in/jane-doe/",
+                "https://www.linkedin.com/in/ACwAAOpaque404",
+            ]
+            body = [
+                {
+                    "firstName": "Jane",
+                    "lastName": "Doe",
+                    "headline": "Research Engineer at Anthropic",
+                    "linkedinUrl": "https://www.linkedin.com/in/jane-doe/",
+                    "publicIdentifier": "jane-doe",
+                },
+                {
+                    "originalQuery": {"url": "https://www.linkedin.com/in/ACwAAOpaque404"},
+                    "status": 404,
+                    "error": "Could not find profileId or publicIdentifier",
+                },
+            ]
+            persisted = connector.persist_profiles_from_batch_body(
+                requested_urls,
+                body,
+                snapshot_dir,
+            )
+            self.assertEqual(set(persisted["profiles"].keys()), {"https://www.linkedin.com/in/jane-doe/"})
+            self.assertEqual(persisted["unresolved_urls"], ["https://www.linkedin.com/in/ACwAAOpaque404"])
+
+    def test_harvest_profile_connector_ignores_invalid_cached_raw_payload_and_refetches(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        connector = HarvestProfileConnector(settings)
+        requested_url = "https://www.linkedin.com/in/ACwAAOpaque404"
+        with tempfile.TemporaryDirectory() as tempdir:
+            raw_path = Path(tempdir) / "harvest_profiles" / f"{sha1(requested_url.encode('utf-8')).hexdigest()[:16]}.json"
+            raw_path.parent.mkdir(parents=True, exist_ok=True)
+            raw_path.write_text(
+                json.dumps(
+                    {
+                        "_harvest_request": {"kind": "url", "value": requested_url, "profile_url": requested_url},
+                        "item": {
+                            "status": 404,
+                            "error": "Could not find profileId or publicIdentifier",
+                            "originalQuery": {"url": requested_url},
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            def _fake_run(_settings, payload, **kwargs):
+                return [
+                    {
+                        "firstName": "Mallorie",
+                        "lastName": "Kiunke",
+                        "linkedinUrl": "https://www.linkedin.com/in/mallorie-kiunke-199b19399",
+                        "publicIdentifier": "mallorie-kiunke-199b19399",
+                        "originalQuery": {"url": requested_url},
+                    }
+                ]
+
+            with patch("sourcing_agent.harvest_connectors._run_harvest_actor", side_effect=_fake_run):
+                result = connector.fetch_profiles_by_urls([requested_url], Path(tempdir), use_cache=True)
+
+        self.assertIn(requested_url, result)
+        self.assertEqual(
+            result[requested_url]["parsed"]["profile_url"],
+            "https://www.linkedin.com/in/mallorie-kiunke-199b19399",
+        )
+
     def test_large_harvest_company_timeout_is_more_conservative(self) -> None:
         self.assertEqual(_recommended_harvest_company_timeout_seconds(25), 300)
         self.assertEqual(_recommended_harvest_company_timeout_seconds(2500), 1500)
+
+    def test_fetch_profiles_by_urls_emits_batch_result_callback_after_provider_response(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        connector = HarvestProfileConnector(settings)
+        requested_url = "https://www.linkedin.com/in/streaming-profile/"
+        batches: list[dict[str, Any]] = []
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            snapshot_dir = Path(tempdir) / "runtime" / "company_assets" / "openai" / "snap-stream"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+
+            def _fake_run(_settings, payload, **kwargs):
+                self.assertEqual(payload["urls"], [requested_url])
+                return [
+                    {
+                        "fullName": "Streaming Profile",
+                        "headline": "Research Engineer",
+                        "linkedinUrl": requested_url,
+                        "publicIdentifier": "streaming-profile",
+                        "originalQuery": {"url": requested_url},
+                    }
+                ]
+
+            with patch("sourcing_agent.harvest_connectors._run_harvest_actor", side_effect=_fake_run):
+                result = connector.fetch_profiles_by_urls(
+                    [requested_url],
+                    snapshot_dir,
+                    use_cache=False,
+                    on_batch_result=batches.append,
+                )
+
+        self.assertIn(requested_url, result)
+        self.assertEqual(len(batches), 1)
+        self.assertEqual(batches[0]["response_level"], "batch")
+        self.assertEqual(batches[0]["requested_urls"], [requested_url])
+        self.assertEqual(batches[0]["profile_count"], 1)
+        self.assertIn(requested_url, batches[0]["profiles"])
 
     def test_large_harvest_profile_timeout_and_charge_budget_are_more_conservative(self) -> None:
         self.assertEqual(_recommended_harvest_profile_timeout_seconds(25, collect_email=False), 300)
@@ -488,13 +717,52 @@ class HarvestConnectorTest(unittest.TestCase):
         settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
         self.assertEqual(_profile_scraper_mode(settings), "Profile details no email ($4 per 1k)")
 
+    def test_harvest_profile_batch_payload_explicitly_disables_email_lookup_when_collect_email_is_false(self) -> None:
+        settings = HarvestActorSettings(
+            enabled=True,
+            api_token="token",
+            actor_id="actor",
+            default_mode="full",
+            collect_email=False,
+        )
+        connector = HarvestProfileConnector(settings)
+        with tempfile.TemporaryDirectory() as tempdir:
+            snapshot_dir = Path(tempdir) / "runtime" / "company_assets" / "openai" / "snap-email-off"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            captured: dict[str, object] = {}
+
+            def _fake_submit(actor_settings, payload, **kwargs):
+                captured["payload"] = dict(payload)
+                return {"data": {"id": "run-email-off", "defaultDatasetId": "dataset-email-off", "status": "RUNNING"}}
+
+            with patch(
+                "sourcing_agent.harvest_connectors._load_cached_harvest_payload",
+                return_value=(None, None, None),
+            ), patch(
+                "sourcing_agent.harvest_connectors._submit_harvest_actor_run",
+                side_effect=_fake_submit,
+            ):
+                connector.execute_batch_with_checkpoint(
+                    ["https://www.linkedin.com/in/jane-doe/"],
+                    snapshot_dir,
+                )
+
+        self.assertEqual(
+            captured["payload"],
+            {
+                "urls": ["https://www.linkedin.com/in/jane-doe/"],
+                "profileScraperMode": "Profile details no email ($4 per 1k)",
+                "findEmail": False,
+            },
+        )
+
     def test_harvest_profile_search_supports_multi_page_former_search(self) -> None:
         settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="short", max_paid_items=25)
         connector = HarvestProfileSearchConnector(settings)
         with tempfile.TemporaryDirectory() as tempdir:
             capture = {}
 
-            def _fake_run(actor_settings, payload):
+            def _fake_run(actor_settings, payload, **kwargs):
                 capture["payload"] = dict(payload)
                 capture["max_total_charge_usd"] = actor_settings.max_total_charge_usd
                 capture["timeout_seconds"] = actor_settings.timeout_seconds
@@ -547,7 +815,7 @@ class HarvestConnectorTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tempdir:
             capture = {}
 
-            def _fake_run(actor_settings, payload):
+            def _fake_run(actor_settings, payload, **kwargs):
                 capture["payload"] = dict(payload)
                 capture["max_paid_items"] = actor_settings.max_paid_items
                 return []
@@ -622,7 +890,7 @@ class HarvestConnectorTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tempdir:
             capture = {}
 
-            def _fake_run(_settings, payload):
+            def _fake_run(_settings, payload, **kwargs):
                 capture["payload"] = dict(payload)
                 return [
                     {
@@ -652,7 +920,7 @@ class HarvestConnectorTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tempdir:
             requests_seen = []
 
-            def _fake_run(_settings, payload):
+            def _fake_run(_settings, payload, **kwargs):
                 requests_seen.append(dict(payload))
                 return [
                     {
@@ -690,7 +958,7 @@ class HarvestConnectorTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tempdir:
             requests_seen = []
 
-            def _fake_run(_settings, payload):
+            def _fake_run(_settings, payload, **kwargs):
                 requests_seen.append(dict(payload))
                 return [
                     {
@@ -738,7 +1006,7 @@ class HarvestConnectorTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tempdir:
             requests_seen = []
 
-            def _fake_run(_settings, payload):
+            def _fake_run(_settings, payload, **kwargs):
                 requests_seen.append(dict(payload))
                 return [
                     {
@@ -787,7 +1055,7 @@ class HarvestConnectorTest(unittest.TestCase):
             requests_seen = []
             requested_urls = [f"https://www.linkedin.com/in/opaque-{index}" for index in range(6)]
 
-            def _fake_run(_settings, payload):
+            def _fake_run(_settings, payload, **kwargs):
                 requests_seen.append(dict(payload))
                 if "publicIdentifiers" in payload or "profileIds" in payload:
                     raise AssertionError("expected smaller batch retries before single fallback")
@@ -805,7 +1073,10 @@ class HarvestConnectorTest(unittest.TestCase):
                     for index, url in enumerate(urls, start=1)
                 ]
 
-            with patch("sourcing_agent.harvest_connectors._run_harvest_actor", side_effect=_fake_run):
+            with patch.dict("os.environ", {"SOURCING_EXTERNAL_PROVIDER_MODE": "simulate"}, clear=False), patch(
+                "sourcing_agent.harvest_connectors._run_harvest_actor",
+                side_effect=_fake_run,
+            ):
                 result = connector.fetch_profiles_by_urls(
                     requested_urls,
                     Path(tempdir),
@@ -824,13 +1095,16 @@ class HarvestConnectorTest(unittest.TestCase):
             requests_seen = []
             requested_urls = [f"https://www.linkedin.com/in/opaque-{index}" for index in range(12)]
 
-            def _fake_run(_settings, payload):
+            def _fake_run(_settings, payload, **kwargs):
                 requests_seen.append(dict(payload))
                 if "publicIdentifiers" in payload or "profileIds" in payload:
                     raise AssertionError("unexpected direct single fallback for large unresolved batch")
                 return None
 
-            with patch("sourcing_agent.harvest_connectors._run_harvest_actor", side_effect=_fake_run):
+            with patch.dict("os.environ", {"SOURCING_EXTERNAL_PROVIDER_MODE": "simulate"}, clear=False), patch(
+                "sourcing_agent.harvest_connectors._run_harvest_actor",
+                side_effect=_fake_run,
+            ):
                 result = connector.fetch_profiles_by_urls(
                     requested_urls,
                     Path(tempdir),
@@ -842,13 +1116,33 @@ class HarvestConnectorTest(unittest.TestCase):
                     [12, 10, 2, 5, 5, 2],
                 )
 
+    def test_harvest_profile_connector_live_mode_does_not_fragment_large_unresolved_tail(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        connector = HarvestProfileConnector(settings)
+        with tempfile.TemporaryDirectory() as tempdir:
+            requests_seen = []
+            requested_urls = [f"https://www.linkedin.com/in/live-opaque-{index}" for index in range(12)]
+
+            def _fake_run(_settings, payload, **kwargs):
+                requests_seen.append(dict(payload))
+                return None
+
+            with patch("sourcing_agent.harvest_connectors._run_harvest_actor", side_effect=_fake_run):
+                result = connector.fetch_profiles_by_urls(
+                    requested_urls,
+                    Path(tempdir),
+                    use_cache=False,
+                )
+                self.assertEqual(result, {})
+                self.assertEqual([len(payload.get("urls") or []) for payload in requests_seen], [12])
+
     def test_harvest_profile_connector_single_url_falls_back_to_public_identifier(self) -> None:
         settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
         connector = HarvestProfileConnector(settings)
         with tempfile.TemporaryDirectory() as tempdir:
             requests_seen = []
 
-            def _fake_run(_settings, payload):
+            def _fake_run(_settings, payload, **kwargs):
                 requests_seen.append(dict(payload))
                 if "urls" in payload:
                     return None
@@ -950,7 +1244,7 @@ class HarvestConnectorTest(unittest.TestCase):
             snapshot_dir.mkdir(parents=True, exist_ok=True)
             capture = {}
 
-            def _fake_run(actor_settings, payload):
+            def _fake_run(actor_settings, payload, **kwargs):
                 capture["payload"] = dict(payload)
                 capture["max_paid_items"] = actor_settings.max_paid_items
                 capture["max_total_charge_usd"] = actor_settings.max_total_charge_usd
@@ -1005,7 +1299,7 @@ class HarvestConnectorTest(unittest.TestCase):
             snapshot_dir.mkdir(parents=True, exist_ok=True)
             capture = {}
 
-            def _fake_run(actor_settings, payload):
+            def _fake_run(actor_settings, payload, **kwargs):
                 capture["payload"] = dict(payload)
                 return [
                     {
@@ -1108,6 +1402,194 @@ class HarvestConnectorTest(unittest.TestCase):
         self.assertTrue(summary["summary_path"].endswith(".summary.json"))
         self.assertTrue(summary["log_path"].endswith(".log.txt"))
 
+    def test_harvest_company_fetch_reuses_complete_probe_dataset_without_second_run(self) -> None:
+        settings = HarvestActorSettings(
+            enabled=True,
+            api_token="token",
+            actor_id="actor",
+            default_mode="short",
+            max_total_charge_usd=0.2,
+            max_paid_items=25,
+        )
+        connector = HarvestCompanyEmployeesConnector(settings)
+        identity = CompanyIdentity(
+            requested_name="Monica AI",
+            canonical_name="Monica AI",
+            company_key="monicaai",
+            linkedin_slug="monica-im",
+            linkedin_company_url="https://www.linkedin.com/company/monica-im/",
+        )
+        probe_items = [
+            {
+                "firstName": "Ada",
+                "lastName": "Lovelace",
+                "linkedinUrl": "https://www.linkedin.com/in/ada-lovelace/",
+                "publicIdentifier": "ada-lovelace",
+            }
+            for _ in range(8)
+        ]
+        with tempfile.TemporaryDirectory() as tempdir:
+            snapshot_dir = Path(tempdir) / "runtime" / "company_assets" / "monicaai" / "snap"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            with patch(
+                "sourcing_agent.harvest_connectors._submit_harvest_actor_run",
+                return_value={"data": {"id": "run-probe-1", "defaultDatasetId": "dataset-probe-1", "status": "RUNNING"}},
+            ) as submit_run, patch(
+                "sourcing_agent.harvest_connectors._get_harvest_actor_run",
+                return_value={"data": {"id": "run-probe-1", "defaultDatasetId": "dataset-probe-1", "status": "SUCCEEDED"}},
+            ), patch(
+                "sourcing_agent.harvest_connectors._get_harvest_actor_run_log",
+                return_value=(
+                    '2026-04-24T09:54:28.033Z Found 8 profiles total for input '
+                    '{"currentCompanies":["https://www.linkedin.com/company/monica-im/"]}\n'
+                    "2026-04-24T09:54:28.100Z Scraped search page 1. Found 8 profiles on the page.\n"
+                ),
+            ), patch(
+                "sourcing_agent.harvest_connectors._get_harvest_dataset_items",
+                return_value=probe_items,
+            ), patch(
+                "sourcing_agent.harvest_connectors._run_harvest_actor",
+                side_effect=AssertionError("full run should not be called when probe proves complete"),
+            ), patch(
+                "sourcing_agent.harvest_connectors.time.sleep",
+                return_value=None,
+            ):
+                snapshot = connector.fetch_company_roster(identity, snapshot_dir, max_pages=8, page_limit=25)
+                request_manifest = json.loads(
+                    (
+                        snapshot_dir / "harvest_company_employees" / "harvest_company_employees_raw.request.json"
+                    ).read_text(encoding="utf-8")
+                )
+
+        self.assertEqual(submit_run.call_count, 1)
+        self.assertEqual(len(snapshot.visible_entries), 1)
+        self.assertEqual(request_manifest["request_context"]["cache_status"], "probe_complete_dataset")
+
+    def test_harvest_company_checkpoint_reuses_complete_probe_dataset_without_second_run(self) -> None:
+        settings = HarvestActorSettings(
+            enabled=True,
+            api_token="token",
+            actor_id="actor",
+            default_mode="short",
+            max_total_charge_usd=0.2,
+            max_paid_items=25,
+        )
+        connector = HarvestCompanyEmployeesConnector(settings)
+        identity = CompanyIdentity(
+            requested_name="Monica AI",
+            canonical_name="Monica AI",
+            company_key="monicaai",
+            linkedin_slug="monica-im",
+            linkedin_company_url="https://www.linkedin.com/company/monica-im/",
+        )
+        probe_items = [
+            {
+                "firstName": "Ada",
+                "lastName": "Lovelace",
+                "linkedinUrl": "https://www.linkedin.com/in/ada-lovelace/",
+                "publicIdentifier": "ada-lovelace",
+            }
+        ]
+        with tempfile.TemporaryDirectory() as tempdir:
+            snapshot_dir = Path(tempdir) / "runtime" / "company_assets" / "monicaai" / "snap"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            with patch(
+                "sourcing_agent.harvest_connectors._submit_harvest_actor_run",
+                return_value={"data": {"id": "run-probe-1", "defaultDatasetId": "dataset-probe-1", "status": "RUNNING"}},
+            ) as submit_run, patch(
+                "sourcing_agent.harvest_connectors._get_harvest_actor_run",
+                return_value={"data": {"id": "run-probe-1", "defaultDatasetId": "dataset-probe-1", "status": "SUCCEEDED"}},
+            ), patch(
+                "sourcing_agent.harvest_connectors._get_harvest_actor_run_log",
+                return_value=(
+                    '2026-04-24T09:54:28.033Z Found 1 profiles total for input '
+                    '{"currentCompanies":["https://www.linkedin.com/company/monica-im/"]}\n'
+                    "2026-04-24T09:54:28.100Z Scraped search page 1. Found 1 profiles on the page.\n"
+                ),
+            ), patch(
+                "sourcing_agent.harvest_connectors._get_harvest_dataset_items",
+                return_value=probe_items,
+            ), patch(
+                "sourcing_agent.harvest_connectors.time.sleep",
+                return_value=None,
+            ):
+                result = connector.execute_with_checkpoint(identity, snapshot_dir, max_pages=8, page_limit=25)
+
+        self.assertEqual(submit_run.call_count, 1)
+        self.assertFalse(result.pending)
+        self.assertEqual(result.checkpoint["cache_source"], "probe_complete_dataset")
+        self.assertEqual(result.body, probe_items)
+        self.assertEqual([artifact.label for artifact in result.artifacts], ["dataset_items"])
+
+    def test_harvest_company_probe_company_roster_query_replay_cache_miss_returns_unknown_total(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="short")
+        connector = HarvestCompanyEmployeesConnector(settings)
+        identity = CompanyIdentity(
+            requested_name="Surge AI",
+            canonical_name="Surge AI",
+            company_key="surgeai",
+            linkedin_slug="surge-ai",
+            linkedin_company_url="https://www.linkedin.com/company/surge-ai/",
+        )
+        with tempfile.TemporaryDirectory() as tempdir:
+            snapshot_dir = Path(tempdir) / "runtime" / "company_assets" / "surgeai" / "probe-replay"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            with patch.dict("os.environ", {"SOURCING_EXTERNAL_PROVIDER_MODE": "replay"}), patch(
+                "sourcing_agent.harvest_connectors._load_cached_harvest_payload",
+                return_value=(None, None, None),
+            ), patch(
+                "sourcing_agent.harvest_connectors._submit_harvest_actor_run",
+                side_effect=AssertionError("replay mode should not submit live Harvest runs"),
+            ):
+                summary = connector.probe_company_roster_query(
+                    identity,
+                    snapshot_dir,
+                    probe_id="surgeai",
+                    title="Surge AI full roster",
+                )
+
+        self.assertEqual(summary["estimated_total_count"], 0)
+        self.assertFalse(summary["provider_result_limited"])
+        self.assertIn("unknown", str(summary["detail"] or "").lower())
+
+    def test_harvest_company_probe_company_roster_query_request_scoped_fast_smoke_shortens_poll_interval(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="short")
+        connector = HarvestCompanyEmployeesConnector(settings)
+        identity = CompanyIdentity(
+            requested_name="Anthropic",
+            canonical_name="Anthropic",
+            company_key="anthropic",
+            linkedin_slug="anthropicresearch",
+            linkedin_company_url="https://www.linkedin.com/company/anthropicresearch/",
+        )
+        with tempfile.TemporaryDirectory() as tempdir:
+            snapshot_dir = Path(tempdir) / "runtime" / "company_assets" / "anthropic" / "probe-fast-smoke"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            with patch(
+                "sourcing_agent.harvest_connectors._submit_harvest_actor_run",
+                return_value={"data": {"id": "run-probe-fast", "defaultDatasetId": "dataset-probe-fast", "status": "RUNNING"}},
+            ), patch(
+                "sourcing_agent.harvest_connectors._get_harvest_actor_run",
+                return_value={"data": {"id": "run-probe-fast", "defaultDatasetId": "dataset-probe-fast", "status": "SUCCEEDED"}},
+            ), patch(
+                "sourcing_agent.harvest_connectors._get_harvest_actor_run_log",
+                return_value="2026-04-09T00:01:40.783Z Found 100 profiles total for input {}\n",
+            ), patch(
+                "sourcing_agent.harvest_connectors._get_harvest_dataset_items",
+                return_value=[{"firstName": "Ada"}],
+            ), patch(
+                "sourcing_agent.harvest_connectors.time.sleep",
+                return_value=None,
+            ) as sleep_mock:
+                summary = connector.probe_company_roster_query(
+                    identity,
+                    snapshot_dir,
+                    runtime_timing_overrides={"runtime_tuning_profile": "fast_smoke"},
+                )
+
+        self.assertEqual(summary["status"], "completed")
+        self.assertEqual(sleep_mock.call_args_list, [call(0.25)])
+
     def test_load_cached_harvest_payload_reuses_live_probe_summary_via_request_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             runtime_dir = Path(tempdir) / "runtime"
@@ -1162,6 +1644,192 @@ class HarvestConnectorTest(unittest.TestCase):
             )
             self.assertEqual(second_body, summary_payload)
             self.assertEqual(second_source, "shared_cache")
+
+    def test_load_cached_harvest_payload_discards_offline_shared_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime"
+            snapshot_dir = runtime_dir / "company_assets" / "surgeai" / "snap-live"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            cache_dir = runtime_dir / "provider_cache" / "harvest_company_employees"
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            cache_path = cache_dir / "4af5cf964987ed7d.json"
+            request_path = cache_dir / "4af5cf964987ed7d.request.json"
+            cache_path.write_text(
+                json.dumps(
+                    [
+                        {
+                            "_offline": True,
+                            "_provider_mode": "replay",
+                            "linkedinUrl": "https://www.linkedin.com/in/surge-ai-offline-1/",
+                        }
+                    ],
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            request_path.write_text(
+                json.dumps(
+                    {
+                        "logical_name": "harvest_company_employees",
+                        "payload_hash": "4af5cf964987ed7d",
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            payload = {
+                "profileScraperMode": "Short ($4 per 1k)",
+                "companies": ["https://www.linkedin.com/company/surge-ai/"],
+                "takePages": 8,
+                "maxItems": 180,
+            }
+
+            cached_body, cache_source, cache_origin = _load_cached_harvest_payload(
+                snapshot_dir,
+                logical_name="harvest_company_employees",
+                payload=payload,
+            )
+
+            self.assertIsNone(cached_body)
+            self.assertIsNone(cache_source)
+            self.assertIsNone(cache_origin)
+            self.assertFalse(cache_path.exists())
+            self.assertFalse(request_path.exists())
+
+    def test_persist_shared_harvest_payload_skips_offline_replay_body(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            snapshot_dir = Path(tempdir) / "runtime" / "company_assets" / "surgeai" / "snap-replay"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            payload = {
+                "profileScraperMode": "Short ($4 per 1k)",
+                "companies": ["https://www.linkedin.com/company/surge-ai/"],
+                "takePages": 8,
+                "maxItems": 180,
+            }
+            body = [
+                {
+                    "_offline": True,
+                    "_provider_mode": "replay",
+                    "linkedinUrl": "https://www.linkedin.com/in/surge-ai-offline-1/",
+                }
+            ]
+
+            with patch.dict("os.environ", {"SOURCING_EXTERNAL_PROVIDER_MODE": "replay"}):
+                _persist_shared_harvest_payload(
+                    snapshot_dir,
+                    logical_name="harvest_company_employees",
+                    payload=payload,
+                    body=body,
+                    request_context={"provider_mode": "replay"},
+                )
+
+            cache_dir = Path(tempdir) / "runtime" / "provider_cache" / "harvest_company_employees"
+            self.assertFalse(cache_dir.exists() and any(cache_dir.iterdir()))
+
+    def test_non_live_provider_mode_does_not_read_live_shared_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            snapshot_dir = Path(tempdir) / "runtime" / "company_assets" / "surgeai" / "snap-live"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            payload = {
+                "profileScraperMode": "Short ($4 per 1k)",
+                "companies": ["https://www.linkedin.com/company/surge-ai/"],
+                "takePages": 1,
+                "maxItems": 25,
+            }
+            body = [{"linkedinUrl": "https://www.linkedin.com/in/real-surge-member/"}]
+
+            with patch.dict(
+                "os.environ",
+                {
+                    "SOURCING_EXTERNAL_PROVIDER_MODE": "live",
+                    "SOURCING_RUNTIME_ENVIRONMENT": "local_dev",
+                },
+                clear=False,
+            ):
+                _persist_shared_harvest_payload(
+                    snapshot_dir,
+                    logical_name="harvest_company_employees",
+                    payload=payload,
+                    body=body,
+                    request_context={"provider_mode": "live"},
+                )
+
+            with patch.dict(
+                "os.environ",
+                {
+                    "SOURCING_EXTERNAL_PROVIDER_MODE": "replay",
+                    "SOURCING_RUNTIME_ENVIRONMENT": "replay",
+                },
+                clear=False,
+            ):
+                cached_body, cache_source, cache_origin = _load_cached_harvest_payload(
+                    snapshot_dir,
+                    logical_name="harvest_company_employees",
+                    payload=payload,
+                )
+
+            self.assertIsNone(cached_body)
+            self.assertIsNone(cache_source)
+            self.assertIsNone(cache_origin)
+
+    def test_harvest_company_execute_with_checkpoint_ignores_offline_shared_cache_in_live_mode(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="short")
+        connector = HarvestCompanyEmployeesConnector(settings)
+        identity = CompanyIdentity(
+            requested_name="Surge AI",
+            canonical_name="Surge AI",
+            company_key="surgeai",
+            linkedin_slug="surge-ai",
+            linkedin_company_url="https://www.linkedin.com/company/surge-ai/",
+        )
+        with tempfile.TemporaryDirectory() as tempdir:
+            snapshot_dir = Path(tempdir) / "runtime" / "company_assets" / "surgeai" / "snap-live"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            cache_dir = Path(tempdir) / "runtime" / "provider_cache" / "harvest_company_employees"
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            payload_hash = "4af5cf964987ed7d"
+            (cache_dir / f"{payload_hash}.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "_offline": True,
+                            "_provider_mode": "replay",
+                            "linkedinUrl": "https://www.linkedin.com/in/surge-ai-offline-1/",
+                        }
+                    ],
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            (cache_dir / f"{payload_hash}.request.json").write_text(
+                json.dumps(
+                    {
+                        "logical_name": "harvest_company_employees",
+                        "payload_hash": payload_hash,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            with patch(
+                "sourcing_agent.harvest_connectors._submit_harvest_actor_run",
+                return_value={"data": {"id": "run-live-1", "defaultDatasetId": "dataset-live-1", "status": "RUNNING"}},
+            ) as submit_mock:
+                result = connector.execute_with_checkpoint(
+                    identity,
+                    snapshot_dir,
+                    max_pages=20,
+                    page_limit=25,
+                )
+
+            self.assertTrue(result.pending)
+            self.assertEqual(result.checkpoint["run_id"], "run-live-1")
+            self.assertEqual(result.checkpoint["status"], "submitted")
+            self.assertEqual(submit_mock.call_count, 2)
 
     def test_harvest_profile_batch_execute_with_checkpoint_submits_async_run(self) -> None:
         settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
@@ -1228,7 +1896,166 @@ class HarvestConnectorTest(unittest.TestCase):
         self.assertFalse(result.pending)
         self.assertEqual(result.checkpoint["provider_mode"], "replay")
         self.assertEqual(result.checkpoint["status"], "completed")
-        self.assertEqual(len(result.body), 1)
+        self.assertEqual(len(result.body), 0)
+
+    def test_harvest_company_execute_with_checkpoint_replay_cache_miss_returns_empty_without_live_request(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="short")
+        connector = HarvestCompanyEmployeesConnector(settings)
+        identity = CompanyIdentity(
+            requested_name="Surge AI",
+            canonical_name="Surge AI",
+            company_key="surgeai",
+            linkedin_slug="surge-ai",
+            linkedin_company_url="https://www.linkedin.com/company/surge-ai/",
+        )
+        with tempfile.TemporaryDirectory() as tempdir:
+            snapshot_dir = Path(tempdir) / "runtime" / "company_assets" / "surgeai" / "snap-replay"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            with patch.dict("os.environ", {"SOURCING_EXTERNAL_PROVIDER_MODE": "replay"}), patch(
+                "sourcing_agent.harvest_connectors._load_cached_harvest_payload",
+                return_value=(None, None, None),
+            ), patch(
+                "sourcing_agent.harvest_connectors._submit_harvest_actor_run",
+                side_effect=AssertionError("replay mode should not submit live Harvest runs"),
+            ):
+                result = connector.execute_with_checkpoint(
+                    identity,
+                    snapshot_dir,
+                    max_pages=2,
+                    page_limit=25,
+                )
+
+        self.assertFalse(result.pending)
+        self.assertEqual(result.checkpoint["provider_mode"], "replay")
+        self.assertEqual(result.checkpoint["status"], "completed")
+        self.assertEqual(len(result.body), 0)
+
+    def test_harvest_profile_batch_execute_with_checkpoint_supports_scripted_pending_rounds(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        connector = HarvestProfileConnector(settings)
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime"
+            snapshot_dir = runtime_dir / "company_assets" / "openai" / "snap-scripted"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            scenario_path = Path(tempdir) / "scripted_harvest.json"
+            scenario_path.write_text(
+                json.dumps(
+                    {
+                        "harvest": {
+                            "rules": [
+                                {
+                                    "name": "profile_batch",
+                                    "match": {"logical_name": "harvest_profile_scraper_batch"},
+                                    "execute_pending_rounds": 1,
+                                    "body": [
+                                        {
+                                            "linkedinUrl": "https://www.linkedin.com/in/jane-doe/",
+                                            "publicIdentifier": "jane-doe",
+                                            "headline": "Reasoning engineer at OpenAI",
+                                            "item": {
+                                                "profileUrl": "https://www.linkedin.com/in/jane-doe/",
+                                                "fullName": "Jane Doe",
+                                                "headline": "Reasoning engineer at OpenAI",
+                                            },
+                                        }
+                                    ],
+                                }
+                            ]
+                        }
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            with patch.dict(
+                "os.environ",
+                {
+                    "SOURCING_EXTERNAL_PROVIDER_MODE": "scripted",
+                    "SOURCING_SCRIPTED_PROVIDER_SCENARIO": str(scenario_path),
+                },
+            ):
+                first = connector.execute_batch_with_checkpoint(
+                    ["https://www.linkedin.com/in/jane-doe/"],
+                    snapshot_dir,
+                )
+                second = connector.execute_batch_with_checkpoint(
+                    ["https://www.linkedin.com/in/jane-doe/"],
+                    snapshot_dir,
+                    checkpoint=first.checkpoint,
+                )
+
+        self.assertTrue(first.pending)
+        self.assertEqual(first.checkpoint["provider_mode"], "scripted")
+        self.assertEqual(first.checkpoint["status"], "submitted")
+        self.assertFalse(second.pending)
+        self.assertEqual(second.checkpoint["provider_mode"], "scripted")
+        self.assertEqual(second.checkpoint["status"], "completed")
+        self.assertEqual(len(second.body), 1)
+        self.assertEqual(second.body[0]["publicIdentifier"], "jane-doe")
+
+    def test_harvest_profile_batch_execute_with_checkpoint_request_scoped_fast_smoke_caps_scripted_sleep_across_resume(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        connector = HarvestProfileConnector(settings)
+        with tempfile.TemporaryDirectory() as tempdir:
+            runtime_dir = Path(tempdir) / "runtime"
+            snapshot_dir = runtime_dir / "company_assets" / "openai" / "snap-scripted-fast"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            scenario_path = Path(tempdir) / "scripted_harvest_fast.json"
+            scenario_path.write_text(
+                json.dumps(
+                    {
+                        "harvest": {
+                            "rules": [
+                                {
+                                    "name": "profile_batch_fast_smoke",
+                                    "match": {"logical_name": "harvest_profile_scraper_batch"},
+                                    "execute_pending_rounds": 1,
+                                    "execute_sleep_seconds": 2.0,
+                                    "body": [
+                                        {
+                                            "linkedinUrl": "https://www.linkedin.com/in/jane-doe/",
+                                            "publicIdentifier": "jane-doe",
+                                            "headline": "Reasoning engineer at OpenAI",
+                                            "item": {
+                                                "profileUrl": "https://www.linkedin.com/in/jane-doe/",
+                                                "fullName": "Jane Doe",
+                                                "headline": "Reasoning engineer at OpenAI",
+                                            },
+                                        }
+                                    ],
+                                }
+                            ]
+                        }
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            with patch.dict(
+                "os.environ",
+                {
+                    "SOURCING_EXTERNAL_PROVIDER_MODE": "scripted",
+                    "SOURCING_SCRIPTED_PROVIDER_SCENARIO": str(scenario_path),
+                },
+            ), patch("sourcing_agent.harvest_connectors.time.sleep", return_value=None) as sleep_mock:
+                first = connector.execute_batch_with_checkpoint(
+                    ["https://www.linkedin.com/in/jane-doe/"],
+                    snapshot_dir,
+                    runtime_timing_overrides={"runtime_tuning_profile": "fast_smoke"},
+                )
+                second = connector.execute_batch_with_checkpoint(
+                    ["https://www.linkedin.com/in/jane-doe/"],
+                    snapshot_dir,
+                    checkpoint=first.checkpoint,
+                )
+
+        self.assertTrue(first.pending)
+        self.assertEqual(first.checkpoint["request_context"]["runtime_tuning_profile"], "fast_smoke")
+        self.assertFalse(second.pending)
+        self.assertEqual(second.checkpoint["request_context"]["runtime_tuning_profile"], "fast_smoke")
+        self.assertEqual(sleep_mock.call_args_list, [call(0.1), call(0.1)])
 
     def test_get_harvest_dataset_items_paginates_large_dataset_download(self) -> None:
         settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
@@ -1281,6 +2108,35 @@ class HarvestConnectorTest(unittest.TestCase):
 
         self.assertEqual(items, [{"idx": 1}])
         self.assertEqual(attempt_counter["count"], 3)
+
+    def test_get_harvest_dataset_items_request_scoped_fast_smoke_shortens_retry_backoff(self) -> None:
+        settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
+        attempt_counter = {"count": 0}
+
+        def _fake_request(endpoint: str, *, payload=None, timeout=180):
+            attempt_counter["count"] += 1
+            if attempt_counter["count"] < 3:
+                raise RuntimeError("Harvest API request failed: IncompleteRead(2048 bytes read)")
+            return [{"idx": 1}]
+
+        with patch("sourcing_agent.harvest_connectors._harvest_json_request", side_effect=_fake_request), patch(
+            "sourcing_agent.harvest_connectors.time.sleep",
+            return_value=None,
+        ) as sleep_mock:
+            items = _get_harvest_dataset_items(
+                settings,
+                "dataset-retryable-fast-smoke",
+                logical_name="harvest_profile_scraper_batch",
+                run_id="run-retryable-fast-smoke",
+                request_context={
+                    "requested_url_count": 50,
+                    "runtime_tuning_profile": "fast_smoke",
+                },
+            )
+
+        self.assertEqual(items, [{"idx": 1}])
+        self.assertEqual(attempt_counter["count"], 3)
+        self.assertEqual(sleep_mock.call_args_list, [call(0.25), call(0.25)])
 
     def test_harvest_profile_batch_execute_with_checkpoint_preserves_run_on_retryable_dataset_download_failure(self) -> None:
         settings = HarvestActorSettings(enabled=True, api_token="token", actor_id="actor", default_mode="full")
@@ -1398,7 +2254,16 @@ class HarvestConnectorTest(unittest.TestCase):
                     page_limit=25,
                     checkpoint={"run_id": "run-456", "dataset_id": "dataset-456", "status": "running"},
                 )
-                cache_files = list((Path(tempdir) / "runtime" / "provider_cache" / "harvest_company_employees").glob("*.json"))
+                cache_files = list(
+                    (
+                        Path(tempdir)
+                        / "runtime"
+                        / "provider_cache"
+                        / "local_dev"
+                        / "live"
+                        / "harvest_company_employees"
+                    ).glob("*.json")
+                )
         self.assertFalse(result.pending)
         self.assertEqual(result.checkpoint["status"], "completed")
         self.assertEqual(len(result.body), 1)
@@ -1514,6 +2379,7 @@ class HarvestConnectorTest(unittest.TestCase):
                     "headline": "Member of Technical Staff at Thinking Machines Lab",
                     "location": "San Francisco",
                     "linkedin_url": "https://www.linkedin.com/in/john-smith/",
+                    "source_shard_filters": {"function_ids": ["24"]},
                     "page": 1,
                     "source_account_id": "harvest_company_employees",
                 }
@@ -1532,4 +2398,5 @@ class HarvestConnectorTest(unittest.TestCase):
         self.assertEqual(len(candidates), 1)
         self.assertEqual(candidates[0].linkedin_url, "https://www.linkedin.com/in/john-smith/")
         self.assertEqual(candidates[0].metadata.get("profile_url"), "https://www.linkedin.com/in/john-smith/")
+        self.assertEqual(candidates[0].metadata.get("function_ids"), [])
         self.assertEqual(evidence[0].metadata.get("profile_url"), "https://www.linkedin.com/in/john-smith/")

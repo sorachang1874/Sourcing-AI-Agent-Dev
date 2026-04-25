@@ -1,0 +1,79 @@
+{
+  "search": {
+    "default": {
+      "poll_pending_rounds": 1,
+      "pending_message": "Scripted Physical Intelligence search is still preparing former-member leads.",
+      "results": [
+        {
+          "title": "Physical Intelligence former robotics engineer",
+          "url": "https://www.linkedin.com/in/scripted-pi-former/",
+          "snippet": "Former Physical Intelligence robotics engineer working on embodied models."
+        },
+        {
+          "title": "Physical Intelligence systems engineer",
+          "url": "https://www.linkedin.com/in/scripted-pi-systems/",
+          "snippet": "Physical Intelligence systems engineer focused on robot foundation models."
+        }
+      ]
+    }
+  },
+  "harvest": {
+    "default": {
+      "execute_pending_rounds": 1,
+      "pending_message": "Scripted Harvest actor is still collecting Physical Intelligence roster results.",
+      "body": [
+        {
+          "linkedinUrl": "https://www.linkedin.com/in/scripted-pi-systems/",
+          "publicIdentifier": "scripted-pi-systems",
+          "headline": "Systems Engineer at Physical Intelligence",
+          "currentCompany": "Physical Intelligence",
+          "location": "San Francisco Bay Area",
+          "item": {
+            "profileUrl": "https://www.linkedin.com/in/scripted-pi-systems/",
+            "linkedinUrl": "https://www.linkedin.com/in/scripted-pi-systems/",
+            "publicIdentifier": "scripted-pi-systems",
+            "fullName": "Scripted PI Systems",
+            "headline": "Systems Engineer at Physical Intelligence",
+            "location": "San Francisco Bay Area",
+            "currentCompany": "Physical Intelligence",
+            "summary": "Works on robot foundation models, systems, and embodied AI infrastructure."
+          }
+        },
+        {
+          "linkedinUrl": "https://www.linkedin.com/in/scripted-pi-robotics/",
+          "publicIdentifier": "scripted-pi-robotics",
+          "headline": "Research Engineer at Physical Intelligence",
+          "currentCompany": "Physical Intelligence",
+          "location": "San Francisco Bay Area",
+          "item": {
+            "profileUrl": "https://www.linkedin.com/in/scripted-pi-robotics/",
+            "linkedinUrl": "https://www.linkedin.com/in/scripted-pi-robotics/",
+            "publicIdentifier": "scripted-pi-robotics",
+            "fullName": "Scripted PI Robotics",
+            "headline": "Research Engineer at Physical Intelligence",
+            "location": "San Francisco Bay Area",
+            "currentCompany": "Physical Intelligence",
+            "summary": "Embodied AI, world models, robotics learning, and data collection."
+          }
+        },
+        {
+          "linkedinUrl": "https://www.linkedin.com/in/scripted-pi-former/",
+          "publicIdentifier": "scripted-pi-former",
+          "headline": "Former Robotics Engineer at Physical Intelligence",
+          "currentCompany": "Independent",
+          "location": "United States",
+          "item": {
+            "profileUrl": "https://www.linkedin.com/in/scripted-pi-former/",
+            "linkedinUrl": "https://www.linkedin.com/in/scripted-pi-former/",
+            "publicIdentifier": "scripted-pi-former",
+            "fullName": "Scripted PI Former",
+            "headline": "Former Robotics Engineer at Physical Intelligence",
+            "location": "United States",
+            "currentCompany": "Independent",
+            "summary": "Former Physical Intelligence engineer with embodied models and robotics platform experience."
+          }
+        }
+      ]
+    }
+  }
+}

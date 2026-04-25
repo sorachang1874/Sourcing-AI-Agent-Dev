@@ -11,6 +11,7 @@ from .domain import (
     normalize_requested_role_bucket,
     normalize_requested_role_buckets,
 )
+from .organization_execution_profile import FALLBACK_LARGE_COMPANY_KEYS
 from .query_signal_knowledge import (
     ALPHABET_COMPANY_URL,
     DEEPMIND_COMPANY_URL,
@@ -19,25 +20,14 @@ from .query_signal_knowledge import (
     default_large_org_priority_function_ids,
     match_scope_signals,
     related_company_scope_labels,
+    related_company_scope_urls,
     role_bucket_function_ids,
     role_bucket_role_hints,
     role_buckets_from_text,
     scope_signal_keyword_labels,
 )
-from .request_normalization import resolve_request_intent_view
-
-
-LARGE_COMPANY_KEYS = {
-    "google",
-    "alphabet",
-    "meta",
-    "microsoft",
-    "amazon",
-    "apple",
-    "bytedance",
-    "tiktok",
-    "openai",
-}
+from .request_normalization import build_effective_job_request, coerce_intent_axis_mapping
+from .semantic_intent import compile_semantic_brief, semantic_brief_function_target_groups
 
 LARGE_ORG_SCOPE_COMPANY_URLS = {
     "google": GOOGLE_COMPANY_URL,
@@ -48,8 +38,17 @@ LARGE_ORG_SCOPE_COMPANY_URLS = {
 
 LARGE_ORG_PRIORITY_FUNCTION_IDS = default_large_org_priority_function_ids()
 DEFAULT_PRIMARY_LOCATION = "United States"
+FULL_COMPANY_TECHNICAL_ROSTER_FUNCTION_IDS = ["8", "24"]
 
 KEYWORD_CANONICAL_ALIASES = {
+    "coding": "Coding",
+    "math": "Math",
+    "text": "Text",
+    "audio": "Audio",
+    "infra": "Infra",
+    "vision": "Vision",
+    "multimodal": "Multimodal",
+    "reasoning": "Reasoning",
     "post-train": "Post-train",
     "post train": "Post-train",
     "post-training": "Post-train",
@@ -62,11 +61,30 @@ KEYWORD_CANONICAL_ALIASES = {
     "inference-time compute": "Inference-time compute",
     "reasoning model": "Reasoning",
     "reasoning models": "Reasoning",
+    "推理": "Reasoning",
+    "rl": "RL",
+    "reinforcement learning": "RL",
+    "强化学习": "RL",
     "rlhf": "RLHF",
+    "eval": "Eval",
+    "evals": "Eval",
+    "evaluation": "Eval",
+    "model evaluation": "Eval",
+    "alignment evaluation": "Eval",
+    "评估": "Eval",
+    "评测": "Eval",
     "vision language": "Vision-language",
     "vision-language": "Vision-language",
     "video-generation": "Video generation",
+    "多模态": "Multimodal",
     "multimodality": "Multimodal",
+    "预训练": "Pre-train",
+    "后训练": "Post-train",
+    "world modeling": "World model",
+    "world model": "World model",
+    "world models": "World model",
+    "世界模型": "World model",
+    "基础设施": "Infra",
 }
 
 ACQUISITION_KEYWORD_EXCLUSION_KEYS = {
@@ -113,61 +131,114 @@ def compile_acquisition_strategy(
     categories: list[str],
     employment_statuses: list[str],
     retrieval_plan: RetrievalPlan,
+    organization_execution_profile: dict[str, Any] | None = None,
 ) -> AcquisitionStrategyPlan:
-    raw_text = f"{request.raw_user_request} {request.query}".strip()
-    text = _normalize(raw_text)
-    intent_view = resolve_request_intent_view(
+    effective_request, intent_view = build_effective_job_request(
         request,
         fallback_categories=categories,
         fallback_employment_statuses=employment_statuses,
     )
-    intent_axes = dict(intent_view.get("intent_axes") or {})
-    population_boundary = dict(intent_axes.get("population_boundary") or {})
-    scope_boundary = dict(intent_axes.get("scope_boundary") or {})
-    effective_target_company = str(intent_view.get("target_company") or request.target_company or "").strip()
-    effective_categories = list(intent_view.get("categories") or population_boundary.get("categories") or categories or [])
+    raw_text = f"{effective_request.raw_user_request} {effective_request.query}".strip()
+    text = _normalize(raw_text)
+    intent_axes = coerce_intent_axis_mapping(intent_view.get("intent_axes"))
+    population_boundary = coerce_intent_axis_mapping(intent_axes.get("population_boundary"))
+    scope_boundary = coerce_intent_axis_mapping(intent_axes.get("scope_boundary"))
+    effective_target_company = str(effective_request.target_company or request.target_company or "").strip()
+    effective_categories = list(effective_request.categories or population_boundary.get("categories") or categories or [])
     effective_employment_statuses = list(
-        intent_view.get("employment_statuses") or population_boundary.get("employment_statuses") or employment_statuses or []
+        effective_request.employment_statuses or population_boundary.get("employment_statuses") or employment_statuses or []
     )
-    effective_organization_keywords = list(intent_view.get("organization_keywords") or scope_boundary.get("organization_keywords") or [])
-    effective_keywords = list(intent_view.get("keywords") or [])
-    effective_must_have_keywords = list(intent_view.get("must_have_keywords") or [])
-    effective_must_have_facets = list(intent_view.get("must_have_facets") or [])
-    effective_role_buckets = list(intent_view.get("must_have_primary_role_buckets") or [])
+    effective_organization_keywords = list(
+        intent_view.get("organization_keywords") or effective_request.organization_keywords or scope_boundary.get("organization_keywords") or []
+    )
+    effective_keywords = list(intent_view.get("keywords") or effective_request.keywords or [])
+    effective_must_have_keywords = list(intent_view.get("must_have_keywords") or effective_request.must_have_keywords or [])
+    effective_must_have_facets = list(intent_view.get("must_have_facets") or effective_request.must_have_facets or [])
+    requested_role_buckets = list(
+        intent_view.get("must_have_primary_role_buckets")
+        or effective_request.must_have_primary_role_buckets
+        or []
+    )
     category_role_buckets = normalize_requested_role_buckets(effective_categories)
-    primary_role_bucket_mode = str(intent_view.get("primary_role_bucket_mode") or "hard").strip().lower() or "hard"
-    execution_preferences = dict(intent_view.get("execution_preferences") or {})
-    scope_hints = _merge_scope_hints(
-        inferred=_infer_scope_hints(text),
-        explicit=effective_organization_keywords,
+    primary_role_bucket_mode = str(getattr(effective_request, "primary_role_bucket_mode", "") or intent_view.get("primary_role_bucket_mode") or "hard").strip().lower() or "hard"
+    execution_preferences = dict(effective_request.execution_preferences or {})
+    semantic_brief = dict(
+        intent_view.get("semantic_brief")
+        or compile_semantic_brief(
+            raw_text=raw_text,
+            target_company=effective_target_company,
+            target_scope=str(effective_request.target_scope or request.target_scope or "").strip(),
+            categories=effective_categories,
+            employment_statuses=effective_employment_statuses,
+            organization_keywords=effective_organization_keywords,
+            keywords=effective_keywords,
+            must_have_keywords=effective_must_have_keywords,
+            must_have_facets=effective_must_have_facets,
+            must_have_primary_role_buckets=requested_role_buckets,
+            execution_preferences=execution_preferences,
+            scope_disambiguation=dict(
+                effective_request.scope_disambiguation
+                or intent_view.get("scope_disambiguation")
+                or scope_boundary.get("scope_disambiguation")
+                or {}
+            ),
+        )
+    )
+    scope_semantics = dict(semantic_brief.get("scope") or {})
+    role_targeting = dict(semantic_brief.get("role_targeting") or {})
+    effective_role_buckets = list(
+        role_targeting.get("resolved_role_buckets")
+        or requested_role_buckets
+        or []
+    )
+    scope_hints = list(
+        scope_semantics.get("scope_hints")
+        or _merge_scope_hints(
+            inferred=_infer_scope_hints(text),
+            explicit=effective_organization_keywords,
+            target_company=effective_target_company,
+        )
+    )
+    strategy_decision = _determine_strategy_decision(
         target_company=effective_target_company,
+        text=text,
+        categories=effective_categories,
+        employment_statuses=effective_employment_statuses,
+        scope_hints=scope_hints,
+        execution_preferences=execution_preferences,
+        organization_keywords=effective_organization_keywords,
+        keywords=effective_keywords,
+        must_have_keywords=effective_must_have_keywords,
+        must_have_facets=effective_must_have_facets,
+        role_buckets=effective_role_buckets,
+        semantic_brief=semantic_brief,
+        organization_execution_profile=organization_execution_profile,
     )
-    strategy_type = _infer_strategy_type(
-        effective_target_company,
-        effective_categories,
-        effective_employment_statuses,
-        scope_hints,
-        execution_preferences,
-    )
+    strategy_type = str(strategy_decision.get("strategy_type") or "")
     company_scope = _build_company_scope(
         effective_target_company,
         scope_hints,
         strategy_type,
         execution_preferences,
-        scope_disambiguation=dict(intent_view.get("scope_disambiguation") or scope_boundary.get("scope_disambiguation") or {}),
+        scope_disambiguation=dict(effective_request.scope_disambiguation or intent_view.get("scope_disambiguation") or scope_boundary.get("scope_disambiguation") or {}),
     )
-    role_hints = _infer_role_hints(
-        text,
-        [*category_role_buckets, *(effective_role_buckets if primary_role_bucket_mode == "hard" else [])],
-        effective_must_have_facets,
-    )
-    function_ids = _infer_function_ids(
-        text,
-        [*category_role_buckets, *effective_role_buckets],
-        effective_must_have_facets,
-        categories=effective_categories,
-        keyword_hints=effective_keywords + effective_must_have_keywords,
-    )
+    function_target_groups = semantic_brief_function_target_groups(semantic_brief)
+    role_hints = _grouped_role_hints(function_target_groups)
+    function_ids = _grouped_function_ids(function_target_groups)
+    if not role_hints:
+        role_hints = _infer_role_hints(
+            text,
+            [*category_role_buckets, *(effective_role_buckets if primary_role_bucket_mode == "hard" else [])],
+            effective_must_have_facets,
+        )
+    if not function_ids:
+        function_ids = _infer_function_ids(
+            text,
+            [*category_role_buckets, *effective_role_buckets],
+            effective_must_have_facets,
+            categories=effective_categories,
+            keyword_hints=effective_keywords + effective_must_have_keywords,
+        )
     keyword_hints = _infer_keyword_hints(
         text,
         _acquisition_keyword_candidates(
@@ -179,15 +250,11 @@ def compile_acquisition_strategy(
                 target_company=effective_target_company,
             )
         ),
+        prefer_explicit_keyword_focus=strategy_type == "scoped_search_roster",
     )
 
     roster_sources = _roster_sources(strategy_type)
-    search_channel_order = [
-        "general_web_search_relation_check",
-        "targeted_linkedin_web_search",
-        "provider_people_search_api",
-        "profile_detail_api",
-    ]
+    search_channel_order = _search_channel_order(strategy_type)
     cost_policy = _build_cost_policy(
         strategy_type,
         execution_preferences,
@@ -199,6 +266,7 @@ def compile_acquisition_strategy(
         effective_target_company,
         company_scope,
         role_hints,
+        function_target_groups,
         keyword_hints,
         effective_employment_statuses,
         keyword_priority_only=bool(cost_policy.get("keyword_priority_only")),
@@ -221,7 +289,7 @@ def compile_acquisition_strategy(
         execution_preferences,
         raw_text=raw_text,
         keyword_hints=keyword_hints,
-        scope_disambiguation=dict(intent_view.get("scope_disambiguation") or scope_boundary.get("scope_disambiguation") or {}),
+        scope_disambiguation=dict(effective_request.scope_disambiguation or intent_view.get("scope_disambiguation") or scope_boundary.get("scope_disambiguation") or {}),
     )
     reasoning = _build_reasoning(
         strategy_type,
@@ -250,6 +318,12 @@ def compile_acquisition_strategy(
         cost_policy=cost_policy,
         confirmation_points=confirmation_points,
         reasoning=reasoning,
+        organization_execution_profile=dict(strategy_decision.get("organization_execution_profile") or {}),
+        strategy_decision_explanation={
+            **dict(strategy_decision or {}),
+            "semantic_brief": semantic_brief,
+            "function_target_groups": function_target_groups,
+        },
     )
 
 
@@ -279,6 +353,29 @@ def _merge_execution_preferences_from_intent_axes(
 
 def _normalize(value: str) -> str:
     return " ".join(value.lower().split())
+
+
+def _grouped_role_hints(function_target_groups: list[dict[str, Any]]) -> list[str]:
+    hints: list[str] = []
+    for item in list(function_target_groups or []):
+        primary_role_hint = str(item.get("primary_role_hint") or "").strip()
+        if primary_role_hint and primary_role_hint not in hints:
+            hints.append(primary_role_hint)
+        for role_hint in list(item.get("role_hints") or []):
+            normalized = str(role_hint or "").strip()
+            if normalized and normalized not in hints:
+                hints.append(normalized)
+    return hints[:6]
+
+
+def _grouped_function_ids(function_target_groups: list[dict[str, Any]]) -> list[str]:
+    function_ids: list[str] = []
+    for item in list(function_target_groups or []):
+        for function_id in list(item.get("function_ids") or []):
+            normalized = str(function_id or "").strip()
+            if normalized and normalized not in function_ids:
+                function_ids.append(normalized)
+    return function_ids[:6]
 
 
 def _infer_scope_hints(text: str) -> list[str]:
@@ -418,9 +515,214 @@ def _infer_strategy_type(
     if company_key in {"google", "alphabet"}:
         if related_company_scope_labels(target_company, scope_hints):
             return "full_company_roster"
-    if company_key in LARGE_COMPANY_KEYS or len(scope_hints) >= 2:
+    if company_key in FALLBACK_LARGE_COMPANY_KEYS or len(scope_hints) >= 2:
         return "scoped_search_roster"
     return "full_company_roster"
+
+
+def _is_directional_company_query(
+    *,
+    text: str,
+    scope_hints: list[str],
+    organization_keywords: list[str],
+    keywords: list[str],
+    must_have_keywords: list[str],
+    must_have_facets: list[str],
+    role_buckets: list[str],
+) -> bool:
+    if len(scope_hints) >= 2:
+        return True
+    if organization_keywords or keywords or must_have_keywords or must_have_facets or role_buckets:
+        return True
+    return any(token in text for token in _DIRECTIONAL_SCOPE_HINT_TERMS)
+
+
+def _is_thematic_or_role_constrained_query(
+    *,
+    text: str,
+    keywords: list[str],
+    must_have_keywords: list[str],
+    must_have_facets: list[str],
+    role_buckets: list[str],
+) -> bool:
+    if keywords or must_have_keywords or must_have_facets or role_buckets:
+        return True
+    return any(token in text for token in _DIRECTIONAL_SCOPE_HINT_TERMS)
+
+
+def _is_explicit_full_roster_intent(
+    text: str,
+    *,
+    thematic_or_role_constrained: bool = False,
+) -> bool:
+    if not text:
+        return False
+    strong_full_roster_terms = [
+        "entire roster",
+        "company wide roster",
+        "company-wide roster",
+        "full roster",
+        "full company roster",
+        "先拿全量数据资产",
+        "先获取全量数据资产",
+        "先全量获取数据资产",
+        "先全量获取",
+        "全量获取 roster",
+        "全量 roster",
+    ]
+    if any(term in text for term in strong_full_roster_terms):
+        return True
+
+    weak_full_roster_terms = [
+        "all members",
+        "all employees",
+        "所有成员",
+        "全部成员",
+        "全体成员",
+        "全量",
+        "全员",
+    ]
+    if thematic_or_role_constrained:
+        return False
+    return any(term in text for term in weak_full_roster_terms)
+
+
+def _determine_strategy_decision(
+    *,
+    target_company: str,
+    text: str,
+    categories: list[str],
+    employment_statuses: list[str],
+    scope_hints: list[str],
+    execution_preferences: dict[str, object],
+    organization_keywords: list[str],
+    keywords: list[str],
+    must_have_keywords: list[str],
+    must_have_facets: list[str],
+    role_buckets: list[str],
+    semantic_brief: dict[str, Any] | None = None,
+    organization_execution_profile: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    normalized_profile = dict(organization_execution_profile or {})
+    normalized_categories = {str(item).strip().lower() for item in categories if str(item).strip()}
+    normalized_statuses = {str(item).strip().lower() for item in employment_statuses if str(item).strip()}
+    scope_semantics = dict(dict(semantic_brief or {}).get("scope") or {})
+    thematic_focus = dict(dict(semantic_brief or {}).get("thematic_focus") or {})
+    directional_query = bool(
+        scope_semantics.get("directional_query")
+        if scope_semantics
+        else _is_directional_company_query(
+            text=text,
+            scope_hints=scope_hints,
+            organization_keywords=organization_keywords,
+            keywords=keywords,
+            must_have_keywords=must_have_keywords,
+            must_have_facets=must_have_facets,
+            role_buckets=role_buckets,
+        )
+    )
+    thematic_or_role_constrained_query = bool(
+        thematic_focus.get("thematic_or_role_constrained")
+        if thematic_focus
+        else _is_thematic_or_role_constrained_query(
+            text=text,
+            keywords=keywords,
+            must_have_keywords=must_have_keywords,
+            must_have_facets=must_have_facets,
+            role_buckets=role_buckets,
+        )
+    )
+    explicit_override = str(execution_preferences.get("acquisition_strategy_override") or "").strip().lower()
+    if explicit_override in {
+        "full_company_roster",
+        "scoped_search_roster",
+        "former_employee_search",
+        "investor_firm_roster",
+    }:
+        return {
+            "strategy_type": explicit_override,
+            "decision_source": "explicit_override",
+            "reason_codes": ["explicit_strategy_override"],
+            "directional_query": directional_query,
+            "organization_execution_profile": normalized_profile,
+        }
+    if bool(execution_preferences.get("use_company_employees_lane")) and normalized_statuses != {"former"} and "investor" not in normalized_categories:
+        return {
+            "strategy_type": "full_company_roster",
+            "decision_source": "execution_preferences",
+            "reason_codes": ["use_company_employees_lane"],
+            "directional_query": directional_query,
+            "organization_execution_profile": normalized_profile,
+        }
+    if "investor" in normalized_categories:
+        return {
+            "strategy_type": "investor_firm_roster",
+            "decision_source": "population",
+            "reason_codes": ["investor_population"],
+            "directional_query": directional_query,
+            "organization_execution_profile": normalized_profile,
+        }
+    if employment_statuses == ["former"]:
+        return {
+            "strategy_type": "former_employee_search",
+            "decision_source": "population",
+            "reason_codes": ["former_only_population"],
+            "directional_query": directional_query,
+            "organization_execution_profile": normalized_profile,
+        }
+    if bool(scope_semantics.get("explicit_full_roster_intent")) or _is_explicit_full_roster_intent(
+        text,
+        thematic_or_role_constrained=thematic_or_role_constrained_query,
+    ):
+        return {
+            "strategy_type": "full_company_roster",
+            "decision_source": "request_semantics",
+            "reason_codes": ["explicit_full_roster_intent"],
+            "directional_query": directional_query,
+            "organization_execution_profile": normalized_profile,
+        }
+    default_mode = str(normalized_profile.get("default_acquisition_mode") or "").strip().lower()
+    if default_mode == "scoped_search_roster":
+        return {
+            "strategy_type": "scoped_search_roster",
+            "decision_source": "organization_execution_profile",
+            "reason_codes": ["org_profile_default_scoped_search"],
+            "directional_query": directional_query,
+            "organization_execution_profile": normalized_profile,
+        }
+    if default_mode == "hybrid":
+        return {
+            "strategy_type": "scoped_search_roster" if directional_query else "full_company_roster",
+            "decision_source": "organization_execution_profile",
+            "reason_codes": [
+                "org_profile_default_hybrid",
+                "hybrid_directional_query" if directional_query else "hybrid_broad_query",
+            ],
+            "directional_query": directional_query,
+            "organization_execution_profile": normalized_profile,
+        }
+    if default_mode == "full_company_roster":
+        return {
+            "strategy_type": "full_company_roster",
+            "decision_source": "organization_execution_profile",
+            "reason_codes": ["org_profile_default_full_roster"],
+            "directional_query": directional_query,
+            "organization_execution_profile": normalized_profile,
+        }
+    fallback_strategy_type = _infer_strategy_type(
+        target_company,
+        categories,
+        employment_statuses,
+        scope_hints,
+        execution_preferences,
+    )
+    return {
+        "strategy_type": fallback_strategy_type,
+        "decision_source": "fallback_rules",
+        "reason_codes": ["fallback_rule_strategy"],
+        "directional_query": directional_query,
+        "organization_execution_profile": normalized_profile,
+    }
 
 
 def _infer_role_hints(text: str, requested_role_buckets: list[str], requested_facets: list[str]) -> list[str]:
@@ -483,7 +785,12 @@ def _should_expand_directional_function_ids(
     return True
 
 
-def _infer_keyword_hints(text: str, explicit_keywords: list[str]) -> list[str]:
+def _infer_keyword_hints(
+    text: str,
+    explicit_keywords: list[str],
+    *,
+    prefer_explicit_keyword_focus: bool = False,
+) -> list[str]:
     hints: list[str] = []
     seen_keys: set[str] = set()
     for keyword in explicit_keywords:
@@ -504,6 +811,8 @@ def _infer_keyword_hints(text: str, explicit_keywords: list[str]) -> list[str]:
             continue
         seen_keys.add(dedupe_key)
         hints.append(candidate)
+    if prefer_explicit_keyword_focus and hints:
+        return hints[:12]
     lexical_hints = [
         ("reinforcement learning", "Reinforcement Learning"),
         ("rl", "RL"),
@@ -519,6 +828,9 @@ def _infer_keyword_hints(text: str, explicit_keywords: list[str]) -> list[str]:
         ("post train", "Post-train"),
         ("multimodal", "Multimodal"),
         ("multimodality", "Multimodal"),
+        ("world model", "World model"),
+        ("world models", "World model"),
+        ("世界模型", "World model"),
         ("vision-language", "Vision-language"),
         ("vision language", "Vision-language"),
         ("video generation", "Video generation"),
@@ -627,18 +939,30 @@ def _keyword_like_organization_terms(values: list[str], *, target_company: str) 
 
 def _roster_sources(strategy_type: str) -> list[str]:
     mapping = {
-        "full_company_roster": ["linkedin_company_roster", "company_directory_pages", "the_org"],
-        "scoped_search_roster": ["web_search_seed_queries", "linkedin_people_search", "company_suborg_sources"],
-        "former_employee_search": ["web_search_seed_queries", "linkedin_people_search", "news_and_bio_pages"],
+        "full_company_roster": ["harvest_company_employees", "company_directory_pages", "the_org"],
+        "scoped_search_roster": ["harvest_profile_search", "company_suborg_sources"],
+        "former_employee_search": ["harvest_profile_search", "news_and_bio_pages"],
         "investor_firm_roster": ["funding_graph", "investor_firm_roster", "linkedin_people_search"],
     }
     return list(mapping.get(strategy_type, ["linkedin_company_roster"]))
+
+
+def _search_channel_order(strategy_type: str) -> list[str]:
+    normalized_strategy = str(strategy_type or "").strip().lower()
+    if normalized_strategy == "full_company_roster":
+        return ["harvest_company_employees", "harvest_profile_search", "profile_detail_api"]
+    if normalized_strategy in {"scoped_search_roster", "former_employee_search"}:
+        return ["harvest_profile_search", "profile_detail_api"]
+    if normalized_strategy == "investor_firm_roster":
+        return ["funding_graph", "provider_people_search_api", "profile_detail_api"]
+    return ["profile_detail_api"]
 
 
 def _build_search_seed_queries(
     target_company: str,
     company_scope: list[str],
     role_hints: list[str],
+    function_target_groups: list[dict[str, Any]],
     keyword_hints: list[str],
     employment_statuses: list[str],
     *,
@@ -651,16 +975,28 @@ def _build_search_seed_queries(
 
     scope_fragment = " ".join(company_scope[1:] or company_scope[:1]).strip()
     company_fragment = target_company.strip()
-    broad_role = role_hints[0] if role_hints else "Employee"
     former_fragment = " former" if employment_statuses == ["former"] else ""
-
     focus_fragment = " ".join(keyword_hints[:2]).strip()
-    candidates = [
-        f"{company_fragment} {focus_fragment} {broad_role}{former_fragment}".strip(),
-        f"{scope_fragment} {focus_fragment} {broad_role}{former_fragment}".strip(),
-        f"{company_fragment} {focus_fragment} employee{former_fragment}".strip(),
-        f"{company_fragment} LinkedIn {focus_fragment} {broad_role}".strip(),
+    candidate_roles = [
+        str(item.get("primary_role_hint") or "").strip()
+        for item in list(function_target_groups or [])
+        if str(item.get("primary_role_hint") or "").strip()
     ]
+    if not candidate_roles:
+        candidate_roles = [str(item).strip() for item in list(role_hints or []) if str(item).strip()]
+    if not candidate_roles:
+        candidate_roles = ["Employee"]
+
+    candidates: list[str] = []
+    for role in candidate_roles[:3]:
+        candidates.extend(
+            [
+                f"{company_fragment} {focus_fragment} {role}{former_fragment}".strip(),
+                f"{scope_fragment} {focus_fragment} {role}{former_fragment}".strip(),
+                f"{company_fragment} LinkedIn {focus_fragment} {role}".strip(),
+            ]
+        )
+    candidates.append(f"{company_fragment} {focus_fragment} employee{former_fragment}".strip())
     deduped: list[str] = []
     seen: set[str] = set()
     for query in candidates:
@@ -687,7 +1023,16 @@ def _build_filter_hints(
     function_ids: list[str],
 ) -> dict[str, list[str]]:
     large_org_keyword_probe_mode = bool(cost_policy.get("large_org_keyword_probe_mode"))
-    prefer_known_scope_company_urls = large_org_keyword_probe_mode or normalize_company_key(target_company) in {"google", "alphabet"}
+    prefer_known_scope_company_urls = bool(
+        large_org_keyword_probe_mode
+        or related_company_scope_urls(target_company, company_scope)
+        or normalize_company_key(target_company) in LARGE_ORG_SCOPE_COMPANY_URLS
+    )
+    effective_function_ids = list(function_ids or [])
+    if not effective_function_ids and strategy_type == "full_company_roster":
+        company_key = normalize_company_key(target_company)
+        if company_key in FALLBACK_LARGE_COMPANY_KEYS:
+            effective_function_ids = list(FULL_COMPANY_TECHNICAL_ROSTER_FUNCTION_IDS)
     if strategy_type == "full_company_roster":
         company_values = _company_scope_company_filters(
             target_company=target_company,
@@ -703,19 +1048,32 @@ def _build_filter_hints(
         filters["past_companies"] = company_values
     else:
         filters["current_companies"] = company_values
-    if strategy_type == "full_company_roster":
+    if strategy_type == "full_company_roster" and _full_company_roster_defaults_to_primary_location(
+        target_company=target_company,
+        cost_policy=cost_policy,
+    ):
         filters["locations"] = [DEFAULT_PRIMARY_LOCATION]
     if large_org_keyword_probe_mode:
-        filters["function_ids"] = list(dict.fromkeys([*LARGE_ORG_PRIORITY_FUNCTION_IDS, *list(function_ids or [])]))
-    elif function_ids:
-        filters["function_ids"] = list(function_ids)
+        filters["function_ids"] = list(dict.fromkeys([*LARGE_ORG_PRIORITY_FUNCTION_IDS, *effective_function_ids]))
+    elif effective_function_ids:
+        filters["function_ids"] = list(effective_function_ids)
     if company_scope[1:]:
         filters["scope_keywords"] = company_scope[1:]
-    if role_hints and not function_ids and not (large_org_keyword_probe_mode and keyword_hints):
+    if role_hints and not effective_function_ids and not (large_org_keyword_probe_mode and keyword_hints):
         filters["job_titles"] = role_hints
     if keyword_hints:
         filters["keywords"] = keyword_hints
     return filters
+
+
+def _full_company_roster_defaults_to_primary_location(
+    *,
+    target_company: str,
+    cost_policy: dict[str, object],
+) -> bool:
+    if bool(cost_policy.get("large_org_keyword_probe_mode")):
+        return True
+    return normalize_company_key(target_company) in FALLBACK_LARGE_COMPANY_KEYS
 
 
 def _company_scope_company_filters(
@@ -744,12 +1102,13 @@ def _company_scope_company_filters(
         seen_company_signatures.add(signature)
         if normalized not in company_values:
             company_values.append(normalized)
-    if prefer_known_urls and normalize_company_key(target_company) in {"google", "alphabet"}:
-        google_url = LARGE_ORG_SCOPE_COMPANY_URLS["google"]
-        google_signature = _company_scope_filter_signature(google_url)
-        if google_signature not in seen_company_signatures and google_url not in company_values:
-            company_values.insert(0, google_url)
-            seen_company_signatures.add(google_signature)
+    if prefer_known_urls:
+        primary_url = LARGE_ORG_SCOPE_COMPANY_URLS.get(normalize_company_key(target_company))
+        if primary_url:
+            primary_signature = _company_scope_filter_signature(primary_url)
+            if primary_signature not in seen_company_signatures and primary_url not in company_values:
+                company_values.insert(0, primary_url)
+                seen_company_signatures.add(primary_signature)
     return company_values
 
 
@@ -786,8 +1145,6 @@ def _build_confirmation_points(
         )
     if employment_statuses == ["former"]:
         points.append("Confirm whether former employees should exclude anyone who has already returned to the target company.")
-    if "allow_high_cost_sources" not in execution_preferences:
-        points.append("Confirm when the workflow is allowed to spend on high-cost LinkedIn provider calls instead of low-cost web search.")
     implicit_keywords = _keywords_not_explicitly_mentioned(raw_text, keyword_hints)
     if implicit_keywords:
         points.append(
@@ -847,9 +1204,16 @@ def _potentially_ambiguous_terms_for_confirmation(
     text = str(raw_text or "")
     if not text:
         return []
+    company_scope_tokens = {
+        normalize_company_key(token)
+        for value in [target_company, *list(company_scope or [])]
+        for token in re.findall(r"[A-Za-z]{2,}", str(value or ""))
+        if normalize_company_key(token)
+    }
     known_terms = {
         normalize_company_key(target_company),
         *[normalize_company_key(item) for item in company_scope],
+        *company_scope_tokens,
         *[normalize_company_key(item) for item in keyword_hints],
         "google",
         "alphabet",
@@ -925,7 +1289,7 @@ def _build_cost_policy(
     policy = {
         "default_route_when_url_known": "linkedin_profile_scraper",
         "profile_scraper_mode": "full",
-        "collect_email": True,
+        "collect_email": False,
         "provider_people_search_mode": "fallback_only",
         "provider_people_search_query_strategy": "all_queries_union",
         "provider_people_search_min_expected_results": 10,
@@ -949,9 +1313,9 @@ def _build_cost_policy(
         "worker_retry_limit": 2,
         "large_org_member_threshold": 10000,
         "large_org_keyword_probe_mode": large_org_keyword_probe_mode,
-        "keyword_priority_only": large_org_keyword_probe_mode,
+        "keyword_priority_only": large_org_keyword_probe_mode or (strategy_type == "scoped_search_roster" and bool(keyword_hints)),
         "former_keyword_queries_only": large_org_keyword_probe_mode,
-        "high_cost_requires_approval": "allow_high_cost_sources" not in execution_preferences,
+        "former_broad_past_company_only": strategy_type == "full_company_roster" and not large_org_keyword_probe_mode,
     }
     if strategy_type == "former_employee_search":
         policy["provider_people_search_min_expected_results"] = 50
@@ -959,9 +1323,6 @@ def _build_cost_policy(
         policy["allow_cached_roster_fallback"] = False
         policy["allow_historical_profile_inheritance"] = False
         policy["allow_shared_provider_cache"] = False
-    if "allow_high_cost_sources" in execution_preferences:
-        policy["high_cost_requires_approval"] = False
-        policy["high_cost_sources_approved"] = bool(execution_preferences.get("allow_high_cost_sources"))
     if str(execution_preferences.get("precision_recall_bias") or "").strip().lower() in {
         "precision_first",
         "recall_first",
@@ -1003,26 +1364,17 @@ def _apply_scoped_search_provider_policy(
         return
     if "former_keyword_queries_only" not in execution_preferences:
         policy["former_keyword_queries_only"] = True
-    explicit_high_cost_preference = "allow_high_cost_sources" in execution_preferences
-    high_cost_approved = bool(
-        execution_preferences.get("allow_high_cost_sources")
-        or policy.get("high_cost_sources_approved")
-    )
-    if high_cost_approved:
-        policy["provider_people_search_mode"] = "primary_only"
-        try:
-            current_min_expected = int(policy.get("provider_people_search_min_expected_results") or 0)
-        except (TypeError, ValueError):
-            current_min_expected = 0
-        try:
-            current_pages = int(policy.get("provider_people_search_pages") or 0)
-        except (TypeError, ValueError):
-            current_pages = 0
-        policy["provider_people_search_min_expected_results"] = max(current_min_expected, 50)
-        policy["provider_people_search_pages"] = max(current_pages, 2)
-        return
-    if explicit_high_cost_preference and not bool(execution_preferences.get("allow_high_cost_sources")):
-        policy["provider_people_search_mode"] = "disabled"
+    policy["provider_people_search_mode"] = "primary_only"
+    try:
+        current_min_expected = int(policy.get("provider_people_search_min_expected_results") or 0)
+    except (TypeError, ValueError):
+        current_min_expected = 0
+    try:
+        current_pages = int(policy.get("provider_people_search_pages") or 0)
+    except (TypeError, ValueError):
+        current_pages = 0
+    policy["provider_people_search_min_expected_results"] = max(current_min_expected, 50)
+    policy["provider_people_search_pages"] = max(current_pages, 2)
 
 
 def _should_enable_large_org_keyword_probe_mode(
@@ -1036,15 +1388,19 @@ def _should_enable_large_org_keyword_probe_mode(
         return False
     if not keyword_hints:
         return False
-    target_key = normalize_company_key(target_company)
-    if target_key not in {"google", "alphabet"}:
-        return False
     scope_tokens = {normalize_company_key(item) for item in company_scope if item}
-    trigger_tokens = {"deepmind", "googledeepmind", "gemini", "veo", "nanobanana"}
     keyword_tokens = {normalize_company_key(item) for item in keyword_hints if item}
-    if not (scope_tokens & trigger_tokens or keyword_tokens & trigger_tokens):
+    related_scope_urls = related_company_scope_urls(target_company, company_scope)
+    if len(keyword_tokens) < 2:
         return False
-    return len(keyword_tokens) >= 2
+    if related_scope_urls:
+        return True
+    non_root_scope_tokens = {
+        token
+        for token in scope_tokens
+        if token and token != normalize_company_key(target_company)
+    }
+    return bool(non_root_scope_tokens)
 
 
 def _build_reasoning(
@@ -1073,11 +1429,6 @@ def _build_reasoning(
         reasoning.append("The user explicitly requested a full-company roster instead of a scoped acquisition.")
     if bool(execution_preferences.get("force_fresh_run")):
         reasoning.append("The user explicitly requested a fresh run instead of cache reuse or historical inheritance.")
-    if "allow_high_cost_sources" in execution_preferences:
-        if bool(execution_preferences.get("allow_high_cost_sources")):
-            reasoning.append("The user explicitly approved high-cost sources during plan compilation.")
-        else:
-            reasoning.append("The user explicitly disallowed high-cost sources during plan compilation.")
     if bool(execution_preferences.get("use_company_employees_lane")):
         reasoning.append("The plan uses the Harvest company-employees lane because the user asked for a broad current-company roster.")
     return reasoning

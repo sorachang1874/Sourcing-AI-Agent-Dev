@@ -1,22 +1,292 @@
 import unittest
 
-from sourcing_agent.asset_catalog import AssetCatalog
 from sourcing_agent.acquisition_strategy import compile_acquisition_strategy
+from sourcing_agent.asset_catalog import AssetCatalog
 from sourcing_agent.asset_reuse_planning import (
+    _baseline_population_default_reuse_sufficient,
+    _large_authoritative_baseline_local_reuse_eligible,
     _planned_company_employee_delta_specs,
     _planned_profile_search_query_specs,
     apply_asset_reuse_plan_to_sourcing_plan,
 )
 from sourcing_agent.domain import AcquisitionTask, JobRequest, RetrievalPlan
 from sourcing_agent.model_provider import DeterministicModelClient
+from sourcing_agent.organization_execution_profile import build_organization_execution_profile
 from sourcing_agent.plan_review import apply_plan_review_decision, build_plan_review_gate
 from sourcing_agent.planning import build_sourcing_plan
 from sourcing_agent.publication_planning import compile_publication_coverage_plan
-from sourcing_agent.request_normalization import resolve_request_intent_view
+from sourcing_agent.request_normalization import build_request_preview_payload, resolve_request_intent_view
 from sourcing_agent.search_planning import compile_search_strategy
 
 
 class PlanningModulesTest(unittest.TestCase):
+    def test_directional_technical_queries_default_to_researcher_and_engineer_population(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "帮我找Reflection AI的Post-train方向的人",
+                "target_company": "Reflection AI",
+                "categories": ["employee", "former_employee"],
+                "employment_statuses": ["current", "former"],
+                "keywords": ["Post-train"],
+            }
+        )
+
+        intent_view = resolve_request_intent_view(
+            request,
+            fallback_categories=["employee", "former_employee"],
+            fallback_employment_statuses=["current", "former"],
+        )
+
+        self.assertEqual(intent_view["categories"], ["researcher", "engineer"])
+
+    def test_explicit_role_queries_do_not_expand_beyond_requested_role_population(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "帮我找Reflection AI做Post-train方向的Researcher",
+                "target_company": "Reflection AI",
+                "categories": ["researcher"],
+                "employment_statuses": ["current", "former"],
+                "keywords": ["Post-train"],
+            }
+        )
+
+        intent_view = resolve_request_intent_view(
+            request,
+            fallback_categories=["employee", "former_employee"],
+            fallback_employment_statuses=["current", "former"],
+        )
+
+        self.assertEqual(intent_view["categories"], ["researcher"])
+
+    def test_implicit_single_role_categories_from_model_assisted_queries_expand_back_to_default_technical_population(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "帮我找Reflection AI的Post-train方向的人",
+                "target_company": "Reflection AI",
+                "categories": ["researcher"],
+                "employment_statuses": ["current", "former"],
+                "keywords": ["Post-train"],
+            }
+        )
+
+        intent_view = resolve_request_intent_view(
+            request,
+            fallback_categories=["employee", "former_employee"],
+            fallback_employment_statuses=["current", "former"],
+        )
+
+        self.assertEqual(intent_view["categories"], ["researcher", "engineer"])
+
+    def test_structured_single_role_requests_without_raw_query_remain_narrow(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "target_company": "Reflection AI",
+                "categories": ["researcher"],
+                "employment_statuses": ["current", "former"],
+                "keywords": ["Post-train"],
+            }
+        )
+
+        intent_view = resolve_request_intent_view(
+            request,
+            fallback_categories=["employee", "former_employee"],
+            fallback_employment_statuses=["current", "former"],
+        )
+
+        self.assertEqual(intent_view["categories"], ["researcher"])
+
+    def test_large_authoritative_baseline_local_reuse_accepts_small_backlog_ratios(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "帮我找Anthropic做Pre-training的人",
+                "target_company": "Anthropic",
+                "categories": ["researcher", "engineer"],
+                "employment_statuses": ["current", "former"],
+                "keywords": ["Pre-train"],
+            }
+        )
+        plan = build_sourcing_plan(
+            request,
+            AssetCatalog.discover(),
+            DeterministicModelClient(),
+            organization_execution_profile={"org_scale_band": "large"},
+        )
+
+        eligible = _large_authoritative_baseline_local_reuse_eligible(
+            baseline={
+                "authoritative": True,
+                "candidate_count": 3455,
+                "completeness_score": 86.95,
+                "profile_detail_count": 3389,
+                "missing_linkedin_count": 9,
+                "profile_completion_backlog_count": 57,
+                "manual_review_backlog_count": 12,
+            },
+            plan=plan,
+            baseline_candidate_count=3455,
+            current_lane_coverage={
+                "effective_ready": True,
+                "effective_candidate_count": 3015,
+            },
+            former_lane_coverage={
+                "effective_ready": True,
+                "effective_candidate_count": 556,
+            },
+        )
+
+        self.assertTrue(eligible)
+
+    def test_multi_snapshot_all_history_union_does_not_unlock_population_default_reuse(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "帮我找Google做多模态方向的人",
+                "target_company": "Google",
+                "target_scope": "full_company_asset",
+                "categories": ["researcher", "engineer"],
+                "employment_statuses": ["current", "former"],
+                "keywords": ["Multimodal"],
+            }
+        )
+        plan = build_sourcing_plan(
+            request,
+            AssetCatalog.discover(),
+            DeterministicModelClient(),
+            organization_execution_profile={
+                "target_company": "Google",
+                "org_scale_band": "large",
+                "default_acquisition_mode": "scoped_search_roster",
+            },
+        )
+
+        eligible = _baseline_population_default_reuse_sufficient(
+            request=request,
+            plan=plan,
+            current_strategy_type="scoped_search_roster",
+            baseline={
+                "authoritative": True,
+                "candidate_count": 3600,
+                "selected_snapshot_ids": ["google-baseline", "google-multimodal"],
+                "source_snapshot_selection": {
+                    "mode": "all_history_snapshots",
+                    "selected_snapshot_ids": ["google-baseline", "google-multimodal"],
+                },
+            },
+            baseline_candidate_count=3600,
+            current_lane_coverage={
+                "effective_ready": True,
+                "effective_candidate_count": 3100,
+            },
+            former_lane_coverage={
+                "effective_ready": True,
+                "effective_candidate_count": 520,
+            },
+        )
+
+        self.assertFalse(eligible)
+
+    def test_mode_only_preferred_multi_snapshot_subset_does_not_unlock_population_default_reuse(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "帮我找Google做多模态方向的人",
+                "target_company": "Google",
+                "target_scope": "full_company_asset",
+                "categories": ["researcher", "engineer"],
+                "employment_statuses": ["current", "former"],
+                "keywords": ["Multimodal"],
+            }
+        )
+        plan = build_sourcing_plan(
+            request,
+            AssetCatalog.discover(),
+            DeterministicModelClient(),
+            organization_execution_profile={
+                "target_company": "Google",
+                "org_scale_band": "large",
+                "default_acquisition_mode": "scoped_search_roster",
+            },
+        )
+
+        eligible = _baseline_population_default_reuse_sufficient(
+            request=request,
+            plan=plan,
+            current_strategy_type="scoped_search_roster",
+            baseline={
+                "authoritative": True,
+                "candidate_count": 3600,
+                "selected_snapshot_ids": ["google-baseline", "google-multimodal"],
+                "source_snapshot_selection": {
+                    "mode": "preferred_snapshot_subset",
+                    "selected_snapshot_ids": ["google-baseline", "google-multimodal"],
+                },
+            },
+            baseline_candidate_count=3600,
+            current_lane_coverage={
+                "effective_ready": True,
+                "effective_candidate_count": 3100,
+            },
+            former_lane_coverage={
+                "effective_ready": True,
+                "effective_candidate_count": 520,
+            },
+        )
+
+        self.assertFalse(eligible)
+
+    def test_promoted_multi_snapshot_subset_can_unlock_population_default_reuse(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "帮我找Google做多模态方向的人",
+                "target_company": "Google",
+                "target_scope": "full_company_asset",
+                "categories": ["researcher", "engineer"],
+                "employment_statuses": ["current", "former"],
+                "keywords": ["Multimodal"],
+            }
+        )
+        plan = build_sourcing_plan(
+            request,
+            AssetCatalog.discover(),
+            DeterministicModelClient(),
+            organization_execution_profile={
+                "target_company": "Google",
+                "org_scale_band": "large",
+                "default_acquisition_mode": "scoped_search_roster",
+            },
+        )
+
+        eligible = _baseline_population_default_reuse_sufficient(
+            request=request,
+            plan=plan,
+            current_strategy_type="scoped_search_roster",
+            baseline={
+                "authoritative": True,
+                "candidate_count": 3600,
+                "selected_snapshot_ids": ["google-baseline", "google-multimodal"],
+                "source_snapshot_selection": {
+                    "mode": "preferred_snapshot_subset",
+                    "selected_snapshot_ids": ["google-baseline", "google-multimodal"],
+                    "coverage_proof": {
+                        "contract": "promoted_aggregate_coverage",
+                        "status": "promoted",
+                        "proof_kind": "promoted_authoritative_aggregate",
+                        "covered_snapshot_ids": ["google-baseline", "google-multimodal"],
+                        "coverage_scope": "request_family",
+                    },
+                },
+            },
+            baseline_candidate_count=3600,
+            current_lane_coverage={
+                "effective_ready": True,
+                "effective_candidate_count": 3100,
+            },
+            former_lane_coverage={
+                "effective_ready": True,
+                "effective_candidate_count": 520,
+            },
+        )
+
+        self.assertTrue(eligible)
+
     def test_resolve_request_intent_view_merges_axes_into_effective_execution_semantics(self) -> None:
         intent_view = resolve_request_intent_view(
             {
@@ -221,18 +491,81 @@ class PlanningModulesTest(unittest.TestCase):
             request_payload,
             plan_payload,
             {
-                "allow_high_cost_sources": True,
                 "provider_people_search_query_strategy": "all_queries_union",
             },
         )
 
-        self.assertTrue(updated_request["execution_preferences"]["allow_high_cost_sources"])
+        self.assertEqual(
+            updated_request["execution_preferences"]["provider_people_search_query_strategy"],
+            "all_queries_union",
+        )
         cost_policy = updated_plan["acquisition_strategy"]["cost_policy"]
         self.assertEqual(cost_policy["provider_people_search_mode"], "primary_only")
         self.assertEqual(cost_policy["provider_people_search_query_strategy"], "all_queries_union")
         self.assertEqual(cost_policy["provider_people_search_min_expected_results"], 50)
         self.assertEqual(cost_policy["provider_people_search_pages"], 2)
         self.assertTrue(cost_policy["former_keyword_queries_only"])
+
+    def test_plan_review_gate_exposes_target_company_linkedin_override_field(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "给我 Safe Superintelligence Inc 的成员",
+                "target_company": "Safe Superintelligence Inc",
+            }
+        )
+        plan = build_sourcing_plan(request, AssetCatalog.discover(), DeterministicModelClient())
+
+        gate = build_plan_review_gate(request, plan)
+
+        self.assertIn("target_company_linkedin_url", gate["editable_fields"])
+
+    def test_plan_review_decision_persists_target_company_linkedin_override(self) -> None:
+        request_payload = {
+            "raw_user_request": "给我 Safe Superintelligence Inc 的成员",
+            "target_company": "Safe Superintelligence Inc",
+            "execution_preferences": {},
+        }
+        plan_payload = {
+            "acquisition_strategy": {
+                "strategy_type": "full_company_roster",
+                "company_scope": ["Safe Superintelligence Inc"],
+                "filter_hints": {},
+                "cost_policy": {},
+            },
+            "acquisition_tasks": [],
+        }
+
+        updated_request, _ = apply_plan_review_decision(
+            request_payload,
+            plan_payload,
+            {
+                "target_company_linkedin_url": "https://www.linkedin.com/company/ssi-ai/?trk=public_profile_topcard-current-company",
+            },
+        )
+
+        self.assertEqual(
+            updated_request["execution_preferences"]["target_company_linkedin_url"],
+            "https://www.linkedin.com/company/ssi-ai/",
+        )
+        self.assertEqual(updated_request["execution_preferences"]["target_company_linkedin_slug"], "ssi-ai")
+
+    def test_request_preview_exposes_manual_target_company_identity_override(self) -> None:
+        preview = build_request_preview_payload(
+            request={
+                "raw_user_request": "给我 Safe Superintelligence Inc 的成员",
+                "target_company": "Safe Superintelligence Inc",
+                "execution_preferences": {
+                    "target_company_linkedin_url": "https://www.linkedin.com/company/ssi-ai/",
+                },
+            }
+        )
+
+        self.assertEqual(
+            preview["target_company_identity"]["linkedin_company_url"],
+            "https://www.linkedin.com/company/ssi-ai/",
+        )
+        self.assertEqual(preview["target_company_identity"]["linkedin_slug"], "ssi-ai")
+        self.assertEqual(preview["target_company_identity"]["resolver"], "manual_review_override")
 
     def test_keyword_priority_scoped_search_uses_function_ids_without_job_titles_or_alias_duplication(self) -> None:
         request = JobRequest.from_payload(
@@ -256,7 +589,7 @@ class PlanningModulesTest(unittest.TestCase):
         strategy = compile_acquisition_strategy(request, ["researcher", "engineer"], ["current", "former"], retrieval_plan)
 
         self.assertEqual(strategy.search_seed_queries, ["Reasoning"])
-        self.assertEqual(strategy.filter_hints.get("function_ids"), ["24", "8"])
+        self.assertCountEqual(strategy.filter_hints.get("function_ids"), ["24", "8"])
         self.assertNotIn("job_titles", strategy.filter_hints)
         self.assertTrue(strategy.cost_policy.get("former_keyword_queries_only"))
 
@@ -279,8 +612,81 @@ class PlanningModulesTest(unittest.TestCase):
         strategy = compile_acquisition_strategy(request, ["employee"], ["current", "former"], retrieval_plan)
 
         self.assertEqual(strategy.search_seed_queries, ["Reasoning"])
-        self.assertEqual(strategy.filter_hints.get("function_ids"), ["24", "8"])
+        self.assertCountEqual(strategy.filter_hints.get("function_ids"), ["24", "8"])
         self.assertNotIn("job_titles", strategy.filter_hints)
+
+    def test_openai_pretrain_directional_query_prefers_scoped_search_keyword_shard(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "给我OpenAI做Pre-train方向的人",
+                "query": "OpenAI Pre-train方向的人",
+                "target_company": "OpenAI",
+                "categories": ["employee"],
+                "employment_statuses": ["current", "former"],
+                "keywords": ["Pre-train"],
+                "execution_preferences": {
+                    "keyword_priority_only": True,
+                    "provider_people_search_query_strategy": "all_queries_union",
+                },
+            }
+        )
+        retrieval_plan = RetrievalPlan(strategy="hybrid", reason="test")
+        strategy = compile_acquisition_strategy(
+            request,
+            ["employee"],
+            ["current", "former"],
+            retrieval_plan,
+            organization_execution_profile={
+                "target_company": "OpenAI",
+                "org_scale_band": "large",
+                "default_acquisition_mode": "scoped_search_roster",
+                "reason_codes": ["large_scale_signal"],
+            },
+        )
+
+        self.assertEqual(strategy.strategy_type, "scoped_search_roster")
+        self.assertEqual(strategy.search_seed_queries, ["Pre-train"])
+        self.assertCountEqual(strategy.filter_hints.get("function_ids"), ["24", "8"])
+        self.assertNotIn("job_titles", strategy.filter_hints)
+        self.assertEqual(
+            strategy.strategy_decision_explanation.get("decision_source"),
+            "organization_execution_profile",
+        )
+
+    def test_openai_infra_and_posttrain_query_keeps_distinct_keyword_shards(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "给我OpenAI做Infra和Post-train方向的人",
+                "query": "OpenAI Infra 和 Post-train 方向的人",
+                "target_company": "OpenAI",
+                "categories": ["employee"],
+                "employment_statuses": ["current", "former"],
+                "keywords": ["Infra", "Post-train"],
+                "execution_preferences": {
+                    "keyword_priority_only": True,
+                    "provider_people_search_query_strategy": "all_queries_union",
+                },
+            }
+        )
+        retrieval_plan = RetrievalPlan(strategy="hybrid", reason="test")
+        strategy = compile_acquisition_strategy(
+            request,
+            ["employee"],
+            ["current", "former"],
+            retrieval_plan,
+            organization_execution_profile={
+                "target_company": "OpenAI",
+                "org_scale_band": "large",
+                "default_acquisition_mode": "scoped_search_roster",
+                "reason_codes": ["large_scale_signal"],
+            },
+        )
+
+        self.assertEqual(strategy.strategy_type, "scoped_search_roster")
+        self.assertEqual(strategy.search_seed_queries, ["Infra", "Post-train"])
+        self.assertCountEqual(strategy.filter_hints.get("function_ids"), ["8", "24"])
+        self.assertNotIn("job_titles", strategy.filter_hints)
+        self.assertTrue(strategy.cost_policy.get("former_keyword_queries_only"))
 
     def test_acquisition_keyword_hints_exclude_outreach_only_terms(self) -> None:
         request = JobRequest(
@@ -299,7 +705,7 @@ class PlanningModulesTest(unittest.TestCase):
         strategy = compile_acquisition_strategy(request, ["employee"], ["current"], retrieval_plan)
 
         keyword_hints = list(strategy.filter_hints.get("keywords") or [])
-        self.assertIn("multimodal", keyword_hints)
+        self.assertIn("Multimodal", keyword_hints)
         self.assertIn("Veo", keyword_hints)
         self.assertIn("Nano Banana", keyword_hints)
         self.assertNotIn("Greater China experience", keyword_hints)
@@ -316,13 +722,162 @@ class PlanningModulesTest(unittest.TestCase):
 
         self.assertEqual(strategy.strategy_type, "full_company_roster")
         self.assertIn("Google DeepMind", strategy.company_scope)
-        self.assertIn("general_web_search_relation_check", strategy.search_channel_order)
+        self.assertEqual(
+            strategy.search_channel_order,
+            ["harvest_company_employees", "harvest_profile_search", "profile_detail_api"],
+        )
+        self.assertEqual(strategy.roster_sources, ["harvest_company_employees", "company_directory_pages", "the_org"])
         self.assertEqual(strategy.filter_hints.get("function_ids"), ["8", "9", "19", "24"])
         self.assertNotIn("job_titles", strategy.filter_hints)
         self.assertTrue(any("Gemini" in query for query in strategy.search_seed_queries))
         self.assertTrue(strategy.cost_policy.get("allow_company_employee_api"))
         self.assertEqual(strategy.cost_policy.get("provider_people_search_mode"), "fallback_only")
-        self.assertTrue(strategy.cost_policy.get("collect_email"))
+        self.assertFalse(strategy.cost_policy.get("collect_email"))
+
+    def test_organization_execution_profile_prefers_scoped_search_for_large_org_directional_query(self) -> None:
+        request = JobRequest(
+            raw_user_request="给我 Google 做多模态和 Pre-train 方向的人",
+            query="Google multimodal pre-train people",
+            target_company="Google",
+            keywords=["Multimodal", "Pre-train"],
+            employment_statuses=["current", "former"],
+        )
+        retrieval_plan = RetrievalPlan(strategy="hybrid", reason="test")
+        strategy = compile_acquisition_strategy(
+            request,
+            ["employee"],
+            ["current", "former"],
+            retrieval_plan,
+            organization_execution_profile={
+                "target_company": "Google",
+                "org_scale_band": "large",
+                "default_acquisition_mode": "scoped_search_roster",
+                "reason_codes": ["large_scale_signal"],
+            },
+        )
+
+        self.assertEqual(strategy.strategy_type, "scoped_search_roster")
+        self.assertEqual(
+            strategy.strategy_decision_explanation.get("decision_source"),
+            "organization_execution_profile",
+        )
+        self.assertIn(
+            "org_profile_default_scoped_search",
+            list(strategy.strategy_decision_explanation.get("reason_codes") or []),
+        )
+        self.assertEqual(
+            dict(strategy.organization_execution_profile).get("default_acquisition_mode"),
+            "scoped_search_roster",
+        )
+        self.assertEqual(strategy.roster_sources, ["harvest_profile_search", "company_suborg_sources"])
+
+    def test_organization_execution_profile_prefers_hybrid_broad_query_full_roster(self) -> None:
+        request = JobRequest(
+            raw_user_request="帮我找 Anthropic 的成员",
+            query="Anthropic employees",
+            target_company="Anthropic",
+            employment_statuses=["current", "former"],
+        )
+        retrieval_plan = RetrievalPlan(strategy="hybrid", reason="test")
+        strategy = compile_acquisition_strategy(
+            request,
+            ["employee"],
+            ["current", "former"],
+            retrieval_plan,
+            organization_execution_profile={
+                "target_company": "Anthropic",
+                "org_scale_band": "medium",
+                "default_acquisition_mode": "hybrid",
+                "reason_codes": ["medium_scale_signal"],
+            },
+        )
+
+        self.assertEqual(strategy.strategy_type, "full_company_roster")
+        self.assertEqual(
+            strategy.strategy_decision_explanation.get("decision_source"),
+            "organization_execution_profile",
+        )
+        self.assertIn(
+            "hybrid_broad_query",
+            list(strategy.strategy_decision_explanation.get("reason_codes") or []),
+        )
+
+    def test_execution_profile_keeps_small_org_small_even_with_many_shards(self) -> None:
+        profile = build_organization_execution_profile(
+            target_company="Reflection AI",
+            registry_row={
+                "target_company": "Reflection AI",
+                "company_key": "reflectionai",
+                "snapshot_id": "snap_reflection",
+                "candidate_count": 153,
+                "current_lane_effective_candidate_count": 147,
+                "former_lane_effective_candidate_count": 6,
+                "current_lane_effective_ready": True,
+                "former_lane_effective_ready": True,
+                "completeness_score": 39.83,
+                "current_lane_coverage": {"effective_candidate_count": 147, "effective_ready": True},
+                "former_lane_coverage": {"effective_candidate_count": 6, "effective_ready": True},
+            },
+            shard_rows=[
+                {"lane": "profile_search", "employment_scope": "current", "estimated_total_count": 153}
+                for _ in range(12)
+            ],
+        )
+
+        self.assertEqual(profile["org_scale_band"], "small")
+        self.assertEqual(profile["default_acquisition_mode"], "full_company_roster")
+        self.assertIn("small_scale_signal", list(profile.get("reason_codes") or []))
+
+    def test_execution_profile_treats_humansand_mid_hundreds_baseline_as_small_org(self) -> None:
+        profile = build_organization_execution_profile(
+            target_company="Humans&",
+            registry_row={
+                "target_company": "Humans&",
+                "company_key": "humansand",
+                "snapshot_id": "snap_humansand",
+                "candidate_count": 600,
+                "current_lane_effective_candidate_count": 520,
+                "former_lane_effective_candidate_count": 80,
+                "current_lane_effective_ready": True,
+                "former_lane_effective_ready": True,
+                "completeness_score": 90.0,
+                "current_lane_coverage": {"effective_candidate_count": 520, "effective_ready": True},
+                "former_lane_coverage": {"effective_candidate_count": 80, "effective_ready": True},
+            },
+        )
+
+        self.assertEqual(profile["org_scale_band"], "small")
+        self.assertEqual(profile["default_acquisition_mode"], "full_company_roster")
+        self.assertIn("small_scale_signal", list(profile.get("reason_codes") or []))
+
+    def test_execution_profile_promotes_known_large_company_even_with_small_local_baseline(self) -> None:
+        profile = build_organization_execution_profile(
+            target_company="OpenAI",
+            registry_row={
+                "target_company": "OpenAI",
+                "company_key": "openai",
+                "snapshot_id": "snap_openai",
+                "candidate_count": 153,
+                "current_lane_effective_candidate_count": 117,
+                "former_lane_effective_candidate_count": 36,
+                "current_lane_effective_ready": True,
+                "former_lane_effective_ready": True,
+                "completeness_score": 28.35,
+                "current_lane_coverage": {"effective_candidate_count": 117, "effective_ready": True},
+                "former_lane_coverage": {"effective_candidate_count": 36, "effective_ready": True},
+            },
+        )
+
+        self.assertEqual(profile["org_scale_band"], "large")
+        self.assertEqual(profile["default_acquisition_mode"], "scoped_search_roster")
+        self.assertIn("known_large_company_override", list(profile.get("reason_codes") or []))
+
+    def test_execution_profile_treats_xai_as_known_large_company(self) -> None:
+        profile = build_organization_execution_profile(target_company="xAI")
+
+        self.assertEqual(profile["org_scale_band"], "large")
+        self.assertEqual(profile["default_acquisition_mode"], "scoped_search_roster")
+        self.assertIn("fallback_known_large_company", list(profile.get("reason_codes") or []))
 
     def test_former_employee_strategy_prefers_past_company_recall(self) -> None:
         request = JobRequest(
@@ -338,6 +893,35 @@ class PlanningModulesTest(unittest.TestCase):
         self.assertNotIn("exclude_current_companies", strategy.filter_hints)
         self.assertFalse(strategy.cost_policy.get("allow_company_employee_api"))
         self.assertEqual(strategy.cost_policy.get("provider_people_search_min_expected_results"), 50)
+
+    def test_directional_xai_query_with_all_members_language_stays_scoped_search(self) -> None:
+        request = JobRequest(
+            raw_user_request="我要 xAI 做 Coding 方向的全部成员",
+            query="xAI coding all members",
+            target_company="xAI",
+            keywords=["Coding"],
+            must_have_facets=["coding"],
+            employment_statuses=["current", "former"],
+        )
+        retrieval_plan = RetrievalPlan(strategy="hybrid", reason="test")
+        strategy = compile_acquisition_strategy(
+            request,
+            ["employee"],
+            ["current", "former"],
+            retrieval_plan,
+            organization_execution_profile={
+                "target_company": "xAI",
+                "org_scale_band": "large",
+                "default_acquisition_mode": "scoped_search_roster",
+                "reason_codes": ["known_large_company_override"],
+            },
+        )
+
+        self.assertEqual(strategy.strategy_type, "scoped_search_roster")
+        self.assertNotIn(
+            "explicit_full_roster_intent",
+            list(strategy.strategy_decision_explanation.get("reason_codes") or []),
+        )
 
     def test_publication_coverage_includes_engineering_and_blog(self) -> None:
         request = JobRequest(
@@ -509,6 +1093,44 @@ class PlanningModulesTest(unittest.TestCase):
             linkedin_task.metadata["intent_view"]["profile_detail_limit"],
             linkedin_task.metadata["profile_detail_limit"],
         )
+        semantic_brief = dict(plan.acquisition_strategy.strategy_decision_explanation.get("semantic_brief") or {})
+        role_targeting = dict(semantic_brief.get("role_targeting") or {})
+        self.assertEqual(semantic_brief.get("target_company"), "Google")
+        self.assertEqual(role_targeting.get("resolved_role_buckets"), ["product_management"])
+        self.assertEqual(role_targeting.get("function_ids"), ["19"])
+
+    def test_scoped_search_plan_prefetches_full_profile_detail_baseline(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "我想要OpenAI做Reasoning方向的人",
+                "query": "OpenAI Reasoning方向的人",
+                "target_company": "OpenAI",
+                "categories": ["employee"],
+                "employment_statuses": ["current", "former"],
+                "keywords": ["Reasoning"],
+                "execution_preferences": {
+                    "keyword_priority_only": True,
+                    "provider_people_search_query_strategy": "all_queries_union",
+                },
+            }
+        )
+
+        plan = build_sourcing_plan(
+            request,
+            AssetCatalog.discover(),
+            DeterministicModelClient(),
+            organization_execution_profile={
+                "target_company": "OpenAI",
+                "org_scale_band": "large",
+                "default_acquisition_mode": "scoped_search_roster",
+                "reason_codes": ["large_scale_signal"],
+            },
+        )
+        linkedin_task = next(task for task in plan.acquisition_tasks if task.task_type == "enrich_linkedin_profiles")
+
+        self.assertEqual(linkedin_task.metadata["strategy_type"], "scoped_search_roster")
+        self.assertTrue(linkedin_task.metadata["full_roster_profile_prefetch"])
+        self.assertTrue(linkedin_task.metadata["intent_view"]["full_roster_profile_prefetch"])
 
     def test_asset_reuse_application_syncs_delta_fields_into_task_intent_view(self) -> None:
         request = JobRequest.from_payload(
@@ -599,7 +1221,43 @@ class PlanningModulesTest(unittest.TestCase):
                 "https://www.linkedin.com/company/deepmind/",
             ],
         )
-        self.assertEqual(profile_specs[0]["function_ids"], ["19"])
+
+    def test_asset_reuse_delta_specs_prefer_explicit_search_seed_queries_over_broad_filter_keywords(self) -> None:
+        task = AcquisitionTask(
+            task_id="task_openai_pretrain_scope",
+            task_type="acquire_full_roster",
+            title="Acquire scoped OpenAI roster",
+            description="test",
+            source_hint="test",
+            status="ready",
+            metadata={
+                "strategy_type": "scoped_search_roster",
+                "search_seed_queries": ["Pre-train"],
+                "filter_hints": {
+                    "current_companies": ["https://www.linkedin.com/company/openai/"],
+                    "function_ids": ["24", "8"],
+                    "keywords": ["Pre-train", "research"],
+                },
+                "employment_statuses": ["current", "former"],
+                "intent_view": {
+                    "strategy_type": "scoped_search_roster",
+                    "search_seed_queries": ["Pre-train"],
+                    "filter_hints": {
+                        "current_companies": ["https://www.linkedin.com/company/openai/"],
+                        "function_ids": ["24", "8"],
+                        "keywords": ["Pre-train", "research"],
+                    },
+                    "employment_statuses": ["current", "former"],
+                },
+            },
+        )
+
+        profile_specs, profile_queries = _planned_profile_search_query_specs(task)
+
+        self.assertEqual(profile_queries, ["Pre-train"])
+        self.assertEqual(profile_specs[0]["search_query"], "Pre-train")
+        self.assertEqual(profile_specs[0]["employment_scope"], "current")
+        self.assertEqual(profile_specs[0]["function_ids"], ["24", "8"])
 
     def test_sourcing_plan_contains_search_strategy_and_filter_layers(self) -> None:
         request = JobRequest(
@@ -611,7 +1269,7 @@ class PlanningModulesTest(unittest.TestCase):
 
         layer_ids = [item.get("layer_id") for item in plan.retrieval_plan.filter_layers]
         bundle_ids = [item.bundle_id for item in plan.search_strategy.query_bundles]
-        self.assertIn("semantic_vector_rerank", layer_ids)
+        self.assertIn("lexical_alias_recall", layer_ids)
         self.assertIn("manual_review_queue", layer_ids)
         self.assertIn("public_interviews", bundle_ids)
 
@@ -734,7 +1392,6 @@ class PlanningModulesTest(unittest.TestCase):
             organization_keywords=["Google DeepMind", "Veo", "Nano Banana"],
             execution_preferences={
                 "use_company_employees_lane": True,
-                "allow_high_cost_sources": False,
             },
             scope_disambiguation={
                 "inferred_scope": "sub_org_only",
@@ -763,7 +1420,6 @@ class PlanningModulesTest(unittest.TestCase):
             organization_keywords=["Google DeepMind", "Veo", "Nano Banana"],
             execution_preferences={
                 "use_company_employees_lane": True,
-                "allow_high_cost_sources": False,
                 "confirmed_company_scope": ["Google", "Google DeepMind"],
             },
             scope_disambiguation={
@@ -778,9 +1434,9 @@ class PlanningModulesTest(unittest.TestCase):
         gate = build_plan_review_gate(request, plan)
 
         self.assertEqual(plan.acquisition_strategy.strategy_type, "full_company_roster")
-        self.assertEqual(gate["status"], "ready")
         self.assertNotIn("google_scope_ambiguity_requires_confirmation", gate["reasons"])
         self.assertEqual(gate["scope_disambiguation"]["source"], "llm")
+        self.assertFalse(gate["scope_disambiguation"]["requires_confirmation"])
 
     def test_plan_review_gate_exposes_keyword_first_controls(self) -> None:
         request = JobRequest(
@@ -802,7 +1458,7 @@ class PlanningModulesTest(unittest.TestCase):
     def test_full_company_preferences_surface_in_plan_without_extra_review(self) -> None:
         request = JobRequest.from_payload(
             {
-                "raw_user_request": "我想要 Humans& 公司全量成员，重新跑，不要高成本。",
+                "raw_user_request": "我想要 Humans& 公司全量成员，重新跑。",
                 "target_company": "Humans&",
                 "planning_mode": "heuristic",
             }
@@ -813,13 +1469,11 @@ class PlanningModulesTest(unittest.TestCase):
         self.assertEqual(request.execution_preferences["acquisition_strategy_override"], "full_company_roster")
         self.assertTrue(request.execution_preferences["force_fresh_run"])
         self.assertTrue(request.execution_preferences["use_company_employees_lane"])
-        self.assertFalse(request.execution_preferences["allow_high_cost_sources"])
         self.assertEqual(plan.acquisition_strategy.strategy_type, "full_company_roster")
         self.assertTrue(plan.acquisition_strategy.cost_policy["allow_company_employee_api"])
         self.assertFalse(plan.acquisition_strategy.cost_policy["allow_cached_roster_fallback"])
         self.assertFalse(plan.acquisition_strategy.cost_policy["allow_historical_profile_inheritance"])
         self.assertFalse(plan.acquisition_strategy.cost_policy["allow_shared_provider_cache"])
-        self.assertFalse(plan.acquisition_strategy.cost_policy["high_cost_requires_approval"])
         self.assertEqual(plan.open_questions, [])
         self.assertTrue(
             any("company-employees lane" in item for item in plan.intent_brief.default_execution_strategy),
@@ -864,17 +1518,63 @@ class PlanningModulesTest(unittest.TestCase):
         self.assertEqual(plan.acquisition_strategy.strategy_type, "full_company_roster")
         self.assertEqual(acquire_task.metadata["max_pages"], 100)
         self.assertEqual(acquire_task.metadata["page_limit"], 25)
-        self.assertEqual(acquire_task.metadata["company_employee_shard_strategy"], "adaptive_us_function_partition")
+        self.assertEqual(acquire_task.metadata["company_employee_shard_strategy"], "adaptive_us_technical_partition")
         self.assertEqual(acquire_task.metadata["company_employee_shards"], [])
         self.assertEqual(
             acquire_task.metadata["company_employee_shard_policy"]["root_filters"],
-            {"locations": ["United States"]},
+            {"locations": ["United States"], "function_ids": ["8", "24"]},
         )
         self.assertEqual(
-            acquire_task.metadata["company_employee_shard_policy"]["partition_rules"][0]["include_patch"]["function_ids"],
-            ["8"],
+            acquire_task.metadata["company_employee_shard_policy"]["partition_rules"][0]["include_patch"]["exclude_function_ids"],
+            ["24"],
         )
         self.assertTrue(acquire_task.metadata["include_former_search_seed"])
+
+    def test_small_org_full_company_roster_does_not_force_us_location_on_former_seed(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "帮我找 MiroMind.ai 的全部成员",
+                "target_company": "MiroMind.ai",
+                "employment_statuses": ["current", "former"],
+            }
+        )
+
+        plan = build_sourcing_plan(request, AssetCatalog.discover(), DeterministicModelClient())
+        former_task = next(task for task in plan.acquisition_tasks if task.task_type == "acquire_former_search_seed")
+
+        self.assertEqual(plan.acquisition_strategy.strategy_type, "full_company_roster")
+        self.assertNotIn("locations", plan.acquisition_strategy.filter_hints)
+        self.assertNotIn("locations", former_task.metadata["filter_hints"])
+
+    def test_xai_full_company_roster_plan_uses_overflow_tolerant_shard_policy(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "给我 xAI 的所有成员",
+                "target_company": "xAI",
+            }
+        )
+
+        plan = build_sourcing_plan(request, AssetCatalog.discover(), DeterministicModelClient())
+        acquire_task = next(task for task in plan.acquisition_tasks if task.task_type == "acquire_full_roster")
+        shard_policy = dict(acquire_task.metadata.get("company_employee_shard_policy") or {})
+
+        self.assertEqual(plan.acquisition_strategy.strategy_type, "full_company_roster")
+        self.assertEqual(acquire_task.metadata["max_pages"], 100)
+        self.assertEqual(acquire_task.metadata["company_employee_shard_strategy"], "adaptive_us_technical_partition")
+        self.assertTrue(acquire_task.metadata["include_former_search_seed"])
+        self.assertEqual(
+            shard_policy.get("root_filters"),
+            {"locations": ["United States"], "function_ids": ["8", "24"]},
+        )
+        self.assertEqual(
+            plan.acquisition_strategy.filter_hints.get("function_ids"),
+            ["8", "24"],
+        )
+        self.assertTrue(shard_policy.get("allow_overflow_partial"))
+        self.assertEqual(
+            [item.get("include_patch", {}).get("exclude_function_ids") for item in list(shard_policy.get("partition_rules") or [])],
+            [["24"], ["8"]],
+        )
 
     def test_scoped_search_roster_with_current_and_former_adds_former_seed_task(self) -> None:
         request = JobRequest.from_payload(

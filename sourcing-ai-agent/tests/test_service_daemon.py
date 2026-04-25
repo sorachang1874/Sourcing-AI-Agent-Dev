@@ -6,7 +6,14 @@ from unittest import mock
 import json
 from pathlib import Path
 
-from sourcing_agent.service_daemon import SingleInstanceError, WorkerDaemonService, read_service_status, render_systemd_unit
+from sourcing_agent.service_daemon import (
+    SingleInstanceError,
+    WorkerDaemonService,
+    read_service_status,
+    read_service_stop_request,
+    render_systemd_unit,
+    request_service_stop,
+)
 
 
 class ServiceDaemonTest(unittest.TestCase):
@@ -118,6 +125,43 @@ class ServiceDaemonTest(unittest.TestCase):
             release.set()
             thread.join(timeout=2.0)
 
+    def test_service_accepts_persisted_cooperative_stop_request(self) -> None:
+        ticks: list[int] = []
+        first_tick_done = threading.Event()
+
+        def callback(payload: dict) -> dict:  # noqa: ARG001
+            ticks.append(len(ticks) + 1)
+            first_tick_done.set()
+            return {"status": "completed", "daemon": {"claimed_count": 0, "executed_count": 0}}
+
+        service = WorkerDaemonService(
+            runtime_dir=self.runtime_dir,
+            recovery_callback=callback,
+            service_name="worker-recovery-daemon",
+            poll_seconds=0.2,
+        )
+        thread = threading.Thread(target=lambda: service.run_forever(), daemon=True)
+        thread.start()
+        self.assertTrue(first_tick_done.wait(timeout=1.0))
+
+        running_status = read_service_status(self.runtime_dir, "worker-recovery-daemon")
+        stop_request = request_service_stop(
+            self.runtime_dir,
+            "worker-recovery-daemon",
+            reason="test stop",
+            requested_by="unit-test",
+            target_status=running_status,
+        )
+        self.assertEqual(stop_request["status"], "requested")
+        self.assertEqual(read_service_stop_request(self.runtime_dir, "worker-recovery-daemon")["status"], "requested")
+
+        thread.join(timeout=2.0)
+        self.assertFalse(thread.is_alive())
+        stopped_status = read_service_status(self.runtime_dir, "worker-recovery-daemon")
+        self.assertEqual(stopped_status["status"], "stopped")
+        self.assertFalse(stopped_status["stop_requested"])
+        self.assertLessEqual(len(ticks), 2)
+
     def test_service_refreshes_heartbeat_while_callback_is_in_progress(self) -> None:
         entered = threading.Event()
         release = threading.Event()
@@ -185,6 +229,30 @@ class ServiceDaemonTest(unittest.TestCase):
         self.assertIn("--lease-seconds 240", unit)
         self.assertIn("--stale-after-seconds 150", unit)
         self.assertIn("--total-limit 6", unit)
+
+    def test_render_systemd_unit_carries_pg_only_env_when_dsn_is_present(self) -> None:
+        with mock.patch.dict(
+            "os.environ",
+            {
+                "SOURCING_CONTROL_PLANE_POSTGRES_DSN": "postgresql://svc@127.0.0.1:5432/sourcing_agent",
+                "SOURCING_CONTROL_PLANE_POSTGRES_SCHEMA": "prod_app",
+                "SOURCING_PG_ONLY_SQLITE_BACKEND": "shared_memory",
+            },
+            clear=False,
+        ):
+            unit = render_systemd_unit(
+                project_root="/tmp/sourcing-ai-agent",
+                service_name="worker-recovery-daemon",
+            )
+
+        self.assertIn(
+            "Environment=SOURCING_CONTROL_PLANE_POSTGRES_DSN=postgresql://svc@127.0.0.1:5432/sourcing_agent",
+            unit,
+        )
+        self.assertIn("Environment=SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE=postgres_only", unit)
+        self.assertIn("Environment=SOURCING_CONTROL_PLANE_POSTGRES_SCHEMA=prod_app", unit)
+        self.assertIn("Environment=SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES=1", unit)
+        self.assertIn("Environment=SOURCING_PG_ONLY_SQLITE_BACKEND=shared_memory", unit)
 
     def test_service_status_retains_last_nonempty_summary_and_cumulative_totals(self) -> None:
         callbacks = iter(

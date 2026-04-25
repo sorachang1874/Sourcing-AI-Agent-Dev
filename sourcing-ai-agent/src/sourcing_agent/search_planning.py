@@ -11,6 +11,7 @@ from .domain import (
     SearchStrategyPlan,
 )
 from .model_provider import ModelClient
+from .query_signal_knowledge import naturalize_search_query_terms
 from .request_normalization import resolve_request_intent_view
 
 MODEL_WRITTEN_SEARCH_PLANNING_MODES = {"llm_brief", "product_brief_model_assisted"}
@@ -52,10 +53,14 @@ def _deterministic_search_strategy(
 ) -> SearchStrategyPlan:
     intent_view = resolve_request_intent_view(request)
     company = str(intent_view.get("target_company") or request.target_company or "").strip() or "target company"
-    scope_terms = list(intent_view.get("organization_keywords") or acquisition_strategy.company_scope[1:] or [company])
+    scope_terms = naturalize_search_query_terms(
+        list(intent_view.get("organization_keywords") or acquisition_strategy.company_scope[1:] or [company])
+    )
+    if not scope_terms:
+        scope_terms = [company]
     distinct_scope_terms = _scope_terms_distinct_from_company(scope_terms, company)
     role_terms = list(acquisition_strategy.filter_hints.get("job_titles") or [])
-    keyword_terms = _dedupe(
+    keyword_terms = naturalize_search_query_terms(
         list(acquisition_strategy.filter_hints.get("keywords") or [])
         + list(intent_view.get("keywords") or [])
         + list(intent_view.get("must_have_keywords") or [])
@@ -140,7 +145,7 @@ def _deterministic_search_strategy(
                 priority="medium",
                 objective="Use paid people search only after low-cost search has exhausted public profile discovery.",
                 execution_mode="paid_fallback",
-                queries=list(acquisition_strategy.search_seed_queries[:4]),
+                queries=naturalize_search_query_terms(list(acquisition_strategy.search_seed_queries[:4])),
                 filters=dict(acquisition_strategy.filter_hints),
             )
         )

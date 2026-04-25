@@ -101,6 +101,28 @@ class ScoringOutreachTermTests(unittest.TestCase):
         )
         self.assertFalse(candidate_matches_structured_filters(candidate, topical_request))
 
+    def test_structured_filter_ignores_unsupported_thematic_must_have_facets(self) -> None:
+        candidate = Candidate(
+            candidate_id="cand_pretrain",
+            name_en="Pat Pretrain",
+            display_name="Pat Pretrain",
+            category="employee",
+            target_company="Anthropic",
+            organization="Anthropic",
+            employment_status="current",
+            role="Research Engineer",
+            focus_areas="Large language model training systems",
+        )
+        request = JobRequest(
+            target_company="Anthropic",
+            categories=["employee"],
+            employment_statuses=["current"],
+            must_have_facets=["pre_training"],
+            keywords=["Pre-train"],
+        )
+
+        self.assertTrue(candidate_matches_structured_filters(candidate, request))
+
     def test_profile_metadata_summary_and_skills_are_searchable(self) -> None:
         candidate = Candidate(
             candidate_id="cand_2",

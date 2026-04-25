@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 import base64
+import json
+import re
 from dataclasses import fields
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
-import json
 from pathlib import Path
-import re
 from typing import Any
 
 from .asset_logger import AssetLogger
+from .asset_paths import extract_company_snapshot_ref, iter_company_asset_files, iter_company_asset_snapshot_dirs
+from .candidate_artifacts import load_snapshot_candidate_artifact_payload
 from .company_asset_completion import CompanyAssetCompletionManager
+from .company_asset_supplement import CompanyAssetSupplementManager
 from .company_registry import normalize_company_key
 from .connectors import resolve_company_identity
 from .domain import (
@@ -25,13 +28,16 @@ from .domain import (
     normalize_requested_role_bucket,
 )
 from .enrichment import _format_education, _format_experience, _format_profile_languages, _format_profile_skills
-from .harvest_connectors import HarvestProfileSearchConnector
+from .harvest_connectors import HarvestProfileSearchConnector, harvest_connector_available
 from .model_provider import ModelClient
+from .profile_timeline import (
+    timeline_has_complete_profile_detail,
+)
 from .query_signal_knowledge import role_bucket_function_ids, role_bucket_role_hints
+from .runtime_tuning import resolved_harvest_prefetch_submit_workers
 from .settings import AppSettings
 from .storage import SQLiteStore
 from .xlsx_reader import XlsxWorkbook
-
 
 _CANDIDATE_FIELD_NAMES = {field.name for field in fields(Candidate)}
 _MAX_LOCAL_NEAR_MATCHES = 5
@@ -40,6 +46,89 @@ _MIN_LOCAL_NEAR_MATCH_NAME_SIMILARITY = 0.9
 _SEARCH_AUTO_FETCH_THRESHOLD = 86.0
 _MAX_SEARCH_ROWS_PER_CONTACT = 5
 _PROFILE_DETAIL_METADATA_FIELDS = ("headline", "summary", "languages", "skills", "public_identifier")
+
+
+def build_excel_intake_throughput_plan(
+    contacts: list[dict[str, Any]],
+    *,
+    runtime_context: dict[str, Any] | None = None,
+    target_candidates_enabled: bool = False,
+    export_enabled: bool = False,
+) -> dict[str, Any]:
+    normalized_contacts = [dict(item) for item in list(contacts or []) if isinstance(item, dict)]
+    total_rows = len(normalized_contacts)
+    direct_linkedin_count = len(
+        [
+            item
+            for item in normalized_contacts
+            if str(item.get("linkedin_url") or "").strip()
+        ]
+    )
+    search_required_count = max(0, total_rows - direct_linkedin_count)
+    company_grouping = group_contacts_by_company_hints(normalized_contacts)
+    profile_fetch_batch_size = _recommended_excel_profile_fetch_batch_size(direct_linkedin_count)
+    profile_fetch_batch_count = (
+        0 if direct_linkedin_count <= 0 else max(1, (direct_linkedin_count + profile_fetch_batch_size - 1) // profile_fetch_batch_size)
+    )
+    profile_fetch_workers = resolved_harvest_prefetch_submit_workers(
+        runtime_context,
+        chunk_count=max(1, profile_fetch_batch_count),
+        default=2,
+    )
+    search_batch_size = 10
+    search_batch_count = (
+        0 if search_required_count <= 0 else max(1, (search_required_count + search_batch_size - 1) // search_batch_size)
+    )
+    return {
+        "total_rows": total_rows,
+        "company_group_count": int(company_grouping.get("group_count") or 0),
+        "company_groups": [
+            {
+                "company": str(item.get("company") or ""),
+                "row_count": int(item.get("row_count") or 0),
+            }
+            for item in list(company_grouping.get("groups") or [])
+            if isinstance(item, dict)
+        ],
+        "direct_linkedin_count": direct_linkedin_count,
+        "search_required_count": search_required_count,
+        "profile_fetch": {
+            "batch_size": profile_fetch_batch_size,
+            "batch_count": profile_fetch_batch_count,
+            "max_workers": profile_fetch_workers,
+            "dispatch_granularity": "profile_fetch_batch",
+        },
+        "profile_search": {
+            "batch_size": search_batch_size,
+            "batch_count": search_batch_count,
+            "dispatch_granularity": "excel_contact_search_batch",
+        },
+        "continuation": {
+            "manual_review_supported": True,
+            "row_level_decisions_supported": True,
+        },
+        "target_candidates_linkage": {
+            "enabled": bool(target_candidates_enabled),
+            "recommended_after_status": "completed",
+        },
+        "export_linkage": {
+            "enabled": bool(export_enabled),
+            "recommended_formats": ["csv", "profile_bundle"] if export_enabled else [],
+        },
+    }
+
+
+def _recommended_excel_profile_fetch_batch_size(total_urls: int) -> int:
+    count = max(0, int(total_urls or 0))
+    if count <= 1:
+        return 1
+    if count <= 40:
+        return count
+    if count <= 120:
+        return 35
+    if count <= 240:
+        return 45
+    return 60
 
 
 class ExcelIntakeService:
@@ -61,14 +150,16 @@ class ExcelIntakeService:
             settings=self.settings,
             model_client=self.model_client,
         )
+        self.supplement_manager = CompanyAssetSupplementManager(
+            runtime_dir=self.runtime_dir,
+            store=self.store,
+            settings=self.settings,
+            model_client=self.model_client,
+            asset_completion_manager=self.profile_completion_manager,
+        )
         self.harvest_profile_search_connector = HarvestProfileSearchConnector(self.settings.harvest.profile_search)
 
-    def ingest_contacts(self, payload: dict[str, Any]) -> dict[str, Any]:
-        intake_id = _utc_timestamp_slug()
-        intake_dir = self.runtime_dir / "excel_intake" / intake_id
-        intake_dir.mkdir(parents=True, exist_ok=True)
-        logger = AssetLogger(intake_dir)
-
+    def prepare_contacts(self, payload: dict[str, Any], *, intake_dir: Path) -> dict[str, Any]:
         workbook_path = self._materialize_workbook(payload=payload, intake_dir=intake_dir)
         workbook = XlsxWorkbook(workbook_path)
         sheet_names = workbook.sheet_names()
@@ -76,17 +167,65 @@ class ExcelIntakeService:
         schema_payload = _build_schema_payload(workbook_path=workbook_path, sheet_rows=sheet_rows)
         inferred_schema = self.model_client.normalize_spreadsheet_contacts(schema_payload)
         normalized_schema = _normalize_schema_payload(inferred_schema or {}, fallback_payload=schema_payload)
-
         contacts = _extract_contacts_from_workbook(
             sheet_rows=sheet_rows,
             schema_payload=normalized_schema,
             workbook_path=workbook_path,
+        )
+        return {
+            "workbook": {
+                "source_path": str(workbook_path),
+                "sheet_count": len(sheet_names),
+                "sheet_names": sheet_names,
+                "detected_contact_row_count": len(contacts),
+            },
+            "schema_inference": normalized_schema,
+            "contacts": contacts,
+        }
+
+    def ingest_contacts(self, payload: dict[str, Any]) -> dict[str, Any]:
+        intake_id = _utc_timestamp_slug()
+        intake_dir = self.runtime_dir / "excel_intake" / intake_id
+        intake_dir.mkdir(parents=True, exist_ok=True)
+        logger = AssetLogger(intake_dir)
+        attachment_request = _normalize_snapshot_attachment_request(payload)
+        prepared_batch = dict(payload.get("prepared_contact_batch") or {})
+        if isinstance(prepared_batch.get("contacts"), list):
+            workbook_summary = dict(prepared_batch.get("workbook") or {})
+            normalized_schema = dict(prepared_batch.get("schema_inference") or {})
+            contacts = [
+                dict(item)
+                for item in list(prepared_batch.get("contacts") or [])
+                if isinstance(item, dict)
+            ]
+        else:
+            prepared_batch = self.prepare_contacts(payload, intake_dir=intake_dir)
+            workbook_summary = dict(prepared_batch.get("workbook") or {})
+            normalized_schema = dict(prepared_batch.get("schema_inference") or {})
+            contacts = [
+                dict(item)
+                for item in list(prepared_batch.get("contacts") or [])
+                if isinstance(item, dict)
+            ]
+        workbook_path = Path(str(workbook_summary.get("source_path") or (intake_dir / "uploaded.xlsx")))
+        sheet_names = [
+            str(item or "").strip()
+            for item in list(workbook_summary.get("sheet_names") or [])
+            if str(item or "").strip()
+        ]
+        throughput_plan = build_excel_intake_throughput_plan(
+            contacts,
+            runtime_context=dict(payload.get("execution_preferences") or payload.get("runtime_timing_overrides") or {}),
+            target_candidates_enabled=bool(payload.get("target_candidates_enabled")),
+            export_enabled=bool(payload.get("export_enabled")),
         )
 
         inventory = _build_local_candidate_inventory(self.runtime_dir, self.store)
         processed_rows: list[dict[str, Any]] = []
         persisted_candidate_count = 0
         persisted_evidence_count = 0
+        attachment_candidates: list[Candidate] = []
+        attachment_evidence: list[EvidenceRecord] = []
 
         for contact in contacts:
             row_result = self._process_contact_row(
@@ -101,6 +240,27 @@ class ExcelIntakeService:
             persisted_candidate = row_result.get("persisted_candidate")
             if isinstance(persisted_candidate, Candidate):
                 _update_inventory_with_candidate(inventory, persisted_candidate)
+            _collect_snapshot_attachment_records(
+                row_result,
+                candidates=attachment_candidates,
+                evidence=attachment_evidence,
+            )
+
+        attachment_summary = self._attach_resolved_rows_to_snapshot(
+            intake_id=intake_id,
+            target_company=str(attachment_request.get("target_company") or ""),
+            snapshot_id=str(attachment_request.get("snapshot_id") or ""),
+            build_artifacts=bool(attachment_request.get("build_artifacts")),
+            attach_to_snapshot=bool(attachment_request.get("attach_to_snapshot")),
+            candidates=attachment_candidates,
+            evidence=attachment_evidence,
+            source_kind="excel_intake",
+            source_summary={
+                "workbook_path": str(workbook_path),
+                "sheet_names": sheet_names,
+                "detected_contact_row_count": len(contacts),
+            },
+        )
 
         status_counts = _count_row_statuses(processed_rows)
         summary = {
@@ -129,6 +289,9 @@ class ExcelIntakeService:
                 "persisted_candidate_count": persisted_candidate_count,
                 "persisted_evidence_count": persisted_evidence_count,
             },
+            "throughput_plan": throughput_plan,
+            "attachment": attachment_request,
+            "attachment_summary": attachment_summary,
             "results": processed_rows,
         }
 
@@ -190,6 +353,10 @@ class ExcelIntakeService:
         summary_payload = _read_json_dict(intake_dir / "summary.json")
         if not summary_payload:
             raise ValueError(f"excel intake {intake_id} summary missing")
+        attachment_request = _normalize_snapshot_attachment_request(
+            payload,
+            fallback=dict(summary_payload.get("attachment") or {}),
+        )
         normalized_contacts_payload = json.loads((intake_dir / "normalized_contacts.json").read_text())
         contacts_by_row_key = {
             str(item.get("row_key") or "").strip(): dict(item)
@@ -206,6 +373,8 @@ class ExcelIntakeService:
         decision_results: list[dict[str, Any]] = []
         persisted_candidate_count = 0
         persisted_evidence_count = 0
+        attachment_candidates: list[Candidate] = []
+        attachment_evidence: list[EvidenceRecord] = []
         continuation_id = _utc_timestamp_slug()
         continuation_root = intake_dir / "continuations"
         continuation_root.mkdir(parents=True, exist_ok=True)
@@ -241,6 +410,26 @@ class ExcelIntakeService:
             persisted_candidate = row_result.get("persisted_candidate")
             if isinstance(persisted_candidate, Candidate):
                 _update_inventory_with_candidate(inventory, persisted_candidate)
+            _collect_snapshot_attachment_records(
+                row_result,
+                candidates=attachment_candidates,
+                evidence=attachment_evidence,
+            )
+
+        attachment_summary = self._attach_resolved_rows_to_snapshot(
+            intake_id=intake_id,
+            target_company=str(attachment_request.get("target_company") or ""),
+            snapshot_id=str(attachment_request.get("snapshot_id") or ""),
+            build_artifacts=bool(attachment_request.get("build_artifacts")),
+            attach_to_snapshot=bool(attachment_request.get("attach_to_snapshot")),
+            candidates=attachment_candidates,
+            evidence=attachment_evidence,
+            source_kind="excel_intake_review",
+            source_summary={
+                "continuation_id": continuation_id,
+                "decision_count": len(decision_results),
+            },
+        )
 
         continuation_payload = {
             "status": "completed",
@@ -249,6 +438,8 @@ class ExcelIntakeService:
             "decision_count": len(decision_results),
             "persisted_candidate_count": persisted_candidate_count,
             "persisted_evidence_count": persisted_evidence_count,
+            "attachment": attachment_request,
+            "attachment_summary": attachment_summary,
             "results": decision_results,
         }
         continuation_path = logger.write_json(
@@ -262,14 +453,60 @@ class ExcelIntakeService:
         continuation_payload["artifact_path"] = str(continuation_path)
         return continuation_payload
 
+    def _attach_resolved_rows_to_snapshot(
+        self,
+        *,
+        intake_id: str,
+        target_company: str,
+        snapshot_id: str,
+        build_artifacts: bool,
+        attach_to_snapshot: bool,
+        candidates: list[Candidate],
+        evidence: list[EvidenceRecord],
+        source_kind: str,
+        source_summary: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        if not attach_to_snapshot:
+            return {"status": "skipped", "reason": "attach_to_snapshot_disabled"}
+        normalized_target_company = str(target_company or "").strip()
+        if not normalized_target_company:
+            raise ValueError("target_company is required when attach_to_snapshot is enabled")
+        if not candidates:
+            return {
+                "status": "skipped",
+                "reason": "no_resolved_candidates",
+                "target_company": normalized_target_company,
+                "snapshot_id": str(snapshot_id or "").strip(),
+            }
+        return self.supplement_manager.merge_candidates_into_snapshot(
+            target_company=normalized_target_company,
+            snapshot_id=str(snapshot_id or "").strip(),
+            candidates=candidates,
+            evidence=evidence,
+            source_kind=source_kind,
+            source_summary={
+                "intake_id": intake_id,
+                **dict(source_summary or {}),
+            },
+            build_artifacts=build_artifacts,
+            create_snapshot_if_missing=True,
+        )
+
     def _materialize_workbook(self, *, payload: dict[str, Any], intake_dir: Path) -> Path:
-        file_path = Path(str(payload.get("file_path") or "").strip()).expanduser()
-        if file_path.exists():
-            return file_path
+        raw_file_path = str(payload.get("file_path") or "").strip()
+        if raw_file_path:
+            file_path = Path(raw_file_path).expanduser()
+            if file_path.is_file():
+                return file_path
+            if file_path.exists():
+                raise ValueError(f"file_path must point to a file: {file_path}")
         encoded = str(payload.get("file_content_base64") or "").strip()
         if not encoded:
+            if raw_file_path:
+                raise ValueError(f"file_path not found: {raw_file_path}")
             raise ValueError("file_path or file_content_base64 is required")
         filename = str(payload.get("filename") or "uploaded.xlsx").strip() or "uploaded.xlsx"
+        intake_dir.mkdir(parents=True, exist_ok=True)
         target_path = intake_dir / filename
         target_path.write_bytes(base64.b64decode(encoded))
         return target_path
@@ -325,6 +562,8 @@ class ExcelIntakeService:
                     "persisted_candidate_count": 1,
                     "persisted_evidence_count": len(evidence),
                     "persisted_candidate": candidate,
+                    "attachment_candidates": [candidate],
+                    "attachment_evidence": evidence,
                 }
 
         local_near_matches = _find_local_near_matches(contact, inventory)
@@ -341,6 +580,8 @@ class ExcelIntakeService:
                 "result": result,
                 "persisted_candidate_count": 0,
                 "persisted_evidence_count": 0,
+                "attachment_candidates": [],
+                "attachment_evidence": [],
             }
 
         return self._resolve_contact_via_search(
@@ -456,6 +697,8 @@ class ExcelIntakeService:
                 "persisted_candidate_count": 1,
                 "persisted_evidence_count": len(evidence),
                 "persisted_candidate": candidate,
+                "attachment_candidates": [candidate],
+                "attachment_evidence": evidence,
             }
 
         if action in {"continue_search", "search", "reject_local_and_search", "fetch_or_search"}:
@@ -488,6 +731,8 @@ class ExcelIntakeService:
             },
             "persisted_candidate_count": 0,
             "persisted_evidence_count": 0,
+            "attachment_candidates": [],
+            "attachment_evidence": [],
         }
 
     def _resolve_local_exact_hit(
@@ -528,6 +773,8 @@ class ExcelIntakeService:
                     "persisted_candidate_count": 1,
                     "persisted_evidence_count": len(evidence),
                     "persisted_candidate": enriched_candidate,
+                    "attachment_candidates": [enriched_candidate],
+                    "attachment_evidence": evidence,
                 }
             self.store.upsert_candidate(candidate)
             return {
@@ -541,6 +788,8 @@ class ExcelIntakeService:
                 },
                 "persisted_candidate_count": 0,
                 "persisted_evidence_count": 0,
+                "attachment_candidates": [candidate],
+                "attachment_evidence": [],
             }
 
         self.store.upsert_candidate(candidate)
@@ -554,6 +803,8 @@ class ExcelIntakeService:
             },
             "persisted_candidate_count": 0,
             "persisted_evidence_count": 0,
+            "attachment_candidates": [candidate],
+            "attachment_evidence": [],
         }
 
     def _fetch_profiles(
@@ -584,7 +835,7 @@ class ExcelIntakeService:
         intake_dir: Path,
         logger: AssetLogger,
     ) -> dict[str, Any]:
-        if not self.harvest_profile_search_connector.settings.enabled:
+        if not harvest_connector_available(self.harvest_profile_search_connector.settings):
             return {
                 "status": "skipped",
                 "reason": "harvest_profile_search_disabled",
@@ -631,13 +882,18 @@ class ExcelIntakeService:
         auto_fetch_profile_url = ""
         if ranked_rows:
             top = ranked_rows[0]
-            if float(top.get("match_score") or 0.0) >= _SEARCH_AUTO_FETCH_THRESHOLD and str(top.get("profile_url") or "").strip():
+            if (
+                float(top.get("match_score") or 0.0) >= _SEARCH_AUTO_FETCH_THRESHOLD
+                and str(top.get("profile_url") or "").strip()
+            ):
                 auto_fetch_profile_url = str(top.get("profile_url") or "").strip()
         return {
             "status": "completed",
             "attempts": attempts,
             "ranked_candidates": ranked_rows[:_MAX_SEARCH_ROWS_PER_CONTACT],
-            "manual_review_candidates": ranked_rows[:_MAX_SEARCH_ROWS_PER_CONTACT] if not auto_fetch_profile_url else [],
+            "manual_review_candidates": ranked_rows[:_MAX_SEARCH_ROWS_PER_CONTACT]
+            if not auto_fetch_profile_url
+            else [],
             "auto_fetch_profile_url": auto_fetch_profile_url,
         }
 
@@ -672,6 +928,8 @@ class ExcelIntakeService:
                     "persisted_candidate_count": 1,
                     "persisted_evidence_count": len(evidence),
                     "persisted_candidate": candidate,
+                    "attachment_candidates": [candidate],
+                    "attachment_evidence": evidence,
                 }
 
         search_candidates = list(search_result.get("manual_review_candidates") or [])
@@ -686,6 +944,8 @@ class ExcelIntakeService:
                 },
                 "persisted_candidate_count": 0,
                 "persisted_evidence_count": 0,
+                "attachment_candidates": [],
+                "attachment_evidence": [],
             }
 
         return {
@@ -696,6 +956,8 @@ class ExcelIntakeService:
             },
             "persisted_candidate_count": 0,
             "persisted_evidence_count": 0,
+            "attachment_candidates": [],
+            "attachment_evidence": [],
         }
 
     def _persist_contact_profile(
@@ -707,36 +969,56 @@ class ExcelIntakeService:
     ) -> tuple[Candidate, list[EvidenceRecord]]:
         profile = dict(fetched_payload.get("parsed") or {})
         raw_path = Path(str(fetched_payload.get("raw_path") or ""))
+        uploaded_company = str(contact.get("uploaded_company") or contact.get("company") or "").strip()
         requested_company = str(contact.get("company") or "").strip() or str(profile.get("current_company") or "").strip()
         identity = resolve_company_identity(requested_company)
         target_company = str(identity.canonical_name or requested_company).strip() or requested_company
-        organization = requested_company or str(profile.get("current_company") or "").strip() or target_company
         base_name = str(contact.get("name") or profile.get("full_name") or "").strip()
         current_company = str(profile.get("current_company") or "").strip()
+        experience_items = list(profile.get("experience") or [])
         current_identity = resolve_company_identity(current_company) if current_company else None
-        company_match = _company_identity_matches(
+        route_membership = _classify_profile_company_membership(
             requested_company=requested_company,
             requested_identity=identity,
             current_company=current_company,
             current_identity=current_identity,
+            experience_items=experience_items,
         )
+        company_match = route_membership == "current"
+        organization = current_company or requested_company or target_company
         seed_patch = normalize_candidate(
             Candidate(
-                candidate_id=(seed_candidate.candidate_id if isinstance(seed_candidate, Candidate) else make_candidate_id(base_name, organization, target_company)),
+                candidate_id=(
+                    seed_candidate.candidate_id
+                    if isinstance(seed_candidate, Candidate)
+                    else make_candidate_id(base_name, organization, target_company)
+                ),
                 name_en=base_name,
                 display_name=format_display_name(base_name, ""),
                 category=(seed_candidate.category if isinstance(seed_candidate, Candidate) else "lead"),
-                target_company=(seed_candidate.target_company if isinstance(seed_candidate, Candidate) else target_company),
+                target_company=(
+                    seed_candidate.target_company if isinstance(seed_candidate, Candidate) else target_company
+                ),
                 organization=(seed_candidate.organization if isinstance(seed_candidate, Candidate) else organization),
                 employment_status=(seed_candidate.employment_status if isinstance(seed_candidate, Candidate) else ""),
-                role=str(contact.get("title") or "").strip() or (seed_candidate.role if isinstance(seed_candidate, Candidate) else ""),
-                linkedin_url=str(contact.get("linkedin_url") or (seed_candidate.linkedin_url if isinstance(seed_candidate, Candidate) else "")).strip(),
-                source_dataset=(seed_candidate.source_dataset if isinstance(seed_candidate, Candidate) else "excel_intake"),
-                source_path=str(contact.get("source_path") or (seed_candidate.source_path if isinstance(seed_candidate, Candidate) else "")).strip(),
+                role=str(contact.get("title") or "").strip()
+                or (seed_candidate.role if isinstance(seed_candidate, Candidate) else ""),
+                linkedin_url=str(
+                    contact.get("linkedin_url")
+                    or (seed_candidate.linkedin_url if isinstance(seed_candidate, Candidate) else "")
+                ).strip(),
+                source_dataset=(
+                    seed_candidate.source_dataset if isinstance(seed_candidate, Candidate) else "excel_intake"
+                ),
+                source_path=str(
+                    contact.get("source_path")
+                    or (seed_candidate.source_path if isinstance(seed_candidate, Candidate) else "")
+                ).strip(),
                 metadata={
                     **(dict(seed_candidate.metadata or {}) if isinstance(seed_candidate, Candidate) else {}),
                     "excel_intake_row_key": str(contact.get("row_key") or ""),
-                    "excel_uploaded_company": requested_company,
+                    "excel_uploaded_company": uploaded_company,
+                    "excel_route_company": requested_company,
                     "excel_uploaded_title": str(contact.get("title") or "").strip(),
                     "excel_uploaded_email": str(contact.get("email") or "").strip(),
                 },
@@ -750,26 +1032,49 @@ class ExcelIntakeService:
         incoming_candidate = normalize_candidate(
             Candidate(
                 candidate_id=effective_seed_candidate.candidate_id,
-                name_en=str(profile.get("full_name") or effective_seed_candidate.name_en).strip() or effective_seed_candidate.name_en,
+                name_en=str(profile.get("full_name") or effective_seed_candidate.name_en).strip()
+                or effective_seed_candidate.name_en,
                 display_name=format_display_name(
-                    str(profile.get("full_name") or effective_seed_candidate.name_en).strip() or effective_seed_candidate.name_en,
+                    str(profile.get("full_name") or effective_seed_candidate.name_en).strip()
+                    or effective_seed_candidate.name_en,
                     "",
                 ),
-                category="employee" if company_match else "lead",
+                category=(
+                    "employee"
+                    if route_membership == "current"
+                    else ("former_employee" if route_membership == "former" else "lead")
+                ),
                 target_company=effective_seed_candidate.target_company,
-                organization=str(profile.get("current_company") or organization or effective_seed_candidate.organization).strip() or effective_seed_candidate.organization,
-                employment_status="current" if company_match else effective_seed_candidate.employment_status,
-                role=str(profile.get("headline") or effective_seed_candidate.role).strip() or effective_seed_candidate.role,
+                organization=str(
+                    profile.get("current_company") or organization or effective_seed_candidate.organization
+                ).strip()
+                or effective_seed_candidate.organization,
+                employment_status=(
+                    route_membership
+                    if route_membership in {"current", "former"}
+                    else effective_seed_candidate.employment_status
+                ),
+                role=str(profile.get("headline") or effective_seed_candidate.role).strip()
+                or effective_seed_candidate.role,
                 team=effective_seed_candidate.team,
-                focus_areas=str(profile.get("headline") or effective_seed_candidate.focus_areas).strip() or effective_seed_candidate.focus_areas,
+                current_destination=(
+                    str(profile.get("current_company") or "").strip()
+                    if route_membership == "former"
+                    else effective_seed_candidate.current_destination
+                ),
+                focus_areas=str(profile.get("headline") or effective_seed_candidate.focus_areas).strip()
+                or effective_seed_candidate.focus_areas,
                 education=_format_education(list(profile.get("education") or [])),
-                work_history=_format_experience(list(profile.get("experience") or [])),
+                work_history=_format_experience(experience_items),
                 notes=_join_nonempty(
-                    effective_seed_candidate.notes if not _candidate_looks_like_roster_baseline(effective_seed_candidate) else "",
+                    effective_seed_candidate.notes
+                    if not _candidate_looks_like_roster_baseline(effective_seed_candidate)
+                    else "",
                     str(profile.get("summary") or "").strip(),
                     str(profile.get("location") or "").strip(),
                 ),
-                linkedin_url=str(profile.get("profile_url") or effective_seed_candidate.linkedin_url).strip() or effective_seed_candidate.linkedin_url,
+                linkedin_url=str(profile.get("profile_url") or effective_seed_candidate.linkedin_url).strip()
+                or effective_seed_candidate.linkedin_url,
                 source_dataset="excel_intake",
                 source_path=str(raw_path),
                 metadata={
@@ -781,13 +1086,18 @@ class ExcelIntakeService:
                     "languages": _format_profile_languages(list(profile.get("languages") or [])),
                     "skills": _format_profile_skills(list(profile.get("skills") or [])),
                     "excel_intake_source": "harvest_profile_scraper",
-                    "target_company_mismatch": (not company_match) if current_company else False,
+                    "excel_route_company_membership": route_membership,
+                    "source_current_company": current_company,
+                    "source_experience_companies": _profile_experience_company_names(experience_items),
+                    "target_company_mismatch": route_membership == "none" if requested_company else False,
                 },
             )
         )
         candidate = _merge_profile_candidate_records(effective_seed_candidate, incoming_candidate)
         upload_evidence = EvidenceRecord(
-            evidence_id=make_evidence_id(candidate.candidate_id, "excel_upload_row", "Excel upload row", str(contact.get("row_key") or "")),
+            evidence_id=make_evidence_id(
+                candidate.candidate_id, "excel_upload_row", "Excel upload row", str(contact.get("row_key") or "")
+            ),
             candidate_id=candidate.candidate_id,
             source_type="excel_upload_row",
             title="Excel upload row",
@@ -874,7 +1184,9 @@ def _normalize_schema_payload(payload: dict[str, Any], *, fallback_payload: dict
     return {
         "contacts_detected": contacts_detected,
         "selected_sheets": selected_sheets,
-        "ignored_sheets": [str(item or "").strip() for item in list(normalized.get("ignored_sheets") or []) if str(item or "").strip()],
+        "ignored_sheets": [
+            str(item or "").strip() for item in list(normalized.get("ignored_sheets") or []) if str(item or "").strip()
+        ],
         "notes": str(normalized.get("notes") or "").strip(),
     }
 
@@ -963,8 +1275,90 @@ def _extract_contacts_from_workbook(
     return contacts
 
 
+_COMPANY_HINT_SPLIT_PATTERN = re.compile(r"\s+(?:&|/|\+|,|;|\||and|or)\s+|[、，；]+", flags=re.IGNORECASE)
+
+
+def split_contact_company_hints(raw_company: str) -> list[str]:
+    normalized_value = str(raw_company or "").strip()
+    if not normalized_value:
+        return []
+    parts = [normalized_value]
+    if _COMPANY_HINT_SPLIT_PATTERN.search(normalized_value):
+        parts = [item.strip() for item in _COMPANY_HINT_SPLIT_PATTERN.split(normalized_value)]
+    hints: list[str] = []
+    seen: set[str] = set()
+    for raw_part in parts:
+        candidate = raw_part.strip("()[]{} \t\r\n")
+        if not candidate:
+            continue
+        identity = resolve_company_identity(candidate)
+        display_name = str(identity.canonical_name or candidate).strip() or candidate
+        key = normalize_company_key(display_name)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        hints.append(display_name)
+    return hints
+
+
+def group_contacts_by_company_hints(contacts: list[dict[str, Any]]) -> dict[str, Any]:
+    groups_by_key: dict[str, dict[str, Any]] = {}
+    unassigned_contacts: list[dict[str, Any]] = []
+    for raw_contact in list(contacts or []):
+        if not isinstance(raw_contact, dict):
+            continue
+        contact = dict(raw_contact)
+        uploaded_company = str(contact.get("company") or "").strip()
+        company_hints = split_contact_company_hints(uploaded_company)
+        if not company_hints:
+            unassigned_contacts.append(contact)
+            continue
+        for hint in company_hints:
+            company_key = normalize_company_key(hint)
+            if not company_key:
+                continue
+            group = groups_by_key.setdefault(
+                company_key,
+                {
+                    "company": hint,
+                    "company_key": company_key,
+                    "contacts": [],
+                    "source_companies": [],
+                },
+            )
+            if uploaded_company and uploaded_company not in group["source_companies"]:
+                group["source_companies"].append(uploaded_company)
+            routed_contact = {
+                **contact,
+                "company": hint,
+                "route_target_company": hint,
+                "uploaded_company": uploaded_company,
+                "company_hints": company_hints,
+            }
+            group["contacts"].append(routed_contact)
+    groups = sorted(
+        (
+            {
+                **group,
+                "row_count": len(list(group.get("contacts") or [])),
+            }
+            for group in groups_by_key.values()
+        ),
+        key=lambda item: str(item.get("company") or "").lower(),
+    )
+    return {
+        "groups": groups,
+        "group_count": len(groups),
+        "unassigned_contacts": unassigned_contacts,
+        "unassigned_row_count": len(unassigned_contacts),
+    }
+
+
 def _build_local_candidate_inventory(runtime_dir: Path, store: SQLiteStore) -> dict[str, Any]:
     candidates_by_key: dict[str, Candidate] = {}
+    candidate_documents_fallback_enabled = bool(
+        getattr(store, "candidate_documents_fallback_enabled", lambda: False)()
+    )
 
     def _ingest(candidate: Candidate) -> None:
         key = _inventory_candidate_key(candidate)
@@ -972,29 +1366,54 @@ def _build_local_candidate_inventory(runtime_dir: Path, store: SQLiteStore) -> d
         if existing is None or _candidate_richness_score(candidate) > _candidate_richness_score(existing):
             candidates_by_key[key] = candidate
 
+    materialized_snapshot_refs: set[tuple[str, str]] = set()
+    for snapshot_dir in iter_company_asset_snapshot_dirs(
+        runtime_dir,
+        prefer_hot_cache=True,
+        existing_only=True,
+    ):
+        snapshot_ref = extract_company_snapshot_ref(snapshot_dir)
+        if snapshot_ref is not None:
+            materialized_snapshot_refs.add(snapshot_ref)
+        try:
+            loaded = load_snapshot_candidate_artifact_payload(
+                snapshot_dir=snapshot_dir,
+                target_company=snapshot_dir.parent.name,
+                asset_view="canonical_merged",
+                company_key=snapshot_dir.parent.name,
+                company_identity={},
+                allow_candidate_documents_fallback=candidate_documents_fallback_enabled,
+            )
+        except Exception:
+            continue
+        payload = dict(loaded.get("source_payload") or {})
+        for item in list(payload.get("candidates") or []):
+            candidate = _candidate_from_payload(item)
+            if candidate is not None:
+                _ingest(candidate)
+    for payload_path in iter_company_asset_files(
+        runtime_dir,
+        pattern="candidate_documents.json",
+        prefer_hot_cache=True,
+        existing_only=True,
+    ):
+        if payload_path.parent.name == "normalized_artifacts":
+            continue
+        snapshot_ref = extract_company_snapshot_ref(payload_path)
+        if snapshot_ref is not None and snapshot_ref in materialized_snapshot_refs:
+            continue
+        normalized_peer = payload_path.parent / "normalized_artifacts" / "materialized_candidate_documents.json"
+        if normalized_peer.exists():
+            continue
+        payload = _read_json_dict(payload_path)
+        for item in list(payload.get("candidates") or []):
+            candidate = _candidate_from_payload(item)
+            if candidate is not None:
+                _ingest(candidate)
+
+    # Snapshot artifacts are the authoritative inventory source; SQLite stays as supplement-only fallback.
     for candidate in store.list_candidates():
         _ingest(candidate)
-
-    company_assets_dir = runtime_dir / "company_assets"
-    if company_assets_dir.exists():
-        materialized_paths = list(company_assets_dir.rglob("normalized_artifacts/materialized_candidate_documents.json"))
-        for payload_path in materialized_paths:
-            payload = _read_json_dict(payload_path)
-            for item in list(payload.get("candidates") or []):
-                candidate = _candidate_from_payload(item)
-                if candidate is not None:
-                    _ingest(candidate)
-        for payload_path in company_assets_dir.rglob("candidate_documents.json"):
-            if payload_path.parent.name == "normalized_artifacts":
-                continue
-            normalized_peer = payload_path.parent / "normalized_artifacts" / "materialized_candidate_documents.json"
-            if normalized_peer.exists():
-                continue
-            payload = _read_json_dict(payload_path)
-            for item in list(payload.get("candidates") or []):
-                candidate = _candidate_from_payload(item)
-                if candidate is not None:
-                    _ingest(candidate)
 
     candidates = list(candidates_by_key.values())
     linkedin_index: dict[str, Candidate] = {}
@@ -1097,7 +1516,7 @@ def _find_exact_local_match(contact: dict[str, Any], inventory: dict[str, Any]) 
     linkedin_key = _normalize_linkedin_lookup_key(contact.get("linkedin_url"))
     if linkedin_key:
         exact_by_linkedin = dict(inventory.get("linkedin_index") or {}).get(linkedin_key)
-        if exact_by_linkedin is not None:
+        if exact_by_linkedin is not None and _candidate_matches_contact_company(exact_by_linkedin, contact):
             return exact_by_linkedin
     return _find_exact_local_structured_match(contact, inventory)
 
@@ -1106,7 +1525,7 @@ def _find_exact_local_linkedin_match(contact: dict[str, Any], inventory: dict[st
     linkedin_key = _normalize_linkedin_lookup_key(contact.get("linkedin_url"))
     if linkedin_key:
         exact_by_linkedin = dict(inventory.get("linkedin_index") or {}).get(linkedin_key)
-        if exact_by_linkedin is not None:
+        if exact_by_linkedin is not None and _candidate_matches_contact_company(exact_by_linkedin, contact):
             return exact_by_linkedin
     return None
 
@@ -1114,12 +1533,12 @@ def _find_exact_local_linkedin_match(contact: dict[str, Any], inventory: dict[st
 def _find_exact_local_structured_match(contact: dict[str, Any], inventory: dict[str, Any]) -> Candidate | None:
     for slug_key in _contact_linkedin_slugs(contact):
         exact_by_slug = dict(inventory.get("linkedin_slug_index") or {}).get(slug_key)
-        if exact_by_slug is not None:
+        if exact_by_slug is not None and _candidate_matches_contact_company(exact_by_slug, contact):
             return exact_by_slug
     email_key = _normalize_email(contact.get("email"))
     if email_key:
         exact_by_email = dict(inventory.get("email_index") or {}).get(email_key)
-        if exact_by_email is not None:
+        if exact_by_email is not None and _candidate_matches_contact_company(exact_by_email, contact):
             return exact_by_email
     name_key = _normalize_person_label(contact.get("name"))
     if not name_key:
@@ -1144,12 +1563,23 @@ def _find_exact_local_structured_match(contact: dict[str, Any], inventory: dict[
     return None
 
 
+def _candidate_matches_contact_company(candidate: Candidate, contact: dict[str, Any]) -> bool:
+    contact_company_keys = _contact_company_keys(contact)
+    if not contact_company_keys:
+        return True
+    return bool(_candidate_company_keys(candidate) & contact_company_keys)
+
+
 def _exact_match_reason(contact: dict[str, Any], candidate: Candidate) -> str:
-    if _normalize_linkedin_lookup_key(contact.get("linkedin_url")) and _normalize_linkedin_lookup_key(contact.get("linkedin_url")) == _normalize_linkedin_lookup_key(candidate.linkedin_url):
+    if _normalize_linkedin_lookup_key(contact.get("linkedin_url")) and _normalize_linkedin_lookup_key(
+        contact.get("linkedin_url")
+    ) == _normalize_linkedin_lookup_key(candidate.linkedin_url):
         return "linkedin_url"
     if _contact_linkedin_slugs(contact) & _candidate_linkedin_slugs(candidate):
         return "linkedin_slug"
-    if _normalize_email(contact.get("email")) and _normalize_email(contact.get("email")) in _candidate_email_keys(candidate):
+    if _normalize_email(contact.get("email")) and _normalize_email(contact.get("email")) in _candidate_email_keys(
+        candidate
+    ):
         return "email"
     return "name_company"
 
@@ -1193,7 +1623,9 @@ def _should_enrich_local_exact_match(contact: dict[str, Any], candidate: Candida
         return False
     contact_linkedin_key = _normalize_linkedin_lookup_key(profile_url)
     candidate_linkedin_key = _normalize_linkedin_lookup_key(candidate.linkedin_url)
-    url_mismatch = bool(contact_linkedin_key and candidate_linkedin_key and contact_linkedin_key != candidate_linkedin_key)
+    url_mismatch = bool(
+        contact_linkedin_key and candidate_linkedin_key and contact_linkedin_key != candidate_linkedin_key
+    )
     if match_reason == "name_company" and contact_linkedin_key and url_mismatch:
         return True
     if _candidate_looks_like_roster_baseline(candidate) and not _candidate_has_profile_detail(candidate):
@@ -1202,9 +1634,26 @@ def _should_enrich_local_exact_match(contact: dict[str, Any], candidate: Candida
 
 
 def _candidate_has_profile_detail(candidate: Candidate) -> bool:
+    metadata = dict(candidate.metadata or {})
+    timeline_like = {
+        "experience_lines": metadata.get("experience_lines"),
+        "education_lines": metadata.get("education_lines"),
+        "headline": metadata.get("headline"),
+        "summary": metadata.get("summary"),
+        "about": metadata.get("about"),
+        "primary_email": metadata.get("primary_email") or metadata.get("email"),
+        "languages": metadata.get("languages"),
+        "skills": metadata.get("skills"),
+        "profile_capture_kind": metadata.get("profile_capture_kind"),
+        "profile_capture_source_path": metadata.get("profile_capture_source_path"),
+        "source_path": metadata.get("profile_timeline_source_path")
+        or metadata.get("source_path")
+        or str(candidate.source_path or ""),
+    }
+    if timeline_has_complete_profile_detail(timeline_like):
+        return True
     if str(candidate.education or "").strip() or str(candidate.work_history or "").strip():
         return True
-    metadata = dict(candidate.metadata or {})
     for field_name in _PROFILE_DETAIL_METADATA_FIELDS:
         value = metadata.get(field_name)
         if isinstance(value, list):
@@ -1279,11 +1728,60 @@ def _company_identity_matches(
     if requested_alias_key and current_alias_key and requested_alias_key == current_alias_key:
         return True
 
-    requested_canonical_key = normalize_company_key(str(getattr(requested_identity, "canonical_name", "") or requested_company))
-    current_canonical_key = normalize_company_key(str(getattr(current_identity, "canonical_name", "") or current_company))
+    requested_canonical_key = normalize_company_key(
+        str(getattr(requested_identity, "canonical_name", "") or requested_company)
+    )
+    current_canonical_key = normalize_company_key(
+        str(getattr(current_identity, "canonical_name", "") or current_company)
+    )
     if requested_canonical_key and current_canonical_key and requested_canonical_key == current_canonical_key:
         return True
     return False
+
+
+def _profile_experience_company_names(items: list[dict[str, Any]]) -> list[str]:
+    names: list[str] = []
+    seen: set[str] = set()
+    for item in list(items or []):
+        if not isinstance(item, dict):
+            continue
+        company_name = str(item.get("companyName") or item.get("company_name") or item.get("company") or "").strip()
+        if not company_name:
+            continue
+        key = normalize_company_key(company_name)
+        if key and key in seen:
+            continue
+        if key:
+            seen.add(key)
+        names.append(company_name)
+    return names
+
+
+def _classify_profile_company_membership(
+    *,
+    requested_company: str,
+    requested_identity: Any,
+    current_company: str,
+    current_identity: Any,
+    experience_items: list[dict[str, Any]],
+) -> str:
+    if requested_company and current_company and _company_identity_matches(
+        requested_company=requested_company,
+        requested_identity=requested_identity,
+        current_company=current_company,
+        current_identity=current_identity,
+    ):
+        return "current"
+    for company_name in _profile_experience_company_names(experience_items):
+        experience_identity = resolve_company_identity(company_name)
+        if _company_identity_matches(
+            requested_company=requested_company,
+            requested_identity=requested_identity,
+            current_company=company_name,
+            current_identity=experience_identity,
+        ):
+            return "former"
+    return "none"
 
 
 def _rank_search_rows_for_contact(contact: dict[str, Any], rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -1358,6 +1856,55 @@ def _count_row_statuses(rows: list[dict[str, Any]]) -> dict[str, int]:
     return counts
 
 
+def _normalize_snapshot_attachment_request(
+    payload: dict[str, Any],
+    *,
+    fallback: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    effective_payload = dict(fallback or {})
+    effective_payload.update({key: value for key, value in dict(payload or {}).items() if value is not None})
+    target_company = str(
+        effective_payload.get("target_company")
+        or effective_payload.get("company")
+        or effective_payload.get("attach_target_company")
+        or ""
+    ).strip()
+    snapshot_id = str(effective_payload.get("snapshot_id") or effective_payload.get("attach_snapshot_id") or "").strip()
+    raw_attach_flag = effective_payload.get("attach_to_snapshot")
+    if raw_attach_flag is None and fallback is not None:
+        raw_attach_flag = fallback.get("attach_to_snapshot")
+    attach_to_snapshot = _coerce_bool(raw_attach_flag, False)
+    build_artifacts = _coerce_bool(effective_payload.get("build_artifacts"), True)
+    return {
+        "attach_to_snapshot": attach_to_snapshot,
+        "target_company": target_company,
+        "snapshot_id": snapshot_id,
+        "build_artifacts": build_artifacts,
+    }
+
+
+def _collect_snapshot_attachment_records(
+    row_result: dict[str, Any],
+    *,
+    candidates: list[Candidate],
+    evidence: list[EvidenceRecord],
+) -> None:
+    for item in list(row_result.get("attachment_candidates") or []):
+        if isinstance(item, Candidate):
+            candidates.append(item)
+    for item in list(row_result.get("attachment_evidence") or []):
+        if isinstance(item, EvidenceRecord):
+            evidence.append(item)
+
+
+def _coerce_bool(value: Any, default: bool) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _candidate_from_payload(payload: dict[str, Any]) -> Candidate | None:
     if not isinstance(payload, dict):
         return None
@@ -1365,7 +1912,9 @@ def _candidate_from_payload(payload: dict[str, Any]) -> Candidate | None:
     if not record.get("candidate_id") or not record.get("name_en"):
         return None
     record.setdefault("name_zh", "")
-    record.setdefault("display_name", format_display_name(str(record.get("name_en") or ""), str(record.get("name_zh") or "")))
+    record.setdefault(
+        "display_name", format_display_name(str(record.get("name_en") or ""), str(record.get("name_zh") or ""))
+    )
     record.setdefault("category", "")
     record.setdefault("target_company", "")
     record.setdefault("organization", "")
@@ -1513,7 +2062,9 @@ def _candidate_contact_match_score_impl(contact: dict[str, Any], candidate: Cand
 
     score += title_ratio * 15.0
 
-    if _normalize_title(contact.get("title")) and _normalize_title(contact.get("title")) == _normalize_title(candidate.role):
+    if _normalize_title(contact.get("title")) and _normalize_title(contact.get("title")) == _normalize_title(
+        candidate.role
+    ):
         score += 8.0
     return score
 
@@ -1544,7 +2095,9 @@ def _build_near_match_reason(contact: dict[str, Any], candidate: Candidate, scor
         reasons.append("name_exact_or_near_exact")
     if _contact_company_keys(contact) & _candidate_company_keys(candidate):
         reasons.append("company_overlap")
-    if _normalize_title(contact.get("title")) and _normalize_title(contact.get("title")) == _normalize_title(candidate.role):
+    if _normalize_title(contact.get("title")) and _normalize_title(contact.get("title")) == _normalize_title(
+        candidate.role
+    ):
         reasons.append("title_exact")
     return ",".join(reasons)
 
@@ -1558,7 +2111,10 @@ def _merge_profile_candidate_records(existing: Candidate, incoming: Candidate) -
     merged_category_preview = merge_candidate(existing, incoming).category
 
     if str(incoming_record.get("category") or "").strip():
-        if bool(metadata.get("target_company_mismatch")) or str(incoming_record.get("category") or "").strip() == "non_member":
+        if (
+            bool(metadata.get("target_company_mismatch"))
+            or str(incoming_record.get("category") or "").strip() == "non_member"
+        ):
             merged["category"] = str(incoming_record.get("category") or "").strip()
         elif str(incoming_record.get("category") or "").strip() and (
             str(merged.get("category") or "").strip() == ""
@@ -1571,6 +2127,7 @@ def _merge_profile_candidate_records(existing: Candidate, incoming: Candidate) -
     override_fields = {
         "organization",
         "employment_status",
+        "current_destination",
         "role",
         "focus_areas",
         "education",
@@ -1580,11 +2137,25 @@ def _merge_profile_candidate_records(existing: Candidate, incoming: Candidate) -
         "source_path",
     }
     for key, value in incoming_record.items():
-        if key in {"candidate_id", "target_company", "name_zh", "team", "joined_at", "left_at", "current_destination", "ethnicity_background", "investment_involvement", "media_url", "metadata", "category"}:
+        if key in {
+            "candidate_id",
+            "target_company",
+            "name_zh",
+            "team",
+            "joined_at",
+            "left_at",
+            "ethnicity_background",
+            "investment_involvement",
+            "media_url",
+            "metadata",
+            "category",
+        }:
             continue
         normalized_value = str(value or "").strip()
         if key == "notes":
-            baseline_notes = "" if (_candidate_looks_like_roster_baseline(existing) and normalized_value) else merged.get("notes")
+            baseline_notes = (
+                "" if (_candidate_looks_like_roster_baseline(existing) and normalized_value) else merged.get("notes")
+            )
             merged["notes"] = _join_nonempty(baseline_notes, normalized_value)
             continue
         if key in override_fields:
@@ -1629,6 +2200,8 @@ def _normalize_person_label(value: Any) -> str:
     normalized = re.sub(r"[^\w\s:/.-]+", "", normalized)
     normalized = normalized.rstrip("/")
     return normalized
+
+
 def _normalize_linkedin_lookup_key(value: Any) -> str:
     normalized = str(value or "").strip()
     if not normalized:

@@ -1,16 +1,17 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from html import unescape
-from hashlib import sha1
-from itertools import combinations
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 import json
 import os
-from pathlib import Path
 import re
 import threading
 import time
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from hashlib import sha1
+from html import unescape
+from itertools import combinations
+from pathlib import Path
 from typing import Any
 from urllib import error, parse, request
 from xml.etree import ElementTree as ET
@@ -19,19 +20,39 @@ from .agent_runtime import AgentRuntimeCoordinator
 from .asset_catalog import AssetCatalog
 from .asset_logger import AssetLogger
 from .connectors import CompanyIdentity, RapidApiAccount, profile_detail_accounts, search_people_accounts
-from .domain import Candidate, EvidenceRecord, JobRequest, make_candidate_id, make_evidence_id, merge_candidate, normalize_name_token
+from .domain import (
+    Candidate,
+    EvidenceRecord,
+    JobRequest,
+    make_candidate_id,
+    make_evidence_id,
+    merge_candidate,
+    normalize_name_token,
+)
 from .exploratory_enrichment import ExploratoryWebEnricher
 from .harvest_connectors import (
     HarvestProfileConnector,
     HarvestProfileSearchConnector,
+    harvest_connector_available,
     parse_harvest_profile_payload,
     write_harvest_execution_artifact,
 )
 from .model_provider import ModelClient
-from .profile_registry_utils import extract_profile_registry_aliases_from_payload, profile_cache_path_candidates
+from .profile_registry_utils import (
+    extract_profile_registry_aliases_from_payload,
+    harvest_profile_payload_has_usable_content,
+    profile_cache_path_candidates,
+)
+from .runtime_tuning import (
+    resolve_runtime_timing_overrides,
+    resolved_harvest_profile_scrape_global_inflight,
+    resolved_harvest_prefetch_submit_workers,
+    resolved_parallel_exploration_workers,
+    runtime_inflight_slot,
+)
+from .runtime_environment import external_provider_mode
 from .search_provider import BaseSearchProvider, DuckDuckGoHtmlSearchProvider, search_response_to_record
 from .storage import SQLiteStore
-
 
 TECHNICAL_SIGNAL_TOKENS = {
     "engineer",
@@ -95,6 +116,8 @@ ACK_STOPWORDS = {
 
 HARVEST_PROFILE_PREFETCH_BATCH_SIZE = 250
 HARVEST_PROFILE_LIVE_FETCH_BATCH_SIZE = 100
+HARVEST_PROFILE_LIVE_FETCH_MAX_CONCURRENCY = 3
+HARVEST_PROFILE_NONLIVE_FETCH_CONCURRENCY = 4
 PROFILE_REGISTRY_LEASE_SECONDS = 240
 PROFILE_REGISTRY_LEASE_WAIT_SECONDS = 18.0
 PROFILE_REGISTRY_LEASE_POLL_SECONDS = 0.8
@@ -110,6 +133,27 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+def _external_provider_mode() -> str:
+    return external_provider_mode()
+
+
+def _runtime_timing_overrides_from_request_payload(request_payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not request_payload:
+        return {}
+    execution_preferences = dict(JobRequest.from_payload(dict(request_payload or {})).execution_preferences or {})
+    return resolve_runtime_timing_overrides(execution_preferences)
+
+
+def _runtime_tuning_context_from_request_payload(request_payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not request_payload:
+        return {}
+    execution_preferences = dict(JobRequest.from_payload(dict(request_payload or {})).execution_preferences or {})
+    return {
+        **resolve_runtime_timing_overrides(execution_preferences),
+        **execution_preferences,
+    }
+
+
 HARVEST_PROFILE_PRIORITY_PREFETCH_BATCH_SIZE = max(
     1,
     _env_int("HARVEST_PROFILE_PRIORITY_PREFETCH_BATCH_SIZE", 25),
@@ -118,11 +162,42 @@ HARVEST_PROFILE_PREFETCH_BATCH_SIZE = max(
     HARVEST_PROFILE_PRIORITY_PREFETCH_BATCH_SIZE,
     _env_int("HARVEST_PROFILE_PREFETCH_BATCH_SIZE", 250),
 )
+HARVEST_PROFILE_PRIORITY_PREFETCH_BATCH_SIZE_LIVE = max(
+    1,
+    _env_int("HARVEST_PROFILE_PRIORITY_PREFETCH_BATCH_SIZE_LIVE", 75),
+)
+HARVEST_PROFILE_PREFETCH_BATCH_SIZE_LIVE = max(
+    HARVEST_PROFILE_PRIORITY_PREFETCH_BATCH_SIZE_LIVE,
+    _env_int("HARVEST_PROFILE_PREFETCH_BATCH_SIZE_LIVE", 150),
+)
+HARVEST_PROFILE_LIVE_FETCH_BATCH_SIZE_LIVE = max(
+    1,
+    _env_int("HARVEST_PROFILE_LIVE_FETCH_BATCH_SIZE_LIVE", 150),
+)
 
 
 def _recommended_harvest_profile_prefetch_batch_size(total_candidates: int, *, priority: bool) -> int:
     default_size = HARVEST_PROFILE_PRIORITY_PREFETCH_BATCH_SIZE if priority else HARVEST_PROFILE_PREFETCH_BATCH_SIZE
     count = max(0, int(total_candidates or 0))
+    if _external_provider_mode() == "live":
+        live_default_size = (
+            HARVEST_PROFILE_PRIORITY_PREFETCH_BATCH_SIZE_LIVE
+            if priority
+            else HARVEST_PROFILE_PREFETCH_BATCH_SIZE_LIVE
+        )
+        if priority:
+            if count >= 1000:
+                return min(live_default_size, 100)
+            if count >= 200:
+                return min(live_default_size, 75)
+            return live_default_size
+        if count >= 2000:
+            return min(live_default_size, 200)
+        if count >= 500:
+            return min(live_default_size, 150)
+        if count >= 150:
+            return min(live_default_size, 100)
+        return min(live_default_size, 75)
     if priority:
         if count >= 2000:
             return min(default_size, 20)
@@ -144,6 +219,12 @@ def _recommended_harvest_profile_prefetch_batch_size(total_candidates: int, *, p
 
 def _recommended_harvest_profile_live_fetch_batch_size(total_urls: int) -> int:
     count = max(0, int(total_urls or 0))
+    if _external_provider_mode() == "live":
+        if count >= 200:
+            return HARVEST_PROFILE_LIVE_FETCH_BATCH_SIZE_LIVE
+        if count >= 50:
+            return min(HARVEST_PROFILE_LIVE_FETCH_BATCH_SIZE_LIVE, 100)
+        return min(HARVEST_PROFILE_LIVE_FETCH_BATCH_SIZE_LIVE, 50)
     if count >= 2000:
         return min(HARVEST_PROFILE_LIVE_FETCH_BATCH_SIZE, 40)
     if count >= 500:
@@ -153,9 +234,141 @@ def _recommended_harvest_profile_live_fetch_batch_size(total_urls: int) -> int:
     return HARVEST_PROFILE_LIVE_FETCH_BATCH_SIZE
 
 
+def _harvest_profile_request_source_mix(
+    source_shards_by_url: dict[str, list[str]] | None,
+    *,
+    total_urls: int,
+) -> dict[str, int]:
+    mix = {
+        "company_roster": 0,
+        "profile_search": 0,
+        "targeted": 0,
+        "other": 0,
+    }
+    for labels in dict(source_shards_by_url or {}).values():
+        normalized_labels = " ".join(
+            str(item or "").strip().lower()
+            for item in list(labels or [])
+            if str(item or "").strip()
+        )
+        if not normalized_labels:
+            mix["other"] += 1
+            continue
+        if any(
+            token in normalized_labels
+            for token in (
+                "publication_lead_targeted",
+                "dataset:publication_lead",
+                "dataset:targeted_name",
+                "resolution_source:publication_lead",
+            )
+        ):
+            mix["targeted"] += 1
+            continue
+        if "harvest_company_employees" in normalized_labels:
+            mix["company_roster"] += 1
+            continue
+        if "harvest_profile_search" in normalized_labels:
+            mix["profile_search"] += 1
+            continue
+        mix["other"] += 1
+    labeled_total = sum(mix.values())
+    if labeled_total < max(0, int(total_urls or 0)):
+        mix["other"] += max(0, int(total_urls or 0) - labeled_total)
+    return mix
+
+
+def _recommended_harvest_profile_live_fetch_window(
+    total_urls: int,
+    *,
+    source_shards_by_url: dict[str, list[str]] | None = None,
+) -> dict[str, Any]:
+    count = max(0, int(total_urls or 0))
+    source_mix = _harvest_profile_request_source_mix(
+        source_shards_by_url,
+        total_urls=count,
+    )
+    if count <= 0:
+        return {
+            "batch_size": 1,
+            "max_workers": 1,
+            "batch_count": 0,
+            "source_mix": source_mix,
+        }
+
+    labeled_total = max(1, sum(source_mix.values()))
+    roster_ratio = float(source_mix.get("company_roster") or 0) / labeled_total
+    profile_search_ratio = float(source_mix.get("profile_search") or 0) / labeled_total
+    targeted_ratio = float(source_mix.get("targeted") or 0) / labeled_total
+
+    if _external_provider_mode() == "live":
+        if count <= 40:
+            desired_batch_count = 1
+            target_workers = 1
+        elif targeted_ratio >= 0.35:
+            target_batch_size = 35 if count <= 120 else 45
+            desired_batch_count = max(2, (count + target_batch_size - 1) // target_batch_size)
+            target_workers = 2
+        elif roster_ratio >= 0.6:
+            if count >= 360:
+                target_batch_size = 75
+                minimum_batches = 6
+            elif count >= 180:
+                target_batch_size = 60
+                minimum_batches = 4
+            else:
+                target_batch_size = 50
+                minimum_batches = 3
+            desired_batch_count = max(minimum_batches, (count + target_batch_size - 1) // target_batch_size)
+            target_workers = HARVEST_PROFILE_LIVE_FETCH_MAX_CONCURRENCY if count >= 180 else 2
+        elif profile_search_ratio >= 0.5:
+            target_batch_size = 45 if count < 240 else 55
+            desired_batch_count = max(3 if count >= 120 else 2, (count + target_batch_size - 1) // target_batch_size)
+            target_workers = 2
+        else:
+            target_batch_size = 40 if count < 120 else 60
+            desired_batch_count = max(2 if count < 120 else 4, (count + target_batch_size - 1) // target_batch_size)
+            target_workers = 2
+    else:
+        if count <= 60:
+            desired_batch_count = 1
+        else:
+            target_batch_size = 40 if targeted_ratio >= 0.35 else 50
+            desired_batch_count = max(2, (count + target_batch_size - 1) // target_batch_size)
+        target_workers = HARVEST_PROFILE_NONLIVE_FETCH_CONCURRENCY
+
+    desired_batch_count = max(1, desired_batch_count)
+    batch_size = max(1, (count + desired_batch_count - 1) // desired_batch_count)
+    batch_count = max(1, (count + batch_size - 1) // batch_size)
+    return {
+        "batch_size": batch_size,
+        "max_workers": min(max(1, int(target_workers or 1)), batch_count),
+        "batch_count": batch_count,
+        "source_mix": source_mix,
+    }
+
+
 def _chunk_strings(values: list[str], chunk_size: int) -> list[list[str]]:
     size = max(1, int(chunk_size or 1))
     return [values[index : index + size] for index in range(0, len(values), size)]
+
+
+def _balanced_chunk_strings(values: list[str], chunk_size: int) -> list[list[str]]:
+    normalized = [str(value or "").strip() for value in list(values or []) if str(value or "").strip()]
+    if not normalized:
+        return []
+    size = max(1, int(chunk_size or 1))
+    if len(normalized) <= size:
+        return [normalized]
+    chunk_count = max(1, (len(normalized) + size - 1) // size)
+    base_size, remainder = divmod(len(normalized), chunk_count)
+    chunks: list[list[str]] = []
+    offset = 0
+    for index in range(chunk_count):
+        current_size = base_size + (1 if index < remainder else 0)
+        chunks.append(normalized[offset : offset + current_size])
+        offset += current_size
+    return chunks
 
 
 @dataclass(slots=True)
@@ -266,6 +479,8 @@ class MultiSourceEnricher:
         logger = asset_logger or AssetLogger(snapshot_dir)
         effective_cost_policy = dict(cost_policy or {})
         allow_shared_provider_cache = bool(effective_cost_policy.get("allow_shared_provider_cache", True))
+        effective_request_payload = dict(request_payload or job_request.to_record() or {})
+        runtime_tuning_context = _runtime_tuning_context_from_request_payload(effective_request_payload)
         normalized_scope = str(enrichment_scope or "full").strip().lower()
         linkedin_stage_enabled = normalized_scope not in {"public_web_stage_2", "public_web_only"}
         public_web_stage_enabled = normalized_scope not in {"linkedin_stage_1", "linkedin_only"}
@@ -297,8 +512,9 @@ class MultiSourceEnricher:
             resolution_prefetch_urls: list[str] = []
             resolution_prefetch_url_set: set[str] = set()
             queue_artifact_paths: list[str] = []
-            pending_dispatch_chunk: list[str] = []
-            priority_dispatch_chunk: list[str] = []
+            pending_dispatch_urls: list[str] = []
+            priority_dispatch_urls: list[str] = []
+            prefetch_source_shards_by_url: dict[str, set[str]] = {}
             resolution_candidate_profile_urls: list[str] = []
             resolution_candidate_profile_url_set: set[str] = set()
             for candidate in resolution_prefetch_candidates:
@@ -334,29 +550,39 @@ class MultiSourceEnricher:
                 priority=False,
             )
 
-            def _dispatch_prefetch_chunk(profile_url_chunk: list[str]) -> None:
-                nonlocal prefetched_harvest_profiles
-                nonlocal queued_harvest_worker_count
+            def _dispatch_prefetch_chunk(
+                *,
+                chunk_index: int,
+                profile_url_chunk: list[str],
+            ) -> dict[str, Any]:
                 if not profile_url_chunk:
-                    return
+                    return {
+                        "chunk_index": chunk_index,
+                        "cached_profiles": {},
+                        "queued_urls": [],
+                        "failed_urls": [],
+                        "error_message": "",
+                        "summary_path": "",
+                    }
                 harvest_worker = self._execute_harvest_profile_batch_worker(
                     profile_urls=profile_url_chunk,
                     snapshot_dir=snapshot_dir,
                     job_id=job_id,
-                    request_payload=request_payload or job_request.to_record(),
+                    request_payload=effective_request_payload,
                     plan_payload=plan_payload or {},
                     runtime_mode=runtime_mode,
                     allow_shared_provider_cache=allow_shared_provider_cache,
                 )
-                prefetched_harvest_profiles.update(
-                    {
-                        str(profile_url or "").strip(): dict(payload or {})
-                        for profile_url, payload in dict(harvest_worker.get("cached_profiles") or {}).items()
-                        if str(profile_url or "").strip()
-                    }
-                )
+                cached_profiles = {
+                    str(profile_url or "").strip(): dict(payload or {})
+                    for profile_url, payload in dict(harvest_worker.get("cached_profiles") or {}).items()
+                    if str(profile_url or "").strip()
+                }
+                worker_summary = dict(harvest_worker.get("summary") or {})
+                queued_urls: list[str] = []
+                failed_urls: list[str] = []
+                error_message = ""
                 if str(harvest_worker.get("worker_status") or "") == "queued":
-                    worker_summary = dict(harvest_worker.get("summary") or {})
                     queued_urls = [
                         str(profile_url or "").strip()
                         for profile_url in list(
@@ -366,23 +592,38 @@ class MultiSourceEnricher:
                         )
                         if str(profile_url or "").strip()
                     ]
-                    if queued_urls:
-                        queued_harvest_worker_count += 1
-                        background_prefetch_urls.update(queued_urls)
-                worker_summary = dict(harvest_worker.get("summary") or {})
-                summary_path_value = str(worker_summary.get("summary_path") or "").strip()
-                if summary_path_value:
-                    queue_artifact_paths.append(summary_path_value)
+                elif str(harvest_worker.get("worker_status") or "") == "failed":
+                    failed_urls = [
+                        str(profile_url or "").strip()
+                        for profile_url in list(
+                            harvest_worker.get("failed_urls")
+                            or worker_summary.get("failed_urls")
+                            or worker_summary.get("queued_urls")
+                            or []
+                        )
+                        if str(profile_url or "").strip()
+                    ]
+                    error_message = str(worker_summary.get("message") or "").strip()
+                return {
+                    "chunk_index": chunk_index,
+                    "cached_profiles": cached_profiles,
+                    "queued_urls": queued_urls,
+                    "failed_urls": failed_urls,
+                    "error_message": error_message,
+                    "summary_path": str(worker_summary.get("summary_path") or "").strip(),
+                }
 
             for candidate in background_prefetch_candidates:
                 candidate_id = str(candidate.candidate_id or "").strip()
                 candidate_profile_urls = _candidate_profile_urls(candidate)
+                candidate_source_shards = _profile_registry_sources_for_candidate(candidate)
                 for profile_url in candidate_profile_urls:
                     normalized_profile_url = str(profile_url or "").strip()
                     if not normalized_profile_url or normalized_profile_url in known_profile_url_set:
                         continue
                     known_profile_url_set.add(normalized_profile_url)
                     known_profile_urls.append(normalized_profile_url)
+                    prefetch_source_shards_by_url.setdefault(normalized_profile_url, set()).update(candidate_source_shards)
                     if candidate_id and candidate_id in resolution_candidate_ids:
                         if (
                             normalized_profile_url not in resolution_prefetch_url_set
@@ -394,23 +635,130 @@ class MultiSourceEnricher:
                         if candidate_id and candidate_id in resolution_candidate_ids and normalized_profile_url in cached_resolution_prefetch_url_set:
                             continue
                         if candidate_id and candidate_id in resolution_candidate_ids:
-                            priority_dispatch_chunk.append(normalized_profile_url)
-                            if len(priority_dispatch_chunk) >= priority_prefetch_batch_size:
-                                _dispatch_prefetch_chunk(list(priority_dispatch_chunk))
-                                priority_dispatch_chunk.clear()
+                            priority_dispatch_urls.append(normalized_profile_url)
                             continue
-                        pending_dispatch_chunk.append(normalized_profile_url)
-                        if len(pending_dispatch_chunk) >= default_prefetch_batch_size:
-                            _dispatch_prefetch_chunk(list(pending_dispatch_chunk))
-                            pending_dispatch_chunk.clear()
+                        pending_dispatch_urls.append(normalized_profile_url)
 
-            if worker_prefetch_enabled and priority_dispatch_chunk:
-                _dispatch_prefetch_chunk(list(priority_dispatch_chunk))
-                priority_dispatch_chunk.clear()
+            if worker_prefetch_enabled:
+                priority_dispatch_chunks = _balanced_chunk_strings(priority_dispatch_urls, priority_prefetch_batch_size)
+                pending_dispatch_chunks = _balanced_chunk_strings(pending_dispatch_urls, default_prefetch_batch_size)
+                dispatch_specs = [
+                    (chunk_index, dispatch_chunk)
+                    for chunk_index, dispatch_chunk in enumerate(
+                        [*priority_dispatch_chunks, *pending_dispatch_chunks],
+                        start=1,
+                    )
+                    if dispatch_chunk
+                ]
+                if dispatch_specs:
+                    dispatch_source_shards_by_url = {
+                        profile_url: sorted(list(prefetch_source_shards_by_url.get(profile_url) or set()))
+                        for profile_url in {
+                            str(profile_url or "").strip()
+                            for _, chunk in dispatch_specs
+                            for profile_url in list(chunk or [])
+                            if str(profile_url or "").strip()
+                        }
+                    }
+                    prefetch_dispatch_window = _recommended_harvest_profile_live_fetch_window(
+                        sum(len(chunk) for _, chunk in dispatch_specs),
+                        source_shards_by_url=dispatch_source_shards_by_url,
+                    )
+                    prefetch_submit_workers = resolved_harvest_prefetch_submit_workers(
+                        runtime_tuning_context,
+                        chunk_count=len(dispatch_specs),
+                        default=int(prefetch_dispatch_window.get("max_workers") or 1),
+                    )
+                    dispatch_results: list[dict[str, Any]] = []
 
-            if worker_prefetch_enabled and pending_dispatch_chunk:
-                _dispatch_prefetch_chunk(list(pending_dispatch_chunk))
-                pending_dispatch_chunk.clear()
+                    def _merge_dispatch_result(result: dict[str, Any]) -> None:
+                        nonlocal prefetched_harvest_profiles
+                        nonlocal queued_harvest_worker_count
+                        prefetched_harvest_profiles.update(
+                            {
+                                str(profile_url or "").strip(): dict(payload or {})
+                                for profile_url, payload in dict(result.get("cached_profiles") or {}).items()
+                                if str(profile_url or "").strip()
+                            }
+                        )
+                        queued_urls = [
+                            str(profile_url or "").strip()
+                            for profile_url in list(result.get("queued_urls") or [])
+                            if str(profile_url or "").strip()
+                        ]
+                        if queued_urls:
+                            queued_harvest_worker_count += 1
+                            background_prefetch_urls.update(queued_urls)
+                        failed_urls = [
+                            str(profile_url or "").strip()
+                            for profile_url in list(result.get("failed_urls") or [])
+                            if str(profile_url or "").strip()
+                        ]
+                        if failed_urls:
+                            background_prefetch_urls.update(failed_urls)
+                        error_message = str(result.get("error_message") or "").strip()
+                        if error_message:
+                            errors.append(f"harvest_profile_prefetch:{error_message}")
+                        summary_path_value = str(result.get("summary_path") or "").strip()
+                        if summary_path_value:
+                            queue_artifact_paths.append(summary_path_value)
+
+                    if prefetch_submit_workers <= 1 or len(dispatch_specs) <= 1:
+                        for chunk_index, dispatch_chunk in dispatch_specs:
+                            dispatch_results.append(
+                                _dispatch_prefetch_chunk(
+                                    chunk_index=chunk_index,
+                                    profile_url_chunk=dispatch_chunk,
+                                )
+                            )
+                    else:
+                        first_exception: Exception | None = None
+                        with ThreadPoolExecutor(
+                            max_workers=prefetch_submit_workers,
+                            thread_name_prefix="harvest-prefetch-dispatch",
+                        ) as executor:
+                            dispatch_iter = iter(dispatch_specs)
+                            future_to_spec: dict[Any, tuple[int, list[str]]] = {}
+
+                            def _submit_next_dispatch() -> bool:
+                                try:
+                                    next_chunk_index, next_dispatch_chunk = next(dispatch_iter)
+                                except StopIteration:
+                                    return False
+                                future = executor.submit(
+                                    _dispatch_prefetch_chunk,
+                                    chunk_index=next_chunk_index,
+                                    profile_url_chunk=next_dispatch_chunk,
+                                )
+                                future_to_spec[future] = (next_chunk_index, next_dispatch_chunk)
+                                return True
+
+                            for _ in range(prefetch_submit_workers):
+                                if not _submit_next_dispatch():
+                                    break
+
+                            while future_to_spec:
+                                done, _ = wait(set(future_to_spec.keys()), return_when=FIRST_COMPLETED)
+                                for future in done:
+                                    chunk_index, dispatch_chunk = future_to_spec.pop(future)
+                                    try:
+                                        dispatch_results.append(dict(future.result() or {}))
+                                    except Exception as exc:
+                                        if first_exception is None:
+                                            first_exception = exc
+                                        errors.append(
+                                            "harvest_profile_prefetch:"
+                                            f"chunk_{chunk_index}_failed:{','.join(dispatch_chunk)}:{exc}"
+                                        )
+                                    _submit_next_dispatch()
+                        if first_exception is not None:
+                            raise first_exception
+
+                    for result in sorted(
+                        dispatch_results,
+                        key=lambda item: int(item.get("chunk_index") or 0),
+                    ):
+                        _merge_dispatch_result(result)
 
             if (
                 known_profile_urls
@@ -596,8 +944,8 @@ class MultiSourceEnricher:
                     )
 
         exploration_targets = _exploration_targets(list(candidate_map.values()), unresolved_candidates) if public_web_stage_enabled else []
-        exploration_budget_used = 0
         if public_web_stage_enabled and job_request.exploration_limit > 0 and exploration_targets:
+            runtime_timing_overrides = _runtime_timing_overrides_from_request_payload(request_payload or job_request.to_record())
             exploration = self.exploratory_enricher.enrich(
                 snapshot_dir,
                 exploration_targets,
@@ -608,9 +956,12 @@ class MultiSourceEnricher:
                 request_payload=request_payload or job_request.to_record(),
                 plan_payload=plan_payload or {},
                 runtime_mode=runtime_mode,
-                parallel_workers=parallel_exploration_workers,
+                parallel_workers=resolved_parallel_exploration_workers(
+                    runtime_timing_overrides,
+                    cost_policy=effective_cost_policy,
+                    default=parallel_exploration_workers,
+                ),
             )
-            exploration_budget_used = len(list(getattr(exploration, "explored_candidates", []) or []))
             artifact_paths.update(exploration.artifact_paths)
             errors.extend(exploration.errors)
             evidence.extend(exploration.evidence)
@@ -806,6 +1157,253 @@ class MultiSourceEnricher:
             )
         return cached_profiles
 
+    def queue_background_profile_prefetch(
+        self,
+        *,
+        candidates: list[Candidate],
+        snapshot_dir: Path,
+        job_id: str,
+        request_payload: dict[str, Any],
+        plan_payload: dict[str, Any],
+        runtime_mode: str,
+        allow_shared_provider_cache: bool,
+        priority: bool = False,
+    ) -> dict[str, Any]:
+        if self.harvest_profile_connector is None or self.worker_runtime is None or not job_id:
+            return {"status": "skipped", "reason": "worker_prefetch_unavailable"}
+
+        normalized_urls: list[str] = []
+        seen_urls: set[str] = set()
+        source_shards_by_url: dict[str, list[str]] = {}
+        for candidate in list(candidates or []):
+            candidate_source_shards = _profile_registry_sources_for_candidate(candidate)
+            for profile_url in _candidate_profile_urls(candidate):
+                normalized_profile_url = str(profile_url or "").strip()
+                if not normalized_profile_url:
+                    continue
+                if normalized_profile_url not in seen_urls:
+                    seen_urls.add(normalized_profile_url)
+                    normalized_urls.append(normalized_profile_url)
+                existing_shards = set(source_shards_by_url.get(normalized_profile_url) or [])
+                existing_shards.update(candidate_source_shards)
+                source_shards_by_url[normalized_profile_url] = sorted(existing_shards)
+        if not normalized_urls:
+            return {"status": "skipped", "reason": "no_profile_urls"}
+
+        cached_profiles = self._hydrate_cached_prefetch_profiles(
+            normalized_urls,
+            snapshot_dir,
+            source_shards_by_url=source_shards_by_url,
+            source_jobs=[job_id],
+        )
+        dispatch_urls = [
+            profile_url
+            for profile_url in normalized_urls
+            if str(profile_url or "").strip() and str(profile_url or "").strip() not in cached_profiles
+        ]
+        if not dispatch_urls:
+            return {
+                "status": "completed",
+                "reason": "reused_local_raw_cache",
+                "requested_url_count": len(normalized_urls),
+                "dispatched_url_count": 0,
+                "cached_profile_count": len(cached_profiles),
+                "queued_worker_count": 0,
+                "summary_paths": [],
+            }
+
+        runtime_tuning_context = _runtime_tuning_context_from_request_payload(dict(request_payload or {}))
+        batch_size = _recommended_harvest_profile_prefetch_batch_size(len(normalized_urls), priority=priority)
+        dispatch_chunks = _balanced_chunk_strings(dispatch_urls, batch_size)
+        if not dispatch_chunks:
+            return {
+                "status": "skipped",
+                "reason": "no_dispatch_chunks",
+                "requested_url_count": len(normalized_urls),
+                "dispatched_url_count": 0,
+                "cached_profile_count": len(cached_profiles),
+                "queued_worker_count": 0,
+                "summary_paths": [],
+            }
+
+        dispatch_source_shards_by_url = {
+            profile_url: list(source_shards_by_url.get(profile_url) or [])
+            for profile_url in dispatch_urls
+        }
+        prefetch_dispatch_window = _recommended_harvest_profile_live_fetch_window(
+            sum(len(chunk) for chunk in dispatch_chunks),
+            source_shards_by_url=dispatch_source_shards_by_url,
+        )
+        prefetch_submit_workers = resolved_harvest_prefetch_submit_workers(
+            runtime_tuning_context,
+            chunk_count=len(dispatch_chunks),
+            default=int(prefetch_dispatch_window.get("max_workers") or 1),
+        )
+        dispatch_results: list[dict[str, Any]] = []
+
+        def _dispatch_prefetch_chunk(
+            *,
+            chunk_index: int,
+            profile_url_chunk: list[str],
+        ) -> dict[str, Any]:
+            if not profile_url_chunk:
+                return {
+                    "chunk_index": chunk_index,
+                    "queued_urls": [],
+                    "failed_urls": [],
+                    "error_message": "",
+                    "summary_path": "",
+                }
+            harvest_worker = self._execute_harvest_profile_batch_worker(
+                profile_urls=profile_url_chunk,
+                snapshot_dir=snapshot_dir,
+                job_id=job_id,
+                request_payload=request_payload,
+                plan_payload=plan_payload,
+                runtime_mode=runtime_mode,
+                allow_shared_provider_cache=allow_shared_provider_cache,
+            )
+            worker_summary = dict(harvest_worker.get("summary") or {})
+            queued_urls: list[str] = []
+            failed_urls: list[str] = []
+            error_message = ""
+            worker_status = str(harvest_worker.get("worker_status") or "")
+            if worker_status == "queued":
+                queued_urls = [
+                    str(profile_url or "").strip()
+                    for profile_url in list(
+                        worker_summary.get("queued_urls")
+                        or worker_summary.get("requested_urls")
+                        or []
+                    )
+                    if str(profile_url or "").strip()
+                ]
+            elif worker_status == "failed":
+                failed_urls = [
+                    str(profile_url or "").strip()
+                    for profile_url in list(
+                        harvest_worker.get("failed_urls")
+                        or worker_summary.get("failed_urls")
+                        or worker_summary.get("queued_urls")
+                        or []
+                    )
+                    if str(profile_url or "").strip()
+                ]
+                error_message = str(worker_summary.get("message") or "").strip()
+            return {
+                "chunk_index": chunk_index,
+                "queued_urls": queued_urls,
+                "failed_urls": failed_urls,
+                "error_message": error_message,
+                "summary_path": str(worker_summary.get("summary_path") or "").strip(),
+            }
+
+        if prefetch_submit_workers <= 1 or len(dispatch_chunks) <= 1:
+            for chunk_index, dispatch_chunk in enumerate(dispatch_chunks, start=1):
+                dispatch_results.append(
+                    _dispatch_prefetch_chunk(
+                        chunk_index=chunk_index,
+                        profile_url_chunk=dispatch_chunk,
+                    )
+                )
+        else:
+            first_exception: Exception | None = None
+            with ThreadPoolExecutor(
+                max_workers=prefetch_submit_workers,
+                thread_name_prefix="harvest-prefetch-dispatch",
+            ) as executor:
+                dispatch_iter = iter(list(enumerate(dispatch_chunks, start=1)))
+                future_to_spec: dict[Any, tuple[int, list[str]]] = {}
+
+                def _submit_next_dispatch() -> bool:
+                    try:
+                        next_chunk_index, next_dispatch_chunk = next(dispatch_iter)
+                    except StopIteration:
+                        return False
+                    future = executor.submit(
+                        _dispatch_prefetch_chunk,
+                        chunk_index=next_chunk_index,
+                        profile_url_chunk=next_dispatch_chunk,
+                    )
+                    future_to_spec[future] = (next_chunk_index, next_dispatch_chunk)
+                    return True
+
+                for _ in range(prefetch_submit_workers):
+                    if not _submit_next_dispatch():
+                        break
+
+                while future_to_spec:
+                    done, _ = wait(set(future_to_spec.keys()), return_when=FIRST_COMPLETED)
+                    for future in done:
+                        chunk_index, dispatch_chunk = future_to_spec.pop(future)
+                        try:
+                            dispatch_results.append(dict(future.result() or {}))
+                        except Exception as exc:
+                            if first_exception is None:
+                                first_exception = exc
+                            dispatch_results.append(
+                                {
+                                    "chunk_index": chunk_index,
+                                    "queued_urls": [],
+                                    "failed_urls": list(dispatch_chunk),
+                                    "error_message": str(exc),
+                                    "summary_path": "",
+                                }
+                            )
+                        _submit_next_dispatch()
+            if first_exception is not None:
+                raise first_exception
+
+        queued_urls: list[str] = []
+        failed_urls: list[str] = []
+        summary_paths: list[str] = []
+        errors: list[str] = []
+        queued_worker_count = 0
+        for result in sorted(dispatch_results, key=lambda item: int(item.get("chunk_index") or 0)):
+            chunk_queued_urls = [
+                str(profile_url or "").strip()
+                for profile_url in list(result.get("queued_urls") or [])
+                if str(profile_url or "").strip()
+            ]
+            if chunk_queued_urls:
+                queued_worker_count += 1
+                for profile_url in chunk_queued_urls:
+                    if profile_url not in queued_urls:
+                        queued_urls.append(profile_url)
+            for profile_url in list(result.get("failed_urls") or []):
+                normalized_profile_url = str(profile_url or "").strip()
+                if normalized_profile_url and normalized_profile_url not in failed_urls:
+                    failed_urls.append(normalized_profile_url)
+            error_message = str(result.get("error_message") or "").strip()
+            if error_message:
+                errors.append(error_message)
+            summary_path_value = str(result.get("summary_path") or "").strip()
+            if summary_path_value:
+                summary_paths.append(summary_path_value)
+
+        if failed_urls and self.store is not None:
+            for profile_url in failed_urls:
+                self.store.mark_linkedin_profile_registry_failed(
+                    profile_url,
+                    error="background_prefetch_dispatch_failed",
+                    retryable=True,
+                    source_shards=list(source_shards_by_url.get(profile_url) or []),
+                    source_jobs=[job_id],
+                    snapshot_dir=str(snapshot_dir),
+                )
+
+        return {
+            "status": "queued" if queued_worker_count > 0 else "completed",
+            "requested_url_count": len(normalized_urls),
+            "dispatched_url_count": len(dispatch_urls),
+            "cached_profile_count": len(cached_profiles),
+            "queued_worker_count": queued_worker_count,
+            "queued_urls": queued_urls,
+            "failed_urls": failed_urls,
+            "summary_paths": summary_paths,
+            "errors": errors,
+        }
+
     def _execute_harvest_profile_batch_worker(
         self,
         *,
@@ -900,17 +1498,75 @@ class MultiSourceEnricher:
         harvest_dir = snapshot_dir / "harvest_profiles"
         harvest_dir.mkdir(parents=True, exist_ok=True)
         artifact_default_path = harvest_dir / f"harvest_profile_batch_{payload_hash}.queue.json"
-        execution = self.harvest_profile_connector.execute_batch_with_checkpoint(
-            dispatch_urls,
-            snapshot_dir,
-            checkpoint=checkpoint,
-            allow_shared_provider_cache=allow_shared_provider_cache,
-        )
+        runtime_timing_overrides = _runtime_timing_overrides_from_request_payload(request_payload)
         artifact_paths = {
             str(key): str(value)
             for key, value in dict(checkpoint.get("artifact_paths") or {}).items()
             if str(key).strip()
         }
+        summary_path = harvest_dir / f"harvest_profile_batch_{payload_hash}.queue_summary.json"
+
+        try:
+            execution = self.harvest_profile_connector.execute_batch_with_checkpoint(
+                dispatch_urls,
+                snapshot_dir,
+                checkpoint=checkpoint,
+                allow_shared_provider_cache=allow_shared_provider_cache,
+                runtime_timing_overrides=runtime_timing_overrides,
+            )
+        except Exception as exc:
+            error_message = str(exc)
+            failure_summary = {
+                "logical_name": "harvest_profile_scraper_batch",
+                "requested_url_count": len(normalized_urls),
+                "requested_urls": list(normalized_urls),
+                "failed_urls": list(dispatch_urls),
+                "dispatched_url_count": len(dispatch_urls),
+                "reused_cached_count": len(cached_profiles),
+                "status": "failed",
+                "message": error_message,
+                "artifact_paths": artifact_paths,
+                "retryable": True,
+            }
+            logger.write_json(
+                summary_path,
+                failure_summary,
+                asset_type="harvest_profile_batch_queue_summary",
+                source_kind="harvest_profile_scraper",
+                is_raw_asset=False,
+                model_safe=True,
+            )
+            updated_checkpoint = {
+                **checkpoint,
+                "artifact_paths": artifact_paths,
+                "summary_path": str(summary_path),
+                "stage": "failed",
+                "last_error": error_message,
+            }
+            updated_output = {"summary": {**failure_summary, "summary_path": str(summary_path)}}
+            if self.store is not None:
+                for profile_url in dispatch_urls:
+                    self.store.mark_linkedin_profile_registry_failed(
+                        str(profile_url or ""),
+                        error=error_message,
+                        retryable=True,
+                        source_shards=["enrichment_background_prefetch"],
+                        source_jobs=[job_id] if str(job_id or "").strip() else [],
+                        snapshot_dir=str(snapshot_dir),
+                    )
+            self.worker_runtime.complete_worker(
+                worker_handle,
+                status="failed",
+                checkpoint_payload=updated_checkpoint,
+                output_payload=updated_output,
+            )
+            return {
+                "worker_status": "failed",
+                "summary": updated_output["summary"],
+                "cached_profiles": cached_profiles,
+                "failed_urls": list(dispatch_urls),
+            }
+
         for artifact in list(execution.artifacts or []):
             artifact_path = write_harvest_execution_artifact(
                 logger=logger,
@@ -938,7 +1594,6 @@ class MultiSourceEnricher:
             "dataset_id": str(execution.checkpoint.get("dataset_id") or ""),
             "artifact_paths": artifact_paths,
         }
-        summary_path = harvest_dir / f"harvest_profile_batch_{payload_hash}.queue_summary.json"
         logger.write_json(
             summary_path,
             summary,
@@ -1248,89 +1903,212 @@ class MultiSourceEnricher:
             pending_urls.append(normalized_profile_url)
 
         if pending_urls:
-            live_fetch_batch_size = _recommended_harvest_profile_live_fetch_batch_size(len(pending_urls))
-            try:
-                for pending_chunk in _chunk_strings(pending_urls, live_fetch_batch_size):
-                    if self.store is not None:
-                        for profile_url in pending_chunk:
-                            self.store.mark_linkedin_profile_registry_queued(
-                                profile_url,
-                                source_shards=list(source_shards_by_url.get(profile_url) or []),
-                                source_jobs=normalized_source_jobs,
-                                snapshot_dir=str(snapshot_dir),
-                            )
-                            _record_event(profile_url, event_type="live_fetch_requested")
+            live_fetch_window = _recommended_harvest_profile_live_fetch_window(
+                len(pending_urls),
+                source_shards_by_url=source_shards_by_url,
+            )
+            live_fetch_batch_size = int(live_fetch_window.get("batch_size") or 1)
+            pending_chunks = _balanced_chunk_strings(pending_urls, live_fetch_batch_size)
+            live_fetch_workers = min(len(pending_chunks), max(1, int(live_fetch_window.get("max_workers") or 1)))
+            global_fetch_budget = resolved_harvest_profile_scrape_global_inflight({})
+            fetched_lock = threading.Lock()
+
+            def _record_live_profile_success(
+                profile_url: str,
+                payload: dict[str, Any],
+                *,
+                event_type: str,
+            ) -> None:
+                with fetched_lock:
+                    fetched[profile_url] = payload
+                if self.store is None:
+                    return
+                alias_metadata = _profile_registry_alias_metadata(profile_url, payload)
+                before_entry = self.store.get_linkedin_profile_registry(profile_url) or {}
+                retry_count_before = int(dict(before_entry).get("retry_count") or 0)
+                fetched_entry = self.store.mark_linkedin_profile_registry_fetched(
+                    profile_url,
+                    raw_path=str(payload.get("raw_path") or ""),
+                    source_shards=list(source_shards_by_url.get(profile_url) or []),
+                    source_jobs=normalized_source_jobs,
+                    alias_urls=list(alias_metadata.get("alias_urls") or []),
+                    raw_linkedin_url=str(alias_metadata.get("raw_linkedin_url") or profile_url),
+                    sanity_linkedin_url=str(alias_metadata.get("sanity_linkedin_url") or ""),
+                    snapshot_dir=str(snapshot_dir),
+                )
+                _record_event(
+                    profile_url,
+                    event_type=event_type,
+                    metadata={"retry_count_before": retry_count_before},
+                    duration_ms=_profile_registry_queue_duration_ms(dict(fetched_entry or {})),
+                )
+
+            def _record_live_batch_stream(batch_result: dict[str, Any]) -> None:
+                profiles = {
+                    str(profile_url or "").strip(): dict(profile or {})
+                    for profile_url, profile in dict(batch_result.get("profiles") or {}).items()
+                    if str(profile_url or "").strip() and isinstance(profile, dict)
+                }
+                for profile_url, profile in profiles.items():
+                    _record_live_profile_success(
+                        profile_url,
+                        profile,
+                        event_type="live_fetch_streaming_success",
+                    )
+
+            def _fetch_live_chunk(pending_chunk: list[str]) -> dict[str, Any]:
+                with runtime_inflight_slot(
+                    "harvest_profile_scrape",
+                    budget=global_fetch_budget,
+                    metadata={"chunk_size": len(pending_chunk), "source": "enrichment"},
+                ):
                     try:
-                        live_payload = self.harvest_profile_connector.fetch_profiles_by_urls(
-                            pending_chunk,
-                            snapshot_dir,
-                            asset_logger=asset_logger,
-                            allow_shared_provider_cache=allow_shared_provider_cache,
-                        )
-                    except Exception as exc:
-                        if self.store is not None:
-                            for profile_url in pending_chunk:
-                                before_entry = self.store.get_linkedin_profile_registry(profile_url) or {}
-                                retry_count_before = int(dict(before_entry).get("retry_count") or 0)
-                                self.store.mark_linkedin_profile_registry_failed(
-                                    profile_url,
-                                    error=f"live_fetch_failed:{exc}",
-                                    retryable=True,
-                                    source_shards=list(source_shards_by_url.get(profile_url) or []),
-                                    source_jobs=normalized_source_jobs,
-                                    snapshot_dir=str(snapshot_dir),
-                                )
-                                _record_event(
-                                    profile_url,
-                                    event_type="live_fetch_failed",
-                                    event_status="failed_retryable",
-                                    detail=f"live_fetch_failed:{exc}",
-                                    metadata={"retry_count_before": retry_count_before},
-                                )
-                        raise
-                    fetched.update(live_payload)
-                    if self.store is not None:
-                        returned_urls = {str(item or "").strip() for item in dict(live_payload or {}).keys() if str(item or "").strip()}
-                        for profile_url in pending_chunk:
-                            if profile_url in returned_urls:
-                                payload = dict((live_payload or {}).get(profile_url) or {})
-                                alias_metadata = _profile_registry_alias_metadata(profile_url, payload)
-                                before_entry = self.store.get_linkedin_profile_registry(profile_url) or {}
-                                retry_count_before = int(dict(before_entry).get("retry_count") or 0)
-                                fetched_entry = self.store.mark_linkedin_profile_registry_fetched(
-                                    profile_url,
-                                    raw_path=str(payload.get("raw_path") or ""),
-                                    source_shards=list(source_shards_by_url.get(profile_url) or []),
-                                    source_jobs=normalized_source_jobs,
-                                    alias_urls=list(alias_metadata.get("alias_urls") or []),
-                                    raw_linkedin_url=str(alias_metadata.get("raw_linkedin_url") or profile_url),
-                                    sanity_linkedin_url=str(alias_metadata.get("sanity_linkedin_url") or ""),
-                                    snapshot_dir=str(snapshot_dir),
-                                )
-                                _record_event(
-                                    profile_url,
-                                    event_type="live_fetch_success",
-                                    metadata={"retry_count_before": retry_count_before},
-                                    duration_ms=_profile_registry_queue_duration_ms(dict(fetched_entry or {})),
-                                )
-                            else:
-                                before_entry = self.store.get_linkedin_profile_registry(profile_url) or {}
-                                retry_count_before = int(dict(before_entry).get("retry_count") or 0)
-                                self.store.mark_linkedin_profile_registry_failed(
-                                    profile_url,
-                                    error="live_batch_response_missing_profile",
-                                    retryable=True,
-                                    source_shards=list(source_shards_by_url.get(profile_url) or []),
-                                    source_jobs=normalized_source_jobs,
-                                    snapshot_dir=str(snapshot_dir),
-                                )
-                                _record_event(
-                                    profile_url,
-                                    event_type="live_fetch_failed",
-                                    event_status="failed_retryable",
-                                    detail="live_batch_response_missing_profile",
-                                    metadata={"retry_count_before": retry_count_before},
+                        return dict(
+                            self.harvest_profile_connector.fetch_profiles_by_urls(
+                                pending_chunk,
+                                snapshot_dir,
+                                asset_logger=asset_logger,
+                                allow_shared_provider_cache=allow_shared_provider_cache,
+                                on_batch_result=_record_live_batch_stream,
                             )
+                            or {}
+                        )
+                    except TypeError as exc:
+                        if "on_batch_result" not in str(exc):
+                            raise
+                        return dict(
+                            self.harvest_profile_connector.fetch_profiles_by_urls(
+                                pending_chunk,
+                                snapshot_dir,
+                                asset_logger=asset_logger,
+                                allow_shared_provider_cache=allow_shared_provider_cache,
+                            )
+                            or {}
+                        )
+
+            def _mark_chunk_queued(pending_chunk: list[str]) -> None:
+                if self.store is None:
+                    return
+                for profile_url in pending_chunk:
+                    self.store.mark_linkedin_profile_registry_queued(
+                        profile_url,
+                        source_shards=list(source_shards_by_url.get(profile_url) or []),
+                        source_jobs=normalized_source_jobs,
+                        snapshot_dir=str(snapshot_dir),
+                    )
+                    _record_event(profile_url, event_type="live_fetch_requested")
+
+            def _mark_chunk_failed(pending_chunk: list[str], exc: Exception) -> None:
+                if self.store is None:
+                    return
+                for profile_url in pending_chunk:
+                    before_entry = self.store.get_linkedin_profile_registry(profile_url) or {}
+                    retry_count_before = int(dict(before_entry).get("retry_count") or 0)
+                    self.store.mark_linkedin_profile_registry_failed(
+                        profile_url,
+                        error=f"live_fetch_failed:{exc}",
+                        retryable=True,
+                        source_shards=list(source_shards_by_url.get(profile_url) or []),
+                        source_jobs=normalized_source_jobs,
+                        snapshot_dir=str(snapshot_dir),
+                    )
+                    _record_event(
+                        profile_url,
+                        event_type="live_fetch_failed",
+                        event_status="failed_retryable",
+                        detail=f"live_fetch_failed:{exc}",
+                        metadata={"retry_count_before": retry_count_before},
+                    )
+
+            def _record_chunk_success(pending_chunk: list[str], live_payload: dict[str, Any]) -> None:
+                with fetched_lock:
+                    fetched.update(live_payload)
+                if self.store is None:
+                    return
+                returned_urls = {
+                    str(item or "").strip()
+                    for item in dict(live_payload or {}).keys()
+                    if str(item or "").strip()
+                }
+                for profile_url in pending_chunk:
+                    if profile_url in returned_urls:
+                        payload = dict((live_payload or {}).get(profile_url) or {})
+                        _record_live_profile_success(
+                            profile_url,
+                            payload,
+                            event_type="live_fetch_success",
+                        )
+                        continue
+                    before_entry = self.store.get_linkedin_profile_registry(profile_url) or {}
+                    retry_count_before = int(dict(before_entry).get("retry_count") or 0)
+                    self.store.mark_linkedin_profile_registry_failed(
+                        profile_url,
+                        error="live_batch_response_missing_profile",
+                        retryable=True,
+                        source_shards=list(source_shards_by_url.get(profile_url) or []),
+                        source_jobs=normalized_source_jobs,
+                        snapshot_dir=str(snapshot_dir),
+                    )
+                    _record_event(
+                        profile_url,
+                        event_type="live_fetch_failed",
+                        event_status="failed_retryable",
+                        detail="live_batch_response_missing_profile",
+                        metadata={"retry_count_before": retry_count_before},
+                    )
+
+            try:
+                if live_fetch_workers <= 1 or len(pending_chunks) <= 1:
+                    for pending_chunk in pending_chunks:
+                        _mark_chunk_queued(pending_chunk)
+                        try:
+                            live_payload = _fetch_live_chunk(pending_chunk)
+                        except Exception as exc:
+                            _mark_chunk_failed(pending_chunk, exc)
+                            raise
+                        _record_chunk_success(pending_chunk, dict(live_payload or {}))
+                else:
+                    first_exception: Exception | None = None
+                    with ThreadPoolExecutor(
+                        max_workers=live_fetch_workers,
+                        thread_name_prefix="harvest-live-fetch",
+                    ) as executor:
+                        chunk_iter = iter(pending_chunks)
+                        future_to_chunk: dict[Any, list[str]] = {}
+
+                        def _submit_next_chunk() -> bool:
+                            try:
+                                pending_chunk = next(chunk_iter)
+                            except StopIteration:
+                                return False
+                            _mark_chunk_queued(pending_chunk)
+                            future = executor.submit(
+                                _fetch_live_chunk,
+                                pending_chunk,
+                            )
+                            future_to_chunk[future] = pending_chunk
+                            return True
+
+                        for _ in range(live_fetch_workers):
+                            if not _submit_next_chunk():
+                                break
+
+                        while future_to_chunk:
+                            done, _ = wait(set(future_to_chunk.keys()), return_when=FIRST_COMPLETED)
+                            for future in done:
+                                pending_chunk = future_to_chunk.pop(future)
+                                try:
+                                    live_payload = dict(future.result() or {})
+                                except Exception as exc:
+                                    _mark_chunk_failed(pending_chunk, exc)
+                                    if first_exception is None:
+                                        first_exception = exc
+                                    _submit_next_chunk()
+                                    continue
+                                _record_chunk_success(pending_chunk, live_payload)
+                                _submit_next_chunk()
+                    if first_exception is not None:
+                        raise first_exception
             finally:
                 _release_acquired_leases()
         if contended_urls:
@@ -1609,7 +2387,7 @@ class MultiSourceEnricher:
     ) -> tuple[int, Path | None]:
         if (
             self.harvest_profile_search_connector is None
-            or not self.harvest_profile_search_connector.settings.enabled
+            or not harvest_connector_available(self.harvest_profile_search_connector.settings)
             or self.harvest_profile_connector is None
             or remaining_profile_budget <= 0
         ):
@@ -2504,6 +3282,8 @@ class CompanyPublicationConnector:
                 metadata={"company": identity.canonical_name},
             )
             return _load_local_publications(self.catalog.anthropic_publications, max_publications)
+        if self._should_skip_remote_publication_collection(request_payload):
+            return []
         publication_plan = dict(plan_payload.get("publication_coverage") or {})
         source_families = {
             str(item.get("family") or "").strip()
@@ -2538,6 +3318,13 @@ class CompanyPublicationConnector:
                 )
             )
         return _dedupe_publication_records(results, max_publications)
+
+    def _should_skip_remote_publication_collection(self, request_payload: dict[str, Any]) -> bool:
+        external_provider_mode = _external_provider_mode()
+        if external_provider_mode in {"simulate", "scripted"}:
+            return True
+        runtime_timing_overrides = _runtime_timing_overrides_from_request_payload(request_payload)
+        return str(runtime_timing_overrides.get("runtime_tuning_profile") or "").strip().lower() == "fast_smoke"
 
     def _collect_official_surface_publications(
         self,
@@ -3524,11 +4311,12 @@ def _profile_matches_candidate(
     *,
     model_client: ModelClient | None = None,
 ) -> bool:
-    full_name = profile.get("full_name", "")
+    identifiers_overlap = bool(_candidate_profile_identifiers(candidate) & _profile_identifiers(profile))
+    full_name = str(profile.get("full_name") or "").strip()
+    if identifiers_overlap and (not full_name or _names_match(candidate.name_en, full_name)):
+        return True
     if not _names_match(candidate.name_en, full_name):
         return False
-    if _candidate_profile_identifiers(candidate) & _profile_identifiers(profile):
-        return True
     resolved_category, _ = _classify_profile_membership(profile, identity, model_client=model_client)
     return resolved_category in {"employee", "former_employee"}
 
@@ -3987,6 +4775,8 @@ def _load_harvest_profile_payload_from_raw_path(raw_path: str) -> dict[str, Any]
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None
+    if not harvest_profile_payload_has_usable_content(payload):
+        return None
     alias_metadata = extract_profile_registry_aliases_from_payload(payload)
     return {
         "raw_path": path,
@@ -4023,6 +4813,7 @@ def _profile_identifiers(profile: dict[str, Any]) -> set[str]:
     return _linkedin_identifier_set(
         [
             profile.get("profile_url"),
+            profile.get("requested_profile_url"),
             profile.get("public_identifier"),
             profile.get("username"),
             profile.get("more_profiles"),

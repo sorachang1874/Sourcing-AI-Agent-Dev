@@ -30,7 +30,6 @@ _SOURCE_FAMILY_ALIASES: dict[str, str] = {
 _ALLOWED_DECISION_FIELDS = {
     "confirmed_company_scope",
     "extra_source_families",
-    "allow_high_cost_sources",
     "precision_recall_bias",
     "acquisition_strategy_override",
     "use_company_employees_lane",
@@ -48,7 +47,6 @@ _DECISION_FIELD_ALIASES = {
     "confirmed_scope": "confirmed_company_scope",
     "scope": "confirmed_company_scope",
     "source_families": "extra_source_families",
-    "high_cost_sources_approved": "allow_high_cost_sources",
     "force_company_employees": "use_company_employees_lane",
     "allow_company_employee_api": "use_company_employees_lane",
     "keyword_first": "keyword_priority_only",

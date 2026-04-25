@@ -32,6 +32,33 @@ _LIST_MATCH_FIELDS = [
 ]
 
 
+def build_request_matching_bundle(payload: dict[str, Any]) -> dict[str, Any]:
+    effective_payload = _prepared_effective_request_payload(dict(payload or {}))
+    matching_request = _normalized_effective_request_payload(
+        effective_payload,
+        include_runtime_limits=True,
+    )
+    matching_family_request = _normalized_effective_request_payload(
+        effective_payload,
+        include_runtime_limits=False,
+    )
+    return {
+        "effective_request": effective_payload,
+        "matching_request": matching_request,
+        "matching_family_request": matching_family_request,
+        "matching_request_signature": _signature_for_payload(matching_request),
+        "matching_request_family_signature": _signature_for_payload(matching_family_request),
+    }
+
+
+def matching_request_signature(payload: dict[str, Any]) -> str:
+    return str(build_request_matching_bundle(payload).get("matching_request_signature") or "")
+
+
+def matching_request_family_signature(payload: dict[str, Any]) -> str:
+    return str(build_request_matching_bundle(payload).get("matching_request_family_signature") or "")
+
+
 def request_signature(payload: dict[str, Any]) -> str:
     normalized = _normalized_request_payload(payload, include_runtime_limits=True)
     serialized = json.dumps(normalized, ensure_ascii=False, sort_keys=True)
@@ -44,16 +71,28 @@ def request_family_signature(payload: dict[str, Any]) -> str:
     return sha1(serialized.encode("utf-8")).hexdigest()[:16]
 
 
-def request_family_score(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
-    left_norm = _normalized_matching_payload(left, include_runtime_limits=False)
-    right_norm = _normalized_matching_payload(right, include_runtime_limits=False)
+def request_family_score(
+    left: dict[str, Any],
+    right: dict[str, Any],
+    *,
+    left_bundle: dict[str, Any] | None = None,
+    right_bundle: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    left_matching_bundle = _coerce_matching_bundle(left, left_bundle)
+    right_matching_bundle = _coerce_matching_bundle(right, right_bundle)
+    left_norm = dict(left_matching_bundle.get("matching_family_request") or {})
+    right_norm = dict(right_matching_bundle.get("matching_family_request") or {})
+    left_request_signature = str(left_matching_bundle.get("matching_request_signature") or "")
+    right_request_signature = str(right_matching_bundle.get("matching_request_signature") or "")
+    left_request_family_signature = str(left_matching_bundle.get("matching_request_family_signature") or "")
+    right_request_family_signature = str(right_matching_bundle.get("matching_request_family_signature") or "")
     if left_norm["target_company"] != right_norm["target_company"]:
         result = {
             "score": 0.0,
             "exact_request_match": False,
             "exact_family_match": False,
-            "family_signature_left": request_family_signature(left),
-            "family_signature_right": request_family_signature(right),
+            "family_signature_left": left_request_family_signature,
+            "family_signature_right": right_request_family_signature,
             "reasons": ["target_company_mismatch"],
             "matching_request_left": left_norm,
             "matching_request_right": right_norm,
@@ -61,15 +100,21 @@ def request_family_score(left: dict[str, Any], right: dict[str, Any]) -> dict[st
         result["explanation"] = build_request_family_match_explanation(left, right, match=result)
         return result
 
-    exact_request_match = request_signature(left) == request_signature(right)
-    exact_family_match = request_family_signature(left) == request_family_signature(right)
+    exact_request_match = (
+        bool(left_request_signature)
+        and left_request_signature == right_request_signature
+    )
+    exact_family_match = (
+        bool(left_request_family_signature)
+        and left_request_family_signature == right_request_family_signature
+    )
     if exact_request_match:
         result = {
             "score": 100.0,
             "exact_request_match": True,
             "exact_family_match": True,
-            "family_signature_left": request_family_signature(left),
-            "family_signature_right": request_family_signature(right),
+            "family_signature_left": left_request_family_signature,
+            "family_signature_right": right_request_family_signature,
             "reasons": ["exact_request_match"],
             "matching_request_left": left_norm,
             "matching_request_right": right_norm,
@@ -81,8 +126,8 @@ def request_family_score(left: dict[str, Any], right: dict[str, Any]) -> dict[st
             "score": 95.0,
             "exact_request_match": False,
             "exact_family_match": True,
-            "family_signature_left": request_family_signature(left),
-            "family_signature_right": request_family_signature(right),
+            "family_signature_left": left_request_family_signature,
+            "family_signature_right": right_request_family_signature,
             "reasons": ["exact_family_match"],
             "matching_request_left": left_norm,
             "matching_request_right": right_norm,
@@ -115,8 +160,8 @@ def request_family_score(left: dict[str, Any], right: dict[str, Any]) -> dict[st
         "score": round(score, 2),
         "exact_request_match": False,
         "exact_family_match": False,
-        "family_signature_left": request_family_signature(left),
-        "family_signature_right": request_family_signature(right),
+        "family_signature_left": left_request_family_signature,
+        "family_signature_right": right_request_family_signature,
         "reasons": reasons,
         "matching_request_left": left_norm,
         "matching_request_right": right_norm,
@@ -275,6 +320,17 @@ def _prepared_effective_request_payload(payload: dict[str, Any]) -> dict[str, An
 
 def _normalized_matching_payload(payload: dict[str, Any], *, include_runtime_limits: bool) -> dict[str, Any]:
     effective_payload = _prepared_effective_request_payload(dict(payload or {}))
+    return _normalized_effective_request_payload(
+        effective_payload,
+        include_runtime_limits=include_runtime_limits,
+    )
+
+
+def _normalized_effective_request_payload(
+    effective_payload: dict[str, Any],
+    *,
+    include_runtime_limits: bool,
+) -> dict[str, Any]:
     normalized = {
         "target_company": _normalize_scalar(effective_payload.get("target_company")),
         "asset_view": _normalize_scalar(effective_payload.get("asset_view")) or "canonical_merged",
@@ -307,6 +363,31 @@ def _normalized_matching_payload(payload: dict[str, Any], *, include_runtime_lim
             }
         )
     return normalized
+
+
+def _coerce_matching_bundle(payload: dict[str, Any], bundle: dict[str, Any] | None) -> dict[str, Any]:
+    if bundle:
+        normalized_bundle = dict(bundle)
+        matching_request = dict(normalized_bundle.get("matching_request") or {})
+        matching_family_request = dict(normalized_bundle.get("matching_family_request") or {})
+        if matching_request and matching_family_request:
+            normalized_bundle["matching_request"] = matching_request
+            normalized_bundle["matching_family_request"] = matching_family_request
+            normalized_bundle.setdefault(
+                "matching_request_signature",
+                _signature_for_payload(matching_request),
+            )
+            normalized_bundle.setdefault(
+                "matching_request_family_signature",
+                _signature_for_payload(matching_family_request),
+            )
+            return normalized_bundle
+    return build_request_matching_bundle(payload)
+
+
+def _signature_for_payload(payload: dict[str, Any]) -> str:
+    serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+    return sha1(serialized.encode("utf-8")).hexdigest()[:16]
 
 
 def _normalize_list(value: Any) -> list[str]:

@@ -1,5 +1,8 @@
 # Backend MVP
 
+> Status: Design/reference doc. Useful for product or architecture context, but not the source of truth for current runtime behavior.
+
+
 ## 1. MVP 输入
 
 请求体示例：

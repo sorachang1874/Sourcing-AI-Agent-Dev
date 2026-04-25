@@ -1,5 +1,8 @@
 # Service Evolution Strategy
 
+> Status: Current first-party doc. Treat this file as active guidance, but keep it aligned with `docs/INDEX.md` and `PROGRESS.md` when runtime contracts change.
+
+
 ## Short Answer
 
 现在不应该在“纯云端 SaaS”和“纯本地 App”之间二选一。

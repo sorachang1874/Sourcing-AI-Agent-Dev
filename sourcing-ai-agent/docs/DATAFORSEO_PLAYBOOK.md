@@ -1,5 +1,8 @@
 # DataForSEO Google Organic Playbook
 
+> Status: Current first-party doc. Treat this file as active guidance, but keep it aligned with `docs/INDEX.md` and `PROGRESS.md` when runtime contracts change.
+
+
 这份文档记录本项目当前对 `DataForSEO Google Organic SERP API` 的实际接入方式、默认成本口径和推荐使用场景。
 
 ## 适用场景

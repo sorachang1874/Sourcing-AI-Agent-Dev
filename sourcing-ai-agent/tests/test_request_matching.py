@@ -1,6 +1,13 @@
 import unittest
 
-from sourcing_agent.request_matching import request_family_score, request_family_signature, request_signature
+from sourcing_agent.request_matching import (
+    build_request_matching_bundle,
+    matching_request_family_signature,
+    matching_request_signature,
+    request_family_score,
+    request_family_signature,
+    request_signature,
+)
 
 
 class RequestMatchingTest(unittest.TestCase):
@@ -92,3 +99,30 @@ class RequestMatchingTest(unittest.TestCase):
         }
         self.assertEqual(request_signature(left), request_signature(right))
         self.assertEqual(request_family_signature(left), request_family_signature(right))
+
+    def test_matching_signature_uses_effective_request_normalization(self) -> None:
+        raw_query_payload = {
+            "raw_user_request": "我想找 Google Gemini 的产品经理",
+            "target_company": "Google",
+        }
+        structured_payload = {
+            "target_company": "Google",
+            "organization_keywords": ["Gemini", "Google DeepMind"],
+            "keywords": ["Gemini"],
+            "must_have_primary_role_buckets": ["product_management"],
+        }
+
+        self.assertNotEqual(request_signature(raw_query_payload), request_signature(structured_payload))
+        self.assertEqual(
+            matching_request_signature(raw_query_payload),
+            matching_request_signature(structured_payload),
+        )
+        self.assertEqual(
+            matching_request_family_signature(raw_query_payload),
+            matching_request_family_signature(structured_payload),
+        )
+
+        bundle = build_request_matching_bundle(raw_query_payload)
+        self.assertEqual(bundle["matching_family_request"]["target_company"], "google")
+        self.assertIn("gemini", bundle["matching_family_request"]["organization_keywords"])
+        self.assertIn("product_management", bundle["matching_family_request"]["must_have_primary_role_buckets"])

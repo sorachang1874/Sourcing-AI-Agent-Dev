@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 from typing import Any, Protocol
 from urllib import error, request
 import requests
@@ -9,6 +8,7 @@ import requests
 from .document_extraction import infer_structured_signals_from_payload
 from .domain import JobRequest
 from .query_intent_policy import build_supported_rewrite_policy_prompt_context
+from .runtime_environment import external_provider_mode
 from .settings import ModelProviderSettings, QwenSettings
 
 
@@ -16,7 +16,7 @@ _OUTREACH_LAYER_PROMPT_TEMPLATE_VERSION = "outreach_layering_v3_explicit_greater
 
 
 def _external_provider_mode() -> str:
-    return str(os.getenv("SOURCING_EXTERNAL_PROVIDER_MODE") or "live").strip().lower() or "live"
+    return external_provider_mode()
 
 
 def _build_outreach_layer_system_prompt() -> str:
@@ -64,7 +64,6 @@ def _execution_preferences_schema_prompt() -> str:
         "provider_people_search_max_queries, "
         "large_org_keyword_probe_mode, "
         "force_fresh_run, "
-        "allow_high_cost_sources, "
         "precision_recall_bias, "
         "confirmed_company_scope, "
         "extra_source_families, "
@@ -77,6 +76,15 @@ def _execution_preferences_schema_prompt() -> str:
         "provider_people_search_query_strategy must be all_queries_union or first_hit. "
         "provider_people_search_max_queries must be a small positive integer. "
         "Omit uncertain fields from execution_preferences. "
+    )
+
+
+def _explicit_thematic_keyword_boundary_prompt() -> str:
+    return (
+        "Use the user's explicit topical vocabulary as the boundary for keywords and research_direction_keywords. "
+        "Do not expand a single direction into sibling, parent, child, or adjacent directions unless those exact terms also appear in the request. "
+        "For example, if the request says Multimodal, keep Multimodal as the direction keyword and do not add Text, Vision, vision-language, or video generation unless they are explicitly present in the user text. "
+        "Likewise, preserve the exact explicit topic set instead of broadening it into related families. "
     )
 
 
@@ -112,7 +120,7 @@ def _build_request_normalization_system_prompt() -> str:
         "population boundary (categories + employment_statuses), "
         "scope boundary (target_company + organization_keywords + scope_disambiguation + confirmed_company_scope), "
         "acquisition lane policy (acquisition_strategy_override + use_company_employees_lane + keyword_priority_only + former_keyword_queries_only + large_org_keyword_probe_mode), "
-        "and fallback policy (force_fresh_run + allow_high_cost_sources + provider_people_search_query_strategy + provider_people_search_max_queries + reuse_existing_roster + run_former_search_seed). "
+        "and fallback policy (force_fresh_run + provider_people_search_query_strategy + provider_people_search_max_queries + reuse_existing_roster + run_former_search_seed). "
         + _execution_preferences_schema_prompt()
         + "scope_disambiguation must be an object and may contain only inferred_scope,sub_org_candidates,confidence,rationale. "
         "inferred_scope must be one of parent,sub_org_only,both,uncertain. "
@@ -125,8 +133,15 @@ def _build_request_normalization_system_prompt() -> str:
         "Do not invent lab/model/product names that are not in the user text unless they are high-confidence standard aliases. "
         "If a term may be new or ambiguous (for example Avocado, TBD), keep the raw term in keywords and/or organization_keywords instead of dropping it, "
         "and prefer uncertain scope over confident hallucination. "
+        "Organization names may legitimately contain generic-looking suffixes such as AI, Lab, Labs, Research, Systems, or Studio; "
+        "when such a token is part of the resolved organization or sub-org name, keep it attached to that name instead of surfacing it again as a standalone ambiguous keyword. "
         "Prefer canonical organization names in target_company, team or sub-org names in organization_keywords, "
         "and direction/topic/model/technology terms in keywords. "
+        + _explicit_thematic_keyword_boundary_prompt()
+        +
+        "Common AI direction terms such as Coding, Math, Text, Audio, Vision/Visual, Multimodal, Reasoning, "
+        "Pre-train, Post-train, World model, Alignment, and Safety should usually be preserved as explicit keywords "
+        "and, when applicable, repeated in research_direction_keywords instead of being dropped as generic language. "
         "If a term is both a team/sub-org clue and an important retrieval/search constraint, it may appear in both organization_keywords and keywords. "
         "Important extraction rule: only return atomic search/retrieval terms. "
         "Never return wrapper phrases or narrative fragments such as '在Veo和Nano Banana团队', '参与Veo和Nano Banana', "
@@ -137,6 +152,9 @@ def _build_request_normalization_system_prompt() -> str:
         "Populate product/model/research-direction optional keys whenever possible; if not found, return empty arrays. "
         "categories should prefer employee, former_employee, investor, researcher, engineer. "
         "employment_statuses should use current or former. "
+        "If the user asks for people in a technical direction/topic (for example Pre-train, Post-train, Reasoning, "
+        "Infra, Multimodal, Eval, RL, Coding, or Math) and does not explicitly say researcher-only or engineer-only, "
+        "prefer categories=['researcher','engineer'] instead of narrowing to one side. "
         "retrieval_strategy must be one of empty string, structured, hybrid, semantic. "
         "Unless the user explicitly limits the scope, default employment_statuses to both current and former members. "
         "If the user says 华人, 泛华人, or Chinese members, interpret that as public Greater China study/work experience "
@@ -164,7 +182,12 @@ def _build_request_normalization_system_prompt() -> str:
         "{\"target_company\":\"Meta\",\"employment_statuses\":[\"current\",\"former\"],"
         "\"organization_keywords\":[\"TBD\"],"
         "\"keywords\":[\"infra\",\"TBD\"],"
-        "\"scope_disambiguation\":{\"inferred_scope\":\"uncertain\",\"sub_org_candidates\":[\"TBD\"],\"confidence\":0.4}}."
+        "\"scope_disambiguation\":{\"inferred_scope\":\"uncertain\",\"sub_org_candidates\":[\"TBD\"],\"confidence\":0.4}}. "
+        "Example 4 input: 给我Anthropic做Coding、Math和Audio方向的人. "
+        "Example 4 output: "
+        "{\"target_company\":\"Anthropic\",\"employment_statuses\":[\"current\",\"former\"],"
+        "\"keywords\":[\"Coding\",\"Math\",\"Audio\"],"
+        "\"research_direction_keywords\":[\"Coding\",\"Math\",\"Audio\"]}."
     )
 
 
@@ -464,17 +487,18 @@ class DeterministicModelClient:
 class OfflineModelClient(DeterministicModelClient):
     def __init__(self, *, mode: str) -> None:
         normalized_mode = str(mode or "simulate").strip().lower() or "simulate"
-        self.mode = normalized_mode if normalized_mode in {"simulate", "replay"} else "simulate"
+        self.mode = normalized_mode if normalized_mode in {"simulate", "replay", "scripted"} else "simulate"
 
     def provider_name(self) -> str:
         return "offline_model"
 
     def healthcheck(self) -> dict[str, Any]:
-        note = (
-            "Simulated model provider; no external model request will be sent."
-            if self.mode == "simulate"
-            else "Replay model provider; external model requests are disabled."
-        )
+        if self.mode == "simulate":
+            note = "Simulated model provider; no external model request will be sent."
+        elif self.mode == "replay":
+            note = "Replay model provider; external model requests are disabled."
+        else:
+            note = "Scripted model provider; external model requests are disabled and orchestration uses scripted fixtures."
         return {
             "provider": self.provider_name(),
             "status": "ready",
@@ -563,6 +587,8 @@ class QwenResponsesModelClient(DeterministicModelClient):
             "If a term may be new or ambiguous (for example Avocado, TBD), keep the raw term in keywords and/or organization_keywords instead of dropping it. "
             "Prefer canonical company names in target_company context, team/sub-org/project labels in organization_keywords, "
             "and direction/topic/model/technology terms in keywords or the optional keyword-family fields. "
+            + _explicit_thematic_keyword_boundary_prompt()
+            +
             "If the instruction narrows scope to a subset, prefer preserving those terms rather than collapsing them away. "
             "Only include fields directly supported by the instruction. "
             "If the instruction uses shorthand like 华人 or Chinese members, rewrite it into public Greater China experience "
@@ -861,6 +887,8 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
             "If a term may be new or ambiguous (for example Avocado, TBD), keep the raw term in keywords and/or organization_keywords instead of dropping it. "
             "Prefer canonical company names in target_company context, team/sub-org/project labels in organization_keywords, "
             "and direction/topic/model/technology terms in keywords or the optional keyword-family fields. "
+            + _explicit_thematic_keyword_boundary_prompt()
+            +
             "If the instruction narrows scope to a subset, prefer preserving those terms rather than collapsing them away. "
             "Only include fields directly supported by the instruction. "
             "If the instruction uses shorthand like 华人 or Chinese members, rewrite it into public Greater China experience "
@@ -1212,7 +1240,7 @@ def build_model_client(
     qwen_settings: QwenSettings | None = None,
 ) -> ModelClient:
     external_mode = _external_provider_mode()
-    if external_mode in {"simulate", "replay"}:
+    if external_mode in {"simulate", "replay", "scripted"}:
         return OfflineModelClient(mode=external_mode)
     if qwen_settings and qwen_settings.enabled:
         return QwenResponsesModelClient(qwen_settings)

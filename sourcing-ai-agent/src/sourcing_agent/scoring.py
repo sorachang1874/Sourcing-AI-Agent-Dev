@@ -441,7 +441,14 @@ def candidate_matches_structured_filters(
         if involvement_label == "no":
             return False
 
-    if effective_must_have_facets and not all(_normalize(facet) in candidate_facets for facet in effective_must_have_facets):
+    enforceable_must_have_facets = [
+        normalize_requested_facet(facet)
+        for facet in effective_must_have_facets
+        if normalize_requested_facet(facet) in FACET_ALIAS_MAP
+    ]
+    if enforceable_must_have_facets and not all(
+        _normalize(facet) in candidate_facets for facet in enforceable_must_have_facets
+    ):
         return False
     if effective_role_buckets and primary_role_bucket_mode == "hard":
         candidate_role_bucket = _normalize(derive_candidate_role_bucket(candidate))
@@ -623,6 +630,12 @@ def _score_keyword_pool(
             matched_variant = next((item for item in variants if _normalize(item) in normalized_value), "")
             if not matched_variant:
                 continue
+            if _should_skip_keyword_match(
+                keyword=keyword,
+                matched_variant=matched_variant,
+                field_name=field_name,
+            ):
+                continue
             exact_match = _normalize(matched_variant) == _normalize(keyword)
             effective_weight = weight if exact_match else round(weight * 0.65, 2)
             match_record = {
@@ -669,6 +682,15 @@ def _score_keyword_pool(
             matched_fields.append(supporting)
             score += supporting_weight
     return score, matched_fields
+
+
+def _should_skip_keyword_match(*, keyword: str, matched_variant: str, field_name: str) -> bool:
+    if field_name != "derived_facets":
+        return False
+    normalized_keyword = str(keyword or "").strip()
+    if not re.fullmatch(r"[A-Z]{2,3}", normalized_keyword):
+        return False
+    return _normalize(matched_variant) == _normalize(normalized_keyword)
 
 
 def _keyword_variants(keyword: str, criteria_patterns: list[dict[str, Any]]) -> list[str]:

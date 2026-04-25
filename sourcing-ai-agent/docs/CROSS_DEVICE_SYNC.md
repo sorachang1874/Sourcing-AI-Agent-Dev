@@ -1,5 +1,10 @@
 # Cross-Device Secure Asset Sync
 
+> Status: Current first-party doc. Treat this file as active guidance, but keep it aligned with `docs/INDEX.md` and `PROGRESS.md` when runtime contracts change.
+
+
+> Current default: hosted / cross-device recovery now prefers `Postgres control plane + control_plane_snapshot + company_snapshot`. `sqlite_snapshot` remains a legacy backup alias, not the primary path.
+
 ## Goal
 
 这份文档定义一套适合 `Sourcing AI Agent` 的跨设备可恢复方案。
@@ -22,6 +27,10 @@
 - secrets 不应该进入 Git
 - high-value raw assets 太敏感、太大，也不适合放 Git
 - workflow 仍需要保持 raw-first、可审计、可回放
+
+如果你的目标不是“恢复 durable runtime 资产”，而是“把当前本地开发环境整体搬到另一台 Mac，包括 Codex 本地状态”，直接看：
+
+- `docs/MAC_DEV_ENV_MIGRATION.md`
 
 ## Design Principles
 
@@ -51,7 +60,7 @@
 | Durable normalized assets | `candidate_documents.json`, `manifest.json`, retrieval artifacts | local runtime first, then cloud object storage | No | Yes |
 | Execution state | worker checkpoint, scheduler state, daemon status | local runtime / DB | No | Selective |
 | Ephemeral cache | temporary HTML, retry scratch, debug temp file | local runtime | No | Usually No |
-| Local DB | SQLite `jobs / candidates / evidence / criteria_*` | local runtime | No | Exported snapshots only |
+| Local DB | Postgres control plane, plus legacy backup-only SQLite snapshots when explicitly exported | local runtime / local PG | No | Exported control-plane snapshots only |
 
 ## Recommended Storage Planes
 
@@ -153,7 +162,7 @@ sourcing-ai-agent-dev/
 - live debug cache
 - current worker checkpoint
 - daemon status
-- sqlite working database
+- Postgres control plane（以及按需导出的 legacy SQLite backup）
 - 尚未上传或不值得上传的临时资产
 
 不要求本地 runtime 全量持久化到云端。只同步高价值子集。
@@ -186,7 +195,7 @@ sourcing-ai-agent-dev/
 
 最小可行形态：
 
-- 仍然用本地 SQLite
+- 直接复用本地 Postgres control plane / control-plane snapshot manifests
 - 每次 cloud sync 额外生成：
   - `asset_bundle_manifest.json`
   - `sync_run.json`
@@ -212,7 +221,7 @@ sourcing-ai-agent-dev/
 
 当前 server/bootstrap 推荐的 canonical durable set 是：
 
-- 一份全局 `sqlite_snapshot`
+- 一份全局 `control_plane_snapshot`
 - 每个 canonical company 一份 `company_snapshot`
 
 不再推荐默认依赖 `company_handoff` 做服务器恢复，因为它更重，也更容易把历史测试态运行文件一起带回。
@@ -289,7 +298,7 @@ sourcing-ai-agent-dev/
 
 默认服务器恢复入口已经收敛到：
 
-- `import-cloud-assets --bundle-kind sqlite_snapshot ...`
+- `import-cloud-assets --bundle-kind control_plane_snapshot ...`
 - `import-cloud-assets --bundle-kind company_snapshot ...`
 
 其余 `download-asset-bundle / restore-*` 保留为排障或离线拆解 bundle 的低层工具。
@@ -304,6 +313,21 @@ sourcing-ai-agent-dev/
   - `indexes/bundle_index.json`
 - remote sync runs:
   - `indexes/sync_runs/*.json`
+
+新增账本：
+
+- `import-cloud-assets` 现在会额外写一条 local sync run，action=`import`
+- 同时写入 control-plane `cloud_asset_operation_ledger`
+  - `operation_type=import_bundle`
+  - 记录 bundle kind/id、manifest path、restore 结果、repair/warmup/backfill 结果、scoped companies / snapshot
+- `delete-asset-bundle` 现在会在原有 delete sync run 之外，再写一条 control-plane ledger
+  - `operation_type=gc_delete_bundle`
+  - 记录 sync_run_id、bundle kind/id、目标 runtime/db 与删除摘要
+
+如果服务器恢复后要排查“这次到底导入/删除了什么”，优先看：
+
+- `runtime/object_sync/runs/*.json`
+- control-plane `cloud_asset_operation_ledger`
 
 `upload-asset-bundle / download-asset-bundle` 现已支持：
 
@@ -354,7 +378,7 @@ PYTHONPATH=src python3 -m sourcing_agent.cli import-cloud-assets --bundle-kind c
 
 恢复顺序：
 
-1. 先恢复 `sqlite_snapshot`
+1. 先恢复 `control_plane_snapshot`
 2. 再恢复需要的 `company_snapshot`
 3. 校验 `latest_snapshot.json / asset_registry.json / candidate_documents.json`
 4. 最后启动 hosted runtime

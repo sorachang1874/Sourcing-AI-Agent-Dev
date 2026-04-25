@@ -1,0 +1,43 @@
+{
+  "updated_at": "2026-04-15T00:00:00+00:00",
+  "company_count": 2,
+  "alias_count": 6,
+  "records": [
+    {
+      "company_key": "humansand",
+      "canonical_name": "Humans&",
+      "linkedin_slug": "humansand",
+      "domain": "humansand.ai",
+      "aliases": [
+        "Humans&",
+        "humansand",
+        "humans and"
+      ],
+      "confidence": "high",
+      "local_asset_available": false,
+      "notes": "Bootstrap seed identity. Runtime company identity seed catalogs and imported assets can override this entry without code changes."
+    },
+    {
+      "company_key": "safesuperintelligence",
+      "canonical_name": "Safe Superintelligence",
+      "linkedin_slug": "ssi-ai",
+      "domain": "",
+      "aliases": [
+        "Safe Superintelligence",
+        "Safe Superintelligence Inc",
+        "SSI AI"
+      ],
+      "confidence": "high",
+      "local_asset_available": false,
+      "notes": "Bundled deterministic seed for Safe Superintelligence so company-name normalization does not fall back to heuristic slug guessing."
+    }
+  ],
+  "alias_index": {
+    "humansand": "humansand",
+    "humansandai": "humansand",
+    "humans": "humansand",
+    "safesuperintelligence": "safesuperintelligence",
+    "safesuperintelligenceinc": "safesuperintelligence",
+    "ssiai": "safesuperintelligence"
+  }
+}

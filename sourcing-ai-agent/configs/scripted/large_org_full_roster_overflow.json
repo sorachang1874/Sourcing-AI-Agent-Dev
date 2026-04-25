@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "behavior_fixture": "large_org_full_roster_overflow",
+    "concrete_driver": "xAI full-roster query",
+    "notes": [
+      "This is a reusable large-org behavior fixture, not an xAI-only workflow contract.",
+      "The current concrete payload uses xAI-shaped sample data so the hosted smoke suite can exercise a realistic large-org full-roster path."
+    ]
+  },
+  "harvest": {
+    "default": {
+      "execute_pending_rounds": 3,
+      "pending_message": "Scripted large-org Harvest task is still processing the roster shard.",
+      "errors": [
+        {
+          "phase": "execute",
+          "round": 1,
+          "kind": "retryable",
+          "message": "Scripted large-org Harvest transient backpressure; retrying the roster shard."
+        }
+      ]
+    }
+  }
+}

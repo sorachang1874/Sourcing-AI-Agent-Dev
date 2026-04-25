@@ -1,5 +1,10 @@
 # Canonical Cloud Bundle Catalog
 
+> Status: Current first-party doc. Treat this file as active guidance, but keep it aligned with `docs/INDEX.md` and `PROGRESS.md` when runtime contracts change.
+
+
+> Current default: hosted restore should prefer `control_plane_snapshot + company_snapshot`. `sqlite_snapshot` entries below are legacy backup aliases kept for portability/reference.
+
 ## Goal
 
 这份文档定义当前推荐恢复到服务器的 canonical runtime bundle 集合。
@@ -11,7 +16,7 @@
 
 当前推荐的恢复基线不是 `company_handoff`，而是：
 
-1. 一份全局 `sqlite_snapshot`
+1. 一份全局 `control_plane_snapshot`
 2. 每个 canonical company 一份 `company_snapshot`
 
 这样做更轻、更清晰，也更适合后续按公司增量更新。
@@ -22,7 +27,7 @@
 
 | Kind | Bundle ID | Notes |
 | --- | --- | --- |
-| `sqlite_snapshot` | `sqlite_snapshot_sourcing_agent_db_20260412T071012Z` | 当前云端已完成同步的全局 SQLite 状态，包含 query dispatch、registry、workflow/job state、shared reuse metadata。下一版 `sqlite_snapshot_sourcing_agent_db_20260413T061157Z` 正在上传。 |
+| `control_plane_snapshot` | `control_plane_snapshot_*` | 当前推荐的全局 control-plane 恢复基线。旧的 `sqlite_snapshot_*` 仅作 legacy backup alias。 |
 
 ### Company snapshots
 
@@ -48,12 +53,12 @@
 
 ## Recommended Restore Order
 
-### 1. Restore SQLite first
+### 1. Restore control plane first
 
 ```bash
 PYTHONPATH=src python3 -m sourcing_agent.cli import-cloud-assets \
-  --bundle-kind sqlite_snapshot \
-  --bundle-id sqlite_snapshot_sourcing_agent_db_20260412T071012Z \
+  --bundle-kind control_plane_snapshot \
+  --bundle-id <control_plane_snapshot_bundle_id> \
   --output-dir runtime/asset_imports
 ```
 
@@ -104,7 +109,7 @@ PYTHONPATH=src python3 -m sourcing_agent.cli run-worker-daemon-service --poll-se
 服务器恢复后，默认应优先消费这些已恢复资产，而不是立刻 fresh run：
 
 - 默认走 hosted 路径
-- 默认复用 local runtime + SQLite registry
+- 默认复用 local runtime + Postgres control-plane registry / restored authoritative generations
 - 只有在用户明确要求 fresh run，或现有 snapshot 明显不满足目标范围时，才触发新的外部 acquisition
 
 对前端与 API 调用方也一样：

@@ -1,0 +1,23 @@
+{
+  "aliyun_ecs": {
+    "label": "aliyun-ecs-personal-dev-trial",
+    "region": "cn-hongkong",
+    "public_ip": "YOUR_PUBLIC_IP",
+    "private_ip": "YOUR_PRIVATE_IP",
+    "login_user": "",
+    "password": "YOUR_SERVER_PASSWORD",
+    "os": "Ubuntu 22.04 64-bit",
+    "vcpu": 2,
+    "memory_gib": 4,
+    "system_disk_gib": 40,
+    "bandwidth_billing": "pay_by_traffic"
+  },
+  "cloudflare_pages": {
+    "account_id": "YOUR_CLOUDFLARE_ACCOUNT_ID",
+    "api_token": "YOUR_CLOUDFLARE_API_TOKEN",
+    "project_name": "YOUR_PAGES_PROJECT",
+    "frontend_url": "https://demo.example.com",
+    "backend_api_origin": "https://api.example.com",
+    "zone_domain": "example.com"
+  }
+}

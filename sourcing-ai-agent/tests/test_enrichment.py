@@ -1,19 +1,20 @@
 import json
 import tempfile
+import threading
+import time
 import unittest
-from unittest import mock
 from pathlib import Path
+from unittest import mock
 
 from sourcing_agent.asset_catalog import AssetCatalog
 from sourcing_agent.asset_logger import AssetLogger
-from sourcing_agent.connectors import CompanyIdentity
+from sourcing_agent.connectors import CompanyIdentity, RapidApiAccount
 from sourcing_agent.domain import Candidate, EvidenceRecord, JobRequest
-from sourcing_agent.connectors import RapidApiAccount
 from sourcing_agent.enrichment import (
     CompanyPublicationConnector,
+    LinkedInSearchSlugResolver,
     MultiSourceEnricher,
     PublicationRecord,
-    LinkedInSearchSlugResolver,
     _candidate_key,
     _extract_page_authors,
     _extract_publications_from_rss,
@@ -25,6 +26,8 @@ from sourcing_agent.enrichment import (
     extract_search_people_rows,
     parse_basic_linkedin_profile_payload,
 )
+
+
 class EnrichmentHelpersTest(unittest.TestCase):
     def test_extract_search_people_rows(self) -> None:
         payload = {
@@ -196,6 +199,80 @@ class EnrichmentHelpersTest(unittest.TestCase):
         <body><span class="author"><a href="https://example.com">John Schulman</a> in collaboration with others at Thinking Machines</span></body></html>
         """
         self.assertEqual(_extract_page_authors(article_html), ["John Schulman"])
+
+    def test_publication_connector_skips_remote_collection_in_simulate_mode_and_fast_smoke(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            catalog = AssetCatalog(
+                project_root=root,
+                dev_root=root,
+                anthropic_root=root,
+                anthropic_workbook=root / "anthropic.xlsx",
+                anthropic_readme=root / "README.md",
+                anthropic_progress=root / "PROGRESS.md",
+                legacy_api_accounts=root / "api_accounts.json",
+                legacy_company_ids=root / "company_ids.json",
+                anthropic_publications=root / "publications.json",
+                scholar_scan_results=root / "scholar.json",
+                investor_members_json=root / "investor.json",
+                employee_scan_skill=root / "employee_skill.md",
+                investor_scan_skill=root / "investor_skill.md",
+                onepager_skill=root / "onepager_skill.md",
+            )
+            connector = CompanyPublicationConnector(catalog)
+            identity = CompanyIdentity(
+                requested_name="Google",
+                canonical_name="Google",
+                company_key="google",
+                linkedin_slug="google",
+                linkedin_company_url="https://www.linkedin.com/company/google/",
+                domain="google.com",
+            )
+            publications_dir = root / "publications"
+            logger = AssetLogger(root)
+            plan_payload = {
+                "publication_coverage": {
+                    "source_families": [
+                        {"family": "official_research"},
+                        {"family": "publication_platforms"},
+                    ]
+                }
+            }
+            with (
+                mock.patch.object(
+                    connector,
+                    "_collect_official_surface_publications",
+                    side_effect=AssertionError("official surface fetch should be skipped"),
+                ),
+                mock.patch.object(
+                    connector,
+                    "_search_arxiv_publications",
+                    side_effect=AssertionError("arxiv fetch should be skipped"),
+                ),
+            ):
+                with mock.patch.dict("os.environ", {"SOURCING_EXTERNAL_PROVIDER_MODE": "simulate"}, clear=False):
+                    self.assertEqual(
+                        connector._collect_publications(
+                            identity,
+                            publications_dir,
+                            5,
+                            asset_logger=logger,
+                            request_payload={},
+                            plan_payload=plan_payload,
+                        ),
+                        [],
+                    )
+                self.assertEqual(
+                    connector._collect_publications(
+                        identity,
+                        publications_dir,
+                        5,
+                        asset_logger=logger,
+                        request_payload={"execution_preferences": {"runtime_tuning_profile": "fast_smoke"}},
+                        plan_payload=plan_payload,
+                    ),
+                    [],
+                )
 
     def test_publication_connector_adds_coauthor_evidence_without_creating_new_leads(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
@@ -772,7 +849,7 @@ class EnrichmentHelpersTest(unittest.TestCase):
             self.assertEqual(len(resolved_profiles), 1)
             self.assertEqual(len(evidence), 1)
 
-    def test_fetch_harvest_profiles_for_urls_splits_live_requests_into_micro_batches(self) -> None:
+    def test_fetch_harvest_profiles_for_urls_uses_balanced_live_batches(self) -> None:
         class _FakeProfileConnector:
             def __init__(self) -> None:
                 self.batch_sizes: list[int] = []
@@ -834,7 +911,234 @@ class EnrichmentHelpersTest(unittest.TestCase):
             )
 
             self.assertEqual(len(fetched), 205)
-            self.assertEqual(fake_profile_connector.batch_sizes, [75, 75, 55])
+            self.assertEqual(sorted(fake_profile_connector.batch_sizes), [51, 51, 51, 52])
+
+    def test_fetch_harvest_profiles_for_urls_uses_bounded_parallel_live_batches(self) -> None:
+        class _FakeProfileConnector:
+            def __init__(self) -> None:
+                self.batch_sizes: list[int] = []
+                self._lock = threading.Lock()
+                self.inflight = 0
+                self.max_inflight = 0
+
+            def fetch_profiles_by_urls(
+                self,
+                profile_urls,
+                snapshot_dir,
+                asset_logger=None,
+                use_cache=True,
+                allow_shared_provider_cache=True,
+            ):
+                with self._lock:
+                    self.batch_sizes.append(len(profile_urls))
+                    self.inflight += 1
+                    self.max_inflight = max(self.max_inflight, self.inflight)
+                time.sleep(0.05)
+                payloads = {}
+                for profile_url in profile_urls:
+                    slug = profile_url.rstrip("/").split("/")[-1]
+                    raw_path = snapshot_dir / "harvest_profiles" / f"{slug}.json"
+                    raw_path.parent.mkdir(parents=True, exist_ok=True)
+                    raw_path.write_text("{}")
+                    payloads[profile_url] = {
+                        "raw_path": raw_path,
+                        "account_id": "harvest_profile_scraper",
+                        "parsed": {
+                            "full_name": slug,
+                            "profile_url": profile_url,
+                        },
+                    }
+                with self._lock:
+                    self.inflight -= 1
+                return payloads
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            catalog = AssetCatalog(
+                project_root=root,
+                dev_root=root,
+                anthropic_root=root,
+                anthropic_workbook=root / "anthropic.xlsx",
+                anthropic_readme=root / "README.md",
+                anthropic_progress=root / "PROGRESS.md",
+                legacy_api_accounts=root / "api_accounts.json",
+                legacy_company_ids=root / "company_ids.json",
+                anthropic_publications=root / "publications.json",
+                scholar_scan_results=root / "scholar.json",
+                investor_members_json=root / "investor.json",
+                employee_scan_skill=root / "employee_skill.md",
+                investor_scan_skill=root / "investor_skill.md",
+                onepager_skill=root / "onepager_skill.md",
+            )
+            fake_profile_connector = _FakeProfileConnector()
+            enricher = MultiSourceEnricher(
+                catalog,
+                accounts=[],
+                harvest_profile_connector=fake_profile_connector,
+            )
+            profile_urls = [f"https://www.linkedin.com/in/parallel-live-{idx}/" for idx in range(205)]
+            with mock.patch("sourcing_agent.enrichment._external_provider_mode", return_value="live"):
+                fetched = enricher._fetch_harvest_profiles_for_urls(
+                    profile_urls,
+                    root,
+                    asset_logger=AssetLogger(root),
+                )
+
+            self.assertEqual(len(fetched), 205)
+            self.assertEqual(sorted(fake_profile_connector.batch_sizes), [51, 51, 51, 52])
+            self.assertEqual(fake_profile_connector.max_inflight, 2)
+
+    def test_fetch_harvest_profiles_for_urls_respects_global_inflight_budget(self) -> None:
+        class _FakeProfileConnector:
+            def __init__(self) -> None:
+                self._lock = threading.Lock()
+                self.inflight = 0
+                self.max_inflight = 0
+
+            def fetch_profiles_by_urls(
+                self,
+                profile_urls,
+                snapshot_dir,
+                asset_logger=None,
+                use_cache=True,
+                allow_shared_provider_cache=True,
+            ):
+                with self._lock:
+                    self.inflight += 1
+                    self.max_inflight = max(self.max_inflight, self.inflight)
+                time.sleep(0.02)
+                payloads = {}
+                for profile_url in profile_urls:
+                    slug = profile_url.rstrip("/").split("/")[-1]
+                    raw_path = snapshot_dir / "harvest_profiles" / f"{slug}.json"
+                    raw_path.parent.mkdir(parents=True, exist_ok=True)
+                    raw_path.write_text("{}")
+                    payloads[profile_url] = {
+                        "raw_path": raw_path,
+                        "parsed": {"full_name": slug, "profile_url": profile_url},
+                    }
+                with self._lock:
+                    self.inflight -= 1
+                return payloads
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            catalog = AssetCatalog(
+                project_root=root,
+                dev_root=root,
+                anthropic_root=root,
+                anthropic_workbook=root / "anthropic.xlsx",
+                anthropic_readme=root / "README.md",
+                anthropic_progress=root / "PROGRESS.md",
+                legacy_api_accounts=root / "api_accounts.json",
+                legacy_company_ids=root / "company_ids.json",
+                anthropic_publications=root / "publications.json",
+                scholar_scan_results=root / "scholar.json",
+                investor_members_json=root / "investor.json",
+                employee_scan_skill=root / "employee_skill.md",
+                investor_scan_skill=root / "investor_skill.md",
+                onepager_skill=root / "onepager_skill.md",
+            )
+            fake_profile_connector = _FakeProfileConnector()
+            enricher = MultiSourceEnricher(
+                catalog,
+                accounts=[],
+                harvest_profile_connector=fake_profile_connector,
+            )
+            profile_urls = [f"https://www.linkedin.com/in/global-budget-{idx}/" for idx in range(160)]
+            with mock.patch("sourcing_agent.enrichment._external_provider_mode", return_value="live"), mock.patch.dict(
+                "os.environ",
+                {"SOURCING_HARVEST_PROFILE_SCRAPE_GLOBAL_INFLIGHT": "1"},
+                clear=False,
+            ):
+                fetched = enricher._fetch_harvest_profiles_for_urls(
+                    profile_urls,
+                    root,
+                    asset_logger=AssetLogger(root),
+                )
+
+            self.assertEqual(len(fetched), 160)
+            self.assertEqual(fake_profile_connector.max_inflight, 1)
+
+    def test_fetch_harvest_profiles_for_urls_uses_higher_parallelism_for_roster_heavy_live_batches(self) -> None:
+        class _FakeProfileConnector:
+            def __init__(self) -> None:
+                self.batch_sizes: list[int] = []
+                self._lock = threading.Lock()
+                self.inflight = 0
+                self.max_inflight = 0
+
+            def fetch_profiles_by_urls(
+                self,
+                profile_urls,
+                snapshot_dir,
+                asset_logger=None,
+                use_cache=True,
+                allow_shared_provider_cache=True,
+            ):
+                with self._lock:
+                    self.batch_sizes.append(len(profile_urls))
+                    self.inflight += 1
+                    self.max_inflight = max(self.max_inflight, self.inflight)
+                time.sleep(0.05)
+                payloads = {}
+                for profile_url in profile_urls:
+                    slug = profile_url.rstrip("/").split("/")[-1]
+                    raw_path = snapshot_dir / "harvest_profiles" / f"{slug}.json"
+                    raw_path.parent.mkdir(parents=True, exist_ok=True)
+                    raw_path.write_text("{}")
+                    payloads[profile_url] = {
+                        "raw_path": raw_path,
+                        "account_id": "harvest_profile_scraper",
+                        "parsed": {
+                            "full_name": slug,
+                            "profile_url": profile_url,
+                        },
+                    }
+                with self._lock:
+                    self.inflight -= 1
+                return payloads
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            catalog = AssetCatalog(
+                project_root=root,
+                dev_root=root,
+                anthropic_root=root,
+                anthropic_workbook=root / "anthropic.xlsx",
+                anthropic_readme=root / "README.md",
+                anthropic_progress=root / "PROGRESS.md",
+                legacy_api_accounts=root / "api_accounts.json",
+                legacy_company_ids=root / "company_ids.json",
+                anthropic_publications=root / "publications.json",
+                scholar_scan_results=root / "scholar.json",
+                investor_members_json=root / "investor.json",
+                employee_scan_skill=root / "employee_skill.md",
+                investor_scan_skill=root / "investor_skill.md",
+                onepager_skill=root / "onepager_skill.md",
+            )
+            fake_profile_connector = _FakeProfileConnector()
+            enricher = MultiSourceEnricher(
+                catalog,
+                accounts=[],
+                harvest_profile_connector=fake_profile_connector,
+            )
+            profile_urls = [f"https://www.linkedin.com/in/roster-heavy-{idx}/" for idx in range(240)]
+            source_shards_by_url = {
+                profile_url: ["harvest_company_employees_visible"]
+                for profile_url in profile_urls
+            }
+            with mock.patch("sourcing_agent.enrichment._external_provider_mode", return_value="live"):
+                fetched = enricher._fetch_harvest_profiles_for_urls(
+                    profile_urls,
+                    root,
+                    asset_logger=AssetLogger(root),
+                    source_shards_by_url=source_shards_by_url,
+                )
+
+            self.assertEqual(len(fetched), 240)
+            self.assertEqual(sorted(fake_profile_connector.batch_sizes), [60, 60, 60, 60])
+            self.assertEqual(fake_profile_connector.max_inflight, 3)
 
     def test_fetch_harvest_profiles_for_urls_does_not_head_of_line_block_on_contended_registry_urls(self) -> None:
         class _FakeProfileConnector:
@@ -1932,6 +2236,103 @@ class EnrichmentHelpersTest(unittest.TestCase):
                 ),
             )
             self.assertEqual(result.errors, [])
+
+    def test_enrich_background_prefetch_dispatch_uses_bounded_parallel_submit_workers(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            catalog = AssetCatalog(
+                project_root=root,
+                dev_root=root,
+                anthropic_root=root,
+                anthropic_workbook=root / "anthropic.xlsx",
+                anthropic_readme=root / "README.md",
+                anthropic_progress=root / "PROGRESS.md",
+                legacy_api_accounts=root / "api_accounts.json",
+                legacy_company_ids=root / "company_ids.json",
+                anthropic_publications=root / "publications.json",
+                scholar_scan_results=root / "scholar.json",
+                investor_members_json=root / "investor.json",
+                employee_scan_skill=root / "employee_skill.md",
+                investor_scan_skill=root / "investor_skill.md",
+                onepager_skill=root / "onepager_skill.md",
+            )
+            enricher = MultiSourceEnricher(catalog, accounts=[])
+            enricher.worker_runtime = object()
+            enricher.harvest_profile_connector = mock.Mock(
+                settings=type("_Settings", (), {"enabled": True})()
+            )
+            identity = CompanyIdentity(
+                requested_name="OpenAI",
+                canonical_name="OpenAI",
+                company_key="openai",
+                linkedin_slug="openai",
+                linkedin_company_url="https://www.linkedin.com/company/openai/",
+            )
+            candidates = [
+                Candidate(
+                    candidate_id=f"cand_{index}",
+                    name_en=f"Candidate {index}",
+                    display_name=f"Candidate {index}",
+                    category="employee",
+                    target_company="OpenAI",
+                    organization="OpenAI",
+                    employment_status="current",
+                    role="Research Engineer",
+                    linkedin_url=f"https://www.linkedin.com/in/openai-prefetch-{index}/",
+                )
+                for index in range(4)
+            ]
+            counters = {"active": 0, "max_active": 0}
+            lock = threading.Lock()
+            overlap_seen = threading.Event()
+
+            def _fake_execute_harvest_profile_batch_worker(**kwargs):
+                profile_urls = list(kwargs.get("profile_urls") or [])
+                with lock:
+                    counters["active"] += 1
+                    counters["max_active"] = max(counters["max_active"], counters["active"])
+                    if counters["active"] >= 2:
+                        overlap_seen.set()
+                overlap_seen.wait(0.25)
+                time.sleep(0.05)
+                with lock:
+                    counters["active"] -= 1
+                profile_key = profile_urls[0].rstrip("/").split("/")[-1] if profile_urls else "empty"
+                return {
+                    "worker_status": "queued",
+                    "summary": {
+                        "queued_urls": profile_urls,
+                        "summary_path": str(root / f"{profile_key}.queue_summary.json"),
+                    },
+                    "cached_profiles": {},
+                }
+
+            enricher._execute_harvest_profile_batch_worker = _fake_execute_harvest_profile_batch_worker
+
+            with mock.patch(
+                "sourcing_agent.enrichment._recommended_harvest_profile_prefetch_batch_size",
+                return_value=1,
+            ):
+                result = enricher.enrich(
+                    identity,
+                    root,
+                    candidates,
+                    JobRequest(
+                        raw_user_request="Find OpenAI multimodal people",
+                        target_company="OpenAI",
+                        categories=["employee"],
+                        employment_statuses=["current", "former"],
+                        profile_detail_limit=4,
+                        slug_resolution_limit=1,
+                        execution_preferences={"harvest_prefetch_submit_workers": 2},
+                    ),
+                    job_id="job_prefetch_parallel_submit",
+                    full_roster_profile_prefetch=True,
+                )
+
+            self.assertEqual(result.stop_reason, "queued_background_harvest")
+            self.assertEqual(result.queued_harvest_worker_count, 4)
+            self.assertGreaterEqual(counters["max_active"], 2)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,8 @@
 # Thinking Machines Lab Validation 2026-04-08
 
+> Status: Current first-party doc. Treat this file as active guidance, but keep it aligned with `docs/INDEX.md` and `PROGRESS.md` when runtime contracts change.
+
+
 ## Scope
 
 This note captures a quick validation pass on the current Thinking Machines Lab asset pool and retrieval stack after the latest asset completion / daemon recovery work.

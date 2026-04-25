@@ -4,11 +4,11 @@ from typing import Any
 
 from .acquisition_strategy import compile_acquisition_strategy
 from .asset_catalog import AssetCatalog
+from .company_registry import normalize_company_key
 from .company_shard_planning import (
     build_default_company_employee_shard_policy,
     build_large_org_keyword_probe_shard_policy,
 )
-from .company_registry import normalize_company_key
 from .domain import (
     AcquisitionStrategyPlan,
     AcquisitionTask,
@@ -22,9 +22,17 @@ from .domain import (
     SourcingPlan,
 )
 from .model_provider import DeterministicModelClient, ModelClient
+from .organization_execution_profile import organization_execution_profile_full_roster_max_pages
 from .publication_planning import compile_publication_coverage_plan
+from .provider_execution_policy import normalize_former_member_search_contract
 from .query_intent_rewrite import summarize_query_intent_rewrite
-from .request_normalization import build_effective_request_payload, build_request_intent_axes_payload, resolve_request_intent_view
+from .request_normalization import (
+    build_effective_job_request,
+    build_effective_request_payload,
+    build_request_intent_axes_payload,
+    coerce_intent_axis_mapping,
+    resolve_request_intent_view,
+)
 from .search_planning import compile_search_strategy
 
 MODEL_WRITTEN_PLANNING_MODES = {"llm_brief", "product_brief_model_assisted"}
@@ -34,6 +42,7 @@ FULL_COMPANY_EMPLOYEES_LARGE_ORG_MAX_PAGES = 100
 FULL_COMPANY_EMPLOYEES_LARGE_ORG_KEYS = {
     "anthropic",
     "openai",
+    "xai",
     "meta",
     "facebook",
     "google",
@@ -44,25 +53,45 @@ FULL_COMPANY_EMPLOYEES_LARGE_ORG_KEYS = {
     "bytedance",
     "tiktok",
 }
+
+FULL_PROFILE_PREFETCH_STRATEGY_TYPES = {
+    "full_company_roster",
+    "scoped_search_roster",
+    "former_employee_search",
+    "investor_firm_roster",
+}
+
+
+def _requires_full_profile_prefetch(strategy_type: str) -> bool:
+    return str(strategy_type or "").strip() in FULL_PROFILE_PREFETCH_STRATEGY_TYPES
+
+
 def build_sourcing_plan(
     request: JobRequest,
     catalog: AssetCatalog,
     model_client: ModelClient,
+    organization_execution_profile: dict[str, Any] | None = None,
 ) -> SourcingPlan:
-    intent_view = resolve_request_intent_view(
+    effective_request, intent_view = build_effective_job_request(
         request,
         fallback_categories=_infer_categories(request),
         fallback_employment_statuses=_infer_employment_statuses(request),
     )
-    effective_target_company = str(intent_view.get("target_company") or request.target_company).strip()
-    categories = list(intent_view.get("categories") or [])
-    employment_statuses = list(intent_view.get("employment_statuses") or [])
-    retrieval_plan = _build_retrieval_plan(request, categories, intent_view=intent_view)
-    acquisition_strategy = compile_acquisition_strategy(request, categories, employment_statuses, retrieval_plan)
-    publication_coverage = compile_publication_coverage_plan(request, acquisition_strategy)
-    search_strategy = compile_search_strategy(request, acquisition_strategy, publication_coverage, model_client)
+    effective_target_company = str(effective_request.target_company or request.target_company).strip()
+    categories = list(effective_request.categories or [])
+    employment_statuses = list(effective_request.employment_statuses or [])
+    retrieval_plan = _build_retrieval_plan(effective_request, categories, intent_view=intent_view)
+    acquisition_strategy = compile_acquisition_strategy(
+        effective_request,
+        categories,
+        employment_statuses,
+        retrieval_plan,
+        organization_execution_profile=organization_execution_profile,
+    )
+    publication_coverage = compile_publication_coverage_plan(effective_request, acquisition_strategy)
+    search_strategy = compile_search_strategy(effective_request, acquisition_strategy, publication_coverage, model_client)
     acquisition_tasks = _build_acquisition_tasks(
-        request,
+        effective_request,
         categories,
         employment_statuses,
         acquisition_strategy,
@@ -70,10 +99,10 @@ def build_sourcing_plan(
         search_strategy,
         intent_view=intent_view,
     )
-    criteria_summary = _criteria_summary(request, categories, employment_statuses, intent_view=intent_view)
-    assumptions = _build_assumptions(request, categories, retrieval_plan.strategy, acquisition_strategy)
+    criteria_summary = _criteria_summary(effective_request, categories, employment_statuses, intent_view=intent_view)
+    assumptions = _build_assumptions(effective_request, categories, retrieval_plan.strategy, acquisition_strategy)
     open_questions = _build_open_questions(
-        request,
+        effective_request,
         categories,
         employment_statuses,
         acquisition_strategy,
@@ -92,10 +121,11 @@ def build_sourcing_plan(
         "criteria_summary": criteria_summary,
         "assumptions": assumptions,
         "open_questions": open_questions,
+        "organization_execution_profile": dict(acquisition_strategy.organization_execution_profile or {}),
     }
     intent_brief = _build_intent_brief(
         model_client=model_client,
-        request=request,
+        request=effective_request,
         draft_plan=draft_plan,
         categories=categories,
         employment_statuses=employment_statuses,
@@ -106,13 +136,13 @@ def build_sourcing_plan(
     )
     draft_plan["intent_brief"] = intent_brief.to_record()
     if request.planning_mode.lower() in MODEL_WRITTEN_PLANNING_MODES:
-        intent_summary = model_client.interpret_intent(request, draft_plan)
+        intent_summary = model_client.interpret_intent(effective_request, draft_plan)
     else:
-        intent_summary = DeterministicModelClient().interpret_intent(request, draft_plan)
+        intent_summary = DeterministicModelClient().interpret_intent(effective_request, draft_plan)
 
     return SourcingPlan(
         target_company=effective_target_company,
-        target_scope=request.target_scope,
+        target_scope=effective_request.target_scope,
         intent_summary=intent_summary,
         criteria_summary=criteria_summary,
         retrieval_plan=retrieval_plan,
@@ -120,6 +150,7 @@ def build_sourcing_plan(
         publication_coverage=publication_coverage,
         search_strategy=search_strategy,
         acquisition_tasks=acquisition_tasks,
+        organization_execution_profile=dict(acquisition_strategy.organization_execution_profile or {}),
         intent_brief=intent_brief,
         assumptions=assumptions,
         open_questions=open_questions,
@@ -192,6 +223,8 @@ def hydrate_sourcing_plan(payload: dict[str, object]) -> SourcingPlan:
             cost_policy=dict(acquisition_payload.get("cost_policy") or {}),
             confirmation_points=list(acquisition_payload.get("confirmation_points") or []),
             reasoning=list(acquisition_payload.get("reasoning") or []),
+            organization_execution_profile=dict(acquisition_payload.get("organization_execution_profile") or {}),
+            strategy_decision_explanation=dict(acquisition_payload.get("strategy_decision_explanation") or {}),
         ),
         publication_coverage=PublicationCoveragePlan(
             coverage_goal=str(publication_payload.get("coverage_goal") or ""),
@@ -210,6 +243,7 @@ def hydrate_sourcing_plan(payload: dict[str, object]) -> SourcingPlan:
         ),
         acquisition_tasks=acquisition_tasks,
         asset_reuse_plan=dict(payload.get("asset_reuse_plan") or {}),
+        organization_execution_profile=dict(payload.get("organization_execution_profile") or {}),
         intent_brief=IntentPlanBrief(
             identified_request=list((payload.get("intent_brief") or {}).get("identified_request") or []),
             target_output=list((payload.get("intent_brief") or {}).get("target_output") or []),
@@ -292,9 +326,9 @@ def _deterministic_intent_brief(
         fallback_categories=categories,
         fallback_employment_statuses=employment_statuses,
     )
-    intent_axes = dict(intent_view.get("intent_axes") or build_request_intent_axes_payload(request=request))
-    acquisition_lane_policy = dict(intent_axes.get("acquisition_lane_policy") or {})
-    fallback_policy = dict(intent_axes.get("fallback_policy") or {})
+    intent_axes = coerce_intent_axis_mapping(intent_view.get("intent_axes") or build_request_intent_axes_payload(request=request))
+    acquisition_lane_policy = coerce_intent_axis_mapping(intent_axes.get("acquisition_lane_policy"))
+    fallback_policy = coerce_intent_axis_mapping(intent_axes.get("fallback_policy"))
     target_company = str(intent_view.get("target_company") or request.target_company).strip() or "待确认组织"
     effective_categories = list(intent_view.get("categories") or categories or [])
     effective_employment_statuses = list(intent_view.get("employment_statuses") or employment_statuses or [])
@@ -342,13 +376,7 @@ def _deterministic_intent_brief(
         execution_strategy.insert(2, "当前计划优先走 Harvest company-employees lane，先拿当前组织 roster 再进入后续检索。")
     if bool(fallback_policy.get("force_fresh_run") or request.execution_preferences.get("force_fresh_run")):
         execution_strategy.insert(3, "本次按 fresh run 执行，不复用 cached roster、共享 provider cache 或历史 profile inheritance。")
-    if (
-        ("allow_high_cost_sources" in fallback_policy or "allow_high_cost_sources" in request.execution_preferences)
-        and not bool(fallback_policy.get("allow_high_cost_sources", request.execution_preferences.get("allow_high_cost_sources")))
-    ):
-        execution_strategy.insert(4, "默认不启用高成本 LinkedIn source，只有用户后续显式放开才升级。")
-    else:
-        execution_strategy.insert(4, "公开网页和低成本 search 优先，只有在无法确认成员关系时才升级到高成本 LinkedIn provider。")
+    execution_strategy.insert(4, "默认先复用 authoritative baseline 与低成本公开信号；company-scoped LinkedIn roster/search 仅用于组织级 current/former 召回，不用于单人姓名检索。")
 
     review_focus = [_localize_review_question(item) for item in open_questions[:4]]
     return IntentPlanBrief(
@@ -543,6 +571,7 @@ def _build_acquisition_tasks(
         execution_preferences=effective_execution_preferences,
     )
     task_intent_view = _build_task_intent_view_metadata(
+        effective_request=request,
         intent_view=intent_view,
         acquisition_strategy=acquisition_strategy,
         search_strategy=search_strategy,
@@ -561,6 +590,10 @@ def _build_acquisition_tasks(
         "acquisition_phase": "public_web_stage_2",
         "acquisition_phase_title": "Public Web Stage 2",
     }
+    include_public_web_stage = _should_include_public_web_stage_2(
+        request=request,
+        execution_preferences=effective_execution_preferences,
+    )
 
     tasks = [
         AcquisitionTask(
@@ -613,6 +646,15 @@ def _build_acquisition_tasks(
         ),
     ]
     if include_former_search_seed:
+        former_search_contract = normalize_former_member_search_contract(
+            strategy_type="former_employee_search",
+            employment_statuses=["former"],
+            search_channel_order=["harvest_profile_search"],
+            cost_policy=acquisition_strategy.cost_policy,
+            min_expected_results=50,
+        )
+        former_search_channel_order = list(former_search_contract.get("search_channel_order") or ["harvest_profile_search"])
+        former_task_cost_policy = dict(former_search_contract.get("cost_policy") or acquisition_strategy.cost_policy)
         tasks.append(
             AcquisitionTask(
                 task_id="acquire-former-search-seed",
@@ -625,17 +667,19 @@ def _build_acquisition_tasks(
                 metadata={
                     "strategy_type": "former_employee_search",
                     "employment_statuses": ["former"],
-                    "search_channel_order": ["harvest_profile_search"],
+                    "search_channel_order": former_search_channel_order,
                     "search_seed_queries": acquisition_strategy.search_seed_queries,
-                    "search_query_bundles": [bundle.to_record() for bundle in search_strategy.query_bundles],
+                    "search_query_bundles": [],
                     "filter_hints": acquisition_strategy.filter_hints,
-                    "cost_policy": acquisition_strategy.cost_policy,
+                    "cost_policy": former_task_cost_policy,
                     "former_provider_people_search_min_expected_results": 50,
                     "intent_view": _task_intent_view_with_overrides(
                         task_intent_view,
                         strategy_type="former_employee_search",
                         employment_statuses=["former"],
-                        search_channel_order=["harvest_profile_search"],
+                        search_channel_order=former_search_channel_order,
+                        search_query_bundles=[],
+                        cost_policy=former_task_cost_policy,
                         former_provider_people_search_min_expected_results=50,
                         acquisition_phase="linkedin_stage_1",
                         acquisition_phase_title="LinkedIn Stage 1",
@@ -660,14 +704,18 @@ def _build_acquisition_tasks(
                     "cost_policy": acquisition_strategy.cost_policy,
                     "slug_resolution_limit": request.slug_resolution_limit,
                     "profile_detail_limit": request.profile_detail_limit,
-                    "full_roster_profile_prefetch": acquisition_strategy.strategy_type == "full_company_roster",
+                    "full_roster_profile_prefetch": _requires_full_profile_prefetch(
+                        acquisition_strategy.strategy_type
+                    ),
                     "reuse_existing_roster": bool(effective_execution_preferences.get("reuse_existing_roster")),
                     "enrichment_scope": "linkedin_stage_1",
                     "intent_view": _task_intent_view_with_overrides(
                         task_intent_view,
                         slug_resolution_limit=request.slug_resolution_limit,
                         profile_detail_limit=request.profile_detail_limit,
-                        full_roster_profile_prefetch=acquisition_strategy.strategy_type == "full_company_roster",
+                        full_roster_profile_prefetch=_requires_full_profile_prefetch(
+                            acquisition_strategy.strategy_type
+                        ),
                         reuse_existing_roster=bool(effective_execution_preferences.get("reuse_existing_roster")),
                         enrichment_scope="linkedin_stage_1",
                         acquisition_phase="linkedin_stage_1",
@@ -676,6 +724,10 @@ def _build_acquisition_tasks(
                     **linkedin_stage_metadata,
                 },
             ),
+        ]
+    )
+    if include_public_web_stage:
+        tasks.append(
             AcquisitionTask(
                 task_id="enrich-public-web-signals",
                 task_type="enrich_public_web_signals",
@@ -709,9 +761,8 @@ def _build_acquisition_tasks(
                     ),
                     **public_web_stage_metadata,
                 },
-            ),
-        ]
-    )
+            )
+        )
     tasks.extend(
         [
         AcquisitionTask(
@@ -719,7 +770,7 @@ def _build_acquisition_tasks(
             task_type="normalize_asset_snapshot",
             title="Normalize and version the asset snapshot",
             description="Write a versioned candidate/evidence snapshot that can be reused by later queries.",
-            source_hint="SQLite + versioned JSON artifact",
+            source_hint="Postgres control plane + generation-first snapshot artifacts",
             status="ready" if has_target_company else "needs_input",
             blocking=False,
         ),
@@ -728,7 +779,7 @@ def _build_acquisition_tasks(
             task_type="build_retrieval_index",
             title="Build retrieval index",
             description="Prepare structured filters and semantic-ready candidate documents for later retrieval.",
-            source_hint="SQLite filters + candidate document index + future vector index",
+            source_hint="Registry-backed filters + candidate document index + future vector index",
             status="ready" if has_target_company else "needs_input",
             blocking=False,
         ),
@@ -737,13 +788,27 @@ def _build_acquisition_tasks(
     return tasks
 
 
+def _should_include_public_web_stage_2(
+    *,
+    request: JobRequest,
+    execution_preferences: dict[str, Any] | None = None,
+) -> bool:
+    analysis_stage_mode = str(getattr(request, "analysis_stage_mode", "") or "").strip().lower()
+    if analysis_stage_mode == "two_stage":
+        return True
+    prefs = dict(execution_preferences or {})
+    return bool(prefs.get("require_stage2_confirmation"))
+
+
 def _build_task_intent_view_metadata(
     *,
+    effective_request: JobRequest,
     intent_view: dict[str, Any],
     acquisition_strategy: AcquisitionStrategyPlan,
     search_strategy: SearchStrategyPlan | None = None,
 ) -> dict[str, Any]:
     return {
+        "effective_request": effective_request.to_record(),
         "target_company": str(intent_view.get("target_company") or "").strip(),
         "categories": list(intent_view.get("categories") or []),
         "employment_statuses": list(intent_view.get("employment_statuses") or []),
@@ -766,11 +831,14 @@ def _build_task_intent_view_metadata(
         "strategy_type": str(acquisition_strategy.strategy_type or "").strip(),
         "search_channel_order": list(acquisition_strategy.search_channel_order or []),
         "cost_policy": dict(acquisition_strategy.cost_policy or {}),
+        "organization_execution_profile": dict(acquisition_strategy.organization_execution_profile or {}),
+        "strategy_decision_explanation": dict(acquisition_strategy.strategy_decision_explanation or {}),
     }
 
 
 def _clone_task_intent_view_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
     return {
+        "effective_request": dict(metadata.get("effective_request") or {}),
         "target_company": str(metadata.get("target_company") or "").strip(),
         "categories": list(metadata.get("categories") or []),
         "employment_statuses": list(metadata.get("employment_statuses") or []),
@@ -791,6 +859,8 @@ def _clone_task_intent_view_metadata(metadata: dict[str, Any]) -> dict[str, Any]
         "strategy_type": str(metadata.get("strategy_type") or "").strip(),
         "search_channel_order": [str(item).strip() for item in list(metadata.get("search_channel_order") or []) if str(item).strip()],
         "cost_policy": dict(metadata.get("cost_policy") or {}),
+        "organization_execution_profile": dict(metadata.get("organization_execution_profile") or {}),
+        "strategy_decision_explanation": dict(metadata.get("strategy_decision_explanation") or {}),
     }
 
 
@@ -815,10 +885,15 @@ def _default_full_company_roster_max_pages(
 ) -> int:
     if acquisition_strategy.strategy_type != "full_company_roster":
         return 10
-    company_key = normalize_company_key(target_company)
-    if company_key in FULL_COMPANY_EMPLOYEES_LARGE_ORG_KEYS:
-        return FULL_COMPANY_EMPLOYEES_LARGE_ORG_MAX_PAGES
-    return FULL_COMPANY_EMPLOYEES_DEFAULT_MAX_PAGES
+    profile = dict(acquisition_strategy.organization_execution_profile or {})
+    if not profile and normalize_company_key(target_company) in FULL_COMPANY_EMPLOYEES_LARGE_ORG_KEYS:
+        profile = {"org_scale_band": "large"}
+    return organization_execution_profile_full_roster_max_pages(
+        profile,
+        default_small=FULL_COMPANY_EMPLOYEES_DEFAULT_MAX_PAGES,
+        default_medium=max(FULL_COMPANY_EMPLOYEES_DEFAULT_MAX_PAGES, 50),
+        default_large=FULL_COMPANY_EMPLOYEES_LARGE_ORG_MAX_PAGES,
+    )
 
 
 def _default_full_company_roster_shard_policy(
@@ -846,6 +921,7 @@ def _default_full_company_roster_shard_policy(
         company_key,
         max_pages=max_pages,
         page_limit=page_limit,
+        organization_execution_profile=acquisition_strategy.organization_execution_profile,
     )
 
 
@@ -862,7 +938,7 @@ def _should_include_default_former_search_seed(
     if "run_former_search_seed" in preferences:
         return bool(preferences.get("run_former_search_seed"))
     normalized_statuses = {str(item or "").strip().lower() for item in list(employment_statuses or []) if str(item or "").strip()}
-    if acquisition_strategy.strategy_type == "scoped_search_roster" and "former" not in normalized_statuses:
+    if "former" not in normalized_statuses:
         return False
     normalized_categories = {str(item or "").strip().lower() for item in categories if str(item or "").strip()}
     if "investor" in normalized_categories:
@@ -904,6 +980,9 @@ def _infer_retrieval_strategy(
     effective_role_buckets = list(intent_view.get("must_have_primary_role_buckets") or [])
     effective_organization_keywords = list(intent_view.get("organization_keywords") or [])
     effective_keywords = list(intent_view.get("keywords") or [])
+    analysis_stage_mode = str(getattr(request, "analysis_stage_mode", "") or "").strip().lower()
+    if analysis_stage_mode == "two_stage" and effective_keywords:
+        return "hybrid"
     if (
         effective_must_have_keywords
         or effective_must_have_facets
@@ -955,8 +1034,8 @@ def _build_assumptions(request: JobRequest, categories: list[str], strategy: str
         assumptions.append("Corner cases will need semantic matching or model-assisted reranking after structured filtering.")
     if "investor" not in categories:
         assumptions.append("The primary retrieval population is company members rather than investors.")
-    if "general_web_search_relation_check" in acquisition_strategy.search_channel_order:
-        assumptions.append("Low-cost relation verification and public web search should run before paid LinkedIn people search.")
+    if acquisition_strategy.strategy_type in {"full_company_roster", "scoped_search_roster", "former_employee_search"}:
+        assumptions.append("Core roster acquisition should follow the provider-backed LinkedIn lane defined by the execution contract.")
     if acquisition_strategy.strategy_type == "scoped_search_roster":
         assumptions.append("Large-company requests should prefer a scoped roster over a company-wide roster unless the user confirms otherwise.")
     return assumptions

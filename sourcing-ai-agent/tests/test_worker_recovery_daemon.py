@@ -789,6 +789,74 @@ class PersistentWorkerRecoveryDaemonTest(unittest.TestCase):
         self.assertEqual(worker["status"], "completed")
         self.assertEqual(worker["checkpoint"]["recovery_kind"], "harvest_profile_batch")
 
+    def test_persistent_daemon_persists_completed_harvest_profile_batch_result_without_nested_worker_update(self) -> None:
+        job_id = "job_harvest_profile_recovery_cached"
+        snapshot_dir = Path(self.tempdir.name) / "company_assets" / "xai" / "snapshot-harvest-profile-cached"
+        self._save_job(job_id)
+        handle = self.controller_runtime.begin_worker(
+            job_id=job_id,
+            request=self.request,
+            plan_payload=self.plan_payload,
+            runtime_mode="workflow",
+            lane_id="enrichment_specialist",
+            worker_key="harvest_profile_batch::cached",
+            stage="enriching",
+            span_name="harvest_profile_batch:cached",
+            budget_payload={"requested_url_count": 1},
+            input_payload={"profile_urls": ["https://www.linkedin.com/in/cached-user/"]},
+            metadata={
+                "recovery_kind": "harvest_profile_batch",
+                "snapshot_dir": str(snapshot_dir),
+                "profile_urls": ["https://www.linkedin.com/in/cached-user/"],
+                "request_payload": self.request.to_record(),
+                "plan_payload": self.plan_payload,
+                "runtime_mode": "workflow",
+            },
+            handoff_from_lane="acquisition_specialist",
+        )
+        self.controller_runtime.complete_worker(
+            handle,
+            status="queued",
+            checkpoint_payload={"stage": "waiting_remote_harvest"},
+            output_payload={"summary": {"status": "queued"}},
+        )
+
+        def _resume_without_store_update(**kwargs):
+            self.fake_engine.harvest_profile_batch_calls.append(
+                {
+                    "job_id": str(kwargs.get("job_id") or ""),
+                    "runtime_mode": str(kwargs.get("runtime_mode") or ""),
+                    "snapshot_dir": str(kwargs.get("snapshot_dir") or ""),
+                    "requested_url_count": str(len(list(kwargs.get("profile_urls") or []))),
+                }
+            )
+            return {
+                "worker_status": "completed",
+                "summary": {"status": "completed", "requested_url_count": 1, "message": "reused_local_raw_cache"},
+            }
+
+        self.fake_engine.multi_source_enricher._execute_harvest_profile_batch_worker = _resume_without_store_update
+
+        daemon = PersistentWorkerRecoveryDaemon(
+            store=self.daemon_store,
+            agent_runtime=self.daemon_runtime,
+            acquisition_engine=self.fake_engine,
+            owner_id="daemon-harvest-profile-cached",
+            stale_after_seconds=180,
+            total_limit=2,
+        )
+        summary = daemon.run_once()
+        worker = self.controller_store.get_agent_worker(worker_id=handle.worker_id)
+
+        self.assertEqual(summary["claimed_count"], 1)
+        self.assertEqual(summary["executed_count"], 1)
+        self.assertEqual(len(self.fake_engine.harvest_profile_batch_calls), 1)
+        self.assertIsNotNone(worker)
+        self.assertEqual(worker["status"], "completed")
+        self.assertEqual(worker["checkpoint"]["stage"], "completed")
+        self.assertEqual(worker["checkpoint"]["status"], "completed")
+        self.assertEqual(worker["output"]["summary"]["message"], "reused_local_raw_cache")
+
     def test_persistent_daemon_processes_remote_wait_worker_for_completed_job(self) -> None:
         job_id = "job_completed_exploration_followup"
         snapshot_dir = Path(self.tempdir.name) / "company_assets" / "xai" / "snapshot-completed-followup"

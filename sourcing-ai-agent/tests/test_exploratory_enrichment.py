@@ -1,8 +1,11 @@
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
+import sourcing_agent.exploratory_enrichment as exploratory_enrichment_module
 from sourcing_agent.asset_logger import AssetLogger
 from sourcing_agent.asset_policy import DEFAULT_MODEL_CONTEXT_CHAR_LIMIT, RAW_ASSET_POLICY_SUMMARY
 from sourcing_agent.domain import Candidate
@@ -22,6 +25,31 @@ from sourcing_agent.search_provider import (
 
 
 class ExploratoryEnrichmentTest(unittest.TestCase):
+    def test_runtime_exploration_poll_intervals_follow_env_without_reload(self) -> None:
+        with mock.patch.dict(
+            os.environ,
+            {
+                "WEB_SEARCH_READY_POLL_MIN_INTERVAL_SECONDS": "0",
+                "WEB_SEARCH_FETCH_MIN_INTERVAL_SECONDS": "0",
+            },
+            clear=False,
+        ):
+            self.assertEqual(exploratory_enrichment_module._lane_ready_poll_min_interval_seconds(), 0)
+            self.assertEqual(exploratory_enrichment_module._lane_fetch_min_interval_seconds(), 0)
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "WEB_SEARCH_READY_POLL_MIN_INTERVAL_SECONDS": "7",
+                "WEB_SEARCH_FETCH_MIN_INTERVAL_SECONDS": "8",
+                "EXPLORATION_READY_POLL_MIN_INTERVAL_SECONDS": "1",
+                "EXPLORATION_FETCH_MIN_INTERVAL_SECONDS": "2",
+            },
+            clear=False,
+        ):
+            self.assertEqual(exploratory_enrichment_module._lane_ready_poll_min_interval_seconds(), 1)
+            self.assertEqual(exploratory_enrichment_module._lane_fetch_min_interval_seconds(), 2)
+
     def test_extract_page_signals(self) -> None:
         html = """
         <html>
@@ -408,6 +436,74 @@ class ExploratoryEnrichmentTest(unittest.TestCase):
             )
             self.assertEqual(len(provider.ready_calls), 1)
             self.assertEqual(len(provider.fetch_calls), 1)
+
+    def test_prepare_batched_exploration_queries_reuses_cached_query_list_per_candidate(self) -> None:
+        class _BatchSearchProvider:
+            provider_name = "dataforseo_google_organic"
+
+            def submit_batch_queries(self, query_specs):
+                return SearchBatchSubmissionResult(
+                    provider_name=self.provider_name,
+                    tasks=[
+                        SearchBatchSubmissionTask(
+                            task_key=str(item["task_key"]),
+                            query_text=str(item["query_text"]),
+                            checkpoint={
+                                "provider_name": self.provider_name,
+                                "task_id": f"task_{index}",
+                                "status": "submitted",
+                            },
+                            metadata={},
+                        )
+                        for index, item in enumerate(query_specs, start=1)
+                    ],
+                    artifacts=[],
+                )
+
+            def poll_ready_batch(self, query_specs):
+                return SearchBatchReadyResult(
+                    provider_name=self.provider_name,
+                    tasks=[
+                        SearchBatchReadyTask(
+                            task_key=str(item["task_key"]),
+                            task_id=str(dict(item.get("checkpoint") or {}).get("task_id") or ""),
+                            query_text=str(item["query_text"]),
+                            checkpoint={
+                                **dict(item.get("checkpoint") or {}),
+                                "status": "waiting_for_ready_cached",
+                            },
+                        )
+                        for item in query_specs
+                    ],
+                    artifacts=[],
+                )
+
+            def fetch_ready_batch(self, query_specs):
+                raise AssertionError("fetch_ready_batch should not run when nothing is ready")
+
+        candidate = Candidate(
+            candidate_id="c1",
+            name_en="Jane Doe",
+            display_name="Jane Doe",
+            target_company="Thinking Machines Lab",
+        )
+        pending_specs = [{"candidate": candidate, "runtime_timing_overrides": {}}]
+        with tempfile.TemporaryDirectory() as tempdir, mock.patch.object(
+            exploratory_enrichment_module,
+            "_build_exploration_queries",
+            return_value=["q1", "q2"],
+        ) as build_queries_mock:
+            errors = exploratory_enrichment_module._prepare_batched_exploration_queries(
+                search_provider=_BatchSearchProvider(),
+                logger=AssetLogger(Path(tempdir)),
+                exploration_dir=Path(tempdir) / "exploration",
+                pending_specs=pending_specs,
+                target_company="Thinking Machines Lab",
+            )
+
+        self.assertEqual(errors, [])
+        self.assertEqual(build_queries_mock.call_count, 1)
+        self.assertEqual(pending_specs[0]["exploration_queries"], ["q1", "q2"])
 
     def test_enrich_does_not_repoll_ready_cached_queries(self) -> None:
         class _BatchSearchProvider:

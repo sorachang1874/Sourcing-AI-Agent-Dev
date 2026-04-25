@@ -3,6 +3,7 @@ import unittest
 from sourcing_agent.worker_scheduler import (
     effective_worker_status,
     infer_resume_mode,
+    lane_budget_caps_from_plan,
     lane_limits_from_plan,
     schedule_work_specs,
     summarize_scheduler,
@@ -69,3 +70,28 @@ class WorkerSchedulerTest(unittest.TestCase):
             effective_worker_status({"status": "running", "checkpoint": {"stage": "waiting_remote_search"}}),
             "waiting_remote_search",
         )
+
+    def test_lane_limits_from_plan_can_read_runtime_tuning_profile_from_task_intent_view(self) -> None:
+        plan = {
+            "acquisition_strategy": {"cost_policy": {"parallel_search_workers": 3, "parallel_exploration_workers": 2}},
+            "acquisition_tasks": [
+                {
+                    "task_id": "acquire-full-roster",
+                    "metadata": {
+                        "intent_view": {
+                            "execution_preferences": {
+                                "runtime_tuning_profile": "fast_smoke",
+                            }
+                        }
+                    },
+                }
+            ],
+        }
+
+        limits = lane_limits_from_plan(plan)
+        budgets = lane_budget_caps_from_plan(plan)
+
+        self.assertEqual(limits["search_planner"], 6)
+        self.assertEqual(limits["exploration_specialist"], 4)
+        self.assertEqual(budgets["search_planner"], 12)
+        self.assertEqual(budgets["public_media_specialist"], 10)

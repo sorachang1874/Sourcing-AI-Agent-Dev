@@ -1,0 +1,39 @@
+{
+  "cases": [
+    {
+      "case": "skild_pretrain",
+      "payload": {
+        "raw_user_request": "请帮我找Skild AI里做Pre-train方向的人",
+        "top_k": 10
+      }
+    },
+    {
+      "case": "humansand_coding",
+      "payload": {
+        "raw_user_request": "我想了解Humans&里偏Coding agents方向的研究成员",
+        "top_k": 10
+      }
+    },
+    {
+      "case": "anthropic_pretraining",
+      "payload": {
+        "raw_user_request": "帮我找Anthropic里做Pre-training方向的人",
+        "top_k": 10
+      }
+    },
+    {
+      "case": "openai_reasoning",
+      "payload": {
+        "raw_user_request": "我想要OpenAI里做Reasoning方向的人",
+        "top_k": 10
+      }
+    },
+    {
+      "case": "google_multimodal_pretrain",
+      "payload": {
+        "raw_user_request": "帮我找Google里做多模态和Pre-train方向的人（包括Veo和Nano Banana相关）",
+        "top_k": 10
+      }
+    }
+  ]
+}

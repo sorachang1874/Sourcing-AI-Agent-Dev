@@ -1,5 +1,8 @@
 # Terminal Workflow
 
+> Status: Current first-party doc. Treat this file as active guidance, but keep it aligned with `docs/INDEX.md` and `PROGRESS.md` when runtime contracts change.
+
+
 这份文档说明如何直接在终端里调用 `Sourcing AI Agent`，并尽量贴近产品原生流程：
 
 - `plan`
@@ -89,7 +92,7 @@ PYTHONPATH=src python3 -m sourcing_agent.cli review-plan \
 PYTHONPATH=src python3 -m sourcing_agent.cli review-plan \
   --review-id 12 \
   --reviewer sora \
-  --instruction "改成 full company roster，走 Harvest company-employees lane，强制 fresh run，不允许高成本 source。" \
+  --instruction "改成 full company roster，走 Harvest company-employees lane，强制 fresh run。" \
   --preview
 ```
 
@@ -126,7 +129,7 @@ PYTHONPATH=src python3 -m sourcing_agent.cli review-plan \
 PYTHONPATH=src python3 -m sourcing_agent.cli review-plan \
   --review-id 12 \
   --reviewer sora \
-  --instruction "改成 full company roster，走 Harvest company-employees lane，强制 fresh run，不允许高成本 source。"
+  --instruction "改成 full company roster，走 Harvest company-employees lane，强制 fresh run。"
 ```
 
 当前自然语言 helper 能稳定覆盖的 review 字段主要有：
@@ -134,10 +137,13 @@ PYTHONPATH=src python3 -m sourcing_agent.cli review-plan \
 - `acquisition_strategy_override`
 - `use_company_employees_lane`
 - `force_fresh_run`
-- `allow_high_cost_sources`
 - `precision_recall_bias`
 - `extra_source_families`
 - `confirmed_company_scope`
+
+补充：
+
+- 不要把 `Harvest profile-search` 用成单人姓名检索；如果要限制 targeted exact-person lookup，应通过 dedicated targeted-name contract，而不是继续围绕通用 cost toggle 写 operator 规则
 
 当前实现是：
 

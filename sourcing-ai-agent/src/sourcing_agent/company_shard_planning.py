@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-from copy import deepcopy
 import re
+from copy import deepcopy
 from typing import Any, Callable
 
+from .organization_execution_profile import FALLBACK_LARGE_COMPANY_KEYS
 from .query_signal_knowledge import (
     ALPHABET_COMPANY_URL,
     GOOGLE_COMPANY_URL,
     related_company_scope_urls,
     scope_signal_search_query_aliases,
 )
-
 
 FULL_COMPANY_EMPLOYEE_RESULT_CAP = 2500
 COMPANY_FILTER_LIST_KEYS = (
@@ -53,58 +53,55 @@ SEARCH_QUERY_CANONICAL_ALIASES: dict[str, str] = {
 }
 
 LARGE_ORG_PRIORITY_FUNCTION_IDS = ["8", "9", "19", "24"]
+LARGE_ORG_TECHNICAL_FUNCTION_IDS = ["8", "24"]
 
-ADAPTIVE_COMPANY_EMPLOYEE_SHARD_POLICIES: dict[str, dict[str, Any]] = {
-    "anthropic": {
-        "strategy_id": "adaptive_us_function_partition",
-        "scope_note": (
-            "Probe-driven United States roster partition. Start from the broad US scope, "
-            "then split only if the live estimated count exceeds the provider cap."
+
+def _generic_large_org_technical_partition_policy(*, scope_note: str = "") -> dict[str, Any]:
+    return {
+        "strategy_id": "adaptive_us_technical_partition",
+        "scope_note": scope_note
+        or (
+            "Probe-driven United States technical roster partition. Start from engineering+research, "
+            "split engineering and research explicitly, and keep capped shard metadata when a live shard still exceeds the provider cap."
         ),
         "root_title": "United States",
         "root_filters": {
             "locations": ["United States"],
+            "function_ids": list(LARGE_ORG_TECHNICAL_FUNCTION_IDS),
         },
+        "allow_overflow_partial": True,
         "partition_rules": [
             {
                 "rule_id": "engineering",
                 "title": "Engineering",
-                "include_patch": {"function_ids": ["8"]},
+                "include_patch": {"exclude_function_ids": ["24"]},
                 "remainder_exclude_patch": {"exclude_function_ids": ["8"]},
             },
             {
                 "rule_id": "research",
                 "title": "Research",
-                "include_patch": {"function_ids": ["24"]},
+                "include_patch": {"exclude_function_ids": ["8"]},
                 "remainder_exclude_patch": {"exclude_function_ids": ["24"]},
             },
-            {
-                "rule_id": "product_management",
-                "title": "Product Management",
-                "include_patch": {"function_ids": ["19"]},
-                "remainder_exclude_patch": {"exclude_function_ids": ["19"]},
-            },
-            {
-                "rule_id": "operations",
-                "title": "Operations",
-                "include_patch": {"function_ids": ["18"]},
-                "remainder_exclude_patch": {"exclude_function_ids": ["18"]},
-            },
-            {
-                "rule_id": "business_development",
-                "title": "Business Development",
-                "include_patch": {"function_ids": ["4"]},
-                "remainder_exclude_patch": {"exclude_function_ids": ["4"]},
-            },
-            {
-                "rule_id": "sales",
-                "title": "Sales",
-                "include_patch": {"function_ids": ["25"]},
-                "remainder_exclude_patch": {"exclude_function_ids": ["25"]},
-            },
         ],
-    },
-}
+    }
+
+ADAPTIVE_COMPANY_EMPLOYEE_SHARD_POLICIES: dict[str, dict[str, Any]] = {}
+
+
+def _should_use_generic_large_org_partition(
+    company_key: str,
+    organization_execution_profile: dict[str, Any] | None = None,
+) -> bool:
+    normalized_company_key = str(company_key or "").strip().lower()
+    normalized_profile = dict(organization_execution_profile or {})
+    scale_band = str(normalized_profile.get("org_scale_band") or "").strip().lower()
+    default_mode = str(normalized_profile.get("default_acquisition_mode") or "").strip().lower()
+    if scale_band == "large":
+        return True
+    if default_mode == "scoped_search_roster":
+        return True
+    return normalized_company_key in FALLBACK_LARGE_COMPANY_KEYS
 
 
 def build_default_company_employee_shard_policy(
@@ -112,8 +109,15 @@ def build_default_company_employee_shard_policy(
     *,
     max_pages: int,
     page_limit: int,
+    organization_execution_profile: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    base = deepcopy(ADAPTIVE_COMPANY_EMPLOYEE_SHARD_POLICIES.get(str(company_key or "").strip().lower()) or {})
+    normalized_company_key = str(company_key or "").strip().lower()
+    base = deepcopy(ADAPTIVE_COMPANY_EMPLOYEE_SHARD_POLICIES.get(normalized_company_key) or {})
+    if not base and _should_use_generic_large_org_partition(
+        normalized_company_key,
+        organization_execution_profile=organization_execution_profile,
+    ):
+        base = _generic_large_org_technical_partition_policy()
     if not base:
         return {}
     base["max_pages"] = max(1, int(max_pages or 1))
@@ -134,9 +138,6 @@ def build_large_org_keyword_probe_shard_policy(
     page_limit: int,
 ) -> dict[str, Any]:
     normalized_company_key = str(company_key or "").strip().lower()
-    if normalized_company_key not in {"google", "alphabet"}:
-        return {}
-
     scope_companies = _resolve_large_org_scope_companies(normalized_company_key, company_scope)
     if not scope_companies:
         return {}
@@ -151,7 +152,7 @@ def build_large_org_keyword_probe_shard_policy(
             "force_keyword_shards": True,
             "allow_overflow_partial": True,
             "scope_note": (
-                "Large-org keyword probe mode. First probe the broad US scope, then run keyword shards "
+                "Related-scope keyword probe mode. First probe the broad US scope, then run keyword shards "
                 "and union+dedupe downstream if the root scope exceeds the provider cap."
             ),
             "root_title": "United States",
@@ -240,6 +241,7 @@ def plan_company_employee_shards_from_policy(
     mode = str(normalized_policy.get("mode") or "partition_mece").strip().lower()
     partition_rules = [dict(item) for item in list(normalized_policy.get("partition_rules") or []) if isinstance(item, dict)]
     keyword_shards = [dict(item) for item in list(normalized_policy.get("keyword_shards") or []) if isinstance(item, dict)]
+    allow_overflow_partial = bool(normalized_policy.get("allow_overflow_partial"))
 
     if mode == "keyword_union":
         return _plan_keyword_union_shards(
@@ -316,6 +318,7 @@ def plan_company_employee_shards_from_policy(
         }
 
     shards: list[dict[str, Any]] = []
+    overflow_scopes: list[dict[str, Any]] = []
     remaining_filters = dict(root_filters)
     consumed_titles: list[str] = []
     for rule in partition_rules:
@@ -341,27 +344,8 @@ def plan_company_employee_shards_from_policy(
         probe_summaries.append(branch_probe_summary)
         branch_count = int(branch_probe_summary.get("estimated_total_count") or 0)
         if branch_count > provider_cap:
-            return {
-                "status": "blocked",
-                "reason": "partition_branch_over_cap",
-                "detail": (
-                    f"Adaptive shard probe found '{branch_title}' still above the provider cap "
-                    f"({branch_count} > {provider_cap})."
-                ),
-                "policy": normalized_policy,
-                "probe_summaries": probe_summaries,
-                "shards": shards,
-                "overflow_scope": {
-                    "title": branch_title,
-                    "company_filters": branch_filters,
-                    "estimated_total_count": branch_count,
-                    "partition_rule": dict(rule),
-                },
-            }
-        if branch_count > 0:
-            consumed_titles.append(str(rule.get("title") or rule.get("rule_id") or "").strip())
-            shards.append(
-                _build_shard_record(
+            if allow_overflow_partial:
+                capped_shard = _build_shard_record(
                     strategy_id=strategy_id,
                     shard_id=str(rule.get("rule_id") or _normalize_shard_id(branch_title)).strip() or _normalize_shard_id(branch_title),
                     title=branch_title,
@@ -371,7 +355,50 @@ def plan_company_employee_shards_from_policy(
                     company_filters=branch_filters,
                     probe_summary=branch_probe_summary,
                 )
-            )
+                capped_shard["provider_cap_limited"] = True
+                capped_shard["estimated_total_count_before_cap"] = branch_count
+                shards.append(capped_shard)
+                overflow_scopes.append(
+                    {
+                        "title": branch_title,
+                        "company_filters": branch_filters,
+                        "estimated_total_count": branch_count,
+                        "partition_rule": dict(rule),
+                    }
+                )
+            else:
+                return {
+                    "status": "blocked",
+                    "reason": "partition_branch_over_cap",
+                    "detail": (
+                        f"Adaptive shard probe found '{branch_title}' still above the provider cap "
+                        f"({branch_count} > {provider_cap})."
+                    ),
+                    "policy": normalized_policy,
+                    "probe_summaries": probe_summaries,
+                    "shards": shards,
+                    "overflow_scope": {
+                        "title": branch_title,
+                        "company_filters": branch_filters,
+                        "estimated_total_count": branch_count,
+                        "partition_rule": dict(rule),
+                    },
+                }
+        if branch_count > 0:
+            consumed_titles.append(str(rule.get("title") or rule.get("rule_id") or "").strip())
+            if not allow_overflow_partial or branch_count <= provider_cap:
+                shards.append(
+                    _build_shard_record(
+                        strategy_id=strategy_id,
+                        shard_id=str(rule.get("rule_id") or _normalize_shard_id(branch_title)).strip() or _normalize_shard_id(branch_title),
+                        title=branch_title,
+                        scope_note=scope_note,
+                        max_pages=max_pages,
+                        page_limit=page_limit,
+                        company_filters=branch_filters,
+                        probe_summary=branch_probe_summary,
+                    )
+                )
 
         remaining_filters = merge_company_filters(remaining_filters, rule.get("remainder_exclude_patch"))
         remaining_title = _remaining_shard_title(root_title, consumed_titles)
@@ -395,7 +422,7 @@ def plan_company_employee_shards_from_policy(
         probe_summaries.append(remaining_probe_summary)
         remaining_count = int(remaining_probe_summary.get("estimated_total_count") or 0)
         if remaining_count <= 0:
-            return {
+            result = {
                 "status": "planned",
                 "reason": "partition_consumed_scope",
                 "detail": "Adaptive partitioning fully consumed the target scope.",
@@ -403,6 +430,15 @@ def plan_company_employee_shards_from_policy(
                 "probe_summaries": probe_summaries,
                 "shards": shards,
             }
+            if overflow_scopes:
+                result["reason"] = "partition_with_capped_shards"
+                result["detail"] = (
+                    "Some partition shards exceed the provider cap; those shards will run up to the provider cap "
+                    "and keep overflow metadata for follow-up refinement."
+                )
+                result["overflow_scope"] = overflow_scopes[0]
+                result["overflow_scopes"] = overflow_scopes
+            return result
         if remaining_count <= provider_cap:
             shards.append(
                 _build_shard_record(
@@ -416,7 +452,7 @@ def plan_company_employee_shards_from_policy(
                     probe_summary=remaining_probe_summary,
                 )
             )
-            return {
+            result = {
                 "status": "planned",
                 "reason": "partitioned_scope_within_cap",
                 "detail": "Adaptive partitioning reduced the scope below the provider cap.",
@@ -424,6 +460,49 @@ def plan_company_employee_shards_from_policy(
                 "probe_summaries": probe_summaries,
                 "shards": shards,
             }
+            if overflow_scopes:
+                result["reason"] = "partition_with_capped_shards"
+                result["detail"] = (
+                    "Some partition shards exceed the provider cap; those shards will run up to the provider cap "
+                    "and keep overflow metadata for follow-up refinement."
+                )
+                result["overflow_scope"] = overflow_scopes[0]
+                result["overflow_scopes"] = overflow_scopes
+            return result
+
+    remaining_overflow_scope = {
+        "title": _remaining_shard_title(root_title, consumed_titles),
+        "company_filters": remaining_filters,
+        "estimated_total_count": int(probe_summaries[-1].get("estimated_total_count") or 0),
+    }
+    if allow_overflow_partial and remaining_overflow_scope["estimated_total_count"] > 0:
+        capped_remaining = _build_shard_record(
+            strategy_id=strategy_id,
+            shard_id=_normalize_shard_id(str(remaining_overflow_scope.get("title") or root_title)),
+            title=str(remaining_overflow_scope.get("title") or root_title),
+            scope_note=scope_note,
+            max_pages=max_pages,
+            page_limit=page_limit,
+            company_filters=remaining_filters,
+            probe_summary=probe_summaries[-1],
+        )
+        capped_remaining["provider_cap_limited"] = True
+        capped_remaining["estimated_total_count_before_cap"] = int(remaining_overflow_scope["estimated_total_count"] or 0)
+        shards.append(capped_remaining)
+        overflow_scopes.append(remaining_overflow_scope)
+        return {
+            "status": "planned",
+            "reason": "partition_with_capped_shards",
+            "detail": (
+                "Some partition shards exceed the provider cap; those shards will run up to the provider cap "
+                "and keep overflow metadata for follow-up refinement."
+            ),
+            "policy": normalized_policy,
+            "probe_summaries": probe_summaries,
+            "shards": shards,
+            "overflow_scope": overflow_scopes[0],
+            "overflow_scopes": overflow_scopes,
+        }
 
     return {
         "status": "blocked",
@@ -432,11 +511,7 @@ def plan_company_employee_shards_from_policy(
         "policy": normalized_policy,
         "probe_summaries": probe_summaries,
         "shards": shards,
-        "overflow_scope": {
-            "title": _remaining_shard_title(root_title, consumed_titles),
-            "company_filters": remaining_filters,
-            "estimated_total_count": int(probe_summaries[-1].get("estimated_total_count") or 0),
-        },
+        "overflow_scope": remaining_overflow_scope,
     }
 
 

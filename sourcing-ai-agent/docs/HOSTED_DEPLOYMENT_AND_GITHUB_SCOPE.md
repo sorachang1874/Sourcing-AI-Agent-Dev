@@ -1,5 +1,8 @@
 # Hosted Deployment And GitHub Scope
 
+> Status: Current first-party doc. Treat this file as active guidance, but keep it aligned with `docs/INDEX.md` and `PROGRESS.md` when runtime contracts change.
+
+
 这份文档用于避免两类常见错误：
 
 1. 在云端仍按本地临时调试方式运行（手工续跑、手工补状态）

@@ -8,6 +8,24 @@ from sourcing_agent.search_planning import compile_search_strategy
 
 
 class SearchPlanningTest(unittest.TestCase):
+    def test_publication_coverage_naturalizes_directional_topic_queries(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "给我OpenAI做RL、Post-train和Text方向的人",
+                "query": "OpenAI RL Post-train Text people",
+                "target_company": "OpenAI",
+                "keywords": ["RL", "Post-train"],
+                "must_have_facets": ["text"],
+            }
+        )
+        retrieval_plan = RetrievalPlan(strategy="hybrid", reason="test")
+        strategy = compile_acquisition_strategy(request, ["employee"], ["current", "former"], retrieval_plan)
+        publication = compile_publication_coverage_plan(request, strategy)
+
+        self.assertIn("OpenAI Reinforcement Learning research", publication.seed_queries)
+        self.assertIn("OpenAI Post-train contributor", publication.seed_queries)
+        self.assertIn("OpenAI Language Model contributor", publication.seed_queries)
+
     def test_public_interview_bundle_is_compiled_for_interview_queries(self) -> None:
         request = JobRequest(
             raw_user_request="在 YouTube 和 Podcast 上检索所有 Gemini Team 的访谈内容，找到其中的 Gemini 成员",
@@ -41,6 +59,32 @@ class SearchPlanningTest(unittest.TestCase):
         self.assertTrue(
             any("paid" in rule.lower() or "LinkedIn URL" in rule for rule in search_plan.follow_up_rules),
             search_plan.follow_up_rules,
+        )
+
+    def test_targeted_people_search_bundle_uses_natural_keyword_queries(self) -> None:
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "我想要OpenAI做RL、Eval、Infra方向的人",
+                "query": "OpenAI RL Eval Infra people",
+                "target_company": "OpenAI",
+                "categories": ["employee"],
+                "employment_statuses": ["current", "former"],
+                "keywords": ["RL", "Eval", "Infra"],
+                "execution_preferences": {
+                    "keyword_priority_only": True,
+                    "provider_people_search_query_strategy": "all_queries_union",
+                },
+            }
+        )
+        retrieval_plan = RetrievalPlan(strategy="hybrid", reason="test")
+        strategy = compile_acquisition_strategy(request, ["employee"], ["current", "former"], retrieval_plan)
+        publication = compile_publication_coverage_plan(request, strategy)
+        search_plan = compile_search_strategy(request, strategy, publication, DeterministicModelClient())
+
+        fallback_bundle = next(item for item in search_plan.query_bundles if item.bundle_id == "targeted_people_search")
+        self.assertCountEqual(
+            fallback_bundle.queries,
+            ["Reinforcement Learning", "Evaluation", "Infrastructure"],
         )
 
     def test_relationship_bundle_dedupes_company_scope_terms(self) -> None:

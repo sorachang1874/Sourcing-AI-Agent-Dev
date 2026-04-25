@@ -1,5 +1,8 @@
 # Workflow Operations Playbook
 
+> Status: Current first-party doc. Treat this file as active guidance, but keep it aligned with `docs/INDEX.md` and `PROGRESS.md` when runtime contracts change.
+
+
 这份文档面向“真实操作与排障”，覆盖两件事：
 
 1. 现在如何调用 Sourcing AI Agent（CLI / API）
@@ -11,6 +14,7 @@
 
 - `docs/CANONICAL_CLOUD_BUNDLE_CATALOG.md`
 - `docs/SERVER_RUNTIME_BOOTSTRAP.md`
+- `docs/TESTING_PLAYBOOK.md`
 
 ## 1. 快速启动
 
@@ -32,14 +36,58 @@ export SOURCING_EXTERNAL_PROVIDER_MODE=simulate
   - 真实调用 Harvest / Search / model / semantic provider
 - `replay`
   - 只复用缓存，不做新的外部请求
+  - 缓存未命中则保持空结果，不再生成 `_offline` 占位成员
 - `simulate`
-  - 完全不发外部请求，返回 workflow 可消费的模拟结果
+  - 完全不发外部请求，返回 workflow 可消费的模拟 provider 结果
 
 推荐用法：
 
 - 编排/恢复 smoke test：`simulate`
 - 缓存复用验证：`replay`
 - 真实召回验证：`live`
+
+## 1.0 运行时 identity / Email 口径
+
+公司 identity 现在按下面优先级合并，不再继续把中小组织 alias 硬编码进 builtin：
+
+- builtin identity
+  - 只保留少量大组织 / 特殊 deterministic 入口
+- runtime seed catalog
+  - `runtime/company_identity_seed_catalog.json`
+  - 也支持通过 `SOURCING_COMPANY_IDENTITY_SEED_CATALOG_PATH` 指向外部文件
+- imported / local company assets
+  - `runtime/company_assets/*/*/identity.json`
+- 最终物化 registry
+  - `runtime/company_identity_registry.json`
+
+补充：
+
+- 仓库内有一个极小的 bootstrap seed catalog，仅用于像 `Humans&` 这类已知组织的冷启动兜底
+- 真正可持续维护的入口仍是 runtime seed catalog 和 imported asset identity
+- `refresh_company_identity_registry` 会把 seed catalog 与本地 snapshot identity 一起合并进最终 registry
+
+Harvest profile email 现在默认改为 no-email 模式：
+
+- profile scraper 默认使用 `Profile details no email ($4 per 1k)`
+- planner / settings 默认 `collect_email=false`
+- 若历史 raw payload 里仍有 Harvest email，只接受非 `risky` 且 `qualityScore >= 80` 的条目
+- risky / 低分邮件会在 timeline/materialization/results API 这整条链路上被 scrub，不再继续透传到前端
+
+如果当前目标是低 IO 地批量重写现有 company assets，而不是顺便重刷 registry，可用 rewrite-only 方式：
+
+```bash
+PYTHONPATH=src python3 -m sourcing_agent.cli backfill-structured-timeline \
+  --company "Anthropic" \
+  --skip-profile-registry-backfill \
+  --skip-registry-refresh
+```
+
+说明：
+
+- 这会重写 `normalized_artifacts` / `strict_roster_only` 下的结构化经历物化结果
+- 不会同步执行 organization asset registry refresh
+- 适合 WSL / 本地联调环境里的分批资产修复
+- 若后续需要刷新 registry，再单独跑对应的 registry backfill / warmup
 
 建议常驻一个后台恢复器（非阻塞 workflow 场景）：
 
@@ -70,14 +118,56 @@ PYTHONPATH=src python3 -m sourcing_agent.cli run-worker-daemon-service --poll-se
 - `GET /api/providers/health`
 - `GET /api/workers/daemon/status`
 - `GET /api/runtime/health`
+- `GET /api/runtime/progress`
 
 不推荐把“手工 execute-workflow 续跑”作为常规流程；它应只用于排障。
 
 补充：
 
 - `SOURCING_EXTERNAL_PROVIDER_MODE` 会统一影响高成本外部 provider，包括 Harvest / search / model / semantic
-- hosted workflow、SQLite、snapshot 落盘、progress / recovery / stage summaries 仍按真实路径运行
+- Postgres control plane、snapshot 落盘、progress / recovery / stage summaries 仍按真实路径运行
 - 因此它适合做“低成本端到端编排测试”，但不适合拿来评估真实召回覆盖率
+- `simulate/scripted/replay` 必须运行在隔离 runtime namespace；不要把 hosted production 切成 non-live provider mode 来做常规 smoke
+- runtime namespace / provider cache / PG 隔离规则见 `docs/RUNTIME_ENVIRONMENT_ISOLATION.md`
+
+推荐直接用内建 smoke matrix 做 hosted simulate 回归：
+
+```bash
+cd "sourcing-ai-agent"
+PYTHONPATH=src python3 scripts/run_simulate_smoke_matrix.py --strict
+```
+
+默认 matrix 覆盖：
+
+- Skild AI
+- Humans&
+- Anthropic
+- OpenAI
+- Google
+
+如果要走自动化 hosted 回归：
+
+```bash
+cd "sourcing-ai-agent"
+PYTHONPATH=src python3 -m unittest tests.test_hosted_workflow_smoke -v
+SOURCING_RUN_FULL_HOSTED_SMOKE_MATRIX=1 PYTHONPATH=src python3 -m unittest tests.test_hosted_workflow_smoke -v
+```
+
+口径说明：
+
+- 默认 `unittest` 只跑 3 条代表性 flow，适合作为日常回归
+- full 5-case hosted matrix 需要显式设置 `SOURCING_RUN_FULL_HOSTED_SMOKE_MATRIX=1`
+- smoke/cI 若要进一步压时长，相关 search cooldown 现已支持运行时配置为 `0`
+- 若你测的是外部常驻 `serve`，现在有两种方式：
+  - 在 server / daemon 进程侧设置这些 cooldown 环境变量
+  - 或者在请求里带 `execution_preferences.runtime_tuning_profile=fast_smoke`
+- `fast_smoke` 也会缩短 Harvest 的 probe poll、dataset retry backoff、scripted sleep
+
+对共享 hosted 环境做 smoke 时，更推荐第二种。这样只会影响当前 job，不会改整个服务的默认档位。
+
+若要进一步压大组织长尾 pending/timeout/recovery，请改用 scripted 模式，具体分层与回归入口见：
+
+- `docs/TESTING_PLAYBOOK.md`
 
 ## 2. CLI 标准交互
 
@@ -94,6 +184,25 @@ PYTHONPATH=src python3 -m sourcing_agent.cli plan --file configs/demo_workflow_h
 - `plan.acquisition_strategy`
 - `plan_review_gate`
 - `plan_review_session`
+
+若前端 / 运维需要在真正启动前看 dry-run 决策，优先用：
+
+```bash
+PYTHONPATH=src python3 -m sourcing_agent.cli explain-workflow --file <request.json>
+```
+
+或：
+
+- `POST /api/workflows/explain`
+
+重点看：
+
+- `organization_execution_profile`
+- `asset_reuse_plan`
+- `dispatch_preview`
+- `lane_preview`
+- `generation_watermarks`
+- `cloud_asset_operations`
 
 补充：
 
@@ -159,7 +268,14 @@ PYTHONPATH=src python3 -m sourcing_agent.cli intake-excel --file <workbook.xlsx>
 PYTHONPATH=src python3 -m sourcing_agent.cli continue-excel-intake --file <review_decisions.json>
 ```
 
-这条链路适合前端“上传 Excel -> 返回本地命中 / 待复核 / 新抓取结果”场景，不依赖主 query workflow。
+这条 CLI 链路适合单次排查“上传 Excel -> 返回本地命中 / 待复核 / 新抓取结果”。
+
+前端产品入口走 `/api/intake/excel/workflow`：
+
+- 浏览器上传真实 Excel 文件，不要求用户提供服务器本地路径
+- 后端先解析 workbook，再按 company hint 自动拆成多个 history/job
+- 每个子 job 的检索方案页显示“不适用”，直接进入执行过程与候选人看板
+- 本地 dev / preview 都应通过 same-origin `/api/*` proxy 或 loopback fallback 连接 `127.0.0.1:8765`
 
 ## 3. 进度追踪与交互
 
@@ -178,7 +294,38 @@ PYTHONPATH=src python3 -m sourcing_agent.cli show-trace --job-id <job_id>
 - `show-progress` 的 `stage / milestones / worker_summary`
 - `show-progress` 或 `GET /api/jobs/{job_id}/progress` 里的 `workflow_stage_summaries`
 - `show-workers` 的 `status`（`queued/running/blocked/completed`）
+- `GET /api/runtime/progress` 里的：
+  - `cloud_asset_operations`
+  - `company_asset.authoritative_registry.materialization_watermark`
+  - `company_asset.execution_profile.source_generation_watermark`
+
+说明：
+
+- `generation_watermark` 现在是跨 artifact / registry / execution profile 的统一 freshness 标记
+- 若 explain 说要复用某个 baseline，但 runtime progress 里的 `company_asset` watermark 与预期不一致，优先怀疑导入/repair/materialization 没收敛
 - `show-job` 的 `summary` 与最终结果
+
+补充：
+
+- `show-progress` / `GET /progress` 现在会对 hosted runtime 的 service status / runner probe 做短 TTL 缓存，避免前端高频轮询时反复重读 watchdog / recovery / runner 状态文件。
+- 如需调节这层轮询成本，可用 `WORKFLOW_PROGRESS_SERVICE_STATUS_CACHE_SECONDS` 与 `WORKFLOW_PROGRESS_RUNNER_STATUS_CACHE_SECONDS`；默认只做亚秒级缓存，不改变 workflow takeover 语义。
+- `show-progress` / `GET /progress` 的热路径也只读取 result/manual-review summary counts，不再为计数目的拉整批明细；若要看候选详情或 manual review 内容，改用 `show-job` 或专门明细接口。
+- `show-progress` / `GET /progress` 现在还会优先读取 `job_progress_event_summaries`，不再为常规轮询全量扫描 `job_events`；只有 runtime auto-takeover cooldown 判断仍保留小范围 `runtime_control` 查询。
+
+物化水位：
+
+- 组织级 `normalized_artifacts/artifact_summary.json` 现在会带：
+  - `materialization_generation_key`
+  - `materialization_generation_sequence`
+  - `materialization_watermark`
+  - `membership_summary`
+- shard bundle `normalized_artifacts/<view>/acquisition_shard_bundles/<shard>/summary.json` 也带同一套 generation watermark。
+- `organization_completeness_ledger.json` 会把 baseline 的 exact membership summary 一起写入。
+- `organization_asset_registry.materialization_*`
+- `acquisition_shard_registry.materialization_*`
+- `organization_execution_profiles.source_generation_*`
+
+排障时如果发现文件已刷新、但 registry / execution profile 还是旧状态，就直接比对这组 generation watermark。
 
 当前稳定阶段总结顺序：
 
@@ -227,6 +374,23 @@ PYTHONPATH=src python3 -m sourcing_agent.cli show-trace --job-id <job_id>
 - `POST /api/workers/daemon/run-once`
 - `POST /api/workers/interrupt`
 
+### 3.3 统一入口分工
+
+默认应按职责选择入口，而不是混用 CLI repair 命令和 hosted 主路径：
+
+| 场景 | Canonical entrypoint | 说明 |
+| --- | --- | --- |
+| 计划生成 | `POST /api/plan` / `cli plan` | 只生成 plan/review，不创建 workflow job |
+| 执行前解释 | `POST /api/workflows/explain` / `cli explain-workflow` | dry-run，不写 job，只返回 normalization / dispatch / lane preview |
+| 正式执行 | `POST /api/workflows` | hosted 默认执行入口，由 `serve` 托管 |
+| 恢复排障 | `execute-workflow` / `supervise-workflow` / `run-worker-daemon-once` | 仅 repair/debug，不应替代 hosted 常驻 |
+| 云端资产恢复 | `import-cloud-assets` | 恢复 bundle 并统一修复 registry / completeness / profile registry |
+
+运维侧最小常驻组合保持不变：
+
+- `serve`
+- `run-worker-daemon-service`
+
 ## 4. Query 去重与复用（成本控制）
 
 当前 workflow 默认具备 query dispatch 去重：
@@ -244,6 +408,32 @@ PYTHONPATH=src python3 -m sourcing_agent.cli show-trace --job-id <job_id>
   - dispatch 去重阶段的 deterministic 归一。
   - 基于 prepared/effective request 生成 signature、family score，并决定 `join_inflight / reuse_completed / reuse_snapshot / new_job`。
   - 这一层不重新调用模型。
+
+建议在真实执行前先做一次 dry-run：
+
+```bash
+PYTHONPATH=src python3 -m sourcing_agent.cli explain-workflow --file <request.json>
+```
+
+或走 API：
+
+- `POST /api/workflows/explain`
+
+这个入口不会创建 job，但会一次性返回：
+
+- `ingress_normalization`
+- `planning`
+- `dispatch_matching_normalization`
+- `dispatch_preview`
+- `lane_preview`
+
+其中 `dispatch_preview` 现在也会直接带：
+
+- `strategy`
+- `matched_job.job_id`
+- `matched_job.status`
+
+适合前端展示“这次请求为什么会复用 baseline / 为什么会补 former delta / 当前 lane 会不会 live 打外部 provider / 这次是不是直接 reuse_completed 了上一条已完成 job”，也适合运维排障。
 
 建议前端带上：
 

@@ -48,3 +48,14 @@ class SemanticProviderTest(unittest.TestCase):
             )
         self.assertIsInstance(provider, OfflineSemanticProvider)
         self.assertEqual(provider.healthcheck()["provider_mode"], "replay")
+
+    def test_build_semantic_provider_uses_offline_provider_in_scripted_mode(self) -> None:
+        with patch.dict("os.environ", {"SOURCING_EXTERNAL_PROVIDER_MODE": "scripted"}):
+            provider = build_semantic_provider(
+                SemanticProviderSettings(
+                    enabled=True,
+                    api_key="sk-test",
+                )
+            )
+        self.assertIsInstance(provider, OfflineSemanticProvider)
+        self.assertEqual(provider.healthcheck()["provider_mode"], "scripted")

@@ -1,7 +1,9 @@
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from sourcing_agent.profile_registry_backfill import backfill_linkedin_profile_registry
 from sourcing_agent.storage import SQLiteStore
@@ -109,6 +111,36 @@ class ProfileRegistryBackfillTest(unittest.TestCase):
         self.assertEqual(second_run["files_processed_this_run"], 1)
         second_entry = self.store.get_linkedin_profile_registry("https://www.linkedin.com/in/second-user/")
         self.assertIsNotNone(second_entry)
+
+    def test_backfill_scans_hot_cache_harvest_profiles(self) -> None:
+        hot_cache_dir = self.runtime_dir / "hot_cache_company_assets"
+        harvest_dir = hot_cache_dir / "anthropic" / "20260410T000200" / "harvest_profiles"
+        harvest_dir.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "_harvest_request": {
+                "kind": "url",
+                "value": "https://www.linkedin.com/in/hot-cache-user/",
+                "profile_url": "https://www.linkedin.com/in/hot-cache-user/",
+            },
+            "item": {"fullName": "Hot Cache User", "profileUrl": "https://www.linkedin.com/in/hot-cache-user/"},
+        }
+        (harvest_dir / "hot_cache.json").write_text(json.dumps(payload), encoding="utf-8")
+
+        with patch.dict(os.environ, {"SOURCING_HOT_CACHE_ASSETS_DIR": str(hot_cache_dir)}, clear=False):
+            result = backfill_linkedin_profile_registry(
+                runtime_dir=self.runtime_dir,
+                store=self.store,
+                company="anthropic",
+                snapshot_id="20260410T000200",
+                progress_interval=10,
+            )
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["files_processed_this_run"], 1)
+        entry = self.store.get_linkedin_profile_registry("https://www.linkedin.com/in/hot-cache-user/")
+        self.assertIsNotNone(entry)
+        assert entry is not None
+        self.assertEqual(entry["status"], "fetched")
 
 
 if __name__ == "__main__":

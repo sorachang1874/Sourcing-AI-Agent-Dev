@@ -1,5 +1,8 @@
 # HarvestAPI Playbook
 
+> Status: Current first-party doc. Treat this file as active guidance, but keep it aligned with `docs/INDEX.md` and `PROGRESS.md` when runtime contracts change.
+
+
 这份文档沉淀 `harvestapi` 在本项目中的实际使用方法、参数约束、真实踩坑和 Thinking Machines Lab 测试结论。目标不是复述官方 README，而是给后续开发提供一个“可以直接照着执行”的调用手册。
 
 ## Actor 页面
@@ -20,7 +23,9 @@
   - 适合作为 `known URL -> full detail` 主入口
   - 目标是把候选人升级成完整 dossier
 - `linkedin-profile-search`
-  - 适合作为 `former fallback / targeted fallback`
+  - 适合作为 `former recall / scoped company-specific recall` 主入口
+  - `full_company_roster` 的 former lane 默认应走这里
+  - `scoped_search_roster` 的 current/former company-scoped recall 也允许走这里
   - 不应该默认承担 `FullName + Organization` 的 exact-name resolution
 
 ## 配置位置
@@ -39,7 +44,7 @@
       "actor_id": "LpVuK3Zozwuipa5bp",
       "api_token": "REDACTED",
       "default_mode": "full",
-      "collect_email": true
+      "collect_email": false
     },
     "profile_search": {
       "enabled": true,
@@ -58,6 +63,9 @@
   }
 }
 ```
+
+默认建议把 `harvest.profile_scraper.collect_email` 保持为 `false`。
+如果后台 run summary 里出现 `chargedEventCounts.profile_with_email > 0`，说明运行时配置或 provider 输入已经偏离了 “no email” 模式，需要先修正，再继续 live 调用。
 
 生产环境更推荐 secret manager 或环境变量，不建议依赖旧项目里的 `api_accounts.json` 自动发现。
 
@@ -98,7 +106,7 @@
 
 ### 2. `linkedin-profile-search`
 
-本项目当前正确 former recall 思路：
+本项目当前正确 former/company-scoped recall 思路：
 
 ```json
 {
@@ -115,11 +123,13 @@
 关键结论：
 
 - former workflow 应以 `pastCompanies` 做 recall-first
+- company-scoped current/former recall 应优先走 `currentCompanies / pastCompanies` 这类组织约束，而不是先退化成零散姓名检索
 - 不要默认加 `excludeCurrentCompanies`
 - Thinking Machines Lab 这个 case 上：
   - `pastCompanies` 两页能返回接近 LinkedIn 官网 former 搜索页的结果
   - `excludeCurrentCompanies` 会把结果压成 `0`
-- `profile-search` 适合 former fallback，不适合默认承担 exact-name resolution
+- `profile-search` 是 core company search lane 的一部分，不应再受通用成本开关影响
+- `profile-search` 适合 former/company-scoped recall，不适合默认承担 exact-name resolution
 - former search 不应再静态写死页数上限
   - 正确做法是先发一轮小 probe
   - 从 provider 返回里读取 `total_elements / total_pages`
@@ -240,18 +250,26 @@
 
 ## Profile enrich 的执行策略
 
-对于已经拿到 LinkedIn URL 的 current / former roster，`profile-scraper` 不应再完全串行。
+对于已经拿到 LinkedIn URL 的 current / former roster，`profile-scraper` 不应再完全串行，也不应再固定按“每批约 100 条”机械切分。
 
 当前推荐做法是：
 
 1. 先做 URL 级去重
-2. 以 `100` 左右为一个 batch
-3. 同时保留多个 in-flight batch
-4. 只对失败或未返回 detail 的 URL 做定向 retry
+2. 根据 URL 总量和来源混合（`company_roster / profile_search / targeted / other`）决定 batch 大小
+3. live 模式使用更小、更均衡的 batch，并采用 sliding-window 提交
+4. in-flight batch 维持有界并发：
+   - roster-heavy 大集合最多 `3` 个并发 batch
+   - profile-search / targeted 默认 `2` 个
+   - non-live 最多 `4` 个
+5. 只对失败或未返回 detail 的 unresolved subset 做定向 retry
+6. 这套 window contract 不能只放在前台 enrichment：
+   - background `company_asset_completion`
+   - Excel intake 复用的 profile completion
+   也必须共用同一套 live batching 规则，不能再退回“大批次 + 串行瀑布流”
 
 这样做的原因：
 
-- 一次 `100` 条即使局部失败，也不会丢整批上下文
+- 可以避免 roster-heavy 大集合被切成少数超大 batch，导致单批失败成本过高
 - 可以避免“上一批完全结束之后才发下一批”的低利用率串行模式
 - retry 只打 unresolved subset，不会把已成功 URL 再跑一遍
 

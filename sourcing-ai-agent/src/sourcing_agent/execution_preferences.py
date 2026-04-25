@@ -3,11 +3,13 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from .company_registry import normalize_company_key
+from .runtime_tuning import normalize_runtime_tuning_profile
 
 EXECUTION_PREFERENCE_FIELDS = {
     "confirmed_company_scope",
     "extra_source_families",
-    "allow_high_cost_sources",
+    "allow_local_bootstrap_fallback",
     "require_stage2_confirmation",
     "precision_recall_bias",
     "acquisition_strategy_override",
@@ -24,6 +26,50 @@ EXECUTION_PREFERENCE_FIELDS = {
     "reuse_baseline_job_id",
     "delta_baseline_snapshot_id",
     "delta_baseline_snapshot_ids",
+    "target_company_linkedin_url",
+    "target_company_linkedin_slug",
+    "runtime_tuning_profile",
+    "lane_ready_cooldown_seconds",
+    "lane_fetch_cooldown_seconds",
+    "task_get_batch_workers",
+    "harvest_poll_interval_seconds",
+    "harvest_retry_backoff_seconds",
+    "harvest_scripted_sleep_seconds_cap",
+    "provider_people_search_parallel_queries",
+    "harvest_company_roster_parallel_shards",
+    "candidate_artifact_parallel_min_candidates",
+    "candidate_artifact_max_workers",
+    "parallel_search_workers",
+    "parallel_exploration_workers",
+    "harvest_prefetch_submit_workers",
+    "search_worker_unit_budget",
+    "public_media_worker_unit_budget",
+    "exploration_worker_unit_budget",
+}
+
+RUNTIME_TUNING_NONNEGATIVE_INT_FIELDS = {
+    "lane_ready_cooldown_seconds",
+    "lane_fetch_cooldown_seconds",
+}
+
+RUNTIME_TUNING_POSITIVE_INT_FIELDS = {
+    "task_get_batch_workers",
+    "provider_people_search_parallel_queries",
+    "harvest_company_roster_parallel_shards",
+    "candidate_artifact_parallel_min_candidates",
+    "candidate_artifact_max_workers",
+    "parallel_search_workers",
+    "parallel_exploration_workers",
+    "harvest_prefetch_submit_workers",
+    "search_worker_unit_budget",
+    "public_media_worker_unit_budget",
+    "exploration_worker_unit_budget",
+}
+
+RUNTIME_TUNING_NONNEGATIVE_FLOAT_FIELDS = {
+    "harvest_poll_interval_seconds",
+    "harvest_retry_backoff_seconds",
+    "harvest_scripted_sleep_seconds_cap",
 }
 
 EXECUTION_PREFERENCE_ALIASES = {
@@ -31,7 +77,6 @@ EXECUTION_PREFERENCE_ALIASES = {
     "confirmed_scope": "confirmed_company_scope",
     "scope": "confirmed_company_scope",
     "source_families": "extra_source_families",
-    "high_cost_sources_approved": "allow_high_cost_sources",
     "pause_before_stage2_analysis": "require_stage2_confirmation",
     "require_stage2_approval": "require_stage2_confirmation",
     "wait_for_stage2_approval": "require_stage2_confirmation",
@@ -52,6 +97,12 @@ EXECUTION_PREFERENCE_ALIASES = {
     "skip_current_roster_refresh": "reuse_existing_roster",
     "former_search_seed": "run_former_search_seed",
     "include_former_search_seed": "run_former_search_seed",
+    "company_linkedin_url": "target_company_linkedin_url",
+    "linkedin_company_url": "target_company_linkedin_url",
+    "company_linkedin_slug": "target_company_linkedin_slug",
+    "linkedin_company_slug": "target_company_linkedin_slug",
+    "testing_profile": "runtime_tuning_profile",
+    "runtime_profile": "runtime_tuning_profile",
 }
 
 ALLOWED_PRECISION_RECALL_BIAS = {"precision_first", "recall_first", "balanced"}
@@ -91,6 +142,8 @@ def normalize_execution_preferences(
     if isinstance(candidate.get("execution_preferences"), dict):
         candidate = dict(candidate.get("execution_preferences") or {})
     normalized: dict[str, Any] = {}
+    raw_target_company_linkedin_url = ""
+    raw_target_company_linkedin_slug = ""
     for raw_key, raw_value in candidate.items():
         key = EXECUTION_PREFERENCE_ALIASES.get(str(raw_key or "").strip(), str(raw_key or "").strip())
         if key not in EXECUTION_PREFERENCE_FIELDS:
@@ -101,7 +154,7 @@ def normalize_execution_preferences(
                 normalized[key] = items
             continue
         if key in {
-            "allow_high_cost_sources",
+            "allow_local_bootstrap_fallback",
             "require_stage2_confirmation",
             "use_company_employees_lane",
             "keyword_priority_only",
@@ -119,6 +172,32 @@ def normalize_execution_preferences(
             value = str(raw_value or "").strip()
             if value:
                 normalized[key] = value[:120]
+            continue
+        if key == "target_company_linkedin_url":
+            raw_target_company_linkedin_url = str(raw_value or "").strip()
+            continue
+        if key == "target_company_linkedin_slug":
+            raw_target_company_linkedin_slug = str(raw_value or "").strip()
+            continue
+        if key == "runtime_tuning_profile":
+            value = normalize_runtime_tuning_profile(raw_value)
+            if value:
+                normalized[key] = value
+            continue
+        if key in RUNTIME_TUNING_NONNEGATIVE_INT_FIELDS:
+            value = _coerce_nonnegative_int(raw_value, maximum=86_400)
+            if value is not None:
+                normalized[key] = value
+            continue
+        if key in RUNTIME_TUNING_POSITIVE_INT_FIELDS:
+            value = _coerce_small_positive_int(raw_value, maximum=10_000)
+            if value is not None:
+                normalized[key] = value
+            continue
+        if key in RUNTIME_TUNING_NONNEGATIVE_FLOAT_FIELDS:
+            value = _coerce_nonnegative_float(raw_value, maximum=86_400.0)
+            if value is not None:
+                normalized[key] = value
             continue
         if key == "provider_people_search_query_strategy":
             value = _normalize_provider_people_search_query_strategy(raw_value)
@@ -139,6 +218,16 @@ def normalize_execution_preferences(
             value = _normalize_acquisition_strategy(raw_value)
             if value:
                 normalized[key] = value
+    target_company_linkedin_slug = normalize_target_company_linkedin_slug(
+        raw_target_company_linkedin_slug or raw_target_company_linkedin_url
+    )
+    target_company_linkedin_url = normalize_target_company_linkedin_url(
+        raw_target_company_linkedin_url or raw_target_company_linkedin_slug
+    )
+    if target_company_linkedin_slug:
+        normalized["target_company_linkedin_slug"] = target_company_linkedin_slug
+    if target_company_linkedin_url:
+        normalized["target_company_linkedin_url"] = target_company_linkedin_url
     return normalized
 
 
@@ -162,9 +251,6 @@ def infer_execution_preferences_from_text(
     run_former_search_seed = _infer_run_former_search_seed(lower)
     if run_former_search_seed is not None:
         prefs["run_former_search_seed"] = run_former_search_seed
-    allow_high_cost = _infer_allow_high_cost(lower)
-    if allow_high_cost is not None:
-        prefs["allow_high_cost_sources"] = allow_high_cost
     require_stage2_confirmation = _infer_require_stage2_confirmation(lower)
     if require_stage2_confirmation is not None:
         prefs["require_stage2_confirmation"] = require_stage2_confirmation
@@ -219,6 +305,54 @@ def merge_execution_preferences(
         if key not in merged:
             merged[key] = value
     return merged
+
+
+def normalize_target_company_linkedin_slug(value: Any) -> str:
+    raw = " ".join(str(value or "").strip().split())
+    if not raw:
+        return ""
+    if "linkedin.com" in raw.lower() or raw.startswith("/"):
+        extracted = _extract_linkedin_company_slug(raw)
+        return extracted.lower()
+    normalized = raw.strip().strip("/")
+    if normalized.lower().startswith("company/"):
+        normalized = normalized.split("/", 1)[1]
+    normalized = normalized.split("?", 1)[0].split("#", 1)[0].strip()
+    if not normalized:
+        return ""
+    if not re.fullmatch(r"[A-Za-z0-9._-]+", normalized):
+        return ""
+    return normalized.lower()
+
+
+def normalize_target_company_linkedin_url(value: Any) -> str:
+    slug = normalize_target_company_linkedin_slug(value)
+    if not slug:
+        return ""
+    return f"https://www.linkedin.com/company/{slug}/"
+
+
+def extract_target_company_linkedin_override(
+    payload: dict[str, Any] | None,
+    *,
+    target_company: str = "",
+) -> dict[str, str]:
+    preferences = normalize_execution_preferences(payload, target_company=target_company)
+    linkedin_slug = str(preferences.get("target_company_linkedin_slug") or "").strip()
+    linkedin_url = str(preferences.get("target_company_linkedin_url") or "").strip()
+    if not linkedin_slug and not linkedin_url:
+        return {}
+    if not linkedin_slug:
+        linkedin_slug = normalize_target_company_linkedin_slug(linkedin_url)
+    if not linkedin_url:
+        linkedin_url = normalize_target_company_linkedin_url(linkedin_slug)
+    if not linkedin_slug:
+        return {}
+    return {
+        "linkedin_slug": linkedin_slug,
+        "linkedin_company_url": linkedin_url,
+        "company_key_hint": normalize_company_key(target_company or linkedin_slug),
+    }
 
 
 def apply_execution_preference_policy(
@@ -343,6 +477,39 @@ def _coerce_small_positive_int(value: Any, *, maximum: int) -> int | None:
     return min(parsed, maximum)
 
 
+def _coerce_nonnegative_int(value: Any, *, maximum: int) -> int | None:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    if parsed < 0:
+        return None
+    return min(parsed, maximum)
+
+
+def _coerce_nonnegative_float(value: Any, *, maximum: float) -> float | None:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    if parsed < 0:
+        return None
+    return min(parsed, maximum)
+
+
+def _extract_linkedin_company_slug(value: str) -> str:
+    normalized = str(value or "").strip()
+    if not normalized:
+        return ""
+    match = re.search(r"linkedin\.com/company/([A-Za-z0-9._-]+)", normalized, flags=re.IGNORECASE)
+    if match is not None:
+        return str(match.group(1) or "").strip()
+    match = re.search(r"(?:^|/)company/([A-Za-z0-9._-]+)", normalized, flags=re.IGNORECASE)
+    if match is not None:
+        return str(match.group(1) or "").strip()
+    return ""
+
+
 def _infer_strategy_override_from_text(lower: str) -> str:
     if any(token in lower for token in ["former employee", "former employees", "前员工", "已离职"]):
         return "former_employee_search"
@@ -415,31 +582,6 @@ def _infer_force_fresh_run(lower: str) -> bool:
             "不复用历史",
         ]
     )
-
-
-def _infer_allow_high_cost(lower: str) -> bool | None:
-    deny_patterns = [
-        "不允许高成本",
-        "不要高成本",
-        "禁用高成本",
-        "禁止高成本",
-        "without high cost",
-        "no high cost",
-        "disallow high cost",
-        "deny high cost",
-    ]
-    allow_patterns = [
-        "允许高成本",
-        "可以高成本",
-        "approve high cost",
-        "allow high cost",
-        "enable high cost",
-    ]
-    if any(token in lower for token in deny_patterns):
-        return False
-    if any(token in lower for token in allow_patterns):
-        return True
-    return None
 
 
 def _infer_reuse_existing_roster(lower: str) -> bool:

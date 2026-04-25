@@ -23,22 +23,103 @@ def service_state_dir(runtime_dir: str | Path, service_name: str = "worker-recov
     return Path(runtime_dir) / "services" / service_name
 
 
+def service_stop_request_path(runtime_dir: str | Path, service_name: str = "worker-recovery-daemon") -> Path:
+    return service_state_dir(runtime_dir, service_name) / "stop_request.json"
+
+
+def read_service_stop_request(runtime_dir: str | Path, service_name: str = "worker-recovery-daemon") -> dict[str, Any]:
+    request_path = service_stop_request_path(runtime_dir, service_name)
+    if not request_path.exists():
+        return {
+            "status": "not_requested",
+            "service_name": service_name,
+            "path": str(request_path),
+        }
+    try:
+        payload = json.loads(request_path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return {
+            "status": "corrupted",
+            "service_name": service_name,
+            "path": str(request_path),
+        }
+    if not isinstance(payload, dict):
+        payload = {}
+    payload.setdefault("status", "requested")
+    payload.setdefault("service_name", service_name)
+    payload.setdefault("path", str(request_path))
+    return payload
+
+
+def request_service_stop(
+    runtime_dir: str | Path,
+    service_name: str = "worker-recovery-daemon",
+    *,
+    reason: str = "",
+    requested_by: str = "",
+    target_status: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    normalized_service_name = str(service_name or "worker-recovery-daemon").strip() or "worker-recovery-daemon"
+    current_status = dict(target_status or read_service_status(runtime_dir, normalized_service_name))
+    request_path = service_stop_request_path(runtime_dir, normalized_service_name)
+    request_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "status": "requested",
+        "service_name": normalized_service_name,
+        "requested_at": _utc_now(),
+        "requested_by": str(requested_by or "").strip() or "operator",
+        "reason": str(reason or "").strip() or "cooperative_shutdown_requested",
+        "target_pid": _coerce_pid(current_status.get("pid")),
+        "target_owner_id": str(current_status.get("owner_id") or "").strip(),
+        "target_started_at": str(current_status.get("started_at") or "").strip(),
+        "target_status": str(current_status.get("status") or "").strip(),
+        "path": str(request_path),
+    }
+    request_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
+    return payload
+
+
+def clear_service_stop_request(runtime_dir: str | Path, service_name: str = "worker-recovery-daemon") -> bool:
+    request_path = service_stop_request_path(runtime_dir, service_name)
+    try:
+        request_path.unlink()
+        return True
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return False
+
+
 def read_service_status(runtime_dir: str | Path, service_name: str = "worker-recovery-daemon") -> dict[str, Any]:
     status_path = service_state_dir(runtime_dir, service_name) / "status.json"
     if not status_path.exists():
-        return {
+        payload = {
             "service_name": service_name,
             "status": "not_started",
             "status_path": str(status_path),
         }
+        stop_request = read_service_stop_request(runtime_dir, service_name)
+        if str(stop_request.get("status") or "") != "not_requested":
+            payload["stop_request"] = stop_request
+            payload["stop_requested"] = True
+        else:
+            payload["stop_requested"] = False
+        return payload
     try:
         payload = json.loads(status_path.read_text())
     except (OSError, json.JSONDecodeError):
-        return {
+        payload = {
             "service_name": service_name,
             "status": "corrupted",
             "status_path": str(status_path),
         }
+        stop_request = read_service_stop_request(runtime_dir, service_name)
+        if str(stop_request.get("status") or "") != "not_requested":
+            payload["stop_request"] = stop_request
+            payload["stop_requested"] = True
+        else:
+            payload["stop_requested"] = False
+        return payload
     lock_path = Path(str(payload.get("lock_path") or service_state_dir(runtime_dir, service_name) / "service.lock"))
     lock_status = _probe_service_lock_status(lock_path)
     payload["lock_status"] = lock_status
@@ -50,6 +131,12 @@ def read_service_status(runtime_dir: str | Path, service_name: str = "worker-rec
         payload["heartbeat_age_seconds"] = heartbeat_age_seconds
     heartbeat_timeout_seconds = _heartbeat_timeout_seconds(payload.get("poll_seconds"))
     payload["heartbeat_timeout_seconds"] = heartbeat_timeout_seconds
+    stop_request = read_service_stop_request(runtime_dir, service_name)
+    if str(stop_request.get("status") or "") != "not_requested":
+        payload["stop_request"] = stop_request
+        payload["stop_requested"] = True
+    else:
+        payload["stop_requested"] = False
     payload.setdefault("service_name", service_name)
     payload.setdefault("status_path", str(status_path))
     payload = _decorate_service_activity_status(payload)
@@ -77,8 +164,11 @@ def render_systemd_unit(
     python_bin: str = "/usr/bin/env python3",
     user_name: str = "",
 ) -> str:
-    root = Path(project_root).expanduser().resolve()
+    root = Path(project_root).expanduser()
     account = user_name.strip() or getpass.getuser()
+    postgres_dsn = str(os.getenv("SOURCING_CONTROL_PLANE_POSTGRES_DSN") or "").strip()
+    postgres_schema = str(os.getenv("SOURCING_CONTROL_PLANE_POSTGRES_SCHEMA") or "public").strip() or "public"
+    sqlite_shadow_backend = str(os.getenv("SOURCING_PG_ONLY_SQLITE_BACKEND") or "shared_memory").strip() or "shared_memory"
     exec_start = (
         f"{python_bin} -m sourcing_agent.cli run-worker-daemon-service "
         f"--service-name {service_name} "
@@ -100,6 +190,17 @@ def render_systemd_unit(
             f"WorkingDirectory={root}",
             "Environment=PYTHONPATH=src",
             "Environment=PYTHONUNBUFFERED=1",
+            *(
+                [
+                    f"Environment=SOURCING_CONTROL_PLANE_POSTGRES_DSN={postgres_dsn}",
+                    "Environment=SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE=postgres_only",
+                    f"Environment=SOURCING_CONTROL_PLANE_POSTGRES_SCHEMA={postgres_schema}",
+                    "Environment=SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES=1",
+                    f"Environment=SOURCING_PG_ONLY_SQLITE_BACKEND={sqlite_shadow_backend}",
+                ]
+                if postgres_dsn
+                else []
+            ),
             f"ExecStart={exec_start}",
             "Restart=always",
             "RestartSec=5",
@@ -176,6 +277,16 @@ class WorkerDaemonService:
             )
             try:
                 while not self._stop_event.is_set():
+                    stop_request = self._matching_stop_request()
+                    if stop_request:
+                        self._emit_log(
+                            event="service_stop_requested",
+                            tick=tick,
+                            reason=str(stop_request.get("reason") or ""),
+                            requested_by=str(stop_request.get("requested_by") or ""),
+                        )
+                        self._stop_event.set()
+                        break
                     tick += 1
                     callback_payload = self._build_callback_payload()
                     self._write_status(
@@ -235,6 +346,16 @@ class WorkerDaemonService:
                     )
                     if max_ticks > 0 and tick >= max_ticks:
                         break
+                    stop_request = self._matching_stop_request()
+                    if stop_request:
+                        self._emit_log(
+                            event="service_stop_requested",
+                            tick=tick,
+                            reason=str(stop_request.get("reason") or ""),
+                            requested_by=str(stop_request.get("requested_by") or ""),
+                        )
+                        self._stop_event.set()
+                        break
                     if _service_summary_has_activity(last_summary):
                         continue
                     if self._sleep_until_next_tick():
@@ -257,6 +378,7 @@ class WorkerDaemonService:
                     final_status=final_status,
                     summary=_summarize_service_log_payload(last_summary),
                 )
+                clear_service_stop_request(self.runtime_dir, self.service_name)
                 return read_service_status(self.runtime_dir, self.service_name)
             except Exception as exc:
                 self._write_status(
@@ -339,9 +461,28 @@ class WorkerDaemonService:
     def _sleep_until_next_tick(self) -> bool:
         deadline = time.time() + self.poll_seconds
         while time.time() < deadline:
+            if self._matching_stop_request():
+                self._stop_event.set()
+                return True
             if self._stop_event.wait(timeout=min(0.25, max(0.01, deadline - time.time()))):
                 return True
         return False
+
+    def _matching_stop_request(self) -> dict[str, Any]:
+        stop_request = read_service_stop_request(self.runtime_dir, self.service_name)
+        if str(stop_request.get("status") or "") != "requested":
+            return {}
+        target_pid = _coerce_pid(stop_request.get("target_pid"))
+        target_owner_id = str(stop_request.get("target_owner_id") or "").strip()
+        if target_pid > 0:
+            return stop_request if target_pid == os.getpid() else {}
+        if target_owner_id:
+            return stop_request if target_owner_id == self.owner_id else {}
+        requested_at = _parse_datetime(stop_request.get("requested_at"))
+        started_at = _parse_datetime(self._started_at)
+        if requested_at is not None and started_at is not None:
+            return stop_request if requested_at >= started_at else {}
+        return stop_request
 
     def _build_callback_payload(self) -> dict[str, Any]:
         payload = {
@@ -574,7 +715,14 @@ def _pid_is_alive(pid: int) -> bool:
 
 
 def _heartbeat_age_seconds(updated_at: Any) -> float | None:
-    raw = str(updated_at or "").strip()
+    observed_at = _parse_datetime(updated_at)
+    if observed_at is None:
+        return None
+    return max(0.0, (datetime.now(timezone.utc) - observed_at.astimezone(timezone.utc)).total_seconds())
+
+
+def _parse_datetime(value: Any) -> datetime | None:
+    raw = str(value or "").strip()
     if not raw:
         return None
     try:
@@ -583,7 +731,7 @@ def _heartbeat_age_seconds(updated_at: Any) -> float | None:
         return None
     if observed_at.tzinfo is None:
         observed_at = observed_at.replace(tzinfo=timezone.utc)
-    return max(0.0, (datetime.now(timezone.utc) - observed_at.astimezone(timezone.utc)).total_seconds())
+    return observed_at.astimezone(timezone.utc)
 
 
 def _heartbeat_timeout_seconds(poll_seconds: Any) -> float:

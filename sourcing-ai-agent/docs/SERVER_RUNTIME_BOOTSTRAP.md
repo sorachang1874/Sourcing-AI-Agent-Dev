@@ -1,5 +1,10 @@
 # Server Runtime Bootstrap
 
+> Status: Current first-party doc. Treat this file as active guidance, but keep it aligned with `docs/INDEX.md` and `PROGRESS.md` when runtime contracts change.
+
+
+> Current default: hosted bootstrap should restore `Postgres control plane + control_plane_snapshot + company_snapshot`. `sqlite_snapshot` is now a legacy backup/portability alias.
+
 ## Goal
 
 这份文档定义当前 `Sourcing AI Agent` 在长期在线 Linux/server 环境上的最小可执行启动流程。
@@ -30,7 +35,7 @@ canonical bundle 选择请同时参考：
 - Git repo
 - provider secrets
 - object storage config
-- 必要的 bundle / SQLite snapshot
+- 必要的 bundle / control-plane snapshot
 
 ## Host Requirements
 
@@ -38,6 +43,7 @@ canonical bundle 选择请同时参考：
 
 - Linux，优先 Debian/Ubuntu 或兼容环境
 - Python `>=3.12`
+- 与仓库依赖锁定一致的 repo-managed venv
 - Git
 - 可写的本地 `runtime/`
 
@@ -168,19 +174,20 @@ mkdir -p runtime/secrets runtime/asset_imports runtime/vendor
 
 默认恢复路径应是：
 
-1. 恢复 canonical `sqlite_snapshot`
+1. 恢复 canonical `control_plane_snapshot`
 2. 再恢复需要的 canonical `company_snapshot`
 
 不要把 `company_handoff` 当成默认 server bootstrap 入口，因为它更重，也更容易把历史测试态文件一起带回。
+`sqlite_snapshot` 现在只保留 backup / portability 语义，不再是 hosted 默认恢复主路径。
 
 默认推荐直接使用统一导入命令 `import-cloud-assets`，而不是手工串联 `download-asset-bundle -> restore-* -> backfill-*`。
 
-先恢复 SQLite：
+先恢复 control plane：
 
 ```bash
 PYTHONPATH=src python3 -m sourcing_agent.cli import-cloud-assets \
-  --bundle-kind sqlite_snapshot \
-  --bundle-id <sqlite_bundle_id> \
+  --bundle-kind control_plane_snapshot \
+  --bundle-id <control_plane_snapshot_bundle_id> \
   --output-dir runtime/asset_imports
 ```
 
@@ -198,6 +205,9 @@ PYTHONPATH=src python3 -m sourcing_agent.cli import-cloud-assets \
 - candidate artifact repair
 - organization asset registry warmup
 - linkedin profile registry backfill
+
+注意：serve 启动时的 organization asset warmup 不是默认后台任务。需要冷启动预热时显式设置
+`STARTUP_ORGANIZATION_ASSET_WARMUP_ENABLED=true`，否则它会保持 disabled，避免每次启动都扫描全部 runtime assets 并拖慢前台 plan / workflow 请求。
 
 如果你已经手工下载好了 bundle，也可以直接给本地 manifest：
 

@@ -1,5 +1,10 @@
 # Data Asset Governance
 
+> Status: Current first-party doc. Treat this file as active guidance, but keep it aligned with `docs/INDEX.md` and `PROGRESS.md` when runtime contracts change.
+
+
+> Current default: live/hosted storage is `Postgres control plane + generation-first artifacts`. `sqlite_snapshot` now exists only as a legacy backup/portability alias.
+
 ## Goal
 
 这份文档定义 `Sourcing AI Agent` 的数据资产管理规则，目标是解决下面几类问题：
@@ -7,7 +12,7 @@
 - 新 snapshot 上传后，旧版本如何保留、降级、归档或淘汰
 - 同一组织下不同团队、不同 scope 的资产如何隔离，不互相覆盖
 - 哪些文件属于“可长期复用的数据资产”，哪些只是一次性执行痕迹
-- 本地 runtime、云端 object storage、SQLite 和 retrieval artifact 之间如何分层
+- 本地 runtime、云端 object storage、Postgres control plane、legacy backup alias 和 retrieval artifact 之间如何分层
 
 这份规则是工程约束，不是建议。
 
@@ -66,12 +71,13 @@
 
 - `company_snapshot bundle`
 - `company_handoff bundle`
-- `sqlite_snapshot bundle`
+- `control_plane_snapshot bundle`
+- `sqlite_snapshot bundle` (legacy alias)
 
 补充：
 
 - `company_handoff bundle` 仍是受支持的导出格式
-- 但当前服务器/云端恢复默认基线应优先使用 `company_snapshot + sqlite_snapshot`
+- 但当前服务器/云端恢复默认基线应优先使用 `company_snapshot + control_plane_snapshot`
 - canonical 恢复清单见 `docs/CANONICAL_CLOUD_BUNDLE_CATALOG.md`
 
 规则：
@@ -305,6 +311,16 @@
 - 云端以 `company_snapshot bundle` 为发布单元
 - 发布后额外维护一份 registry，而不是只靠 object prefix 浏览
 - `latest_snapshot.json` 只代表本地默认版本；云端还需要自己的 `latest canonical` registry 记录
+- `src/sourcing_agent/asset_governance.py` 现在提供第一版可执行 contract：
+  - default pointer key 固定为 `(company_key, scope_kind, scope_key, asset_kind)`
+  - canonical replacement plan 会显式生成新 default pointer 与旧 superseded pointer
+  - historical retention 会保留新旧 snapshot id，避免覆盖式修补
+  - `draft/partial/superseded/archived/empty` 不允许成为 default canonical pointer
+- 2026-04-25 起，default pointer 已有持久化 writer：
+  - control-plane table: `asset_default_pointers`
+  - history table: `asset_default_pointer_history`
+  - API: `POST /api/assets/governance/promote-default`
+  - CLI: `promote-asset-default-pointer`
 
 ## Next Engineering Step
 
@@ -312,6 +328,6 @@
 
 1. 给 bundle metadata 增加 `status / scope_kind / scope_key / supersedes_snapshot_id`
 2. 在 object sync 时生成 cloud-side registry index
-3. 增加“promote snapshot”命令，而不是手工改 latest pointer
+3. 将 promotion-time `coverage_proof` stamping 自动化，避免调用方手写 proof
 4. 增加 partial/superseded/archive 生命周期操作
 5. 把 team-scoped asset 从“query 约定”升级为显式目录与元数据模型

@@ -1,0 +1,38 @@
+{
+  "search": {
+    "default": {
+      "poll_pending_rounds": 1,
+      "results": [
+        {
+          "title": "Reflection AI infra engineer",
+          "url": "https://www.linkedin.com/in/scripted-reflection-infra/",
+          "snippet": "Infra engineer at Reflection AI working on distributed systems."
+        }
+      ]
+    }
+  },
+  "harvest": {
+    "default": {
+      "execute_pending_rounds": 1,
+      "body": [
+        {
+          "linkedinUrl": "https://www.linkedin.com/in/scripted-reflection-infra/",
+          "publicIdentifier": "scripted-reflection-infra",
+          "headline": "Infra Engineer at Reflection AI",
+          "currentCompany": "Reflection AI",
+          "location": "United States",
+          "item": {
+            "profileUrl": "https://www.linkedin.com/in/scripted-reflection-infra/",
+            "linkedinUrl": "https://www.linkedin.com/in/scripted-reflection-infra/",
+            "publicIdentifier": "scripted-reflection-infra",
+            "fullName": "Scripted Reflection",
+            "headline": "Infra Engineer at Reflection AI",
+            "location": "United States",
+            "currentCompany": "Reflection AI",
+            "summary": "Distributed systems, infra, reliability."
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,20 +1,22 @@
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
 import json
-from pathlib import Path
+import os
 import re
 import sqlite3
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 from urllib import parse
 
-from .candidate_artifacts import load_company_snapshot_candidate_documents
+from .candidate_artifacts import load_authoritative_company_snapshot_candidate_documents
 from .domain import Candidate
 from .harvest_connectors import parse_harvest_profile_payload
+from .local_postgres import resolve_default_control_plane_db_path
 from .model_provider import ModelClient, get_outreach_layer_prompt_template
-
+from .storage import SQLiteStore
 
 _PINYIN_SURNAMES = {
     "bai",
@@ -51,18 +53,24 @@ _PINYIN_SURNAMES = {
     "hu",
     "hua",
     "huang",
+    "hwang",
     "hsu",
+    "ip",
     "jiang",
     "jin",
     "kang",
     "ke",
+    "koh",
     "kong",
     "lan",
+    "lai",
+    "lam",
     "lei",
     "li",
     "lian",
     "liang",
     "liao",
+    "lim",
     "lin",
     "liu",
     "long",
@@ -74,6 +82,7 @@ _PINYIN_SURNAMES = {
     "mao",
     "meng",
     "mo",
+    "ng",
     "ou",
     "pan",
     "peng",
@@ -101,6 +110,7 @@ _PINYIN_SURNAMES = {
     "wei",
     "wen",
     "wu",
+    "woo",
     "xia",
     "xiao",
     "xie",
@@ -118,6 +128,7 @@ _PINYIN_SURNAMES = {
     "yuan",
     "yue",
     "yun",
+    "yip",
     "zeng",
     "zhai",
     "zhang",
@@ -128,6 +139,90 @@ _PINYIN_SURNAMES = {
     "zhuang",
     "zou",
 }
+
+_GREATER_CHINA_UNIVERSITY_TOKENS = (
+    "university of hong kong",
+    "hku",
+    "chinese university of hong kong",
+    "cuhk",
+    "hong kong university of science and technology",
+    "hkust",
+    "city university of hong kong",
+    "cityu hong kong",
+    "hong kong polytechnic university",
+    "polyu",
+    "hong kong baptist university",
+    "hkbu",
+    "lingnan university",
+    "education university of hong kong",
+    "eduhk",
+    "university of macau",
+    "macau university of science and technology",
+    "must macau",
+    "national taiwan university",
+    "national tsing hua university",
+    "nthu",
+    "national yang ming chiao tung university",
+    "nycu",
+    "national cheng kung university",
+    "ncku",
+    "national taiwan normal university",
+    "ntnu",
+    "national chengchi university",
+    "nccu",
+    "national sun yat-sen university",
+    "tamkang university",
+    "fu jen catholic university",
+    "輔仁大學",
+    "辅仁大学",
+)
+
+_SINOPHONE_UNIVERSITY_TOKENS = (
+    "peking university",
+    "北京大学",
+    "pku",
+    "tsinghua university",
+    "清华大学",
+    "tsinghua",
+    "fudan university",
+    "复旦大学",
+    "fudan",
+    "fdu",
+    "shanghai jiao tong university",
+    "上海交通大学",
+    "sjtu",
+    "zhejiang university",
+    "浙江大学",
+    "university of science and technology of china",
+    "中国科学技术大学",
+    "ustc",
+    "nanjing university",
+    "南京大学",
+    "wuhan university",
+    "武汉大学",
+    "sun yat-sen university",
+    "中山大学",
+    "harbin institute of technology",
+    "哈尔滨工业大学",
+    "hit harbin",
+    "tongji university",
+    "同济大学",
+    "xian jiaotong university",
+    "西安交通大学",
+    "xjtu",
+    "huazhong university of science and technology",
+    "华中科技大学",
+    "hust china",
+    "beihang university",
+    "北京航空航天大学",
+    "renmin university of china",
+    "中国人民大学",
+    "southeast university china",
+    "东南大学",
+    "fu jen catholic university",
+    "輔仁大學",
+    "辅仁大学",
+)
 
 _GREATER_CHINA_REGION_TOKENS = (
     "greater china",
@@ -160,6 +255,7 @@ _GREATER_CHINA_REGION_TOKENS = (
     "澳門",
     "singapore",
     "新加坡",
+    *_GREATER_CHINA_UNIVERSITY_TOKENS,
 )
 
 _MAINLAND_TOKENS = (
@@ -188,6 +284,7 @@ _MAINLAND_TOKENS = (
     "tsinghua",
     "fudan",
     "复旦",
+    *_SINOPHONE_UNIVERSITY_TOKENS,
 )
 
 _CHINESE_LANGUAGE_TOKENS = (
@@ -222,6 +319,13 @@ _CHINESE_LANGUAGE_TOKENS = (
     "粵語",
 )
 
+
+def _sqlite_profile_registry_fallback_enabled() -> bool:
+    raw_value = str(os.getenv("SOURCING_ENABLE_SQLITE_PROFILE_REGISTRY_FALLBACK") or "").strip().lower()
+    if not raw_value:
+        return False
+    return raw_value not in {"0", "false", "no", "off"}
+
 _NAME_TOKEN_PATTERN = re.compile(r"[A-Za-z]+")
 _CJK_PATTERN = re.compile(r"[\u4e00-\u9fff]")
 
@@ -252,22 +356,26 @@ def analyze_company_outreach_layers(
     view: str = "canonical_merged",
     query: str = "",
     model_client: ModelClient | None = None,
+    store: SQLiteStore | None = None,
     max_ai_verifications: int = 80,
     ai_workers: int = 8,
     ai_max_retries: int = 2,
     ai_retry_backoff_seconds: float = 0.8,
     output_dir: str | Path | None = None,
 ) -> dict[str, Any]:
-    loaded = load_company_snapshot_candidate_documents(
+    loaded = load_authoritative_company_snapshot_candidate_documents(
         runtime_dir=runtime_dir,
+        store=store,
         target_company=target_company,
         snapshot_id=snapshot_id,
         view=view,
+        allow_materialization_fallback=store is not None,
     )
     candidates = list(loaded.get("candidates") or [])
     registry_raw_paths = _load_registry_raw_paths_for_candidates(
         runtime_dir=runtime_dir,
         candidates=candidates,
+        store=store,
     )
     analysis = build_outreach_layer_analysis(
         candidates=candidates,
@@ -725,7 +833,12 @@ def _dedupe_nonempty_strings(values: list[str]) -> list[str]:
     return deduped
 
 
-def _load_registry_raw_paths_for_candidates(*, runtime_dir: str | Path, candidates: list[Candidate]) -> dict[str, str]:
+def _load_registry_raw_paths_for_candidates(
+    *,
+    runtime_dir: str | Path,
+    candidates: list[Candidate],
+    store: SQLiteStore | None = None,
+) -> dict[str, str]:
     keys = _dedupe_nonempty_strings(
         [
             _normalize_linkedin_profile_url_key(str(candidate.linkedin_url or "").strip())
@@ -734,7 +847,23 @@ def _load_registry_raw_paths_for_candidates(*, runtime_dir: str | Path, candidat
     )
     if not keys:
         return {}
-    db_path = Path(runtime_dir) / "sourcing_agent.db"
+    if store is not None:
+        try:
+            store_registry_rows = store.get_linkedin_profile_registry_bulk(keys)
+        except Exception:
+            store_registry_rows = {}
+        resolved_from_store: dict[str, str] = {}
+        for key in keys:
+            raw_path = str(dict(store_registry_rows.get(key) or {}).get("last_raw_path") or "").strip()
+            if raw_path and Path(raw_path).exists():
+                resolved_from_store[key] = raw_path
+        if resolved_from_store or bool(
+            getattr(store, "control_plane_postgres_is_postgres_only", lambda: False)()
+        ) or bool(getattr(store, "sqlite_shadow_is_ephemeral", lambda: False)()):
+            return resolved_from_store
+    if not _sqlite_profile_registry_fallback_enabled():
+        return {}
+    db_path = resolve_default_control_plane_db_path(runtime_dir, base_dir=runtime_dir)
     if not db_path.exists():
         return {}
     connection: sqlite3.Connection | None = None
@@ -759,7 +888,7 @@ def _load_registry_raw_paths_for_candidates(*, runtime_dir: str | Path, candidat
         if not canonical_keys:
             return {}
         canonical_placeholders = ",".join("?" for _ in canonical_keys)
-        registry_rows = connection.execute(
+        sqlite_registry_rows = connection.execute(
             f"""
             SELECT profile_url_key, last_raw_path
             FROM linkedin_profile_registry
@@ -777,7 +906,7 @@ def _load_registry_raw_paths_for_candidates(*, runtime_dir: str | Path, candidat
                 pass
     raw_by_canonical = {
         str(row["profile_url_key"] or "").strip(): str(row["last_raw_path"] or "").strip()
-        for row in registry_rows
+        for row in sqlite_registry_rows
         if str(row["profile_url_key"] or "").strip()
     }
     resolved: dict[str, str] = {}

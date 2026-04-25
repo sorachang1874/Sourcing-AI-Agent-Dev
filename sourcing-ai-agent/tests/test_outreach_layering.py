@@ -56,6 +56,20 @@ class OutreachLayeringTests(unittest.TestCase):
             "outreach_layering_v3_explicit_greater_china_scope",
         )
 
+    def test_name_signal_hits_common_english_surname_variant(self) -> None:
+        candidate = Candidate(
+            candidate_id="c_name_variant",
+            name_en="Aaron Chen",
+            display_name="Aaron Chen",
+            target_company="Thinking Machines Lab",
+            organization="Thinking Machines Lab",
+            employment_status="current",
+            role="Research Engineer",
+        )
+        result = build_outreach_layer_analysis(candidates=[candidate], query="", model_client=None, max_ai_verifications=0)
+        self.assertEqual(result["layers"]["layer_1_name_signal"]["count"], 1)
+        self.assertEqual(result["final_layer_distribution"]["layer_1"], 1)
+
     def test_region_and_language_signals_drive_layer3_layer4(self) -> None:
         candidate = Candidate(
             candidate_id="c_region",
@@ -71,6 +85,36 @@ class OutreachLayeringTests(unittest.TestCase):
         result = build_outreach_layer_analysis(candidates=[candidate], query="", model_client=None, max_ai_verifications=0)
         self.assertEqual(result["layers"]["layer_1_name_signal"]["count"], 0)
         self.assertEqual(result["layers"]["layer_2_greater_china_region_experience"]["count"], 0)
+        self.assertEqual(result["layers"]["layer_3_mainland_china_experience_or_chinese_language"]["count"], 1)
+        self.assertEqual(result["final_layer_distribution"]["layer_3"], 1)
+
+    def test_hong_kong_taiwan_university_signals_raise_layer2(self) -> None:
+        candidate = Candidate(
+            candidate_id="c_hk",
+            name_en="Jane HK",
+            display_name="Jane HK",
+            target_company="Thinking Machines Lab",
+            organization="Thinking Machines Lab",
+            employment_status="current",
+            role="Researcher",
+            education="Hong Kong University of Science and Technology, Computer Science",
+        )
+        result = build_outreach_layer_analysis(candidates=[candidate], query="", model_client=None, max_ai_verifications=0)
+        self.assertEqual(result["layers"]["layer_2_greater_china_region_experience"]["count"], 1)
+        self.assertEqual(result["final_layer_distribution"]["layer_2"], 1)
+
+    def test_sinophone_university_signals_raise_layer3(self) -> None:
+        candidate = Candidate(
+            candidate_id="c_fdu",
+            name_en="Jane FDU",
+            display_name="Jane FDU",
+            target_company="Thinking Machines Lab",
+            organization="Thinking Machines Lab",
+            employment_status="current",
+            role="Researcher",
+            education="FDU / Fu Jen Catholic University",
+        )
+        result = build_outreach_layer_analysis(candidates=[candidate], query="", model_client=None, max_ai_verifications=0)
         self.assertEqual(result["layers"]["layer_3_mainland_china_experience_or_chinese_language"]["count"], 1)
         self.assertEqual(result["final_layer_distribution"]["layer_3"], 1)
 

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import json
 import os
+from dataclasses import dataclass, field
 from pathlib import Path
+
+from .local_postgres import resolve_default_control_plane_db_path
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,11 +132,27 @@ class AppSettings:
     model_provider: ModelProviderSettings = field(default_factory=ModelProviderSettings)
 
 
+def _resolve_path_env(value: str | Path | None, *, base_dir: Path) -> Path | None:
+    if value in (None, ""):
+        return None
+    path = Path(str(value)).expanduser()
+    if not path.is_absolute():
+        path = (base_dir / path).resolve()
+    return path
+
+
 def load_settings(project_root: str | Path) -> AppSettings:
-    root = Path(project_root)
-    runtime_dir = root / "runtime"
+    root = Path(project_root).resolve()
+    runtime_dir = _resolve_path_env(os.getenv("SOURCING_RUNTIME_DIR"), base_dir=root) or (root / "runtime")
+    runtime_dir = runtime_dir.resolve()
     secret_dir = runtime_dir / "secrets"
-    secret_file = secret_dir / "providers.local.json"
+    legacy_secret_file = root / "runtime" / "secrets" / "providers.local.json"
+    explicit_secret_file = _resolve_path_env(os.getenv("SOURCING_SECRETS_FILE"), base_dir=root)
+    if explicit_secret_file is not None:
+        secret_file = explicit_secret_file
+    else:
+        candidate_secret_file = secret_dir / "providers.local.json"
+        secret_file = candidate_secret_file if candidate_secret_file.exists() or runtime_dir == (root / "runtime") else legacy_secret_file
     secret_payload = _load_json_file(secret_file)
 
     qwen_payload = secret_payload.get("qwen", {})
@@ -171,7 +189,17 @@ def load_settings(project_root: str | Path) -> AppSettings:
     except (TypeError, ValueError):
         model_provider_timeout_seconds = 45
 
-    semantic_api_key = os.getenv("DASHSCOPE_API_KEY") or str(semantic_payload.get("api_key", "")).strip() or api_key
+    semantic_enabled = _coerce_bool(
+        os.getenv("SOURCING_SEMANTIC_PROVIDER_ENABLED"),
+        default=_coerce_bool(semantic_payload.get("enabled"), default=False),
+    )
+    semantic_api_key = str(
+        os.getenv("SEMANTIC_PROVIDER_API_KEY")
+        or os.getenv("DASHSCOPE_SEMANTIC_API_KEY")
+        or semantic_payload.get("api_key", "")
+    ).strip()
+    if semantic_enabled and not semantic_api_key:
+        semantic_api_key = os.getenv("DASHSCOPE_API_KEY") or api_key
     embedding_base_url = os.getenv("DASHSCOPE_EMBEDDING_BASE_URL") or str(
         semantic_payload.get("embedding_base_url", "https://dashscope.aliyuncs.com/compatible-mode/v1")
     ).strip()
@@ -406,9 +434,12 @@ def load_settings(project_root: str | Path) -> AppSettings:
         project_root=root,
         runtime_dir=runtime_dir,
         secrets_file=secret_file,
-        jobs_dir=runtime_dir / "jobs",
-        company_assets_dir=runtime_dir / "company_assets",
-        db_path=runtime_dir / "sourcing_agent.db",
+        jobs_dir=_resolve_path_env(os.getenv("SOURCING_JOBS_DIR"), base_dir=root) or (runtime_dir / "jobs"),
+        company_assets_dir=_resolve_path_env(os.getenv("SOURCING_COMPANY_ASSETS_DIR"), base_dir=root) or (runtime_dir / "company_assets"),
+        db_path=(
+            _resolve_path_env(os.getenv("SOURCING_DB_PATH"), base_dir=root)
+            or resolve_default_control_plane_db_path(runtime_dir, base_dir=root)
+        ),
         qwen=QwenSettings(
             enabled=bool(api_key),
             api_key=api_key,
@@ -417,7 +448,7 @@ def load_settings(project_root: str | Path) -> AppSettings:
             timeout_seconds=timeout_seconds,
         ),
         semantic=SemanticProviderSettings(
-            enabled=bool(semantic_api_key),
+            enabled=bool(semantic_enabled and semantic_api_key),
             api_key=semantic_api_key,
             embedding_base_url=embedding_base_url.rstrip("/"),
             embedding_model=embedding_model,
@@ -487,7 +518,7 @@ def load_settings(project_root: str | Path) -> AppSettings:
                 default_charge=5.0,
                 default_items=25,
                 default_mode="full",
-                default_collect_email=True,
+                default_collect_email=False,
             ),
             profile_search=_harvest_actor_settings(
                 profile_search_payload,

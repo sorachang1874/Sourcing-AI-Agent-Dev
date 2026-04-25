@@ -1,9 +1,9 @@
 import json
-from hashlib import sha1
-from pathlib import Path
 import tempfile
 import threading
 import unittest
+from hashlib import sha1
+from pathlib import Path
 from unittest import mock
 
 from sourcing_agent.asset_logger import AssetLogger
@@ -44,7 +44,9 @@ class _FakeHarvestProfileConnector:
         return results
 
     def fetch_profile_by_url(self, profile_url, snapshot_dir, asset_logger=None, use_cache=True):
-        return self.fetch_profiles_by_urls([profile_url], snapshot_dir, asset_logger=asset_logger, use_cache=use_cache).get(profile_url)
+        return self.fetch_profiles_by_urls(
+            [profile_url], snapshot_dir, asset_logger=asset_logger, use_cache=use_cache
+        ).get(profile_url)
 
 
 class _ShuffledHarvestProfileConnector:
@@ -169,7 +171,9 @@ class _SuspiciousHarvestProfileConnector:
         }
 
     def fetch_profile_by_url(self, profile_url, snapshot_dir, asset_logger=None, use_cache=True):
-        return self.fetch_profiles_by_urls([profile_url], snapshot_dir, asset_logger=asset_logger, use_cache=use_cache).get(profile_url)
+        return self.fetch_profiles_by_urls(
+            [profile_url], snapshot_dir, asset_logger=asset_logger, use_cache=use_cache
+        ).get(profile_url)
 
 
 class _SuspiciousMembershipModelClient(DeterministicModelClient):
@@ -193,8 +197,18 @@ class _RefreshBatchOnlyHarvestProfileConnector:
         self.batch_calls.append({"urls": list(profile_urls), "use_cache": use_cache})
         raw_path = Path(snapshot_dir) / "harvest_profiles" / "refresh_batch_profile.json"
         raw_path.parent.mkdir(parents=True, exist_ok=True)
-        raw_path.write_text(json.dumps({"ok": True}))
         if use_cache:
+            raw_path.write_text(
+                json.dumps(
+                    {
+                        "fullName": "Different Person",
+                        "profileUrl": "https://www.linkedin.com/in/different-person/",
+                        "publicIdentifier": "different-person",
+                        "headline": "Engineer at OtherCo",
+                        "experience": [{"companyName": "OtherCo", "title": "Engineer"}],
+                    }
+                )
+            )
             return {
                 url: {
                     "raw_path": raw_path,
@@ -215,6 +229,21 @@ class _RefreshBatchOnlyHarvestProfileConnector:
                 }
                 for url in profile_urls
             }
+        raw_path.write_text(
+            json.dumps(
+                {
+                    "fullName": "Former Example",
+                    "profileUrl": "https://www.linkedin.com/in/former-example/",
+                    "publicIdentifier": "former-example",
+                    "headline": "Research Engineer at NewCo",
+                    "experience": [
+                        {"companyName": "Acme", "title": "Member of Technical Staff"},
+                        {"companyName": "NewCo", "title": "Research Engineer"},
+                    ],
+                    "education": [{"schoolName": "Stanford University", "degree": "MS"}],
+                }
+            )
+        )
         return {
             url: {
                 "raw_path": raw_path,
@@ -244,21 +273,22 @@ class _RefreshBatchOnlyHarvestProfileConnector:
 
 
 class _ParallelTrackingHarvestProfileConnector:
-    def __init__(self) -> None:
+    def __init__(self, *, release_after_calls: int = 2) -> None:
         self.batch_calls: list[list[str]] = []
         self._lock = threading.Lock()
         self._active_calls = 0
         self.max_active_calls = 0
-        self._second_batch_started = threading.Event()
+        self._release_after_calls = max(1, int(release_after_calls or 1))
+        self._dispatch_gate = threading.Event()
 
     def fetch_profiles_by_urls(self, profile_urls, snapshot_dir, asset_logger=None, use_cache=True):
         with self._lock:
             self.batch_calls.append(list(profile_urls))
             self._active_calls += 1
             self.max_active_calls = max(self.max_active_calls, self._active_calls)
-            if len(self.batch_calls) >= 2:
-                self._second_batch_started.set()
-        self._second_batch_started.wait(timeout=0.5)
+            if len(self.batch_calls) >= self._release_after_calls:
+                self._dispatch_gate.set()
+        self._dispatch_gate.wait(timeout=0.5)
         raw_path = Path(snapshot_dir) / "harvest_profiles" / f"parallel_{len(profile_urls)}.json"
         raw_path.parent.mkdir(parents=True, exist_ok=True)
         raw_path.write_text(json.dumps({"ok": True, "use_cache": use_cache}))
@@ -276,10 +306,91 @@ class _ParallelTrackingHarvestProfileConnector:
                 self._active_calls -= 1
 
     def fetch_profile_by_url(self, profile_url, snapshot_dir, asset_logger=None, use_cache=True):
-        return self.fetch_profiles_by_urls([profile_url], snapshot_dir, asset_logger=asset_logger, use_cache=use_cache).get(profile_url)
+        return self.fetch_profiles_by_urls(
+            [profile_url], snapshot_dir, asset_logger=asset_logger, use_cache=use_cache
+        ).get(profile_url)
+
+
+class _CanonicalOnlyHarvestProfileConnector:
+    def __init__(self) -> None:
+        self.batch_calls: list[dict[str, object]] = []
+
+    def fetch_profiles_by_urls(self, profile_urls, snapshot_dir, asset_logger=None, use_cache=True):
+        self.batch_calls.append({"urls": list(profile_urls), "use_cache": use_cache})
+        raw_path = Path(snapshot_dir) / "harvest_profiles" / "canonical_profile.json"
+        raw_path.parent.mkdir(parents=True, exist_ok=True)
+        results = {}
+        for url in profile_urls:
+            if url not in {
+                "https://www.linkedin.com/in/former-example",
+                "https://www.linkedin.com/in/former-example/",
+            }:
+                continue
+            raw_path.write_text(
+                json.dumps(
+                    {
+                        "fullName": "Former Example",
+                        "profileUrl": "https://www.linkedin.com/in/former-example/",
+                        "publicIdentifier": "former-example",
+                        "headline": "Research Engineer at NewCo",
+                        "experience": [
+                            {"companyName": "Acme", "title": "Member of Technical Staff"},
+                            {"companyName": "NewCo", "title": "Research Engineer"},
+                        ],
+                        "education": [{"schoolName": "Stanford University", "degree": "MS"}],
+                    }
+                )
+            )
+            results[url] = {
+                "raw_path": raw_path,
+                "account_id": "fake_harvest",
+                "parsed": {
+                    "full_name": "Former Example",
+                    "profile_url": "https://www.linkedin.com/in/former-example/",
+                    "headline": "Research Engineer at NewCo",
+                    "summary": "Former Example previously worked at Acme.",
+                    "location": "San Francisco",
+                    "current_company": "NewCo",
+                    "experience": [
+                        {"companyName": "Acme", "title": "Member of Technical Staff"},
+                        {"companyName": "NewCo", "title": "Research Engineer"},
+                    ],
+                    "education": [{"school": "Stanford University", "degree": "MS"}],
+                    "more_profiles": [],
+                    "public_identifier": "former-example",
+                    "publications": [],
+                },
+            }
+        return results
+
+    def fetch_profile_by_url(self, profile_url, snapshot_dir, asset_logger=None, use_cache=True):
+        return self.fetch_profiles_by_urls(
+            [profile_url], snapshot_dir, asset_logger=asset_logger, use_cache=use_cache
+        ).get(profile_url)
 
 
 class CompanyAssetCompletionTest(unittest.TestCase):
+    def _snapshot_candidate_doc_path(self) -> Path:
+        return self.runtime_dir / "company_assets" / "acme" / "20260406T120000" / "candidate_documents.json"
+
+    def _upsert_snapshot_candidates(self, *candidates: Candidate) -> None:
+        candidate_doc_path = self._snapshot_candidate_doc_path()
+        payload = {"candidates": [], "evidence": []}
+        if candidate_doc_path.exists():
+            loaded = json.loads(candidate_doc_path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                payload = loaded
+        existing_candidates = {
+            str(item.get("candidate_id") or "").strip(): dict(item)
+            for item in list(payload.get("candidates") or [])
+            if isinstance(item, dict) and str(item.get("candidate_id") or "").strip()
+        }
+        for candidate in candidates:
+            existing_candidates[candidate.candidate_id] = candidate.to_record()
+        payload["candidates"] = list(existing_candidates.values())
+        payload.setdefault("evidence", [])
+        candidate_doc_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
         self.project_root = Path(self.tempdir.name)
@@ -313,38 +424,28 @@ class CompanyAssetCompletionTest(unittest.TestCase):
             linkedin_url="https://www.linkedin.com/in/current-snapshot",
             source_dataset="acme_roster_snapshot",
         )
-        (snapshot_dir / "candidate_documents.json").write_text(
-            json.dumps(
-                {
-                    "candidates": [current_snapshot_candidate.to_record()],
-                    "evidence": [],
-                },
-                ensure_ascii=False,
-                indent=2,
-            )
-        )
         self.store = SQLiteStore(self.runtime_dir / "sourcing_agent.db")
-        self.store.upsert_candidate(
-            Candidate(
-                candidate_id="former1",
-                name_en="Former Example",
-                display_name="Former Example",
-                category="former_employee",
-                target_company="Acme",
-                employment_status="former",
-                role="Search seed",
-                linkedin_url="https://www.linkedin.com/in/ACwAAOldFormer/",
-                metadata={"seed_slug": "ACwAAOldFormer"},
-                source_dataset="acme_search_seed",
-            )
+        former_snapshot_candidate = Candidate(
+            candidate_id="former1",
+            name_en="Former Example",
+            display_name="Former Example",
+            category="former_employee",
+            target_company="Acme",
+            employment_status="former",
+            role="Search seed",
+            linkedin_url="https://www.linkedin.com/in/ACwAAOldFormer/",
+            metadata={"seed_slug": "ACwAAOldFormer"},
+            source_dataset="acme_search_seed",
         )
+        self._upsert_snapshot_candidates(current_snapshot_candidate, former_snapshot_candidate)
+        self.store.upsert_candidate(former_snapshot_candidate)
         self.settings = load_settings(self.project_root)
 
     def tearDown(self) -> None:
         self.tempdir.cleanup()
 
-    def test_load_settings_defaults_profile_scraper_to_email_collection(self) -> None:
-        self.assertTrue(self.settings.harvest.profile_scraper.collect_email)
+    def test_load_settings_defaults_profile_scraper_to_no_email_collection(self) -> None:
+        self.assertFalse(self.settings.harvest.profile_scraper.collect_email)
 
     def test_complete_company_assets_enriches_known_profile_urls_and_builds_artifacts(self) -> None:
         manager = CompanyAssetCompletionManager(
@@ -376,32 +477,31 @@ class CompanyAssetCompletionTest(unittest.TestCase):
         self.assertTrue(artifact_summary_path.exists())
 
     def test_complete_company_assets_matches_profiles_even_when_batch_response_is_reordered(self) -> None:
-        self.store.upsert_candidate(
-            Candidate(
-                candidate_id="former2",
-                name_en="First Example",
-                display_name="First Example",
-                category="former_employee",
-                target_company="Acme",
-                employment_status="former",
-                linkedin_url="https://www.linkedin.com/in/ACwAAFirst/",
-                metadata={"seed_slug": "ACwAAFirst"},
-                source_dataset="acme_search_seed",
-            )
+        former_two = Candidate(
+            candidate_id="former2",
+            name_en="First Example",
+            display_name="First Example",
+            category="former_employee",
+            target_company="Acme",
+            employment_status="former",
+            linkedin_url="https://www.linkedin.com/in/ACwAAFirst/",
+            metadata={"seed_slug": "ACwAAFirst"},
+            source_dataset="acme_search_seed",
         )
-        self.store.upsert_candidate(
-            Candidate(
-                candidate_id="former3",
-                name_en="Second Example",
-                display_name="Second Example",
-                category="former_employee",
-                target_company="Acme",
-                employment_status="former",
-                linkedin_url="https://www.linkedin.com/in/ACwAASecond/",
-                metadata={"seed_slug": "ACwAASecond"},
-                source_dataset="acme_search_seed",
-            )
+        former_three = Candidate(
+            candidate_id="former3",
+            name_en="Second Example",
+            display_name="Second Example",
+            category="former_employee",
+            target_company="Acme",
+            employment_status="former",
+            linkedin_url="https://www.linkedin.com/in/ACwAASecond/",
+            metadata={"seed_slug": "ACwAASecond"},
+            source_dataset="acme_search_seed",
         )
+        self._upsert_snapshot_candidates(former_two, former_three)
+        self.store.upsert_candidate(former_two)
+        self.store.upsert_candidate(former_three)
         manager = CompanyAssetCompletionManager(
             runtime_dir=self.runtime_dir,
             store=self.store,
@@ -425,6 +525,74 @@ class CompanyAssetCompletionTest(unittest.TestCase):
         self.assertEqual(first.linkedin_url, "https://www.linkedin.com/in/first-example/")
         self.assertEqual(second.linkedin_url, "https://www.linkedin.com/in/second-example/")
 
+    def test_complete_snapshot_profiles_accepts_targeted_candidate_ids_even_when_missing_detail_gate_would_skip(
+        self,
+    ) -> None:
+        targeted_candidate = Candidate(
+            candidate_id="former_partial",
+            name_en="Former Example",
+            display_name="Former Example",
+            category="former_employee",
+            target_company="Acme",
+            employment_status="former",
+            role="Member of Technical Staff",
+            linkedin_url="https://www.linkedin.com/in/ACwAAOldFormer/",
+            work_history="2021~2024, Acme, Member of Technical Staff",
+            source_dataset="acme_search_seed",
+        )
+        self.store.upsert_candidate(targeted_candidate)
+        snapshot_dir = self.runtime_dir / "company_assets" / "acme" / "20260406T120000"
+        (snapshot_dir / "candidate_documents.json").write_text(
+            json.dumps(
+                {
+                    "candidates": [
+                        Candidate(
+                            candidate_id="current1",
+                            name_en="Current Snapshot",
+                            display_name="Current Snapshot",
+                            category="employee",
+                            target_company="Acme",
+                            employment_status="current",
+                            role="Research Engineer",
+                            linkedin_url="https://www.linkedin.com/in/current-snapshot",
+                            source_dataset="acme_roster_snapshot",
+                        ).to_record(),
+                        targeted_candidate.to_record(),
+                    ],
+                    "evidence": [],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        manager = CompanyAssetCompletionManager(
+            runtime_dir=self.runtime_dir,
+            store=self.store,
+            settings=self.settings,
+            model_client=DeterministicModelClient(),
+            harvest_profile_connector=_FakeHarvestProfileConnector(),
+        )
+
+        result = manager.complete_snapshot_profiles(
+            target_company="Acme",
+            snapshot_id="20260406T120000",
+            employment_scope="all",
+            profile_limit=0,
+            only_missing_profile_detail=True,
+            force_refresh=False,
+            allow_live_refetch_for_unmatched=True,
+            build_artifacts=False,
+            candidate_ids=["former_partial"],
+        )
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["requested_candidate_ids"], ["former_partial"])
+        self.assertEqual(result["target_candidate_count"], 1)
+        self.assertEqual(result["result"]["resolved_candidate_count"], 1)
+        refreshed = self.store.get_candidate("former_partial")
+        assert refreshed is not None
+        self.assertIn("Stanford", refreshed.education)
+
     def test_complete_company_assets_refreshes_unresolved_profiles_via_batch_call(self) -> None:
         connector = _RefreshBatchOnlyHarvestProfileConnector()
         manager = CompanyAssetCompletionManager(
@@ -434,12 +602,16 @@ class CompanyAssetCompletionTest(unittest.TestCase):
             model_client=DeterministicModelClient(),
             harvest_profile_connector=connector,
         )
-        result = manager.complete_company_assets(
-            target_company="Acme",
-            profile_detail_limit=3,
-            exploration_limit=0,
-            build_artifacts=False,
-        )
+        with mock.patch(
+            "sourcing_agent.company_asset_completion.DuckDuckGoLinkedInResolver.resolve",
+            return_value={"results": [], "errors": []},
+        ):
+            result = manager.complete_company_assets(
+                target_company="Acme",
+                profile_detail_limit=3,
+                exploration_limit=0,
+                build_artifacts=False,
+            )
         self.assertEqual(len(connector.batch_calls), 3)
         self.assertTrue(connector.batch_calls[0]["use_cache"])
         self.assertFalse(connector.batch_calls[1]["use_cache"])
@@ -451,24 +623,88 @@ class CompanyAssetCompletionTest(unittest.TestCase):
             },
         )
         self.assertEqual(set(connector.batch_calls[0]["urls"]), set(connector.batch_calls[1]["urls"]))
-        self.assertEqual(connector.batch_calls[2], {"urls": ["https://www.linkedin.com/in/current-snapshot"], "use_cache": False})
+        self.assertEqual(
+            connector.batch_calls[2], {"urls": ["https://www.linkedin.com/in/current-snapshot"], "use_cache": False}
+        )
         completed_ids = {item["candidate_id"] for item in result["profile_completion"]["completed_candidates"]}
         self.assertIn("former1", completed_ids)
 
-    def test_complete_company_assets_marks_name_matched_non_member_profiles(self) -> None:
-        self.store.upsert_candidate(
-            Candidate(
-                candidate_id="former_false_positive",
-                name_en="False Positive",
-                display_name="False Positive",
-                category="former_employee",
-                target_company="Acme",
-                employment_status="former",
-                linkedin_url="https://www.linkedin.com/in/ACwAAFalsePositive/",
-                metadata={"seed_slug": "ACwAAFalsePositive"},
-                source_dataset="acme_search_seed",
-            )
+    def test_complete_company_assets_resolves_canonical_slug_before_retrying_opaque_url(self) -> None:
+        connector = _CanonicalOnlyHarvestProfileConnector()
+        manager = CompanyAssetCompletionManager(
+            runtime_dir=self.runtime_dir,
+            store=self.store,
+            settings=self.settings,
+            model_client=DeterministicModelClient(),
+            harvest_profile_connector=connector,
         )
+        with mock.patch(
+            "sourcing_agent.company_asset_completion.DuckDuckGoLinkedInResolver.resolve",
+            return_value={
+                "results": [
+                    {
+                        "candidate_id": "former1",
+                        "candidate_key": "former1",
+                        "display_name": "Former Example",
+                        "slugs": ["former-example"],
+                        "queries": [],
+                    }
+                ],
+                "errors": [],
+            },
+        ):
+            result = manager.complete_snapshot_profiles(
+                target_company="Acme",
+                snapshot_id="20260406T120000",
+                employment_scope="all",
+                profile_limit=3,
+                only_missing_profile_detail=False,
+                force_refresh=False,
+                allow_live_refetch_for_unmatched=True,
+                build_artifacts=False,
+            )
+        self.assertEqual(
+            connector.batch_calls,
+            [
+                {
+                    "urls": [
+                        "https://www.linkedin.com/in/ACwAAOldFormer/",
+                        "https://www.linkedin.com/in/current-snapshot",
+                    ],
+                    "use_cache": True,
+                },
+                {
+                    "urls": ["https://www.linkedin.com/in/former-example"],
+                    "use_cache": True,
+                },
+                {
+                    "urls": ["https://www.linkedin.com/in/current-snapshot"],
+                    "use_cache": False,
+                },
+            ],
+        )
+        completed_ids = {
+            item["candidate_id"] for item in dict(result["result"] or {}).get("completed_candidates") or []
+        }
+        self.assertIn("former1", completed_ids)
+        candidate = self.store.get_candidate("former1")
+        assert candidate is not None
+        self.assertEqual(candidate.linkedin_url, "https://www.linkedin.com/in/former-example/")
+
+    def test_complete_company_assets_marks_name_matched_non_member_profiles(self) -> None:
+        false_positive = Candidate(
+            candidate_id="former_false_positive",
+            name_en="False Positive",
+            display_name="False Positive",
+            category="former_employee",
+            target_company="Acme",
+            employment_status="former",
+            linkedin_url="https://www.linkedin.com/in/ACwAAFalsePositive/",
+            metadata={"seed_slug": "ACwAAFalsePositive"},
+            source_dataset="acme_search_seed",
+        )
+        self._upsert_snapshot_candidates(false_positive)
+        self.store.upsert_candidate(false_positive)
         manager = CompanyAssetCompletionManager(
             runtime_dir=self.runtime_dir,
             store=self.store,
@@ -491,18 +727,18 @@ class CompanyAssetCompletionTest(unittest.TestCase):
         self.assertTrue(candidate.metadata.get("target_company_mismatch"))
 
     def test_complete_company_assets_routes_suspicious_membership_to_manual_review(self) -> None:
-        self.store.upsert_candidate(
-            Candidate(
-                candidate_id="suspicious_member",
-                name_en="Suspicious Example",
-                display_name="Suspicious Example",
-                category="employee",
-                target_company="Acme",
-                employment_status="current",
-                linkedin_url="https://www.linkedin.com/in/suspicious-example/",
-                source_dataset="acme_roster",
-            )
+        suspicious_candidate = Candidate(
+            candidate_id="suspicious_member",
+            name_en="Suspicious Example",
+            display_name="Suspicious Example",
+            category="employee",
+            target_company="Acme",
+            employment_status="current",
+            linkedin_url="https://www.linkedin.com/in/suspicious-example/",
+            source_dataset="acme_roster",
         )
+        self._upsert_snapshot_candidates(suspicious_candidate)
+        self.store.upsert_candidate(suspicious_candidate)
         manager = CompanyAssetCompletionManager(
             runtime_dir=self.runtime_dir,
             store=self.store,
@@ -584,7 +820,7 @@ class CompanyAssetCompletionTest(unittest.TestCase):
         self.assertGreaterEqual(len(connector.batch_calls), 1)
         self.assertEqual(connector.batch_calls[0]["use_cache"], False)
 
-    def test_fetch_profile_batches_submits_multiple_batches_in_parallel(self) -> None:
+    def test_fetch_profile_batches_submits_multiple_batches_in_parallel_in_simulate_mode(self) -> None:
         connector = _ParallelTrackingHarvestProfileConnector()
         manager = CompanyAssetCompletionManager(
             runtime_dir=self.runtime_dir,
@@ -597,6 +833,32 @@ class CompanyAssetCompletionTest(unittest.TestCase):
         logger = AssetLogger(snapshot_dir)
         urls = [f"https://www.linkedin.com/in/parallel-batch-{index:03d}/" for index in range(250)]
 
+        with mock.patch.dict("os.environ", {"SOURCING_EXTERNAL_PROVIDER_MODE": "simulate"}, clear=False):
+            fetched, errors = manager._fetch_profile_batches(
+                urls,
+                snapshot_dir=snapshot_dir,
+                logger=logger,
+                use_cache=False,
+            )
+
+        self.assertEqual(errors, [])
+        self.assertEqual(len(fetched), 250)
+        self.assertEqual(len(connector.batch_calls), 3)
+        self.assertGreaterEqual(connector.max_active_calls, 2)
+
+    def test_fetch_profile_batches_live_mode_uses_adaptive_parallel_batches(self) -> None:
+        connector = _ParallelTrackingHarvestProfileConnector()
+        manager = CompanyAssetCompletionManager(
+            runtime_dir=self.runtime_dir,
+            store=self.store,
+            settings=self.settings,
+            model_client=DeterministicModelClient(),
+            harvest_profile_connector=connector,
+        )
+        snapshot_dir = self.runtime_dir / "company_assets" / "acme" / "20260406T120000"
+        logger = AssetLogger(snapshot_dir)
+        urls = [f"https://www.linkedin.com/in/live-batch-{index:03d}/" for index in range(250)]
+
         fetched, errors = manager._fetch_profile_batches(
             urls,
             snapshot_dir=snapshot_dir,
@@ -606,8 +868,38 @@ class CompanyAssetCompletionTest(unittest.TestCase):
 
         self.assertEqual(errors, [])
         self.assertEqual(len(fetched), 250)
-        self.assertEqual(len(connector.batch_calls), 3)
+        self.assertEqual(sorted(len(batch) for batch in connector.batch_calls), [50, 50, 50, 50, 50])
         self.assertGreaterEqual(connector.max_active_calls, 2)
+
+    def test_fetch_profile_batches_live_mode_uses_higher_parallelism_for_roster_heavy_batches(self) -> None:
+        connector = _ParallelTrackingHarvestProfileConnector(release_after_calls=3)
+        manager = CompanyAssetCompletionManager(
+            runtime_dir=self.runtime_dir,
+            store=self.store,
+            settings=self.settings,
+            model_client=DeterministicModelClient(),
+            harvest_profile_connector=connector,
+        )
+        snapshot_dir = self.runtime_dir / "company_assets" / "acme" / "20260406T120000"
+        logger = AssetLogger(snapshot_dir)
+        urls = [f"https://www.linkedin.com/in/roster-completion-{index:03d}/" for index in range(240)]
+        source_shards_by_url = {
+            profile_url: ["harvest_company_employees_visible"]
+            for profile_url in urls
+        }
+
+        fetched, errors = manager._fetch_profile_batches(
+            urls,
+            snapshot_dir=snapshot_dir,
+            logger=logger,
+            use_cache=False,
+            source_shards_by_url=source_shards_by_url,
+        )
+
+        self.assertEqual(errors, [])
+        self.assertEqual(len(fetched), 240)
+        self.assertEqual(sorted(len(batch) for batch in connector.batch_calls), [60, 60, 60, 60])
+        self.assertGreaterEqual(connector.max_active_calls, 3)
 
     def test_fetch_profile_batches_reuses_registry_fetched_raw_before_live_fetch(self) -> None:
         connector = _RefreshBatchOnlyHarvestProfileConnector()

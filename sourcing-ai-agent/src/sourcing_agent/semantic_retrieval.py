@@ -108,13 +108,14 @@ def _should_use_remote_semantic_provider(
     *,
     intent_view: dict[str, Any] | None = None,
 ) -> bool:
+    del request
+    del intent_view
     if semantic_provider is None:
         return False
     if semantic_provider.provider_name() == "local_sparse":
         return False
-    intent_view = dict(intent_view or resolve_request_intent_view(request))
-    execution_preferences = dict(intent_view.get("execution_preferences") or {})
-    return bool(execution_preferences.get("allow_high_cost_sources"))
+    # External semantic augmentation is currently retired from the default execution contract.
+    return False
 
 
 def _rank_with_provider(

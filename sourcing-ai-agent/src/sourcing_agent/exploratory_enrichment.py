@@ -24,6 +24,12 @@ from .document_extraction import (
 )
 from .domain import Candidate, EvidenceRecord, JobRequest, make_evidence_id, merge_candidate
 from .model_provider import DeterministicModelClient, ModelClient
+from .runtime_tuning import (
+    apply_runtime_timing_overrides_to_search_state,
+    resolve_runtime_timing_overrides,
+    resolved_lane_fetch_cooldown_seconds,
+    resolved_lane_ready_cooldown_seconds,
+)
 from .search_provider import (
     BaseSearchProvider,
     DuckDuckGoHtmlSearchProvider,
@@ -42,20 +48,50 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
-_LANE_READY_POLL_MIN_INTERVAL_SECONDS = max(
-    1,
-    _env_int(
-        "EXPLORATION_READY_POLL_MIN_INTERVAL_SECONDS",
-        _env_int("WEB_SEARCH_READY_POLL_MIN_INTERVAL_SECONDS", 15),
-    ),
-)
-_LANE_FETCH_MIN_INTERVAL_SECONDS = max(
-    1,
-    _env_int(
-        "EXPLORATION_FETCH_MIN_INTERVAL_SECONDS",
-        _env_int("WEB_SEARCH_FETCH_MIN_INTERVAL_SECONDS", 15),
-    ),
-)
+def _lane_ready_poll_min_interval_seconds() -> int:
+    return max(
+        0,
+        _env_int(
+            "EXPLORATION_READY_POLL_MIN_INTERVAL_SECONDS",
+            _env_int("WEB_SEARCH_READY_POLL_MIN_INTERVAL_SECONDS", 15),
+        ),
+    )
+
+
+def _lane_fetch_min_interval_seconds() -> int:
+    return max(
+        0,
+        _env_int(
+            "EXPLORATION_FETCH_MIN_INTERVAL_SECONDS",
+            _env_int("WEB_SEARCH_FETCH_MIN_INTERVAL_SECONDS", 15),
+        ),
+    )
+
+
+def _runtime_timing_overrides_from_request_payload(request_payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not request_payload:
+        return {}
+    execution_preferences = dict(JobRequest.from_payload(dict(request_payload or {})).execution_preferences or {})
+    return resolve_runtime_timing_overrides(execution_preferences)
+
+
+def _daemon_plan_payload(
+    plan_payload: dict[str, Any] | None,
+    *,
+    request_payload: dict[str, Any] | None,
+    parallel_workers: int,
+) -> dict[str, Any]:
+    normalized_plan = dict(plan_payload or {})
+    acquisition_strategy = dict(normalized_plan.get("acquisition_strategy") or {})
+    cost_policy = dict(acquisition_strategy.get("cost_policy") or {})
+    cost_policy.setdefault("parallel_exploration_workers", max(1, int(parallel_workers or 1)))
+    acquisition_strategy["cost_policy"] = cost_policy
+    normalized_plan["acquisition_strategy"] = acquisition_strategy
+    if "execution_preferences" not in normalized_plan:
+        execution_preferences = dict(JobRequest.from_payload(dict(request_payload or {})).execution_preferences or {})
+        if execution_preferences:
+            normalized_plan["execution_preferences"] = execution_preferences
+    return normalized_plan
 
 
 @dataclass(slots=True)
@@ -123,6 +159,8 @@ class ExploratoryWebEnricher:
                     "lane_id": "exploration_specialist",
                     "worker_key": candidate.candidate_id,
                     "label": candidate.display_name,
+                    "runtime_timing_overrides": dict(metadata.get("runtime_timing_overrides") or {})
+                    or _runtime_timing_overrides_from_request_payload(dict(metadata.get("request_payload") or {})),
                     "worker_id": worker_id,
                 }
             )
@@ -181,6 +219,7 @@ class ExploratoryWebEnricher:
         errors: list[str] = []
 
         selected_candidates = candidates[:max_candidates]
+        runtime_timing_overrides = _runtime_timing_overrides_from_request_payload(request_payload or {})
         pending_specs = [
             {
                 "index": index,
@@ -188,6 +227,7 @@ class ExploratoryWebEnricher:
                 "lane_id": "exploration_specialist",
                 "worker_key": candidate.candidate_id,
                 "label": candidate.display_name,
+                "runtime_timing_overrides": dict(runtime_timing_overrides),
             }
             for index, candidate in enumerate(selected_candidates, start=1)
         ]
@@ -214,7 +254,11 @@ class ExploratoryWebEnricher:
         if pending_specs:
             if self.worker_runtime is not None and job_id:
                 daemon = AutonomousWorkerDaemon.from_plan(
-                    plan_payload={"acquisition_strategy": {"cost_policy": {"parallel_exploration_workers": parallel_workers}}},
+                    plan_payload=_daemon_plan_payload(
+                        plan_payload,
+                        request_payload=request_payload,
+                        parallel_workers=parallel_workers,
+                    ),
                     existing_workers=self.worker_runtime.list_workers(job_id=job_id, lane_id="exploration_specialist"),
                     total_limit=max_workers,
                 )
@@ -325,6 +369,7 @@ class ExploratoryWebEnricher:
         completed_queries = set()
         interrupted = False
         checkpoint: dict[str, Any] = {}
+        runtime_timing_overrides = _runtime_timing_overrides_from_request_payload(request_payload)
         if self.worker_runtime is not None and job_id:
             worker_handle = self.worker_runtime.begin_worker(
                 job_id=job_id,
@@ -347,6 +392,7 @@ class ExploratoryWebEnricher:
                     "request_payload": request_payload,
                     "plan_payload": plan_payload,
                     "runtime_mode": runtime_mode,
+                    "runtime_timing_overrides": dict(runtime_timing_overrides),
                 },
                 handoff_from_lane="public_media_specialist",
             )
@@ -461,6 +507,10 @@ class ExploratoryWebEnricher:
                             "prefetched_queries": prefetched_queries,
                         }
                     else:
+                        search_checkpoint = apply_runtime_timing_overrides_to_search_state(
+                            search_checkpoint,
+                            runtime_timing_overrides=runtime_timing_overrides,
+                        )
                         search_execution = self.search_provider.execute_with_checkpoint(
                             query_text,
                             max_results=10,
@@ -765,8 +815,7 @@ def _prepare_batched_exploration_queries(
     }
     for candidate_id, spec in pending_by_candidate_id.items():
         prefetched_queries: dict[str, dict[str, Any]] = {}
-        candidate = spec.get("candidate")
-        for index, query_text in enumerate(_build_exploration_queries(candidate, target_company), start=1):
+        for index, query_text in enumerate(_pending_exploration_queries(spec, target_company), start=1):
             task_key = f"{candidate_id}::{index:02d}"
             entry = dict(manifest_entries.get(task_key) or {})
             search_state = dict(entry.get("search_state") or {})
@@ -783,13 +832,12 @@ def _prepare_batched_exploration_queries(
 
     unresolved_requests: list[dict[str, Any]] = []
     for candidate_id, spec in pending_by_candidate_id.items():
-        candidate = spec.get("candidate")
         existing_prefetch = {
             str(key): dict(value)
             for key, value in dict(spec.get("prefetched_search_queries") or {}).items()
             if str(key).strip()
         }
-        for index, query_text in enumerate(_build_exploration_queries(candidate, target_company), start=1):
+        for index, query_text in enumerate(_pending_exploration_queries(spec, target_company), start=1):
             if str(dict(existing_prefetch.get(str(index)) or {}).get("search_state", {}).get("task_id") or "").strip():
                 continue
             unresolved_requests.append(
@@ -797,6 +845,7 @@ def _prepare_batched_exploration_queries(
                     "task_key": f"{candidate_id}::{index:02d}",
                     "query_text": query_text,
                     "max_results": 10,
+                    "runtime_timing_overrides": dict(spec.get("runtime_timing_overrides") or {}),
                 }
             )
     provider_name = str(
@@ -941,8 +990,7 @@ def _refresh_batched_exploration_ready_cache(
     poll_specs: list[dict[str, Any]] = []
     attempted_at = _batch_lane_timestamp()
     for candidate_id, spec in pending_by_candidate_id.items():
-        candidate = spec.get("candidate")
-        for index, query_text in enumerate(_build_exploration_queries(candidate, target_company), start=1):
+        for index, query_text in enumerate(_pending_exploration_queries(spec, target_company), start=1):
             task_key = f"{candidate_id}::{index:02d}"
             entry = dict(manifest_entries.get(task_key) or {})
             search_state = dict(entry.get("search_state") or {})
@@ -951,7 +999,11 @@ def _refresh_batched_exploration_ready_cache(
                 continue
             if str(search_state.get("status") or "").strip() in {"completed", "fetched_cached", "ready_cached"}:
                 continue
-            if _timestamp_within_seconds(str(search_state.get("ready_attempted_at") or ""), _LANE_READY_POLL_MIN_INTERVAL_SECONDS):
+            ready_poll_min_interval_seconds = resolved_lane_ready_cooldown_seconds(
+                search_state,
+                default=_lane_ready_poll_min_interval_seconds(),
+            )
+            if _timestamp_within_seconds(str(search_state.get("ready_attempted_at") or ""), ready_poll_min_interval_seconds):
                 continue
             search_state["ready_attempted_at"] = attempted_at
             entry["search_state"] = search_state
@@ -1045,8 +1097,7 @@ def _fetch_batched_exploration_ready_results(
     fetch_specs: list[dict[str, Any]] = []
     attempted_at = _batch_lane_timestamp()
     for candidate_id, spec in pending_by_candidate_id.items():
-        candidate = spec.get("candidate")
-        for index, query_text in enumerate(_build_exploration_queries(candidate, target_company), start=1):
+        for index, query_text in enumerate(_pending_exploration_queries(spec, target_company), start=1):
             task_key = f"{candidate_id}::{index:02d}"
             entry = dict(manifest_entries.get(task_key) or {})
             search_state = dict(entry.get("search_state") or {})
@@ -1055,10 +1106,14 @@ def _fetch_batched_exploration_ready_results(
             raw_path = str(entry.get("raw_path") or "").strip()
             if raw_path and Path(raw_path).exists():
                 continue
-            if _timestamp_within_seconds(str(search_state.get("fetch_attempted_at") or ""), _LANE_FETCH_MIN_INTERVAL_SECONDS):
+            fetch_min_interval_seconds = resolved_lane_fetch_cooldown_seconds(
+                search_state,
+                default=_lane_fetch_min_interval_seconds(),
+            )
+            if _timestamp_within_seconds(str(search_state.get("fetch_attempted_at") or ""), fetch_min_interval_seconds):
                 continue
             search_state["fetch_attempted_at"] = attempted_at
-            search_state["lane_fetch_cooldown_seconds"] = _LANE_FETCH_MIN_INTERVAL_SECONDS
+            search_state["lane_fetch_cooldown_seconds"] = fetch_min_interval_seconds
             entry["search_state"] = search_state
             manifest_entries[task_key] = entry
             fetch_specs.append(
@@ -1126,7 +1181,7 @@ def _fetch_batched_exploration_ready_results(
         search_state["fetch_attempted_at"] = attempted_at
         search_state["fetched_at"] = _batch_lane_timestamp()
         search_state["fetch_token"] = fetch_token
-        search_state["lane_fetch_cooldown_seconds"] = _LANE_FETCH_MIN_INTERVAL_SECONDS
+        search_state["lane_fetch_cooldown_seconds"] = fetch_min_interval_seconds
         entry["search_state"] = search_state
         entry["raw_path"] = str(raw_path)
         entry_artifact_paths = {
@@ -1451,6 +1506,18 @@ def _build_exploration_queries(candidate: Candidate, target_company: str) -> lis
         if normalized and normalized not in deduped:
             deduped.append(normalized)
     return deduped
+
+
+def _pending_exploration_queries(spec: dict[str, Any], target_company: str) -> list[str]:
+    cached_queries = [str(item).strip() for item in list(spec.get("exploration_queries") or []) if str(item).strip()]
+    if cached_queries:
+        return cached_queries
+    candidate = spec.get("candidate")
+    if not isinstance(candidate, Candidate):
+        return []
+    queries = _build_exploration_queries(candidate, target_company)
+    spec["exploration_queries"] = list(queries)
+    return queries
 
 
 def _write_search_execution_artifact(

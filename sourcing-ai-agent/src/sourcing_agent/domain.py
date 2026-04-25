@@ -12,6 +12,7 @@ from .execution_preferences import (
     merge_execution_preferences,
     normalize_execution_preferences,
 )
+from .query_signal_knowledge import match_thematic_signals
 from .query_intent_rewrite import apply_query_intent_rewrite
 
 
@@ -144,6 +145,20 @@ class JobRequest:
         normalized_employment_statuses = _normalize_list(normalized_payload.get("employment_statuses"))
         if not normalized_employment_statuses:
             normalized_employment_statuses = _infer_default_employment_statuses(raw_user_request)
+        normalized_keywords = _normalize_list(normalized_payload.get("keywords"))
+        normalized_must_have_facets = normalize_requested_facets(
+            normalized_payload.get("must_have_facets")
+            if normalized_payload.get("must_have_facets") is not None
+            else normalized_payload.get("must_have_facet")
+        )
+        if target_company:
+            from .request_normalization import normalize_must_have_facets_for_request_fields
+
+            normalized_must_have_facets, normalized_keywords = normalize_must_have_facets_for_request_fields(
+                must_have_facets=normalized_must_have_facets,
+                keywords=normalized_keywords,
+                target_company=target_company,
+            )
         return cls(
             raw_user_request=raw_user_request,
             query=_clean(normalized_payload.get("query")),
@@ -152,12 +167,8 @@ class JobRequest:
             target_scope=_clean(normalized_payload.get("target_scope")) or "full_company_asset",
             categories=_normalize_list(normalized_payload.get("categories")),
             employment_statuses=normalized_employment_statuses,
-            keywords=_normalize_list(normalized_payload.get("keywords")),
-            must_have_facets=normalize_requested_facets(
-                normalized_payload.get("must_have_facets")
-                if normalized_payload.get("must_have_facets") is not None
-                else normalized_payload.get("must_have_facet")
-            ),
+            keywords=normalized_keywords,
+            must_have_facets=normalized_must_have_facets,
             must_have_primary_role_buckets=normalize_requested_role_buckets(
                 normalized_payload.get("must_have_primary_role_buckets")
                 if normalized_payload.get("must_have_primary_role_buckets") is not None
@@ -484,6 +495,7 @@ def candidate_profile_signal_text(candidate: Candidate, *, include_notes: bool =
         [
             str(metadata.get("headline") or "").strip(),
             str(metadata.get("summary") or "").strip(),
+            str(metadata.get("about") or "").strip(),
             " / ".join(_normalize_metadata_text_list(metadata.get("languages"), limit=8)),
             " / ".join(_normalize_metadata_text_list(metadata.get("skills"), limit=16)),
             str(metadata.get("profile_location") or "").strip(),
@@ -494,6 +506,7 @@ def candidate_profile_signal_text(candidate: Candidate, *, include_notes: bool =
 
 
 def candidate_searchable_text(candidate: Candidate, *, include_notes: bool = True) -> str:
+    timeline_text = candidate_timeline_signal_text(candidate)
     parts = _dedupe_preserve_order(
         [
             candidate.display_name,
@@ -505,11 +518,22 @@ def candidate_searchable_text(candidate: Candidate, *, include_notes: bool = Tru
             candidate.education,
             candidate.work_history,
             candidate_profile_signal_text(candidate, include_notes=include_notes),
+            timeline_text,
             candidate.ethnicity_background,
             candidate.current_destination,
         ]
     )
     return " | ".join(parts)
+
+
+def candidate_timeline_signal_text(candidate: Candidate) -> str:
+    metadata = dict(candidate.metadata or {})
+    return " | ".join(
+        _dedupe_preserve_order(
+            _normalize_metadata_text_list(metadata.get("experience_lines"), limit=16)
+            + _normalize_metadata_text_list(metadata.get("education_lines"), limit=8)
+        )
+    )
 
 
 def normalize_requested_facet(value: str) -> str:
@@ -617,14 +641,16 @@ def derive_candidate_facets(candidate: Candidate) -> list[str]:
             "infra",
             "platform",
             "distributed systems",
-            "systems",
+            "systems engineer",
+            "operating systems",
             "runtime",
             "serving",
             "compiler",
             "kernel",
             "cluster",
             "gpu",
-            "compute",
+            "gpu compute",
+            "compute infrastructure",
             "backend",
             "performance",
         ],
@@ -644,6 +670,7 @@ def derive_candidate_facets(candidate: Candidate) -> list[str]:
         facets.append("inference")
     if _contains_any(text, ["data engineer", "data platform", "data infrastructure", "dataset", "data systems"]):
         facets.append("data")
+    facets.extend(_derive_thematic_signal_facets(text))
     facets.extend(_derive_outreach_layer_facets(candidate))
     return _dedupe_preserve_order(facets)
 
@@ -694,9 +721,27 @@ def _candidate_signal_text(candidate: Candidate, *, include_notes: bool) -> str:
             candidate.education,
             candidate.work_history,
             candidate_profile_signal_text(candidate, include_notes=include_notes),
+            candidate_timeline_signal_text(candidate),
         ]
         if _clean(part)
     ).lower()
+
+
+def _derive_thematic_signal_facets(text: str) -> list[str]:
+    if not text:
+        return []
+    matched_facets: list[str] = []
+    for spec in match_thematic_signals(text):
+        facet_labels = [str(item).strip() for item in list(spec.get("facet_labels") or []) if str(item).strip()]
+        if not facet_labels:
+            canonical_label = str(spec.get("canonical_label") or "").strip()
+            if canonical_label:
+                facet_labels = [canonical_label.lower().replace("-", " ").replace("_", " ").strip().replace(" ", "_")]
+        for facet in facet_labels:
+            normalized_facet = normalize_requested_facet(facet)
+            if normalized_facet and normalized_facet not in matched_facets:
+                matched_facets.append(normalized_facet)
+    return matched_facets
 
 
 def _derive_outreach_layer_facets(candidate: Candidate) -> list[str]:
@@ -793,6 +838,8 @@ class AcquisitionStrategyPlan:
     cost_policy: dict[str, Any] = field(default_factory=dict)
     confirmation_points: list[str] = field(default_factory=list)
     reasoning: list[str] = field(default_factory=list)
+    organization_execution_profile: dict[str, Any] = field(default_factory=dict)
+    strategy_decision_explanation: dict[str, Any] = field(default_factory=dict)
 
     def to_record(self) -> dict[str, Any]:
         return asdict(self)
@@ -876,6 +923,7 @@ class SourcingPlan:
     search_strategy: SearchStrategyPlan
     acquisition_tasks: list[AcquisitionTask]
     asset_reuse_plan: dict[str, Any] = field(default_factory=dict)
+    organization_execution_profile: dict[str, Any] = field(default_factory=dict)
     intent_brief: IntentPlanBrief = field(default_factory=IntentPlanBrief)
     assumptions: list[str] = field(default_factory=list)
     open_questions: list[str] = field(default_factory=list)

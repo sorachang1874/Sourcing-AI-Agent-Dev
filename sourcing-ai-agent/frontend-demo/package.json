@@ -1,0 +1,36 @@
+{
+  "name": "sourcing-ai-agent-frontend-demo",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:backend": "bash ../scripts/dev_backend.sh",
+    "dev:frontend": "bash ../scripts/dev_frontend.sh",
+    "dev:local": "bash ../scripts/dev_frontend.sh",
+    "build": "tsc -b && vite build",
+    "build:hosted": "node ./scripts/verify_hosted_build_env.mjs && tsc -b && vite build",
+    "preview": "vite preview",
+    "browser:install": "bash ./scripts/bootstrap_browser_env.sh",
+    "browser:check": "bash ./scripts/check_playwright_browser.sh",
+    "browser:e2e": "node ./scripts/run_workflow_e2e.mjs",
+    "browser:matrix:fast": "make -C .. test-browser-e2e-fast",
+    "browser:matrix:slow": "make -C .. test-browser-e2e-slow",
+    "browser:matrix:full": "make -C .. test-browser-e2e-full",
+    "import:tml-assets": "node ./scripts/import-tml-assets.mjs",
+    "pull:tml-assets": "python3 ./scripts/pull_tml_assets.py"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "playwright": "^1.59.1",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10"
+  }
+}

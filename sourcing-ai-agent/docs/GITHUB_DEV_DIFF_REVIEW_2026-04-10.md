@@ -1,5 +1,8 @@
 # GitHub Dev Diff Review (2026-04-10)
 
+> Status: Historical reference only. Do not use this file as the default implementation or operations guide; cross-check `docs/INDEX.md` and `PROGRESS.md` first.
+
+
 这份文档记录本地工作区相对 `origin/dev` 的一次审阅结果，目标是给后续 PR 审核一个可读、可复盘的变更摘要。
 
 ## 1. 对比基线

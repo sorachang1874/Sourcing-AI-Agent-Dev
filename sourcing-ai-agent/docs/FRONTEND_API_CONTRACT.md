@@ -1,5 +1,8 @@
 # Frontend API Contract
 
+> Status: Current first-party doc. Treat this file as active guidance, but keep it aligned with `docs/INDEX.md` and `PROGRESS.md` when runtime contracts change.
+
+
 这份文档定义 Web 层当前应该如何消费后端 API，尤其是：
 
 - `plan -> review -> workflow -> progress -> results` 的标准接口顺序
@@ -14,6 +17,39 @@
 - `request` 表示当前后端准备真正执行的 execution-aligned request，而不只是最初的归一化输入
 - `request_preview` 应被视为 `request` 的可解释展示层，两者在 `keywords / organization_keywords / employment_statuses / intent_axes` 上应保持同一语义
 - 如果 planning / acquisition strategy 扩展了执行关键词，例如把用户 query 补成 `Pre-train`、`Vision-language` 这类真实 shard / provider keyword，前端应直接信任返回的 `request` / `request_preview`，而不是自己从原始 query 再做一轮猜测
+- 前端接 hosted 后端时，默认不应再把 `force_fresh_run=true` 作为通用默认值
+  - 当组织级 baseline 已经 `effective_ready`，这会直接绕开本地资产复用，重新触发高成本 provider
+- `POST /api/workflows/explain` 应作为前端的 dry-run / operator explain 入口
+  - 它现在会返回 `generation_watermarks`、`asset_reuse_plan`、`cloud_asset_operations`
+  - 适合在真正 `start workflow` 前展示“这次会复用哪个 baseline、是否只补 delta、最近有没有云端 import/GC”
+- `GET /api/runtime/progress` 应作为运维面板的聚合入口
+  - 它现在会返回 `cloud_asset_operations` 和按公司过滤的 `company_asset`
+  - 不需要前端自己再拼 runtime 文件或 registry
+- 本地前端直连 hosted backend 时，默认使用 `http://127.0.0.1:4173 -> http://127.0.0.1:8765`
+  - 后端会为 `127.0.0.1:4173` / `localhost:4173` 返回 CORS 响应头
+  - 若前端运行在其他域名或端口，运维应设置 `SOURCING_API_ALLOWED_ORIGINS`
+- 前端的“人工审核状态”和“目标候选人 CRM”现在已经切到后端 API + Postgres-backed control plane
+  - 不再以浏览器 `localStorage` 作为真相源
+  - 同一个 `job_id` 的审核状态，应通过 `GET/POST /api/candidate-review-registry` 读写
+  - 跨 workflow 的目标候选人池，应通过 `GET/POST /api/target-candidates` 读写
+  - 将某个已完成 workflow 的候选人批量导入目标池，应通过 `POST /api/target-candidates/import-from-job`
+  - 导出目标候选人 CSV/profile bundle，应通过 `POST /api/target-candidates/export`
+  - 前端仍可保留本地事件广播，只用于刷新 UI，不用于持久化
+- 前端历史搜索记录现在也应以后端为准
+  - Sidebar 列表统一读 `GET /api/frontend-history?limit=24`
+  - 单条恢复仍读 `GET /api/frontend-history/{history_id}`
+  - 删除历史统一走 `DELETE /api/frontend-history/{history_id}`
+  - 浏览器 `localStorage` 只保留为本地 cache / optimistic UI，不再作为跨设备真相源
+- Stage 1 之后的 LinkedIn 信息补全不应默认自动执行
+  - 缺工作经历 / 教育经历的候选人，可在前端标记为 `needs_profile_completion`
+  - 用户手动触发时，前端调用 `POST /api/jobs/{job_id}/profile-completion`
+  - 后端会基于该 job 对应的 snapshot，只对指定 `candidate_ids` 跑受控 profile completion，并重写 materialization
+- `GET /api/jobs/{job_id}/results` 若同时返回 `results` 和 `asset_population`
+  - 前端结果看板默认应优先消费 `asset_population`
+  - `results` 仍保留为排序结果与审计参考，不再默认作为用户主列表
+- 候选人结果对象现在可稳定携带 `avatar_url / photo_url / media_url / primary_email`
+  - 这些字段可能来自候选表、materialized candidate artifact，或 LinkedIn profile raw path 的二次解析
+  - 前端应直接消费这些字段，不再自己从原始文本中推断头像或 Email
 
 仓库内对应的共享类型资产：
 
@@ -135,6 +171,9 @@ export function SourcingConsole() {
   - 不要扫描 `runtime/company_assets/*`
   - 不要读取 `runtime/jobs/*`
   - 不要将 snapshot 文件路径当成前端主数据源
+- demo / prototype UI 也不应再默认依赖 `public/tml/*` 这类静态 JSON 作为主链路
+  - 静态 JSON 只适合视觉开发或离线演示
+  - 一旦接真实后端，应切到 API contract，并把静态资产读取退回成 fallback/debug 能力
 
 ### 1.1 Runtime 边界（强约束）
 
@@ -146,6 +185,39 @@ export function SourcingConsole() {
 
 不要依赖 snapshot 内部文件（例如 `workflow_stage_summaries/*.json`）做页面逻辑。
 这些文件只用于后端审计/排障，不保证前端兼容性。
+
+历史记录列表也属于同一边界：
+
+- 读取 `GET /api/frontend-history`
+- 恢复 `GET /api/frontend-history/{history_id}`
+- 删除 `DELETE /api/frontend-history/{history_id}`
+
+不要把浏览器本地 `localStorage` 当成跨设备共享的历史记录数据库。
+
+### 1.2 Dry-Run / Explain 边界
+
+需要在“开始 workflow 前”展示的内容，统一读取：
+
+- `POST /api/workflows/explain`
+
+推荐前端只使用这几个稳定层：
+
+- `request_preview`
+- `organization_execution_profile`
+- `asset_reuse_plan`
+- `dispatch_preview`
+- `lane_preview`
+- `generation_watermarks`
+- `cloud_asset_operations`
+
+不要再用前端自己的 query heuristic 去猜：
+
+- 目标公司
+- 组织规模
+- 会不会复用 baseline
+- current/former lane 的执行方式
+
+这些都应该以后端 explain 为准。
 
 ## 2. 核心对象
 
@@ -324,6 +396,36 @@ export function SourcingConsole() {
 - review summary 应优先来自 compile-instruction 的返回
 
 ### 4.3 Workflow Start
+
+在真正 `POST /api/workflows` 前，前端可以先调用 dry-run explain：
+
+- `POST /api/workflows/explain`
+
+前端应消费：
+
+- `status`
+- `request_preview`
+- `ingress_normalization`
+- `planning.plan`
+- `planning.plan_review_gate`
+- `organization_execution_profile`
+- `asset_reuse_plan`
+- `dispatch_matching_normalization`
+- `dispatch_preview`
+- `lane_preview`
+- `timings_ms`
+
+推荐做法：
+
+- plan/review 页在用户点击执行前，先调用一次 explain，用它展示“这次请求会走 full roster、scoped search，还是 baseline reuse / delta from snapshot”
+- 如果 `dispatch_preview.strategy == reuse_snapshot` 或 `delta_from_snapshot`，前端优先展示 `dispatch_preview.request_family_match_explanation`
+- 如果 `status == needs_plan_review`，前端用 `planning.plan_review_gate` 渲染 review 阶段，而不是直接创建 workflow job
+
+注意：
+
+- explain 是 dry-run，不创建 job，不写 plan review session
+- explain 返回的是“如果现在提交，会发生什么”，适合作为执行前的解释层与排障层
+- 前端不要把 explain 当成真实执行结果缓存到 job 详情页；真实状态仍以 `POST /api/workflows` 和 `GET /api/jobs/{job_id}/progress` 为准
 
 接口：
 

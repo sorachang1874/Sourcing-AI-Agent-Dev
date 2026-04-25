@@ -3,6 +3,12 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any
 
+from .runtime_tuning import (
+    resolved_lane_budget_caps,
+    resolved_parallel_exploration_workers,
+    resolved_parallel_search_workers,
+)
+
 
 LANE_PRIORITY = {
     "public_media_specialist": 90,
@@ -26,11 +32,45 @@ RESUME_PRIORITY = {
 REMOTE_WAIT_STAGES = {"waiting_remote_search", "waiting_remote_harvest"}
 
 
+def _plan_runtime_tuning_context(plan_payload: dict[str, Any]) -> dict[str, Any]:
+    task_preferences: list[dict[str, Any]] = []
+    for task in list(plan_payload.get("acquisition_tasks") or []):
+        if not isinstance(task, dict):
+            continue
+        metadata = dict(task.get("metadata") or {})
+        intent_view = dict(metadata.get("intent_view") or {})
+        execution_preferences = dict(intent_view.get("execution_preferences") or {})
+        if execution_preferences:
+            task_preferences.append(execution_preferences)
+    merged: dict[str, Any] = {}
+    for candidate in (
+        dict(plan_payload.get("execution_preferences") or {}),
+        dict(plan_payload.get("request_intent_view") or {}).get("execution_preferences") or {},
+        dict(plan_payload.get("intent_view") or {}).get("execution_preferences") or {},
+        *(task_preferences),
+    ):
+        if not isinstance(candidate, dict):
+            continue
+        for key, value in candidate.items():
+            if key not in merged and value not in (None, "", []):
+                merged[key] = value
+    return merged
+
+
 def lane_limits_from_plan(plan_payload: dict[str, Any]) -> dict[str, int]:
     acquisition_strategy = dict(plan_payload.get("acquisition_strategy") or {})
     cost_policy = dict(acquisition_strategy.get("cost_policy") or {})
-    search_limit = max(1, int(cost_policy.get("parallel_search_workers", 3) or 3))
-    exploration_limit = max(1, int(cost_policy.get("parallel_exploration_workers", 2) or 2))
+    runtime_context = _plan_runtime_tuning_context(plan_payload)
+    search_limit = resolved_parallel_search_workers(
+        runtime_context,
+        cost_policy=cost_policy,
+        default=3,
+    )
+    exploration_limit = resolved_parallel_exploration_workers(
+        runtime_context,
+        cost_policy=cost_policy,
+        default=2,
+    )
     return {
         "search_planner": search_limit,
         "public_media_specialist": search_limit,
@@ -41,14 +81,8 @@ def lane_limits_from_plan(plan_payload: dict[str, Any]) -> dict[str, int]:
 def lane_budget_caps_from_plan(plan_payload: dict[str, Any]) -> dict[str, int]:
     acquisition_strategy = dict(plan_payload.get("acquisition_strategy") or {})
     cost_policy = dict(acquisition_strategy.get("cost_policy") or {})
-    search_budget = max(1, int(cost_policy.get("search_worker_unit_budget", 8) or 8))
-    public_media_budget = max(1, int(cost_policy.get("public_media_worker_unit_budget", 6) or 6))
-    exploration_budget = max(1, int(cost_policy.get("exploration_worker_unit_budget", 5) or 5))
-    return {
-        "search_planner": search_budget,
-        "public_media_specialist": public_media_budget,
-        "exploration_specialist": exploration_budget,
-    }
+    runtime_context = _plan_runtime_tuning_context(plan_payload)
+    return resolved_lane_budget_caps(runtime_context, cost_policy=cost_policy)
 
 
 def summarize_scheduler(

@@ -1,5 +1,1227 @@
 # Sourcing AI Agent Dev Progress
 
+> Status: Living tracker. Use the latest entries as the source of truth, and assume older bullets may describe superseded intermediate states.
+
+
+## 2026-04-25 (Asia/Shanghai)
+
+### Closeout validation, browser plan semantics, and documentation handoff
+
+- 收掉最终 browser E2E 暴露的 plan 语义恢复问题：
+  - `/api/plan/submit` 的异步 hydration 完成后，`frontend_history_links.metadata` 现在会持久化：
+    - `request_preview`
+    - `dispatch_preview`
+    - `organization_execution_profile`
+    - `asset_reuse_plan`
+    - `lane_preview`
+    - `effective_execution_semantics`
+  - 前端 history recovery 会消费这些后端语义字段，不再把核心检索策略 / dispatch label 回退成 `待定` 或自行粗推断
+  - 新组织 `full_company_roster` 的用户可见策略 label 统一为 `全量 live roster`，避免与已有本地资产的 `全量本地资产复用` 混淆
+- 已完成 closeout 验证矩阵：
+  - `./.venv-tests/bin/python -m pytest tests/test_execution_semantics.py tests/test_frontend_history_recovery.py -q`
+  - `cd frontend-demo && npm run build`
+  - `SOURCING_RUN_FRONTEND_BROWSER_E2E=1 ./.venv-tests/bin/python -m pytest tests/test_frontend_browser_e2e.py -q`
+    - `5 passed, 2 skipped, 2 subtests passed`
+  - `./.venv-tests/bin/python -m pytest tests/test_regression_matrix.py tests/test_scripted_provider_scenario.py tests/test_workflow_smoke.py -q`
+  - `./.venv-tests/bin/python -m pytest tests/test_hosted_workflow_smoke.py -q`
+  - `bash ./scripts/run_python_quality.sh typecheck`
+  - `./.venv-tests/bin/python -m pytest tests/test_markdown_status.py -q`
+  - isolated simulate matrix:
+    - `scripts/run_simulate_smoke_matrix.py --runtime-dir runtime/test_env/closeout_simulate_20260425 --seed-reference-runtime --fast-runtime --strict --timing-summary`
+  - scripted Google long-tail:
+    - `scripts/run_simulate_smoke_matrix.py --runtime-dir runtime/test_env/scripted_long_tail_closeout_20260425 --provider-mode scripted --scripted-scenario configs/scripted/google_multimodal_long_tail.json --fast-runtime --case google_multimodal_pretrain --strict --timing-summary`
+  - 全仓：
+    - `./.venv-tests/bin/python -m pytest -q`
+    - 当前结果：`1135 passed, 8 skipped, 25 subtests passed`
+- 文档 closeout 已开始：
+  - 已确认 54 个一方 Markdown 均有 `> Status:` 头
+  - 更新重点是 `AGENTS.md`、测试/运行/ECS 文档、active tracker、handoff，而不是机械改动每个历史 reference 文件
+
+### Productization pass: streaming/materialization reports, scripted scenarios, asset governance, Excel throughput
+
+- 已完成 productization 第二批可执行契约：
+  - Harvest / materialization：
+    - `runtime_tuning.py` 新增 materialization coalescing window 与 streaming budget report
+    - running job 的 inline incremental sync 现在会通过 shared `materialization_writer` in-flight slot
+    - sync result 会记录 writer slot / streaming budget metadata
+    - smoke provider case report 现在输出 `materialization_streaming`
+    - aggregate smoke summary 会汇总 provider response count、pending delta count、provider response -> first materialization gap，并将 slow first materialization 作为 guardrail
+  - scripted provider scenario：
+    - 新增 scenario coverage validator
+    - 新增 `configs/scripted/provider_behavior_matrix.json`
+    - 覆盖 retryable 429、timeout、partial result、staged ready/fetch 四类行为
+  - asset governance：
+    - 新增 `asset_governance.py`
+    - 建立 `(company_key, scope_kind, scope_key, asset_kind)` default pointer contract
+    - canonical replacement plan 会生成新 default pointer、superseded predecessor 与 historical retention 摘要
+    - 非 canonical lifecycle 不能被提升为默认指针
+  - Excel intake：
+    - intake summary 现在带 `throughput_plan`
+    - 覆盖 company grouping、direct LinkedIn fetch batch、search-required count、row-level continuation、target candidates/export linkage gates
+  - product journey regression matrix：
+    - scripted provider / workflow smoke report / Excel intake / asset governance / product journey 已接入 high-signal test selection
+- 已完成验证：
+  - `py_compile` 覆盖本轮新增/修改的 backend modules
+  - `tests/test_runtime_tuning.py`
+  - `tests/test_scripted_provider_scenario.py`
+  - `tests/test_asset_governance.py`
+  - `tests/test_workflow_smoke.py -k 'provider_case_report or summarize_smoke_timings'`
+  - `tests/test_excel_intake.py -k 'throughput_plan or local_exact_hit_and_local_manual_review'`
+  - `tests/test_regression_matrix.py`
+  - `tests/test_markdown_status.py`
+  - repo-configured `typecheck`
+  - hosted scripted Google long-tail timeout smoke sample
+
+### Productization pass: persisted governance writers, Excel target/export actions, provider batch streaming
+
+- 已完成 productization 第三批收尾：
+  - asset governance 不再只是纯 helper：
+    - 新增 `asset_default_pointers`
+    - 新增 `asset_default_pointer_history`
+    - storage writer 会持久化 canonical default pointer、superseded history 与 coverage proof
+    - 新增 API：
+      - `GET /api/assets/governance/default-pointers`
+      - `POST /api/assets/governance/promote-default`
+    - 新增 CLI：
+      - `promote-asset-default-pointer`
+  - Excel intake 的 target/export linkage 已从计划字段接成真实动作：
+    - 新增 `POST /api/target-candidates/import-from-job`
+    - 首页 Excel group 完成后可直接导入目标候选人
+    - 首页 Excel group 完成后可直接导出 target candidates profile bundle
+  - Harvest profile adapter 已支持 provider batch response callback：
+    - `fetch_profiles_by_urls(..., on_batch_result=...)`
+    - enrichment live fetch 会在单个 provider batch 返回后立即写 profile registry / fetched cache
+  - materialization writer backpressure 继续收口：
+    - `runtime_inflight_slot(...)` 支持同线程 reentrant，避免 outer sync + inner artifact write 在 budget=1 时死锁
+    - `SnapshotMaterializer.synchronize_snapshot_candidate_documents(...)` 主入口也进入 shared `materialization_writer` budget
+- 已完成验证：
+  - `py_compile` 覆盖本轮 backend modules 与相关 tests
+  - `tests/test_asset_governance.py`
+  - `tests/test_runtime_tuning.py`
+  - `tests/test_harvest_connectors.py`
+  - `tests/test_results_api.py`
+  - `tests/test_excel_intake.py`
+  - `tests/test_regression_matrix.py`
+  - 相关 `tests/test_pipeline.py` incremental sync / snapshot materializer 子集
+  - frontend `npm run build`
+  - repo-configured `typecheck`
+  - 全仓 `pytest -q`：`1134 passed, 8 skipped, 25 subtests passed`
+
+### Productization pass: runner shutdown, promoted aggregate proof, shared plan labels
+
+- 已完成本轮 productization 第一批可执行契约：
+  - runtime service 增加持久化 cooperative shutdown：
+    - `services/<service_name>/stop_request.json`
+    - `/api/runtime/services/shutdown`
+    - `/api/jobs/{job_id}/cancel`
+  - workflow cancel 现在会：
+    - 将 workflow job 标记为 `cancelled`
+    - retire 未完成 worker
+    - release workflow lease
+    - 请求 job-scoped recovery service 停止
+  - multi-snapshot coverage 不再用 `source_snapshot_selection.mode` 当 proof：
+    - `preferred_snapshot_subset` 只表示选择模式
+    - 必须有显式 `coverage_proof` / promoted aggregate contract 才能解锁 multi-snapshot population-default reuse
+  - 前后端检索策略 label 继续收口：
+    - 后端 `compile_execution_semantics(...)` 输出 `execution_strategy_label`
+    - 前端 plan 卡片优先展示后端语义 label，不再先自行推断
+  - SQLite legacy surface 增加 CLI banner：
+    - `show-control-plane-runtime` 会显式标记非 PG-only 为 legacy/emergency，并输出 migration exit
+- 已完成验证：
+  - targeted service daemon / pipeline cancel / planning / organization profile / execution semantics / CLI tests
+  - frontend `npm run build`
+- 本轮活跃 tracker：
+  - `docs/SESSION_TRACKER_2026-04-25_PRODUCTIZATION.md`
+
+### Hosted smoke long-tail verification closure
+
+- 收掉第二轮全仓 pytest 暴露的 hosted smoke 尾巴：
+  - post-terminal nonblocking `harvest_profile_batch` 不再被 recovery follow-up 当成“可忽略尾巴”直接跳过；不阻塞主 job 完成，但仍会继续后台抓取并 reconcile profile detail
+  - `workflow_smoke.py` 现在会在 job terminal 后继续 settle recoverable background workers，避免 smoke 把“主链完成”误判成“profile-tail 也已完成”
+  - snapshot candidate documents 同步 / incremental apply 后统一失效对应 snapshot 的 asset-population 读缓存，避免候选人看板或 `/results?include_candidates=1` 读到旧 materialized payload
+  - hosted smoke harness teardown 等待更多实际写 runtime 的后台线程，并对 cleanup 期间后台线程已删除子文件的 `ENOENT` 做安全处理，减少 rmtree race
+- 已完成验证：
+  - `./.venv-tests/bin/python -m pytest tests/test_hosted_workflow_smoke.py -q`
+  - `bash ./scripts/run_python_quality.sh typecheck`
+  - `./.venv-tests/bin/python -m pytest -q`
+  - 当前结果：`1105 passed, 8 skipped, 25 subtests passed`
+
+## 2026-04-24
+
+### Long-tail architecture hardening tracker
+
+- 本轮剩余架构尾巴集中记录在：
+  - `docs/SESSION_TRACKER_2026-04-24_LONG_TAIL.md`
+- 每次 context compact / 会话恢复后，先读该 tracker、本文最新条目和 `docs/NEXT_TODO.md`，再执行命令，避免重复排查或把已修过的策略回退。
+- 当前 long-tail checklist 已收口：
+  - runner/recovery ownership 已由 hosted dispatch marker、recovery takeover guard、job lease release regression 固定
+  - plan hydration 已升级为 normalized request-signature inflight dedupe，并记录 coalescing / queue wait metadata
+  - runtime PG/schema bootstrap 已支持按 runtime namespace 解析 schema，isolated runtime 不再默认继承 production schema
+  - Harvest provider calls 与 materialization writer 已并入 shared global in-flight budget / backpressure
+  - asset governance/promotion 已加入 lifecycle gate，`draft/partial/superseded/archived/empty` 不可被自动 promotion 成 authoritative coverage baseline
+  - cold materialization 已去掉一次冗余 per-candidate normalize，并为 profile/source JSON 建立 mtime/size 缓存与 selector index
+  - SQLite compatibility surface 已继续收紧：production runtime 默认要求 PG，只有显式 `SOURCING_ALLOW_PRODUCTION_SQLITE_CONTROL_PLANE=1` 才允许 emergency SQLite control plane
+- 当前验证状态与命令记录见 `docs/SESSION_TRACKER_2026-04-24_LONG_TAIL.md`。
+
+### Excel intake relaunch gate 收尾
+
+- 首页 `Excel Intake` 入口已重新打开：
+  - 默认展示；需要灰度关闭时设置 `VITE_ENABLE_EXCEL_INTAKE_WORKFLOW=false`
+  - `.env.development` / `.env.production` 现显式启用该入口
+- 本地浏览器上传链路已收口：
+  - Vite `dev` 与 `preview` 都支持 same-origin `/api/*` proxy
+  - 前端 API client 对本地 same-origin HTML fallback 增加 `127.0.0.1:8765` / `localhost:8765` loopback retry
+  - Excel workflow 继续使用真实 `FormData` 上传，后端转为 `file_content_base64` 后在云端解析，不再依赖用户本地路径
+- 多公司 Excel 自动拆 job 已保留并增加真实浏览器回归：
+  - `frontend-demo/scripts/run_excel_intake_e2e.mjs`
+  - `tests/test_frontend_browser_e2e.py::FrontendBrowserFastE2ETest::test_browser_excel_intake_upload_splits_companies_via_same_origin`
+  - 覆盖选中文件、提交 `/api/intake/excel/workflow`、按 company 拆成多个 group、首页展示拆分结果
+- 已完成验证：
+  - `./.venv-tests/bin/python -m pytest tests/test_excel_intake.py tests/test_frontend_history_recovery.py tests/test_api_json_serialization.py -q -k 'excel or Excel'`
+  - `./.venv-tests/bin/python -m py_compile tests/test_frontend_browser_e2e.py`
+  - `npm run build`
+  - `./.venv-tests/bin/python -m pytest tests/test_frontend_browser_e2e.py -q -k 'excel_intake'`
+  - `SOURCING_RUN_FRONTEND_BROWSER_E2E=1 ./.venv-tests/bin/python -m pytest tests/test_frontend_browser_e2e.py -q -k 'excel_intake_upload'`
+
+### Runtime environment namespace 隔离收口
+
+- 已新增统一 runtime environment contract：
+  - `src/sourcing_agent/runtime_environment.py`
+  - `SOURCING_RUNTIME_ENVIRONMENT=production|local_dev|test|simulate|scripted|replay|ci`
+  - provider mode 仍由 `SOURCING_EXTERNAL_PROVIDER_MODE` 表达，但不再单独承担环境隔离语义
+- Harvest shared provider cache 已改成 live-only 且按 runtime namespace 分目录：
+  - `runtime/provider_cache/<runtime_environment>/live/<logical_provider_name>/...`
+  - `simulate/scripted/replay` 不再读写 shared Harvest provider cache
+  - 旧版 `runtime/provider_cache/<logical_name>/...` 不再作为可复用 cache；遇到 `_offline` legacy body 会删除
+- test/scripted/replay runtime 已阻断 repo-level PG 自动继承：
+  - `scripts/dev_backend.sh` 在隔离 runtime 下先设置 `SOURCING_RUNTIME_ENVIRONMENT`
+  - 默认写入 `<runtime_dir>/.isolated-local-postgres.env`
+  - 除非显式提供 runtime 专属 `SOURCING_LOCAL_POSTGRES_ENV_FILE` 或设置 `SOURCING_ALLOW_TEST_REPO_POSTGRES_ENV=1`
+- hosted production entrypoint 已收紧：
+  - `scripts/run_hosted_trial_backend.sh` 默认 `SOURCING_RUNTIME_ENVIRONMENT=production`
+  - hosted 默认 provider mode 从 `replay` 改为 `live`
+  - production 下 `replay/simulate/scripted` 需要显式 temporary override，否则启动失败
+- `/api/runtime/health` 现在会返回当前 `runtime_environment / provider_mode / provider_cache_namespace / runtime_dir`，用于部署或手动测试前确认实际运行 namespace
+- 文档已落到：
+  - `docs/RUNTIME_ENVIRONMENT_ISOLATION.md`
+  - `docs/TEST_ENVIRONMENT.md`
+  - `docs/ECS_PRELAUNCH_CHECKLIST.md`
+  - `docs/ALIYUN_ECS_TRIAL_ROLLOUT.md`
+  - `docs/PG_ONLY_CUTOVER_TRACKER.md`
+  - `docs/NEXT_TODO.md`
+
+### Perplexity full-roster 语义、hosted queued 卡住与 former broad-search 收口
+
+- Meta `TBD` / ByteDance `Seedance` plan 复核：
+  - 两者实际 `strategy_type` 都是 `scoped_search_roster`，都会走带关键词的 scoped current/former profile search
+  - 前端 label 差异来自 baseline 状态：ByteDance 没 baseline；Meta 曾被 4 月 23 日 Excel intake 的 2 人快照误标成 authoritative baseline
+  - 已新增大组织 coverage baseline gate：Excel/import/supplemental 小样本资产仍可作为候选人资产检索，但没有 shard / standard bundle / coverage proof 时，不再解锁 `prefer_delta_from_baseline` 或 `baseline_reuse_available`
+  - 已在本地 PG 刷新 Meta execution profile：`baseline_candidate_count=2`、`coverage_baseline_reuse_ready=false`、`current_lane_default=keyword_search`
+- Perplexity `Agent` 方向 plan 显示 `全量公司资产` 是当前预期：
+  - Perplexity 本地没有 authoritative baseline，organization execution profile 走 `fallback_unknown_company`
+  - fallback 默认 acquisition mode 是 `full_company_roster`
+  - `Agent` 在这个模式下应作为后续本地 retrieval/rerank 关键词，而不是限制 current company roster API
+- 已确认并修复 hosted workflow `queued` 卡住：
+  - 根因是 `start_workflow(...)` 先启动 recovery daemons，再启动 hosted dispatch，recovery 可能抢先持有 job lease
+  - queued hosted recovery 也曾在持有 job lease 时再启动 hosted thread，导致 thread 立即看到 `already_running` 后退出
+  - 现在 hosted dispatch 先于 recovery daemon 启动；recovery 接管 queued hosted job 时不再持有外层 job lock
+- 已收口 former lane 的 full-roster 语义：
+  - 对 full-company roster / 小公司全量成员策略，former `linkedin-profile-search` 默认只传 `pastCompanies`
+  - 不再把 `Agent` 这类方向词作为 `searchQuery` 限制 former 搜索
+  - 只有 scoped / large-org keyword-only 策略才保留 keyword-limited former search
+- 旧 Perplexity job `b22332dfcc6f` 是修复前启动的，但修复后已从 queued 恢复并完成：
+  - worker 日志记录本次 Perplexity asset population 约 `525` candidates
+  - `/api/jobs/{job_id}/results` 默认仍只返回轻量/检索结果视图，不等价于资产总人口数
+- 已完成验证：
+  - `./.venv-tests/bin/python -m pytest tests/test_seed_discovery.py -q -k 'former_paid_fallback_keyword_only_skips_blank_query or former_paid_fallback_full_roster_uses_broad_past_company_when_not_keyword_only or paid_fallback_all_queries_union_runs_all_harvest_queries'`
+  - `./.venv-tests/bin/python -m pytest tests/test_pipeline.py -q -k 'resume_queued_workflow_prefers_hosted_dispatch_when_requested or resume_queued_hosted_workflow_dispatches_without_holding_job_lock or start_workflow_dispatches_hosted_runner_before_recovery_daemons or start_hosted_workflow_thread_skips_duplicate_dispatch_with_fresh_marker or progress_auto_recovery_skips_fresh_hosted_dispatch_for_queued_job'`
+  - `./.venv-tests/bin/python -m py_compile src/sourcing_agent/orchestrator.py src/sourcing_agent/seed_discovery.py tests/test_pipeline.py tests/test_seed_discovery.py`
+  - 本地 backend / frontend 已重启并健康：`http://127.0.0.1:8765`、`http://localhost:4173`
+
+### Monica probe/full duplicate 与 Perplexity plan 卡顿根因修复
+
+- `harvestapi/linkedin-company-employees` 的 adaptive probe 现在会在“probe 已证明完整”时直接复用 probe dataset：
+  - 条件是 probe completed、未触发 provider cap、`estimated_total_count > 0`、且 `returned_item_count >= estimated_total_count`
+  - 同步 `fetch_company_roster(...)` 与 queued `execute_with_checkpoint(...)` 两条入口都已覆盖
+  - 因此 Monica AI 这类 probe 只返回 8 个成员的 case，不再为了同一个 payload 再发第二次 full run
+- Perplexity plan 9-13 分钟的根因不是 planner 本身：
+  - 独立 `explain-workflow` 对 `Perplexity Agent` 实测约 `12.87s`
+  - 本地 serve 进程里同时跑了 startup `organization_asset_warmup`
+  - 该 warmup 默认无上限扫描/同步所有 runtime organization assets，长期占用一个 Python 线程和 GIL，拖慢 async plan hydration
+- startup organization asset warmup 已改成显式 opt-in：
+  - 默认 `STARTUP_ORGANIZATION_ASSET_WARMUP_ENABLED=false`
+  - 需要冷启动预热时再手动开启，不能再作为每次本地/线上 serve 的默认后台任务
+- 已完成验证：
+  - `./.venv-tests/bin/python -m pytest tests/test_harvest_connectors.py -q -k 'complete_probe_dataset or probe_company_roster_query_records_probe_summary or multi_page_fetch_budget'`
+  - `./.venv-tests/bin/python -m pytest tests/test_pipeline.py -q -k 'startup_organization_asset_warmup_is_opt_in_by_default'`
+  - `./.venv-tests/bin/python -m py_compile src/sourcing_agent/harvest_connectors.py src/sourcing_agent/orchestrator.py tests/test_harvest_connectors.py tests/test_pipeline.py`
+
+### Scripted workflow guardrails 当前轮收尾
+
+- `workflow_smoke.py` 的 progress observability 已把计数语义拆清：
+  - `result_count / observed_company_candidate_count` 是单调观测计数，回退仍视为 regression
+  - `manual_review_count` 是待处理 backlog，profile 补全后下降是正常行为，现单独输出 `backlog_reductions`
+  - synthetic terminal fallback 在缺少终态计数字段时仍会 carry forward，避免 terminal summary 把有效计数误清零
+- 当前 scripted smoke 已能结构化验证这几类用户手动测试暴露过的问题：
+  - duplicate provider dispatch
+  - default-off `Public Web Stage 2` 是否被误打开
+  - prerequisite-ready 到下游启动之间是否存在异常空转
+  - `Final Results` 与候选人看板持久化是否一致
+  - progress counter regression 与 manual-review backlog reduction 分口径统计
+- 新一轮验证已完成：
+  - `./.venv-tests/bin/python -m pytest tests/test_workflow_smoke.py -q`
+  - `PYTHONPATH=src ./.venv-tests/bin/python scripts/run_simulate_smoke_matrix.py --runtime-dir runtime/test_env/scripted_google_long_tail_current_recheck4 --provider-mode scripted --scripted-scenario configs/scripted/google_multimodal_long_tail.json --fast-runtime --case google_multimodal_pretrain --strict --timing-summary --report-json output/scripted_smoke_current/google_long_tail_recheck4_report.json --summary-json output/scripted_smoke_current/google_long_tail_recheck4_summary.json`
+  - `./.venv-tests/bin/python -m pytest tests/test_hosted_workflow_smoke.py -q -k 'hosted_scripted_google_long_tail_timeout_completes_without_manual_takeover or hosted_scripted_large_org_full_roster_overflow_completes_without_live_provider or hosted_scripted_large_org_profile_tail_reconciles_after_background_prefetch or hosted_scripted_large_org_profile_tail_completed_snapshot_skips_repeat_prefetch or hosted_scripted_long_tail_accepts_request_scoped_fast_smoke_profile_without_server_env'`
+  - `./.venv-tests/bin/python -m pytest tests/test_workflow_smoke.py tests/test_harvest_connectors.py tests/test_seed_discovery.py -q`
+  - `./.venv-tests/bin/python -m pytest tests/test_pipeline.py -q -k 'acquire_search_seed_pool_prefetches_incrementally_without_redispatching_overlapping_urls or acquire_full_roster_continues_from_search_seed_baseline_while_background_harvest_runs or acquire_full_roster_continues_from_roster_baseline_while_former_search_runs_in_background or reconcile_completed_workflow_after_background_search_seed or reconcile_completed_workflow_after_background_company_roster or reconcile_completed_workflow_after_background_harvest_prefetch or refresh_running_workflow_before_retrieval_applies_completed_background_search_outputs_and_syncs_store or refresh_running_workflow_before_retrieval_applies_completed_background_company_roster_outputs_and_syncs_store or refresh_running_workflow_before_retrieval_applies_completed_background_harvest_prefetch_outputs_and_syncs_store or handle_completed_recovery_worker_result_applies_harvest_prefetch_inline_and_defers_sync_while_same_kind_worker_pending or refresh_running_workflow_before_retrieval_skips_workers_already_consumed_inline'`
+- Google long-tail scripted strict recheck 当前结果：
+  - total 约 `5502.19ms`
+  - `progress_regression_case_count=0`
+  - duplicate dispatch / disabled stage / prerequisite gap / final-results board violation 均为 `0`
+
+### Search-seed profile prefetch 已前推到单 query 返回粒度
+
+- `src/sourcing_agent/worker_daemon.py` 这轮把 worker result 消费从“按提交顺序阻塞 `future.result()`”改成了“按实际完成顺序消费”：
+  - `AutonomousWorkerDaemon.run(...)` 现在会按 completed order 处理 worker result
+  - 同时支持 `result_callback`
+  - 这让上层不必再等最慢的那条 query，才能看到更快 query 的增量结果
+- `src/sourcing_agent/seed_discovery.py` 现在新增了 `on_incremental_query_result` contract：
+  - `discover(...)` 会在单个 query spec 返回 usable entries 后立即回调
+  - `_provider_people_search_fallback(...)` 也同步接入，不再只在 paid fallback 全部完成后才统一吐结果
+  - 当前 `web_search` / `harvest_profile_search` 两条 search-seed 入口都已经具备 query-level incremental emit
+- `src/sourcing_agent/acquisition.py` 也不再把 search-seed prefetch 分成“incremental 临时分支 + final snapshot 另一套逻辑”：
+  - 新增 shared helper，把 search-seed entries 统一转成 prefetch candidates
+  - acquisition 侧会按 job-local seen URL 去重
+  - overlapping query results 不会在同一 job 里重复派发相同的 profile prefetch
+  - final snapshot prefetch 会和前面 incremental dispatch 汇总成同一份 summary，而不是把“前面已派发过”覆盖成一个误导性的 skipped 结果
+- 这轮解决的是：
+  - search-seed 不再必须等整轮 discover 结束，才第一次启动 profile prefetch
+  - overlap query 不再在同一 job 内二次派发同一个 LinkedIn profile URL
+  - worker daemon completion order 不再被最慢 worker 拖成伪串行
+- 这轮还没有结束的点：
+  - 还没把 `linkedin-company-employees` / `linkedin-profile-search` 的 provider response 也统一收成同一套 request-level incremental ingest
+  - 也还没把 scraper batch 返回后的 delta materialization / debounce writer 收到最终形态
+- 已完成验证：
+  - `./.venv-tests/bin/python -m pytest tests/test_worker_daemon.py -q`
+  - `./.venv-tests/bin/python -m pytest tests/test_seed_discovery.py -q`
+  - `./.venv-tests/bin/python -m pytest tests/test_pipeline.py -q -k 'acquire_search_seed_pool or acquire_full_roster_continues_from_search_seed_baseline_while_background_harvest_runs or acquire_full_roster_continues_from_roster_baseline_while_former_search_runs_in_background or reconcile_completed_workflow_after_background_search_seed or refresh_running_workflow_before_retrieval_applies_completed_background_search_outputs_and_syncs_store'`
+  - 当前均已转绿
+
+### Company-roster background output 已并入 shared snapshot apply / reconcile contract
+
+- `src/sourcing_agent/snapshot_materializer.py` 这轮新增了 `apply_company_roster_workers_to_snapshot(...)`：
+  - `harvest_company_employees` completed worker 现在不再只是“等下次整轮恢复时再重抓”
+  - 会直接把 worker/shard 的 queue dataset materialize 成 worker snapshot
+  - 再把它增量 merge 回 root snapshot 的：
+    - `harvest_company_employees_merged.json`
+    - `harvest_company_employees_visible.json`
+    - `harvest_company_employees_headless.json`
+    - `harvest_company_employees_summary.json`
+  - 同时也会把 root `candidate_documents.json` 一并增量更新
+- `src/sourcing_agent/orchestrator.py` 现已把这条 contract 接到两条主路径：
+  - `pre_retrieval_refresh`
+  - `completed-job background reconcile`
+  - running/completed 两条路径不再对 `company_roster` 各长一套独立逻辑
+- `src/sourcing_agent/workflow_refresh.py` 这轮也补了 shared classification / metrics：
+  - `worker_has_completed_background_company_roster_output(...)`
+  - `resolve_reconcile_snapshot_dir(...)` / `resolve_reconcile_snapshot_id(...)` 现在优先认 `root_snapshot_dir`
+  - segmented shard worker 不会再错误把 shard dir 当成最终 root snapshot 去 reconcile
+  - refresh metrics 现新增：
+    - `inline_company_roster_worker_count`
+    - `background_company_roster_reconcile_count`
+- partial segmented roster 这轮也收了 completion contract：
+  - `_restore_segmented_roster_snapshot_from_snapshot_dir(...)` 不再要求 all-shards-ready 才第一次恢复
+  - 已完成 shard 现在可以先恢复成 partial root snapshot，供当前 workflow 继续主链
+  - 但 `src/sourcing_agent/acquisition.py::_load_cached_roster_snapshot(...)` 会显式跳过 `completion_status != completed` 的 partial roster
+  - 这样 partial current roster 可以服务当前 job，但不会误被后续新 job 当成“可直接复用的完整 cached roster”
+- 这轮解决的是：
+  - `linkedin-company-employees` completed background worker 不再游离在 search-seed 之外
+  - running/completed 两种 reconcile 都共享同一套 roster apply contract
+  - segmented roster 可以 partial restore，但不会错误解锁 cached reuse
+- 这轮还没结束的点：
+  - `linkedin-company-employees` live provider response 仍未做到“单个 provider request 返回就立即 inline ingest”，当前收口点还是 completed worker/shard output
+  - scraper batch 返回后的 delta materialization / debounce writer 仍未收到终态
+- 已完成验证：
+  - `./.venv-tests/bin/python -m py_compile src/sourcing_agent/workflow_refresh.py src/sourcing_agent/snapshot_materializer.py src/sourcing_agent/orchestrator.py src/sourcing_agent/acquisition.py`
+  - `./.venv-tests/bin/python -m pytest tests/test_worker_daemon.py tests/test_seed_discovery.py -q`
+  - `./.venv-tests/bin/python -m pytest tests/test_pipeline.py -q -k 'acquire_search_seed_pool_prefetches_incrementally_without_redispatching_overlapping_urls or acquire_full_roster_continues_from_search_seed_baseline_while_background_harvest_runs or acquire_full_roster_continues_from_roster_baseline_while_former_search_runs_in_background or reconcile_completed_workflow_after_background_search_seed or reconcile_completed_workflow_after_background_company_roster or refresh_running_workflow_before_retrieval_applies_completed_background_search_outputs_and_syncs_store or refresh_running_workflow_before_retrieval_applies_completed_background_company_roster_outputs_and_syncs_store or refresh_running_workflow_before_retrieval_skips_workers_already_consumed_inline or restore_roster_snapshot_rehydrates_segmented_harvest_queue_shards or restore_roster_snapshot_rehydrates_partial_segmented_harvest_queue_shards_without_cached_reuse'`
+  - 当前均已转绿
+
+### Harvest/company-roster worker completion 现已走统一的 inline incremental ingest 主路径
+
+- `src/sourcing_agent/snapshot_materializer.py` 这轮补上了 `apply_harvest_profile_workers_to_snapshot(...)`：
+  - completed `harvest_profile_batch` worker 不再只靠后续 `CompanyAssetCompletionManager` 全量补课
+  - 现在会直接把已持久化的 raw LinkedIn profile payload delta-merge 回 root `candidate_documents.json`
+  - 复用现有 profile match / membership review / non-member apply helper，不再额外长一套 harvest-only merge 逻辑
+- `src/sourcing_agent/orchestrator.py` 现已把 running/completed 两条路都收口到同一 helper：
+  - running job:
+    - worker recovery completion callback 会立即 apply company-roster / harvest-prefetch 输出
+    - company-roster apply 后会立刻继续 queue baseline profile prefetch
+    - full sync/materialize 现已收成 same-kind micro-batch + per-job single-writer：
+      - 同 job、同 snapshot、同 kind 的多个 completed worker 会先合并成一个 apply batch
+      - 同 kind worker 仍在 in-flight -> 只做 delta apply，先不重跑 full sync
+      - 同 kind worker drain 完 -> 只触发一次 `_synchronize_snapshot_candidate_documents(...)`
+  - completed job:
+    - `_reconcile_completed_workflow_after_harvest_prefetch(...)` 现改为先走 shared harvest delta apply
+    - 不再回退到 `CompanyAssetCompletionManager.complete_snapshot_profiles(...)` 作为另一套 reconcile 主路径
+- `src/sourcing_agent/acquisition.py` 这轮把 in-process segmented roster 也接到了同一 callback：
+  - 当 `ThreadPoolExecutor` shard 中已有 completed local shard、但整轮 segmented roster 仍需 background resume 时
+  - 会立即把这批 completed shard 通过同一 inline reconcile callback merge 回 root snapshot
+  - 不再等到 recovery daemon 下一拍才第一次看见这些已完成 shard
+- 为了避免“callback 已吃掉 worker，但 refresh/reconcile 又二次吃同一 worker”：
+  - completed background worker 现在会写 `inline_incremental_ingest` marker
+  - `worker_has_completed_background_company_roster_output(...)` / `worker_has_completed_background_harvest_prefetch(...)` 会跳过已 inline-consumed worker
+- 这轮实际收掉的是：
+  - `linkedin-company-employees` background worker completion -> root snapshot apply -> downstream prefetch/sync
+  - `harvest_profile_batch` completion -> delta merge -> same-kind micro-batch sync/materialize
+  - in-process segmented `harvest_company_employees` completion -> same inline callback / apply contract
+  - completed reconcile 不再保留 harvest-prefetch 的另一套 legacy completion-manager 双轨
+- 还没继续做的更深一层优化：
+  - 现在剩下的不是“同步 shard 有没有接入 callback”，而是更细的 runtime tuning：
+    - 还没继续做 time-window coalescing
+    - 还没把 per-job single-writer 再提升成更完整的 global in-flight budget / backpressure contract
+- 已完成验证：
+  - `./.venv-tests/bin/python -m py_compile src/sourcing_agent/snapshot_materializer.py src/sourcing_agent/orchestrator.py src/sourcing_agent/worker_daemon.py src/sourcing_agent/workflow_refresh.py`
+  - `./.venv-tests/bin/python -m pytest tests/test_worker_daemon.py tests/test_worker_recovery_daemon.py -q`
+  - `./.venv-tests/bin/python -m pytest tests/test_pipeline.py -q -k 'refresh_running_workflow_before_retrieval_applies_completed_background_harvest_prefetch_outputs_and_syncs_store or handle_completed_recovery_worker_result_applies_harvest_prefetch_inline_and_defers_sync_while_same_kind_worker_pending or reconcile_completed_workflow_after_background_harvest_prefetch_uses_shared_snapshot_apply_contract or execute_segmented_harvest_company_roster_workers_emits_inline_callback_for_completed_local_shards or micro_batches_completed_harvest_prefetch_workers_and_syncs_once'`
+  - `./.venv-tests/bin/python -m pytest tests/test_pipeline.py -q -k 'acquire_search_seed_pool_prefetches_incrementally_without_redispatching_overlapping_urls or acquire_full_roster_continues_from_search_seed_baseline_while_background_harvest_runs or acquire_full_roster_continues_from_roster_baseline_while_former_search_runs_in_background or reconcile_completed_workflow_after_background_search_seed or reconcile_completed_workflow_after_background_company_roster or reconcile_completed_workflow_after_background_harvest_prefetch or refresh_running_workflow_before_retrieval_applies_completed_background_search_outputs_and_syncs_store or refresh_running_workflow_before_retrieval_applies_completed_background_company_roster_outputs_and_syncs_store or refresh_running_workflow_before_retrieval_applies_completed_background_harvest_prefetch_outputs_and_syncs_store or handle_completed_recovery_worker_result_applies_harvest_prefetch_inline_and_defers_sync_while_same_kind_worker_pending or refresh_running_workflow_before_retrieval_skips_workers_already_consumed_inline'`
+  - 当前均已转绿
+
+### Full-roster blocked resume 已允许基于 partial baseline 提前继续
+
+- `src/sourcing_agent/orchestrator.py` 这轮收掉了一个仍然存在的阶段级 barrier：
+  - 之前 `acquire_full_roster` 只要还有 `acquisition_specialist / harvest_company_employees` worker 在跑，就会继续保持 `blocked`
+  - 即使 former/search-seed baseline 已经足够进入 `enrich_linkedin_profiles`，workflow 也会被错误卡住
+- 这轮又把同一条 contract 前推到了 `src/sourcing_agent/acquisition.py`：
+  - `acquire_full_roster` 在 current-roster Harvest 已 queued、但 former/search-seed baseline 已到位时，不再先返回 `blocked`
+  - 现在会直接以 partial baseline 继续主链，并提前派发 background profile prefetch
+  - 这样不必再等 recovery tick 才从 blocked 状态被重新拉起
+- 同时也把原先不对称的反向分支收掉了：
+  - 如果 current roster 已经 ready，但 former/search-seed 还在后台 worker
+  - `acquire_full_roster` 现在也会继续主链，而不是继续 `blocked`
+  - current/former 两侧改为共用同一个 full-roster baseline continuation helper，不再各长一套局部分支
+- 现在的 contract 改为：
+  - 只要 `acquire_full_roster` 已经具备可用 baseline
+  - 无论剩余后台 worker 是 `harvest_company_employees` 还是 former/search-seed
+  - workflow 就允许继续 resume 到 enrichment / normalize / retrieval
+  - current-roster Harvest worker 留在后台继续补 current lane，而不是阻塞主链
+- 这意味着：
+  - `LinkedIn Stage 1 completed` 不再必须等待所有 current roster worker terminal
+  - full-roster job 可以更早进入 preview / board-ready 路径
+  - readiness 与 checkpoint reuse 的 contract 现在更一致，不再出现“checkpoint 已够复用，但 readiness 还在机械等待”的分叉
+  - former/search-seed baseline 上的 LinkedIn profile prefetch 也能更早开始，而不是只能等 `enrich_linkedin_profiles`
+- search-seed acquisition / recovery 这轮也继续前推到更细粒度：
+  - `acquire_search_seed_pool(...)` 一旦拿到带 `profile_url` 的新 entries，就会立刻派发 background profile prefetch
+  - `background_search_seed_reconcile`
+  - `pre_retrieval_refresh`
+  - 这两条补偿路径现在也会在 merge `search_seed_snapshot` 后立刻触发同一套 prefetch，而不是只等后续 enrichment stage
+- 同时把旧测试契约对齐到当前 default-off stage 设计：
+  - `tests/test_pipeline.py` 不再假设 `enrich_public_web_signals` 在默认 plan 中一定存在
+- 已完成验证：
+  - `./.venv-tests/bin/python -m pytest tests/test_pipeline.py -q -k 'resume_blocked_workflow_uses_search_seed_baseline_with_noncritical_pending_workers or acquisition_resume_readiness_allows_background_current_roster_harvest_when_baseline_exists or enrich_profiles_writes_baseline_when_full_roster_profile_prefetch_is_pending or restore_completed_workflow_stage_summary_contract_keeps_latest_completed_at or scoped_search_prefetch_queues_all_known_profile_urls or execute_retrieval_skips_ranked_scoring_for_asset_population_default_view'`
+  - `./.venv-tests/bin/python -m pytest tests/test_pipeline.py -q -k 'resume_blocked_workflow_after_workers_complete or resume_blocked_workflow_ignores_pending_exploration_workers or job_progress_classifies_blocked_acquisition_workers or get_job_progress_triggers_auto_recovery_when_blocked_on_acquisition_workers or acquire_full_roster_blocks_when_background_harvest_is_pending'`
+  - `./.venv-tests/bin/python -m pytest tests/test_pipeline.py -q -k 'acquire_full_roster_continues_from_search_seed_baseline_while_background_harvest_runs or acquire_full_roster_blocks_when_background_harvest_is_pending or acquisition_resume_readiness_allows_background_current_roster_harvest_when_baseline_exists or resume_blocked_workflow_uses_search_seed_baseline_with_noncritical_pending_workers or enrich_profiles_writes_baseline_when_full_roster_profile_prefetch_is_pending'`
+  - `./.venv-tests/bin/python -m pytest tests/test_pipeline.py -q -k 'acquire_search_seed_pool_queues_profile_prefetch_immediately_for_recovered_entries or acquire_search_seed_pool_allows_baseline_when_background_queue_is_pending or acquire_search_seed_pool_still_blocks_when_background_queue_has_no_entries or reconcile_completed_workflow_after_background_search_seed or refresh_running_workflow_before_retrieval_applies_completed_background_search_outputs_and_syncs_store or acquire_full_roster_continues_from_roster_baseline_while_former_search_runs_in_background or acquire_full_roster_continues_from_search_seed_baseline_while_background_harvest_runs'`
+  - `./.venv-tests/bin/python -m pytest tests/test_pipeline.py -q -k 'acquire_full_roster or acquire_search_seed_pool or reconcile_completed_workflow_after_background_search_seed or refresh_running_workflow_before_retrieval_applies_completed_background_search_outputs_and_syncs_store or resume_blocked_workflow_uses_search_seed_baseline_with_noncritical_pending_workers or acquisition_resume_readiness_allows_background_current_roster_harvest_when_baseline_exists'`
+  - 当前均已转绿
+
+### Workflow behavior guardrails 已接入 scripted smoke report
+
+- scripted provider 路径现会把 dispatch invocation 写入隔离 runtime：
+  - `src/sourcing_agent/scripted_provider_scenario.py`
+  - `src/sourcing_agent/search_provider.py`
+  - `src/sourcing_agent/harvest_connectors.py`
+- `src/sourcing_agent/workflow_smoke.py` 现在会在 per-case `provider_case_report` 和顶层 export 中同时输出：
+  - `behavior_guardrails.duplicate_provider_dispatch`
+  - `behavior_guardrails.disabled_stage_violations`
+  - `behavior_guardrails.prerequisite_gaps`
+  - `behavior_guardrails.final_results_board_consistency`
+- 这意味着 scripted smoke 不再只看 wall-clock，而能直接回答：
+  - 同一 payload 有没有被重复 dispatch
+  - `Public Web Stage 2` 这种 default-off stage 有没有被误打开
+  - `LinkedIn Stage 1 -> Stage 1 Preview -> stage_2_final` 之间有没有不合理空转
+  - `Final Results` 之后 board 是否真正 non-empty
+- 汇总层 `summarize_smoke_timings(...)` 也新增了 aggregate summary：
+  - duplicate dispatch case/signature/redundant dispatch counts
+  - unexpected public web stage case count
+  - prerequisite gap p95/min/max
+  - final-results-vs-board violation case count
+- 已完成验证：
+  - `./.venv-tests/bin/python -m pytest -q tests/test_workflow_smoke.py`
+  - `./.venv-tests/bin/python -m pytest -q tests/test_hosted_workflow_smoke.py -k 'large_org_full_roster_overflow_completes_without_live_provider'`
+  - `./.venv-tests/bin/python scripts/run_simulate_smoke_matrix.py --runtime-dir <tmp> --provider-mode scripted --scripted-scenario configs/scripted/large_org_full_roster_overflow.json --fast-runtime --case xai_full_roster --strict --timing-summary`
+  - 实测这条 `xai_full_roster` scripted smoke 的 `behavior_guardrails` 为全绿：
+    - duplicate dispatch `0`
+    - unexpected public web stage `0`
+    - prerequisite gaps `0ms`
+    - final-results / board inconsistency `0`
+
+### Public Web Stage 2 已改为 default-off，不再阻塞候选人看板
+
+- workflow submission 默认 `analysis_stage_mode=single_stage`：
+  - `POST /api/workflows` 不再默认把 job 送进 `two_stage`
+  - 默认链路现在是 `LinkedIn Stage 1 -> Stage 1 Preview -> normalize/materialize -> final results`
+- plan 默认不再加入 `enrich_public_web_signals`：
+  - 只有显式 `analysis_stage_mode=two_stage` 的请求才会把 `Public Web Stage 2` 放进 acquisition plan
+  - 因此默认 workflow 不会再被一个当前几乎无增量价值的 stage2 acquisition 卡住
+- `Stage 1 preview` 的 summary / event 文案也已对齐：
+  - default path 改为 `Continuing snapshot materialization`
+  - 只有显式启用 two-stage 的 case 才会显示 `Continuing Public Web Stage 2 acquisition`
+- 已完成验证：
+  - `./.venv-tests/bin/python -m pytest -q` 跑了这条变更对应的高信号子集
+  - 覆盖了：
+    - plan default-off / explicit two-stage opt-in
+    - single-stage workflow 不再落 `public_web_stage_2`
+    - two-stage 显式启用时旧链路仍可继续工作
+    - `/api/workflows` 默认 submission contract 改为 `single_stage`
+
+### `/api/plan` 已拆成 fast submit + async plan hydration
+
+- 这轮先把“进入检索方案页”从同步 `explain_workflow()` 长尾里剥离出来：
+  - 新增 `POST /api/plan/submit`
+  - 前端不再阻塞等待完整 plan/explain 才切路由
+  - 现在会先创建 `history_id`、立即进入 `phase=plan` 的 loading 态，再通过 frontend-history recovery 异步补全 plan
+- 后端新增了按 `history_id` 去重的 plan hydration in-flight state：
+  - `src/sourcing_agent/orchestrator.py`
+    - `submit_plan_workflow(...)`
+    - `_queue_plan_hydration(...)`
+    - `_run_plan_hydration(...)`
+  - `frontend_history_link.metadata.plan_generation` 现在显式记录：
+    - `queued`
+    - `running`
+    - `completed`
+    - `failed`
+    - 以及 request id / timing / error message
+- `/api/frontend-history/{history_id}` recovery 也补上了显式 `error_message`，前端可以直接区分：
+  - “还在生成 plan”
+  - “plan 已生成可展示”
+  - “plan generation failed”
+- 前端 `SearchPage` 已接到新 contract：
+  - submit / revision 现在走 fast submit
+  - 方案页允许 `plan=null` 的 loading state
+  - history hydration 对 `phase=plan && plan missing` 不再死循环 recover，而是走定时 hydration polling
+  - 历史侧栏在这类记录上显示“检索方案生成中”，不再直接显示“未生成方案”
+- API lane 也一起收了：
+  - `/api/plan/submit` 被标为 `light` lane
+  - 避免它继续和重 POST 共用 shared lane，导致轻量提交也被排队拖慢
+- 已完成验证：
+  - `./.venv-tests/bin/python -m pytest tests/test_frontend_history_recovery.py tests/test_api_json_serialization.py -q`
+  - `./.venv-tests/bin/python -m pytest tests/test_pipeline.py -q -k 'http_api_light_routes_are_classified_for_reserved_lane'`
+  - `cd frontend-demo && npm run build`
+  - 当前均已转绿
+
+### Remaining note after fast submit split
+
+- 这轮收掉的是“HTTP submit/route transition 长尾”，不是 `build_plan` 本身的纯计算成本：
+  - `llm_normalize_request`
+  - `_build_augmented_sourcing_plan`
+  - `_build_execution_bundle`
+  - 这些仍在后台 hydration 线程里执行
+- 因此用户进入方案页已可接近秒级，但完整 plan detail 的最终 ready 时间，仍受 planner/LLM 本身耗时影响。
+
+### 2026-04-23 PM tracker closure pass
+
+- `docs/SESSION_TRACKER_2026-04-23_PM.md` 现已正式关闭：
+  - immediate stabilization tails are no longer tracked as an open session backlog
+  - long-horizon follow-ups were promoted into `docs/NEXT_TODO.md`
+- authoritative snapshot board source has been re-aligned:
+  - `src/sourcing_agent/orchestrator.py` now ignores non-patch job asset-population overlays when the candidate source is an authoritative snapshot baseline
+  - this fixes the class where `/api/jobs/{job_id}/dashboard` and `/api/jobs/{job_id}/candidates?offset=0` exposed different first-page prefixes for the same authoritative asset
+- frontend board hydration/recovery contract is now more stable:
+  - `frontend-demo/src/lib/api.ts`
+    - candidate-page merge is now offset-aware
+    - incomplete dashboard summaries proactively backfill page 0 before continuing hydration
+- smoke/stage digest contract was tightened:
+  - `src/sourcing_agent/workflow_smoke.py` now synthesizes missing canonical provider stages such as `public_web_stage_2` from later completed stages
+  - hosted smoke assertions no longer flap on reuse cases where the provider stage was effectively skipped but finalization already completed
+- regression coverage added:
+  - `tests/test_hosted_workflow_smoke.py::HostedWorkflowSmokeTest::test_authoritative_snapshot_candidate_page_ignores_non_patch_overlay_prefix_drift`
+  - `tests/test_workflow_smoke.py::WorkflowSmokeTest::test_stage_summary_digest_synthesizes_missing_public_web_stage_from_final_stage`
+- verified in this pass:
+  - `./.venv-tests/bin/python -m pytest tests/test_hosted_workflow_smoke.py -q -k 'authoritative_snapshot_candidate_page_ignores_non_patch_overlay_prefix_drift or large_org_full_roster_existing_baseline_defaults_to_asset_population'`
+  - `./.venv-tests/bin/python -m pytest tests/test_workflow_smoke.py tests/test_hosted_workflow_smoke.py tests/test_scripted_test_runtime.py -q`
+  - `SOURCING_RUN_FRONTEND_BROWSER_E2E=1 ./.venv-tests/bin/python -m pytest tests/test_frontend_browser_e2e.py -q`
+  - current result: green (`4 passed, 2 skipped` for browser E2E; relevant smoke/runtime suites green)
+
+### Background prefetch submit 与 backend stage timing 已做 fresh smoke 复核
+
+- `execution_preferences.py` 这轮把 runtime tuning 的数值型 override 也保留下来，避免：
+  - request normalize 后把 `harvest_prefetch_submit_workers`
+  - `parallel_search_workers`
+  - `parallel_exploration_workers`
+  - `candidate_artifact_max_workers`
+  - 这类 runtime knobs 静默丢失
+- `enrichment.py` 的 background Harvest prefetch submit 现已与 foreground hydration 基本对齐：
+  - chunk submit 不再全串行
+  - 会基于 URL/source-shard 上下文解默认 window
+  - 再通过 shared runtime tuning resolver 做 cap/override
+- `orchestrator.py` / `workflow_smoke.py` 这轮也补了 backend stage timestamp repair：
+  - `stage_1_preview` nested payload 会带 `started_at` / `completed_at`
+  - `linkedin_stage_1` 缺失 `started_at` 时会从既有 summary 或 job `created_at` 回填
+  - smoke 汇总现在优先消费 backend authoritative timestamps，而不是先掉回 client timeline
+- 已用隔离 runtime 重跑 fresh smoke，并落盘到 `output/scripted_smoke_v4/`：
+  - `openai_reuse`
+    - `reuse_snapshot`
+    - total 约 `1505.78ms`
+    - `job_to_board_nonempty` 约 `1020.23ms`
+  - `google_scoped_cold`
+    - `delta_from_snapshot`
+    - total 约 `5144.26ms`
+    - `job_to_board_nonempty` 约 `1076.37ms`
+  - `xai_live_roster`
+    - `new_job`
+    - total 约 `18825.6ms`
+    - `job_to_board_nonempty` 约 `15120.17ms`
+    - progress 峰值：
+      - `queued_worker_count=3`
+      - `waiting_remote_harvest_count=3`
+      - `pending_worker_count=3`
+- fresh smoke 结论：
+  - `provider_case_report.stage_wall_clock_ms` 不再回到空字典
+  - `provider_case_report.workflow_wall_clock_ms` 在 reuse / delta / live-roster 三类代表性 case 都已产出
+  - backend stage timing 修复已经体现在标准 smoke report，而不只是单测
+- 尾巴已继续收掉：
+  - per-case 顶层 `stage_summary_digest / stage_wall_clock_ms / workflow_wall_clock_ms` 现已与 nested `provider_case_report` 对齐导出
+  - synthetic terminal sample 现会保留 monotonic counters，不再把 completed case 的 `manual_review_count` / `result_count` 打回 `0`
+- 已补并通过回归：
+  - `tests/test_workflow_smoke.py::WorkflowSmokeTest::test_synthetic_terminal_sample_preserves_monotonic_counts`
+  - `tests/test_workflow_smoke.py::WorkflowSmokeTest::test_build_case_level_smoke_exports_surfaces_stage_digest_and_timings`
+  - fresh recheck: `output/scripted_smoke_v4_recheck/openai_reuse/report.json`
+
+### Shared runtime tuning 继续收口到 scheduler lane budget，并补上 workflow wall-clock smoke report
+
+- `runtime_tuning.py` 这轮继续向上收口：
+  - 不再只覆盖 provider query / roster shard / candidate artifact 并发
+  - 同一套 profile/override resolver 现在也覆盖：
+    - `parallel_search_workers`
+    - `parallel_exploration_workers`
+    - `search_worker_unit_budget`
+    - `public_media_worker_unit_budget`
+    - `exploration_worker_unit_budget`
+- `worker_scheduler.py` 不再直接机械读 `cost_policy.parallel_*`：
+  - 会先从 plan / task intent view 的 `execution_preferences.runtime_tuning_profile` 抽 shared runtime context
+  - 再统一解析 lane limits / lane budget caps
+  - 这样 `PersistentWorkerRecoveryDaemon`、scheduler summary、exploration worker daemon 不再各自长一套并发预算分叉
+- `enrichment.py` / `exploratory_enrichment.py` 也继续并到同一 contract：
+  - public-web exploration worker 数不再由 `acquisition.py` 直接读 `cost_policy`
+  - `MultiSourceEnricher` 现按 request runtime tuning + cost policy 统一解出 exploration parallelism
+  - `ExploratoryWebEnricher` 的 daemon plan 也会带上真实 plan/request runtime context，而不是临时拼一个只含 `parallel_exploration_workers` 的简化 plan
+- `workflow_smoke.py` 的 provider-grade report 继续升级：
+  - 新增 `workflow_wall_clock_ms`
+  - 优先使用 backend stage summary 的时间戳
+  - 若 backend stage summary 缺失/不稳定，则回退到 client-observed timeline + smoke timings 估算：
+    - `job_to_stage_1_preview`
+    - `job_to_final_results`
+    - `stage_1_preview_to_final_results`
+    - `final_results_to_board_ready`
+    - `job_to_board_ready`
+    - `job_to_board_nonempty`
+  - aggregate summary 现也带：
+    - `workflow_wall_clock_ms`
+    - `strategy_rollups`
+      - `effective_acquisition_mode`
+      - `dispatch_strategy`
+- `scripts/run_simulate_smoke_matrix.py` 现支持直接落盘：
+  - `--report-json`
+  - `--summary-json`
+  - 这样不再依赖 shell redirect 去抓 stdout/stderr，scripted smoke report 更稳定
+- 已完成验证：
+  - `./.venv-tests/bin/python -m pytest tests/test_runtime_tuning.py tests/test_worker_scheduler.py tests/test_workflow_smoke.py -q`
+  - `./.venv-tests/bin/python -m pytest tests/test_enrichment.py tests/test_seed_discovery.py tests/test_company_asset_completion.py tests/test_worker_recovery_daemon.py -q`
+- 新 scripted smoke 基线已落到 `output/scripted_smoke_v3/`：
+  - `openai_reuse`
+    - `full_local_asset_reuse`
+    - total 约 `1351.05ms`
+    - `job_to_final_results` 约 `80.59ms`
+    - `job_to_board_nonempty` 约 `129.88ms`
+  - `google_scoped_cold`
+    - `baseline_reuse_with_delta`
+    - total 约 `18569.96ms`
+    - `job_to_stage_1_preview` 约 `2266.48ms`
+    - `job_to_final_results` 约 `16080.28ms`
+    - `job_to_board_nonempty` 约 `16257.71ms`
+    - progress 峰值：
+      - `queued_worker_count=1`
+      - `waiting_remote_harvest_count=1`
+      - `pending_worker_count=1`
+      - `active_worker_count=1`
+  - `xai_live_roster`
+    - `scoped_live_search`
+    - total 约 `27678.67ms`
+    - `job_to_stage_1_preview` 约 `8234.12ms`
+    - `job_to_final_results` 约 `27340.48ms`
+    - `job_to_board_nonempty` 约 `27472.91ms`
+    - progress 峰值：
+      - `queued_worker_count=3`
+      - `waiting_remote_harvest_count=3`
+      - `pending_worker_count=3`
+
+### Shared runtime tuning 收口到 provider throughput / artifact workers，并把 smoke report 升级到 progress observability
+
+- `runtime_tuning.py` 不再只管 cooldown/poll：
+  - 现在同一套 profile/override resolver 也覆盖：
+    - `provider_people_search_parallel_queries`
+    - `harvest_company_roster_parallel_shards`
+    - `candidate_artifact_parallel_min_candidates`
+    - `candidate_artifact_max_workers`
+- 已接入的主路径：
+  - `seed_discovery.py`
+    - Harvest `profile_search` 并行 query worker 数不再各自读 cost_policy，改为先走 shared runtime tuning resolver
+  - `acquisition.py`
+    - segmented `company-employees` shard fetch / shard worker dispatch 并发上限改为 shared resolver
+  - `candidate_artifacts.py`
+    - `foreground_fast` 的 candidate artifact 并发预算不再写死旧常数
+    - 现在按 build profile + CPU + runtime tuning overrides 统一计算
+    - `build_execution` 也新增：
+      - `parallel_min_candidates`
+      - `parallel_worker_cap`
+      - `runtime_tuning_profile`
+- `scripts/run_simulate_smoke_matrix.py` / `scripts/run_live_large_org_regression.py` 已清掉遗留的
+  `allow_high_cost_sources` 调用参数，脚本重新与当前 active contract 对齐。
+- `workflow_smoke.py` 的 provider-grade case report 继续升级：
+  - 新增 `progress_observability`
+  - 单 case 现在会结构化输出：
+    - progress sample 数
+    - `queued_worker_count / waiting_remote_harvest_count / pending_worker_count` 峰值
+    - `result_count / observed_company_candidate_count` 是否回退
+    - `manual_review_count` 是否作为 backlog 正常下降，而不是被误判为候选人数回退
+    - 是否出现 “results 已 ready，但 progress terminal 事件滞后” 的 synthetic terminal sample
+  - aggregate summary 也会带：
+    - `progress_regression_case_count`
+    - `progress_sample_count`
+    - `progress_maxima`
+- 已完成验证：
+  - `./.venv-tests/bin/python -m pytest tests/test_runtime_tuning.py tests/test_workflow_smoke.py -q`
+  - `./.venv-tests/bin/python -m pytest tests/test_candidate_artifacts.py -q -k 'records_phase_timings or foreground_fast_skips_compatibility_exports_and_hot_cache or aliases_strict_view_when_it_matches_canonical or legacy_like_benchmark_flags_disable_fast_paths or reuses_candidate_shards_and_rebuilds_only_dirty_candidates or uses_scope_replace_when_all_states_are_dirty'`
+  - `./.venv-tests/bin/python -m pytest tests/test_company_asset_completion.py tests/test_enrichment.py tests/test_seed_discovery.py -q`
+- 新 benchmark / smoke 观测：
+  - `scripts/run_candidate_artifact_benchmark.py --candidate-count 320 --dirty-candidates 24 --repeat 3 --build-profile foreground_fast`
+    - `cold_full` optimized median `3703.2ms` vs legacy-like `6745.95ms`，约 `1.82x`
+    - `incremental_patch` optimized median `2007.68ms` vs legacy-like `2347.21ms`，约 `1.17x`
+  - isolated/scripted smoke:
+    - `openai_reasoning` full local reuse: total 约 `2115.8ms`，board probe wait 约 `17.48ms`
+    - `google_multimodal_pretrain` baseline reuse + delta scripted case: total 约 `33807.25ms`
+      - report 正确标出 `terminal_progress_lag_detected=true`
+      - 无 progress counter regression
+    - `xai_full_roster` scripted large-roster/profile-tail case: total 约 `31091.1ms`
+      - `queued_worker_count / waiting_remote_harvest_count / pending_worker_count` 峰值均为 `3`
+      - 无 progress counter regression，且最终 progress 已观测到 terminal
+
+## 2026-04-23
+
+### Evening stabilization tracker consolidated
+
+- 已新增 [docs/SESSION_TRACKER_2026-04-23_PM.md](docs/SESSION_TRACKER_2026-04-23_PM.md)
+  - 把 `2026-04-23 20:00` 之后讨论的收尾项集中成单一 Markdown tracker
+  - 明确区分：
+    - fixed
+    - partially fixed
+    - still open
+  - 目的是避免 context compact 后再次遗漏：
+    - `allow_high_cost_sources` 彻底退场
+    - worker/progress/results 可见状态一致性
+    - API payload slimming 剩余尾巴
+    - runtime namespace isolation
+    - Harvest batching / benchmark / Excel intake relaunch gate
+
+### 4/21-4/23 变更复盘已落文档，core lane 语义与 live profile hydration 再收一层
+
+- 已新增正式复盘文档：
+  - `docs/CHANGE_REVIEW_2026-04-21_2026-04-23.md`
+  - 重新归类了 4/21-4/23 这轮改动里：
+    - 哪些属于正确的 contract 收口
+    - 哪些只是方向正确但仍有 compatibility tail
+    - 哪些本质上仍是补丁式/双轨式修复，需要继续回退成单一 contract
+- 已继续清理 planner/review 的 core acquisition lane 可见语义：
+  - `full_company_roster` 的 `roster_sources` 现以 `harvest_company_employees` 为主
+  - `scoped_search_roster` / `former_employee_search` 现以 `harvest_profile_search` 为主
+  - 不再在这类 core lane 的用户可见 metadata 里继续表达成 `web_search_seed_queries` 优先
+  - `planning._build_assumptions(...)` 也已去掉旧的 “low-cost web search before paid LinkedIn people search” 叙事
+- 已继续收 `enrichment.py` 的 live profile hydration 瓶颈：
+  - `_fetch_harvest_profiles_for_urls(...)` 不再按 batch 全串行 waterfall 执行
+  - 当前改成 bounded-window 并行：
+    - `live`: 最多 2 个 batch 并发
+    - `non-live`: 最多 4 个 batch 并发
+  - 仍保留按 chunk 记 queued/fetched/failed registry 状态的 contract，不做无界 fan-out
+- 已把同一套 Harvest live batching contract 向后台 `company_asset_completion` 收口：
+  - live profile completion 不再固定 `150 x 1 worker` 的大批串行模式
+  - 改为复用 `enrichment` 的 URL-count + source-mix adaptive window
+  - roster-heavy completion 现在也能抬到 `3` 个并发 batch，而不是继续串行补全
+- 已补/更新回归：
+  - `tests/test_enrichment.py`
+    - balanced live batch 断言更新为顺序无关
+    - 新增 bounded parallel live batch 断言，验证 `205 -> 103/102` 且 `max_inflight=2`
+  - `tests/test_company_asset_completion.py`
+    - live completion 改为断言 adaptive parallel batching
+    - 新增 roster-heavy live completion `240 -> 60x4` 且 `max_inflight>=3`
+  - `tests/test_planning_modules.py`
+    - 补 core roster source 语义断言
+- 已完成验证：
+  - `./.venv-tests/bin/python -m pytest tests/test_enrichment.py -q`
+  - `./.venv-tests/bin/python -m pytest tests/test_planning_modules.py -q`
+  - `./.venv-tests/bin/python -m pytest tests/test_review_plan_instructions.py -q`
+  - `./.venv-tests/bin/python -m pytest tests/test_pipeline.py -q -k 'acquire_former_search_seed_keeps_primary_provider_search_for_scoped_search or build_sourcing_plan_splits_linkedin_and_public_web_acquisition_stages or plan_stage_colloquial_full_company_request_can_skip_review'`
+- 当前剩余尾巴：
+  - background prefetch worker chunk 提交仍主要是顺序 dispatch，尚未做同等级别的 bounded parallel submit
+  - generic high-cost toggle 本身已从 active contract / smoke helper / 当前回归 fixture 中彻底移除；剩余的是更上层的 provider policy 收口，不是字段兼容尾巴
+
+### Generic cost toggle 删除完成，补上 investor category replace 去重护栏
+
+- `allow_high_cost_sources` 已从 active contract / smoke helper / 当前测试 fixture 中彻底移除：
+  - 不再保留 `high_cost_requires_approval` 衍生 policy tail
+  - 当前代码/测试搜索仅剩 tracker 与历史进度文档中的历史描述
+- 顺手补上了 `storage.py` 的更泛化去重护栏：
+  - `replace_company_category_data(...)` 现在会先删除与 incoming candidate ids 冲突的旧行
+  - candidate/evidence bulk replace path 也会先做一次 payload 级 dedupe
+  - 这样像 `investor_firm_roster` 这种“同 candidate_id 以另一 category 已存在”的情况，不会再把 workflow 打成 `UNIQUE constraint failed: candidates.candidate_id`
+- 已完成验证：
+  - `./.venv-tests/bin/python -m pytest tests/test_provider_execution_policy.py tests/test_planning_modules.py tests/test_workflow_smoke.py -q`
+  - `./.venv-tests/bin/python -m pytest tests/test_pipeline.py -q -k 'investor_firm_workflow_uses_tiered_firm_roster or build_sourcing_plan_full_company_defaults_do_not_require_high_cost_approval or acquire_former_search_seed_uses_primary_provider_search_mode or acquire_former_search_seed_keeps_primary_provider_search_when_high_cost_not_allowed or acquire_former_search_seed_keeps_primary_provider_search_for_scoped_search or plan_stage_colloquial_full_company_request_can_skip_review or queue_workflow_backfills_missing_target_company_from_approved_review_scope or queue_workflow_rebuilds_google_keyword_shard_plan_from_approved_review_request or compile_plan_review_instruction_uses_model_then_schema_validation or workflow_progress_schema_summarizes_stage_and_worker_state or run_workflow_blocking_triggers_job_recovery_when_acquisition_is_blocked'`
+  - `./.venv-tests/bin/python -m pytest tests/test_hosted_workflow_smoke.py -q -k 'test_hosted_simulate_smoke_matrix_completes_across_small_medium_large_orgs or test_hosted_simulate_xai_boundary_and_anthropic_asset_population or test_hosted_scripted_google_long_tail_timeout_completes_without_manual_takeover or test_hosted_simulate_large_org_full_roster_existing_baseline_defaults_to_asset_population'`
+  - `cd frontend-demo && npm run build`
+  - `./.venv-tests/bin/python -m py_compile tests/test_frontend_browser_e2e.py tests/test_hosted_workflow_smoke.py src/sourcing_agent/workflow_smoke.py src/sourcing_agent/storage.py`
+- 顺手补了一轮 hosted harness teardown 修复：
+  - `tests/test_hosted_workflow_smoke.py` 现在会等待：
+    - `background-outreach-layering-*`
+    - `background-snapshot-materialization-*`
+  - 代表性的 hosted smoke 组合回归已能在同一 pytest 进程内顺序通过，不再在 teardown 阶段被后台 reconcile 线程打出 segfault
+  - 整套 hosted/browser full matrix 仍未重跑，但这条高频 crash 已不再是当前 blocker
+
+### Replay 假候选人已收口，ECS 已切回 live provider
+
+- 已修正 `harvest_connectors.py` 中 `replay` 模式的离线行为：
+  - `replay` 现在是严格的 cache-only
+  - cache miss 不再合成 `Offline Member` / 假 LinkedIn profile
+  - synthetic sample 仅保留给 `simulate`
+- 已补测试并通过：
+  - `tests/test_harvest_connectors.py` 中 replay cache-miss / company-roster probe 相关断言已更新为“返回空结果而不是合成样本”
+- 已在 ECS 上完成 Surge AI 污染清理：
+  - 删除了 `Surge AI / 20260423T195046` 的 PG registry / shard / generation / membership / materialization state / history-job / LinkedIn registry 记录
+  - 删除了 `/srv/sourcing-ai-agent/runtime/company_assets/surgeai`
+  - 删除了 `/srv/sourcing-ai-agent/runtime/hot_cache_company_assets/surgeai`
+  - 删除了对应 `runtime/jobs/401ca57f9fc9*.json`
+  - 清理后复核计数均为 `0`，不会被后续 baseline / snapshot 复用
+- 进一步确认并补上了第二层根因修复：
+  - 问题不只是 `replay` 会产出假数据，而是这些 `_offline` body 之前还能落进生产共享的 `runtime/provider_cache/*`
+  - 结果是后续 `live` job 也会命中这份污染缓存，表现成“明明切回 live 了，还是读到 Surge Ai Offline Member”
+  - 现已收口为：
+    - `live` / `replay` 都不会复用带 `_offline` 标记的 shared provider cache
+    - `replay` / `simulate` / `scripted` 产出的 harvest body 不再写回 shared provider cache
+    - 发现历史 `_offline` shared cache 时会直接丢弃并删除，而不是继续命中
+  - 这次清理也补齐到了 provider cache 层，不再只删 PG / runtime assets / jobs 文件
+- 经验沉淀：
+  - `replay` 只是 provider mode，不等于独立测试环境
+  - 真正的问题是生产 live runtime 与 replay/simulate/scripted 的 cache namespace 之前隔离不严
+  - 后续终态仍建议继续推进“live runtime / test runtime / scripted runtime”物理隔离，避免再次发生交叉污染
+- 已将 ECS `sourcing-ai-agent.service` 的 `SOURCING_EXTERNAL_PROVIDER_MODE` 从 `replay` 改为 `live`
+  - `systemctl` 已重载并重启
+  - `/proc/<pid>/environ` 已确认当前进程实际运行在 `SOURCING_EXTERNAL_PROVIDER_MODE=live`
+  - `http://127.0.0.1:8765/health` 返回正常
+
+### 检索方案页已前置 Target company LinkedIn
+
+- `frontend-demo/src/components/PlanCard.tsx` 已将 `Target company LinkedIn` 从 `Advanced Mode` 挪到检索方案主卡片：
+  - 默认展示后端当前识别到的 LinkedIn company URL
+  - 以带圈问号 tooltip 展示识别来源 / 置信度 / 是否可复用本地资产
+  - 仍保留手动修正输入框，只有用户填入新 URL 时才覆盖默认 slug 解析
+- `frontend-demo/src/styles.css` 已补齐对应样式，并已通过 `frontend-demo` 生产构建验证
+- 已完成 Cloudflare Pages production 发布：
+  - Pages project: `sourcing-ai-agents-demo`
+  - production deployment: `66610098-6882-4b91-9848-061aefd05229`
+  - custom domain `https://demo.111874.xyz` 已确认切到新 bundle：
+    - `/assets/index-CWVpTh4a.js`
+    - `/assets/index-BVF0ErbD.css`
+  - `https://demo.111874.xyz/health` 返回正常
+
+### ECS 已完成整仓部署、PG control-plane bootstrap 与 Cloudflare production 发布
+
+- 已将本地最新整仓代码增量同步到 ECS：
+  - 远端代码目录确认是 `/opt/sourcing-ai-agent`
+  - runtime 仍挂在 `/srv/sourcing-ai-agent/runtime`
+  - 这次不是只补单文件，而是整仓 `rsync`，同时保留远端 `runtime/` 与 `venv/`
+- 已确认并修复 ECS 上的真实 hosted leak：
+  - 原有 `sourcing-ai-agent.service` systemd unit 仍直接执行
+    `python -m sourcing_agent.cli serve`
+  - drop-in `runtime.conf` 仍注入旧配置：
+    - `SOURCING_EXTERNAL_PROVIDER_MODE=live`
+    - `SOURCING_API_MAX_PARALLEL_REQUESTS=2`
+  - 更关键的是它没有注入 `SOURCING_CONTROL_PLANE_POSTGRES_*`
+  - 结果是 ECS 会自动重启回旧环境，并继续把 live control-plane 写到磁盘 SQLite shadow
+- 已在 ECS 上补齐 Postgres 基础设施并完成控制面迁移：
+  - 安装系统 `postgresql` / `postgresql-contrib`
+  - 创建本地 `sourcing` 用户与 `sourcing_agent` 数据库
+  - 将远端 `.local-postgres.env` 改成 ECS 实际可用 DSN：
+    - `postgresql://sourcing:***@127.0.0.1:5432/sourcing_agent`
+  - 将 live `runtime/control_plane.shadow.db` 全量 sync 到 PG
+  - 已通过 `validate_postgres=true` 校验：
+    - `jobs=4`
+    - `job_events=138`
+    - `organization_asset_registry=152`
+    - `asset_materialization_generations=224`
+    - `asset_membership_index=15863`
+    - `candidate_materialization_state=1535`
+    - `linkedin_profile_registry=452`
+- 已把 ECS 的 systemd backend 改成 PG-only 生产配置：
+  - 主 unit 现在显式注入：
+    - `SOURCING_CONTROL_PLANE_POSTGRES_DSN`
+    - `SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE=postgres_only`
+    - `SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES=1`
+    - `SOURCING_PG_ONLY_SQLITE_BACKEND=shared_memory`
+    - `SOURCING_EXTERNAL_PROVIDER_MODE=replay`
+    - `SOURCING_API_MAX_PARALLEL_REQUESTS=8`
+    - `SOURCING_API_LIGHT_REQUEST_RESERVED=2`
+  - 已移除旧的 `runtime.conf`
+  - `systemctl status sourcing-ai-agent.service` 已确认新环境生效
+  - `/proc/<pid>/environ` 已确认当前 ECS live 进程实际携带上述 PG-only 变量
+- 已完成 ECS 上的 OpenAI shard-family metadata 收口：
+  - `OpenAI / 20260423T165904`
+  - `--rebuild-from-assets` 恢复并校验 6 条 shard rows
+  - family 结果已确认：
+    - `Language Model -> Text`
+    - `Vision -> Vision`
+    - `Multimodal -> Multimodal`
+- 已完成 Cloudflare Pages production 重新发布：
+  - 先 build 最新 `frontend-demo/dist`
+  - 再以 `--branch main` 发布到 `sourcing-ai-agents-demo`
+  - 当前 `demo.111874.xyz` 已更新到最新 bundle：
+    - `index-CnK2iRg-.js`
+- 已完成公网验证：
+  - `https://api.111874.xyz/health`
+  - `https://demo.111874.xyz/health`
+  - `https://demo.111874.xyz/api/runtime/health`
+  - 当前均返回 `200`
+
+### Hosted same-origin API proxy 已切到 Cloudflare Pages Functions
+
+- 已完成 `demo.111874.xyz` 的同域 `/api/*` 收口，但实际落地路径不是独立 Worker route，而是 Pages Functions：
+  - `frontend-demo/functions/api/[[path]].js`
+  - `frontend-demo/functions/health.js`
+  - `frontend-demo/cloudflare_api_proxy.mjs`
+- 根因是当前本地 `cloudflare_pages.api_token` 足够做 Pages deploy，但不足以单独做 Workers script deploy / route bind：
+  - `wrangler pages deploy ...` 可用
+  - `wrangler deploy ... --route ...` 返回 `Authentication error [code: 10000]`
+- 因此这轮改成把同域 proxy 收进 Pages 项目本身：
+  - `demo.111874.xyz/api/* -> https://api.111874.xyz/api/*`
+  - `demo.111874.xyz/health -> https://api.111874.xyz/health`
+  - 发布 frontend 时同域 proxy 也一起更新，不再拆成“先 Pages、再 Worker route”两步
+- 已完成验证：
+  - `https://demo.111874.xyz/api/runtime/health` 返回后端 JSON，不再回落到前端 `index.html`
+  - `https://demo.111874.xyz/health` 返回后端 JSON
+  - `https://demo.111874.xyz` 当前已重新回到 `same-origin` bundle：`index-CnK2iRg-.js`
+- 文档已同步更新：
+  - `docs/CLOUDFLARE_SAME_ORIGIN_PROXY.md`
+
+### 临时隐藏首页 Excel intake 入口，等待浏览器上传稳定性收口
+
+- 历史记录：这一段描述的是当时的临时降级状态，已被 `2026-04-24` 的 “Excel intake relaunch gate 收尾” 取代。
+- 当时首页 `Excel Intake` 入口改为 feature-flag gated：
+  - `VITE_ENABLE_EXCEL_INTAKE_WORKFLOW=true` 才会显示
+  - 默认本地/线上构建都不再展示该入口
+- 原因不是后端 Excel 解析 contract 已失效，而是本地真实浏览器环境里仍出现间歇性：
+  - `Local backend is unreachable via same-origin`
+  - `Local backend is unreachable via http://localhost:8765`
+  - `Local backend is unreachable via http://127.0.0.1:8765`
+- Playwright 下 direct upload / workflow split 已可通过，但用户浏览器仍未稳定，因此当前策略是先隐藏，避免继续把未收敛链路暴露到首页。
+- 后续重新开放前，需要补浏览器级稳定性回归并完成 direct-upload 网络路径的最终收口。
+
+### 修复 acquisition_shard_registry 真实 PG 存量库的 legacy bool/int 迁移炸点
+
+- 已修复 `OpenAI / Reasoning` 在 `/api/plan` 与 `/api/workflows/explain` 上触发的 `500`：
+  - 根因不是 query 语义，而是本地 PG 里 `acquisition_shard_registry` 仍停留在 legacy 单表形态
+  - 旧表中的 `provider_cap_hit` 是 `bigint`
+  - writer schema ensure 在做 former/current split cutover 时，直接把旧列灌进新 `BOOLEAN` 列，导致类型不匹配
+- 这次把修复收口到了 PG 契约边界，而不是只在某个调用点打补丁：
+  - legacy table -> split tables 的迁移 SQL 现在会显式把 `provider_cap_hit` 归一为 boolean
+  - `upsert_acquisition_shard_registry_rows(...)` 也会把旧 `0/1` payload 统一归一为 boolean
+  - 因此同时覆盖：
+    - 存量库 schema ensure
+    - 后续 live writer / bulk upsert
+- 已在本地真实 PG 执行 schema ensure，并确认当前状态：
+  - `acquisition_shard_registry` 现为 compatibility view
+  - `acquisition_shard_registry_current` / `acquisition_shard_registry_former` 均为物理表
+  - 两张 split 表里的 `provider_cap_hit` 均为 `boolean`
+- 已补回归：
+  - `tests/test_control_plane_postgres.py`
+  - 覆盖 legacy table split migration 的 `provider_cap_hit` 归一化
+  - 覆盖 acquisition shard upsert 时 `0/1 -> bool` 的 PG 写入归一化
+- 已完成验证：
+  - `./.venv-tests/bin/python -m pytest tests/test_control_plane_postgres.py -q`
+  - 本地 `POST /api/plan`
+  - 本地 `POST /api/workflows/explain`
+  - 当前对 `我想要OpenAI做Reasoning方向的人` 均已返回 `200`
+
+### 收口 hosted live snapshot 在 `Public Web Stage 2 -> Final Results` 间被前台 materialization 卡住的问题
+
+- 已锁定这次 `OpenAI / Multimodal` 在 ECS 上“Stage 2 已完成、但 Final Results 与候选人看板迟迟不出”的根因：
+  - 不是 PG/SQLite 存储后端本身把 job 卡死
+  - 而是 `direct asset-population finalization` 明明已可用时，`_refresh_running_workflow_before_retrieval(...)` 仍把已完成的 `harvest_prefetch` worker 视为“必须先 inline sync/materialize snapshot”的信号
+  - 于是前台继续跑 `candidate_documents / normalized_artifacts / retrieval-ready`，把结果页阻塞在 post-stage2 收尾
+- 这轮已把 contract 改成更清晰的两段式：
+  - authoritative candidate source ready -> foreground finalize
+  - snapshot sync/materialize/reconcile -> background deferred materialization
+- 已完成的后端收口：
+  - `orchestrator.py` 新增统一的 deferred `background_snapshot_materialization` helper
+  - direct finalization 当前 snapshot 与 baseline patch 两条分支，都会显式写出 background materialization contract
+  - `pre_retrieval_refresh` 新增“harvest-prefetch 可 defer 到后台”的语义，不再把这类 worker 完成机械等同于前台必须同步
+  - background reconcile 事件文案也从“baseline-backed finalization”泛化成“deferred finalization”，避免误导
+- 这次也补上了之前缺失的 regression fixture：
+  - `direct finalization + completed harvest workers + no search-seed delta + snapshot artifacts not ready`
+  - 这是此前本地回归没覆盖到、但 ECS hosted live case 正好触发的组合
+- 已完成验证：
+  - `python3 -m py_compile src/sourcing_agent/orchestrator.py tests/test_pipeline.py`
+  - `./.venv/bin/python -m pytest tests/test_pipeline.py -q -k 'direct_finalization or harvest_prefetch_for_direct_finalization or harvest_defer_into_background_materialization or preview_can_use_stage_candidate_documents or equivalent_baseline_reuse or reused_snapshot_short_circuits_after_public_web_stage'`
+  - 当前为 `9 passed`
+
+### baseline candidate 选择收口，避免 stale authoritative row 误把已覆盖 query 判成 delta
+
+- 已修复 `OpenAI / Coding` 这类“公司已有本地 query-family 资产，但 authoritative row 较旧”的计划误判：
+  - 之前 `compile_asset_reuse_plan(...)` 只盯当前 authoritative registry row
+  - 一旦 authoritative row 没及时晋升到较新的 snapshot，就会把已覆盖的 `current/former` query family 重新判成 `delta_from_snapshot`
+  - 这次已改成：
+    - 先算 authoritative baseline 的 reuse plan
+    - 再对同公司其他 registry snapshot 做同一套 coverage 评估
+    - 若存在更优 baseline candidate（更少 missing / 无 delta / coverage 更完整），自动切到那个 snapshot
+- 本地真实验证结果：
+  - `帮我找OpenAI做Coding方向的人`
+  - 现已从：
+    - `baseline_reuse_with_delta`
+    - `planner_mode=delta_from_snapshot`
+  - 修正为：
+    - `effective_acquisition_mode=full_local_asset_reuse`
+    - `planner_mode=reuse_snapshot_only`
+    - `baseline_snapshot_id=20260422T171923`
+- 已补回归：
+  - `tests/test_workflow_explain.py::WorkflowExplainTest::test_explain_workflow_prefers_better_non_authoritative_snapshot_when_authoritative_baseline_is_stale`
+- 这轮也额外回归了高信号 query：
+  - `OpenAI / Reasoning`
+  - `Anthropic / Pre-training`
+  - 当前 reuse / delta 语义未被带坏
+- 继续把 planner 与 `organization_execution_profile` 的 source 对齐也收掉了：
+  - 根因不是 PG 缺数据，也不是 execution profile 缓存提前返回
+  - 真正问题是 `organization_execution_profile._select_best_organization_asset_registry_row(...)`
+    把 `evaluate_organization_asset_registry_promotion(...)` 当成了多轮链式比较器使用
+  - `explicit_baseline_inclusion` 在链式比较里会把已经选中的更优 snapshot 又“晋升”回较旧 aggregate row，导致：
+    - planner 选中较新的 baseline candidate
+    - execution profile / authoritative row 仍停在旧 snapshot
+- 这次已改成：
+  - 提取共享 helper，统一做 organization-asset baseline candidate selection
+  - 先按 coverage/quality 排序候选 row
+  - 再始终以“当前 authoritative row”为固定基准，挑选第一个真正可晋升的更优候选
+  - 不再在多个非 authoritative rows 之间反复链式 promotion
+- 这层 shared helper 现在已同时接到：
+  - `backfill_organization_asset_registry_for_company(...)`
+  - `organization_execution_profile._select_best_organization_asset_registry_row(...)`
+  - `compile_asset_reuse_plan(...)` 的 store-backed baseline candidate inventory
+  - 避免出现“planner 已选对 baseline candidate，但 authoritative promotion / execution profile 仍各走各的”继续漂移
+- 本地真实 PG/runtime 已验证：
+  - `OpenAI` 当前 authoritative row 已从 `35230 / 20260422T151623` 切到
+    `35232 / 20260422T171923`
+  - `organization_execution_profiles.source_registry_id / source_snapshot_id` 也已同步切到同一 row
+- 继续收掉了 `explicit_baseline_inclusion` 过宽导致的 live 回摆：
+  - 之前它只要看到 “candidate selected_snapshot_ids 包含当前 authoritative snapshot” 就会直接允许 promotion
+  - 这会让 `OpenAI` 在 authoritative 已经是 `20260422T171923` 时，又被更薄的历史 aggregate
+    `20260416T095325` 反压回去
+  - 现已改成：
+    - `explicit_baseline_inclusion` 只有在 candidate sort key 更优时才可晋升
+    - 同时必须满足：
+      - 要么是显式 aggregate 且对当前 authoritative 形成非回退 subsumption
+      - 要么是当前 authoritative 本身质量很差时的 `quality_recovery`
+- live 验证结果：
+  - `帮我找OpenAI做Coding方向的人`
+    - `effective_acquisition_mode=full_local_asset_reuse`
+    - `planner_mode=reuse_snapshot_only`
+    - `baseline_snapshot_id=20260422T171923`
+    - `organization_execution_profile.source_snapshot_id=20260422T171923`
+  - `帮我找OpenAI做Pre-train方向的人`
+    - 仍保持 `planner_mode=delta_from_snapshot`
+    - 未被这轮 shared helper / promotion guard 收口带坏
+- 已补回归：
+  - `tests/test_organization_execution_profile.py::OrganizationExecutionProfileTest::test_promotion_candidate_selection_does_not_chain_regress_on_explicit_baseline_inclusion`
+  - `tests/test_organization_execution_profile.py::OrganizationExecutionProfileTest::test_explicit_baseline_inclusion_does_not_promote_thinner_aggregate_over_richer_authoritative`
+  - `tests/test_organization_execution_profile.py::OrganizationExecutionProfileTest::test_candidate_inventory_prioritizes_promoted_row_before_authoritative`
+  - `tests/test_organization_execution_profile.py::OrganizationExecutionProfileTest::test_select_best_registry_row_does_not_regress_after_promoting_better_candidate`
+  - `tests/test_organization_execution_profile.py::OrganizationExecutionProfileTest::test_ensure_execution_profile_promotes_better_registry_row_and_aligns_source_snapshot`
+
+### Browser E2E 候选人看板分页稳定性与真实大 snapshot cold build 基准
+
+- `frontend-demo/scripts/run_workflow_e2e.mjs` 现支持两类入口：
+  - 正常 `Search -> plan -> review -> results`
+  - 直接打开 `?history=...&job=...` 的 restored-results 入口
+- `tests/test_frontend_browser_e2e.py` 新增并固定了两条候选人看板分页稳定性 browser E2E：
+  - large-org existing baseline workflow case
+  - restored-history results recovery case
+- 当前 browser 断言已经明确覆盖：
+  - 切到第 2 页后不回跳到第 1 页
+  - 当前页首批候选人 preview 顺序保持稳定
+  - 如果没有观察到 `loadedCount` 继续增长，则必须已经处于 `loaded == total` 的全量态，不能是半加载错态
+- 为了稳定制造 hydration 窗口，后端新增了一个测试专用延迟钩子：
+  - `SOURCING_TEST_CANDIDATE_PAGE_DELAY_MS`
+  - 仅用于 browser E2E / test harness，不改变默认生产路径
+- 已完成验证：
+  - `frontend-demo` 生产构建
+  - `tests/test_frontend_browser_e2e.py`
+    - `test_browser_workflow_e2e_covers_large_org_existing_baseline_asset_population`
+    - `test_browser_results_recovery_hydration_preserves_second_page`
+- 追加跑了一条真实大 snapshot 冷启动 benchmark：
+  - 来源：隔离 runtime 下的 Google `20260423T040115`
+  - 规模：`5897` candidates
+  - `build_company_candidate_artifacts(..., build_profile=\"foreground_fast\")`
+  - cold full wall time：`863216ms`，约 `14.4min`
+  - 关键 timings：
+    - `prepare_candidates`: `376223ms`
+    - `payload_build_total`: `376552ms`
+    - `view_write_total`: `381302ms`
+    - `state_upsert`: `107ms`
+    - `generation_register`: `651ms`
+    - `finalize_total`: `1222ms`
+  - 结论：
+    - 当前真实大 snapshot cold build 的主瓶颈已明确不是 PG `state_upsert` / `finalize`
+    - 主要耗时仍集中在 per-candidate prepare/payload/materialization 主路径
+
+### explain/smoke 脚本隔离 runtime 收口
+
+- `scripts/run_explain_dry_run_matrix.py` 与 `scripts/run_simulate_smoke_matrix.py` 现在都支持：
+  - `--runtime-dir`
+  - `--runtime-env-file`
+  - `--seed-reference-runtime`
+  - `--provider-mode`
+  - `--scripted-scenario`
+  - `--fast-runtime`
+- 新增 `src/sourcing_agent/scripted_test_runtime.py`：
+  - 负责启动脚本自带的 in-process backend
+  - 显式把 `SOURCING_RUNTIME_DIR` 指向专用 `runtime/test_env/...`
+  - 默认会写空的 local-postgres env sentinel，阻断仓库根 `.local-postgres.env` 与 shell 导出的 PG 变量泄漏到隔离 runtime
+- 这意味着 explain/smoke 脚本现在可以稳定跑在“专用测试 runtime”上，而不是继续隐式吃当前本地运行态数据
+- 近真实 scripted 模拟的推荐路径也已补档：
+  - 先用 `scripts/seed_test_env_assets.py` 把当前 authoritative snapshot 种到 `runtime/test_env/...`
+  - 再用 `--runtime-dir` + `--provider-mode scripted` 跑 explain/smoke
+- 已补回归：
+  - `tests/test_scripted_test_runtime.py`
+  - 覆盖“阻断父目录 PG env 泄漏”和“seeded reference runtime 可直接提供 explain API”
+
+### authoritative baseline completeness contract 收口与 large-specific reuse gate 去分叉
+
+- `asset_reuse_planning.py` 已把“large org 单独 reuse helper + small/medium 通用 helper”的结构收成单一 authoritative-baseline completeness contract：
+  - population-default reuse 与 embedded query reuse 现在共用同一套主判断骨架
+  - 不再通过“large org 直接走另一套分支”来决定能否 `reuse_snapshot`
+- `medium -> hybrid` 的语义已明确保留在 acquisition shape，而不是 reuse eligibility：
+  - directional query -> `scoped_search_roster`
+  - broad/full-company query -> `full_company_roster`
+- 修掉了一个 hosted smoke 回归：
+  - 之前把“multi-snapshot directional query 不能直接 population-default reuse”错误扩散到了 embedded query reuse
+  - 已收回到 population-default 那一层，恢复 `Google multimodal + pre-train` 这类 case 的：
+    - current lane `reuse_baseline`
+    - former lane `delta_acquisition`
+- 当前已明确的业务语义：
+  - `Anthropic` 这类已经具备完整 authoritative baseline 的公司，可以直接 `reuse_snapshot`
+  - `Google / OpenAI` 当前更接近 family-scoped authoritative baseline：
+    - 已覆盖 family 可 reuse
+    - 未覆盖 family 继续 `delta_from_snapshot`
+    - 不应因为积累了多个方向性 snapshot 就自动视为“公司级 full local reuse”
+- `selected_snapshot_ids > 1` 的粗代理已经进一步缩窄：
+  - directional query 不再因为“snapshot 数量 > 1”被机械阻断
+  - 现在看的是 `source_snapshot_selection.mode` / aggregate coverage proof
+  - `all_history_snapshots` 这类历史并集仍不解锁 population-default reuse
+  - `preferred_snapshot_subset` 这类显式聚合子集，在 lane coverage 完整时可解锁 population-default reuse
+- 已完成验证：
+  - `tests/test_planning_modules.py`
+  - `tests/test_workflow_explain.py`
+  - `tests/test_pipeline.py`
+  - `tests/test_hosted_workflow_smoke.py::HostedWorkflowSmokeTest::test_hosted_explain_dry_run_matrix_covers_reference_regressions`
+  - `tests/test_hosted_workflow_smoke.py::HostedWorkflowSmokeTest::test_hosted_simulate_smoke_matrix_completes_across_small_medium_large_orgs`
+  - 全仓 `pytest -q`
+  - repo-configured `mypy`
+  - 当前均已转绿
+
+### PG former/current 物理分表 cutover、job/results 默认瘦身与全仓回归转绿
+
+- 已完成 PG `acquisition_shard_registry` 的 former/current 物理分表 cutover：
+  - live writer、SQLite->PG sync、direct-stream sync、PG->PG migration、PG snapshot export 现统一收口到：
+    - `acquisition_shard_registry_current`
+    - `acquisition_shard_registry_former`
+  - 逻辑名 `acquisition_shard_registry` 现在作为 compatibility view 保留给上层读取契约
+  - 不再把“单表 + lane contract”当成 PG 终态
+- `/api/jobs/{job_id}` 现改为 summary-first 默认返回：
+  - 默认只返回 job summary / status / 轻量 request preview
+  - full `events` / `intent_rewrite` 需显式 `?include_details=1`
+  - 这与 `/api/jobs/{job_id}/results` 之前的 summary-first 改动配套，进一步收掉前端 polling 的重 payload
+- 补充并固定了几类新增测试契约：
+  - PG former/current split upsert contract
+  - `/api/jobs/{job_id}` summary-only default + opt-in detail
+  - hosted smoke 中真正需要 full candidates 的调用显式 `?include_candidates=1`
+- 顺手修掉了几处跨环境路径漂移：
+  - `harvest_connectors.py` 不再把 macOS `/var` 强制提前解析成 `/private/var`
+  - `service_daemon.py` 生成 systemd 单元时不再把工作目录强行 `.resolve()`
+- 已完成验证：
+  - 全仓 `pytest -q`
+  - repo-configured `mypy`
+  - 相关 control-plane / results API / hosted smoke 子集
+  - 当前均已转绿
+
+## 2026-04-21
+
+### 手工测试缺口复盘、follow-up reuse 回归补齐与 history 恢复链路入默认矩阵
+
+- 这轮把“为什么 simulate / explain / 已有 E2E 没挡住后续手测问题”正式沉淀进：
+  - `docs/TESTING_PLAYBOOK.md`
+- 核心结论已明确：
+  - 之前更多在测“单次 workflow 能否完成”
+  - 手工暴露的问题则集中在“workflow 写回后，下一次 explain / 下一次结果恢复 / 历史打开是否仍正确”
+  - 因而必须把 `persisted state` 当成默认断言对象，而不是只看当次 API 返回
+- 新增两条默认 automated regression：
+  - `test_hosted_simulate_reuse_queries_preserve_follow_up_planning_contract`
+    - 先跑完整 reuse workflow，再做 follow-up explain
+    - 覆盖 `Reflection AI Post-train` 与 `OpenAI Reasoning`
+  - `test_hosted_simulate_completed_history_round_trip_exposes_results_recovery`
+    - 断言 `history_id -> results -> /api/frontend-history/{history_id}` 恢复链路稳定
+- `src/sourcing_agent/regression_matrix.py` 也同步收口：
+  - `hosted-workflow-smoke-focus` 默认把上述两条用户链路一起纳入
+  - `orchestrator / results / history` 相关改动现在也会命中这组 smoke，而不再只跑 explain/API contract
+- 当前测试体系已明确把以下模式作为后续默认原则：
+  - reuse / delta planning 改动必须至少有一条 `run once -> persisted -> explain again`
+  - history/results 相关改动必须至少有一条 `history_id -> completed -> recovery`
+  - 本地资产复用 query 需要独立 timing budget，不再混在 large-org live 路径里看
+
+### Mac migration prep、full snapshot lane 与 ECS access playbook
+
+- 已把“从当前 Linux/WSL 虚拟机迁到另一台 Mac”收成正式文档与脚本：
+  - `docs/MAC_DEV_ENV_MIGRATION.md`
+  - `scripts/prepare_mac_migration_bundle.sh`
+- 迁移语义现在明确拆成两条：
+  - portable migration bundle
+    - 目标是让 Mac 侧快速恢复为可运行开发环境
+  - full local snapshot
+    - 目标是尽可能完整保留旧工作树、runtime、`runtime/secrets/`、完整 `~/.codex` 与取证上下文
+- `prepare_mac_migration_bundle.sh` 现在支持：
+  - `--stage-repo`
+  - `--stage-repo-full`
+  - `--stage-codex`
+  - `--stage-codex-full`
+  - `--stage-full-snapshot`
+  - `--include-secrets`
+  - `--include-codex-auth`
+  - `--codex-session-id <id>`
+- 本地 PG 发现机制已补上 env-file 入口：
+  - `.local-postgres.env`
+  - `.local-postgres/connection.env`
+  - 不再只依赖 Linux/WSL 里的 `.local-postgres/{extract,data}`
+- 当前本地已确认：
+  - `~/.codex/sessions/` 中存在 `019d6630-2137-7f70-b742-43f979b8207b`
+  - `~/.codex/state_5.sqlite` 的 `threads` 表里也存在该 session id
+  - 因此如果完整迁移 `~/.codex`，继续 `codex resume 019d6630-2137-7f70-b742-43f979b8207b` 的成功率会明显高于只拷 `history.jsonl`
+- 这轮还新增了一份可重复使用的 ECS 连接文档：
+  - `docs/ECS_ACCESS_PLAYBOOK.md`
+  - 统一沉淀 SSH config、端口转发、`rsync/scp`、远端 health probe、最小重启路径
+- 当前推荐的传输优先级也已写明：
+  - 1. 机器直连 `rsync/scp`
+  - 2. 外接 SSD / 局域网共享盘
+  - 3. OSS / R2 / S3 等对象存储中转
+  - 一般不需要为了本地开发环境迁移专门走 OSS；只有在两台机器无法直接连通，或你更希望云端中转时才采用
+- 已把“全量迁移版”的标准 resync 清单补进：
+  - `docs/MAC_DEV_ENV_MIGRATION.md`
+  - 覆盖 source-side freeze、full snapshot 生成、`rsync` 直传、Mac 侧 restore、以及 `codex resume` 校验
+
+
 ## 2026-04-13
 
 ### OpenAI hosted rerun 跑通、search-seed lane merge 修复与云端 canonical bundle 补齐

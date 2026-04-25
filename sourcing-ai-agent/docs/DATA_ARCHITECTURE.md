@@ -1,5 +1,8 @@
 # Data Architecture
 
+> Status: Design/reference doc. Useful for product or architecture context, but not the source of truth for current runtime behavior.
+
+
 ## 1. 当前已经落地的底层资产模型
 
 ### Canonical entities
@@ -96,7 +99,7 @@
   - 保存 YouTube / Podcast / interview surface 的标题/摘要级结果
   - 当前资产类型包括 `public_media_results / public_media_analysis`
 
-这些 snapshot 会继续归一化成统一的 `candidate_documents.json`、SQLite `candidates` 和 `evidence`。
+这些 snapshot 会继续归一化成统一的 `candidate_documents.json`、candidate artifacts，以及 Postgres control-plane/result store 中的候选人与证据视图。
 
 ## 3. 表达用户意图与 Sourcing Criteria 的方式
 
