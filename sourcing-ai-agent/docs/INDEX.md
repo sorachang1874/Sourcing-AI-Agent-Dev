@@ -29,6 +29,8 @@
   当前已完成事项与最近一次验证结果。
 - [NEXT_TODO.md](NEXT_TODO.md)
   活跃待办与下一轮应继续收口的 contract。
+- [PUBLIC_WEB_SEARCH_PRODUCTIZATION_TODO.md](PUBLIC_WEB_SEARCH_PRODUCTIZATION_TODO.md)
+  将旧 `Public Web Stage 2` 改造成目标候选人页批量 Public Web Search 的产品化 TODO/spec。
 - [PG_ONLY_CUTOVER_TRACKER.md](PG_ONLY_CUTOVER_TRACKER.md)
   PG-only cutover 的剩余尾巴与风险点。
 - [SEMANTIC_REFACTOR_PROGRESS.md](SEMANTIC_REFACTOR_PROGRESS.md)
@@ -48,6 +50,8 @@
   4/21-4/23 这轮稳定化改动的复盘：哪些改动应保留，哪些仍需继续回退成更干净的 contract。
 - [SESSION_HANDOFF_2026-04-25.md](SESSION_HANDOFF_2026-04-25.md)
   当前稳定版本的验证结果、新会话恢复步骤和不可回退 guardrails。
+- [SESSION_HANDOFF_2026-04-26_PUBLIC_WEB.md](SESSION_HANDOFF_2026-04-26_PUBLIC_WEB.md)
+  目标候选人级 Public Web Search 的方法探索、后端/前端产品化进度、跨 session review、剩余工作和验证命令。
 - [INTENT_PLANNING_BRIEF.md](INTENT_PLANNING_BRIEF.md)
   `plan` 阶段第一段产品原生解释卡片的标准结构。
 - [FRONTEND_API_CONTRACT.md](FRONTEND_API_CONTRACT.md)

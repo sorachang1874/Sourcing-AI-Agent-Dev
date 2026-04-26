@@ -36,7 +36,7 @@ from .profile_registry_utils import extract_profile_registry_aliases_from_payloa
 from .search_provider import build_search_provider
 from .seed_discovery import SearchSeedAcquirer, SearchSeedSnapshot, build_candidates_from_seed_snapshot
 from .settings import AppSettings
-from .storage import SQLiteStore
+from .storage import ControlPlaneStore
 
 
 class CompanyAssetSupplementManager:
@@ -44,7 +44,7 @@ class CompanyAssetSupplementManager:
         self,
         *,
         runtime_dir: str | Path,
-        store: SQLiteStore,
+        store: ControlPlaneStore,
         settings: AppSettings,
         model_client: ModelClient | None = None,
         asset_completion_manager: CompanyAssetCompletionManager | None = None,

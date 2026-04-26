@@ -102,6 +102,8 @@ PYTHONPATH=src python3 scripts/seed_test_env_assets.py \
   --company xai
 ```
 
+`seed_test_env_assets.py` 现在要求 source / target runtime 都能解析到 Postgres control-plane DSN；它不再从磁盘 SQLite source fallback 读取 registry。
+
 ## 切换为 Scripted
 
 如果你要验证长尾 provider 行为，而不是纯 simulate：
@@ -247,7 +249,7 @@ make test-live-large-org-manual LIVE_CONFIRM=1
 - `SOURCING_SECRETS_FILE`
   - 可显式指定 provider secrets 文件
 - `SOURCING_DB_PATH`
-  - 可显式指定本地 shadow sqlite 路径
+  - 可显式指定本地 compatibility-shadow 路径
 - `SOURCING_JOBS_DIR`
   - 可显式指定 jobs 目录
 - `SOURCING_COMPANY_ASSETS_DIR`

@@ -36,7 +36,7 @@ from .source_snapshot_coverage import (
     promoted_aggregate_coverage_contract,
     source_snapshot_selection_has_coverage_proof,
 )
-from .storage import SQLiteStore
+from .storage import ControlPlaneStore
 
 
 def _safe_int(value: Any) -> int:
@@ -1107,7 +1107,7 @@ def _organization_asset_registry_record_is_candidate_eligible(payload: dict[str,
 
 def build_organization_asset_registry_candidate_inventory(
     *,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     target_company: str,
     asset_view: str = "canonical_merged",
     limit: int = 50,
@@ -1160,7 +1160,7 @@ def build_organization_asset_registry_candidate_inventory(
 
 def upsert_organization_asset_registry_with_guard(
     *,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     candidate_record: dict[str, Any],
 ) -> dict[str, Any]:
     target_company = _normalize_text(candidate_record.get("target_company"))
@@ -1245,7 +1245,7 @@ def _load_available_organization_asset_registry_records(
 def backfill_organization_asset_registry_for_company(
     *,
     runtime_dir: str | Path,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     target_company: str,
     asset_view: str = "canonical_merged",
 ) -> dict[str, Any]:
@@ -1534,7 +1534,7 @@ def build_search_seed_shard_registry_records(
 def ensure_organization_asset_registry(
     *,
     runtime_dir: str | Path,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     target_company: str,
     asset_view: str = "canonical_merged",
 ) -> dict[str, Any]:
@@ -1561,7 +1561,7 @@ def ensure_organization_asset_registry(
 def ensure_acquisition_shard_registry_for_snapshot(
     *,
     runtime_dir: str | Path,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     target_company: str,
     snapshot_id: str,
 ) -> dict[str, int]:
@@ -2238,7 +2238,7 @@ def _exact_overlap_scope(value: Any) -> str:
 
 def _compare_baseline_generation_to_row(
     *,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     baseline: dict[str, Any],
     row: dict[str, Any],
     desired_spec: dict[str, Any],
@@ -2296,7 +2296,7 @@ def _exact_overlap_gap_allows_same_snapshot_reuse(
 
 def _classify_matched_row_against_baseline(
     *,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     baseline: dict[str, Any],
     matched_row: dict[str, Any],
     desired_spec: dict[str, Any],
@@ -2903,7 +2903,7 @@ def _build_task_delta_execution_plan(
 def _compile_asset_reuse_plan_for_baseline(
     *,
     runtime_dir: str | Path,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     request: JobRequest,
     plan: SourcingPlan,
     baseline: dict[str, Any],
@@ -3452,7 +3452,7 @@ def _strip_asset_reuse_plan_private_fields(plan_payload: dict[str, Any]) -> dict
 def compile_asset_reuse_plan(
     *,
     runtime_dir: str | Path,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     request: JobRequest,
     plan: SourcingPlan,
 ) -> dict[str, Any]:

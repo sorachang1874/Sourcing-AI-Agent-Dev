@@ -24,14 +24,14 @@ from sourcing_agent.settings import (
     QwenSettings,
     SemanticProviderSettings,
 )
-from sourcing_agent.storage import SQLiteStore
+from sourcing_agent.storage import ControlPlaneStore
 
 
 class ResultsApiTest(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
         self.catalog = AssetCatalog.discover()
-        self.store = SQLiteStore(f"{self.tempdir.name}/test.db")
+        self.store = ControlPlaneStore(f"{self.tempdir.name}/test.db")
         self.settings = AppSettings(
             project_root=Path(self.tempdir.name),
             runtime_dir=Path(self.tempdir.name),
@@ -4160,6 +4160,348 @@ class ResultsApiTest(unittest.TestCase):
         records = self.store.list_target_candidates(history_id="history-import-1")
         self.assertEqual(len(records), 1)
         self.assertEqual(records[0]["candidate_name"], "Bob Chen")
+
+    def test_target_candidate_public_web_api_queues_idempotent_runs(self) -> None:
+        record = self.store.upsert_target_candidate(
+            {
+                "record_id": "target-public-web-1",
+                "candidate_id": "cand-public-web-1",
+                "candidate_name": "Alice Public",
+                "current_company": "Example AI",
+                "linkedin_url": "https://www.linkedin.com/in/alice-public/",
+            }
+        )
+        server = create_server(self.orchestrator, host="127.0.0.1", port=0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        host, port = server.server_address
+        opener = urllib_request.build_opener(urllib_request.ProxyHandler({}))
+        try:
+            request = urllib_request.Request(
+                f"http://{host}:{port}/api/target-candidates/public-web-search",
+                data=json.dumps(
+                    {
+                        "record_ids": [record["id"]],
+                        "options": {
+                            "max_queries_per_candidate": 4,
+                            "fetch_content": False,
+                            "ai_extraction": "off",
+                        },
+                    }
+                ).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with opener.open(request) as response:
+                queued = json.loads(response.read().decode("utf-8"))
+            with opener.open(request) as response:
+                joined = json.loads(response.read().decode("utf-8"))
+            with opener.open(f"http://{host}:{port}/api/target-candidates/public-web-search") as response:
+                listed = json.loads(response.read().decode("utf-8"))
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
+        self.assertEqual(queued["status"], "queued")
+        self.assertEqual(joined["status"], "joined")
+        self.assertEqual(queued["batch"]["batch_id"], joined["batch"]["batch_id"])
+        self.assertEqual(len(queued["runs"]), 1)
+        self.assertEqual(queued["worker_summary"]["queued_worker_count"], 1)
+        self.assertEqual(len(listed["runs"]), 1)
+        workers = self.store.list_agent_workers(job_id=queued["job"]["job_id"])
+        self.assertEqual(len(workers), 1)
+        self.assertEqual(workers[0]["wait_stage"], "waiting_remote_search")
+
+    def test_target_candidate_public_web_detail_api_returns_model_safe_signals(self) -> None:
+        record = self.store.upsert_target_candidate(
+            {
+                "record_id": "target-public-web-detail-1",
+                "candidate_id": "cand-public-web-detail-1",
+                "candidate_name": "Alice Detail",
+                "current_company": "Example AI",
+                "linkedin_url": "https://www.linkedin.com/in/alice-detail/",
+            }
+        )
+        run = self.store.upsert_target_candidate_public_web_run(
+            {
+                "run_id": "public-web-detail-run-1",
+                "batch_id": "public-web-detail-batch-1",
+                "record_id": record["id"],
+                "candidate_id": record["candidate_id"],
+                "candidate_name": record["candidate_name"],
+                "current_company": record["current_company"],
+                "linkedin_url": record["linkedin_url"],
+                "linkedin_url_key": "alice-detail",
+                "person_identity_key": "linkedin:alice-detail",
+                "idempotency_key": "public-web-detail-run-key-1",
+                "status": "completed",
+                "phase": "completed",
+                "summary": {"email_candidate_count": 1, "entry_link_count": 1},
+                "analysis_checkpoint": {"stage": "completed", "status": "completed"},
+            }
+        )
+        asset = self.store.upsert_person_public_web_asset(
+            {
+                "asset_id": "public-web-detail-asset-1",
+                "person_identity_key": "linkedin:alice-detail",
+                "linkedin_url_key": "alice-detail",
+                "latest_run_id": run["run_id"],
+                "target_candidate_record_id": record["id"],
+                "summary": {"email_candidate_count": 1},
+                "signals": {"fetched_documents": [{"raw_path": "/tmp/raw.html"}]},
+                "source_run_ids": [run["run_id"]],
+            }
+        )
+        self.store.replace_person_public_web_signals_for_run(
+            run_id=run["run_id"],
+            signals=[
+                {
+                    "signal_id": "public-web-detail-email-1",
+                    "run_id": run["run_id"],
+                    "asset_id": asset["asset_id"],
+                    "person_identity_key": "linkedin:alice-detail",
+                    "record_id": record["id"],
+                    "candidate_id": record["candidate_id"],
+                    "candidate_name": record["candidate_name"],
+                    "linkedin_url_key": "alice-detail",
+                    "signal_kind": "email_candidate",
+                    "signal_type": "academic",
+                    "email_type": "academic",
+                    "value": "alice@example.edu",
+                    "normalized_value": "alice@example.edu",
+                    "source_url": "https://alice.example.edu/",
+                    "source_domain": "alice.example.edu",
+                    "source_family": "profile_web_presence",
+                    "confidence_label": "high",
+                    "confidence_score": 0.91,
+                    "identity_match_label": "likely_same_person",
+                    "identity_match_score": 0.9,
+                    "publishable": True,
+                    "promotion_status": "promotion_recommended",
+                    "artifact_refs": {
+                        "evidence_slice_path": "/tmp/evidence.json",
+                        "raw_path": "/tmp/raw.html",
+                    },
+                    "metadata": {
+                        "query_id": "homepage",
+                        "raw_payload": {"html": "<html></html>"},
+                    },
+                },
+                {
+                    "signal_id": "public-web-detail-link-1",
+                    "run_id": run["run_id"],
+                    "asset_id": asset["asset_id"],
+                    "person_identity_key": "linkedin:alice-detail",
+                    "record_id": record["id"],
+                    "candidate_id": record["candidate_id"],
+                    "candidate_name": record["candidate_name"],
+                    "linkedin_url_key": "alice-detail",
+                    "signal_kind": "profile_link",
+                    "signal_type": "github_url",
+                    "value": "https://github.com/alice-detail",
+                    "normalized_value": "https://github.com/alice-detail",
+                    "url": "https://github.com/alice-detail",
+                    "source_url": "https://github.com/alice-detail",
+                    "source_domain": "github.com",
+                    "source_family": "technical_presence",
+                    "identity_match_label": "ambiguous_identity",
+                    "identity_match_score": 0.42,
+                    "publishable": False,
+                },
+            ],
+        )
+        server = create_server(self.orchestrator, host="127.0.0.1", port=0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        host, port = server.server_address
+        opener = urllib_request.build_opener(urllib_request.ProxyHandler({}))
+        try:
+            with opener.open(
+                f"http://{host}:{port}/api/target-candidates/{record['id']}/public-web-search"
+            ) as response:
+                detail = json.loads(response.read().decode("utf-8"))
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
+        self.assertEqual(detail["status"], "ok")
+        self.assertEqual(detail["latest_run"]["run_id"], run["run_id"])
+        self.assertEqual(detail["person_asset"]["asset_id"], asset["asset_id"])
+        self.assertEqual(detail["email_candidates"][0]["promotion_status"], "promotion_recommended")
+        self.assertEqual(detail["profile_links"][0]["identity_match_label"], "ambiguous_identity")
+        self.assertEqual(detail["grouped_signals"]["email_candidates_by_type"]["academic"][0]["value"], "alice@example.edu")
+        payload_text = json.dumps(detail, ensure_ascii=False)
+        self.assertNotIn("raw_path", payload_text)
+        self.assertNotIn("raw_payload", payload_text)
+        self.assertNotIn("<html", payload_text)
+
+    def test_target_candidate_public_web_promotion_updates_primary_email_then_export_uses_promoted_signals(self) -> None:
+        record = self.store.upsert_target_candidate(
+            {
+                "record_id": "target-public-web-promote-1",
+                "candidate_id": "cand-public-web-promote-1",
+                "candidate_name": "Alice Promote",
+                "current_company": "Example AI",
+                "linkedin_url": "https://www.linkedin.com/in/alice-promote/",
+            }
+        )
+        run = self.store.upsert_target_candidate_public_web_run(
+            {
+                "run_id": "public-web-promote-run-1",
+                "batch_id": "public-web-promote-batch-1",
+                "record_id": record["id"],
+                "candidate_id": record["candidate_id"],
+                "candidate_name": record["candidate_name"],
+                "current_company": record["current_company"],
+                "linkedin_url": record["linkedin_url"],
+                "linkedin_url_key": "alice-promote",
+                "person_identity_key": "linkedin:alice-promote",
+                "idempotency_key": "public-web-promote-run-key-1",
+                "status": "completed",
+                "phase": "completed",
+                "summary": {"email_candidate_count": 1, "entry_link_count": 2},
+                "analysis_checkpoint": {"stage": "completed", "status": "completed"},
+            }
+        )
+        asset = self.store.upsert_person_public_web_asset(
+            {
+                "asset_id": "public-web-promote-asset-1",
+                "person_identity_key": "linkedin:alice-promote",
+                "linkedin_url_key": "alice-promote",
+                "latest_run_id": run["run_id"],
+                "target_candidate_record_id": record["id"],
+                "summary": {"email_candidate_count": 1},
+                "source_run_ids": [run["run_id"]],
+            }
+        )
+        self.store.replace_person_public_web_signals_for_run(
+            run_id=run["run_id"],
+            signals=[
+                {
+                    "signal_id": "public-web-promote-email-1",
+                    "run_id": run["run_id"],
+                    "asset_id": asset["asset_id"],
+                    "person_identity_key": "linkedin:alice-promote",
+                    "record_id": record["id"],
+                    "candidate_id": record["candidate_id"],
+                    "candidate_name": record["candidate_name"],
+                    "linkedin_url_key": "alice-promote",
+                    "signal_kind": "email_candidate",
+                    "signal_type": "academic",
+                    "email_type": "academic",
+                    "value": "alice.promote@example.edu",
+                    "normalized_value": "alice.promote@example.edu",
+                    "source_url": "https://alice-promote.example.edu/",
+                    "source_domain": "alice-promote.example.edu",
+                    "source_family": "profile_web_presence",
+                    "confidence_label": "high",
+                    "confidence_score": 0.94,
+                    "identity_match_label": "likely_same_person",
+                    "identity_match_score": 0.92,
+                    "publishable": True,
+                    "promotion_status": "promotion_recommended",
+                    "evidence_excerpt": "Contact Alice at alice.promote@example.edu",
+                    "artifact_refs": {
+                        "evidence_slice_path": "/tmp/evidence.json",
+                        "raw_path": "/tmp/raw.html",
+                    },
+                    "metadata": {"raw_payload": {"html": "<html></html>"}},
+                },
+                {
+                    "signal_id": "public-web-promote-github-1",
+                    "run_id": run["run_id"],
+                    "asset_id": asset["asset_id"],
+                    "person_identity_key": "linkedin:alice-promote",
+                    "record_id": record["id"],
+                    "candidate_id": record["candidate_id"],
+                    "candidate_name": record["candidate_name"],
+                    "linkedin_url_key": "alice-promote",
+                    "signal_kind": "profile_link",
+                    "signal_type": "github_url",
+                    "value": "https://github.com/alice-promote",
+                    "normalized_value": "https://github.com/alice-promote",
+                    "url": "https://github.com/alice-promote",
+                    "source_url": "https://github.com/alice-promote",
+                    "source_domain": "github.com",
+                    "source_family": "technical_presence",
+                    "confidence_label": "high",
+                    "confidence_score": 0.9,
+                    "identity_match_label": "likely_same_person",
+                    "identity_match_score": 0.88,
+                    "publishable": True,
+                    "metadata": {"clean_profile_link": True, "link_shape_warnings": []},
+                },
+            ],
+        )
+
+        server = create_server(self.orchestrator, host="127.0.0.1", port=0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        host, port = server.server_address
+        opener = urllib_request.build_opener(urllib_request.ProxyHandler({}))
+        try:
+            promote_request = urllib_request.Request(
+                f"http://{host}:{port}/api/target-candidates/{record['id']}/public-web-promotions",
+                data=json.dumps(
+                    {
+                        "signal_id": "public-web-promote-email-1",
+                        "action": "promote",
+                        "operator": "qa-user",
+                    }
+                ).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with opener.open(promote_request) as response:
+                promoted = json.loads(response.read().decode("utf-8"))
+            with opener.open(
+                f"http://{host}:{port}/api/target-candidates/{record['id']}/public-web-search"
+            ) as response:
+                detail = json.loads(response.read().decode("utf-8"))
+            export_request = urllib_request.Request(
+                f"http://{host}:{port}/api/target-candidates/public-web-export",
+                data=json.dumps({"record_ids": [record["id"]]}).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with opener.open(export_request) as response:
+                archive_body = response.read()
+                content_type = response.headers.get("Content-Type")
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
+        self.assertEqual(promoted["status"], "promoted")
+        self.assertEqual(promoted["promotion"]["previous_value"], "")
+        self.assertEqual(promoted["promotion"]["new_value"], "alice.promote@example.edu")
+        updated_record = self.store.get_target_candidate(record["id"])
+        self.assertEqual(updated_record["primary_email"], "alice.promote@example.edu")
+        self.assertEqual(updated_record["metadata"]["primary_email_metadata"]["source"], "public_web_search")
+        self.assertEqual(detail["email_candidates"][0]["promotion_status"], "manually_promoted")
+        self.assertEqual(detail["promotion_summary"]["promoted_email_count"], 1)
+        self.assertEqual(content_type, "application/zip")
+        with zipfile.ZipFile(io.BytesIO(archive_body), "r") as archive:
+            names = set(archive.namelist())
+            summary_name = next(name for name in names if name.endswith("/public_web_summary.csv"))
+            signals_name = next(name for name in names if name.endswith("/public_web_signals.csv"))
+            promotions_name = next(name for name in names if name.endswith("/public_web_promotions.csv"))
+            manifest_name = next(name for name in names if name.endswith("/public_web_manifest.json"))
+            summary_csv = archive.read(summary_name).decode("utf-8-sig")
+            signals_csv = archive.read(signals_name).decode("utf-8-sig")
+            promotions_csv = archive.read(promotions_name).decode("utf-8-sig")
+            manifest = json.loads(archive.read(manifest_name).decode("utf-8"))
+            archive_text = "\n".join(archive.read(name).decode("utf-8", errors="ignore") for name in names if name.endswith((".csv", ".json")))
+
+        self.assertIn("alice.promote@example.edu", summary_csv)
+        self.assertIn("manual_promoted", signals_csv)
+        self.assertIn("qa-user", promotions_csv)
+        self.assertFalse(manifest["raw_assets_included"])
+        self.assertNotIn("raw_path", archive_text)
+        self.assertNotIn("raw_payload", archive_text)
+        self.assertNotIn("<html", archive_text)
 
     def test_asset_governance_promote_default_api_persists_pointer(self) -> None:
         server = create_server(self.orchestrator, host="127.0.0.1", port=0)

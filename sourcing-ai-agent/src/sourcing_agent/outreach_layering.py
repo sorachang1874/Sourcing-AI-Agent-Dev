@@ -1,22 +1,19 @@
 from __future__ import annotations
 
 import json
-import os
 import re
-import sqlite3
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from urllib import parse
 
 from .candidate_artifacts import load_authoritative_company_snapshot_candidate_documents
 from .domain import Candidate
 from .harvest_connectors import parse_harvest_profile_payload
-from .local_postgres import resolve_default_control_plane_db_path
+from .linkedin_url_normalization import normalize_linkedin_profile_url_key
 from .model_provider import ModelClient, get_outreach_layer_prompt_template
-from .storage import SQLiteStore
+from .storage import ControlPlaneStore
 
 _PINYIN_SURNAMES = {
     "bai",
@@ -320,12 +317,6 @@ _CHINESE_LANGUAGE_TOKENS = (
 )
 
 
-def _sqlite_profile_registry_fallback_enabled() -> bool:
-    raw_value = str(os.getenv("SOURCING_ENABLE_SQLITE_PROFILE_REGISTRY_FALLBACK") or "").strip().lower()
-    if not raw_value:
-        return False
-    return raw_value not in {"0", "false", "no", "off"}
-
 _NAME_TOKEN_PATTERN = re.compile(r"[A-Za-z]+")
 _CJK_PATTERN = re.compile(r"[\u4e00-\u9fff]")
 
@@ -356,7 +347,7 @@ def analyze_company_outreach_layers(
     view: str = "canonical_merged",
     query: str = "",
     model_client: ModelClient | None = None,
-    store: SQLiteStore | None = None,
+    store: ControlPlaneStore | None = None,
     max_ai_verifications: int = 80,
     ai_workers: int = 8,
     ai_max_retries: int = 2,
@@ -455,7 +446,7 @@ def build_outreach_layer_analysis(
     registry_paths = dict(registry_raw_paths or {})
     for candidate in candidates:
         candidate_url = str(candidate.linkedin_url or "").strip()
-        candidate_url_key = _normalize_linkedin_profile_url_key(candidate_url)
+        candidate_url_key = normalize_linkedin_profile_url_key(candidate_url)
         fallback_raw_path = str(registry_paths.get(candidate_url_key) or "").strip()
         source_profile = _load_source_profile_signals(
             candidate.source_path,
@@ -800,27 +791,6 @@ def _is_harvest_profile_path(path: Path) -> bool:
     return "harvest_profiles" in {part.lower() for part in path.parts}
 
 
-def _normalize_linkedin_profile_url_key(profile_url: str) -> str:
-    raw_value = str(profile_url or "").strip()
-    if not raw_value:
-        return ""
-    if "://" not in raw_value:
-        raw_value = f"https://{raw_value}"
-    parsed = parse.urlsplit(raw_value)
-    netloc = str(parsed.netloc or "").strip().lower()
-    path = str(parsed.path or "").strip()
-    if not netloc and path:
-        reparsed = parse.urlsplit(f"https://{path}")
-        netloc = str(reparsed.netloc or "").strip().lower()
-        path = str(reparsed.path or "").strip()
-    if not netloc:
-        return ""
-    normalized_path = re.sub(r"/{2,}", "/", path).rstrip("/")
-    if not normalized_path:
-        normalized_path = "/"
-    return f"https://{netloc}{normalized_path}".lower()
-
-
 def _dedupe_nonempty_strings(values: list[str]) -> list[str]:
     deduped: list[str] = []
     seen: set[str] = set()
@@ -837,11 +807,11 @@ def _load_registry_raw_paths_for_candidates(
     *,
     runtime_dir: str | Path,
     candidates: list[Candidate],
-    store: SQLiteStore | None = None,
+    store: ControlPlaneStore | None = None,
 ) -> dict[str, str]:
     keys = _dedupe_nonempty_strings(
         [
-            _normalize_linkedin_profile_url_key(str(candidate.linkedin_url or "").strip())
+            normalize_linkedin_profile_url_key(str(candidate.linkedin_url or "").strip())
             for candidate in list(candidates or [])
         ]
     )
@@ -861,61 +831,7 @@ def _load_registry_raw_paths_for_candidates(
             getattr(store, "control_plane_postgres_is_postgres_only", lambda: False)()
         ) or bool(getattr(store, "sqlite_shadow_is_ephemeral", lambda: False)()):
             return resolved_from_store
-    if not _sqlite_profile_registry_fallback_enabled():
-        return {}
-    db_path = resolve_default_control_plane_db_path(runtime_dir, base_dir=runtime_dir)
-    if not db_path.exists():
-        return {}
-    connection: sqlite3.Connection | None = None
-    try:
-        connection = sqlite3.connect(db_path)
-        connection.row_factory = sqlite3.Row
-        placeholders = ",".join("?" for _ in keys)
-        alias_rows = connection.execute(
-            f"""
-            SELECT alias_url_key, profile_url_key
-            FROM linkedin_profile_registry_aliases
-            WHERE alias_url_key IN ({placeholders})
-            """,
-            tuple(keys),
-        ).fetchall()
-        alias_map = {
-            str(row["alias_url_key"] or "").strip(): str(row["profile_url_key"] or "").strip()
-            for row in alias_rows
-            if str(row["alias_url_key"] or "").strip() and str(row["profile_url_key"] or "").strip()
-        }
-        canonical_keys = _dedupe_nonempty_strings([str(alias_map.get(key) or key).strip() for key in keys])
-        if not canonical_keys:
-            return {}
-        canonical_placeholders = ",".join("?" for _ in canonical_keys)
-        sqlite_registry_rows = connection.execute(
-            f"""
-            SELECT profile_url_key, last_raw_path
-            FROM linkedin_profile_registry
-            WHERE profile_url_key IN ({canonical_placeholders})
-            """,
-            tuple(canonical_keys),
-        ).fetchall()
-    except sqlite3.Error:
-        return {}
-    finally:
-        if connection is not None:
-            try:
-                connection.close()
-            except Exception:
-                pass
-    raw_by_canonical = {
-        str(row["profile_url_key"] or "").strip(): str(row["last_raw_path"] or "").strip()
-        for row in sqlite_registry_rows
-        if str(row["profile_url_key"] or "").strip()
-    }
-    resolved: dict[str, str] = {}
-    for key in keys:
-        canonical_key = str(alias_map.get(key) or key).strip()
-        raw_path = str(raw_by_canonical.get(canonical_key) or "").strip()
-        if raw_path and Path(raw_path).exists():
-            resolved[key] = raw_path
-    return resolved
+    return {}
 
 
 def _select_matching_profile_payload(payload: Any, *, candidate_url: str) -> dict[str, Any]:

@@ -259,7 +259,7 @@ PYTHONPATH=src ./.venv-tests/bin/python scripts/run_explain_dry_run_matrix.py \
   - 典型例子是某公司原本在默认矩阵里预期 `new_job`，但你本地已经有 authoritative baseline，于是实际会变成 `reuse_snapshot`
   - 所以：
     - 要做稳定回归，用 `--runtime-dir` 指向隔离 test runtime
-    - 要做“近真实本地数据”的 scripted 验证，用 `seed_test_env_assets.py` 先把当前 authoritative snapshots 种进专用 `runtime/test_env/...`
+    - 要做“近真实本地数据”的 scripted 验证，用 `seed_test_env_assets.py` 先把当前 authoritative snapshots 种进专用 `runtime/test_env/...`；该脚本要求 Postgres control plane，不再读取磁盘 SQLite fallback
     - 不要把“直接打当前本地 runtime 的 explain matrix 预期不符”机械当成代码 regression
 - `--runtime-dir`
   - 脚本会自起一个 in-process backend，并把 `SOURCING_RUNTIME_DIR` 指向该目录
@@ -364,7 +364,7 @@ SOURCING_RUN_FULL_HOSTED_SMOKE_MATRIX=1 PYTHONPATH=src ./.venv-tests/bin/python 
 - `scripts/run_simulate_smoke_matrix.py` 仍保留完整默认 matrix，适合手工 smoke / 运维排障 / 新场景验证
 - `--runtime-dir` 适合把 smoke 固定在 `runtime/test_env/...` 下的专用目录，而不是直接打日常开发 runtime
 - 如果希望 smoke 更接近本地真实资产，而不是 reference fixture：
-  - 先用 `scripts/seed_test_env_assets.py` 从当前 runtime 复制/链接 authoritative snapshot
+  - 先用 `scripts/seed_test_env_assets.py` 从当前 Postgres control-plane runtime 复制/链接 authoritative snapshot
   - 再用 `--runtime-dir` + `--provider-mode scripted` 跑 case report
 - smoke 结果里现在也会带更多 explain 侧结构化摘要，便于直接看出：
   - 为什么是 `reuse_snapshot` / `delta_from_snapshot` / `new_job`

@@ -3,7 +3,7 @@
 > Status: Current first-party doc. Treat this file as active guidance, but keep it aligned with `docs/INDEX.md` and `PROGRESS.md` when runtime contracts change.
 
 
-> Current default: hosted / cross-device recovery now prefers `Postgres control plane + control_plane_snapshot + company_snapshot`. `sqlite_snapshot` remains a legacy backup alias, not the primary path.
+> Current default: hosted / cross-device recovery uses `Postgres control plane + control_plane_snapshot + company_snapshot`. `sqlite_snapshot` is retired and no longer has product CLI, import, upload, download, or restore support.
 
 ## Goal
 
@@ -60,7 +60,7 @@
 | Durable normalized assets | `candidate_documents.json`, `manifest.json`, retrieval artifacts | local runtime first, then cloud object storage | No | Yes |
 | Execution state | worker checkpoint, scheduler state, daemon status | local runtime / DB | No | Selective |
 | Ephemeral cache | temporary HTML, retry scratch, debug temp file | local runtime | No | Usually No |
-| Local DB | Postgres control plane, plus legacy backup-only SQLite snapshots when explicitly exported | local runtime / local PG | No | Exported control-plane snapshots only |
+| Local DB | Postgres control plane | local runtime / local PG | No | Exported control-plane snapshots only |
 
 ## Recommended Storage Planes
 
@@ -137,9 +137,6 @@ sourcing-ai-agent-dev/
       {job_id}/
         results.json
         result_diff.json
-    sqlite_exports/
-      {date}/
-        sourcing_agent.sqlite.zst
     manifests/
       latest/
         company_assets_index.json
@@ -162,7 +159,7 @@ sourcing-ai-agent-dev/
 - live debug cache
 - current worker checkpoint
 - daemon status
-- Postgres control plane（以及按需导出的 legacy SQLite backup）
+- Postgres control plane
 - 尚未上传或不值得上传的临时资产
 
 不要求本地 runtime 全量持久化到云端。只同步高价值子集。
@@ -289,19 +286,18 @@ sourcing-ai-agent-dev/
 
 - `export-company-snapshot-bundle`
 - `export-company-handoff-bundle`
-- `export-sqlite-snapshot`
+- `export-control-plane-snapshot-bundle`
 - `upload-asset-bundle`
 - `download-asset-bundle`
 - `import-cloud-assets`
 - `restore-asset-bundle`
-- `restore-sqlite-snapshot`
 
 默认服务器恢复入口已经收敛到：
 
 - `import-cloud-assets --bundle-kind control_plane_snapshot ...`
 - `import-cloud-assets --bundle-kind company_snapshot ...`
 
-其余 `download-asset-bundle / restore-*` 保留为排障或离线拆解 bundle 的低层工具。
+其余 `download-asset-bundle / restore-asset-bundle` 保留为排障或离线拆解 bundle 的低层工具。
 
 当前 object sync 附加元数据也已实现：
 
@@ -345,8 +341,8 @@ sourcing-ai-agent-dev/
   - 把 bundle 和 manifest 推送到 cloud object storage
 - `pull-asset-index`
   - 拉取云端 index，不拉全量 raw asset
-- `export-sqlite-snapshot`
-  - 导出当前 SQLite 的只读恢复版本
+- `export-control-plane-snapshot-bundle`
+  - 导出 Postgres control-plane snapshot bundle，作为服务器恢复的全局状态基线
 
 ## Implemented CLI Examples
 
@@ -354,9 +350,9 @@ sourcing-ai-agent-dev/
 cd "sourcing-ai-agent"
 
 PYTHONPATH=src python3 -m sourcing_agent.cli export-company-snapshot-bundle --company thinkingmachineslab
-PYTHONPATH=src python3 -m sourcing_agent.cli export-sqlite-snapshot
+PYTHONPATH=src python3 -m sourcing_agent.cli export-control-plane-snapshot-bundle
 PYTHONPATH=src python3 -m sourcing_agent.cli upload-asset-bundle --manifest runtime/asset_exports/<bundle>/bundle_manifest.json
-PYTHONPATH=src python3 -m sourcing_agent.cli import-cloud-assets --bundle-kind sqlite_snapshot --bundle-id <sqlite_bundle_id> --output-dir /tmp/asset_imports
+PYTHONPATH=src python3 -m sourcing_agent.cli import-cloud-assets --bundle-kind control_plane_snapshot --bundle-id <control_plane_bundle_id> --output-dir /tmp/asset_imports
 PYTHONPATH=src python3 -m sourcing_agent.cli import-cloud-assets --bundle-kind company_snapshot --bundle-id <bundle_id> --output-dir /tmp/asset_imports
 ```
 
@@ -364,7 +360,6 @@ PYTHONPATH=src python3 -m sourcing_agent.cli import-cloud-assets --bundle-kind c
 
 - `download-asset-bundle`
 - `restore-asset-bundle`
-- `restore-sqlite-snapshot`
 
 ## Canonical Restore Example
 
@@ -391,7 +386,7 @@ PYTHONPATH=src python3 -m sourcing_agent.cli import-cloud-assets --bundle-kind c
   - 当前默认 filesystem backend:
     - `runtime/object_store/sourcing-ai-agent-dev/`
   - Thinking Machines Lab handoff bundle 已成功 upload + download
-  - SQLite snapshot 已成功 upload
+  - control-plane snapshot 应通过 `control_plane_snapshot` bundle 导出和恢复
 
 ## Real Cloud S3-Compatible Validation
 
@@ -407,7 +402,7 @@ PYTHONPATH=src python3 -m sourcing_agent.cli import-cloud-assets --bundle-kind c
 
 已验证能力包括：
 
-- `sqlite_snapshot` 上传
+- `control_plane_snapshot` / `company_snapshot` 风格 bundle 上传下载
 - bundle 下载与本地恢复
 
 这说明当前 `s3_compatible` provider 对以下要素已经有效：
@@ -484,7 +479,7 @@ PYTHONPATH=src python3 -m sourcing_agent.cli import-cloud-assets --bundle-kind c
    - `company_assets`
    - `manual_review_assets`
    - retrieval artifacts
-   - exported SQLite snapshots
+   - exported control-plane snapshots
 
 4. 先实现“按 bundle 恢复”，不要追求全量 runtime 镜像  
    当前真正值得恢复的是高价值调查资产，不是整个本地缓存目录。
@@ -520,4 +515,4 @@ PYTHONPATH=src python3 -m sourcing_agent.cli import-cloud-assets --bundle-kind c
 1. `asset_bundle_manifest` 规范
 2. `export-asset-bundle / import-cloud-assets`
 3. 云端 object storage prefix 约定
-4. exported SQLite snapshot 机制
+4. exported control-plane snapshot 机制

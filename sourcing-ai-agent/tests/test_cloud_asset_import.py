@@ -10,8 +10,7 @@ from sourcing_agent.asset_sync import AssetBundleError, AssetBundleManager
 from sourcing_agent.cloud_asset_import import hydrate_cloud_generation, import_cloud_assets
 from sourcing_agent.domain import Candidate, make_evidence_id
 from sourcing_agent.object_storage import ObjectStorageConfig, build_object_storage_client
-from sourcing_agent.request_matching import matching_request_family_signature, matching_request_signature
-from sourcing_agent.storage import SQLiteStore
+from sourcing_agent.storage import ControlPlaneStore
 
 
 class CloudAssetImportTest(unittest.TestCase):
@@ -146,7 +145,7 @@ class CloudAssetImportTest(unittest.TestCase):
         self.assertTrue(ledger_path.exists())
         self.assertTrue((self.target_runtime / "company_identity_registry.json").exists())
 
-        store = SQLiteStore(self.target_runtime / "sourcing_agent.db")
+        store = ControlPlaneStore(self.target_runtime / "sourcing_agent.db")
         authoritative = store.get_authoritative_organization_asset_registry(
             target_company="Acme",
             asset_view="canonical_merged",
@@ -277,113 +276,73 @@ class CloudAssetImportTest(unittest.TestCase):
             "completed",
         )
 
-        target_store = SQLiteStore(self.target_runtime / "sourcing_agent.db")
+        target_store = ControlPlaneStore(self.target_runtime / "sourcing_agent.db")
         profile_registry_entry = target_store.get_linkedin_profile_registry("https://www.linkedin.com/in/alice-example/")
         self.assertIsNotNone(profile_registry_entry)
 
-    def test_import_sqlite_snapshot_refreshes_legacy_matching_metadata(self) -> None:
-        source_store = SQLiteStore(self.source_runtime / "sourcing_agent.db")
-        legacy_request = {
-            "raw_user_request": "我想找 Google Gemini 的产品经理",
-            "target_company": "Google",
-        }
-        source_store._connection.execute(
-            """
-            INSERT INTO jobs (
-                job_id, status, stage, request_json, execution_bundle_json, matching_request_json,
-                request_signature, request_family_signature, matching_request_signature, matching_request_family_signature
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                "legacy-job",
-                "completed",
-                "completed",
-                json.dumps(legacy_request, ensure_ascii=False),
-                "{}",
-                "{}",
-                "",
-                "",
-                "",
-                "",
+    def test_import_retired_sqlite_snapshot_manifest_is_rejected(self) -> None:
+        bundle_root = self.source_runtime / "asset_exports" / "retired-sqlite"
+        bundle_root.mkdir(parents=True, exist_ok=True)
+        manifest_path = bundle_root / "bundle_manifest.json"
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "bundle_kind": "sqlite_snapshot",
+                    "bundle_id": "retired-sqlite",
+                    "files": [],
+                },
+                ensure_ascii=False,
+                indent=2,
             ),
-        )
-        source_store._connection.execute(
-            """
-            INSERT INTO criteria_feedback (
-                job_id, candidate_id, target_company, feedback_type, subject, value, reviewer, notes, payload_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                "legacy-job",
-                "cand-1",
-                "Google",
-                "must_have_signal",
-                "gemini",
-                "product manager",
-                "human",
-                "",
-                json.dumps({"request_payload": legacy_request}, ensure_ascii=False),
-            ),
-        )
-        source_store._connection.commit()
-
-        export = self.source_manager.export_sqlite_snapshot()
-        result = import_cloud_assets(
-            bundle_manager=self.target_manager,
-            manifest_path=export["manifest_path"],
+            encoding="utf-8",
         )
 
-        self.assertEqual(result["status"], "completed")
-        self.assertEqual(result["bundle_kind"], "control_plane_snapshot")
-        self.assertEqual(result["matching_metadata_refresh"]["status"], "completed")
-        self.assertEqual(str(dict(result.get("ledger") or {}).get("operation_type") or ""), "import_bundle")
-        self.assertGreaterEqual(result["matching_metadata_refresh"]["job_request_signature_count"], 1)
-        self.assertGreaterEqual(result["matching_metadata_refresh"]["job_count"], 1)
-        self.assertGreaterEqual(result["matching_metadata_refresh"]["feedback_count"], 1)
-
-        target_store = SQLiteStore(self.target_runtime / "sourcing_agent.db")
-        restored_job = target_store.get_job("legacy-job")
-        self.assertIsNotNone(restored_job)
-        assert restored_job is not None
-        self.assertEqual(
-            restored_job["matching_request_signature"],
-            matching_request_signature(legacy_request),
-        )
-        self.assertEqual(
-            restored_job["matching_request_family_signature"],
-            matching_request_family_signature(legacy_request),
-        )
-        feedback_rows = target_store.list_criteria_feedback(target_company="Google", limit=5)
-        self.assertEqual(
-            str(feedback_rows[0]["metadata"].get("matching_request_signature") or ""),
-            matching_request_signature(legacy_request),
-        )
-        self.assertEqual(
-            str(feedback_rows[0]["metadata"].get("matching_request_family_signature") or ""),
-            matching_request_family_signature(legacy_request),
-        )
-
-    def test_import_sqlite_snapshot_requires_explicit_restore_opt_in(self) -> None:
-        sqlite_path = self.source_runtime / "sourcing_agent.db"
-        sqlite_path.write_bytes(b"not-a-real-db")
-        export = self.source_manager.export_sqlite_snapshot()
-
-        with self.assertRaisesRegex(AssetBundleError, "sqlite snapshot restore is disabled by default"):
+        with self.assertRaisesRegex(AssetBundleError, "sqlite_snapshot import/restore has been retired"):
             import_cloud_assets(
                 bundle_manager=self.target_manager,
-                manifest_path=export["manifest_path"],
+                manifest_path=str(manifest_path),
+            )
+
+    def test_import_control_plane_snapshot_requires_postgres_dsn(self) -> None:
+        bundle_root = self.source_runtime / "asset_exports" / "control-plane"
+        bundle_root.mkdir(parents=True, exist_ok=True)
+        manifest_path = bundle_root / "bundle_manifest.json"
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "bundle_kind": "control_plane_snapshot",
+                    "bundle_id": "control-plane",
+                    "files": [],
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(AssetBundleError, "requires a Postgres control-plane DSN"):
+            import_cloud_assets(
+                bundle_manager=self.target_manager,
+                manifest_path=str(manifest_path),
             )
 
     def test_import_cloud_assets_can_disable_legacy_bundle_fallback(self) -> None:
-        source_store = SQLiteStore(self.source_runtime / "sourcing_agent.db")
-        source_store.save_job(
-            "job-1",
-            "workflow",
-            "completed",
-            "completed",
-            {"target_company": "Acme"},
+        company_dir = self.source_runtime / "company_assets" / "acme"
+        snapshot_dir = company_dir / "20260413T120000"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        (company_dir / "latest_snapshot.json").write_text(
+            json.dumps(
+                {
+                    "snapshot_id": "20260413T120000",
+                    "company_identity": {"canonical_name": "Acme", "company_key": "acme"},
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
         )
-        export = self.source_manager.export_sqlite_snapshot()
+        (snapshot_dir / "manifest.json").write_text(json.dumps({"snapshot_id": "20260413T120000"}), encoding="utf-8")
+        export = self.source_manager.export_company_snapshot_bundle("Acme")
 
         with self.assertRaisesRegex(AssetBundleError, "legacy bundle fallback is disabled"):
             import_cloud_assets(
@@ -624,7 +583,7 @@ class CloudAssetImportTest(unittest.TestCase):
         self.assertTrue(
             (hot_cache_root / "acme" / snapshot_id / "normalized_artifacts" / "candidate_shards" / "c1.json").exists()
         )
-        target_store = SQLiteStore(self.target_runtime / "sourcing_agent.db")
+        target_store = ControlPlaneStore(self.target_runtime / "sourcing_agent.db")
         authoritative = target_store.get_authoritative_organization_asset_registry(
             target_company="Acme",
             asset_view="canonical_merged",
@@ -808,7 +767,7 @@ class CloudAssetImportTest(unittest.TestCase):
             clear=False,
         ):
             published = self.source_manager.publish_candidate_generation(target_company="Acme", client=client)
-            export = self.source_manager.export_company_handoff_bundle("Acme", include_sqlite=False)
+            export = self.source_manager.export_company_handoff_bundle("Acme")
             imported = import_cloud_assets(
                 bundle_manager=self.target_manager,
                 manifest_path=export["manifest_path"],
@@ -827,95 +786,14 @@ class CloudAssetImportTest(unittest.TestCase):
             str(published.get("generation_key") or ""),
         )
 
-    def test_import_sqlite_snapshot_direct_request_can_resolve_generation_first(self) -> None:
-        canonical_root = self.root / "canonical_company_assets"
-        hot_cache_root = self.root / "hot_cache_company_assets"
-        snapshot_id = "20260418T120000"
-        snapshot_dir = canonical_root / "acme" / snapshot_id
-        artifact_dir = snapshot_dir / "normalized_artifacts"
-        (artifact_dir / "candidate_shards").mkdir(parents=True, exist_ok=True)
-        company_identity = {
-            "requested_name": "Acme",
-            "canonical_name": "Acme",
-            "company_key": "acme",
-            "linkedin_slug": "acme",
-        }
-        (canonical_root / "acme" / "latest_snapshot.json").write_text(
-            json.dumps({"snapshot_id": snapshot_id, "company_identity": company_identity}, ensure_ascii=False, indent=2)
-        )
-        (snapshot_dir / "identity.json").write_text(json.dumps(company_identity, ensure_ascii=False, indent=2))
-        (artifact_dir / "manifest.json").write_text(
-            json.dumps(
-                {
-                    "target_company": "Acme",
-                    "company_key": "acme",
-                    "snapshot_id": snapshot_id,
-                    "asset_view": "canonical_merged",
-                    "candidate_count": 1,
-                    "candidate_shards": [{"candidate_id": "c1", "path": "candidate_shards/c1.json"}],
-                    "pages": [],
-                    "backlogs": {},
-                    "materialization_generation_key": "gen-acme-sqlite-1",
-                    "materialization_generation_sequence": 1,
-                    "materialization_watermark": "1:gen-acme-sqlite-1",
-                },
-                ensure_ascii=False,
-                indent=2,
-            )
-        )
-        (artifact_dir / "artifact_summary.json").write_text(
-            json.dumps(
-                {
-                    "target_company": "Acme",
-                    "company_key": "acme",
-                    "snapshot_id": snapshot_id,
-                    "asset_view": "canonical_merged",
-                    "candidate_count": 1,
-                    "materialization_generation_key": "gen-acme-sqlite-1",
-                    "materialization_generation_sequence": 1,
-                    "materialization_watermark": "1:gen-acme-sqlite-1",
-                },
-                ensure_ascii=False,
-                indent=2,
-            )
-        )
-        (artifact_dir / "candidate_shards" / "c1.json").write_text(
-            json.dumps({"candidate_id": "c1", "display_name": "Alice"}, ensure_ascii=False, indent=2)
-        )
-        client = build_object_storage_client(
-            ObjectStorageConfig(
-                provider="filesystem", local_dir=str(self.root / "object_store"), prefix="cloud-import-tests"
-            )
-        )
-
-        with unittest.mock.patch.dict(
-            os.environ,
-            {
-                "SOURCING_CANONICAL_ASSETS_DIR": str(canonical_root),
-                "SOURCING_HOT_CACHE_ASSETS_DIR": str(hot_cache_root),
-            },
-            clear=False,
-        ):
-            published = self.source_manager.publish_candidate_generation(target_company="Acme", client=client)
-            imported = import_cloud_assets(
+    def test_import_retired_sqlite_snapshot_direct_request_is_rejected(self) -> None:
+        with self.assertRaisesRegex(AssetBundleError, "sqlite_snapshot import/restore has been retired"):
+            import_cloud_assets(
                 bundle_manager=self.target_manager,
-                storage_client=client,
                 bundle_kind="sqlite_snapshot",
-                bundle_id="legacy-sqlite-bundle",
+                bundle_id="retired-sqlite-bundle",
                 companies=["Acme"],
-                snapshot_id=snapshot_id,
             )
-
-        self.assertEqual(imported["status"], "completed")
-        self.assertEqual(imported["bundle_kind"], "candidate_generation")
-        self.assertEqual(imported["import_mode"], "candidate_generation")
-        self.assertFalse(bool(imported["legacy_bundle_fallback_used"]))
-        self.assertEqual(str(imported["requested_bundle_kind"] or ""), "sqlite_snapshot")
-        self.assertEqual(str(imported["requested_bundle_id"] or ""), "legacy-sqlite-bundle")
-        self.assertEqual(
-            str(dict(imported.get("generation_first_attempt") or {}).get("generation_key") or ""),
-            str(published.get("generation_key") or ""),
-        )
 
 
 if __name__ == "__main__":

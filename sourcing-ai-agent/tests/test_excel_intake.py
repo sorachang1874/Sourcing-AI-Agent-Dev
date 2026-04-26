@@ -24,7 +24,7 @@ from sourcing_agent.settings import (
     QwenSettings,
     SemanticProviderSettings,
 )
-from sourcing_agent.storage import SQLiteStore
+from sourcing_agent.storage import ControlPlaneStore
 
 
 def _column_ref(index: int) -> str:
@@ -97,7 +97,7 @@ class ExcelIntakeTest(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
         root = Path(self.tempdir.name)
-        self.store = SQLiteStore(root / "test.db")
+        self.store = ControlPlaneStore(root / "test.db")
         self.settings = AppSettings(
             project_root=root,
             runtime_dir=root,

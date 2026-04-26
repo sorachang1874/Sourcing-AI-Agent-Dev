@@ -5,9 +5,8 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
-from sourcing_agent.asset_sync import AssetBundleManager
+from sourcing_agent.asset_sync import AssetBundleError, AssetBundleManager
 from sourcing_agent.object_storage import ObjectStorageConfig, build_object_storage_client
-from sourcing_agent.storage import SQLiteStore
 
 
 class AssetBundleManagerTest(unittest.TestCase):
@@ -88,12 +87,9 @@ class AssetBundleManagerTest(unittest.TestCase):
         job_path = self.runtime_dir / "jobs" / "job_01.json"
         job_path.parent.mkdir(parents=True, exist_ok=True)
         job_path.write_text(json.dumps({"target_company": "Thinking Machines Lab", "status": "completed"}))
-        SQLiteStore(self.runtime_dir / "sourcing_agent.db")
-
-        export = self.manager.export_company_handoff_bundle("Thinking Machines Lab", include_sqlite=True)
+        export = self.manager.export_company_handoff_bundle("Thinking Machines Lab")
         manifest = json.loads(Path(export["manifest_path"]).read_text())
         relpaths = {entry["runtime_relative_path"] for entry in manifest["files"]}
-        self.assertEqual(str(dict(manifest.get("metadata") or {}).get("control_plane_snapshot_role") or ""), "backup_only")
         self.assertIn("company_assets/thinkingmachineslab/latest_snapshot.json", relpaths)
         self.assertIn(
             "manual_review_assets/thinkingmachineslab/session_01/review_adhoc_01/resolution_input.json",
@@ -101,50 +97,50 @@ class AssetBundleManagerTest(unittest.TestCase):
         )
         self.assertIn("live_tests/harvest_profile_batch_tml/batch_summary.json", relpaths)
         self.assertIn("jobs/job_01.json", relpaths)
+        self.assertNotIn("object_sync/control_plane/control_plane_snapshot.json", relpaths)
+
+    def test_export_control_plane_snapshot_bundle_uses_postgres_source(self) -> None:
+        def fake_export_control_plane_snapshot(**kwargs):
+            self.assertEqual(kwargs["source_backend"], "postgres")
+            output_path = Path(kwargs["output_path"])
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(
+                json.dumps({"source_backend": "postgres", "tables": {}}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            return {"status": "exported", "source_backend": "postgres", "output_path": str(output_path)}
+
+        with unittest.mock.patch(
+            "sourcing_agent.asset_sync.export_control_plane_snapshot",
+            side_effect=fake_export_control_plane_snapshot,
+        ):
+            export = self.manager.export_control_plane_snapshot_bundle()
+
+        manifest = json.loads(Path(export["manifest_path"]).read_text())
+        relpaths = {entry["runtime_relative_path"] for entry in manifest["files"]}
+        self.assertEqual(manifest["bundle_kind"], "control_plane_snapshot")
+        self.assertEqual(str(dict(manifest.get("metadata") or {}).get("source_backend") or ""), "postgres")
         self.assertIn("object_sync/control_plane/control_plane_snapshot.json", relpaths)
 
-    def test_export_sqlite_snapshot_bundle(self) -> None:
-        sqlite_path = self.runtime_dir / "sourcing_agent.db"
-        sqlite_path.write_bytes(b"sqlite-bytes")
-        export = self.manager.export_sqlite_snapshot()
-        manifest = json.loads(Path(export["manifest_path"]).read_text())
-        self.assertEqual(manifest["bundle_kind"], "sqlite_snapshot")
-        self.assertEqual(str(dict(manifest.get("metadata") or {}).get("sqlite_role") or ""), "backup_only")
-        self.assertEqual(manifest["files"][0]["runtime_relative_path"], "sourcing_agent.db")
+    def test_sqlite_snapshot_bundle_methods_are_retired(self) -> None:
+        self.assertFalse(hasattr(self.manager, "export_sqlite_snapshot"))
+        self.assertFalse(hasattr(self.manager, "restore_sqlite_snapshot"))
 
-    def test_restore_sqlite_snapshot_compat_restores_valid_control_plane_snapshot_bundle(self) -> None:
-        store = SQLiteStore(self.runtime_dir / "sourcing_agent.db")
-        store.save_job(
-            "job-control-plane",
-            "workflow",
-            "completed",
-            "completed",
-            {"target_company": "Acme"},
+        bundle_root = self.runtime_dir / "asset_exports" / "retired-sqlite"
+        payload_dir = bundle_root / "payload"
+        payload_dir.mkdir(parents=True, exist_ok=True)
+        (bundle_root / "bundle_manifest.json").write_text(
+            json.dumps(
+                {
+                    "bundle_kind": "sqlite_snapshot",
+                    "bundle_id": "retired",
+                    "files": [],
+                }
+            ),
+            encoding="utf-8",
         )
-        export = self.manager.export_sqlite_snapshot()
-
-        manifest = json.loads(Path(export["manifest_path"]).read_text())
-        self.assertEqual(manifest["bundle_kind"], "control_plane_snapshot")
-
-        replacement_store = SQLiteStore(self.runtime_dir / "replacement.db")
-        replacement_store.save_job(
-            "job-replacement",
-            "workflow",
-            "running",
-            "running",
-            {"target_company": "Other"},
-        )
-
-        restore = self.manager.restore_sqlite_snapshot(
-            export["manifest_path"],
-            target_db_path=self.runtime_dir / "replacement.db",
-        )
-
-        self.assertEqual(restore["status"], "control_plane_snapshot_restored")
-        self.assertTrue(bool(restore["backup_path"]))
-        restored_store = SQLiteStore(self.runtime_dir / "replacement.db")
-        self.assertIsNotNone(restored_store.get_job("job-control-plane"))
-        self.assertIsNone(restored_store.get_job("job-replacement"))
+        with self.assertRaisesRegex(AssetBundleError, "sqlite_snapshot bundles have been retired"):
+            self.manager.restore_bundle(bundle_root / "bundle_manifest.json")
 
     def test_export_company_handoff_bundle_excludes_sqlite_by_default(self) -> None:
         snapshot_dir = self.runtime_dir / "company_assets" / "acme" / "20260406T120000"
@@ -167,7 +163,7 @@ class AssetBundleManagerTest(unittest.TestCase):
         relpaths = {entry["runtime_relative_path"] for entry in manifest["files"]}
 
         self.assertNotIn("sourcing_agent.db", relpaths)
-        self.assertFalse(bool(dict(manifest.get("metadata") or {}).get("include_sqlite")))
+        self.assertNotIn("include_sqlite", dict(manifest.get("metadata") or {}))
 
     def test_export_company_snapshot_bundle_from_external_canonical_root(self) -> None:
         canonical_root = self.project_root / "canonical_company_assets"

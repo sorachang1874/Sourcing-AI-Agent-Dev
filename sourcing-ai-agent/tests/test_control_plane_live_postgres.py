@@ -9,7 +9,7 @@ from sourcing_agent.control_plane_job_progress import update_job_progress_event_
 from sourcing_agent.control_plane_live_postgres import LiveControlPlanePostgresAdapter
 from sourcing_agent.domain import Candidate, EvidenceRecord, JobRequest
 from sourcing_agent.retrieval_runtime import load_bootstrap_candidate_source
-from sourcing_agent.storage import SQLiteStore
+from sourcing_agent.storage import ControlPlaneStore
 
 
 class _RetryablePostgresError(Exception):
@@ -89,6 +89,11 @@ class _FakeLiveControlPlanePostgresAdapter:
         "manual_review_items",
         "candidate_review_registry",
         "target_candidates",
+        "target_candidate_public_web_batches",
+        "target_candidate_public_web_runs",
+        "person_public_web_assets",
+        "person_public_web_signals",
+        "target_candidate_public_web_promotions",
         "frontend_history_links",
         "agent_runtime_sessions",
         "agent_trace_spans",
@@ -127,6 +132,11 @@ class _FakeLiveControlPlanePostgresAdapter:
         "manual_review_items": ("review_item_id",),
         "candidate_review_registry": ("record_id",),
         "target_candidates": ("record_id",),
+        "target_candidate_public_web_batches": ("batch_id",),
+        "target_candidate_public_web_runs": ("run_id",),
+        "person_public_web_assets": ("asset_id",),
+        "person_public_web_signals": ("signal_id",),
+        "target_candidate_public_web_promotions": ("promotion_id",),
         "frontend_history_links": ("history_id",),
         "query_dispatches": ("dispatch_id",),
         "confidence_policy_runs": ("policy_run_id",),
@@ -1121,6 +1131,11 @@ class _FakeLiveControlPlanePostgresAdapter:
             "job_results",
             "candidate_review_registry",
             "target_candidates",
+            "target_candidate_public_web_batches",
+            "target_candidate_public_web_runs",
+            "person_public_web_assets",
+            "person_public_web_signals",
+            "target_candidate_public_web_promotions",
             "frontend_history_links",
             "plan_review_sessions",
             "manual_review_items",
@@ -1297,7 +1312,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
     def tearDown(self) -> None:
         self.tempdir.cleanup()
 
-    def _build_store(self, *, mode: str | None, extra_env: dict[str, str] | None = None) -> SQLiteStore:
+    def _build_store(self, *, mode: str | None, extra_env: dict[str, str] | None = None) -> ControlPlaneStore:
         env = {
             "SOURCING_CONTROL_PLANE_POSTGRES_DSN": "postgresql://user:pass@localhost:5432/sourcing",
         }
@@ -1312,7 +1327,7 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
                 env,
                 clear=False,
             ):
-                return SQLiteStore(self.db_path)
+                return ControlPlaneStore(self.db_path)
 
     def test_job_result_view_write_is_mirrored_to_live_postgres(self) -> None:
         store = self._build_store(mode="mirror")
@@ -1938,25 +1953,9 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
                 clear=False,
             ):
                 with self.assertRaisesRegex(RuntimeError, "no control-plane Postgres DSN was resolved"):
-                    SQLiteStore(self.db_path)
+                    ControlPlaneStore(self.db_path)
 
-    def test_production_runtime_requires_postgres_without_explicit_emergency_override(self) -> None:
-        with mock.patch("sourcing_agent.storage.LiveControlPlanePostgresAdapter", _FakeLiveControlPlanePostgresAdapter):
-            with mock.patch.dict(
-                os.environ,
-                {
-                    "SOURCING_RUNTIME_ENVIRONMENT": "production",
-                    "SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES": "0",
-                    "SOURCING_CONTROL_PLANE_POSTGRES_DSN": "",
-                    "SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE": "",
-                    "SOURCING_ALLOW_PRODUCTION_SQLITE_CONTROL_PLANE": "",
-                },
-                clear=False,
-            ):
-                with self.assertRaisesRegex(RuntimeError, "no control-plane Postgres DSN was resolved"):
-                    SQLiteStore(self.db_path)
-
-    def test_production_sqlite_control_plane_requires_explicit_emergency_override(self) -> None:
+    def test_production_runtime_requires_postgres_even_if_legacy_override_is_set(self) -> None:
         with mock.patch("sourcing_agent.storage.LiveControlPlanePostgresAdapter", _FakeLiveControlPlanePostgresAdapter):
             with mock.patch.dict(
                 os.environ,
@@ -1969,17 +1968,15 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
                 },
                 clear=False,
             ):
-                store = SQLiteStore(self.db_path)
+                with self.assertRaisesRegex(RuntimeError, "no control-plane Postgres DSN was resolved"):
+                    ControlPlaneStore(self.db_path)
 
-        self.assertEqual(store.control_plane_postgres_live_mode(), "disabled")
-        self.assertEqual(store.sqlite_shadow_backend(), "disk")
-
-    def test_require_control_plane_postgres_rejects_disk_backed_shadow(self) -> None:
-        with self.assertRaisesRegex(RuntimeError, "refuses disk-backed SQLite shadow storage"):
+    def test_postgres_only_rejects_disk_backed_shadow_even_without_require_flag(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "postgres_only control-plane mode refuses disk-backed SQLite shadow"):
             self._build_store(
                 mode="postgres_only",
                 extra_env={
-                    "SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES": "1",
+                    "SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES": "0",
                     "SOURCING_PG_ONLY_SQLITE_BACKEND": "disk",
                 },
             )
@@ -2662,6 +2659,150 @@ class ControlPlaneLivePostgresStorageTest(unittest.TestCase):
         self.assertEqual(int(sqlite_target_count or 0), 0)
         self.assertEqual(int(sqlite_history_count or 0), 0)
         self.assertEqual(int(sqlite_view_count or 0), 0)
+
+    def test_target_candidate_public_web_state_is_postgres_authoritative(self) -> None:
+        store = self._build_store(mode="postgres_only")
+        adapter = store._control_plane_postgres
+        assert isinstance(adapter, _FakeLiveControlPlanePostgresAdapter)
+
+        batch = store.upsert_target_candidate_public_web_batch(
+            {
+                "batch_id": "pw-batch-1",
+                "idempotency_key": "batch-key-1",
+                "status": "queued",
+                "requested_record_ids": ["target-1"],
+                "source_families": ["profile_web_presence", "technical_presence"],
+                "options": {"max_queries_per_candidate": 4},
+                "run_ids": ["pw-run-1"],
+            }
+        )
+        run = store.upsert_target_candidate_public_web_run(
+            {
+                "run_id": "pw-run-1",
+                "batch_id": "pw-batch-1",
+                "record_id": "target-1",
+                "candidate_id": "cand-1",
+                "candidate_name": "Alice",
+                "linkedin_url_key": "alice",
+                "idempotency_key": "run-key-1",
+                "status": "searching",
+                "phase": "searching",
+                "source_families": ["profile_web_presence"],
+                "options": {"use_batch_search": True},
+                "search_checkpoint": {"stage": "waiting_remote_search", "tasks": {"q1": {"status": "waiting"}}},
+            }
+        )
+        asset = store.upsert_person_public_web_asset(
+            {
+                "asset_id": "asset-1",
+                "person_identity_key": "linkedin:alice",
+                "linkedin_url_key": "alice",
+                "latest_run_id": "pw-run-1",
+                "target_candidate_record_id": "target-1",
+                "summary": {"email_candidate_count": 1},
+                "signals": {"email_candidates": []},
+                "source_run_ids": ["pw-run-1"],
+            }
+        )
+        signal_count = store.replace_person_public_web_signals_for_run(
+            run_id="pw-run-1",
+            signals=[
+                {
+                    "signal_id": "signal-1",
+                    "run_id": "pw-run-1",
+                    "asset_id": "asset-1",
+                    "person_identity_key": "linkedin:alice",
+                    "record_id": "target-1",
+                    "candidate_id": "cand-1",
+                    "candidate_name": "Alice",
+                    "linkedin_url_key": "alice",
+                    "signal_kind": "email_candidate",
+                    "signal_type": "academic",
+                    "email_type": "academic",
+                    "value": "alice@example.edu",
+                    "normalized_value": "alice@example.edu",
+                    "source_url": "https://alice.example.edu/",
+                    "source_domain": "alice.example.edu",
+                    "source_family": "profile_web_presence",
+                    "confidence_label": "high",
+                    "confidence_score": 0.91,
+                    "identity_match_label": "likely_same_person",
+                    "identity_match_score": 0.9,
+                    "publishable": True,
+                    "promotion_status": "promotion_recommended",
+                }
+            ],
+        )
+        promotion = store.upsert_target_candidate_public_web_promotion(
+            {
+                "promotion_id": "promotion-1",
+                "signal_id": "signal-1",
+                "run_id": "pw-run-1",
+                "asset_id": "asset-1",
+                "person_identity_key": "linkedin:alice",
+                "record_id": "target-1",
+                "candidate_id": "cand-1",
+                "candidate_name": "Alice",
+                "linkedin_url_key": "alice",
+                "signal_kind": "email_candidate",
+                "signal_type": "academic",
+                "email_type": "academic",
+                "value": "alice@example.edu",
+                "normalized_value": "alice@example.edu",
+                "source_url": "https://alice.example.edu/",
+                "source_domain": "alice.example.edu",
+                "source_family": "profile_web_presence",
+                "confidence_label": "high",
+                "confidence_score": 0.91,
+                "identity_match_label": "likely_same_person",
+                "identity_match_score": 0.9,
+                "publishable": True,
+                "action": "promote",
+                "promoted_field": "primary_email",
+                "new_value": "alice@example.edu",
+                "operator": "unit-test",
+            }
+        )
+
+        self.assertEqual(batch["batch_id"], "pw-batch-1")
+        self.assertEqual(run["search_checkpoint"]["stage"], "waiting_remote_search")
+        self.assertEqual(asset["person_identity_key"], "linkedin:alice")
+        self.assertEqual(signal_count, 1)
+        self.assertEqual(promotion["promotion_status"], "manually_promoted")
+        self.assertEqual(len(store.list_target_candidate_public_web_runs(batch_id="pw-batch-1")), 1)
+        self.assertIsNotNone(store.get_person_public_web_asset(person_identity_key="linkedin:alice"))
+        signals = store.list_person_public_web_signals(run_id="pw-run-1")
+        self.assertEqual(len(signals), 1)
+        self.assertEqual(signals[0]["promotion_status"], "promotion_recommended")
+        promotions = store.list_target_candidate_public_web_promotions(record_id="target-1")
+        self.assertEqual(len(promotions), 1)
+        self.assertEqual(promotions[0]["signal_id"], "signal-1")
+
+        sqlite_batch_count = store._connection.execute(
+            "SELECT COUNT(*) FROM target_candidate_public_web_batches WHERE batch_id = ?",
+            ("pw-batch-1",),
+        ).fetchone()[0]
+        sqlite_run_count = store._connection.execute(
+            "SELECT COUNT(*) FROM target_candidate_public_web_runs WHERE run_id = ?",
+            ("pw-run-1",),
+        ).fetchone()[0]
+        sqlite_asset_count = store._connection.execute(
+            "SELECT COUNT(*) FROM person_public_web_assets WHERE asset_id = ?",
+            ("asset-1",),
+        ).fetchone()[0]
+        sqlite_signal_count = store._connection.execute(
+            "SELECT COUNT(*) FROM person_public_web_signals WHERE signal_id = ?",
+            ("signal-1",),
+        ).fetchone()[0]
+        sqlite_promotion_count = store._connection.execute(
+            "SELECT COUNT(*) FROM target_candidate_public_web_promotions WHERE promotion_id = ?",
+            ("promotion-1",),
+        ).fetchone()[0]
+        self.assertEqual(int(sqlite_batch_count or 0), 0)
+        self.assertEqual(int(sqlite_run_count or 0), 0)
+        self.assertEqual(int(sqlite_asset_count or 0), 0)
+        self.assertEqual(int(sqlite_signal_count or 0), 0)
+        self.assertEqual(int(sqlite_promotion_count or 0), 0)
 
     def test_job_events_ui_tables_and_runtime_sessions_mirror_and_prefer_postgres(self) -> None:
         mirror_store = self._build_store(mode="mirror")

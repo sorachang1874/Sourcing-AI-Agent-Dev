@@ -3,7 +3,159 @@
 > Status: Living tracker. Use the latest entries as the source of truth, and assume older bullets may describe superseded intermediate states.
 
 
+## 2026-04-26 (Asia/Shanghai)
+
+### Public Web target-candidate backend/frontend productization
+
+- 完成目标候选人级 Public Web Search 的第一层后端产品化：
+  - 新增 `target_candidate_public_web.py`，承接 target-candidate selected batch action、idempotency、run summary、DataForSEO-style checkpoint resume、person-level reuse asset upsert
+  - 新增 PG-authoritative control-plane tables：`target_candidate_public_web_batches`、`target_candidate_public_web_runs`、`person_public_web_assets`
+  - 新增 API：`POST /api/target-candidates/public-web-search`、`GET /api/target-candidates/public-web-search`
+  - API trigger 只做幂等排队和 recoverable worker 创建，不在 HTTP request 内跑 live DataForSEO/fetch/LLM
+  - 后台 worker 复用 `exploration_specialist` lane，metadata `recovery_kind=target_candidate_public_web_search`，初始 checkpoint 为 `waiting_remote_search`
+  - per-candidate run 的 `search_checkpoint_json` 保存 query manifest、provider task id、poll count、query results、classified links 和 errors；未 ready 时后续 recovery takeover 会 poll/fetch 既有 task，不重复 submit
+  - run 完成且存在 normalized LinkedIn URL key 时 upsert `person_public_web_assets`，对齐 LinkedIn profile 的 person-level reuse 模型
+- 另一个 session 已继续接入第一层目标候选人页 UI，并在本 session 复核：
+  - `TargetCandidatesPanel` 增加 checkbox selection、`Public Web Search` 批量按钮、状态刷新按钮、5s running-run polling、卡片级 run status/metrics/primary links 展示
+  - 前端通过 `GET/POST /api/target-candidates/public-web-search` 消费后端 contract，不读 runtime 文件，不把 Public Web 结果写入 `primary_email`
+  - `contracts/frontend_api_contract.ts` / `.schema.json` / `frontend_api_adapter.ts` 增加 Public Web Search typed contract
+  - 该前端切片当时已从 compact run summary 继续接上 Public Web detail section；本轮后续已补齐 email/link promotion、Web Search promoted-only export 和对应 browser E2E
+- 本轮继续完成 first-class Public Web signals / detail API 的后端切片：
+  - 新增 PG-authoritative `person_public_web_signals`，并注册到 control-plane/live PG table registry；SQLite 仅作为既有 bootstrap/shadow，不作为 hosted truth source
+  - run 完成后会按 `signals.json` 物化 email candidates 与 profile/public links，保存 source URL/domain/family、identity label、confidence、publishability、suppression reason、artifact refs、model provider/version
+  - 新增 `GET /api/target-candidates/{record_id}/public-web-search`，按 target candidate record 返回 latest run、person asset summary、email candidates、profile links、grouped signals 和 evidence links
+  - detail API 只返回 model-safe signal/evidence payload，不返回 `search_checkpoint`、raw HTML/PDF/search payload 或 raw document paths
+  - 仍不把 Public Web email 写入 `target_candidates.primary_email`；promotion writer/API/UI 仍是后续独立工作
+- 在进入 detail/export/promotion 前，补上 Public Web 质量评测层：
+  - 新增 `src/sourcing_agent/public_web_quality.py`，可扫描实验产出的 `signals.json`，评估邮箱和 X/Substack/GitHub/Google Scholar 等 profile/media links 的 source URL、source family、identity label、publishability、promotion status 和 evidence presence
+  - 新增 CLI：`evaluate-public-web-quality`，支持 `--experiment-dir`、`--output-dir`、`--summary-only`、`--fail-on-high-risk`，输出 JSON/CSV/Markdown 报告
+  - Public Web 实验预算新增 `--max-ai-evidence-documents` / `PublicWebExperimentOptions.max_ai_evidence_documents`，默认 8；产品 API options 会按 1..20 归一化，便于正式接 UI 前跑更大候选人/query/fetch/LLM evidence 预算
+  - `run_public_web_candidate_adjudication(...)` 的 AI result 现在记录发送给 LLM 的 email/link/fetched document/evidence slice 计数，方便复核预算是否真的生效
+  - 用已有 replay 样本复核：4 candidates、13 signals、2 promotion-recommended emails，`cbfinn@cs.stanford.edu` 和 `dainves1@gmail.com` 均有 source URL，质量报告 0 issues
+  - 用已有 live 10x10 social discovery 样本复核：10 candidates、378 profile link signals、0 trusted media links、648 medium issues；主要风险是 search-only X/Substack/GitHub/Scholar 结果多为 `unreviewed`、GitHub repo/deep link、X post/utility URL、Substack non-profile URL 或 same-name Scholar 噪声，证明正式 UI 不能把搜索结果直接当 confirmed profile
+  - 用已有 live fetch+AI Scholar/academic summary 样本复核：3 candidates、94 signals、4 email candidates、21 trusted media links、180 medium issues；质量层发现旧 artifact 里仍有模型非规范 link type（如 `scholar_profile`/`github_profile`），评测器现在会归一化并标 `non_canonical_profile_link_type`
+  - 跑了一轮真实更大 live quality pass：`live-public-web-quality-11x14-fetch12-ai16`，11 candidates、154 queries、880 entry links、131 fetched docs、12 email candidates、2 promotion-recommended emails；质量报告显示 94 trusted media links，但 12 fetches/candidate 的实际 fetch composition 被 discovered GitHub links 插队污染（118/131 fetched docs 是 GitHub，0 X/Substack），因此先修 fetch queue diversity，再决定是否升到 16 fetches
+  - 修复 discovered GitHub front-insert：GitHub links 仍会作为 evidence candidates 保留，但不再前插抢占 Scholar/X/Substack/homepage/resume 的 fetch slots；discovered resume/CV 仍保持高优先级
+  - 修复后跑 3-candidate live sanity：`live-public-web-quality-diversity-fix-3x14-fetch12-ai16`，33 fetched docs 分布为 homepage 5、resume 10、Scholar 4、GitHub 7、X 2、Substack 4、publication 3、academic profile 1；证明 12 fetches/candidate 在队列公平后可以覆盖 X/GitHub/Substack/Scholar 等主要渠道，下一轮无需先升到 16
+  - 明确 LLM adjudication payload 不只依赖 fetched docs：现在会给候选人级 LLM 发送 source-balanced `entry_links` 与 `search_evidence`（DataForSEO URL/title/snippet/query/rank/provider context），避免 X/Substack 等难 fetch 平台只因没有 fetched document 就完全无法被模型判断
+  - 重跑 3-candidate live LLM 对照：`live-public-web-quality-search-evidence-3x14-fetch12-ai16`。耗时约 20 分钟，其中 DataForSEO batch queue 约 5 分 15 秒，后续候选人按顺序 fetch/LLM 分析；第三个候选人因顺序 fetch 慢站点拖到约 20 分钟，总体证明 live 实验 CLI 慢主要来自 provider queue + sequential fetch/analysis，不是单次 LLM
+  - `search_evidence` 后 X/Substack 判断分布改善：旧 run X=`confirmed 1 / unreviewed 25`、Substack=`unreviewed 44`；新 run X=`confirmed 1 / likely_same_person 8 / unreviewed 16`，Substack=`likely_same_person 6 / needs_review 1 / ambiguous_identity 8 / unreviewed 15`
+  - 新质量报告显示 3 candidates、248 signals、8 email candidates、3 promotion-recommended emails、39 trusted media links、1 high issue；high issue 是 promotion-recommended email 缺 trusted identity，需要在 detail/promotion 前继续作为质量 gate
+- 本轮继续补上 Public Web URL shape 与效率/前端 detail 收口：
+  - 新增统一 `public_web_link_shape_warnings(...)` / `is_clean_profile_link(...)`，对 GitHub repo/deep link、X status/search/utility URL、Substack post/home feed/deep link、非 profile Scholar URL 产出显式 warning
+  - LLM search evidence payload 现在携带 `link_shape_warnings` / `clean_profile_link`，prompt 明确这些 deep links 只能作为 evidence，不能当 clean profile
+  - `summary.primary_links` 和 `person_public_web_signals.publishable` 现在同时要求 identity trusted 与 clean URL shape；detail API 会返回 top-level `link_shape_warnings` / `clean_profile_link`
+  - 质量评测层复用同一 URL-shape helper；对既有 `live-public-web-quality-search-evidence-3x14-fetch12-ai16` 重新评估后，trusted media link 从旧口径 39 收紧为 9，X/Substack deep link 继续保留为 evidence/review signal
+  - 实验/worker 分析支持 `max_concurrent_fetches_per_candidate`；实验 CLI 支持 `max_concurrent_candidate_analyses`，用于候选人级 LLM adjudication 并发。默认保持小并发（fetch=4、candidate analysis=2）以控制 provider/LLM 压力
+  - 目标候选人页增加 Public Web detail section，按 record 调用 `GET /api/target-candidates/{record_id}/public-web-search`，展示 email candidates、profile/evidence links、identity label、publishability、suppression reason 和 URL shape warning chips；仍不提供 email promote 按钮
+- 本轮继续完成 Public Web manual promotion 与专用导出包：
+  - 新增 PG-authoritative `target_candidate_public_web_promotions`，保存 signal lineage、source URL/domain/family、identity/confidence、URL shape、operator、timestamp、previous/new value 和 promotion status
+  - 新增 API：`GET/POST /api/target-candidates/{record_id}/public-web-promotions`；POST 默认只允许 publishable/clean signal promoted，email promotion 先写 promotion record，再更新 `target_candidates.primary_email`
+  - Public Web detail API 现在会合并 latest promotion status，email/link 行可显示 `manually_promoted` / `manually_rejected`
+  - 新增 `POST /api/target-candidates/public-web-export`，默认 `promoted_only`，导出 model-safe summary/signals/evidence links/promotions/manifest，并继续排除 raw HTML/PDF/search payload
+  - 目标候选人页 detail section 增加 email/link promote/reject 控件；Public Web 专用导出按钮默认导出已选候选人，否则导出全量 target candidates 的人工确认公开信息
+  - 新增 target-candidate Public Web browser E2E 脚本，覆盖 `/targets` selection -> trigger -> refresh/polling -> compact status card
+  - 继续补一条 browser E2E，覆盖 completed Public Web detail 展开、人工确认邮箱和 clean profile link、promoted-only Public Web 导出下载；后端断言 promotion record 写入后 `primary_email` 才更新
+  - 目标候选人页 toolbar/filter 做第一轮可用性优化：Public Web Search 与刷新状态合并到同一操作组，LinkedIn/Web Search 导出改为范围语义并用问号 tooltip 承载说明，新增关键词、跟进状态多选和 Public Web 状态多选筛选，隐藏容易误导的旧“查看历史记录”跳转按钮
+- 本轮 closeout 文档已补齐新 session 恢复要点：
+  - 本地 `8765` 上观察到的 `Public Web Search 接口暂不可用` 是旧后端进程导致的 404；新 session 应先重启当前分支 backend/worker 并验证 `GET /api/target-candidates/public-web-search?limit=5`
+  - 当前本地 11 个 target candidates 尚未触发 Public Web Search，`未开始` 卡片状态是事实；Web Search 导出按钮里的 11 人只表示当前选择/筛选范围，不表示已有 11 人确认公开网络结果
+  - 继续开发应先小批量触发 2-3 个目标候选人的 Public Web Search，检查 detail/promote/export，再扩展 override/reason、company-level API/CLI lane 和更多 export mode
+- 已跑验证：
+  - `PYTHONPATH=src ./.venv-tests/bin/ruff check src/sourcing_agent/storage.py src/sourcing_agent/target_candidate_public_web.py src/sourcing_agent/orchestrator.py src/sourcing_agent/api.py src/sourcing_agent/worker_daemon.py tests/test_target_candidate_public_web.py tests/test_control_plane_live_postgres.py tests/test_results_api.py`
+  - `PYTHONPATH=src ./.venv-tests/bin/pytest -q tests/test_target_candidate_public_web.py`
+  - `PYTHONPATH=src ./.venv-tests/bin/pytest -q tests/test_control_plane_live_postgres.py -k 'target_candidate_public_web_state_is_postgres_authoritative or postgres_only_uses_ephemeral_sqlite_shadow or postgres_only_skips_sqlite_fallback'`
+  - `PYTHONPATH=src ./.venv-tests/bin/pytest -q tests/test_results_api.py -k 'target_candidate_public_web_api_queues_idempotent_runs'`
+  - `PYTHONPATH=src ./.venv-tests/bin/pytest -q tests/test_public_web_search.py tests/test_target_candidate_public_web.py`
+  - `PYTHONPATH=src ./.venv-tests/bin/pytest -q tests/test_worker_recovery_daemon.py -k 'waiting_remote_search or recovery'`
+  - `PYTHONPATH=src ./.venv-tests/bin/pytest -q tests/test_results_api.py -k 'target_candidates or public_web_api'`
+  - `cd frontend-demo && npm run build`
+  - `PYTHONPATH=src ./.venv-tests/bin/pytest -q tests/test_target_candidate_public_web.py tests/test_results_api.py -k 'target_candidate_public_web or public_web_api'`
+  - `PYTHONPATH=src ./.venv-tests/bin/pytest -q tests/test_control_plane_live_postgres.py -k 'target_candidate_public_web_state_is_postgres_authoritative or postgres_only_uses_ephemeral_sqlite_shadow or postgres_only_skips_sqlite_fallback' tests/test_markdown_status.py`
+  - `PYTHONPATH=src ./.venv-tests/bin/python -m compileall -q src/sourcing_agent/storage.py src/sourcing_agent/target_candidate_public_web.py src/sourcing_agent/orchestrator.py src/sourcing_agent/api.py tests/test_target_candidate_public_web.py tests/test_results_api.py tests/test_control_plane_live_postgres.py`
+  - `PYTHONPATH=src ./.venv-tests/bin/ruff check src/sourcing_agent/target_candidate_public_web.py src/sourcing_agent/api.py src/sourcing_agent/orchestrator.py src/sourcing_agent/storage.py tests/test_target_candidate_public_web.py tests/test_results_api.py tests/test_control_plane_live_postgres.py`
+  - `PYTHONPATH=src ./.venv-tests/bin/pytest -q tests/test_target_candidate_public_web.py tests/test_results_api.py -k 'target_candidate_public_web or public_web_api'` -> `5 passed, 45 deselected`
+  - `PYTHONPATH=src ./.venv-tests/bin/pytest -q tests/test_control_plane_live_postgres.py -k 'target_candidate_public_web_state_is_postgres_authoritative or postgres_only_uses_ephemeral_sqlite_shadow or postgres_only_skips_sqlite_fallback'` -> `3 passed, 37 deselected`
+  - `PYTHONPATH=src ./.venv-tests/bin/pytest -q tests/test_markdown_status.py` -> `1 passed`
+  - `cd frontend-demo && npm run build`
+  - inspected `runtime/public_web/experiments/replay-fetch-homepage-email-4-candidates/candidates/01_replay-chelsea-finn/signals.json` to confirm persisted signal fields match real email/link payloads
+  - `PYTHONPATH=src ./.venv-tests/bin/pytest -q tests/test_public_web_quality.py tests/test_public_web_search.py -k 'public_web_quality or email_extraction_suppresses_pdf_title_artifacts or publication_multi_email_keeps_candidate_local_part_and_suppresses_coauthors or ai_adjudication_marks_weak_identity_social_link_ambiguous or sanitizer or ai_evidence_document_budget'`
+  - `PYTHONPATH=src ./.venv-tests/bin/python -m sourcing_agent.cli evaluate-public-web-quality --experiment-dir runtime/public_web/experiments/replay-fetch-homepage-email-4-candidates --output-dir runtime/public_web/quality/replay-fetch-homepage-email-4-candidates --summary-only`
+  - `PYTHONPATH=src ./.venv-tests/bin/python -m sourcing_agent.cli evaluate-public-web-quality --experiment-dir runtime/public_web/experiments/live-dataforseo-entry-discovery-10x10-social-links --output-dir runtime/public_web/quality/live-dataforseo-entry-discovery-10x10-social-links --summary-only`
+  - `PYTHONPATH=src ./.venv-tests/bin/python -m sourcing_agent.cli evaluate-public-web-quality --experiment-dir runtime/public_web/experiments/live-dataforseo-fetch-scholar-academic-summary-3x7 --output-dir runtime/public_web/quality/live-dataforseo-fetch-scholar-academic-summary-3x7 --summary-only`
+  - `PYTHONPATH=src ./.venv-tests/bin/python -m compileall -q src/sourcing_agent/public_web_search.py src/sourcing_agent/public_web_quality.py src/sourcing_agent/target_candidate_public_web.py src/sourcing_agent/orchestrator.py src/sourcing_agent/cli.py tests/test_public_web_search.py tests/test_public_web_quality.py tests/test_target_candidate_public_web.py`
+  - `PYTHONPATH=src ./.venv-tests/bin/ruff check src/sourcing_agent/public_web_search.py src/sourcing_agent/public_web_quality.py src/sourcing_agent/target_candidate_public_web.py src/sourcing_agent/orchestrator.py src/sourcing_agent/cli.py tests/test_public_web_search.py tests/test_public_web_quality.py tests/test_target_candidate_public_web.py`
+  - `PYTHONPATH=src ./.venv-tests/bin/pytest -q tests/test_public_web_search.py tests/test_public_web_quality.py tests/test_target_candidate_public_web.py -k 'public_web or target_candidate_public_web or url_shape or bounded_concurrency'` -> `40 passed`
+  - `PYTHONPATH=src ./.venv-tests/bin/python -m sourcing_agent.cli evaluate-public-web-quality --experiment-dir runtime/public_web/experiments/live-public-web-quality-search-evidence-3x14-fetch12-ai16 --output-dir runtime/public_web/quality/live-public-web-quality-search-evidence-3x14-fetch12-ai16-shape-warnings --summary-only`
+  - `cd frontend-demo && npm run build`
+  - `PYTHONPATH=src ./.venv-tests/bin/pytest -q tests/test_results_api.py -k 'target_candidate_public_web or public_web_api'` -> `2 passed, 45 deselected`
+  - `PYTHONPATH=src ./.venv-tests/bin/pytest -q tests/test_control_plane_live_postgres.py -k 'target_candidate_public_web_state_is_postgres_authoritative or postgres_only_uses_ephemeral_sqlite_shadow or postgres_only_skips_sqlite_fallback'` -> `3 passed, 37 deselected`
+  - `PYTHONPATH=src ./.venv-tests/bin/pytest -q tests/test_markdown_status.py` -> `1 passed`
+  - `git diff --check`
+  - `node --check frontend-demo/scripts/run_target_public_web_promotion_export_e2e.mjs`
+  - `PYTHONPATH=src ./.venv-tests/bin/ruff check src/sourcing_agent/storage.py src/sourcing_agent/orchestrator.py src/sourcing_agent/api.py src/sourcing_agent/target_candidate_public_web.py tests/test_target_candidate_public_web.py tests/test_results_api.py tests/test_control_plane_live_postgres.py tests/test_frontend_browser_e2e.py`
+  - `PYTHONPATH=src ./.venv-tests/bin/pytest -q tests/test_target_candidate_public_web.py tests/test_results_api.py -k 'target_candidate_public_web or public_web_api or promotion'` -> `7 passed, 45 deselected`
+  - `SOURCING_RUN_FRONTEND_BROWSER_E2E=1 PYTHONPATH=src ./.venv-tests/bin/pytest -q tests/test_frontend_browser_e2e.py -k 'target_candidate_public_web_selection_trigger_and_polling or target_candidate_public_web_promotion_and_export'` -> `2 passed, 7 deselected`
+  - `cd frontend-demo && npm run build`
+- 剩余产品化边界已同步到 `docs/PUBLIC_WEB_SEARCH_PRODUCTIZATION_TODO.md`：
+  - 当前仍未接 company-level Public Web refresh、promotion override/reason workflow、Public Web export 的更多产品口径配置
+- 新 session 交接文件：
+  - `docs/SESSION_HANDOFF_2026-04-26_PUBLIC_WEB.md`
+
 ## 2026-04-25 (Asia/Shanghai)
+
+### Public Web target-candidate experiment: batch search and fetch validation
+
+- 在新增 PG tables 前，先把候选人级 Public Web Search 方法打磨成 artifact-only 实验模块：
+  - 新增 `public_web_search.py`，包含 source-family query planning、entry-link 分类/排序、DataForSEO batch/queue 执行、per-candidate status artifacts、内容 fetch、邮箱抽取、AI adjudication payload 与 signals summary
+  - CLI 入口：`run-target-candidate-public-web-experiment`
+  - 默认走 provider batch/queue；`--no-batch-search` 仅作为调试 fallback
+  - `ai_extraction=auto` 现在不会在 entry-link-only 阶段调用 live LLM，避免搜索完成后被低价值 link-only adjudication 拖慢；有 fetched documents 或 email candidates 时再进入 AI review
+  - unreviewed links 不再进入 `primary_links`，只有 `confirmed/likely_same_person` 才能成为 primary candidate links
+  - classifier 已收紧：低价值目录/聚合页不再算个人主页或公司页，个人主页优先于 company text match 且需要更强姓名 URL/title 证据
+  - query planner 已收紧首轮预算：10x4 配置现在跑 general identity、homepage with negative filters、company-constrained Scholar citations、company-constrained GitHub；name-only GitHub/Scholar 是后续 fallback，generic resume/CV 和 email/contact 已后置
+  - `company_page` 现在只表示公司官方/公司域名页面，第三方文章/活动页仅提到公司名不会再归为 company page，且候选人级默认不 fetch company page
+  - fetched homepage/GitHub/Scholar/publication pages 会产出二级 entry links；Scholar profile 现在抽取 homepage、verified email domain、affiliation、research interests
+  - Google Scholar verified email domain 不再误提取成 `email@domain`；多邮箱论文会先压低非候选人 local-part 邮箱，避免把 coauthor email 直接 promotion
+- 真实 DataForSEO batch entry discovery 验证：
+  - run id: `live-dataforseo-batch-entry-discovery-10x4-ai-skip`
+  - 10 candidates, 40 queries, 40 submitted tasks, 38 fetched task results, 0 task timeouts, 3 ready polls
+  - wall time about 88s, earlier synchronous CLI pass was about 4min
+  - corrected classifier recheck: 166 ranked links, including LinkedIn, Scholar, GitHub, X, Substack, personal homepage, resume/CV, academic profile, publication, company page
+- Replay-style fetch/extraction 验证：
+  - run id: `replay-fetch-homepage-email-4-candidates`
+  - 4 candidates, 6 fetched documents, 2 extracted high-confidence email candidates
+  - verified emails: `cbfinn@cs.stanford.edu` from Chelsea Finn Stanford homepage/CV, `dainves1@gmail.com` from Xiang Fu homepage `mailto:`
+  - 邮箱仍只是 `promotion_recommended` candidates，不会写入 `primary_email`
+- 已跑验证：
+  - `PYTHONPATH=src .venv-tests/bin/python -m compileall -q src/sourcing_agent/public_web_search.py src/sourcing_agent/model_provider.py src/sourcing_agent/document_extraction.py src/sourcing_agent/cli.py tests/test_public_web_search.py tests/test_document_extraction.py tests/test_cli.py`
+  - `.venv-tests/bin/ruff check src/sourcing_agent/public_web_search.py src/sourcing_agent/model_provider.py src/sourcing_agent/document_extraction.py src/sourcing_agent/cli.py tests/test_public_web_search.py tests/test_document_extraction.py tests/test_cli.py`
+  - `PYTHONPATH=src .venv-tests/bin/pytest -q tests/test_public_web_search.py tests/test_document_extraction.py tests/test_cli.py` -> `49 passed`
+- 详细产品化 TODO / empirical notes 已更新到 `docs/PUBLIC_WEB_SEARCH_PRODUCTIZATION_TODO.md`。
+
+### SQLite product-surface retirement before Public Web
+
+- 在 Public Web Search 产品化前完成 bounded storage cleanup：
+  - 移除 `export-sqlite-snapshot` / `restore-sqlite-snapshot` CLI，以及 handoff bundle 的 SQLite 选项
+  - `sqlite_snapshot` bundle kind 现在在 export/import/upload/download/restore 产品路径中显式拒绝，只能作为离线历史材料处理
+  - `import-cloud-assets` 的 `control_plane_snapshot` 恢复现在要求 Postgres DSN，不能 fallback 到磁盘 SQLite
+  - `show-control-plane-runtime` 输出改为 `control_plane_storage_banner`；non-PG runtime 是 error，不再是 legacy warning
+  - profile-registry disk fallback、test-env seed disk fallback、hosted smoke seed disk fallback 已移除或改为 PG-only
+  - 新 artifact 字段写 `control_plane_candidate_count/control_plane_evidence_count`，仅保留读取旧 `sqlite_*` 字段的兼容 fallback
+- 新增/更新回归保护：
+  - `tests/test_storage_surface_guardrails.py`
+  - `tests/test_asset_sync.py`
+  - `tests/test_cloud_asset_import.py`
+  - `tests/test_object_storage.py`
+  - `tests/test_cli.py`
+- 已跑验证：
+  - `./.venv-tests/bin/python -m compileall -q src scripts tests`
+  - `./.venv-tests/bin/python -m pytest tests/test_asset_sync.py tests/test_cloud_asset_import.py tests/test_object_storage.py tests/test_cli.py tests/test_storage_surface_guardrails.py tests/test_candidate_artifacts.py tests/test_company_asset_completion.py -q`
+  - `./.venv-tests/bin/python -m pytest tests/test_control_plane_postgres.py -q`
+  - `./.venv-tests/bin/python -m pytest tests/test_control_plane_live_postgres.py tests/test_storage_profile_registry.py -q`
+  - `PYTHONPATH=src ./.venv-tests/bin/python -m sourcing_agent.cli show-control-plane-runtime`
+  - `./.venv-tests/bin/python -m pytest -q`
+  - 当前 full result：`1140 passed, 8 skipped, 25 subtests passed`
 
 ### Closeout validation, browser plan semantics, and documentation handoff
 

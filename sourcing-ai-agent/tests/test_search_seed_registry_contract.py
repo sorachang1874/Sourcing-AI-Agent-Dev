@@ -11,14 +11,14 @@ from sourcing_agent.asset_reuse_planning import (
 from sourcing_agent.connectors import CompanyIdentity
 from sourcing_agent.search_seed_registry import persist_search_seed_snapshot
 from sourcing_agent.seed_discovery import SearchSeedSnapshot
-from sourcing_agent.storage import SQLiteStore
+from sourcing_agent.storage import ControlPlaneStore
 
 
 class SearchSeedRegistryContractTest(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
         self.runtime_dir = Path(self.tempdir.name)
-        self.store = SQLiteStore(self.runtime_dir / "test.db")
+        self.store = ControlPlaneStore(self.runtime_dir / "test.db")
 
     def tearDown(self) -> None:
         self.tempdir.cleanup()

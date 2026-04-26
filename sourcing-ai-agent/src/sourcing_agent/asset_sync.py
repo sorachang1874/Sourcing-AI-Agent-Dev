@@ -4,7 +4,6 @@ import gzip
 import hashlib
 import json
 import shutil
-import sqlite3
 import tarfile
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -26,14 +25,15 @@ from .asset_paths import (
 from .control_plane_postgres import (
     control_plane_snapshot_output_path,
     export_control_plane_snapshot,
-    restore_control_plane_snapshot_to_sqlite,
 )
-from .local_postgres import resolve_default_control_plane_db_path
 from .object_storage import ObjectStorageClient, ObjectStorageNotFoundError
 
 
 class AssetBundleError(RuntimeError):
     pass
+
+
+_RETIRED_SQLITE_BUNDLE_KIND = "sqlite_snapshot"
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,6 +68,14 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _reject_retired_sqlite_bundle_kind(bundle_kind: str) -> None:
+    if str(bundle_kind or "").strip() == _RETIRED_SQLITE_BUNDLE_KIND:
+        raise AssetBundleError(
+            "sqlite_snapshot bundles have been retired. Use control_plane_snapshot for PG control-plane state "
+            "or candidate_generation/company_snapshot bundles for portable candidate assets."
+        )
 
 
 class AssetBundleManager:
@@ -120,7 +128,6 @@ class AssetBundleManager:
         company: str,
         *,
         output_dir: str | Path | None = None,
-        include_sqlite: bool = False,
         include_live_tests: bool = True,
         include_manual_review: bool = True,
         include_jobs: bool = True,
@@ -142,23 +149,14 @@ class AssetBundleManager:
                     normalized_name = _normalize_key(path.as_posix())
                     if any(alias in normalized_name for alias in aliases):
                         relpaths.append(path.relative_to(self.runtime_dir))
-        control_plane_snapshot_path: Path | None = None
         if include_jobs:
             jobs_dir = self.runtime_dir / "jobs"
             if jobs_dir.exists():
                 relpaths.extend(self._matching_job_files(jobs_dir, aliases))
-        if include_sqlite:
-            control_plane_snapshot_path = self._ensure_control_plane_snapshot_export()
-            if control_plane_snapshot_path is not None and control_plane_snapshot_path.exists():
-                relpaths.append(control_plane_snapshot_path.relative_to(self.runtime_dir))
         metadata = {
             "company": company,
             "company_key": company_key,
             "bundle_scope": "company_handoff",
-            "requested_include_sqlite": include_sqlite,
-            "include_sqlite": False,
-            "include_control_plane_snapshot": bool(control_plane_snapshot_path and control_plane_snapshot_path.exists()),
-            "control_plane_snapshot_role": "backup_only" if include_sqlite else "",
             "include_live_tests": include_live_tests,
             "include_manual_review": include_manual_review,
             "include_jobs": include_jobs,
@@ -178,81 +176,44 @@ class AssetBundleManager:
             output_dir=output_dir,
         )
 
-    def export_sqlite_snapshot(
+    def export_control_plane_snapshot_bundle(
         self,
         *,
         output_dir: str | Path | None = None,
     ) -> dict:
-        control_plane_snapshot_path = self._ensure_control_plane_snapshot_export(include_all_sqlite_tables=True)
-        if control_plane_snapshot_path is not None and control_plane_snapshot_path.exists():
-            return self._export_bundle(
-                bundle_kind="control_plane_snapshot",
-                bundle_key="control_plane_snapshot",
-                relpaths=[control_plane_snapshot_path.relative_to(self.runtime_dir)],
-                metadata={
-                    "bundle_scope": "control_plane_snapshot",
-                    "control_plane_snapshot_role": "backup_only",
-                    "sqlite_role": "deprecated_legacy_alias",
-                },
-                output_dir=output_dir,
-            )
-        sqlite_path = resolve_default_control_plane_db_path(self.runtime_dir, base_dir=self.project_root)
-        if not sqlite_path.exists():
-            raise AssetBundleError("SQLite database does not exist")
-        self._checkpoint_sqlite_snapshot(sqlite_path)
+        control_plane_snapshot_path = self._ensure_control_plane_snapshot_export()
+        if control_plane_snapshot_path is None or not control_plane_snapshot_path.exists():
+            raise AssetBundleError("Postgres control-plane snapshot is unavailable")
         return self._export_bundle(
-            bundle_kind="sqlite_snapshot",
-            bundle_key="sourcing_agent_db",
-            relpaths=[sqlite_path.relative_to(self.runtime_dir)],
+            bundle_kind="control_plane_snapshot",
+            bundle_key="control_plane_snapshot",
+            relpaths=[control_plane_snapshot_path.relative_to(self.runtime_dir)],
             metadata={
-                "bundle_scope": "sqlite_snapshot",
-                "sqlite_role": "backup_only",
+                "bundle_scope": "control_plane_snapshot",
+                "source_backend": "postgres",
             },
             output_dir=output_dir,
         )
 
-    def _checkpoint_sqlite_snapshot(self, sqlite_path: Path) -> None:
-        try:
-            header = sqlite_path.read_bytes()[:16]
-        except OSError as exc:
-            raise AssetBundleError(f"Failed to read sqlite snapshot before export: {exc}") from exc
-        if header != b"SQLite format 3\x00":
-            return
-        try:
-            with sqlite3.connect(sqlite_path) as connection:
-                connection.execute("PRAGMA wal_checkpoint(FULL)")
-        except sqlite3.Error as exc:
-            raise AssetBundleError(f"Failed to checkpoint sqlite snapshot before export: {exc}") from exc
-
-    def _ensure_control_plane_snapshot_export(self, *, include_all_sqlite_tables: bool = False) -> Path | None:
+    def _ensure_control_plane_snapshot_export(self) -> Path | None:
         snapshot_path = control_plane_snapshot_output_path(self.runtime_dir)
         if snapshot_path.exists():
-            if not include_all_sqlite_tables:
-                return snapshot_path
             try:
                 snapshot_payload = json.loads(snapshot_path.read_text(encoding="utf-8"))
             except (OSError, ValueError, json.JSONDecodeError):
                 snapshot_path.unlink(missing_ok=True)
             else:
-                if bool(snapshot_payload.get("include_all_sqlite_tables")):
+                if str(snapshot_payload.get("source_backend") or "").strip() == "postgres":
                     return snapshot_path
-        sqlite_path: Path | None = resolve_default_control_plane_db_path(self.runtime_dir, base_dir=self.project_root)
-        resolved_sqlite_path = sqlite_path
-        if resolved_sqlite_path is not None and resolved_sqlite_path.exists():
-            try:
-                header = resolved_sqlite_path.read_bytes()[:16]
-            except OSError:
-                return None
-            if header != b"SQLite format 3\x00":
-                sqlite_path = None
         try:
             export_control_plane_snapshot(
                 runtime_dir=self.runtime_dir,
                 output_path=snapshot_path,
-                sqlite_path=sqlite_path,
-                include_all_sqlite_tables=include_all_sqlite_tables,
+                sqlite_path=None,
+                include_all_sqlite_tables=False,
+                source_backend="postgres",
             )
-        except (FileNotFoundError, RuntimeError, sqlite3.Error):
+        except (FileNotFoundError, RuntimeError):
             snapshot_path.unlink(missing_ok=True)
             return None
         return snapshot_path if snapshot_path.exists() else None
@@ -268,6 +229,7 @@ class AssetBundleManager:
         if not manifest_file.exists():
             raise AssetBundleError(f"Manifest not found: {manifest_file}")
         payload = json.loads(manifest_file.read_text())
+        _reject_retired_sqlite_bundle_kind(str(payload.get("bundle_kind") or ""))
         if conflict not in {"skip", "overwrite", "error"}:
             raise AssetBundleError(f"Unsupported conflict mode: {conflict}")
         bundle_root = manifest_file.parent
@@ -309,93 +271,6 @@ class AssetBundleManager:
         restore_summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2))
         return summary
 
-    def restore_sqlite_snapshot(
-        self,
-        manifest_path: str | Path,
-        *,
-        target_db_path: str | Path | None = None,
-        backup_current: bool = True,
-        backup_dir: str | Path | None = None,
-    ) -> dict:
-        manifest_file = Path(manifest_path)
-        if not manifest_file.exists():
-            raise AssetBundleError(f"Manifest not found: {manifest_file}")
-        payload = json.loads(manifest_file.read_text())
-        if str(payload.get("bundle_kind") or "").strip() == "control_plane_snapshot":
-            destination = (
-                Path(target_db_path)
-                if target_db_path
-                else resolve_default_control_plane_db_path(self.runtime_dir, base_dir=self.project_root)
-            )
-            backup_path = None
-            if backup_current and destination.exists():
-                resolved_backup_dir = Path(backup_dir) if backup_dir else (self.runtime_dir / "backups" / "sqlite")
-                resolved_backup_dir.mkdir(parents=True, exist_ok=True)
-                backup_path = resolved_backup_dir / f"sourcing_agent_{_utc_now_token()}.db"
-                shutil.copy2(destination, backup_path)
-            restore_summary = self.restore_bundle(
-                manifest_path,
-                target_runtime_dir=self.runtime_dir,
-                conflict="overwrite",
-            )
-            snapshot_path = control_plane_snapshot_output_path(self.runtime_dir)
-            sqlite_restore = restore_control_plane_snapshot_to_sqlite(
-                snapshot_path=snapshot_path,
-                runtime_dir=self.runtime_dir,
-                sqlite_path=destination,
-            )
-            summary = {
-                "status": "control_plane_snapshot_restored",
-                "bundle_id": payload.get("bundle_id", ""),
-                "control_plane_snapshot_role": "backup_only",
-                "source_path": str(snapshot_path),
-                "target_snapshot_path": str(snapshot_path),
-                "target_db_path": str(destination),
-                "backup_path": str(backup_path) if backup_path else "",
-                "restored_file_count": int(restore_summary.get("restored_file_count") or 0),
-                "sqlite_restore": sqlite_restore,
-            }
-            summary_path = manifest_file.parent / "sqlite_restore_summary.json"
-            summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2))
-            return summary
-        db_entry = next(
-            (entry for entry in payload.get("files", []) if entry.get("runtime_relative_path") == "sourcing_agent.db"),
-            None,
-        )
-        if db_entry is None:
-            raise AssetBundleError("Bundle does not contain sourcing_agent.db")
-        source = manifest_file.parent / db_entry["payload_relative_path"]
-        if not source.exists():
-            self._ensure_bundle_payload_materialized(manifest_file.parent, payload)
-        if not source.exists():
-            raise AssetBundleError(f"SQLite payload missing: {source}")
-        destination = (
-            Path(target_db_path)
-            if target_db_path
-            else resolve_default_control_plane_db_path(self.runtime_dir, base_dir=self.project_root)
-        )
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        backup_path = None
-        if destination.exists() and backup_current:
-            resolved_backup_dir = Path(backup_dir) if backup_dir else (self.runtime_dir / "sqlite_backups")
-            resolved_backup_dir.mkdir(parents=True, exist_ok=True)
-            backup_path = resolved_backup_dir / f"{destination.stem}_{_utc_now_token()}{destination.suffix}"
-            shutil.copy2(destination, backup_path)
-        shutil.copy2(source, destination)
-        summary = {
-            "status": "sqlite_restored",
-            "bundle_id": payload.get("bundle_id", ""),
-            "sqlite_role": "backup_only",
-            "source_path": str(source),
-            "target_db_path": str(destination),
-            "backup_current": backup_current,
-            "backup_path": str(backup_path) if backup_path else "",
-            "size_bytes": destination.stat().st_size,
-        }
-        summary_path = manifest_file.parent / "sqlite_restore_summary.json"
-        summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2))
-        return summary
-
     def upload_bundle(
         self,
         manifest_path: str | Path,
@@ -413,6 +288,7 @@ class AssetBundleManager:
         bundle_id = str(payload.get("bundle_id", "")).strip()
         if not bundle_kind or not bundle_id:
             raise AssetBundleError("Bundle manifest missing bundle_kind or bundle_id")
+        _reject_retired_sqlite_bundle_kind(bundle_kind)
         bundle_root = manifest_file.parent
         logical_payload_file_count = len(list(payload.get("files") or []))
         archive_mode_resolved = self._resolve_archive_mode(payload, archive_mode)
@@ -574,6 +450,7 @@ class AssetBundleManager:
         max_workers: int | None = None,
         resume: bool = True,
     ) -> dict:
+        _reject_retired_sqlite_bundle_kind(bundle_kind)
         remote_prefix = self._bundle_remote_prefix(bundle_kind, bundle_id)
         export_root = Path(output_dir) if output_dir else self.exports_dir
         export_root.mkdir(parents=True, exist_ok=True)
@@ -582,6 +459,7 @@ class AssetBundleManager:
         manifest_path = bundle_dir / "bundle_manifest.json"
         client.download_file(f"{remote_prefix}/bundle_manifest.json", manifest_path)
         payload = json.loads(manifest_path.read_text())
+        _reject_retired_sqlite_bundle_kind(str(payload.get("bundle_kind") or bundle_kind))
         downloaded = 1
         total_bytes = manifest_path.stat().st_size
         export_summary = bundle_dir / "export_summary.json"
@@ -2072,6 +1950,7 @@ class AssetBundleManager:
         metadata: dict,
         output_dir: str | Path | None,
     ) -> dict:
+        _reject_retired_sqlite_bundle_kind(bundle_kind)
         normalized = sorted({Path(path).as_posix() for path in relpaths})
         if not normalized:
             raise AssetBundleError(f"No files selected for bundle kind {bundle_kind}")

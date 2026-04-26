@@ -5,6 +5,7 @@ import socket
 import subprocess
 import time
 import unittest
+import zipfile
 from pathlib import Path
 from urllib import request as urllib_request
 
@@ -263,6 +264,70 @@ class _FrontendBrowserE2EBase(unittest.TestCase):
             str(timeout_seconds * 1000),
             "--screenshot",
             str(screenshot_path),
+        ]
+        result = subprocess.run(
+            command,
+            cwd=self.frontend_dir,
+            env=self.playwright_env,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=timeout_seconds + 30,
+        )
+        return json.loads(result.stdout)
+
+    def _run_target_public_web_browser_case(
+        self,
+        *,
+        frontend_url: str,
+        screenshot_path: Path,
+        timeout_seconds: int = 60,
+    ) -> dict:
+        command = [
+            "node",
+            str(self.frontend_dir / "scripts" / "run_target_public_web_e2e.mjs"),
+            "--frontend-url",
+            frontend_url,
+            "--timeout-ms",
+            str(timeout_seconds * 1000),
+            "--screenshot",
+            str(screenshot_path),
+        ]
+        result = subprocess.run(
+            command,
+            cwd=self.frontend_dir,
+            env=self.playwright_env,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=timeout_seconds + 30,
+        )
+        return json.loads(result.stdout)
+
+    def _run_target_public_web_promotion_export_browser_case(
+        self,
+        *,
+        frontend_url: str,
+        screenshot_path: Path,
+        download_path: Path,
+        expected_email: str,
+        timeout_seconds: int = 60,
+    ) -> dict:
+        command = [
+            "node",
+            str(self.frontend_dir / "scripts" / "run_target_public_web_promotion_export_e2e.mjs"),
+            "--frontend-url",
+            frontend_url,
+            "--timeout-ms",
+            str(timeout_seconds * 1000),
+            "--screenshot",
+            str(screenshot_path),
+            "--download",
+            str(download_path),
+            "--expected-email",
+            expected_email,
         ]
         result = subprocess.run(
             command,
@@ -841,6 +906,250 @@ class FrontendBrowserFastE2ETest(_FrontendBrowserE2EBase):
         self.assertIn("OpenAI", combined_groups)
         self.assertIn("Anthropic", combined_groups)
         self.assertFalse(str(payload.get("errorText") or "").strip(), payload)
+
+    def test_browser_target_candidate_public_web_selection_trigger_and_polling(self) -> None:
+        helper = hosted_smoke_module.HostedWorkflowSmokeTest(
+            methodName="test_default_smoke_matrix_covers_reference_orgs"
+        )
+        frontend_port = self._reserve_free_port()
+        frontend_url = f"http://127.0.0.1:{frontend_port}"
+        log_path = self.repo_root / "runtime" / "service_logs" / f"frontend-e2e-target-public-web-{frontend_port}.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with helper._hosted_harness(provider_mode="simulate") as harness:
+            harness.store.upsert_target_candidate(
+                {
+                    "record_id": "browser-public-web-target-1",
+                    "candidate_id": "browser-public-web-candidate-1",
+                    "candidate_name": "Alice Public Web",
+                    "headline": "Research Engineer",
+                    "current_company": "Example AI",
+                    "linkedin_url": "https://www.linkedin.com/in/alice-public-web/",
+                }
+            )
+            frontend_env = dict(self.playwright_env)
+            frontend_env["VITE_API_BASE_URL"] = harness.client.base_url
+            with log_path.open("w", encoding="utf-8") as log_handle:
+                frontend_process = subprocess.Popen(
+                    ["npm", "run", "dev", "--", "--host", "127.0.0.1", "--port", str(frontend_port)],
+                    cwd=self.frontend_dir,
+                    env=frontend_env,
+                    stdout=log_handle,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                )
+                try:
+                    self._wait_for_http_ready(frontend_url, timeout=45)
+                    payload = self._run_target_public_web_browser_case(
+                        frontend_url=frontend_url,
+                        screenshot_path=self.repo_root
+                        / "output"
+                        / "playwright"
+                        / "frontend-browser-e2e-target-public-web.png",
+                        timeout_seconds=90,
+                    )
+                except Exception as exc:
+                    log_excerpt = ""
+                    if log_path.exists():
+                        log_excerpt = log_path.read_text(encoding="utf-8", errors="replace")[-2000:]
+                    stderr_excerpt = ""
+                    if isinstance(exc, subprocess.CalledProcessError):
+                        stderr_excerpt = exc.stderr or ""
+                    raise AssertionError(
+                        f"frontend target Public Web browser e2e failed.\nplaywright stderr:\n{stderr_excerpt}\nfrontend log tail:\n{log_excerpt}"
+                    ) from exc
+                finally:
+                    self._terminate_process(frontend_process, log_path)
+
+        self.assertEqual(payload.get("status"), "ok", payload)
+        self.assertGreaterEqual(int(payload.get("initialCandidateCount") or 0), 1, payload)
+        self.assertTrue(payload.get("sawQueuedOrRunningStatus"), payload)
+        self.assertIn("Web Search", str(payload.get("exportButtonText") or ""), payload)
+
+    def test_browser_target_candidate_public_web_promotion_and_export(self) -> None:
+        helper = hosted_smoke_module.HostedWorkflowSmokeTest(
+            methodName="test_default_smoke_matrix_covers_reference_orgs"
+        )
+        frontend_port = self._reserve_free_port()
+        frontend_url = f"http://127.0.0.1:{frontend_port}"
+        log_path = (
+            self.repo_root
+            / "runtime"
+            / "service_logs"
+            / f"frontend-e2e-target-public-web-promotion-export-{frontend_port}.log"
+        )
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        expected_email = "public.web.browser@example.edu"
+
+        with helper._hosted_harness(provider_mode="simulate") as harness:
+            record = harness.store.upsert_target_candidate(
+                {
+                    "record_id": "browser-public-web-promotion-target-1",
+                    "candidate_id": "browser-public-web-promotion-candidate-1",
+                    "candidate_name": "Alice Public Web Promotion",
+                    "headline": "Research Engineer",
+                    "current_company": "Example AI",
+                    "linkedin_url": "https://www.linkedin.com/in/alice-public-web-promotion/",
+                }
+            )
+            run = harness.store.upsert_target_candidate_public_web_run(
+                {
+                    "run_id": "browser-public-web-promotion-run-1",
+                    "batch_id": "browser-public-web-promotion-batch-1",
+                    "record_id": record["id"],
+                    "candidate_id": record["candidate_id"],
+                    "candidate_name": record["candidate_name"],
+                    "current_company": record["current_company"],
+                    "linkedin_url": record["linkedin_url"],
+                    "linkedin_url_key": "alice-public-web-promotion",
+                    "person_identity_key": "linkedin:alice-public-web-promotion",
+                    "idempotency_key": "browser-public-web-promotion-run-key-1",
+                    "status": "completed",
+                    "phase": "completed",
+                    "summary": {
+                        "entry_link_count": 2,
+                        "fetched_document_count": 2,
+                        "email_candidate_count": 1,
+                        "promotion_recommended_email_count": 1,
+                    },
+                    "analysis_checkpoint": {"stage": "completed", "status": "completed"},
+                }
+            )
+            asset = harness.store.upsert_person_public_web_asset(
+                {
+                    "asset_id": "browser-public-web-promotion-asset-1",
+                    "person_identity_key": "linkedin:alice-public-web-promotion",
+                    "linkedin_url_key": "alice-public-web-promotion",
+                    "latest_run_id": run["run_id"],
+                    "target_candidate_record_id": record["id"],
+                    "candidate_name": record["candidate_name"],
+                    "current_company": record["current_company"],
+                    "status": "completed",
+                    "summary": {"email_candidate_count": 1, "profile_link_count": 1},
+                    "source_run_ids": [run["run_id"]],
+                }
+            )
+            harness.store.replace_person_public_web_signals_for_run(
+                run_id=run["run_id"],
+                signals=[
+                    {
+                        "signal_id": "browser-public-web-promotion-email-1",
+                        "run_id": run["run_id"],
+                        "asset_id": asset["asset_id"],
+                        "person_identity_key": "linkedin:alice-public-web-promotion",
+                        "record_id": record["id"],
+                        "candidate_id": record["candidate_id"],
+                        "candidate_name": record["candidate_name"],
+                        "current_company": record["current_company"],
+                        "linkedin_url_key": "alice-public-web-promotion",
+                        "signal_kind": "email_candidate",
+                        "signal_type": "academic",
+                        "email_type": "academic",
+                        "value": expected_email,
+                        "normalized_value": expected_email,
+                        "source_url": "https://alice-public-web-promotion.example.edu/",
+                        "source_domain": "alice-public-web-promotion.example.edu",
+                        "source_family": "profile_web_presence",
+                        "confidence_label": "high",
+                        "confidence_score": 0.94,
+                        "identity_match_label": "likely_same_person",
+                        "identity_match_score": 0.92,
+                        "publishable": True,
+                        "promotion_status": "promotion_recommended",
+                        "evidence_excerpt": f"Contact Alice at {expected_email}",
+                    },
+                    {
+                        "signal_id": "browser-public-web-promotion-github-1",
+                        "run_id": run["run_id"],
+                        "asset_id": asset["asset_id"],
+                        "person_identity_key": "linkedin:alice-public-web-promotion",
+                        "record_id": record["id"],
+                        "candidate_id": record["candidate_id"],
+                        "candidate_name": record["candidate_name"],
+                        "current_company": record["current_company"],
+                        "linkedin_url_key": "alice-public-web-promotion",
+                        "signal_kind": "profile_link",
+                        "signal_type": "github_url",
+                        "value": "https://github.com/alice-public-web-promotion",
+                        "normalized_value": "https://github.com/alice-public-web-promotion",
+                        "url": "https://github.com/alice-public-web-promotion",
+                        "source_url": "https://github.com/alice-public-web-promotion",
+                        "source_domain": "github.com",
+                        "source_family": "technical_presence",
+                        "confidence_label": "high",
+                        "confidence_score": 0.9,
+                        "identity_match_label": "likely_same_person",
+                        "identity_match_score": 0.88,
+                        "publishable": True,
+                        "metadata": {"clean_profile_link": True, "link_shape_warnings": []},
+                    },
+                ],
+            )
+            frontend_env = dict(self.playwright_env)
+            frontend_env["VITE_API_BASE_URL"] = harness.client.base_url
+            with log_path.open("w", encoding="utf-8") as log_handle:
+                frontend_process = subprocess.Popen(
+                    ["npm", "run", "dev", "--", "--host", "127.0.0.1", "--port", str(frontend_port)],
+                    cwd=self.frontend_dir,
+                    env=frontend_env,
+                    stdout=log_handle,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                )
+                try:
+                    self._wait_for_http_ready(frontend_url, timeout=45)
+                    payload = self._run_target_public_web_promotion_export_browser_case(
+                        frontend_url=frontend_url,
+                        screenshot_path=self.repo_root
+                        / "output"
+                        / "playwright"
+                        / "frontend-browser-e2e-target-public-web-promotion-export.png",
+                        download_path=self.repo_root
+                        / "output"
+                        / "playwright"
+                        / "frontend-browser-e2e-target-public-web-promoted-export.zip",
+                        expected_email=expected_email,
+                        timeout_seconds=90,
+                    )
+                except Exception as exc:
+                    log_excerpt = ""
+                    if log_path.exists():
+                        log_excerpt = log_path.read_text(encoding="utf-8", errors="replace")[-2000:]
+                    stderr_excerpt = ""
+                    if isinstance(exc, subprocess.CalledProcessError):
+                        stderr_excerpt = exc.stderr or ""
+                    raise AssertionError(
+                        "frontend target Public Web promotion/export browser e2e failed.\n"
+                        f"playwright stderr:\n{stderr_excerpt}\nfrontend log tail:\n{log_excerpt}"
+                    ) from exc
+                finally:
+                    self._terminate_process(frontend_process, log_path)
+
+            updated_record = harness.store.get_target_candidate(record["id"])
+            promotions = harness.store.list_target_candidate_public_web_promotions(record_id=record["id"])
+
+        self.assertEqual(payload.get("status"), "ok", payload)
+        self.assertTrue(payload.get("promotedEmailVisible"), payload)
+        self.assertTrue(payload.get("promotedLinkVisible"), payload)
+        self.assertGreater(int(payload.get("downloadedSize") or 0), 0, payload)
+        download_path = Path(str(payload.get("downloadPath") or ""))
+        self.assertTrue(zipfile.is_zipfile(download_path), payload)
+        with zipfile.ZipFile(download_path, "r") as archive:
+            archive_text = "\n".join(
+                archive.read(name).decode("utf-8", errors="ignore")
+                for name in archive.namelist()
+                if name.endswith((".csv", ".json"))
+            )
+        self.assertIn(expected_email, archive_text)
+        self.assertIn("https://github.com/alice-public-web-promotion", archive_text)
+        self.assertNotIn("raw_path", archive_text)
+        self.assertNotIn("raw_payload", archive_text)
+        self.assertEqual((updated_record or {}).get("primary_email"), expected_email)
+        self.assertEqual(len(promotions), 2)
+        self.assertEqual(
+            {promotion.get("promotion_status") for promotion in promotions},
+            {"manually_promoted"},
+        )
 
     def test_browser_results_recovery_hydration_preserves_second_page(self) -> None:
         payload = self._run_restored_history_large_org_hydration_case()

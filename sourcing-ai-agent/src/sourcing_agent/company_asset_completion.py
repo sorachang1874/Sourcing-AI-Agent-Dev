@@ -33,6 +33,7 @@ from .enrichment import (
 )
 from .exploratory_enrichment import ExploratoryWebEnricher
 from .harvest_connectors import HarvestProfileConnector, parse_harvest_profile_payload
+from .linkedin_url_normalization import normalize_linkedin_profile_url_key
 from .model_provider import DeterministicModelClient, ModelClient
 from .profile_registry_utils import (
     extract_profile_registry_aliases_from_payload,
@@ -43,7 +44,7 @@ from .search_provider import build_search_provider
 from .runtime_environment import external_provider_mode
 from .runtime_tuning import resolved_harvest_profile_scrape_global_inflight, runtime_inflight_slot
 from .settings import AppSettings
-from .storage import SQLiteStore
+from .storage import ControlPlaneStore
 
 _PROFILE_COMPLETION_URL_BATCH_SIZE = 100
 _PROFILE_COMPLETION_PARALLEL_BATCH_WORKERS = 4
@@ -120,7 +121,7 @@ class CompanyAssetCompletionManager:
         self,
         *,
         runtime_dir: str | Path,
-        store: SQLiteStore,
+        store: ControlPlaneStore,
         settings: AppSettings,
         model_client: ModelClient | None = None,
         harvest_profile_connector: HarvestProfileConnector | None = None,
@@ -281,8 +282,8 @@ class CompanyAssetCompletionManager:
                 "candidate_count": len(materialized_candidates),
                 "evidence_count": len(materialized_evidence),
                 "source_snapshot_count": len(list(materialized_view.get("source_snapshots") or [])),
-                "sqlite_candidate_count": int(materialized_view.get("sqlite_candidate_count") or 0),
-                "sqlite_evidence_count": int(materialized_view.get("sqlite_evidence_count") or 0),
+                "control_plane_candidate_count": int(materialized_view.get("control_plane_candidate_count") or 0),
+                "control_plane_evidence_count": int(materialized_view.get("control_plane_evidence_count") or 0),
             },
             "profile_completion": profile_results,
             "exploration": {
@@ -825,7 +826,7 @@ class CompanyAssetCompletionManager:
 
         for profile_url in normalized_urls:
             source_shards = list(source_shards_by_url.get(profile_url) or [])
-            registry_key = self.store.normalize_linkedin_profile_url(profile_url)
+            registry_key = normalize_linkedin_profile_url_key(profile_url)
             registry_entry = dict(registry_entries.get(registry_key) or {})
             registry_status = str(registry_entry.get("status") or "").strip().lower()
             _record_event(

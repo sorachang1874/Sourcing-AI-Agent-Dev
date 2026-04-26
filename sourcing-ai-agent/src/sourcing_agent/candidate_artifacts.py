@@ -82,12 +82,13 @@ from .profile_timeline import (
     resolve_candidate_profile_timeline,
     timeline_has_complete_profile_detail,
 )
+from .linkedin_url_normalization import normalize_linkedin_profile_url_key
 from .runtime_tuning import (
     resolved_candidate_artifact_parallelism,
     resolved_materialization_global_writer_budget,
     runtime_inflight_slot,
 )
-from .storage import SQLiteStore, _build_asset_membership_row
+from .storage import ControlPlaneStore, _build_asset_membership_row
 
 
 class CandidateArtifactError(RuntimeError):
@@ -216,7 +217,7 @@ def legacy_candidate_documents_fallback_enabled() -> bool:
 
 def _resolved_candidate_documents_fallback(
     *,
-    store: SQLiteStore | None,
+    store: ControlPlaneStore | None,
     explicit: bool | None,
 ) -> bool:
     if explicit is not None:
@@ -315,7 +316,7 @@ def _resolve_serving_artifact_view_payload_source(
 def materialize_company_candidate_view(
     *,
     runtime_dir: str | Path,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     target_company: str,
     snapshot_id: str = "",
     preferred_source_snapshot_ids: list[str] | None = None,
@@ -366,8 +367,8 @@ def materialize_company_candidate_view(
         "evidence": materialized_evidence,
         "source_snapshots": source_snapshots,
         "source_snapshot_selection": source_snapshot_selection,
-        "sqlite_candidate_count": 0,
-        "sqlite_evidence_count": 0,
+        "control_plane_candidate_count": 0,
+        "control_plane_evidence_count": 0,
         "canonicalization": canonicalization_summary,
     }
 
@@ -375,7 +376,7 @@ def materialize_company_candidate_view(
 def build_company_candidate_artifacts(
     *,
     runtime_dir: str | Path,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     target_company: str,
     snapshot_id: str = "",
     output_dir: str | Path | None = None,
@@ -609,7 +610,7 @@ def build_company_candidate_artifacts(
 def _apply_configured_hot_cache_retention_policy(
     *,
     runtime_dir: str | Path,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
 ) -> dict[str, Any]:
     policy = build_hot_cache_governance_policy(runtime_dir=runtime_dir)
     ttl_seconds = int(policy.get("effective_ttl_seconds") or policy.get("ttl_seconds") or 0)
@@ -783,7 +784,7 @@ def _list_hot_cache_json_paths(artifact_dir: Path, *, asset_view: str) -> list[s
 def cleanup_candidate_artifact_hot_cache(
     *,
     runtime_dir: str | Path,
-    store: SQLiteStore | None = None,
+    store: ControlPlaneStore | None = None,
     companies: list[str] | None = None,
     snapshot_id: str = "",
     dry_run: bool = True,
@@ -1060,7 +1061,7 @@ def cleanup_candidate_artifact_hot_cache(
 def repair_missing_company_candidate_artifacts(
     *,
     runtime_dir: str | Path,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     companies: list[str] | None = None,
     snapshot_id: str = "",
     force_rebuild_artifacts: bool = False,
@@ -1247,7 +1248,7 @@ def repair_missing_company_candidate_artifacts(
 def backfill_structured_timeline_for_company_assets(
     *,
     runtime_dir: str | Path,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     companies: list[str] | None = None,
     snapshot_id: str = "",
     backfill_profile_registry: bool = True,
@@ -1403,7 +1404,7 @@ def repair_projected_profile_signals_in_company_candidate_artifacts(
 def rewrite_structured_timeline_in_company_candidate_artifacts(
     *,
     runtime_dir: str | Path,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     companies: list[str] | None = None,
     snapshot_id: str = "",
     refresh_registry: bool = True,
@@ -1924,7 +1925,7 @@ def _repair_projected_profile_signal_projection_list(
 def _rewrite_existing_candidate_artifact_view(
     *,
     runtime_dir: str | Path,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     target_company: str,
     snapshot_id: str,
     asset_view: str,
@@ -1973,13 +1974,17 @@ def _rewrite_existing_candidate_artifact_view(
             or dict(loaded.get("artifact_summary") or {}).get("source_snapshot_selection")
             or {}
         ),
-        "sqlite_candidate_count": int(
-            snapshot_metadata.get("sqlite_candidate_count")
+        "control_plane_candidate_count": int(
+            snapshot_metadata.get("control_plane_candidate_count")
+            or snapshot_metadata.get("sqlite_candidate_count")
+            or dict(loaded.get("artifact_summary") or {}).get("control_plane_candidate_count")
             or dict(loaded.get("artifact_summary") or {}).get("sqlite_candidate_count")
             or 0
         ),
-        "sqlite_evidence_count": int(
-            snapshot_metadata.get("sqlite_evidence_count")
+        "control_plane_evidence_count": int(
+            snapshot_metadata.get("control_plane_evidence_count")
+            or snapshot_metadata.get("sqlite_evidence_count")
+            or dict(loaded.get("artifact_summary") or {}).get("control_plane_evidence_count")
             or dict(loaded.get("artifact_summary") or {}).get("sqlite_evidence_count")
             or 0
         ),
@@ -2006,7 +2011,7 @@ def _rewrite_existing_candidate_artifact_view(
 def _bootstrap_candidate_artifacts_from_candidate_documents(
     *,
     runtime_dir: str | Path,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     target_company: str,
     snapshot_id: str,
 ) -> dict[str, Any]:
@@ -2052,8 +2057,8 @@ def _bootstrap_candidate_artifacts_from_candidate_documents(
             "selected_snapshot_ids": [str(loaded.get("snapshot_id") or snapshot_id)],
             "excluded_snapshot_ids": [],
         },
-        "sqlite_candidate_count": 0,
-        "sqlite_evidence_count": 0,
+        "control_plane_candidate_count": 0,
+        "control_plane_evidence_count": 0,
     }
     canonical_result = _persist_candidate_artifact_view(
         runtime_dir=runtime_dir,
@@ -2105,7 +2110,7 @@ def _bootstrap_candidate_artifacts_from_candidate_documents(
 def _persist_candidate_artifact_view(
     *,
     runtime_dir: str | Path,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     logger: AssetLogger,
     artifact_dir: Path,
     materialized_view: dict[str, Any],
@@ -2390,7 +2395,7 @@ def load_company_snapshot_candidate_documents(
 def load_authoritative_company_snapshot_candidate_documents(
     *,
     runtime_dir: str | Path,
-    store: SQLiteStore | None,
+    store: ControlPlaneStore | None,
     target_company: str,
     snapshot_id: str = "",
     view: str = "canonical_merged",
@@ -2731,7 +2736,7 @@ _PROFILE_SIGNAL_LIST_KEYS = (
 
 def _build_profile_timeline_registry_rows(
     *,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     candidates: list[Candidate],
 ) -> dict[str, dict[str, Any]]:
     profile_urls = [
@@ -2745,7 +2750,7 @@ def _build_profile_timeline_registry_rows(
     bulk_rows = store.get_linkedin_profile_registry_bulk(profile_urls)
     resolved: dict[str, dict[str, Any]] = dict(bulk_rows)
     for profile_url in profile_urls:
-        normalized_key = store.normalize_linkedin_profile_url(profile_url)
+        normalized_key = normalize_linkedin_profile_url_key(profile_url)
         payload = dict(bulk_rows.get(normalized_key) or bulk_rows.get(profile_url) or {})
         if payload:
             resolved[profile_url] = payload
@@ -2969,7 +2974,7 @@ def _build_reusable_document(
 
 def _write_artifact_view(
     *,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     logger: AssetLogger,
     artifact_dir: Path,
     materialized_view: dict[str, Any],
@@ -3300,7 +3305,7 @@ def _write_artifact_view(
 
 def _write_artifact_view_alias(
     *,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     logger: AssetLogger,
     artifact_dir: Path,
     materialized_view: dict[str, Any],
@@ -3434,7 +3439,7 @@ def _build_aliased_artifact_view_payloads(
 
 def _candidate_membership_rows(
     *,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     target_company: str,
     snapshot_id: str,
     asset_view: str,
@@ -3480,7 +3485,7 @@ def _candidate_materialization_state_requires_upsert(
 
 def _finalize_artifact_view_materialization(
     *,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     logger: AssetLogger,
     artifact_dir: Path,
     target_company: str,
@@ -3626,11 +3631,19 @@ def _write_snapshot_manifest(
         "source_snapshot_selection": dict(
             snapshot_payload.get("source_snapshot_selection") or summary.get("source_snapshot_selection") or {}
         ),
-        "sqlite_candidate_count": int(
-            snapshot_payload.get("sqlite_candidate_count") or summary.get("sqlite_candidate_count") or 0
+        "control_plane_candidate_count": int(
+            snapshot_payload.get("control_plane_candidate_count")
+            or snapshot_payload.get("sqlite_candidate_count")
+            or summary.get("control_plane_candidate_count")
+            or summary.get("sqlite_candidate_count")
+            or 0
         ),
-        "sqlite_evidence_count": int(
-            snapshot_payload.get("sqlite_evidence_count") or summary.get("sqlite_evidence_count") or 0
+        "control_plane_evidence_count": int(
+            snapshot_payload.get("control_plane_evidence_count")
+            or snapshot_payload.get("sqlite_evidence_count")
+            or summary.get("control_plane_evidence_count")
+            or summary.get("sqlite_evidence_count")
+            or 0
         ),
         "materialization_generation_key": str(summary.get("materialization_generation_key") or "").strip(),
         "materialization_generation_sequence": int(summary.get("materialization_generation_sequence") or 0),
@@ -3773,11 +3786,19 @@ def _reconstruct_compatibility_payloads_from_serving_artifacts(
         "source_snapshot_selection": dict(
             manifest_payload.get("source_snapshot_selection") or summary_payload.get("source_snapshot_selection") or {}
         ),
-        "sqlite_candidate_count": int(
-            manifest_payload.get("sqlite_candidate_count") or summary_payload.get("sqlite_candidate_count") or 0
+        "control_plane_candidate_count": int(
+            manifest_payload.get("control_plane_candidate_count")
+            or manifest_payload.get("sqlite_candidate_count")
+            or summary_payload.get("control_plane_candidate_count")
+            or summary_payload.get("sqlite_candidate_count")
+            or 0
         ),
-        "sqlite_evidence_count": int(
-            manifest_payload.get("sqlite_evidence_count") or summary_payload.get("sqlite_evidence_count") or 0
+        "control_plane_evidence_count": int(
+            manifest_payload.get("control_plane_evidence_count")
+            or manifest_payload.get("sqlite_evidence_count")
+            or summary_payload.get("control_plane_evidence_count")
+            or summary_payload.get("sqlite_evidence_count")
+            or 0
         ),
         "materialization_generation_key": str(
             manifest_payload.get("materialization_generation_key")
@@ -3858,7 +3879,7 @@ def _export_compatibility_artifacts_from_serving_view(artifact_dir: Path) -> dic
 
 def _build_artifact_view_payloads(
     *,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     artifact_dir: Path,
     materialized_view: dict[str, Any],
     candidates: list[Candidate],
@@ -3970,7 +3991,7 @@ def _build_artifact_view_payloads(
             "candidate": candidate,
             "candidate_evidence": candidate_evidence,
             "profile_url": profile_url,
-            "profile_url_key": store.normalize_linkedin_profile_url(profile_url) if profile_url else "",
+            "profile_url_key": normalize_linkedin_profile_url_key(profile_url) if profile_url else "",
             "fingerprint": fingerprint,
             "previous_state": previous_state,
             "list_page": list_page,
@@ -4082,7 +4103,7 @@ def _build_artifact_view_payloads(
                 "has_profile_detail": bool(normalized_record.get("has_profile_detail")),
                 "needs_manual_review": bool(normalized_record.get("needs_manual_review")),
                 "needs_profile_completion": bool(normalized_record.get("needs_profile_completion")),
-                "profile_url_key": store.normalize_linkedin_profile_url(profile_url) if profile_url else "",
+                "profile_url_key": normalize_linkedin_profile_url_key(profile_url) if profile_url else "",
             },
         }
         candidate_states.append(candidate_state)
@@ -4111,8 +4132,8 @@ def _build_artifact_view_payloads(
                 for item in materialized_view["source_snapshots"]
             ],
             "source_snapshot_selection": dict(materialized_view.get("source_snapshot_selection") or {}),
-            "sqlite_candidate_count": materialized_view["sqlite_candidate_count"],
-            "sqlite_evidence_count": materialized_view["sqlite_evidence_count"],
+            "control_plane_candidate_count": materialized_view["control_plane_candidate_count"],
+            "control_plane_evidence_count": materialized_view["control_plane_evidence_count"],
         },
         "candidates": materialized_candidate_records,
         "evidence": evidence,
@@ -4188,8 +4209,8 @@ def _build_artifact_view_payloads(
             (materialized_view.get("source_snapshot_selection") or {}).get("mode") or "all_history_snapshots"
         ),
         "source_snapshot_selection": dict(materialized_view.get("source_snapshot_selection") or {}),
-        "sqlite_candidate_count": materialized_view["sqlite_candidate_count"],
-        "sqlite_evidence_count": materialized_view["sqlite_evidence_count"],
+        "control_plane_candidate_count": materialized_view["control_plane_candidate_count"],
+        "control_plane_evidence_count": materialized_view["control_plane_evidence_count"],
         "candidate_shard_count": len(candidate_states),
         "candidate_page_size": _CANDIDATE_SHARD_PAGE_SIZE,
         "candidate_page_count": page_count,
@@ -4254,8 +4275,8 @@ def _build_artifact_view_payloads(
             if isinstance(item, dict)
         ],
         "source_snapshot_selection": dict(materialized_view.get("source_snapshot_selection") or {}),
-        "sqlite_candidate_count": int(materialized_view.get("sqlite_candidate_count") or 0),
-        "sqlite_evidence_count": int(materialized_view.get("sqlite_evidence_count") or 0),
+        "control_plane_candidate_count": int(materialized_view.get("control_plane_candidate_count") or 0),
+        "control_plane_evidence_count": int(materialized_view.get("control_plane_evidence_count") or 0),
     }
     return {
         "materialized_documents": materialized_documents,

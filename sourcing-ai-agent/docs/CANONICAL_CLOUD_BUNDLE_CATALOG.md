@@ -3,7 +3,7 @@
 > Status: Current first-party doc. Treat this file as active guidance, but keep it aligned with `docs/INDEX.md` and `PROGRESS.md` when runtime contracts change.
 
 
-> Current default: hosted restore should prefer `control_plane_snapshot + company_snapshot`. `sqlite_snapshot` entries below are legacy backup aliases kept for portability/reference.
+> Current default: hosted restore should prefer `control_plane_snapshot + company_snapshot`. `sqlite_snapshot` bundles are retired and are not part of the canonical restore catalog.
 
 ## Goal
 
@@ -27,7 +27,7 @@
 
 | Kind | Bundle ID | Notes |
 | --- | --- | --- |
-| `control_plane_snapshot` | `control_plane_snapshot_*` | 当前推荐的全局 control-plane 恢复基线。旧的 `sqlite_snapshot_*` 仅作 legacy backup alias。 |
+| `control_plane_snapshot` | `control_plane_snapshot_*` | 当前推荐的全局 control-plane 恢复基线。旧的 `sqlite_snapshot_*` 不再导入或恢复；如发现旧对象，只能作为离线历史材料处理。 |
 
 ### Company snapshots
 

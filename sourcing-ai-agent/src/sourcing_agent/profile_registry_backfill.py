@@ -11,7 +11,7 @@ from .profile_registry_utils import (
     classify_harvest_profile_payload_status,
     extract_profile_registry_aliases_from_payload,
 )
-from .storage import SQLiteStore
+from .storage import ControlPlaneStore
 
 ProgressCallback = Callable[[dict[str, Any]], None]
 
@@ -31,7 +31,7 @@ class BackfillScope:
 def backfill_linkedin_profile_registry(
     *,
     runtime_dir: Path,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     company: str = "",
     snapshot_id: str = "",
     resume: bool = True,

@@ -7,6 +7,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import socket
 import sqlite3
 import sys
@@ -74,6 +75,7 @@ from .execution_semantics import (
     requested_dispatch_lane_requirements,
 )
 from .ingestion import load_bootstrap_bundle
+from .linkedin_url_normalization import normalize_linkedin_profile_url_key
 from .local_postgres import resolve_default_control_plane_db_path
 from .manual_review import build_manual_review_items
 from .manual_review_resolution import apply_manual_review_resolution
@@ -254,8 +256,16 @@ from .snapshot_state import (
 from .snapshot_state import (
     read_json_list as _read_json_list,
 )
-from .storage import SQLiteStore, _build_asset_membership_row
+from .storage import ControlPlaneStore, _build_asset_membership_row
 from .storage import _json_safe_payload as _storage_json_safe_payload
+from .target_candidate_public_web import (
+    PUBLIC_WEB_JOB_TYPE,
+    PUBLIC_WEB_WORKER_LANE,
+    PUBLIC_WEB_WORKER_RECOVERY_KIND,
+    public_web_worker_key,
+    start_target_candidate_public_web_batch,
+    sync_public_web_batch_summary,
+)
 from .worker_daemon import PersistentWorkerRecoveryDaemon
 from .worker_scheduler import effective_worker_status, summarize_scheduler
 from .workflow_refresh import (
@@ -350,7 +360,7 @@ class SourcingOrchestrator:
     def __init__(
         self,
         catalog: AssetCatalog,
-        store: SQLiteStore,
+        store: ControlPlaneStore,
         jobs_dir: str | Path,
         model_client: ModelClient,
         semantic_provider: SemanticProvider,
@@ -2999,7 +3009,7 @@ class SourcingOrchestrator:
         profile_url = _candidate_profile_lookup_url(payload, metadata)
         if not profile_url:
             return ""
-        return self.store.normalize_linkedin_profile_url(profile_url)
+        return normalize_linkedin_profile_url_key(profile_url)
 
     def _record_has_publishable_primary_email(self, record: dict[str, Any]) -> bool:
         payload = dict(record or {})
@@ -8978,6 +8988,462 @@ class SourcingOrchestrator:
             "target_candidate": record,
         }
 
+    def start_target_candidate_public_web_search(self, payload: dict[str, Any]) -> dict[str, Any]:
+        requested_record_ids = [
+            str(item or "").strip()
+            for item in list(payload.get("record_ids") or payload.get("target_candidate_record_ids") or [])
+            if str(item or "").strip()
+        ]
+        if not requested_record_ids:
+            return {"status": "invalid", "reason": "record_ids are required"}
+        records: list[dict[str, Any]] = []
+        missing_record_ids: list[str] = []
+        seen_record_ids: set[str] = set()
+        for record_id in requested_record_ids:
+            if record_id in seen_record_ids:
+                continue
+            seen_record_ids.add(record_id)
+            record = self.store.get_target_candidate(record_id)
+            if record is None:
+                missing_record_ids.append(record_id)
+                continue
+            records.append(record)
+        if missing_record_ids:
+            return {
+                "status": "not_found",
+                "reason": "one or more target candidates were not found",
+                "missing_record_ids": missing_record_ids,
+            }
+        batch_result = start_target_candidate_public_web_batch(
+            store=self.store,
+            target_candidates=records,
+            runtime_dir=self.runtime_dir,
+            payload=payload,
+        )
+        batch = dict(batch_result.get("batch") or {})
+        runs = [dict(run) for run in list(batch_result.get("runs") or []) if isinstance(run, dict)]
+        job_payload = self._ensure_target_candidate_public_web_job(batch=batch, runs=runs, request_payload=payload)
+        worker_summary = self._queue_target_candidate_public_web_workers(
+            batch=batch,
+            runs=runs,
+            job_payload=job_payload,
+            request_payload=payload,
+        )
+        refreshed_runs = self.store.list_target_candidate_public_web_runs(batch_id=str(batch.get("batch_id") or ""))
+        sync_result = sync_public_web_batch_summary(self.store, str(batch.get("batch_id") or ""))
+        return {
+            "status": str(batch_result.get("status") or "queued"),
+            "batch": dict(sync_result.get("batch") or batch),
+            "runs": refreshed_runs,
+            "summary": dict(sync_result.get("summary") or batch_result.get("summary") or {}),
+            "worker_summary": worker_summary,
+            "job": job_payload,
+        }
+
+    def list_target_candidate_public_web_searches(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        query = dict(payload or {})
+        batch_id = str(query.get("batch_id") or "").strip()
+        record_id = str(query.get("record_id") or "").strip()
+        status = str(query.get("status") or "").strip()
+        limit = min(max(_coerce_int(query.get("limit"), 100), 1), 1000)
+        batches = []
+        if batch_id:
+            batch = self.store.get_target_candidate_public_web_batch(batch_id=batch_id)
+            batches = [batch] if batch is not None else []
+        elif not record_id:
+            batches = self.store.list_target_candidate_public_web_batches(status=status, limit=limit)
+        runs = self.store.list_target_candidate_public_web_runs(
+            batch_id=batch_id,
+            record_id=record_id,
+            status=status,
+            limit=limit,
+        )
+        return {
+            "status": "ok",
+            "batches": batches,
+            "runs": runs,
+        }
+
+    def get_target_candidate_public_web_search_detail(self, record_id: str) -> dict[str, Any]:
+        normalized_record_id = str(record_id or "").strip()
+        if not normalized_record_id:
+            return {"status": "invalid", "reason": "record_id is required"}
+        record = self.store.get_target_candidate(normalized_record_id)
+        if record is None:
+            return {
+                "status": "not_found",
+                "reason": "target_candidate_not_found",
+                "record_id": normalized_record_id,
+            }
+        runs = self.store.list_target_candidate_public_web_runs(record_id=normalized_record_id, limit=10)
+        latest_run = dict(runs[0]) if runs else {}
+        linkedin_url_key = str(latest_run.get("linkedin_url_key") or "").strip() or normalize_linkedin_profile_url_key(
+            str(record.get("linkedin_url") or "")
+        )
+        person_identity_key = str(latest_run.get("person_identity_key") or "").strip()
+        if not person_identity_key and linkedin_url_key:
+            person_identity_key = f"linkedin:{linkedin_url_key}"
+        asset = None
+        if person_identity_key:
+            asset = self.store.get_person_public_web_asset(person_identity_key=person_identity_key)
+        if asset is None and linkedin_url_key:
+            asset = self.store.get_person_public_web_asset(linkedin_url_key=linkedin_url_key)
+        if not latest_run and asset is not None and str(asset.get("latest_run_id") or "").strip():
+            latest_run = self.store.get_target_candidate_public_web_run(run_id=str(asset.get("latest_run_id") or "")) or {}
+        if not latest_run and asset is None:
+            return {
+                "status": "not_found",
+                "reason": "public_web_search_not_found",
+                "record_id": normalized_record_id,
+            }
+        signal_run_id = str(latest_run.get("run_id") or dict(asset or {}).get("latest_run_id") or "").strip()
+        if signal_run_id:
+            signal_rows = self.store.list_person_public_web_signals(run_id=signal_run_id, limit=1000)
+        elif asset is not None:
+            signal_rows = self.store.list_person_public_web_signals(
+                asset_id=str(asset.get("asset_id") or ""),
+                person_identity_key=str(asset.get("person_identity_key") or ""),
+                limit=1000,
+            )
+        else:
+            signal_rows = []
+        promotions = self.store.list_target_candidate_public_web_promotions(
+            record_id=normalized_record_id,
+            limit=1000,
+        )
+        promotions_by_signal = _latest_public_web_promotions_by_signal(promotions)
+        signals = [
+            _public_web_signal_with_promotion(
+                _public_web_signal_detail(row),
+                promotions_by_signal.get(str(row.get("signal_id") or "")),
+            )
+            for row in signal_rows
+        ]
+        email_candidates = [signal for signal in signals if signal.get("signal_kind") == "email_candidate"]
+        profile_links = [signal for signal in signals if signal.get("signal_kind") == "profile_link"]
+        return {
+            "status": "ok",
+            "record_id": normalized_record_id,
+            "target_candidate": _public_web_target_candidate_summary(record),
+            "latest_run": _public_web_run_detail(latest_run) if latest_run else None,
+            "person_asset": _public_web_asset_detail(dict(asset or {})) if asset is not None else None,
+            "signals": signals,
+            "email_candidates": email_candidates,
+            "profile_links": profile_links,
+            "grouped_signals": _group_public_web_signals(email_candidates=email_candidates, profile_links=profile_links),
+            "evidence_links": _public_web_evidence_links(signals),
+            "promotions": [_public_web_promotion_detail(item) for item in promotions],
+            "promotion_summary": _public_web_promotion_summary(promotions),
+            "raw_asset_policy": {
+                "raw_assets_included_by_default": False,
+                "default_export_surface": "model_safe_summary_signals_and_evidence_links",
+            },
+        }
+
+    def list_target_candidate_public_web_promotions(self, record_id: str) -> dict[str, Any]:
+        normalized_record_id = str(record_id or "").strip()
+        if not normalized_record_id:
+            return {"status": "invalid", "reason": "record_id is required"}
+        record = self.store.get_target_candidate(normalized_record_id)
+        if record is None:
+            return {
+                "status": "not_found",
+                "reason": "target_candidate_not_found",
+                "record_id": normalized_record_id,
+            }
+        promotions = self.store.list_target_candidate_public_web_promotions(record_id=normalized_record_id, limit=1000)
+        return {
+            "status": "ok",
+            "record_id": normalized_record_id,
+            "promotions": [_public_web_promotion_detail(item) for item in promotions],
+            "promotion_summary": _public_web_promotion_summary(promotions),
+        }
+
+    def promote_target_candidate_public_web_signal(self, record_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized_record_id = str(record_id or "").strip()
+        if not normalized_record_id:
+            return {"status": "invalid", "reason": "record_id is required"}
+        record = self.store.get_target_candidate(normalized_record_id)
+        if record is None:
+            return {
+                "status": "not_found",
+                "reason": "target_candidate_not_found",
+                "record_id": normalized_record_id,
+            }
+        signal_id = str(payload.get("signal_id") or "").strip()
+        if not signal_id:
+            return {"status": "invalid", "reason": "signal_id is required"}
+        signal_row = self.store.get_person_public_web_signal(signal_id=signal_id)
+        if signal_row is None:
+            return {"status": "not_found", "reason": "public_web_signal_not_found", "signal_id": signal_id}
+        signal_record_id = str(signal_row.get("record_id") or "").strip()
+        if signal_record_id and signal_record_id != normalized_record_id:
+            return {
+                "status": "invalid",
+                "reason": "signal_record_mismatch",
+                "record_id": normalized_record_id,
+                "signal_record_id": signal_record_id,
+            }
+        signal = _public_web_signal_detail(signal_row)
+        action = str(payload.get("action") or "promote").strip().lower()
+        if action not in {"promote", "reject"}:
+            return {"status": "invalid", "reason": "action must be promote or reject"}
+        signal_kind = str(signal.get("signal_kind") or "").strip()
+        if signal_kind not in {"email_candidate", "profile_link"}:
+            return {"status": "invalid", "reason": "unsupported_signal_kind", "signal_kind": signal_kind}
+        allow_unpublishable = bool(payload.get("allow_unpublishable"))
+        if action == "promote":
+            validation_error = _validate_public_web_signal_promotable(signal, allow_unpublishable=allow_unpublishable)
+            if validation_error:
+                return {
+                    "status": "invalid",
+                    "reason": validation_error,
+                    "signal": signal,
+                }
+        promoted_value = _public_web_signal_promoted_value(signal)
+        if action == "promote" and not promoted_value:
+            return {"status": "invalid", "reason": "promoted_value_missing", "signal": signal}
+        previous_primary_email = str(record.get("primary_email") or "").strip()
+        promoted_field = "primary_email" if signal_kind == "email_candidate" and action == "promote" else (
+            "public_web_profile_link" if signal_kind == "profile_link" and action == "promote" else ""
+        )
+        promotion_id = str(payload.get("promotion_id") or "").strip() or f"tc-public-web-promotion-{uuid.uuid4().hex[:16]}"
+        promotion_payload = {
+            "promotion_id": promotion_id,
+            "signal_id": signal_id,
+            "run_id": str(signal.get("run_id") or ""),
+            "asset_id": str(signal.get("asset_id") or ""),
+            "person_identity_key": str(signal.get("person_identity_key") or ""),
+            "record_id": normalized_record_id,
+            "candidate_id": str(signal.get("candidate_id") or record.get("candidate_id") or ""),
+            "candidate_name": str(signal.get("candidate_name") or record.get("candidate_name") or ""),
+            "current_company": str(signal.get("current_company") or record.get("current_company") or ""),
+            "linkedin_url_key": str(signal.get("linkedin_url_key") or ""),
+            "signal_kind": signal_kind,
+            "signal_type": str(signal.get("signal_type") or ""),
+            "email_type": str(signal.get("email_type") or ""),
+            "value": str(signal.get("value") or ""),
+            "normalized_value": str(signal.get("normalized_value") or promoted_value),
+            "url": str(signal.get("url") or ""),
+            "source_url": str(signal.get("source_url") or ""),
+            "source_domain": str(signal.get("source_domain") or ""),
+            "source_family": str(signal.get("source_family") or ""),
+            "source_title": str(signal.get("source_title") or ""),
+            "confidence_label": str(signal.get("confidence_label") or ""),
+            "confidence_score": _coerce_public_web_float(signal.get("confidence_score")),
+            "identity_match_label": str(signal.get("identity_match_label") or ""),
+            "identity_match_score": _coerce_public_web_float(signal.get("identity_match_score")),
+            "publishable": bool(signal.get("publishable")),
+            "clean_profile_link": bool(signal.get("clean_profile_link", True)),
+            "link_shape_warnings": list(signal.get("link_shape_warnings") or []),
+            "action": action,
+            "promotion_status": "manually_promoted" if action == "promote" else "manually_rejected",
+            "promoted_field": promoted_field,
+            "previous_value": previous_primary_email if promoted_field == "primary_email" else "",
+            "new_value": promoted_value,
+            "operator": str(payload.get("operator") or payload.get("requested_by") or "operator").strip() or "operator",
+            "note": str(payload.get("note") or "").strip(),
+            "evidence_excerpt": str(signal.get("evidence_excerpt") or ""),
+            "metadata": {
+                "raw_assets_included": False,
+                "allow_unpublishable": allow_unpublishable,
+                "source": "target_candidate_public_web_search",
+            },
+        }
+        promotion = self.store.upsert_target_candidate_public_web_promotion(promotion_payload)
+        updated_record = record
+        if action == "promote" and signal_kind == "email_candidate":
+            metadata = dict(record.get("metadata") or {})
+            promotion_metadata = {
+                "source": "public_web_search",
+                "status": "manually_promoted",
+                "qualityScore": int(round(min(max(_coerce_public_web_float(signal.get("confidence_score")), 0.0), 1.0) * 100)),
+                "foundInLinkedInProfile": False,
+                "promotion_id": str(promotion.get("promotion_id") or ""),
+                "signal_id": signal_id,
+                "source_url": str(signal.get("source_url") or ""),
+                "source_domain": str(signal.get("source_domain") or ""),
+                "source_family": str(signal.get("source_family") or ""),
+                "email_type": str(signal.get("email_type") or ""),
+                "confidence_label": str(signal.get("confidence_label") or ""),
+                "identity_match_label": str(signal.get("identity_match_label") or ""),
+                "promoted_at": str(promotion.get("created_at") or ""),
+                "operator": str(promotion.get("operator") or ""),
+                "previous_primary_email": previous_primary_email,
+            }
+            metadata["primary_email_metadata"] = promotion_metadata
+            metadata["latest_public_web_email_promotion"] = {
+                "promotion_id": str(promotion.get("promotion_id") or ""),
+                "signal_id": signal_id,
+                "source_url": str(signal.get("source_url") or ""),
+                "promoted_at": str(promotion.get("created_at") or ""),
+                "operator": str(promotion.get("operator") or ""),
+            }
+            updated_record = self.store.upsert_target_candidate(
+                {
+                    "record_id": normalized_record_id,
+                    "candidate_id": str(record.get("candidate_id") or ""),
+                    "history_id": str(record.get("history_id") or ""),
+                    "job_id": str(record.get("job_id") or ""),
+                    "candidate_name": str(record.get("candidate_name") or ""),
+                    "headline": str(record.get("headline") or ""),
+                    "current_company": str(record.get("current_company") or ""),
+                    "avatar_url": str(record.get("avatar_url") or ""),
+                    "linkedin_url": str(record.get("linkedin_url") or ""),
+                    "primary_email": promoted_value,
+                    "follow_up_status": str(record.get("follow_up_status") or "pending_outreach"),
+                    "quality_score": record.get("quality_score"),
+                    "comment": str(record.get("comment") or ""),
+                    "metadata": metadata,
+                    "added_at": str(record.get("added_at") or ""),
+                }
+            )
+        detail = self.get_target_candidate_public_web_search_detail(normalized_record_id)
+        return {
+            "status": "promoted" if action == "promote" else "rejected",
+            "record_id": normalized_record_id,
+            "signal": _public_web_signal_with_promotion(signal, promotion),
+            "promotion": _public_web_promotion_detail(promotion),
+            "target_candidate": _public_web_target_candidate_summary(updated_record),
+            "detail": detail if detail.get("status") == "ok" else None,
+        }
+
+    def _ensure_target_candidate_public_web_job(
+        self,
+        *,
+        batch: dict[str, Any],
+        runs: list[dict[str, Any]],
+        request_payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        batch_id = str(batch.get("batch_id") or "").strip()
+        job_id = f"tc-public-web-{batch_id}" if batch_id else f"tc-public-web-{uuid.uuid4().hex[:12]}"
+        request = self._target_candidate_public_web_job_request(batch=batch, request_payload=request_payload)
+        plan_payload = {
+            "workflow_kind": PUBLIC_WEB_JOB_TYPE,
+            "batch_id": batch_id,
+            "run_count": len(runs),
+            "scheduler_lane_limits": {PUBLIC_WEB_WORKER_LANE: 2},
+            "acquisition_strategy": {"cost_policy": {"worker_retry_limit": 1}},
+            "default_workflow_stage": "not_enabled",
+        }
+        self.store.save_job(
+            job_id,
+            PUBLIC_WEB_JOB_TYPE,
+            "running",
+            "public_web_search",
+            request.to_record(),
+            plan_payload=plan_payload,
+            summary_payload={
+                "batch_id": batch_id,
+                "run_count": len(runs),
+                "status": str(batch.get("status") or "queued"),
+            },
+            artifact_path=str(dict(batch.get("metadata") or {}).get("artifact_root") or ""),
+            idempotency_key=str(batch.get("idempotency_key") or ""),
+        )
+        return {
+            "job_id": job_id,
+            "request": request.to_record(),
+            "plan": plan_payload,
+        }
+
+    def _queue_target_candidate_public_web_workers(
+        self,
+        *,
+        batch: dict[str, Any],
+        runs: list[dict[str, Any]],
+        job_payload: dict[str, Any],
+        request_payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        request = JobRequest.from_payload(dict(job_payload.get("request") or {}))
+        plan_payload = dict(job_payload.get("plan") or {})
+        job_id = str(job_payload.get("job_id") or "")
+        queued = 0
+        reused = 0
+        worker_ids: list[int] = []
+        for index, run in enumerate(runs, start=1):
+            run_status = str(run.get("status") or "")
+            if run_status in {"completed", "completed_with_errors", "needs_review", "failed", "cancelled"}:
+                reused += 1
+                continue
+            run_id = str(run.get("run_id") or "").strip()
+            if not run_id:
+                continue
+            worker_key = str(run.get("worker_key") or "").strip() or public_web_worker_key(run_id)
+            handle = self.agent_runtime.begin_worker(
+                job_id=job_id,
+                request=request,
+                plan_payload=plan_payload,
+                runtime_mode=PUBLIC_WEB_JOB_TYPE,
+                lane_id=PUBLIC_WEB_WORKER_LANE,
+                worker_key=worker_key,
+                stage="public_web_search",
+                span_name=f"Target candidate Public Web Search {index}",
+                budget_payload={"search_provider": "batch_queue", "llm": "candidate_level_analysis"},
+                input_payload={
+                    "run_id": run_id,
+                    "batch_id": str(batch.get("batch_id") or ""),
+                    "record_id": str(run.get("record_id") or ""),
+                },
+                metadata={
+                    "recovery_kind": PUBLIC_WEB_WORKER_RECOVERY_KIND,
+                    "batch_id": str(batch.get("batch_id") or ""),
+                    "run_id": run_id,
+                    "record_id": str(run.get("record_id") or ""),
+                    "runtime_dir": str(self.runtime_dir),
+                    "request_payload": dict(request_payload or {}),
+                    "plan_payload": plan_payload,
+                    "index": index,
+                },
+            )
+            self.agent_runtime.checkpoint_worker(
+                handle,
+                checkpoint_payload={
+                    "stage": "waiting_remote_search",
+                    "status": "queued",
+                    "run_id": run_id,
+                    "batch_id": str(batch.get("batch_id") or ""),
+                },
+                output_payload={
+                    "summary": {
+                        "run_id": run_id,
+                        "record_id": str(run.get("record_id") or ""),
+                        "status": run_status or "queued",
+                    }
+                },
+                status="running",
+            )
+            queued += 1
+            worker_ids.append(handle.worker_id)
+        return {
+            "queued_worker_count": queued,
+            "reused_terminal_run_count": reused,
+            "worker_ids": worker_ids,
+            "lane_id": PUBLIC_WEB_WORKER_LANE,
+            "recovery_kind": PUBLIC_WEB_WORKER_RECOVERY_KIND,
+        }
+
+    @staticmethod
+    def _target_candidate_public_web_job_request(
+        *,
+        batch: dict[str, Any],
+        request_payload: dict[str, Any],
+    ) -> JobRequest:
+        return JobRequest(
+            raw_user_request="Target candidate Public Web Search",
+            query="Target candidate Public Web Search",
+            target_company="target_candidates",
+            target_scope="target_candidate_public_web_search",
+            analysis_stage_mode="single_stage",
+            execution_preferences={
+                "public_web_search": {
+                    "batch_id": str(batch.get("batch_id") or ""),
+                    "record_ids": list(batch.get("requested_record_ids") or request_payload.get("record_ids") or []),
+                    "default_workflow_stage": "not_enabled",
+                }
+            },
+        )
+
     def import_target_candidates_from_job(self, payload: dict[str, Any]) -> dict[str, Any]:
         job_id = str(payload.get("job_id") or "").strip()
         if not job_id:
@@ -9172,6 +9638,284 @@ class SourcingOrchestrator:
                     if str(entry.get("status") or "").strip() == "packaged"
                 ]
             ),
+        }
+
+    def export_target_candidate_public_web_archive(self, payload: dict[str, Any]) -> dict[str, Any]:
+        records_result = self._resolve_target_candidate_export_records(payload)
+        if records_result.get("status") != "ok":
+            return records_result
+        records = [dict(item) for item in list(records_result.get("records") or []) if isinstance(item, dict)]
+        export_mode = str(payload.get("mode") or payload.get("public_web_export_mode") or "promoted_only").strip()
+        if export_mode not in {"promoted_only", "promoted_and_publishable"}:
+            return {
+                "status": "invalid",
+                "reason": "mode must be promoted_only or promoted_and_publishable",
+            }
+        include_publishable_unpromoted = export_mode == "promoted_and_publishable"
+        base_name = f"target-candidates-public-web-{_china_local_filename_timestamp()}"
+        manifest_records: list[dict[str, Any]] = []
+        summary_rows: list[dict[str, str]] = []
+        signal_rows: list[dict[str, str]] = []
+        evidence_rows: list[dict[str, str]] = []
+        promotion_rows: list[dict[str, str]] = []
+        archive_buffer = io.BytesIO()
+        with zipfile.ZipFile(archive_buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for ordinal, record in enumerate(records, start=1):
+                detail = self.get_target_candidate_public_web_search_detail(str(record.get("id") or ""))
+                if detail.get("status") != "ok":
+                    detail = {
+                        "status": str(detail.get("status") or "not_found"),
+                        "record_id": str(record.get("id") or ""),
+                        "signals": [],
+                        "email_candidates": [],
+                        "profile_links": [],
+                        "evidence_links": [],
+                        "promotions": [],
+                        "latest_run": None,
+                        "person_asset": None,
+                        "promotion_summary": {},
+                    }
+                exported_signals = _public_web_exportable_signals(
+                    list(detail.get("signals") or []),
+                    include_publishable_unpromoted=include_publishable_unpromoted,
+                )
+                exported_evidence_links = _public_web_evidence_links(exported_signals)
+                record_promotions = [
+                    item
+                    for item in list(detail.get("promotions") or [])
+                    if isinstance(item, dict)
+                ]
+                promotion_rows.extend(
+                    _public_web_promotion_csv_row(record=record, promotion=dict(item))
+                    for item in record_promotions
+                )
+                signal_rows.extend(
+                    _public_web_signal_csv_row(record=record, signal=dict(signal))
+                    for signal in exported_signals
+                )
+                evidence_rows.extend(
+                    _public_web_evidence_csv_row(record=record, evidence=dict(evidence))
+                    for evidence in exported_evidence_links
+                )
+                summary_rows.append(
+                    _public_web_candidate_summary_csv_row(
+                        record=record,
+                        detail=dict(detail),
+                        exported_signals=exported_signals,
+                        export_mode=export_mode,
+                    )
+                )
+                record_slug = _target_candidate_archive_name_component(
+                    str(record.get("candidate_name") or ""),
+                    fallback=f"candidate-{ordinal}",
+                )
+                record_id_component = _target_candidate_archive_name_component(
+                    str(record.get("id") or ""),
+                    fallback=f"record-{ordinal}",
+                )
+                archive.writestr(
+                    f"{base_name}/candidates/{record_slug}__{record_id_component}/public_web_summary.json",
+                    json.dumps(
+                        {
+                            "generated_at": _china_now_iso(),
+                            "export_mode": export_mode,
+                            "record_id": str(record.get("id") or ""),
+                            "target_candidate": _public_web_target_candidate_summary(record),
+                            "latest_run": detail.get("latest_run"),
+                            "person_asset": detail.get("person_asset"),
+                            "promotion_summary": detail.get("promotion_summary") or {},
+                            "exported_signals": exported_signals,
+                            "evidence_links": exported_evidence_links,
+                            "raw_asset_policy": {
+                                "raw_assets_included": False,
+                                "excluded_raw_asset_types": ["raw_html", "raw_pdf", "raw_search_payload"],
+                            },
+                        },
+                        ensure_ascii=False,
+                        indent=2,
+                    ).encode("utf-8"),
+                )
+                manifest_records.append(
+                    {
+                        "record_id": str(record.get("id") or ""),
+                        "candidate_id": str(record.get("candidate_id") or ""),
+                        "candidate_name": str(record.get("candidate_name") or ""),
+                        "latest_run_id": str(dict(detail.get("latest_run") or {}).get("run_id") or ""),
+                        "exported_signal_count": len(exported_signals),
+                        "exported_evidence_link_count": len(exported_evidence_links),
+                        "promotion_summary": detail.get("promotion_summary") or {},
+                    }
+                )
+            archive.writestr(
+                f"{base_name}/public_web_summary.csv",
+                _build_csv_bytes(
+                    summary_rows,
+                    [
+                        "record_id",
+                        "candidate_name",
+                        "current_company",
+                        "linkedin_url",
+                        "promoted_primary_email",
+                        "email_type",
+                        "email_source_url",
+                        "email_confidence",
+                        "homepage_url",
+                        "github_url",
+                        "x_url",
+                        "substack_url",
+                        "scholar_url",
+                        "other_profile_links",
+                        "exported_signal_count",
+                        "promotion_count",
+                        "export_mode",
+                    ],
+                ),
+            )
+            archive.writestr(
+                f"{base_name}/public_web_signals.csv",
+                _build_csv_bytes(
+                    signal_rows,
+                    [
+                        "record_id",
+                        "candidate_name",
+                        "signal_id",
+                        "signal_kind",
+                        "signal_type",
+                        "email_type",
+                        "value",
+                        "url",
+                        "source_url",
+                        "source_domain",
+                        "source_family",
+                        "confidence_label",
+                        "confidence_score",
+                        "identity_match_label",
+                        "identity_match_score",
+                        "promotion_status",
+                        "promotion_id",
+                        "export_status",
+                        "evidence_excerpt",
+                    ],
+                ),
+            )
+            archive.writestr(
+                f"{base_name}/public_web_evidence_links.csv",
+                _build_csv_bytes(
+                    evidence_rows,
+                    [
+                        "record_id",
+                        "candidate_name",
+                        "source_url",
+                        "source_domain",
+                        "source_family",
+                        "source_title",
+                        "signal_ids",
+                        "signal_kinds",
+                        "signal_types",
+                        "identity_match_labels",
+                        "max_confidence_score",
+                    ],
+                ),
+            )
+            archive.writestr(
+                f"{base_name}/public_web_promotions.csv",
+                _build_csv_bytes(
+                    promotion_rows,
+                    [
+                        "record_id",
+                        "candidate_name",
+                        "promotion_id",
+                        "signal_id",
+                        "action",
+                        "promotion_status",
+                        "signal_kind",
+                        "signal_type",
+                        "email_type",
+                        "new_value",
+                        "previous_value",
+                        "source_url",
+                        "source_domain",
+                        "confidence_label",
+                        "identity_match_label",
+                        "operator",
+                        "created_at",
+                        "note",
+                    ],
+                ),
+            )
+            archive.writestr(
+                f"{base_name}/public_web_manifest.json",
+                json.dumps(
+                    {
+                        "generated_at": _china_now_iso(),
+                        "record_count": len(records),
+                        "export_mode": export_mode,
+                        "default_export_surface": "manual_promotions"
+                        if export_mode == "promoted_only"
+                        else "manual_promotions_and_ai_publishable_signals",
+                        "raw_assets_included": False,
+                        "excluded_raw_asset_types": ["raw_html", "raw_pdf", "raw_search_payload"],
+                        "files": [
+                            "public_web_summary.csv",
+                            "public_web_signals.csv",
+                            "public_web_evidence_links.csv",
+                            "public_web_promotions.csv",
+                        ],
+                        "records": manifest_records,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ).encode("utf-8"),
+            )
+        return {
+            "status": "ok",
+            "filename": f"{base_name}.zip",
+            "content_type": "application/zip",
+            "body": archive_buffer.getvalue(),
+            "record_count": len(records),
+            "export_mode": export_mode,
+            "exported_signal_count": len(signal_rows),
+        }
+
+    def _resolve_target_candidate_export_records(self, payload: dict[str, Any]) -> dict[str, Any]:
+        requested_record_ids = [
+            str(item or "").strip()
+            for item in list(payload.get("record_ids") or [])
+            if str(item or "").strip()
+        ]
+        try:
+            requested_limit = min(max(int(payload.get("limit") or 500), 1), 2000)
+        except (TypeError, ValueError):
+            return {
+                "status": "invalid",
+                "reason": "limit must be an integer",
+            }
+        records: list[dict[str, Any]] = []
+        if requested_record_ids:
+            seen_record_ids: set[str] = set()
+            for record_id in requested_record_ids:
+                if record_id in seen_record_ids:
+                    continue
+                seen_record_ids.add(record_id)
+                record = self.store.get_target_candidate(record_id)
+                if record is not None:
+                    records.append(record)
+        else:
+            records = self.store.list_target_candidates(
+                job_id=str(payload.get("job_id") or ""),
+                history_id=str(payload.get("history_id") or ""),
+                candidate_id=str(payload.get("candidate_id") or ""),
+                follow_up_status=str(payload.get("follow_up_status") or ""),
+                limit=requested_limit,
+            )
+        if not records:
+            return {
+                "status": "not_found",
+                "reason": "no target candidates matched the requested export scope",
+            }
+        return {
+            "status": "ok",
+            "records": records,
         }
 
     def _build_target_candidate_export_item(self, record: dict[str, Any], *, ordinal: int) -> dict[str, Any]:
@@ -21086,6 +21830,498 @@ def _load_job_request_preview(job: dict[str, Any]) -> dict[str, Any]:
                 effective_request=_build_effective_retrieval_request(request, plan),
             )
     return _build_request_preview_payload(request=request_payload)
+
+
+def _public_web_target_candidate_summary(record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "record_id": str(record.get("id") or record.get("record_id") or ""),
+        "candidate_id": str(record.get("candidate_id") or ""),
+        "candidate_name": str(record.get("candidate_name") or ""),
+        "headline": str(record.get("headline") or ""),
+        "current_company": str(record.get("current_company") or ""),
+        "linkedin_url": str(record.get("linkedin_url") or ""),
+        "primary_email": str(record.get("primary_email") or ""),
+        "updated_at": str(record.get("updated_at") or ""),
+    }
+
+
+def _public_web_run_detail(run: dict[str, Any]) -> dict[str, Any]:
+    analysis_checkpoint = dict(run.get("analysis_checkpoint") or {})
+    query_manifest = [dict(item) for item in list(run.get("query_manifest") or []) if isinstance(item, dict)]
+    return {
+        "run_id": str(run.get("run_id") or ""),
+        "batch_id": str(run.get("batch_id") or ""),
+        "record_id": str(run.get("record_id") or ""),
+        "candidate_id": str(run.get("candidate_id") or ""),
+        "candidate_name": str(run.get("candidate_name") or ""),
+        "current_company": str(run.get("current_company") or ""),
+        "linkedin_url_key": str(run.get("linkedin_url_key") or ""),
+        "person_identity_key": str(run.get("person_identity_key") or ""),
+        "status": str(run.get("status") or ""),
+        "phase": str(run.get("phase") or ""),
+        "source_families": list(run.get("source_families") or []),
+        "query_count": len(query_manifest),
+        "summary": _storage_json_safe_payload(dict(run.get("summary") or {})),
+        "analysis": {
+            "stage": str(analysis_checkpoint.get("stage") or ""),
+            "status": str(analysis_checkpoint.get("status") or ""),
+            "ai_adjudication_status": str(analysis_checkpoint.get("ai_adjudication_status") or ""),
+        },
+        "started_at": str(run.get("started_at") or ""),
+        "completed_at": str(run.get("completed_at") or ""),
+        "updated_at": str(run.get("updated_at") or ""),
+    }
+
+
+def _public_web_asset_detail(asset: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "asset_id": str(asset.get("asset_id") or ""),
+        "person_identity_key": str(asset.get("person_identity_key") or ""),
+        "linkedin_url_key": str(asset.get("linkedin_url_key") or ""),
+        "latest_run_id": str(asset.get("latest_run_id") or ""),
+        "target_candidate_record_id": str(asset.get("target_candidate_record_id") or ""),
+        "candidate_name": str(asset.get("candidate_name") or ""),
+        "current_company": str(asset.get("current_company") or ""),
+        "status": str(asset.get("status") or ""),
+        "summary": _storage_json_safe_payload(dict(asset.get("summary") or {})),
+        "source_run_ids": list(asset.get("source_run_ids") or []),
+        "updated_at": str(asset.get("updated_at") or ""),
+    }
+
+
+def _public_web_signal_detail(row: dict[str, Any]) -> dict[str, Any]:
+    metadata = _public_web_model_safe_signal_metadata(dict(row.get("metadata") or {}))
+    return {
+        "signal_id": str(row.get("signal_id") or ""),
+        "run_id": str(row.get("run_id") or ""),
+        "asset_id": str(row.get("asset_id") or ""),
+        "person_identity_key": str(row.get("person_identity_key") or ""),
+        "record_id": str(row.get("record_id") or ""),
+        "candidate_id": str(row.get("candidate_id") or ""),
+        "candidate_name": str(row.get("candidate_name") or ""),
+        "current_company": str(row.get("current_company") or ""),
+        "linkedin_url_key": str(row.get("linkedin_url_key") or ""),
+        "signal_kind": str(row.get("signal_kind") or ""),
+        "signal_type": str(row.get("signal_type") or ""),
+        "email_type": str(row.get("email_type") or ""),
+        "value": str(row.get("value") or ""),
+        "normalized_value": str(row.get("normalized_value") or ""),
+        "url": str(row.get("url") or ""),
+        "source_url": str(row.get("source_url") or ""),
+        "source_domain": str(row.get("source_domain") or ""),
+        "source_family": str(row.get("source_family") or ""),
+        "source_title": str(row.get("source_title") or ""),
+        "confidence_label": str(row.get("confidence_label") or ""),
+        "confidence_score": _coerce_public_web_float(row.get("confidence_score")),
+        "identity_match_label": str(row.get("identity_match_label") or ""),
+        "identity_match_score": _coerce_public_web_float(row.get("identity_match_score")),
+        "publishable": bool(row.get("publishable")),
+        "promotion_status": str(row.get("promotion_status") or ""),
+        "suppression_reason": str(row.get("suppression_reason") or ""),
+        "evidence_excerpt": str(row.get("evidence_excerpt") or ""),
+        "artifact_refs": _public_web_model_safe_artifact_refs(dict(row.get("artifact_refs") or {})),
+        "model_provider": str(row.get("model_provider") or ""),
+        "model_version": str(row.get("model_version") or ""),
+        "link_shape_warnings": list(metadata.get("link_shape_warnings") or []),
+        "clean_profile_link": bool(metadata.get("clean_profile_link", True)),
+        "metadata": metadata,
+        "created_at": str(row.get("created_at") or ""),
+        "updated_at": str(row.get("updated_at") or ""),
+    }
+
+
+def _latest_public_web_promotions_by_signal(promotions: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    latest: dict[str, dict[str, Any]] = {}
+    for promotion in promotions:
+        signal_id = str(promotion.get("signal_id") or "").strip()
+        if not signal_id or signal_id in latest:
+            continue
+        latest[signal_id] = dict(promotion)
+    return latest
+
+
+def _public_web_signal_with_promotion(
+    signal: dict[str, Any],
+    promotion: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if not promotion:
+        return signal
+    updated = dict(signal)
+    updated["promotion_id"] = str(promotion.get("promotion_id") or "")
+    updated["promotion_status"] = str(promotion.get("promotion_status") or signal.get("promotion_status") or "")
+    updated["promotion_action"] = str(promotion.get("action") or "")
+    updated["promoted_field"] = str(promotion.get("promoted_field") or "")
+    updated["promoted_value"] = str(promotion.get("new_value") or "")
+    updated["previous_value"] = str(promotion.get("previous_value") or "")
+    updated["promoted_by"] = str(promotion.get("operator") or "")
+    updated["promoted_at"] = str(promotion.get("created_at") or "")
+    updated["promotion_note"] = str(promotion.get("note") or "")
+    return updated
+
+
+def _public_web_promotion_detail(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "promotion_id": str(row.get("promotion_id") or ""),
+        "signal_id": str(row.get("signal_id") or ""),
+        "run_id": str(row.get("run_id") or ""),
+        "asset_id": str(row.get("asset_id") or ""),
+        "person_identity_key": str(row.get("person_identity_key") or ""),
+        "record_id": str(row.get("record_id") or ""),
+        "candidate_id": str(row.get("candidate_id") or ""),
+        "candidate_name": str(row.get("candidate_name") or ""),
+        "current_company": str(row.get("current_company") or ""),
+        "linkedin_url_key": str(row.get("linkedin_url_key") or ""),
+        "signal_kind": str(row.get("signal_kind") or ""),
+        "signal_type": str(row.get("signal_type") or ""),
+        "email_type": str(row.get("email_type") or ""),
+        "value": str(row.get("value") or ""),
+        "normalized_value": str(row.get("normalized_value") or ""),
+        "url": str(row.get("url") or ""),
+        "source_url": str(row.get("source_url") or ""),
+        "source_domain": str(row.get("source_domain") or ""),
+        "source_family": str(row.get("source_family") or ""),
+        "source_title": str(row.get("source_title") or ""),
+        "confidence_label": str(row.get("confidence_label") or ""),
+        "confidence_score": _coerce_public_web_float(row.get("confidence_score")),
+        "identity_match_label": str(row.get("identity_match_label") or ""),
+        "identity_match_score": _coerce_public_web_float(row.get("identity_match_score")),
+        "publishable": bool(row.get("publishable")),
+        "clean_profile_link": bool(row.get("clean_profile_link")),
+        "link_shape_warnings": list(row.get("link_shape_warnings") or []),
+        "action": str(row.get("action") or ""),
+        "promotion_status": str(row.get("promotion_status") or ""),
+        "promoted_field": str(row.get("promoted_field") or ""),
+        "previous_value": str(row.get("previous_value") or ""),
+        "new_value": str(row.get("new_value") or ""),
+        "operator": str(row.get("operator") or ""),
+        "note": str(row.get("note") or ""),
+        "evidence_excerpt": str(row.get("evidence_excerpt") or ""),
+        "metadata": _storage_json_safe_payload(dict(row.get("metadata") or {})),
+        "created_at": str(row.get("created_at") or ""),
+        "updated_at": str(row.get("updated_at") or ""),
+    }
+
+
+def _public_web_promotion_summary(promotions: list[dict[str, Any]]) -> dict[str, Any]:
+    promoted = [item for item in promotions if str(item.get("action") or "") == "promote"]
+    rejected = [item for item in promotions if str(item.get("action") or "") == "reject"]
+    return {
+        "promotion_count": len(promotions),
+        "promoted_count": len(promoted),
+        "rejected_count": len(rejected),
+        "promoted_email_count": len(
+            [item for item in promoted if str(item.get("signal_kind") or "") == "email_candidate"]
+        ),
+        "promoted_link_count": len(
+            [item for item in promoted if str(item.get("signal_kind") or "") == "profile_link"]
+        ),
+    }
+
+
+def _public_web_exportable_signals(
+    signals: list[dict[str, Any]],
+    *,
+    include_publishable_unpromoted: bool,
+) -> list[dict[str, Any]]:
+    exportable: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for signal in signals:
+        if not isinstance(signal, dict):
+            continue
+        signal_id = str(signal.get("signal_id") or "").strip()
+        if signal_id and signal_id in seen:
+            continue
+        promotion_status = str(signal.get("promotion_status") or "").strip()
+        promoted = promotion_status == "manually_promoted"
+        ai_publishable = include_publishable_unpromoted and bool(signal.get("publishable"))
+        if not promoted and not ai_publishable:
+            continue
+        row = dict(signal)
+        row["export_status"] = "manual_promoted" if promoted else "ai_publishable_unpromoted"
+        exportable.append(row)
+        if signal_id:
+            seen.add(signal_id)
+    return exportable
+
+
+def _public_web_candidate_summary_csv_row(
+    *,
+    record: dict[str, Any],
+    detail: dict[str, Any],
+    exported_signals: list[dict[str, Any]],
+    export_mode: str,
+) -> dict[str, str]:
+    promoted_email = next(
+        (
+            signal
+            for signal in exported_signals
+            if str(signal.get("signal_kind") or "") == "email_candidate"
+            and str(signal.get("promotion_status") or "") == "manually_promoted"
+        ),
+        {},
+    )
+    promoted_links = [
+        signal
+        for signal in exported_signals
+        if str(signal.get("signal_kind") or "") == "profile_link"
+        and str(signal.get("promotion_status") or "") == "manually_promoted"
+    ]
+    links_by_type: dict[str, list[str]] = defaultdict(list)
+    for signal in promoted_links:
+        signal_type = str(signal.get("signal_type") or "other").strip() or "other"
+        url = _public_web_signal_promoted_value(signal)
+        if url and url not in links_by_type[signal_type]:
+            links_by_type[signal_type].append(url)
+    return {
+        "record_id": str(record.get("id") or ""),
+        "candidate_name": str(record.get("candidate_name") or ""),
+        "current_company": str(record.get("current_company") or ""),
+        "linkedin_url": str(record.get("linkedin_url") or ""),
+        "promoted_primary_email": _public_web_signal_promoted_value(promoted_email),
+        "email_type": str(promoted_email.get("email_type") or ""),
+        "email_source_url": str(promoted_email.get("source_url") or ""),
+        "email_confidence": str(promoted_email.get("confidence_label") or ""),
+        "homepage_url": " | ".join(links_by_type.get("homepage", []) or links_by_type.get("personal_homepage", [])),
+        "github_url": " | ".join(links_by_type.get("github_url", []) or links_by_type.get("github", [])),
+        "x_url": " | ".join(links_by_type.get("x_url", []) or links_by_type.get("twitter_url", [])),
+        "substack_url": " | ".join(links_by_type.get("substack_url", []) or links_by_type.get("substack", [])),
+        "scholar_url": " | ".join(links_by_type.get("google_scholar_url", []) or links_by_type.get("scholar", [])),
+        "other_profile_links": " | ".join(
+            url
+            for signal_type, urls in sorted(links_by_type.items())
+            if signal_type
+            not in {
+                "homepage",
+                "personal_homepage",
+                "github",
+                "github_url",
+                "x_url",
+                "twitter_url",
+                "substack",
+                "substack_url",
+                "google_scholar_url",
+                "scholar",
+            }
+            for url in urls
+        ),
+        "exported_signal_count": str(len(exported_signals)),
+        "promotion_count": str(dict(detail.get("promotion_summary") or {}).get("promotion_count") or 0),
+        "export_mode": export_mode,
+    }
+
+
+def _public_web_signal_csv_row(*, record: dict[str, Any], signal: dict[str, Any]) -> dict[str, str]:
+    return {
+        "record_id": str(record.get("id") or signal.get("record_id") or ""),
+        "candidate_name": str(record.get("candidate_name") or signal.get("candidate_name") or ""),
+        "signal_id": str(signal.get("signal_id") or ""),
+        "signal_kind": str(signal.get("signal_kind") or ""),
+        "signal_type": str(signal.get("signal_type") or ""),
+        "email_type": str(signal.get("email_type") or ""),
+        "value": str(signal.get("normalized_value") or signal.get("value") or ""),
+        "url": str(signal.get("url") or ""),
+        "source_url": str(signal.get("source_url") or ""),
+        "source_domain": str(signal.get("source_domain") or ""),
+        "source_family": str(signal.get("source_family") or ""),
+        "confidence_label": str(signal.get("confidence_label") or ""),
+        "confidence_score": str(signal.get("confidence_score") or ""),
+        "identity_match_label": str(signal.get("identity_match_label") or ""),
+        "identity_match_score": str(signal.get("identity_match_score") or ""),
+        "promotion_status": str(signal.get("promotion_status") or ""),
+        "promotion_id": str(signal.get("promotion_id") or ""),
+        "export_status": str(signal.get("export_status") or ""),
+        "evidence_excerpt": str(signal.get("evidence_excerpt") or ""),
+    }
+
+
+def _public_web_evidence_csv_row(*, record: dict[str, Any], evidence: dict[str, Any]) -> dict[str, str]:
+    return {
+        "record_id": str(record.get("id") or ""),
+        "candidate_name": str(record.get("candidate_name") or ""),
+        "source_url": str(evidence.get("source_url") or ""),
+        "source_domain": str(evidence.get("source_domain") or ""),
+        "source_family": str(evidence.get("source_family") or ""),
+        "source_title": str(evidence.get("source_title") or ""),
+        "signal_ids": " | ".join(str(item or "") for item in list(evidence.get("signal_ids") or []) if str(item or "")),
+        "signal_kinds": " | ".join(
+            str(item or "") for item in list(evidence.get("signal_kinds") or []) if str(item or "")
+        ),
+        "signal_types": " | ".join(
+            str(item or "") for item in list(evidence.get("signal_types") or []) if str(item or "")
+        ),
+        "identity_match_labels": " | ".join(
+            str(item or "") for item in list(evidence.get("identity_match_labels") or []) if str(item or "")
+        ),
+        "max_confidence_score": str(evidence.get("max_confidence_score") or ""),
+    }
+
+
+def _public_web_promotion_csv_row(*, record: dict[str, Any], promotion: dict[str, Any]) -> dict[str, str]:
+    return {
+        "record_id": str(record.get("id") or promotion.get("record_id") or ""),
+        "candidate_name": str(record.get("candidate_name") or promotion.get("candidate_name") or ""),
+        "promotion_id": str(promotion.get("promotion_id") or ""),
+        "signal_id": str(promotion.get("signal_id") or ""),
+        "action": str(promotion.get("action") or ""),
+        "promotion_status": str(promotion.get("promotion_status") or ""),
+        "signal_kind": str(promotion.get("signal_kind") or ""),
+        "signal_type": str(promotion.get("signal_type") or ""),
+        "email_type": str(promotion.get("email_type") or ""),
+        "new_value": str(promotion.get("new_value") or ""),
+        "previous_value": str(promotion.get("previous_value") or ""),
+        "source_url": str(promotion.get("source_url") or ""),
+        "source_domain": str(promotion.get("source_domain") or ""),
+        "confidence_label": str(promotion.get("confidence_label") or ""),
+        "identity_match_label": str(promotion.get("identity_match_label") or ""),
+        "operator": str(promotion.get("operator") or ""),
+        "created_at": str(promotion.get("created_at") or ""),
+        "note": str(promotion.get("note") or ""),
+    }
+
+
+def _build_csv_bytes(rows: list[dict[str, str]], fieldnames: list[str]) -> bytes:
+    output = io.StringIO(newline="")
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer.writeheader()
+    for row in rows:
+        writer.writerow({field_name: str(row.get(field_name) or "") for field_name in fieldnames})
+    return output.getvalue().encode("utf-8-sig")
+
+
+def _public_web_signal_promoted_value(signal: dict[str, Any]) -> str:
+    if str(signal.get("signal_kind") or "") == "email_candidate":
+        return str(signal.get("normalized_value") or signal.get("value") or "").strip().lower()
+    return str(signal.get("url") or signal.get("normalized_value") or signal.get("value") or "").strip()
+
+
+def _validate_public_web_signal_promotable(signal: dict[str, Any], *, allow_unpublishable: bool = False) -> str:
+    signal_kind = str(signal.get("signal_kind") or "").strip()
+    promoted_value = _public_web_signal_promoted_value(signal)
+    if signal_kind == "email_candidate" and not _public_web_value_is_probable_email(promoted_value):
+        return "invalid_email_candidate"
+    if not allow_unpublishable:
+        if not bool(signal.get("publishable")):
+            return "signal_not_publishable"
+        if str(signal.get("suppression_reason") or "").strip():
+            return "signal_suppressed"
+        if signal_kind == "profile_link" and not bool(signal.get("clean_profile_link", True)):
+            return "link_shape_not_clean"
+    return ""
+
+
+def _public_web_value_is_probable_email(value: str) -> bool:
+    normalized = str(value or "").strip()
+    if not normalized or len(normalized) > 254:
+        return False
+    return bool(re.fullmatch(r"[^@\s<>]+@[^@\s<>]+\.[^@\s<>]+", normalized))
+
+
+def _public_web_model_safe_artifact_refs(refs: dict[str, Any]) -> dict[str, str]:
+    allowed_keys = {
+        "candidate_summary_path",
+        "entry_links_path",
+        "signals_path",
+        "analysis_path",
+        "evidence_slice_path",
+    }
+    return {
+        key: str(value or "").strip()
+        for key, value in dict(refs or {}).items()
+        if key in allowed_keys and str(value or "").strip()
+    }
+
+
+def _public_web_model_safe_signal_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+    allowed_keys = {
+        "query_id",
+        "query_text",
+        "provider_name",
+        "result_rank",
+        "fetchable",
+        "reasons",
+        "adjudication",
+        "link_shape_warnings",
+        "clean_profile_link",
+    }
+    return _storage_json_safe_payload(
+        {
+            key: value
+            for key, value in dict(metadata or {}).items()
+            if key in allowed_keys
+        }
+    )
+
+
+def _group_public_web_signals(
+    *,
+    email_candidates: list[dict[str, Any]],
+    profile_links: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "email_candidates_by_type": _group_public_web_items(email_candidates, key="email_type"),
+        "profile_links_by_type": _group_public_web_items(profile_links, key="signal_type"),
+        "suppressed_email_candidates": [
+            item for item in email_candidates if str(item.get("suppression_reason") or "").strip()
+        ],
+    }
+
+
+def _group_public_web_items(items: list[dict[str, Any]], *, key: str) -> dict[str, list[dict[str, Any]]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for item in items:
+        group_key = str(item.get(key) or "unknown").strip() or "unknown"
+        grouped.setdefault(group_key, []).append(item)
+    return grouped
+
+
+def _public_web_evidence_links(signals: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    by_url: dict[str, dict[str, Any]] = {}
+    for signal in signals:
+        source_url = str(signal.get("source_url") or signal.get("url") or "").strip()
+        if not source_url:
+            continue
+        current = by_url.setdefault(
+            source_url,
+            {
+                "source_url": source_url,
+                "source_domain": str(signal.get("source_domain") or ""),
+                "source_family": str(signal.get("source_family") or ""),
+                "source_title": str(signal.get("source_title") or ""),
+                "signal_ids": [],
+                "signal_kinds": [],
+                "signal_types": [],
+                "identity_match_labels": [],
+                "max_confidence_score": 0.0,
+            },
+        )
+        for field_name, value in (
+            ("signal_ids", signal.get("signal_id")),
+            ("signal_kinds", signal.get("signal_kind")),
+            ("signal_types", signal.get("signal_type")),
+            ("identity_match_labels", signal.get("identity_match_label")),
+        ):
+            normalized_value = str(value or "").strip()
+            if normalized_value and normalized_value not in current[field_name]:
+                current[field_name].append(normalized_value)
+        current["max_confidence_score"] = max(
+            _coerce_public_web_float(current.get("max_confidence_score")),
+            _coerce_public_web_float(signal.get("confidence_score")),
+        )
+    return sorted(
+        by_url.values(),
+        key=lambda item: (
+            -_coerce_public_web_float(item.get("max_confidence_score")),
+            str(item.get("source_domain") or ""),
+            str(item.get("source_url") or ""),
+        ),
+    )
+
+
+def _coerce_public_web_float(value: Any) -> float:
+    try:
+        return float(value or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _env_bool(name: str, default: bool) -> bool:

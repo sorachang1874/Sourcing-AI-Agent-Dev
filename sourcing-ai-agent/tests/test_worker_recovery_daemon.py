@@ -6,12 +6,12 @@ from types import SimpleNamespace
 from sourcing_agent.agent_runtime import AgentRuntimeCoordinator
 from sourcing_agent.connectors import CompanyIdentity
 from sourcing_agent.domain import Candidate, JobRequest
-from sourcing_agent.storage import SQLiteStore
+from sourcing_agent.storage import ControlPlaneStore
 from sourcing_agent.worker_daemon import PersistentWorkerRecoveryDaemon
 
 
 class _FakeSearchSeedAcquirer:
-    def __init__(self, store: SQLiteStore) -> None:
+    def __init__(self, store: ControlPlaneStore) -> None:
         self.store = store
         self.calls: list[dict[str, str]] = []
         self.refresh_calls: list[list[int]] = []
@@ -87,7 +87,7 @@ class _FakeSearchSeedAcquirer:
 
 
 class _FakeExploratoryEnricher:
-    def __init__(self, store: SQLiteStore) -> None:
+    def __init__(self, store: ControlPlaneStore) -> None:
         self.store = store
         self.calls: list[dict[str, str]] = []
         self.refresh_calls: list[list[int]] = []
@@ -154,7 +154,7 @@ class _FakeExploratoryEnricher:
 
 
 class _FakeAcquisitionEngine:
-    def __init__(self, store: SQLiteStore) -> None:
+    def __init__(self, store: ControlPlaneStore) -> None:
         self.search_seed_acquirer = _FakeSearchSeedAcquirer(store)
         self.multi_source_enricher = SimpleNamespace(
             exploratory_enricher=_FakeExploratoryEnricher(store),
@@ -239,8 +239,8 @@ class PersistentWorkerRecoveryDaemonTest(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
         self.db_path = f"{self.tempdir.name}/runtime.db"
-        self.controller_store = SQLiteStore(self.db_path)
-        self.daemon_store = SQLiteStore(self.db_path)
+        self.controller_store = ControlPlaneStore(self.db_path)
+        self.daemon_store = ControlPlaneStore(self.db_path)
         self.controller_runtime = AgentRuntimeCoordinator(self.controller_store)
         self.daemon_runtime = AgentRuntimeCoordinator(self.daemon_store)
         self.request = JobRequest(

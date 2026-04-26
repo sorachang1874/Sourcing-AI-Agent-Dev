@@ -4,13 +4,13 @@ import unittest
 from sourcing_agent.domain import Candidate, JobRequest
 from sourcing_agent.confidence_policy import build_confidence_policy
 from sourcing_agent.scoring import score_candidates
-from sourcing_agent.storage import SQLiteStore
+from sourcing_agent.storage import ControlPlaneStore
 
 
 class CriteriaEvolutionTest(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
-        self.store = SQLiteStore(f"{self.tempdir.name}/test.db")
+        self.store = ControlPlaneStore(f"{self.tempdir.name}/test.db")
 
     def tearDown(self) -> None:
         self.tempdir.cleanup()

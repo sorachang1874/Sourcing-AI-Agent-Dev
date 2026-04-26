@@ -8,7 +8,7 @@ from pathlib import Path
 from sourcing_agent.candidate_artifacts import CandidateArtifactError
 from sourcing_agent.company_registry import normalize_company_key
 from sourcing_agent.settings import load_settings
-from sourcing_agent.storage import SQLiteStore
+from sourcing_agent.storage import ControlPlaneStore
 
 
 def _load_snapshot_identity(snapshot_dir: Path) -> dict[str, object]:
@@ -35,7 +35,7 @@ def _load_snapshot_identity(snapshot_dir: Path) -> dict[str, object]:
 
 
 def _iter_authoritative_rows(
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     *,
     companies: set[str],
 ) -> list[dict[str, object]]:
@@ -83,7 +83,7 @@ def main() -> None:
     args = parser.parse_args()
 
     settings = load_settings(Path(args.project_root).resolve())
-    store = SQLiteStore(settings.db_path)
+    store = ControlPlaneStore(settings.db_path)
     company_filters = {
         normalize_company_key(str(item or "").strip())
         for item in list(args.company or [])

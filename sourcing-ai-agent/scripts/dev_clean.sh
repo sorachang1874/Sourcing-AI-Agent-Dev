@@ -27,7 +27,7 @@ What it does:
   - removes stale local dev service status directories when their recorded pid is no longer running
 
 What it will not touch:
-  - workflow jobs, company assets, sqlite databases, or workflow-runner/job-recovery logs
+  - workflow jobs, company assets, control-plane data, or workflow-runner/job-recovery logs
   - active service status directories whose pid is still alive
 
 Options:

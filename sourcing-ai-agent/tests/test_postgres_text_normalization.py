@@ -5,7 +5,7 @@ from unittest import mock
 
 from sourcing_agent.control_plane_live_postgres import _fetch_one_dict_row
 from sourcing_agent.local_postgres import describe_control_plane_runtime
-from sourcing_agent.storage import SQLiteStore
+from sourcing_agent.storage import ControlPlaneStore
 
 
 class _FakeCursor:
@@ -47,7 +47,7 @@ class PostgresTextNormalizationTest(unittest.TestCase):
                 },
                 clear=False,
             ):
-                store = SQLiteStore(db_path)
+                store = ControlPlaneStore(db_path)
                 registry = store.upsert_organization_asset_registry(
                     {
                         "target_company": "b'OpenAI'",

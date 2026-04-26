@@ -3,7 +3,7 @@
 > Status: Current first-party doc. Treat this file as active guidance, but keep it aligned with `docs/INDEX.md` and `PROGRESS.md` when runtime contracts change.
 
 
-> Current default: live/hosted storage is `Postgres control plane + generation-first artifacts`. `sqlite_snapshot` now exists only as a legacy backup/portability alias.
+> Current default: live/hosted storage is `Postgres control plane + generation-first artifacts`. `sqlite_snapshot` is retired and should not be exported, uploaded, downloaded, imported, or restored.
 
 ## Goal
 
@@ -12,7 +12,7 @@
 - 新 snapshot 上传后，旧版本如何保留、降级、归档或淘汰
 - 同一组织下不同团队、不同 scope 的资产如何隔离，不互相覆盖
 - 哪些文件属于“可长期复用的数据资产”，哪些只是一次性执行痕迹
-- 本地 runtime、云端 object storage、Postgres control plane、legacy backup alias 和 retrieval artifact 之间如何分层
+- 本地 runtime、云端 object storage、Postgres control plane 和 retrieval artifact 之间如何分层
 
 这份规则是工程约束，不是建议。
 
@@ -72,12 +72,12 @@
 - `company_snapshot bundle`
 - `company_handoff bundle`
 - `control_plane_snapshot bundle`
-- `sqlite_snapshot bundle` (legacy alias)
 
 补充：
 
 - `company_handoff bundle` 仍是受支持的导出格式
 - 但当前服务器/云端恢复默认基线应优先使用 `company_snapshot + control_plane_snapshot`
+- `sqlite_snapshot` bundle 已退役；旧包只应作为离线历史材料处理，不能再走 product CLI / import / object sync
 - canonical 恢复清单见 `docs/CANONICAL_CLOUD_BUNDLE_CATALOG.md`
 
 规则：

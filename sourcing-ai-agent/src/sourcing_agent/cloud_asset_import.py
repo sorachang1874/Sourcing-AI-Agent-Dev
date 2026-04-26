@@ -14,12 +14,22 @@ from .candidate_artifacts import repair_missing_company_candidate_artifacts
 from .company_registry import refresh_company_identity_registry
 from .control_plane_postgres import (
     control_plane_snapshot_output_path,
-    restore_control_plane_snapshot_to_sqlite,
     sync_control_plane_snapshot_to_postgres,
 )
 from .local_postgres import resolve_control_plane_postgres_dsn, resolve_default_control_plane_db_path
 from .profile_registry_backfill import backfill_linkedin_profile_registry
-from .storage import SQLiteStore
+from .storage import ControlPlaneStore
+
+
+_RETIRED_SQLITE_BUNDLE_KIND = "sqlite_snapshot"
+
+
+def _reject_retired_sqlite_bundle_kind(bundle_kind: str) -> None:
+    if str(bundle_kind or "").strip() == _RETIRED_SQLITE_BUNDLE_KIND:
+        raise AssetBundleError(
+            "sqlite_snapshot import/restore has been retired. Use control_plane_snapshot for PG control-plane "
+            "state or candidate_generation/company_snapshot for portable candidate assets."
+        )
 
 
 def _normalize_string_list(values: list[Any] | tuple[Any, ...] | set[Any] | None) -> list[str]:
@@ -37,7 +47,7 @@ def _normalize_string_list(values: list[Any] | tuple[Any, ...] | set[Any] | None
     return normalized
 
 
-def _sync_restored_control_plane_snapshot(runtime_dir: Path, db_path: Path) -> dict[str, Any]:
+def _sync_restored_control_plane_snapshot(runtime_dir: Path) -> dict[str, Any]:
     snapshot_path = control_plane_snapshot_output_path(runtime_dir)
     if not snapshot_path.exists():
         return {
@@ -46,24 +56,10 @@ def _sync_restored_control_plane_snapshot(runtime_dir: Path, db_path: Path) -> d
         }
     dsn = resolve_control_plane_postgres_dsn(runtime_dir)
     if not dsn:
-        try:
-            restore_summary = restore_control_plane_snapshot_to_sqlite(
-                snapshot_path=snapshot_path,
-                runtime_dir=runtime_dir,
-                sqlite_path=db_path,
-            )
-        except Exception as exc:
-            return {
-                "status": "failed_local_restore",
-                "snapshot_path": str(snapshot_path),
-                "sqlite_path": str(db_path),
-                "error": f"{type(exc).__name__}: {exc}",
-            }
         return {
-            "status": "completed_local_restore",
+            "status": "failed_missing_postgres_dsn",
             "snapshot_path": str(snapshot_path),
-            "sqlite_path": str(db_path),
-            "restore": restore_summary,
+            "error": "Postgres DSN is required to restore a control_plane_snapshot.",
         }
     try:
         summary = sync_control_plane_snapshot_to_postgres(
@@ -166,7 +162,7 @@ def _generation_import_hint_from_manifest(
             str(latest_generation.get("asset_view") or resolved_asset_view or "canonical_merged").strip()
             or "canonical_merged"
         )
-    elif bundle_kind in {"sqlite_snapshot", "control_plane_snapshot"}:
+    elif bundle_kind == "control_plane_snapshot":
         target_company = requested_target_company
     else:
         return {}
@@ -196,7 +192,6 @@ def _direct_generation_import_hint(
         "company_snapshot",
         "company_handoff",
         "control_plane_snapshot",
-        "sqlite_snapshot",
     }:
         return {}
     target_company = requested_companies[0] if requested_companies else ""
@@ -243,7 +238,7 @@ def _annotate_generation_first_import(
 def _warmup_company_assets(
     *,
     runtime_dir: Path,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     company: str,
     asset_view: str,
 ) -> dict[str, Any]:
@@ -369,7 +364,7 @@ def _run_post_import_refresh_background(
         },
     )
     try:
-        store = SQLiteStore(db_path)
+        store = ControlPlaneStore(db_path)
         if run_org_warmup and scoped_companies:
             warmup_summary: dict[str, Any] = {
                 "status": "completed",
@@ -462,8 +457,8 @@ def _post_import_runtime_refresh(
     run_profile_registry_backfill: bool,
     profile_registry_resume: bool,
     profile_progress_interval: int,
-) -> tuple[SQLiteStore, dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
-    store = SQLiteStore(db_path)
+) -> tuple[ControlPlaneStore, dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
+    store = ControlPlaneStore(db_path)
     matching_refresh_summary = dict(
         getattr(store, "last_matching_refresh_summary", {}) or {"status": "completed", "counts": {}}
     )
@@ -473,141 +468,134 @@ def _post_import_runtime_refresh(
             runtime_dir=runtime_dir,
             companies=scoped_companies,
         )
-    elif bundle_kind == "sqlite_snapshot":
-        company_identity_registry_summary = refresh_company_identity_registry(runtime_dir=runtime_dir)
 
     repair_summary: dict[str, Any]
     warmup_summary: dict[str, Any]
     profile_registry_summary: dict[str, Any]
-    if bundle_kind != "sqlite_snapshot":
-        if run_artifact_repair:
+    if run_artifact_repair:
+        if scoped_companies:
+            repair_summary = repair_missing_company_candidate_artifacts(
+                runtime_dir=runtime_dir,
+                store=store,
+                companies=scoped_companies,
+                snapshot_id=scoped_snapshot_id,
+            )
+        else:
+            repair_summary = {
+                "status": "skipped_missing_company_scope",
+                "reason": "No company scope could be inferred from the imported asset scope; pass --company to enable artifact repair.",
+            }
+    else:
+        repair_summary = {"status": "skipped_by_flag"}
+
+    defer_followup_refresh = bool(
+        scoped_companies
+        and (run_org_warmup or run_profile_registry_backfill)
+        and _resolve_post_import_refresh_mode(runtime_dir=runtime_dir) == "background"
+    )
+    if defer_followup_refresh:
+        job_id = _post_import_refresh_job_id(
+            bundle_kind=bundle_kind,
+            scoped_companies=scoped_companies,
+            scoped_snapshot_id=scoped_snapshot_id,
+        )
+        state_path = _post_import_refresh_state_path(runtime_dir=runtime_dir, job_id=job_id)
+        _write_post_import_refresh_state(
+            state_path,
+            {
+                "job_id": job_id,
+                "status": "scheduled",
+                "bundle_kind": bundle_kind,
+                "scoped_companies": scoped_companies,
+                "scoped_snapshot_id": scoped_snapshot_id,
+                "asset_view": asset_view,
+                "scheduled_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+        threading.Thread(
+            target=_run_post_import_refresh_background,
+            kwargs={
+                "runtime_dir": runtime_dir,
+                "db_path": db_path,
+                "bundle_kind": bundle_kind,
+                "scoped_companies": scoped_companies,
+                "scoped_snapshot_id": scoped_snapshot_id,
+                "asset_view": asset_view,
+                "run_org_warmup": run_org_warmup,
+                "run_profile_registry_backfill": run_profile_registry_backfill,
+                "profile_registry_resume": profile_registry_resume,
+                "profile_progress_interval": profile_progress_interval,
+                "job_id": job_id,
+                "state_path": state_path,
+            },
+            name=f"post-import-refresh-{job_id[-8:]}",
+            daemon=True,
+        ).start()
+        warmup_summary = {
+            "status": "scheduled" if run_org_warmup else "skipped_by_flag",
+            "mode": "background",
+            "asset_view": asset_view,
+            "job_id": job_id,
+            "state_path": str(state_path),
+            "scoped_companies": scoped_companies,
+        }
+        profile_registry_summary = {
+            "status": "scheduled" if run_profile_registry_backfill else "skipped_by_flag",
+            "mode": "background",
+            "job_id": job_id,
+            "state_path": str(state_path),
+            "scoped_companies": scoped_companies,
+            "snapshot_id": scoped_snapshot_id if len(scoped_companies) == 1 else "",
+        }
+    else:
+        if run_org_warmup:
             if scoped_companies:
-                repair_summary = repair_missing_company_candidate_artifacts(
-                    runtime_dir=runtime_dir,
-                    store=store,
-                    companies=scoped_companies,
-                    snapshot_id=scoped_snapshot_id,
-                )
+                warmup_summary = {
+                    "status": "completed",
+                    "asset_view": asset_view,
+                    "results": [
+                        _warmup_company_assets(
+                            runtime_dir=runtime_dir,
+                            store=store,
+                            company=company,
+                            asset_view=asset_view,
+                        )
+                        for company in scoped_companies
+                    ],
+                }
             else:
-                repair_summary = {
+                warmup_summary = {
                     "status": "skipped_missing_company_scope",
-                    "reason": "No company scope could be inferred from the imported asset scope; pass --company to enable artifact repair.",
+                    "reason": "No company scope could be inferred from the imported asset scope; pass --company to enable organization warmup.",
                 }
         else:
-            repair_summary = {"status": "skipped_by_flag"}
+            warmup_summary = {"status": "skipped_by_flag"}
 
-        defer_followup_refresh = bool(
-            scoped_companies
-            and (run_org_warmup or run_profile_registry_backfill)
-            and _resolve_post_import_refresh_mode(runtime_dir=runtime_dir) == "background"
-        )
-        if defer_followup_refresh:
-            job_id = _post_import_refresh_job_id(
-                bundle_kind=bundle_kind,
-                scoped_companies=scoped_companies,
-                scoped_snapshot_id=scoped_snapshot_id,
-            )
-            state_path = _post_import_refresh_state_path(runtime_dir=runtime_dir, job_id=job_id)
-            _write_post_import_refresh_state(
-                state_path,
-                {
-                    "job_id": job_id,
-                    "status": "scheduled",
-                    "bundle_kind": bundle_kind,
-                    "scoped_companies": scoped_companies,
-                    "scoped_snapshot_id": scoped_snapshot_id,
-                    "asset_view": asset_view,
-                    "scheduled_at": datetime.now(timezone.utc).isoformat(),
-                },
-            )
-            threading.Thread(
-                target=_run_post_import_refresh_background,
-                kwargs={
-                    "runtime_dir": runtime_dir,
-                    "db_path": db_path,
-                    "bundle_kind": bundle_kind,
-                    "scoped_companies": scoped_companies,
-                    "scoped_snapshot_id": scoped_snapshot_id,
-                    "asset_view": asset_view,
-                    "run_org_warmup": run_org_warmup,
-                    "run_profile_registry_backfill": run_profile_registry_backfill,
-                    "profile_registry_resume": profile_registry_resume,
-                    "profile_progress_interval": profile_progress_interval,
-                    "job_id": job_id,
-                    "state_path": state_path,
-                },
-                name=f"post-import-refresh-{job_id[-8:]}",
-                daemon=True,
-            ).start()
-            warmup_summary = {
-                "status": "scheduled" if run_org_warmup else "skipped_by_flag",
-                "mode": "background",
-                "asset_view": asset_view,
-                "job_id": job_id,
-                "state_path": str(state_path),
-                "scoped_companies": scoped_companies,
-            }
-            profile_registry_summary = {
-                "status": "scheduled" if run_profile_registry_backfill else "skipped_by_flag",
-                "mode": "background",
-                "job_id": job_id,
-                "state_path": str(state_path),
-                "scoped_companies": scoped_companies,
-                "snapshot_id": scoped_snapshot_id if len(scoped_companies) == 1 else "",
-            }
-        else:
-            if run_org_warmup:
-                if scoped_companies:
-                    warmup_summary = {
-                        "status": "completed",
-                        "asset_view": asset_view,
-                        "results": [
-                            _warmup_company_assets(
-                                runtime_dir=runtime_dir,
-                                store=store,
-                                company=company,
-                                asset_view=asset_view,
-                            )
-                            for company in scoped_companies
-                        ],
-                    }
-                else:
-                    warmup_summary = {
-                        "status": "skipped_missing_company_scope",
-                        "reason": "No company scope could be inferred from the imported asset scope; pass --company to enable organization warmup.",
-                    }
-            else:
-                warmup_summary = {"status": "skipped_by_flag"}
-
-            if run_profile_registry_backfill:
-                if scoped_companies:
-                    profile_results: list[dict[str, Any]] = []
-                    for company in scoped_companies:
-                        profile_results.append(
-                            backfill_linkedin_profile_registry(
-                                runtime_dir=runtime_dir,
-                                store=store,
-                                company=company,
-                                snapshot_id=scoped_snapshot_id if len(scoped_companies) == 1 else "",
-                                resume=profile_registry_resume,
-                                progress_interval=max(1, int(profile_progress_interval or 1)),
-                            )
+        if run_profile_registry_backfill:
+            if scoped_companies:
+                profile_results: list[dict[str, Any]] = []
+                for company in scoped_companies:
+                    profile_results.append(
+                        backfill_linkedin_profile_registry(
+                            runtime_dir=runtime_dir,
+                            store=store,
+                            company=company,
+                            snapshot_id=scoped_snapshot_id if len(scoped_companies) == 1 else "",
+                            resume=profile_registry_resume,
+                            progress_interval=max(1, int(profile_progress_interval or 1)),
                         )
-                    profile_registry_summary = {
-                        "status": "completed",
-                        "results": profile_results,
-                    }
-                else:
-                    profile_registry_summary = {
-                        "status": "skipped_missing_company_scope",
-                        "reason": "No company scope could be inferred from the imported asset scope; pass --company to enable profile registry backfill.",
-                    }
+                    )
+                profile_registry_summary = {
+                    "status": "completed",
+                    "results": profile_results,
+                }
             else:
-                profile_registry_summary = {"status": "skipped_by_flag"}
-    else:
-        repair_summary = {"status": "skipped_by_bundle_kind", "bundle_kind": bundle_kind}
-        warmup_summary = {"status": "skipped_by_bundle_kind", "bundle_kind": bundle_kind}
-        profile_registry_summary = {"status": "skipped_by_bundle_kind", "bundle_kind": bundle_kind}
+                profile_registry_summary = {
+                    "status": "skipped_missing_company_scope",
+                    "reason": "No company scope could be inferred from the imported asset scope; pass --company to enable profile registry backfill.",
+                }
+        else:
+            profile_registry_summary = {"status": "skipped_by_flag"}
 
     return (
         store,
@@ -784,15 +772,12 @@ def import_cloud_assets(
     target_runtime_dir: str | Path | None = None,
     conflict: str = "skip",
     target_db_path: str | Path | None = None,
-    backup_current_db: bool = True,
-    backup_dir: str | Path | None = None,
     companies: list[str] | None = None,
     snapshot_id: str = "",
     asset_view: str = "canonical_merged",
     generation_key: str = "",
     prefer_generation: bool = True,
     allow_legacy_bundle_fallback: bool = True,
-    allow_sqlite_snapshot_restore: bool = False,
     prefer_local_link: bool = True,
     run_artifact_repair: bool = True,
     run_org_warmup: bool = True,
@@ -826,6 +811,7 @@ def import_cloud_assets(
     }
     if resolved_manifest_path is not None and resolved_manifest_path.exists():
         manifest_preview = json.loads(resolved_manifest_path.read_text(encoding="utf-8"))
+        _reject_retired_sqlite_bundle_kind(str(manifest_preview.get("bundle_kind") or ""))
         if str(manifest_preview.get("manifest_kind") or "").strip() == "candidate_generation":
             preview_target_company = str(
                 manifest_preview.get("target_company") or requested_target_company or ""
@@ -950,6 +936,7 @@ def import_cloud_assets(
     if resolved_manifest_path is None:
         normalized_bundle_kind = str(bundle_kind or "").strip()
         normalized_bundle_id = str(bundle_id or "").strip()
+        _reject_retired_sqlite_bundle_kind(normalized_bundle_kind)
         if normalized_bundle_kind == "candidate_generation":
             if storage_client is None:
                 raise AssetBundleError("storage_client is required when importing a remote candidate generation")
@@ -986,7 +973,7 @@ def import_cloud_assets(
             and (
                 not normalized_bundle_kind
                 or normalized_bundle_kind
-                in {"company_snapshot", "company_handoff", "control_plane_snapshot", "sqlite_snapshot"}
+                in {"company_snapshot", "company_handoff", "control_plane_snapshot"}
             )
         ):
             generation_hint = _direct_generation_import_hint(
@@ -1061,37 +1048,31 @@ def import_cloud_assets(
 
     manifest_payload = json.loads(resolved_manifest_path.read_text(encoding="utf-8"))
     resolved_bundle_kind = str(manifest_payload.get("bundle_kind") or bundle_kind or "").strip()
+    _reject_retired_sqlite_bundle_kind(resolved_bundle_kind)
     scoped_companies = requested_companies or _manifest_company_keys(manifest_payload)
     scoped_snapshot_id = _manifest_snapshot_id(manifest_payload, explicit_snapshot_id=snapshot_id)
 
     if not allow_legacy_bundle_fallback:
         raise AssetBundleError("No matching candidate generation resolved and legacy bundle fallback is disabled.")
 
-    if resolved_bundle_kind == "sqlite_snapshot":
-        if not allow_sqlite_snapshot_restore:
-            raise AssetBundleError(
-                "No matching candidate generation resolved and sqlite snapshot restore is disabled by default. "
-                "Use restore-sqlite-snapshot or explicitly enable sqlite snapshot restore."
-            )
-        restore_summary = bundle_manager.restore_sqlite_snapshot(
-            resolved_manifest_path,
-            target_db_path=effective_db_path,
-            backup_current=backup_current_db,
-            backup_dir=backup_dir,
+    if resolved_bundle_kind == "control_plane_snapshot" and not resolve_control_plane_postgres_dsn(effective_runtime_dir):
+        raise AssetBundleError("control_plane_snapshot restore requires a Postgres control-plane DSN.")
+
+    restore_summary = bundle_manager.restore_bundle(
+        resolved_manifest_path,
+        target_runtime_dir=effective_runtime_dir,
+        conflict=conflict,
+    )
+    restore_summary["restore_path_kind"] = (
+        "control_plane_snapshot" if resolved_bundle_kind == "control_plane_snapshot" else "bundle_restore"
+    )
+    restore_summary["legacy_bundle_restore_used"] = False
+    control_plane_snapshot_sync = _sync_restored_control_plane_snapshot(effective_runtime_dir)
+    if resolved_bundle_kind == "control_plane_snapshot" and str(control_plane_snapshot_sync.get("status") or "") != "completed":
+        raise AssetBundleError(
+            "control_plane_snapshot restore requires Postgres sync to complete; "
+            f"status={control_plane_snapshot_sync.get('status')}"
         )
-        restore_summary["restore_path_kind"] = "sqlite_snapshot_legacy_alias"
-        restore_summary["legacy_bundle_restore_used"] = True
-    else:
-        restore_summary = bundle_manager.restore_bundle(
-            resolved_manifest_path,
-            target_runtime_dir=effective_runtime_dir,
-            conflict=conflict,
-        )
-        restore_summary["restore_path_kind"] = (
-            "control_plane_snapshot" if resolved_bundle_kind == "control_plane_snapshot" else "bundle_restore"
-        )
-        restore_summary["legacy_bundle_restore_used"] = False
-    control_plane_snapshot_sync = _sync_restored_control_plane_snapshot(effective_runtime_dir, effective_db_path)
 
     manifest_metadata = dict(manifest_payload.get("metadata") or {})
     (
@@ -1222,7 +1203,7 @@ def hydrate_cloud_generation(
         if target_db_path
         else resolve_default_control_plane_db_path(bundle_manager.runtime_dir, base_dir=bundle_manager.runtime_dir)
     )
-    store = SQLiteStore(effective_db_path)
+    store = ControlPlaneStore(effective_db_path)
     ledger_entry = store.record_cloud_asset_operation(
         operation_type="hydrate_generation",
         bundle_kind="candidate_generation",

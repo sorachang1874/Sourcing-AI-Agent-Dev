@@ -11,7 +11,7 @@ from sourcing_agent.company_asset_completion import CompanyAssetCompletionManage
 from sourcing_agent.domain import Candidate
 from sourcing_agent.model_provider import DeterministicModelClient
 from sourcing_agent.settings import load_settings
-from sourcing_agent.storage import SQLiteStore
+from sourcing_agent.storage import ControlPlaneStore
 
 
 class _FakeHarvestProfileConnector:
@@ -424,7 +424,7 @@ class CompanyAssetCompletionTest(unittest.TestCase):
             linkedin_url="https://www.linkedin.com/in/current-snapshot",
             source_dataset="acme_roster_snapshot",
         )
-        self.store = SQLiteStore(self.runtime_dir / "sourcing_agent.db")
+        self.store = ControlPlaneStore(self.runtime_dir / "sourcing_agent.db")
         former_snapshot_candidate = Candidate(
             candidate_id="former1",
             name_en="Former Example",

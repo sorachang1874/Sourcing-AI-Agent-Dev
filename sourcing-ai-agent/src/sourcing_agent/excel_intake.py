@@ -36,7 +36,7 @@ from .profile_timeline import (
 from .query_signal_knowledge import role_bucket_function_ids, role_bucket_role_hints
 from .runtime_tuning import resolved_harvest_prefetch_submit_workers
 from .settings import AppSettings
-from .storage import SQLiteStore
+from .storage import ControlPlaneStore
 from .xlsx_reader import XlsxWorkbook
 
 _CANDIDATE_FIELD_NAMES = {field.name for field in fields(Candidate)}
@@ -136,7 +136,7 @@ class ExcelIntakeService:
         self,
         *,
         runtime_dir: str | Path,
-        store: SQLiteStore,
+        store: ControlPlaneStore,
         settings: AppSettings,
         model_client: ModelClient,
     ) -> None:
@@ -1354,7 +1354,7 @@ def group_contacts_by_company_hints(contacts: list[dict[str, Any]]) -> dict[str,
     }
 
 
-def _build_local_candidate_inventory(runtime_dir: Path, store: SQLiteStore) -> dict[str, Any]:
+def _build_local_candidate_inventory(runtime_dir: Path, store: ControlPlaneStore) -> dict[str, Any]:
     candidates_by_key: dict[str, Candidate] = {}
     candidate_documents_fallback_enabled = bool(
         getattr(store, "candidate_documents_fallback_enabled", lambda: False)()

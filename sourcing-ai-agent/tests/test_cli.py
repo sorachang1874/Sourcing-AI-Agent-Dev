@@ -10,20 +10,20 @@ from sourcing_agent import cli
 
 
 class CliWorkflowRunnerTest(unittest.TestCase):
-    def test_legacy_sqlite_runtime_banner_marks_non_pg_runtime_as_warning(self) -> None:
-        banner = cli._legacy_sqlite_runtime_banner(  # noqa: SLF001
+    def test_control_plane_storage_banner_marks_non_pg_runtime_as_error(self) -> None:
+        banner = cli._control_plane_storage_banner(  # noqa: SLF001
             {
                 "control_plane_postgres_live_mode": "disabled",
                 "sqlite_shadow_backend": "disk",
             }
         )
 
-        self.assertEqual(banner["status"], "legacy_sqlite_runtime")
-        self.assertEqual(banner["severity"], "warning")
-        self.assertIn("production/live hosted traffic must use Postgres", banner["message"])
+        self.assertEqual(banner["status"], "non_pg_control_plane")
+        self.assertEqual(banner["severity"], "error")
+        self.assertIn("Disk SQLite live control-plane mode is retired", banner["message"])
 
-    def test_legacy_sqlite_runtime_banner_accepts_pg_only_ephemeral_shadow(self) -> None:
-        banner = cli._legacy_sqlite_runtime_banner(  # noqa: SLF001
+    def test_control_plane_storage_banner_accepts_pg_only_ephemeral_shadow(self) -> None:
+        banner = cli._control_plane_storage_banner(  # noqa: SLF001
             {
                 "control_plane_postgres_live_mode": "postgres_only",
                 "sqlite_shadow_backend": "shared_memory",
@@ -32,6 +32,9 @@ class CliWorkflowRunnerTest(unittest.TestCase):
 
         self.assertEqual(banner["status"], "pg_only")
         self.assertEqual(banner["severity"], "ok")
+
+    def test_retired_sqlite_tool_confirmation_helper_is_removed(self) -> None:
+        self.assertFalse(hasattr(cli, "_require_legacy_sqlite_tool_confirmation"))
 
     def test_runner_environment_prepends_src_to_pythonpath(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
@@ -423,7 +426,7 @@ class CliWorkflowRunnerTest(unittest.TestCase):
             ),
             mock.patch.object(
                 cli,
-                "SQLiteStore",
+                "ControlPlaneStore",
                 return_value=store,
             ),
             mock.patch.object(
@@ -465,7 +468,7 @@ class CliWorkflowRunnerTest(unittest.TestCase):
             ),
             mock.patch.object(
                 cli,
-                "SQLiteStore",
+                "ControlPlaneStore",
                 return_value=store,
             ),
             mock.patch.object(
@@ -516,7 +519,7 @@ class CliWorkflowRunnerTest(unittest.TestCase):
         with (
             mock.patch.object(cli.AssetCatalog, "discover", return_value=catalog),
             mock.patch.object(cli, "load_settings", return_value=settings),
-            mock.patch.object(cli, "SQLiteStore", return_value=store),
+            mock.patch.object(cli, "ControlPlaneStore", return_value=store),
             mock.patch.object(
                 cli,
                 "rebuild_runtime_control_plane",
@@ -693,7 +696,7 @@ class CliWorkflowRunnerTest(unittest.TestCase):
             ),
             mock.patch.object(
                 cli,
-                "SQLiteStore",
+                "ControlPlaneStore",
                 return_value=store,
             ),
             mock.patch.object(
@@ -750,9 +753,10 @@ class CliWorkflowRunnerTest(unittest.TestCase):
         export_mock.assert_called_once_with(
             runtime_dir=settings.runtime_dir,
             output_path=settings.runtime_dir / "object_sync" / "control_plane" / "control_plane_snapshot.json",
-            sqlite_path=settings.db_path,
+            sqlite_path=None,
             tables=["jobs", "job_result_views"],
             include_all_sqlite_tables=False,
+            source_backend="postgres",
         )
         print_mock.assert_called_once()
 
@@ -774,7 +778,7 @@ class CliWorkflowRunnerTest(unittest.TestCase):
             mock.patch.object(
                 cli.sys,
                 "argv",
-                ["cli", "export-control-plane-snapshot", "--all-sqlite-tables"],
+                ["cli", "export-control-plane-snapshot", "--source-backend", "sqlite", "--all-sqlite-tables"],
             ),
             mock.patch("builtins.print"),
         ):
@@ -783,9 +787,10 @@ class CliWorkflowRunnerTest(unittest.TestCase):
         export_mock.assert_called_once_with(
             runtime_dir=settings.runtime_dir,
             output_path=settings.runtime_dir / "object_sync" / "control_plane" / "control_plane_snapshot.json",
-            sqlite_path=settings.db_path,
+            sqlite_path=None,
             tables=[],
             include_all_sqlite_tables=True,
+            source_backend="sqlite",
         )
 
     def test_sync_control_plane_postgres_command_delegates_to_helper(self) -> None:

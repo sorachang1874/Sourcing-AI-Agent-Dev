@@ -37,6 +37,7 @@ from .harvest_connectors import (
     parse_harvest_profile_payload,
     write_harvest_execution_artifact,
 )
+from .linkedin_url_normalization import normalize_linkedin_profile_url_key
 from .model_provider import ModelClient
 from .profile_registry_utils import (
     extract_profile_registry_aliases_from_payload,
@@ -52,7 +53,7 @@ from .runtime_tuning import (
 )
 from .runtime_environment import external_provider_mode
 from .search_provider import BaseSearchProvider, DuckDuckGoHtmlSearchProvider, search_response_to_record
-from .storage import SQLiteStore
+from .storage import ControlPlaneStore
 
 TECHNICAL_SIGNAL_TOKENS = {
     "engineer",
@@ -441,7 +442,7 @@ class MultiSourceEnricher:
         model_client: ModelClient | None = None,
         search_provider: BaseSearchProvider | None = None,
         worker_runtime: AgentRuntimeCoordinator | None = None,
-        store: SQLiteStore | None = None,
+        store: ControlPlaneStore | None = None,
     ) -> None:
         self.catalog = catalog
         self.model_client = model_client
@@ -1131,7 +1132,7 @@ class MultiSourceEnricher:
             registry_entry = {}
             registry_key = profile_url
             if self.store is not None:
-                registry_key = self.store.normalize_linkedin_profile_url(profile_url)
+                registry_key = normalize_linkedin_profile_url_key(profile_url)
                 registry_entry = dict(registry_entries.get(registry_key) or {})
             cached = _load_harvest_profile_payload_from_registry_or_snapshot(
                 registry_entry=registry_entry,
@@ -1836,7 +1837,7 @@ class MultiSourceEnricher:
             registry_key = normalized_profile_url
             registry_status = ""
             if self.store is not None:
-                registry_key = self.store.normalize_linkedin_profile_url(normalized_profile_url)
+                registry_key = normalize_linkedin_profile_url_key(normalized_profile_url)
                 registry_entry = dict(registry_entries.get(registry_key) or {})
                 registry_status = str(registry_entry.get("status") or "").strip().lower()
                 _record_event(

@@ -26,6 +26,7 @@ from sourcing_agent.enrichment import (
     extract_search_people_rows,
     parse_basic_linkedin_profile_payload,
 )
+from sourcing_agent.linkedin_url_normalization import normalize_linkedin_profile_url_key
 
 
 class EnrichmentHelpersTest(unittest.TestCase):
@@ -1172,7 +1173,7 @@ class EnrichmentHelpersTest(unittest.TestCase):
 
         class _TrackingStore:
             def __init__(self, queued_url: str, events: list[str]) -> None:
-                self.queued_url = queued_url
+                self.queued_url = normalize_linkedin_profile_url_key(queued_url)
                 self.events = events
                 self.lookup_count = 0
 
@@ -1181,11 +1182,8 @@ class EnrichmentHelpersTest(unittest.TestCase):
                     self.queued_url: {"status": "queued"},
                 }
 
-            def normalize_linkedin_profile_url(self, profile_url):
-                return str(profile_url or "").strip()
-
             def get_linkedin_profile_registry(self, profile_url):
-                if str(profile_url or "").strip() == self.queued_url:
+                if normalize_linkedin_profile_url_key(profile_url) == self.queued_url:
                     self.lookup_count += 1
                     self.events.append(f"queued_lookup_{self.lookup_count}")
                     if self.lookup_count >= 2 and "live_fetch" not in self.events:
@@ -1270,7 +1268,7 @@ class EnrichmentHelpersTest(unittest.TestCase):
 
         class _QueuedRawStore:
             def __init__(self, profile_url: str, raw_path: Path) -> None:
-                self.profile_url = profile_url
+                self.profile_url = normalize_linkedin_profile_url_key(profile_url)
                 self.raw_path = raw_path
                 self.fetched_marks: list[str] = []
 
@@ -1282,11 +1280,8 @@ class EnrichmentHelpersTest(unittest.TestCase):
                     }
                 }
 
-            def normalize_linkedin_profile_url(self, profile_url):
-                return str(profile_url or "").strip()
-
             def get_linkedin_profile_registry(self, profile_url):
-                if str(profile_url or "").strip() == self.profile_url:
+                if normalize_linkedin_profile_url_key(profile_url) == self.profile_url:
                     return {
                         "status": "queued",
                         "last_raw_path": str(self.raw_path),

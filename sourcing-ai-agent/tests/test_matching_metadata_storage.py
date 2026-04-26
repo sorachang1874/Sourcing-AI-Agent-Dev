@@ -8,7 +8,7 @@ from sourcing_agent.request_matching import (
     request_family_signature,
     request_signature,
 )
-from sourcing_agent.storage import SQLiteStore
+from sourcing_agent.storage import ControlPlaneStore
 
 
 RAW_GEMINI_PM_REQUEST = {
@@ -27,7 +27,7 @@ STRUCTURED_GEMINI_PM_REQUEST = {
 class MatchingMetadataStorageTest(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
-        self.store = SQLiteStore(Path(self.tempdir.name) / "test.db")
+        self.store = ControlPlaneStore(Path(self.tempdir.name) / "test.db")
 
     def tearDown(self) -> None:
         self.tempdir.cleanup()

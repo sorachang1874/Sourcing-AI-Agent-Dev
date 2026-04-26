@@ -12,7 +12,7 @@ from sourcing_agent.connectors import CompanyIdentity
 from sourcing_agent.domain import Candidate, EvidenceRecord
 from sourcing_agent.seed_discovery import SearchSeedSnapshot
 from sourcing_agent.settings import load_settings
-from sourcing_agent.storage import SQLiteStore
+from sourcing_agent.storage import ControlPlaneStore
 
 
 class CompanyAssetSupplementTest(unittest.TestCase):
@@ -56,7 +56,7 @@ class CompanyAssetSupplementTest(unittest.TestCase):
             )
         )
         (snapshot_dir / "candidate_documents.json").write_text(json.dumps({"candidates": [], "evidence": []}, ensure_ascii=False, indent=2))
-        self.store = SQLiteStore(self.runtime_dir / "sourcing_agent.db")
+        self.store = ControlPlaneStore(self.runtime_dir / "sourcing_agent.db")
         self.settings = load_settings(self.project_root)
 
     def tearDown(self) -> None:

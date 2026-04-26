@@ -8,7 +8,7 @@ from .organization_assets import load_cached_organization_completeness_ledger
 from .source_snapshot_coverage import (
     source_snapshot_selection_has_coverage_proof,
 )
-from .storage import SQLiteStore
+from .storage import ControlPlaneStore
 
 _HARD_LARGE_COMPANY_KEYS = {
     "google",
@@ -437,7 +437,7 @@ def build_organization_execution_profile(
 
 def _select_best_organization_asset_registry_row(
     *,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     target_company: str,
     asset_view: str,
 ) -> dict[str, Any]:
@@ -456,7 +456,7 @@ def _select_best_organization_asset_registry_row(
 def ensure_organization_execution_profile(
     *,
     runtime_dir: str | Path,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     target_company: str,
     asset_view: str = "canonical_merged",
 ) -> dict[str, Any]:
@@ -512,7 +512,7 @@ def ensure_organization_execution_profile(
 def warmup_existing_organization_execution_profiles(
     *,
     runtime_dir: str | Path,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     asset_view: str = "canonical_merged",
     max_companies: int = 0,
 ) -> dict[str, Any]:

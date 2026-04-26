@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, Protocol
 from urllib import error, request
+
 import requests
 
 from .document_extraction import infer_structured_signals_from_payload
@@ -10,7 +12,6 @@ from .domain import JobRequest
 from .query_intent_policy import build_supported_rewrite_policy_prompt_context
 from .runtime_environment import external_provider_mode
 from .settings import ModelProviderSettings, QwenSettings
-
 
 _OUTREACH_LAYER_PROMPT_TEMPLATE_VERSION = "outreach_layering_v3_explicit_greater_china_scope"
 
@@ -331,6 +332,8 @@ class ModelClient(Protocol):
 
     def analyze_page_asset(self, payload: dict[str, Any]) -> dict[str, Any]: ...
 
+    def analyze_public_web_candidate_signals(self, payload: dict[str, Any]) -> dict[str, Any]: ...
+
     def judge_company_equivalence(self, payload: dict[str, Any]) -> dict[str, Any]: ...
 
     def judge_profile_membership(self, payload: dict[str, Any]) -> dict[str, Any]: ...
@@ -457,6 +460,127 @@ class DeterministicModelClient:
             },
             "notes": "Deterministic page analysis fallback.",
         }
+
+    def analyze_public_web_candidate_signals(self, payload: dict[str, Any]) -> dict[str, Any]:
+        candidate = dict(payload.get("candidate") or {})
+        candidate_name = str(candidate.get("candidate_name") or "").strip().lower()
+        current_company = str(candidate.get("current_company") or "").strip().lower()
+        name_tokens = [token for token in re.findall(r"[a-z0-9]+", candidate_name) if len(token) > 1][:4]
+        company_tokens = [token for token in re.findall(r"[a-z0-9]+", current_company) if len(token) > 1][:4]
+        assessments: list[dict[str, Any]] = []
+        for item in list(payload.get("email_candidates") or []):
+            if not isinstance(item, dict):
+                continue
+            email = str(item.get("normalized_value") or item.get("value") or "").strip().lower()
+            local_part = email.split("@", 1)[0]
+            evidence = " ".join(
+                [
+                    str(item.get("source_title") or ""),
+                    str(item.get("source_url") or ""),
+                    str(item.get("evidence_excerpt") or ""),
+                ]
+            ).lower()
+            identity_score = 0.2
+            if name_tokens and any(token in local_part or token in evidence for token in name_tokens):
+                identity_score += 0.35
+            if company_tokens and any(token in evidence for token in company_tokens):
+                identity_score += 0.15
+            if str(item.get("source_family") or "") in {
+                "profile_web_presence",
+                "resume_and_documents",
+                "candidate_publication_presence",
+            }:
+                identity_score += 0.15
+            identity_score = min(identity_score, 0.95)
+            confidence_score = max(float(item.get("confidence_score") or 0.0), identity_score)
+            publishable = bool(item.get("publishable", True))
+            suppression_reason = str(item.get("suppression_reason") or "").strip()
+            if identity_score < 0.35:
+                publishable = False
+                suppression_reason = suppression_reason or "weak_identity_match"
+            assessments.append(
+                {
+                    "email": email,
+                    "email_type": str(item.get("email_type") or "unknown").strip() or "unknown",
+                    "confidence_label": "high" if confidence_score >= 0.72 else "medium" if confidence_score >= 0.45 else "low",
+                    "confidence_score": round(min(confidence_score, 0.95), 2),
+                    "publishable": publishable,
+                    "promotion_status": (
+                        "promotion_recommended"
+                        if publishable and confidence_score >= 0.72 and not suppression_reason
+                        else "suppressed"
+                        if suppression_reason
+                        else "not_promoted"
+                    ),
+                    "suppression_reason": suppression_reason,
+                    "identity_match_label": (
+                        "likely_same_person"
+                        if identity_score >= 0.65
+                        else "needs_review"
+                        if identity_score >= 0.35
+                        else "ambiguous_identity"
+                    ),
+                    "identity_match_score": round(identity_score, 2),
+                    "rationale": "Deterministic public-web signal adjudication fallback.",
+                }
+            )
+        return {
+            "summary": "Deterministic public-web signal adjudication fallback.",
+            "email_assessments": assessments,
+            "link_assessments": self._deterministic_public_web_link_assessments(payload),
+            "academic_summary": _build_deterministic_academic_summary(payload),
+            "notes": [],
+        }
+
+    def _deterministic_public_web_link_assessments(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
+        candidate = dict(payload.get("candidate") or {})
+        candidate_name = str(candidate.get("candidate_name") or "").strip().lower()
+        current_company = str(candidate.get("current_company") or "").strip().lower()
+        name_tokens = [token for token in re.findall(r"[a-z0-9]+", candidate_name) if len(token) > 1][:4]
+        company_tokens = [token for token in re.findall(r"[a-z0-9]+", current_company) if len(token) > 1][:4]
+        assessments: list[dict[str, Any]] = []
+        for item in list(payload.get("entry_links") or []):
+            if not isinstance(item, dict):
+                continue
+            url = str(item.get("normalized_url") or item.get("url") or "").strip()
+            text = " ".join(
+                [
+                    str(item.get("title") or ""),
+                    str(item.get("snippet") or ""),
+                    url,
+                ]
+            ).lower()
+            identity_score = 0.15
+            if name_tokens and all(token in text for token in name_tokens[:2]):
+                identity_score += 0.45
+            elif name_tokens and any(token in text for token in name_tokens):
+                identity_score += 0.2
+            if company_tokens and any(token in text for token in company_tokens):
+                identity_score += 0.1
+            signal_type = str(item.get("entry_type") or "other").strip() or "other"
+            if signal_type in {"github_url", "x_url", "substack_url", "scholar_url", "personal_homepage", "academic_profile"}:
+                identity_score += 0.1
+            if signal_type == "company_page":
+                identity_score -= 0.05
+            identity_score = max(0.0, min(identity_score, 0.95))
+            label = (
+                "likely_same_person"
+                if identity_score >= 0.65
+                else "needs_review"
+                if identity_score >= 0.35
+                else "ambiguous_identity"
+            )
+            assessments.append(
+                {
+                    "url": url,
+                    "signal_type": signal_type,
+                    "identity_match_label": label,
+                    "identity_match_score": round(identity_score, 2),
+                    "confidence_label": "high" if identity_score >= 0.75 else "medium" if identity_score >= 0.45 else "low",
+                    "rationale": "Deterministic public-web link adjudication fallback.",
+                }
+            )
+        return assessments
 
     def judge_company_equivalence(self, payload: dict[str, Any]) -> dict[str, Any]:
         observed = list(payload.get("observed_companies") or [])
@@ -681,6 +805,15 @@ class QwenResponsesModelClient(DeterministicModelClient):
             }
         )
         return result
+
+    def analyze_public_web_candidate_signals(self, payload: dict[str, Any]) -> dict[str, Any]:
+        fallback = super().analyze_public_web_candidate_signals(payload)
+        response = self._safe_text_prompt(
+            _build_public_web_signal_adjudication_prompt(),
+            json.dumps(payload, ensure_ascii=False),
+        )
+        parsed = _safe_json_object(response)
+        return _normalize_public_web_signal_adjudication(parsed, fallback=fallback)
 
     def plan_search_strategy(self, request: JobRequest, draft_payload: dict[str, Any]) -> dict[str, Any]:
         response = self._safe_text_prompt(
@@ -968,6 +1101,16 @@ class OpenAICompatibleChatModelClient(DeterministicModelClient):
         )
         return result
 
+    def analyze_public_web_candidate_signals(self, payload: dict[str, Any]) -> dict[str, Any]:
+        fallback = super().analyze_public_web_candidate_signals(payload)
+        response = self._safe_text_prompt(
+            _build_public_web_signal_adjudication_prompt(),
+            json.dumps(payload, ensure_ascii=False),
+            max_tokens=900,
+        )
+        parsed = _safe_json_object(response)
+        return _normalize_public_web_signal_adjudication(parsed, fallback=fallback)
+
     def plan_search_strategy(self, request: JobRequest, draft_payload: dict[str, Any]) -> dict[str, Any]:
         response = self._safe_text_prompt(
             "You are designing a sourcing search plan. Return strict JSON with keys "
@@ -1175,6 +1318,230 @@ def _safe_json_object(text: str) -> dict[str, Any]:
     except json.JSONDecodeError:
         return {}
     return payload if isinstance(payload, dict) else {}
+
+
+def _build_public_web_signal_adjudication_prompt() -> str:
+    return (
+        "You are adjudicating public-web evidence for recruiter-facing candidate research. "
+        "Return strict JSON with keys summary,email_assessments,link_assessments,academic_summary,notes. "
+        "email_assessments must be a list of objects with keys email,email_type,confidence_label,confidence_score,"
+        "publishable,promotion_status,suppression_reason,identity_match_label,identity_match_score,rationale. "
+        "link_assessments must be a list of objects with keys url,signal_type,identity_match_label,"
+        "identity_match_score,confidence_label,rationale. "
+        "academic_summary must be an object with keys research_directions,notable_work,academic_affiliations,"
+        "publication_signals,outreach_angles,confidence_label,evidence_sources. "
+        "research_directions, academic_affiliations, publication_signals, outreach_angles, and evidence_sources must be arrays "
+        "of concise strings. notable_work must be a list of objects with keys title,year,venue,why_it_matters,evidence. "
+        "email_type must be one of personal,academic,company,generic,unknown. "
+        "confidence_label must be high, medium, or low. promotion_status must be not_promoted,"
+        "promotion_recommended,rejected,or suppressed. "
+        "identity_match_label must be one of confirmed,likely_same_person,needs_review,ambiguous_identity,not_same_person. "
+        "Use high confidence only when the source plausibly belongs to the target candidate, such as a personal homepage, "
+        "CV/resume, paper PDF, university profile, or strong company-domain evidence. "
+        "Suppress generic inboxes, unrelated coauthor emails, same-name collisions, and boilerplate contacts. "
+        "Suppress paper-title artifacts that look like emails, such as Learning@Scale.Conference. "
+        "Do not infer a real address from Google Scholar verified-domain text such as Verified email at google.com. "
+        "For grouped addresses such as {barryz, lesli}@domain, judge each expanded address separately and identify whether it is "
+        "the candidate's own address or a coauthor/lab group address. "
+        "For paper PDFs, treat an email as high confidence only when the surrounding author block or local-part evidence ties it "
+        "to the target candidate; otherwise mark coauthor or lab addresses as needs_review or suppressed. "
+        "For X/Twitter, Substack, GitHub, Scholar, and homepage links discovered only from search results, do not mark confirmed "
+        "solely because the name matches. Prefer needs_review or ambiguous_identity unless URL/title/snippet/fetched content "
+        "contains strong identity evidence such as matching employer, education, homepage cross-links, or LinkedIn context. "
+        "Use the candidate LinkedIn URL/key, headline, known work history, education, current company, source URL, title, "
+        "snippet, search_evidence, and evidence_slices to judge identity. search_evidence contains DataForSEO/search-result "
+        "URL/title/snippet/query context and is useful for platform pages that cannot be fetched. evidence_slices are source-aware model-safe excerpts from fetched "
+        "GitHub, Scholar, X/Twitter, Substack, homepage, academic profile, resume/CV, and publication pages; do not assume "
+        "raw HTML/PDF is available in the prompt. "
+        "When Scholar, publication, academic profile, or personal homepage evidence is present, summarize the candidate's "
+        "research directions, important publications or technical achievements, academic affiliations, and practical outreach "
+        "angles. First decide whether each evidence slice belongs to the target candidate; do not use same-name Scholar pages, "
+        "coauthor profiles, unrelated university profiles, or conflicting profiles in academic_summary. Keep academic_summary "
+        "grounded in evidence_slices that you judge confirmed or likely_same_person, and mark low confidence when identity or "
+        "evidence is weak. "
+        "Do not promote anything to primary email; only recommend promotion when a human should review it."
+    )
+
+
+def _normalize_public_web_signal_adjudication(
+    parsed: dict[str, Any],
+    *,
+    fallback: dict[str, Any],
+) -> dict[str, Any]:
+    if not parsed:
+        return fallback
+    normalized: dict[str, Any] = {
+        "summary": str(parsed.get("summary") or fallback.get("summary") or "").strip(),
+        "email_assessments": [],
+        "link_assessments": [],
+        "academic_summary": _normalize_academic_summary(
+            parsed.get("academic_summary"),
+            fallback=dict(fallback.get("academic_summary") or {}),
+        ),
+        "notes": [str(item).strip() for item in list(parsed.get("notes") or []) if str(item).strip()][:10],
+    }
+    for item in list(parsed.get("email_assessments") or []):
+        if not isinstance(item, dict):
+            continue
+        email = str(item.get("email") or item.get("value") or "").strip().lower()
+        if not email:
+            continue
+        confidence_label = str(item.get("confidence_label") or "low").strip().lower()
+        if confidence_label not in {"high", "medium", "low"}:
+            confidence_label = "low"
+        try:
+            confidence_score = max(0.0, min(float(item.get("confidence_score") or 0.0), 1.0))
+        except (TypeError, ValueError):
+            confidence_score = 0.0
+        promotion_status = str(item.get("promotion_status") or "not_promoted").strip().lower()
+        if promotion_status not in {"not_promoted", "promotion_recommended", "rejected", "suppressed"}:
+            promotion_status = "not_promoted"
+        try:
+            identity_match_score = max(0.0, min(float(item.get("identity_match_score") or 0.0), 1.0))
+        except (TypeError, ValueError):
+            identity_match_score = 0.0
+        normalized["email_assessments"].append(
+            {
+                "email": email,
+                "email_type": str(item.get("email_type") or "unknown").strip().lower() or "unknown",
+                "confidence_label": confidence_label,
+                "confidence_score": round(confidence_score, 2),
+                "publishable": bool(item.get("publishable", False)),
+                "promotion_status": promotion_status,
+                "suppression_reason": str(item.get("suppression_reason") or "").strip(),
+                "identity_match_label": str(item.get("identity_match_label") or "needs_review").strip(),
+                "identity_match_score": round(identity_match_score, 2),
+                "rationale": str(item.get("rationale") or "").strip(),
+            }
+        )
+    for item in list(parsed.get("link_assessments") or []):
+        if isinstance(item, dict):
+            try:
+                identity_match_score = max(0.0, min(float(item.get("identity_match_score") or 0.0), 1.0))
+            except (TypeError, ValueError):
+                identity_match_score = 0.0
+            normalized["link_assessments"].append(
+                {
+                    "url": str(item.get("url") or "").strip(),
+                    "signal_type": str(item.get("signal_type") or "").strip(),
+                    "identity_match_label": str(item.get("identity_match_label") or "needs_review").strip(),
+                    "identity_match_score": round(identity_match_score, 2),
+                    "confidence_label": str(item.get("confidence_label") or "low").strip(),
+                    "rationale": str(item.get("rationale") or "").strip(),
+                }
+            )
+    if not normalized["email_assessments"] and fallback.get("email_assessments"):
+        normalized["email_assessments"] = list(fallback.get("email_assessments") or [])
+    if not normalized["link_assessments"] and fallback.get("link_assessments"):
+        normalized["link_assessments"] = list(fallback.get("link_assessments") or [])
+    return normalized
+
+
+def _build_deterministic_academic_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    research_directions: list[str] = []
+    affiliations: list[str] = []
+    publication_signals: list[str] = []
+    notable_work: list[dict[str, str]] = []
+    evidence_sources: list[str] = []
+    for evidence_slice in list(payload.get("evidence_slices") or []):
+        if not isinstance(evidence_slice, dict):
+            continue
+        source_type = str(evidence_slice.get("source_type") or "").strip()
+        if source_type not in {"google_scholar_profile", "publication_pdf", "academic_profile", "personal_homepage", "resume_or_cv"}:
+            continue
+        source_url = str(evidence_slice.get("final_url") or evidence_slice.get("source_url") or "").strip()
+        if source_url:
+            evidence_sources.append(source_url)
+        structured = dict(evidence_slice.get("structured_signals") or {})
+        for item in list(structured.get("research_interests") or []):
+            text = str(item or "").strip()
+            if text and text not in research_directions:
+                research_directions.append(text)
+        for item in list(structured.get("affiliation_signals") or []):
+            if not isinstance(item, dict):
+                continue
+            organization = str(item.get("organization") or "").strip()
+            if organization and organization not in affiliations:
+                affiliations.append(organization)
+        for item in list(structured.get("scholar_publications") or []):
+            if not isinstance(item, dict):
+                continue
+            title = str(item.get("title") or "").strip()
+            if not title:
+                continue
+            record = {
+                "title": title,
+                "year": str(item.get("year") or "").strip(),
+                "venue": str(item.get("venue") or "").strip(),
+                "why_it_matters": "High-signal Google Scholar publication candidate.",
+                "evidence": str(item.get("citations") or item.get("authors") or source_url).strip(),
+            }
+            if record not in notable_work:
+                notable_work.append({key: value for key, value in record.items() if value})
+                publication_signals.append(title)
+    confidence_label = "high" if notable_work or len(research_directions) >= 2 else "medium" if research_directions or affiliations else "low"
+    outreach_angles = []
+    for direction in research_directions[:3]:
+        outreach_angles.append(f"Reference their work in {direction}.")
+    for work in notable_work[:2]:
+        title = str(work.get("title") or "").strip()
+        if title:
+            outreach_angles.append(f"Mention the publication/technical work: {title}.")
+    return {
+        "research_directions": research_directions[:8],
+        "notable_work": notable_work[:8],
+        "academic_affiliations": affiliations[:6],
+        "publication_signals": publication_signals[:8],
+        "outreach_angles": outreach_angles[:6],
+        "confidence_label": confidence_label,
+        "evidence_sources": _dedupe_strings(evidence_sources)[:8],
+    }
+
+
+def _normalize_academic_summary(value: Any, *, fallback: dict[str, Any] | None = None) -> dict[str, Any]:
+    raw = value if isinstance(value, dict) else {}
+    fallback = fallback or {}
+    confidence_label = str(raw.get("confidence_label") or fallback.get("confidence_label") or "low").strip().lower()
+    if confidence_label not in {"high", "medium", "low"}:
+        confidence_label = "low"
+    notable_work: list[dict[str, str]] = []
+    for item in list(raw.get("notable_work") or fallback.get("notable_work") or []):
+        if isinstance(item, dict):
+            record = {
+                key: str(item.get(key) or "").strip()
+                for key in ("title", "year", "venue", "why_it_matters", "evidence")
+                if str(item.get(key) or "").strip()
+            }
+            if record and record not in notable_work:
+                notable_work.append(record)
+        elif str(item or "").strip():
+            notable_work.append({"title": str(item).strip()})
+    return {
+        "research_directions": _string_list_or_fallback(raw.get("research_directions"), fallback.get("research_directions"))[:10],
+        "notable_work": notable_work[:10],
+        "academic_affiliations": _string_list_or_fallback(raw.get("academic_affiliations"), fallback.get("academic_affiliations"))[:8],
+        "publication_signals": _string_list_or_fallback(raw.get("publication_signals"), fallback.get("publication_signals"))[:10],
+        "outreach_angles": _string_list_or_fallback(raw.get("outreach_angles"), fallback.get("outreach_angles"))[:8],
+        "confidence_label": confidence_label,
+        "evidence_sources": _string_list_or_fallback(raw.get("evidence_sources"), fallback.get("evidence_sources"))[:10],
+    }
+
+
+def _string_list_or_fallback(value: Any, fallback: Any) -> list[str]:
+    items = value if isinstance(value, list) else fallback if isinstance(fallback, list) else []
+    return _dedupe_strings([str(item or "").strip() for item in items if str(item or "").strip()])
+
+
+def _dedupe_strings(items: list[str]) -> list[str]:
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        normalized = str(item or "").strip()
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            deduped.append(normalized)
+    return deduped
+
 
 def _extract_openai_chat_text(payload: dict[str, Any]) -> str:
     for choice in payload.get("choices", []) or []:

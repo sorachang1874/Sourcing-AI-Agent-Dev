@@ -287,7 +287,7 @@ Thinking Machines Lab 这轮人工 review 的实际结果：
 当前已实现并验证：
 
 - `export-company-handoff-bundle --company thinkingmachineslab`
-- `export-sqlite-snapshot`
+- `export-control-plane-snapshot-bundle`
 - `restore-asset-bundle --manifest <bundle_manifest.json> --target-runtime-dir <runtime_dir>`
 
 这意味着后续切换到新账号、新机器或服务器环境时，可以：

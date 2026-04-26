@@ -6,7 +6,7 @@ import unittest
 import unittest.mock
 from urllib.parse import parse_qs, urlsplit
 
-from sourcing_agent.asset_sync import AssetBundleManager
+from sourcing_agent.asset_sync import AssetBundleError, AssetBundleManager
 from sourcing_agent.object_storage import ObjectStorageConfig, build_object_storage_client
 
 
@@ -392,33 +392,32 @@ class ObjectStorageSyncTest(unittest.TestCase):
         self.assertEqual(upload["transfer_mode"], "archive")
         self.assertEqual(upload["uploaded_file_count"], 3)
 
-    def test_restore_sqlite_snapshot_can_materialize_archive_bundle(self) -> None:
-        sqlite_path = self.runtime_dir / "sourcing_agent.db"
-        sqlite_path.write_bytes(b"old-db")
-        export = self.bundle_manager.export_sqlite_snapshot()
-        upload = self.bundle_manager.upload_bundle(export["manifest_path"], self.client, archive_mode="tar")
-        download = self.bundle_manager.download_bundle(
-            bundle_kind=upload["bundle_kind"],
-            bundle_id=upload["bundle_id"],
-            client=self.client,
-            output_dir=self.project_root / "downloaded-sqlite-archive",
+    def test_upload_rejects_retired_sqlite_snapshot_manifest(self) -> None:
+        bundle_root = self.runtime_dir / "asset_exports" / "retired-sqlite"
+        bundle_root.mkdir(parents=True, exist_ok=True)
+        (bundle_root / "bundle_manifest.json").write_text(
+            json.dumps(
+                {
+                    "bundle_kind": "sqlite_snapshot",
+                    "bundle_id": "retired-sqlite",
+                    "files": [],
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
         )
 
-        sqlite_path.write_bytes(b"new-db")
-        restore = self.bundle_manager.restore_sqlite_snapshot(download["manifest_path"])
+        with self.assertRaisesRegex(AssetBundleError, "sqlite_snapshot bundles have been retired"):
+            self.bundle_manager.upload_bundle(bundle_root / "bundle_manifest.json", self.client)
 
-        self.assertEqual(restore["status"], "sqlite_restored")
-        self.assertEqual(sqlite_path.read_bytes(), b"old-db")
-
-    def test_restore_sqlite_snapshot_creates_backup(self) -> None:
-        sqlite_path = self.runtime_dir / "sourcing_agent.db"
-        sqlite_path.write_bytes(b"old-db")
-        export = self.bundle_manager.export_sqlite_snapshot()
-        sqlite_path.write_bytes(b"new-db")
-        restore = self.bundle_manager.restore_sqlite_snapshot(export["manifest_path"])
-        self.assertEqual(restore["status"], "sqlite_restored")
-        self.assertTrue(Path(restore["backup_path"]).exists())
-        self.assertEqual(sqlite_path.read_bytes(), b"old-db")
+    def test_download_rejects_retired_sqlite_snapshot_kind(self) -> None:
+        with self.assertRaisesRegex(AssetBundleError, "sqlite_snapshot bundles have been retired"):
+            self.bundle_manager.download_bundle(
+                bundle_kind="sqlite_snapshot",
+                bundle_id="retired-sqlite",
+                client=self.client,
+            )
 
     def test_s3_compatible_upload_file_uses_multipart_for_large_files(self) -> None:
         source = self.project_root / "multipart.bin"

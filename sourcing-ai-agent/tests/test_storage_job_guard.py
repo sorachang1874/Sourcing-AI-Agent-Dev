@@ -1,13 +1,13 @@
 import tempfile
 import unittest
 
-from sourcing_agent.storage import SQLiteStore
+from sourcing_agent.storage import ControlPlaneStore
 
 
 class StorageJobGuardTest(unittest.TestCase):
     def test_save_job_does_not_regress_terminal_job_to_running(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
-            store = SQLiteStore(f"{tempdir}/test.db")
+            store = ControlPlaneStore(f"{tempdir}/test.db")
             job_id = "workflow-terminal-1"
             request_payload = {"raw_user_request": "我想要OpenAI做Reasoning方向的人"}
             plan_payload = {"target_company": "OpenAI"}

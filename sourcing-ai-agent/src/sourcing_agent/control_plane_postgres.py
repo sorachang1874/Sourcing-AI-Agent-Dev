@@ -35,6 +35,11 @@ DEFAULT_CONTROL_PLANE_TABLES = [
     "target_candidates",
     "asset_default_pointers",
     "asset_default_pointer_history",
+    "target_candidate_public_web_batches",
+    "target_candidate_public_web_runs",
+    "person_public_web_assets",
+    "person_public_web_signals",
+    "target_candidate_public_web_promotions",
     "frontend_history_links",
     "agent_runtime_sessions",
     "agent_trace_spans",
@@ -413,14 +418,19 @@ def export_control_plane_snapshot(
     sqlite_path: str | Path | None = None,
     tables: list[str] | None = None,
     include_all_sqlite_tables: bool = False,
+    source_backend: str = "auto",
 ) -> dict[str, Any]:
     runtime_root = Path(runtime_dir).expanduser()
     db_path = _resolve_sqlite_connect_target(runtime_dir=runtime_root, sqlite_path=sqlite_path)
-    source_backend = "sqlite"
+    requested_source_backend = str(source_backend or "auto").strip().lower() or "auto"
+    if requested_source_backend not in {"auto", "postgres", "sqlite"}:
+        raise ValueError("source_backend must be one of: auto, postgres, sqlite")
+    resolved_source_backend = "sqlite"
     resolved_output_path = Path(output_path).expanduser()
     resolved_output_path.parent.mkdir(parents=True, exist_ok=True)
     table_summaries: dict[str, Any] = {}
-    if _sqlite_export_source_exists(db_path):
+    sqlite_source_exists = _sqlite_export_source_exists(db_path)
+    if requested_source_backend in {"auto", "sqlite"} and sqlite_source_exists:
         connection = _connect_sqlite(db_path)
         connection.row_factory = sqlite3.Row
         try:
@@ -434,7 +444,7 @@ def export_control_plane_snapshot(
                 output_path=resolved_output_path,
                 runtime_root=runtime_root,
                 sqlite_path=str(db_path),
-                source_backend=source_backend,
+                source_backend=resolved_source_backend,
                 include_all_sqlite_tables=include_all_sqlite_tables,
                 requested_tables=selected_tables,
                 table_writer=lambda handle, table_name: _write_sqlite_snapshot_table_json(
@@ -447,6 +457,8 @@ def export_control_plane_snapshot(
         finally:
             connection.close()
     else:
+        if requested_source_backend == "sqlite":
+            raise FileNotFoundError(f"SQLite control-plane source is unavailable: {db_path}")
         effective_dsn = resolve_control_plane_postgres_dsn(runtime_root)
         if not effective_dsn:
             raise FileNotFoundError(f"Control-plane source is unavailable: {db_path}")
@@ -455,7 +467,7 @@ def export_control_plane_snapshot(
                 ensure_local_postgres_started(runtime_root)
             except Exception:
                 pass
-        source_backend = "postgres"
+        resolved_source_backend = "postgres"
         psycopg = _import_psycopg()
         with _connect_postgres(effective_dsn, psycopg=psycopg) as connection:
             with connection.cursor() as cursor:
@@ -468,8 +480,8 @@ def export_control_plane_snapshot(
                 table_summaries = _write_control_plane_snapshot_json(
                     output_path=resolved_output_path,
                     runtime_root=runtime_root,
-                    sqlite_path=str(db_path),
-                    source_backend=source_backend,
+                    sqlite_path="" if requested_source_backend == "postgres" else str(db_path),
+                    source_backend=resolved_source_backend,
                     include_all_sqlite_tables=include_all_sqlite_tables,
                     requested_tables=selected_tables,
                     table_writer=lambda handle, table_name: _write_postgres_snapshot_table_json(
@@ -481,7 +493,7 @@ def export_control_plane_snapshot(
                 )
     return {
         "status": "exported",
-        "source_backend": source_backend,
+        "source_backend": resolved_source_backend,
         "output_path": str(resolved_output_path),
         "table_count": len(table_summaries),
         "tables": dict(table_summaries),

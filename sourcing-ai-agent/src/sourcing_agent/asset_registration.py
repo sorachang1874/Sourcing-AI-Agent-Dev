@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .company_registry import normalize_company_key
-from .storage import SQLiteStore
+from .storage import ControlPlaneStore
 
 
 def _normalize_string_list(values: Any) -> list[str]:
@@ -64,7 +64,7 @@ def _aggregate_snapshot_step(entries: list[dict[str, Any]]) -> dict[str, Any]:
 def sync_company_asset_registration(
     *,
     runtime_dir: str | Path,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     target_company: str,
     snapshot_id: str,
     asset_view: str = "canonical_merged",

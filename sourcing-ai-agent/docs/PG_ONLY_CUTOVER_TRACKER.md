@@ -8,12 +8,14 @@
 Hosted / ECS runtime must treat Postgres as the only live authoritative control-plane store.
 
 Allowed:
-- ephemeral in-memory SQLite shadow used only as compatibility scaffolding inside `SQLiteStore`
+- ephemeral in-memory SQLite shadow used only as compatibility scaffolding inside `ControlPlaneStore`
 
 Not allowed:
 - disk-backed `runtime/sourcing_agent.db` or `runtime/control_plane.shadow.db` acting as live control-plane truth
 - hosted backend silently starting without `SOURCING_CONTROL_PLANE_POSTGRES_DSN`
 - hosted runtime falling back to SQLite because PG env was not sourced
+- production runtime using a SQLite control-plane emergency override
+- `postgres_only` runtime using disk-backed SQLite shadow
 
 ## Current Status
 
@@ -52,17 +54,21 @@ As of `2026-04-23`, the main remaining hosted leak identified in this round was:
     - live mode is not `postgres_only`
     - SQLite shadow backend is disk-backed instead of `shared_memory`
   - production runtime now requires PG even if the startup script forgot `SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES=1`
-  - the only production SQLite escape hatch is explicit emergency mode:
-    - `SOURCING_ALLOW_PRODUCTION_SQLITE_CONTROL_PLANE=1`
-  - this keeps PG-only as a code-level runtime contract, not only a shell-script convention
+  - this kept PG-only as a code-level runtime contract, not only a shell-script convention
+- `2026-04-25` storage-surface closeout:
+  - production no longer accepts `SOURCING_ALLOW_PRODUCTION_SQLITE_CONTROL_PLANE=1`
+  - `postgres_only` mode rejects `SOURCING_PG_ONLY_SQLITE_BACKEND=disk`
+  - the runtime store facade is now named `ControlPlaneStore`
+  - LinkedIn URL key normalization moved to a storage-neutral helper
+  - legacy SQLite export/restore CLI commands were removed; `sqlite_snapshot` upload/download/import/restore is retired
 
 - `src/sourcing_agent/service_daemon.py`
   - generated worker-daemon systemd unit now carries PG-only env when a DSN is present at render time
   - avoids daemon-side drift where API is PG-only but `run-worker-daemon-service` still boots without PG env
 
 - `src/sourcing_agent/cli.py`
-  - `show-control-plane-runtime` now emits `legacy_sqlite_banner`
-  - non-`postgres_only` runtime is explicitly marked as legacy/emergency with migration exit instructions
+  - `show-control-plane-runtime` now emits `control_plane_storage_banner`
+  - non-`postgres_only` runtime is marked as an error with migration exit instructions
   - `postgres_only + shared_memory` is marked as the expected live contract
 
 ## ECS Verification Completed
@@ -103,7 +109,6 @@ As of `2026-04-23`, the main remaining hosted leak identified in this round was:
 - Validate the same `OpenAI / 20260423T165904` family-aware shard rows after next ECS deploy / sync cycle
 - After hosted redeploy, verify the same guardrails on ECS with a real job launch
 - The old disk SQLite files under `runtime/` are still retained as backup artifacts, but are no longer the live authoritative path.
-- Continue shrinking legacy SQLite-specific export / restore paths so they remain backup-only tooling, not operational dependencies.
+- Legacy SQLite-specific export / restore paths are retired; keep any remaining SQLite code migration-only or ephemeral-shadow-only.
 - Normalize remaining docs / runbooks that still show raw `python -m sourcing_agent.cli serve` examples without PG-only env context.
-- Next code-level cleanup should add explicit confirmation prompts / flags to legacy SQLite export-restore commands so they cannot be mistaken for a live hosted path.
-- If emergency SQLite mode is ever used in production, record it as an incident and migrate the resulting control-plane state back into PG before normal traffic resumes.
+- If any production process is discovered using disk SQLite control-plane state, treat it as an incident and migrate the resulting state back into PG before normal traffic resumes.

@@ -3,7 +3,7 @@
 > Status: Current first-party doc. Treat this file as active guidance, but keep it aligned with `docs/INDEX.md` and `PROGRESS.md` when runtime contracts change.
 
 
-> Current default: hosted bootstrap should restore `Postgres control plane + control_plane_snapshot + company_snapshot`. `sqlite_snapshot` is now a legacy backup/portability alias.
+> Current default: hosted bootstrap restores `Postgres control plane + control_plane_snapshot + company_snapshot`. `sqlite_snapshot` is retired and no longer has product CLI/import/restore support.
 
 ## Goal
 
@@ -178,7 +178,7 @@ mkdir -p runtime/secrets runtime/asset_imports runtime/vendor
 2. 再恢复需要的 canonical `company_snapshot`
 
 不要把 `company_handoff` 当成默认 server bootstrap 入口，因为它更重，也更容易把历史测试态文件一起带回。
-`sqlite_snapshot` 现在只保留 backup / portability 语义，不再是 hosted 默认恢复主路径。
+`sqlite_snapshot` 已退役；旧包不应进入 hosted bootstrap。
 
 默认推荐直接使用统一导入命令 `import-cloud-assets`，而不是手工串联 `download-asset-bundle -> restore-* -> backfill-*`。
 

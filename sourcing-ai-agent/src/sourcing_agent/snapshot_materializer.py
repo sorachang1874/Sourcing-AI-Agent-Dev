@@ -18,6 +18,7 @@ from .enrichment import (
     _profile_matches_candidate,
     extract_linkedin_slug,
 )
+from .linkedin_url_normalization import normalize_linkedin_profile_url_key
 from .model_provider import ModelClient
 from .seed_discovery import SearchSeedSnapshot, build_candidates_from_seed_snapshot
 from .snapshot_state import (
@@ -27,7 +28,7 @@ from .snapshot_state import (
     read_json_dict as _read_json_dict,
     read_json_list as _read_json_list,
 )
-from .storage import SQLiteStore
+from .storage import ControlPlaneStore
 from .runtime_tuning import resolved_materialization_global_writer_budget, runtime_inflight_slot
 
 
@@ -36,7 +37,7 @@ class SnapshotMaterializer:
         self,
         *,
         runtime_dir: Path,
-        store: SQLiteStore,
+        store: ControlPlaneStore,
         acquisition_engine: AcquisitionEngine,
         model_client: ModelClient | None = None,
     ) -> None:
@@ -566,9 +567,7 @@ class SnapshotMaterializer:
                 if not normalized_requested_profile_url or normalized_requested_profile_url in seen_profile_urls:
                     continue
                 seen_profile_urls.add(normalized_requested_profile_url)
-                normalized_registry_key = normalized_requested_profile_url
-                if self.store is not None:
-                    normalized_registry_key = self.store.normalize_linkedin_profile_url(normalized_requested_profile_url)
+                normalized_registry_key = normalize_linkedin_profile_url_key(normalized_requested_profile_url)
                 payload = _load_harvest_profile_payload_from_registry_or_snapshot(
                     registry_entry=dict(registry_entries.get(normalized_registry_key) or {}),
                     snapshot_dir=snapshot_dir,

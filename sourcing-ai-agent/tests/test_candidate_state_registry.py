@@ -1,13 +1,13 @@
 import tempfile
 import unittest
 
-from sourcing_agent.storage import SQLiteStore
+from sourcing_agent.storage import ControlPlaneStore
 
 
 class CandidateStateRegistryTest(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
-        self.store = SQLiteStore(f"{self.tempdir.name}/state.db")
+        self.store = ControlPlaneStore(f"{self.tempdir.name}/state.db")
 
     def tearDown(self) -> None:
         self.tempdir.cleanup()

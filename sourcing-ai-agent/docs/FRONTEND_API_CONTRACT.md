@@ -34,6 +34,21 @@
   - 跨 workflow 的目标候选人池，应通过 `GET/POST /api/target-candidates` 读写
   - 将某个已完成 workflow 的候选人批量导入目标池，应通过 `POST /api/target-candidates/import-from-job`
   - 导出目标候选人 CSV/profile bundle，应通过 `POST /api/target-candidates/export`
+  - 目标候选人 Public Web Search 应通过 `POST /api/target-candidates/public-web-search` 触发，通过 `GET /api/target-candidates/public-web-search` 查询 batch/run 状态
+    - POST 只做幂等排队，不在请求线程里跑 DataForSEO/fetch/LLM
+    - 返回的 per-candidate run 是事实来源；batch 只做多选操作的聚合状态
+    - 前端应按 `record_id` 将最新 run 映射到候选人卡片，稳定消费 `status / phase / summary / query_manifest / search_checkpoint / analysis_checkpoint / updated_at`
+    - `summary.primary_links`、`summary.entry_link_count`、`summary.fetched_document_count`、`summary.email_candidate_count` 和 `summary.promotion_recommended_email_count` 可作为卡片级紧凑展示；完整 grouped signals/detail 必须通过 record detail API 获取，不应从 raw artifacts 反推
+    - 目标候选人 Public Web detail 应通过 `GET /api/target-candidates/{record_id}/public-web-search` 获取，响应包含 `latest_run`、`person_asset`、`signals`、`email_candidates`、`profile_links`、`grouped_signals` 和 `evidence_links`
+    - detail 响应只返回 first-class `person_public_web_signals` 的 model-safe summaries/evidence links；不返回 raw HTML/PDF/search payload、`search_checkpoint` 或 raw document paths
+    - detail 中的 profile/public link signal 会携带 `link_shape_warnings` 和 `clean_profile_link`
+      - `x_link_not_profile`、`substack_link_not_profile_or_publication`、`github_repository_or_deep_link_not_profile`、`scholar_link_not_profile` 必须作为 UI warning 展示
+      - 即使 identity label 是 `likely_same_person`，`clean_profile_link=false` 的链接也只能作为 evidence/review signal，不应渲染成 clean profile 或 primary link
+    - Public Web email candidates 可以展示为候选联系方式，但不能直接写入 `target_candidates.primary_email`；提升为 primary email 必须通过 `POST /api/target-candidates/{record_id}/public-web-promotions` 先写 promotion record
+    - Public Web link/email promotion 状态可通过 `GET /api/target-candidates/{record_id}/public-web-promotions` 或 detail 响应中的 `promotions` / `promotion_summary` 读取
+    - Web Search 专用导出应调用 `POST /api/target-candidates/public-web-export`，默认 `mode=promoted_only`，只导出人工确认的 model-safe signals/evidence links/promotions/manifest，不包含 raw HTML/PDF/search payload
+    - 目标候选人页的 Public Web export 数字表示当前选择/筛选范围内的 target-candidate 数量，不表示这些候选人都已有确认 Public Web 结果；`promoted_only` 包只会包含已人工确认的 Public Web signals
+    - 如果本地前端提示 Public Web Search 接口不可用并且该 GET 返回 404，优先怀疑后端仍是旧进程；重启当前分支的 backend/worker 后再排查契约
   - 前端仍可保留本地事件广播，只用于刷新 UI，不用于持久化
 - 前端历史搜索记录现在也应以后端为准
   - Sidebar 列表统一读 `GET /api/frontend-history?limit=24`
@@ -75,6 +90,10 @@
   - `#/$defs/JobProgressResponse`
   - `#/$defs/JobResultsResponse`
   - `#/$defs/RetrievalJobResponse`
+  - `#/$defs/TargetCandidatePublicWebSearchState`
+  - `#/$defs/TargetCandidatePublicWebStartResponse`
+  - `#/$defs/TargetCandidatePublicWebDetailResponse`
+  - `#/$defs/TargetCandidatePublicWebPromotionResponse`
   - `#/$defs/RefinementCompileResponse`
   - `#/$defs/RefinementApplyResponse`
 

@@ -111,6 +111,36 @@ def _build_handler(orchestrator: SourcingOrchestrator):
                             follow_up_status=str(query_payload.get("follow_up_status") or ""),
                         ),
                     )
+                if path == "/api/target-candidates/public-web-search":
+                    return self._send_json(
+                        HTTPStatus.OK,
+                        orchestrator.list_target_candidate_public_web_searches(query_payload),
+                    )
+                public_web_detail_match = re.fullmatch(r"/api/target-candidates/([^/]+)/public-web-search", path)
+                if public_web_detail_match:
+                    detail = orchestrator.get_target_candidate_public_web_search_detail(
+                        public_web_detail_match.group(1)
+                    )
+                    status = HTTPStatus.OK
+                    if detail.get("status") == "not_found":
+                        status = HTTPStatus.NOT_FOUND
+                    elif detail.get("status") == "invalid":
+                        status = HTTPStatus.BAD_REQUEST
+                    return self._send_json(status, detail)
+                public_web_promotions_match = re.fullmatch(
+                    r"/api/target-candidates/([^/]+)/public-web-promotions",
+                    path,
+                )
+                if public_web_promotions_match:
+                    result = orchestrator.list_target_candidate_public_web_promotions(
+                        public_web_promotions_match.group(1)
+                    )
+                    status = HTTPStatus.OK
+                    if result.get("status") == "not_found":
+                        status = HTTPStatus.NOT_FOUND
+                    elif result.get("status") == "invalid":
+                        status = HTTPStatus.BAD_REQUEST
+                    return self._send_json(status, result)
                 if path == "/api/assets/governance/default-pointers":
                     return self._send_json(HTTPStatus.OK, orchestrator.list_asset_default_pointers(query_payload))
                 if path == "/api/frontend-history":
@@ -359,9 +389,40 @@ def _build_handler(orchestrator: SourcingOrchestrator):
                         content_type=str(result.get("content_type") or "application/octet-stream"),
                         filename=str(result.get("filename") or "download.bin"),
                     )
+                if path == "/api/target-candidates/public-web-export":
+                    result = orchestrator.export_target_candidate_public_web_archive(payload)
+                    if result.get("status") == "not_found":
+                        return self._send_json(HTTPStatus.NOT_FOUND, result)
+                    if result.get("status") == "invalid":
+                        return self._send_json(HTTPStatus.BAD_REQUEST, result)
+                    return self._send_bytes(
+                        HTTPStatus.OK,
+                        bytes(result.get("body") or b""),
+                        content_type=str(result.get("content_type") or "application/octet-stream"),
+                        filename=str(result.get("filename") or "download.bin"),
+                    )
                 if path == "/api/target-candidates/import-from-job":
                     result = orchestrator.import_target_candidates_from_job(payload)
                     status = HTTPStatus.CREATED if result.get("status") == "imported" else HTTPStatus.BAD_REQUEST
+                    if result.get("status") == "not_found":
+                        status = HTTPStatus.NOT_FOUND
+                    return self._send_json(status, result)
+                if path == "/api/target-candidates/public-web-search":
+                    result = orchestrator.start_target_candidate_public_web_search(payload)
+                    status = HTTPStatus.ACCEPTED if result.get("status") in {"queued", "joined"} else HTTPStatus.BAD_REQUEST
+                    if result.get("status") == "not_found":
+                        status = HTTPStatus.NOT_FOUND
+                    return self._send_json(status, result)
+                public_web_promotion_match = re.fullmatch(
+                    r"/api/target-candidates/([^/]+)/public-web-promotions",
+                    path,
+                )
+                if public_web_promotion_match:
+                    result = orchestrator.promote_target_candidate_public_web_signal(
+                        public_web_promotion_match.group(1),
+                        payload,
+                    )
+                    status = HTTPStatus.CREATED if result.get("status") in {"promoted", "rejected"} else HTTPStatus.BAD_REQUEST
                     if result.get("status") == "not_found":
                         status = HTTPStatus.NOT_FOUND
                     return self._send_json(status, result)
@@ -609,6 +670,8 @@ def _request_priority_lane(method: str, path: str) -> str:
         return "light"
     if normalized_method == "POST" and normalized_path == "/api/runtime/services/shutdown":
         return "light"
+    if normalized_method == "POST" and normalized_path == "/api/target-candidates/public-web-search":
+        return "light"
     if normalized_method == "POST" and re.fullmatch(r"/api/jobs/[A-Za-z0-9_-]+/cancel", normalized_path):
         return "light"
     if normalized_method != "GET":
@@ -623,15 +686,18 @@ def _request_priority_lane(method: str, path: str) -> str:
         "/api/plan/reviews",
         "/api/query-dispatches",
         "/api/manual-review",
-        "/api/candidate-review-registry",
-        "/api/target-candidates",
-        "/api/assets/governance/default-pointers",
+            "/api/candidate-review-registry",
+            "/api/target-candidates",
+            "/api/target-candidates/public-web-search",
+            "/api/assets/governance/default-pointers",
         "/api/frontend-history",
         "/api/workers/recoverable",
         "/api/workers/daemon/status",
     }:
         return "light"
     if re.fullmatch(r"/api/frontend-history/[^/]+", normalized_path):
+        return "light"
+    if re.fullmatch(r"/api/target-candidates/[^/]+/public-web-search", normalized_path):
         return "light"
     if re.fullmatch(r"/api/jobs/[A-Za-z0-9]+/(progress|dashboard)", normalized_path):
         return "light"

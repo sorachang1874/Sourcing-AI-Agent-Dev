@@ -43,7 +43,7 @@ What it does:
 Options:
   --host <host>                  API bind host. Default: 0.0.0.0
   --port <port>                  API bind port. Default: 8765
-  --runtime-dir <path>           Runtime dir / sqlite / jobs / service namespace. Default: <project>/runtime
+  --runtime-dir <path>           Runtime dir / jobs / service namespace. Default: <project>/runtime
   --python-bin <path>            Python executable. Default: prefer <repo>/.venv/bin/python, then <repo>/.venv-tests/bin/python, otherwise python3
   --frontend-port <port>         Allow localhost/127.0.0.1 frontend origin for this port. Repeatable.
   --allow-origin <origin>        Add extra explicit origin. Repeatable.
@@ -247,7 +247,8 @@ if [[ -f "${SCRIPT_DIR}/dev_postgres_env.sh" && ${DEV_BACKEND_SKIP_POSTGRES_AUTO
     printf 'Configured Postgres control plane requires psycopg, but %s cannot import it.\n' "${DEV_PYTHON_BIN}" >&2
     exit 2
   else
-    printf 'Skipping local Postgres env auto-source because %s cannot import psycopg; using SQLite-compatible local mode.\n' "${DEV_PYTHON_BIN}" >&2
+    printf 'Local dev backend requires Postgres control-plane support; %s cannot import psycopg.\n' "${DEV_PYTHON_BIN}" >&2
+    exit 2
   fi
 fi
 

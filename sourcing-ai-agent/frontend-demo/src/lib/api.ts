@@ -18,6 +18,15 @@ import type {
   SupplementOperationResult,
   TargetCompanyIdentityPreview,
   TargetCandidateFollowUpStatus,
+  TargetCandidatePublicWebBatch,
+  TargetCandidatePublicWebDetail,
+  TargetCandidatePublicWebEvidenceLink,
+  TargetCandidatePublicWebPromotion,
+  TargetCandidatePublicWebRun,
+  TargetCandidatePublicWebSearchState,
+  TargetCandidatePublicWebSignal,
+  TargetCandidatePublicWebStartResult,
+  TargetCandidatePublicWebStatus,
   TargetCandidateRecord,
   WorkflowPhase,
 } from "../types";
@@ -3012,6 +3021,133 @@ export async function exportTargetCandidatesArchive(payload?: {
   );
 }
 
+export async function exportTargetCandidatePublicWebArchive(payload?: {
+  recordIds?: string[];
+  jobId?: string;
+  historyId?: string;
+  candidateId?: string;
+  followUpStatus?: TargetCandidateFollowUpStatus;
+  mode?: "promoted_only" | "promoted_and_publishable";
+}): Promise<{ blob: Blob; filename: string; contentType: string }> {
+  return fetchBinary(
+    "/api/target-candidates/public-web-export",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        record_ids: Array.from(new Set((payload?.recordIds || []).map((value) => value.trim()).filter(Boolean))),
+        job_id: payload?.jobId || "",
+        history_id: payload?.historyId || "",
+        candidate_id: payload?.candidateId || "",
+        follow_up_status: payload?.followUpStatus || "",
+        mode: payload?.mode || "promoted_only",
+      }),
+    },
+    RESULTS_API_TIMEOUT_MS,
+  );
+}
+
+export async function getTargetCandidatePublicWebSearches(options?: {
+  batchId?: string;
+  recordId?: string;
+  status?: string;
+  limit?: number;
+}): Promise<TargetCandidatePublicWebSearchState> {
+  const response = await fetchJson<any>(
+    `/api/target-candidates/public-web-search${buildApiQueryString({
+      batch_id: options?.batchId,
+      record_id: options?.recordId,
+      status: options?.status,
+      limit: options?.limit,
+    })}`,
+  );
+  return deriveTargetCandidatePublicWebSearchState(response);
+}
+
+export async function getTargetCandidatePublicWebDetail(recordId: string): Promise<TargetCandidatePublicWebDetail> {
+  const response = await fetchJson<any>(
+    `/api/target-candidates/${encodeURIComponent(recordId)}/public-web-search`,
+  );
+  return deriveTargetCandidatePublicWebDetail(response);
+}
+
+export async function startTargetCandidatePublicWebSearch(payload: {
+  recordIds: string[];
+  options?: Record<string, unknown>;
+  forceRefresh?: boolean;
+  requestedBy?: string;
+}): Promise<TargetCandidatePublicWebStartResult> {
+  const response = await fetchJson<any>("/api/target-candidates/public-web-search", {
+    method: "POST",
+    body: JSON.stringify({
+      record_ids: Array.from(new Set((payload.recordIds || []).map((value) => value.trim()).filter(Boolean))),
+      options: payload.options || {},
+      force_refresh: Boolean(payload.forceRefresh),
+      requested_by: payload.requestedBy || "",
+    }),
+  });
+  const state = deriveTargetCandidatePublicWebSearchState(response);
+  const batch =
+    response.batch && typeof response.batch === "object"
+      ? deriveTargetCandidatePublicWebBatch(response.batch as Record<string, unknown>)
+      : state.batches[0] || null;
+  return {
+    ...state,
+    batch,
+    summary:
+      response.summary && typeof response.summary === "object" && !Array.isArray(response.summary)
+        ? (response.summary as Record<string, unknown>)
+        : {},
+    workerSummary:
+      response.worker_summary && typeof response.worker_summary === "object" && !Array.isArray(response.worker_summary)
+        ? (response.worker_summary as Record<string, unknown>)
+        : {},
+    job:
+      response.job && typeof response.job === "object" && !Array.isArray(response.job)
+        ? (response.job as Record<string, unknown>)
+        : {},
+  };
+}
+
+export async function promoteTargetCandidatePublicWebSignal(payload: {
+  recordId: string;
+  signalId: string;
+  action?: "promote" | "reject";
+  operator?: string;
+  note?: string;
+  allowUnpublishable?: boolean;
+}): Promise<{
+  status: string;
+  promotion: TargetCandidatePublicWebPromotion | null;
+  detail: TargetCandidatePublicWebDetail | null;
+}> {
+  const response = await fetchJson<any>(
+    `/api/target-candidates/${encodeURIComponent(payload.recordId)}/public-web-promotions`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        signal_id: payload.signalId,
+        action: payload.action || "promote",
+        operator: payload.operator || "frontend",
+        note: payload.note || "",
+        allow_unpublishable: Boolean(payload.allowUnpublishable),
+      }),
+    },
+  );
+  targetCandidatesCache.clear();
+  targetCandidatesPromiseCache.clear();
+  return {
+    status: String(response.status || ""),
+    promotion:
+      response.promotion && typeof response.promotion === "object" && !Array.isArray(response.promotion)
+        ? deriveTargetCandidatePublicWebPromotion(response.promotion as Record<string, unknown>)
+        : null,
+    detail:
+      response.detail && typeof response.detail === "object" && !Array.isArray(response.detail)
+        ? deriveTargetCandidatePublicWebDetail(response.detail as Record<string, unknown>)
+        : null,
+  };
+}
+
 export async function getCandidateDetail(candidateId: string, jobId: string): Promise<CandidateDetail | null> {
   if (!jobId) {
     throw new Error("Missing job_id. Candidate detail requests must be scoped to a workflow result set.");
@@ -4160,6 +4296,232 @@ function deriveTargetCandidateRecord(record: Record<string, unknown>): TargetCan
     addedAt: pickFirstString(record, ["added_at", "created_at"]) || new Date().toISOString(),
     updatedAt: pickFirstString(record, ["updated_at"]) || new Date().toISOString(),
   };
+}
+
+function deriveTargetCandidatePublicWebSearchState(record: Record<string, unknown>): TargetCandidatePublicWebSearchState {
+  return {
+    status: pickFirstString(record, ["status"]) || "ok",
+    batches: asArray(record.batches)
+      .map((item) => ((item && typeof item === "object" ? item : {}) as Record<string, unknown>))
+      .filter((item) => Object.keys(item).length > 0)
+      .map((item) => deriveTargetCandidatePublicWebBatch(item)),
+    runs: asArray(record.runs)
+      .map((item) => ((item && typeof item === "object" ? item : {}) as Record<string, unknown>))
+      .filter((item) => Object.keys(item).length > 0)
+      .map((item) => deriveTargetCandidatePublicWebRun(item)),
+  };
+}
+
+function deriveTargetCandidatePublicWebBatch(record: Record<string, unknown>): TargetCandidatePublicWebBatch {
+  return {
+    batchId: pickFirstString(record, ["batch_id", "batchId"]),
+    status: normalizeTargetCandidatePublicWebStatus(pickFirstString(record, ["status"])),
+    requestedRecordIds: asArray(record.requested_record_ids).map((item) => asString(item)).filter(Boolean),
+    runIds: asArray(record.run_ids).map((item) => asString(item)).filter(Boolean),
+    sourceFamilies: asArray(record.source_families).map((item) => asString(item)).filter(Boolean),
+    summary:
+      record.summary && typeof record.summary === "object" && !Array.isArray(record.summary)
+        ? (record.summary as Record<string, unknown>)
+        : {},
+    createdAt: pickFirstString(record, ["created_at"]) || "",
+    updatedAt: pickFirstString(record, ["updated_at"]) || "",
+  };
+}
+
+function deriveTargetCandidatePublicWebRun(record: Record<string, unknown>): TargetCandidatePublicWebRun {
+  const queryManifest = asArray(record.query_manifest)
+    .map((item) => ((item && typeof item === "object" ? item : {}) as Record<string, unknown>))
+    .filter((item) => Object.keys(item).length > 0);
+  return {
+    runId: pickFirstString(record, ["run_id", "runId"]),
+    batchId: pickFirstString(record, ["batch_id", "batchId"]),
+    recordId: pickFirstString(record, ["record_id", "recordId"]),
+    candidateId: pickFirstString(record, ["candidate_id", "candidateId"]),
+    candidateName: pickFirstString(record, ["candidate_name", "candidateName"]),
+    currentCompany: pickFirstString(record, ["current_company", "currentCompany"]),
+    linkedinUrl: pickFirstString(record, ["linkedin_url", "linkedinUrl"]),
+    status: normalizeTargetCandidatePublicWebStatus(pickFirstString(record, ["status"])),
+    phase: pickFirstString(record, ["phase"]),
+    sourceFamilies: asArray(record.source_families).map((item) => asString(item)).filter(Boolean),
+    summary:
+      record.summary && typeof record.summary === "object" && !Array.isArray(record.summary)
+        ? (record.summary as Record<string, unknown>)
+        : {},
+    queryManifest,
+    searchCheckpoint:
+      record.search_checkpoint && typeof record.search_checkpoint === "object" && !Array.isArray(record.search_checkpoint)
+        ? (record.search_checkpoint as Record<string, unknown>)
+        : {},
+    analysisCheckpoint:
+      record.analysis_checkpoint && typeof record.analysis_checkpoint === "object" && !Array.isArray(record.analysis_checkpoint)
+        ? (record.analysis_checkpoint as Record<string, unknown>)
+        : {},
+    artifactRoot: pickFirstString(record, ["artifact_root", "artifactRoot"]),
+    lastError: pickFirstString(record, ["last_error", "lastError"]),
+    startedAt: pickFirstString(record, ["started_at", "startedAt"]),
+    completedAt: pickFirstString(record, ["completed_at", "completedAt"]),
+    updatedAt: pickFirstString(record, ["updated_at", "updatedAt"]),
+  };
+}
+
+function deriveTargetCandidatePublicWebDetail(record: Record<string, unknown>): TargetCandidatePublicWebDetail {
+  return {
+    status: pickFirstString(record, ["status"]) || "ok",
+    recordId: pickFirstString(record, ["record_id", "recordId"]),
+    targetCandidate:
+      record.target_candidate && typeof record.target_candidate === "object" && !Array.isArray(record.target_candidate)
+        ? (record.target_candidate as Record<string, unknown>)
+        : null,
+    latestRun:
+      record.latest_run && typeof record.latest_run === "object" && !Array.isArray(record.latest_run)
+        ? (record.latest_run as Record<string, unknown>)
+        : null,
+    personAsset:
+      record.person_asset && typeof record.person_asset === "object" && !Array.isArray(record.person_asset)
+        ? (record.person_asset as Record<string, unknown>)
+        : null,
+    signals: asArray(record.signals)
+      .map((item) => ((item && typeof item === "object" ? item : {}) as Record<string, unknown>))
+      .filter((item) => Object.keys(item).length > 0)
+      .map((item) => deriveTargetCandidatePublicWebSignal(item)),
+    emailCandidates: asArray(record.email_candidates)
+      .map((item) => ((item && typeof item === "object" ? item : {}) as Record<string, unknown>))
+      .filter((item) => Object.keys(item).length > 0)
+      .map((item) => deriveTargetCandidatePublicWebSignal(item)),
+    profileLinks: asArray(record.profile_links)
+      .map((item) => ((item && typeof item === "object" ? item : {}) as Record<string, unknown>))
+      .filter((item) => Object.keys(item).length > 0)
+      .map((item) => deriveTargetCandidatePublicWebSignal(item)),
+    groupedSignals:
+      record.grouped_signals && typeof record.grouped_signals === "object" && !Array.isArray(record.grouped_signals)
+        ? (record.grouped_signals as Record<string, unknown>)
+        : {},
+    evidenceLinks: asArray(record.evidence_links)
+      .map((item) => ((item && typeof item === "object" ? item : {}) as Record<string, unknown>))
+      .filter((item) => Object.keys(item).length > 0)
+      .map((item) => deriveTargetCandidatePublicWebEvidenceLink(item)),
+    promotions: asArray(record.promotions)
+      .map((item) => ((item && typeof item === "object" ? item : {}) as Record<string, unknown>))
+      .filter((item) => Object.keys(item).length > 0)
+      .map((item) => deriveTargetCandidatePublicWebPromotion(item)),
+    promotionSummary:
+      record.promotion_summary && typeof record.promotion_summary === "object" && !Array.isArray(record.promotion_summary)
+        ? (record.promotion_summary as Record<string, unknown>)
+        : {},
+    rawAssetPolicy:
+      record.raw_asset_policy && typeof record.raw_asset_policy === "object" && !Array.isArray(record.raw_asset_policy)
+        ? (record.raw_asset_policy as Record<string, unknown>)
+        : {},
+  };
+}
+
+function deriveTargetCandidatePublicWebSignal(record: Record<string, unknown>): TargetCandidatePublicWebSignal {
+  return {
+    signalId: pickFirstString(record, ["signal_id", "signalId"]),
+    runId: pickFirstString(record, ["run_id", "runId"]),
+    signalKind: pickFirstString(record, ["signal_kind", "signalKind"]),
+    signalType: pickFirstString(record, ["signal_type", "signalType"]),
+    emailType: pickFirstString(record, ["email_type", "emailType"]),
+    value: pickFirstString(record, ["value"]),
+    normalizedValue: pickFirstString(record, ["normalized_value", "normalizedValue"]),
+    url: pickFirstString(record, ["url"]),
+    sourceUrl: pickFirstString(record, ["source_url", "sourceUrl"]),
+    sourceDomain: pickFirstString(record, ["source_domain", "sourceDomain"]),
+    sourceFamily: pickFirstString(record, ["source_family", "sourceFamily"]),
+    sourceTitle: pickFirstString(record, ["source_title", "sourceTitle"]),
+    confidenceLabel: pickFirstString(record, ["confidence_label", "confidenceLabel"]),
+    confidenceScore: asNumber(record.confidence_score ?? record.confidenceScore),
+    identityMatchLabel: pickFirstString(record, ["identity_match_label", "identityMatchLabel"]),
+    identityMatchScore: asNumber(record.identity_match_score ?? record.identityMatchScore),
+    publishable: asBoolean(record.publishable) ?? false,
+    promotionStatus: pickFirstString(record, ["promotion_status", "promotionStatus"]),
+    promotionId: pickFirstString(record, ["promotion_id", "promotionId"]) || undefined,
+    promotionAction: pickFirstString(record, ["promotion_action", "promotionAction"]) || undefined,
+    promotedField: pickFirstString(record, ["promoted_field", "promotedField"]) || undefined,
+    promotedValue: pickFirstString(record, ["promoted_value", "promotedValue"]) || undefined,
+    previousValue: pickFirstString(record, ["previous_value", "previousValue"]) || undefined,
+    promotedBy: pickFirstString(record, ["promoted_by", "promotedBy"]) || undefined,
+    promotedAt: pickFirstString(record, ["promoted_at", "promotedAt"]) || undefined,
+    promotionNote: pickFirstString(record, ["promotion_note", "promotionNote"]) || undefined,
+    suppressionReason: pickFirstString(record, ["suppression_reason", "suppressionReason"]),
+    evidenceExcerpt: pickFirstString(record, ["evidence_excerpt", "evidenceExcerpt"]),
+    linkShapeWarnings: asArray(record.link_shape_warnings ?? record.linkShapeWarnings)
+      .map((item) => asString(item))
+      .filter(Boolean),
+    cleanProfileLink: asBoolean(record.clean_profile_link ?? record.cleanProfileLink) ?? true,
+    artifactRefs:
+      record.artifact_refs && typeof record.artifact_refs === "object" && !Array.isArray(record.artifact_refs)
+        ? (record.artifact_refs as Record<string, unknown>)
+        : {},
+    metadata:
+      record.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)
+        ? (record.metadata as Record<string, unknown>)
+        : {},
+    createdAt: pickFirstString(record, ["created_at", "createdAt"]),
+    updatedAt: pickFirstString(record, ["updated_at", "updatedAt"]),
+  };
+}
+
+function deriveTargetCandidatePublicWebPromotion(record: Record<string, unknown>): TargetCandidatePublicWebPromotion {
+  return {
+    promotionId: pickFirstString(record, ["promotion_id", "promotionId"]),
+    signalId: pickFirstString(record, ["signal_id", "signalId"]),
+    runId: pickFirstString(record, ["run_id", "runId"]),
+    recordId: pickFirstString(record, ["record_id", "recordId"]),
+    signalKind: pickFirstString(record, ["signal_kind", "signalKind"]),
+    signalType: pickFirstString(record, ["signal_type", "signalType"]),
+    emailType: pickFirstString(record, ["email_type", "emailType"]),
+    newValue: pickFirstString(record, ["new_value", "newValue"]),
+    previousValue: pickFirstString(record, ["previous_value", "previousValue"]),
+    sourceUrl: pickFirstString(record, ["source_url", "sourceUrl"]),
+    sourceDomain: pickFirstString(record, ["source_domain", "sourceDomain"]),
+    confidenceLabel: pickFirstString(record, ["confidence_label", "confidenceLabel"]),
+    identityMatchLabel: pickFirstString(record, ["identity_match_label", "identityMatchLabel"]),
+    action: pickFirstString(record, ["action"]),
+    promotionStatus: pickFirstString(record, ["promotion_status", "promotionStatus"]),
+    operator: pickFirstString(record, ["operator"]),
+    note: pickFirstString(record, ["note"]),
+    createdAt: pickFirstString(record, ["created_at", "createdAt"]),
+    updatedAt: pickFirstString(record, ["updated_at", "updatedAt"]),
+  };
+}
+
+function deriveTargetCandidatePublicWebEvidenceLink(
+  record: Record<string, unknown>,
+): TargetCandidatePublicWebEvidenceLink {
+  return {
+    sourceUrl: pickFirstString(record, ["source_url", "sourceUrl"]),
+    sourceDomain: pickFirstString(record, ["source_domain", "sourceDomain"]),
+    sourceFamily: pickFirstString(record, ["source_family", "sourceFamily"]),
+    sourceTitle: pickFirstString(record, ["source_title", "sourceTitle"]),
+    signalIds: asArray(record.signal_ids ?? record.signalIds).map((item) => asString(item)).filter(Boolean),
+    signalKinds: asArray(record.signal_kinds ?? record.signalKinds).map((item) => asString(item)).filter(Boolean),
+    signalTypes: asArray(record.signal_types ?? record.signalTypes).map((item) => asString(item)).filter(Boolean),
+    identityMatchLabels: asArray(record.identity_match_labels ?? record.identityMatchLabels)
+      .map((item) => asString(item))
+      .filter(Boolean),
+    maxConfidenceScore: asNumber(record.max_confidence_score ?? record.maxConfidenceScore),
+  };
+}
+
+function normalizeTargetCandidatePublicWebStatus(value: string): TargetCandidatePublicWebStatus {
+  const normalized = value.trim().toLowerCase();
+  if (
+    normalized === "queued" ||
+    normalized === "search_submitted" ||
+    normalized === "searching" ||
+    normalized === "entry_links_ready" ||
+    normalized === "fetching" ||
+    normalized === "analyzing" ||
+    normalized === "completed" ||
+    normalized === "completed_with_errors" ||
+    normalized === "needs_review" ||
+    normalized === "failed" ||
+    normalized === "cancelled"
+  ) {
+    return normalized;
+  }
+  return "unknown";
 }
 
 async function getDashboardFromLocalAssets(): Promise<DashboardData | null> {

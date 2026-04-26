@@ -160,7 +160,7 @@
   - `company_snapshot bundle`
   - `company_handoff bundle`
   - `control_plane_snapshot bundle`
-  - `sqlite_snapshot bundle` 仅保留 legacy backup alias
+  - `sqlite_snapshot bundle` 已退役，CLI、import、upload、download、restore 都不再支持
 - 当前默认云端恢复路径：
   - 优先 `control_plane_snapshot + canonical company_snapshot`
   - `company_handoff` 只保留为可选的重型 handoff 载体，不再作为默认 server bootstrap 入口
@@ -168,11 +168,10 @@
   - `upload-asset-bundle`
   - `download-asset-bundle`
   - `import-cloud-assets`
-  - `restore-sqlite-snapshot`
 - 当前默认 server/cloud 恢复入口已收敛为：
   - `import-cloud-assets` 先恢复 `control_plane_snapshot`
   - 再恢复 canonical `company_snapshot`
-- `download-asset-bundle + restore-*` 现在只保留为低层排障路径
+- `download-asset-bundle + restore-asset-bundle` 现在只保留为低层排障路径；`sqlite_snapshot` 旧包不再有恢复入口
 - 这一层不直接把业务逻辑绑死到某个云厂商；先以 bundle 为边界，再通过 object storage provider 上传/下载
 
 ### `object_storage.py`

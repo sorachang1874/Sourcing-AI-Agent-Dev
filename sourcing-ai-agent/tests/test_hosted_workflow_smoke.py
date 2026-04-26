@@ -29,7 +29,7 @@ from sourcing_agent.settings import (
     QwenSettings,
     SemanticProviderSettings,
 )
-from sourcing_agent.storage import SQLiteStore
+from sourcing_agent.storage import ControlPlaneStore
 from sourcing_agent.workflow_explain_matrix import (
     load_explain_cases,
     run_hosted_explain_case,
@@ -59,7 +59,7 @@ _FAST_HOSTED_SMOKE_ENV = {
 @dataclass
 class HostedSmokeHarness:
     tempdir: tempfile.TemporaryDirectory
-    store: SQLiteStore
+    store: ControlPlaneStore
     settings: AppSettings
     orchestrator: SourcingOrchestrator
     client: HostedWorkflowSmokeClient
@@ -171,7 +171,7 @@ class HostedWorkflowSmokeTest(unittest.TestCase):
                     ),
                 ),
             )
-            store = SQLiteStore(str(settings.db_path))
+            store = ControlPlaneStore(str(settings.db_path))
             model_client = build_model_client(qwen_settings=settings.qwen)
             semantic_provider = build_semantic_provider(settings.semantic)
             acquisition_engine = AcquisitionEngine(catalog, settings, store, model_client)

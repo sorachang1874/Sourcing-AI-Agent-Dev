@@ -24,7 +24,7 @@ from sourcing_agent.asset_reuse_planning import (
     refresh_acquisition_shard_registry_query_family_metadata,
 )
 from sourcing_agent.settings import load_settings
-from sourcing_agent.storage import SQLiteStore
+from sourcing_agent.storage import ControlPlaneStore
 
 
 def parse_args() -> argparse.Namespace:
@@ -83,7 +83,7 @@ def main() -> None:
     if args.runtime_dir:
         os.environ["SOURCING_RUNTIME_DIR"] = str(Path(args.runtime_dir).expanduser())
     settings = load_settings(project_root)
-    store = SQLiteStore(settings.db_path)
+    store = ControlPlaneStore(settings.db_path)
 
     companies = _normalized_values(list(args.company or []))
     snapshot_ids = _normalized_values(list(args.snapshot_id or []))

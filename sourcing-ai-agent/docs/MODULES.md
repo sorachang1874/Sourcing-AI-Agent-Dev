@@ -153,12 +153,11 @@ User Request
 - 当前已实现：
   - `export-company-snapshot-bundle`
   - `export-company-handoff-bundle`
-  - `export-sqlite-snapshot`（legacy alias，优先导出 `control_plane_snapshot`）
+  - `export-control-plane-snapshot-bundle`
   - `upload-asset-bundle`
   - `download-asset-bundle`
   - `import-cloud-assets`
   - `restore-asset-bundle`
-  - `restore-sqlite-snapshot`（legacy alias）
 - bundle 当前以文件系统目录形式保存：
   - `bundle_manifest.json`
   - `export_summary.json`

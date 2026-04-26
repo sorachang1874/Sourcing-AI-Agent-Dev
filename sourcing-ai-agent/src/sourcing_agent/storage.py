@@ -3,22 +3,20 @@ from __future__ import annotations
 import ast
 import json
 import os
-import re
 import sqlite3
 import threading
 from datetime import datetime, timedelta, timezone
 from hashlib import sha1
 from pathlib import Path
 from typing import Any
-from urllib import parse
 
-from .asset_paths import extract_company_snapshot_ref
 from .asset_governance import (
     build_canonical_asset_replacement_plan,
-    default_asset_pointer_key,
     default_asset_pointer_history_id,
+    default_asset_pointer_key,
     normalize_default_asset_pointer_payload,
 )
+from .asset_paths import extract_company_snapshot_ref
 from .company_registry import normalize_company_key, resolve_company_alias_key
 from .control_plane_job_progress import (
     build_job_progress_event_summary as _cp_build_job_progress_event_summary,
@@ -34,6 +32,12 @@ from .control_plane_live_postgres import (
     resolve_control_plane_postgres_live_mode,
 )
 from .domain import Candidate, EvidenceRecord, JobRequest, normalize_candidate
+from .linkedin_url_normalization import (
+    normalize_linkedin_profile_url_key as _normalize_linkedin_profile_url_key,
+)
+from .linkedin_url_normalization import (
+    normalize_linkedin_profile_url_list as _normalize_linkedin_profile_url_list,
+)
 from .local_postgres import resolve_control_plane_postgres_dsn
 from .request_matching import (
     MATCH_THRESHOLD,
@@ -92,8 +96,6 @@ def _env_flag_enabled(value: Any, *, default: bool) -> bool:
 def _control_plane_postgres_required(runtime_dir: Path | None = None) -> bool:
     if _env_flag_enabled(os.getenv("SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES"), default=False):
         return True
-    if os.getenv("SOURCING_ALLOW_PRODUCTION_SQLITE_CONTROL_PLANE") == "1":
-        return False
     runtime = current_runtime_environment(runtime_dir=runtime_dir)
     return bool(runtime.is_production)
 
@@ -107,11 +109,14 @@ def _resolve_postgres_only_sqlite_backend(
     configured_backend = str(os.getenv("SOURCING_PG_ONLY_SQLITE_BACKEND") or "").strip().lower()
     if configured_backend == "memory":
         configured_backend = "shared_memory"
-    if normalized_mode != "postgres_only" or configured_backend == "disk":
+    if normalized_mode != "postgres_only":
         return "disk", str(db_path), False
     backend = configured_backend or "shared_memory"
     if backend != "shared_memory":
-        return "disk", str(db_path), False
+        raise RuntimeError(
+            "postgres_only control-plane mode refuses disk-backed SQLite shadow storage. "
+            "Use SOURCING_PG_ONLY_SQLITE_BACKEND=shared_memory."
+        )
     seed = str(db_path.expanduser())
     uri = f"file:sourcing-agent-shadow-{sha1(seed.encode('utf-8')).hexdigest()[:16]}?mode=memory&cache=shared"
     return backend, uri, True
@@ -513,7 +518,7 @@ def _asset_membership_summary_from_rows(rows: list[dict[str, Any]] | None) -> di
     }
 
 
-class SQLiteStore:
+class ControlPlaneStore:
     def __init__(self, db_path: str | Path) -> None:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1137,6 +1142,151 @@ class SQLiteStore:
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP
                 );
 
+                CREATE TABLE IF NOT EXISTS target_candidate_public_web_batches (
+                    batch_id TEXT PRIMARY KEY,
+                    idempotency_key TEXT NOT NULL UNIQUE,
+                    status TEXT NOT NULL DEFAULT 'queued',
+                    requested_record_ids_json TEXT NOT NULL DEFAULT '[]',
+                    source_families_json TEXT NOT NULL DEFAULT '[]',
+                    options_json TEXT NOT NULL DEFAULT '{}',
+                    run_ids_json TEXT NOT NULL DEFAULT '[]',
+                    summary_json TEXT NOT NULL DEFAULT '{}',
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    requested_by TEXT NOT NULL DEFAULT '',
+                    force_refresh INTEGER NOT NULL DEFAULT 0,
+                    started_at TEXT,
+                    completed_at TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS target_candidate_public_web_runs (
+                    run_id TEXT PRIMARY KEY,
+                    batch_id TEXT NOT NULL DEFAULT '',
+                    record_id TEXT NOT NULL DEFAULT '',
+                    candidate_id TEXT NOT NULL DEFAULT '',
+                    candidate_name TEXT NOT NULL DEFAULT '',
+                    current_company TEXT NOT NULL DEFAULT '',
+                    linkedin_url TEXT NOT NULL DEFAULT '',
+                    linkedin_url_key TEXT NOT NULL DEFAULT '',
+                    person_identity_key TEXT NOT NULL DEFAULT '',
+                    idempotency_key TEXT NOT NULL UNIQUE,
+                    status TEXT NOT NULL DEFAULT 'queued',
+                    phase TEXT NOT NULL DEFAULT 'queued',
+                    source_families_json TEXT NOT NULL DEFAULT '[]',
+                    options_json TEXT NOT NULL DEFAULT '{}',
+                    query_manifest_json TEXT NOT NULL DEFAULT '[]',
+                    search_checkpoint_json TEXT NOT NULL DEFAULT '{}',
+                    fetch_checkpoint_json TEXT NOT NULL DEFAULT '{}',
+                    analysis_checkpoint_json TEXT NOT NULL DEFAULT '{}',
+                    summary_json TEXT NOT NULL DEFAULT '{}',
+                    artifact_root TEXT NOT NULL DEFAULT '',
+                    worker_key TEXT NOT NULL DEFAULT '',
+                    lease_owner TEXT NOT NULL DEFAULT '',
+                    lease_expires_at TEXT,
+                    attempt_count INTEGER NOT NULL DEFAULT 0,
+                    last_error TEXT NOT NULL DEFAULT '',
+                    started_at TEXT,
+                    completed_at TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS person_public_web_assets (
+                    asset_id TEXT PRIMARY KEY,
+                    person_identity_key TEXT NOT NULL UNIQUE,
+                    linkedin_url_key TEXT NOT NULL DEFAULT '',
+                    latest_run_id TEXT NOT NULL DEFAULT '',
+                    target_candidate_record_id TEXT NOT NULL DEFAULT '',
+                    candidate_name TEXT NOT NULL DEFAULT '',
+                    current_company TEXT NOT NULL DEFAULT '',
+                    status TEXT NOT NULL DEFAULT 'completed',
+                    summary_json TEXT NOT NULL DEFAULT '{}',
+                    signals_json TEXT NOT NULL DEFAULT '{}',
+                    source_run_ids_json TEXT NOT NULL DEFAULT '[]',
+                    artifact_root TEXT NOT NULL DEFAULT '',
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS person_public_web_signals (
+                    signal_id TEXT PRIMARY KEY,
+                    run_id TEXT NOT NULL DEFAULT '',
+                    asset_id TEXT NOT NULL DEFAULT '',
+                    person_identity_key TEXT NOT NULL DEFAULT '',
+                    record_id TEXT NOT NULL DEFAULT '',
+                    candidate_id TEXT NOT NULL DEFAULT '',
+                    candidate_name TEXT NOT NULL DEFAULT '',
+                    current_company TEXT NOT NULL DEFAULT '',
+                    linkedin_url_key TEXT NOT NULL DEFAULT '',
+                    signal_kind TEXT NOT NULL DEFAULT '',
+                    signal_type TEXT NOT NULL DEFAULT '',
+                    email_type TEXT NOT NULL DEFAULT '',
+                    value TEXT NOT NULL DEFAULT '',
+                    normalized_value TEXT NOT NULL DEFAULT '',
+                    url TEXT NOT NULL DEFAULT '',
+                    source_url TEXT NOT NULL DEFAULT '',
+                    source_domain TEXT NOT NULL DEFAULT '',
+                    source_family TEXT NOT NULL DEFAULT '',
+                    source_title TEXT NOT NULL DEFAULT '',
+                    confidence_label TEXT NOT NULL DEFAULT '',
+                    confidence_score REAL NOT NULL DEFAULT 0,
+                    identity_match_label TEXT NOT NULL DEFAULT '',
+                    identity_match_score REAL NOT NULL DEFAULT 0,
+                    publishable INTEGER NOT NULL DEFAULT 0,
+                    promotion_status TEXT NOT NULL DEFAULT '',
+                    suppression_reason TEXT NOT NULL DEFAULT '',
+                    evidence_excerpt TEXT NOT NULL DEFAULT '',
+                    artifact_refs_json TEXT NOT NULL DEFAULT '{}',
+                    model_provider TEXT NOT NULL DEFAULT '',
+                    model_version TEXT NOT NULL DEFAULT '',
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS target_candidate_public_web_promotions (
+                    promotion_id TEXT PRIMARY KEY,
+                    signal_id TEXT NOT NULL DEFAULT '',
+                    run_id TEXT NOT NULL DEFAULT '',
+                    asset_id TEXT NOT NULL DEFAULT '',
+                    person_identity_key TEXT NOT NULL DEFAULT '',
+                    record_id TEXT NOT NULL DEFAULT '',
+                    candidate_id TEXT NOT NULL DEFAULT '',
+                    candidate_name TEXT NOT NULL DEFAULT '',
+                    current_company TEXT NOT NULL DEFAULT '',
+                    linkedin_url_key TEXT NOT NULL DEFAULT '',
+                    signal_kind TEXT NOT NULL DEFAULT '',
+                    signal_type TEXT NOT NULL DEFAULT '',
+                    email_type TEXT NOT NULL DEFAULT '',
+                    value TEXT NOT NULL DEFAULT '',
+                    normalized_value TEXT NOT NULL DEFAULT '',
+                    url TEXT NOT NULL DEFAULT '',
+                    source_url TEXT NOT NULL DEFAULT '',
+                    source_domain TEXT NOT NULL DEFAULT '',
+                    source_family TEXT NOT NULL DEFAULT '',
+                    source_title TEXT NOT NULL DEFAULT '',
+                    confidence_label TEXT NOT NULL DEFAULT '',
+                    confidence_score REAL NOT NULL DEFAULT 0,
+                    identity_match_label TEXT NOT NULL DEFAULT '',
+                    identity_match_score REAL NOT NULL DEFAULT 0,
+                    publishable INTEGER NOT NULL DEFAULT 0,
+                    clean_profile_link INTEGER NOT NULL DEFAULT 0,
+                    link_shape_warnings_json TEXT NOT NULL DEFAULT '[]',
+                    action TEXT NOT NULL DEFAULT 'promote',
+                    promotion_status TEXT NOT NULL DEFAULT 'manually_promoted',
+                    promoted_field TEXT NOT NULL DEFAULT '',
+                    previous_value TEXT NOT NULL DEFAULT '',
+                    new_value TEXT NOT NULL DEFAULT '',
+                    operator TEXT NOT NULL DEFAULT '',
+                    note TEXT NOT NULL DEFAULT '',
+                    evidence_excerpt TEXT NOT NULL DEFAULT '',
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
                 CREATE TABLE IF NOT EXISTS frontend_history_links (
                     history_id TEXT PRIMARY KEY,
                     query_text TEXT NOT NULL DEFAULT '',
@@ -1562,6 +1712,42 @@ class SQLiteStore:
 
                 CREATE INDEX IF NOT EXISTS idx_asset_default_pointer_history_pointer
                     ON asset_default_pointer_history (pointer_key, occurred_at);
+
+                CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_batches_updated
+                    ON target_candidate_public_web_batches (updated_at, status);
+
+                CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_runs_batch
+                    ON target_candidate_public_web_runs (batch_id, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_runs_record
+                    ON target_candidate_public_web_runs (record_id, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_runs_status
+                    ON target_candidate_public_web_runs (status, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_runs_identity
+                    ON target_candidate_public_web_runs (linkedin_url_key, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_person_public_web_assets_identity
+                    ON person_public_web_assets (linkedin_url_key, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_person_public_web_signals_run
+                    ON person_public_web_signals (run_id, signal_kind, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_person_public_web_signals_record
+                    ON person_public_web_signals (record_id, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_person_public_web_signals_identity
+                    ON person_public_web_signals (person_identity_key, signal_kind, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_promotions_record
+                    ON target_candidate_public_web_promotions (record_id, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_promotions_signal
+                    ON target_candidate_public_web_promotions (signal_id, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_promotions_run
+                    ON target_candidate_public_web_promotions (run_id, updated_at);
 
                 CREATE INDEX IF NOT EXISTS idx_frontend_history_links_review
                     ON frontend_history_links (review_id, updated_at);
@@ -4942,6 +5128,967 @@ class SQLiteStore:
         if row is None:
             return None
         return self._target_candidate_from_row(row)
+
+    def upsert_target_candidate_public_web_batch(self, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized = _normalize_target_candidate_public_web_batch_payload(payload)
+        existing = self.get_target_candidate_public_web_batch(batch_id=normalized["batch_id"])
+        now = _utc_now_timestamp()
+        row_payload = {
+            "batch_id": normalized["batch_id"],
+            "idempotency_key": normalized["idempotency_key"],
+            "status": normalized["status"],
+            "requested_record_ids_json": json.dumps(normalized["requested_record_ids"], ensure_ascii=False),
+            "source_families_json": json.dumps(normalized["source_families"], ensure_ascii=False),
+            "options_json": json.dumps(_json_safe_payload(normalized["options"]), ensure_ascii=False),
+            "run_ids_json": json.dumps(normalized["run_ids"], ensure_ascii=False),
+            "summary_json": json.dumps(_json_safe_payload(normalized["summary"]), ensure_ascii=False),
+            "metadata_json": json.dumps(_json_safe_payload(normalized["metadata"]), ensure_ascii=False),
+            "requested_by": normalized["requested_by"],
+            "force_refresh": 1 if normalized["force_refresh"] else 0,
+            "started_at": normalized["started_at"],
+            "completed_at": normalized["completed_at"],
+            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or "").strip() or now,
+            "updated_at": now,
+        }
+        if self._write_control_plane_row_to_postgres("target_candidate_public_web_batches", row_payload):
+            return (
+                self.get_target_candidate_public_web_batch(batch_id=normalized["batch_id"])
+                or self._target_candidate_public_web_batch_from_row(row_payload)
+            )
+        with self._lock, self._connection:
+            existing_row = self._connection.execute(
+                "SELECT created_at FROM target_candidate_public_web_batches WHERE batch_id = ? LIMIT 1",
+                (normalized["batch_id"],),
+            ).fetchone()
+            self._connection.execute(
+                """
+                INSERT INTO target_candidate_public_web_batches (
+                    batch_id, idempotency_key, status, requested_record_ids_json, source_families_json,
+                    options_json, run_ids_json, summary_json, metadata_json, requested_by, force_refresh,
+                    started_at, completed_at, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), CURRENT_TIMESTAMP)
+                ON CONFLICT(batch_id) DO UPDATE SET
+                    idempotency_key = excluded.idempotency_key,
+                    status = excluded.status,
+                    requested_record_ids_json = excluded.requested_record_ids_json,
+                    source_families_json = excluded.source_families_json,
+                    options_json = excluded.options_json,
+                    run_ids_json = excluded.run_ids_json,
+                    summary_json = excluded.summary_json,
+                    metadata_json = excluded.metadata_json,
+                    requested_by = excluded.requested_by,
+                    force_refresh = excluded.force_refresh,
+                    started_at = excluded.started_at,
+                    completed_at = excluded.completed_at,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (
+                    row_payload["batch_id"],
+                    row_payload["idempotency_key"],
+                    row_payload["status"],
+                    row_payload["requested_record_ids_json"],
+                    row_payload["source_families_json"],
+                    row_payload["options_json"],
+                    row_payload["run_ids_json"],
+                    row_payload["summary_json"],
+                    row_payload["metadata_json"],
+                    row_payload["requested_by"],
+                    row_payload["force_refresh"],
+                    row_payload["started_at"],
+                    row_payload["completed_at"],
+                    existing_row["created_at"] if existing_row is not None else normalized.get("created_at"),
+                ),
+            )
+            row = self._connection.execute(
+                "SELECT * FROM target_candidate_public_web_batches WHERE batch_id = ? LIMIT 1",
+                (normalized["batch_id"],),
+            ).fetchone()
+        self._mirror_control_plane_row("target_candidate_public_web_batches", row)
+        return self.get_target_candidate_public_web_batch(batch_id=normalized["batch_id"]) or normalized
+
+    def get_target_candidate_public_web_batch(
+        self,
+        *,
+        batch_id: str = "",
+        idempotency_key: str = "",
+    ) -> dict[str, Any] | None:
+        normalized_batch_id = str(batch_id or "").strip()
+        normalized_idempotency_key = str(idempotency_key or "").strip()
+        if not normalized_batch_id and not normalized_idempotency_key:
+            return None
+        where_sql = "batch_id = %s" if normalized_batch_id else "idempotency_key = %s"
+        where_sqlite = "batch_id = ?" if normalized_batch_id else "idempotency_key = ?"
+        value = normalized_batch_id or normalized_idempotency_key
+        postgres_row = self._select_control_plane_row(
+            "target_candidate_public_web_batches",
+            row_builder=self._target_candidate_public_web_batch_from_row,
+            where_sql=where_sql,
+            params=[value],
+        )
+        if postgres_row is not None:
+            return postgres_row
+        if self._control_plane_postgres_should_skip_sqlite_fallback("target_candidate_public_web_batches"):
+            return None
+        with self._lock:
+            row = self._connection.execute(
+                f"SELECT * FROM target_candidate_public_web_batches WHERE {where_sqlite} LIMIT 1",
+                (value,),
+            ).fetchone()
+        return self._target_candidate_public_web_batch_from_row(row) if row is not None else None
+
+    def list_target_candidate_public_web_batches(
+        self,
+        *,
+        status: str = "",
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        normalized_status = _normalize_target_candidate_public_web_status(status, default="")
+        postgres_rows = self._select_control_plane_rows(
+            "target_candidate_public_web_batches",
+            row_builder=self._target_candidate_public_web_batch_from_row,
+            where_sql="status = %s" if normalized_status else "",
+            params=[normalized_status] if normalized_status else [],
+            order_by_sql="updated_at DESC, created_at DESC, batch_id DESC",
+            limit=limit,
+        )
+        if postgres_rows:
+            return postgres_rows
+        if self._control_plane_postgres_should_skip_sqlite_fallback("target_candidate_public_web_batches"):
+            return []
+        where_clause = "WHERE status = ?" if normalized_status else ""
+        params = (normalized_status, limit) if normalized_status else (limit,)
+        with self._lock:
+            rows = self._connection.execute(
+                f"""
+                SELECT * FROM target_candidate_public_web_batches
+                {where_clause}
+                ORDER BY updated_at DESC, created_at DESC, batch_id DESC
+                LIMIT ?
+                """,
+                params,
+            ).fetchall()
+        return [self._target_candidate_public_web_batch_from_row(row) for row in rows]
+
+    def upsert_target_candidate_public_web_run(self, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized = _normalize_target_candidate_public_web_run_payload(payload)
+        existing = self.get_target_candidate_public_web_run(run_id=normalized["run_id"])
+        now = _utc_now_timestamp()
+        row_payload = _target_candidate_public_web_run_row_payload(normalized, existing=existing, now=now)
+        if self._write_control_plane_row_to_postgres("target_candidate_public_web_runs", row_payload):
+            return (
+                self.get_target_candidate_public_web_run(run_id=normalized["run_id"])
+                or self._target_candidate_public_web_run_from_row(row_payload)
+            )
+        with self._lock, self._connection:
+            existing_row = self._connection.execute(
+                "SELECT created_at FROM target_candidate_public_web_runs WHERE run_id = ? LIMIT 1",
+                (normalized["run_id"],),
+            ).fetchone()
+            self._connection.execute(
+                """
+                INSERT INTO target_candidate_public_web_runs (
+                    run_id, batch_id, record_id, candidate_id, candidate_name, current_company, linkedin_url,
+                    linkedin_url_key, person_identity_key, idempotency_key, status, phase, source_families_json,
+                    options_json, query_manifest_json, search_checkpoint_json, fetch_checkpoint_json,
+                    analysis_checkpoint_json, summary_json, artifact_root, worker_key, lease_owner,
+                    lease_expires_at, attempt_count, last_error, started_at, completed_at, created_at, updated_at
+                ) VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    COALESCE(?, CURRENT_TIMESTAMP), CURRENT_TIMESTAMP
+                )
+                ON CONFLICT(run_id) DO UPDATE SET
+                    batch_id = excluded.batch_id,
+                    record_id = excluded.record_id,
+                    candidate_id = excluded.candidate_id,
+                    candidate_name = excluded.candidate_name,
+                    current_company = excluded.current_company,
+                    linkedin_url = excluded.linkedin_url,
+                    linkedin_url_key = excluded.linkedin_url_key,
+                    person_identity_key = excluded.person_identity_key,
+                    idempotency_key = excluded.idempotency_key,
+                    status = excluded.status,
+                    phase = excluded.phase,
+                    source_families_json = excluded.source_families_json,
+                    options_json = excluded.options_json,
+                    query_manifest_json = excluded.query_manifest_json,
+                    search_checkpoint_json = excluded.search_checkpoint_json,
+                    fetch_checkpoint_json = excluded.fetch_checkpoint_json,
+                    analysis_checkpoint_json = excluded.analysis_checkpoint_json,
+                    summary_json = excluded.summary_json,
+                    artifact_root = excluded.artifact_root,
+                    worker_key = excluded.worker_key,
+                    lease_owner = excluded.lease_owner,
+                    lease_expires_at = excluded.lease_expires_at,
+                    attempt_count = excluded.attempt_count,
+                    last_error = excluded.last_error,
+                    started_at = excluded.started_at,
+                    completed_at = excluded.completed_at,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (
+                    row_payload["run_id"],
+                    row_payload["batch_id"],
+                    row_payload["record_id"],
+                    row_payload["candidate_id"],
+                    row_payload["candidate_name"],
+                    row_payload["current_company"],
+                    row_payload["linkedin_url"],
+                    row_payload["linkedin_url_key"],
+                    row_payload["person_identity_key"],
+                    row_payload["idempotency_key"],
+                    row_payload["status"],
+                    row_payload["phase"],
+                    row_payload["source_families_json"],
+                    row_payload["options_json"],
+                    row_payload["query_manifest_json"],
+                    row_payload["search_checkpoint_json"],
+                    row_payload["fetch_checkpoint_json"],
+                    row_payload["analysis_checkpoint_json"],
+                    row_payload["summary_json"],
+                    row_payload["artifact_root"],
+                    row_payload["worker_key"],
+                    row_payload["lease_owner"],
+                    row_payload["lease_expires_at"],
+                    row_payload["attempt_count"],
+                    row_payload["last_error"],
+                    row_payload["started_at"],
+                    row_payload["completed_at"],
+                    existing_row["created_at"] if existing_row is not None else normalized.get("created_at"),
+                ),
+            )
+            row = self._connection.execute(
+                "SELECT * FROM target_candidate_public_web_runs WHERE run_id = ? LIMIT 1",
+                (normalized["run_id"],),
+            ).fetchone()
+        self._mirror_control_plane_row("target_candidate_public_web_runs", row)
+        return self.get_target_candidate_public_web_run(run_id=normalized["run_id"]) or normalized
+
+    def update_target_candidate_public_web_run(self, run_id: str, patch: dict[str, Any]) -> dict[str, Any] | None:
+        existing = self.get_target_candidate_public_web_run(run_id=run_id)
+        if existing is None:
+            return None
+        merged = {
+            **existing,
+            **dict(patch or {}),
+            "run_id": str(run_id or "").strip(),
+            "source_families": patch.get("source_families", existing.get("source_families")) if patch else existing.get("source_families"),
+            "options": patch.get("options", existing.get("options")) if patch else existing.get("options"),
+            "query_manifest": patch.get("query_manifest", existing.get("query_manifest")) if patch else existing.get("query_manifest"),
+            "search_checkpoint": patch.get("search_checkpoint", existing.get("search_checkpoint")) if patch else existing.get("search_checkpoint"),
+            "fetch_checkpoint": patch.get("fetch_checkpoint", existing.get("fetch_checkpoint")) if patch else existing.get("fetch_checkpoint"),
+            "analysis_checkpoint": patch.get("analysis_checkpoint", existing.get("analysis_checkpoint")) if patch else existing.get("analysis_checkpoint"),
+            "summary": patch.get("summary", existing.get("summary")) if patch else existing.get("summary"),
+        }
+        return self.upsert_target_candidate_public_web_run(merged)
+
+    def get_target_candidate_public_web_run(
+        self,
+        *,
+        run_id: str = "",
+        idempotency_key: str = "",
+    ) -> dict[str, Any] | None:
+        normalized_run_id = str(run_id or "").strip()
+        normalized_idempotency_key = str(idempotency_key or "").strip()
+        if not normalized_run_id and not normalized_idempotency_key:
+            return None
+        where_sql = "run_id = %s" if normalized_run_id else "idempotency_key = %s"
+        where_sqlite = "run_id = ?" if normalized_run_id else "idempotency_key = ?"
+        value = normalized_run_id or normalized_idempotency_key
+        postgres_row = self._select_control_plane_row(
+            "target_candidate_public_web_runs",
+            row_builder=self._target_candidate_public_web_run_from_row,
+            where_sql=where_sql,
+            params=[value],
+        )
+        if postgres_row is not None:
+            return postgres_row
+        if self._control_plane_postgres_should_skip_sqlite_fallback("target_candidate_public_web_runs"):
+            return None
+        with self._lock:
+            row = self._connection.execute(
+                f"SELECT * FROM target_candidate_public_web_runs WHERE {where_sqlite} LIMIT 1",
+                (value,),
+            ).fetchone()
+        return self._target_candidate_public_web_run_from_row(row) if row is not None else None
+
+    def list_target_candidate_public_web_runs(
+        self,
+        *,
+        batch_id: str = "",
+        record_id: str = "",
+        status: str = "",
+        limit: int = 500,
+    ) -> list[dict[str, Any]]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if batch_id:
+            clauses.append("batch_id = ?")
+            params.append(str(batch_id or "").strip())
+        if record_id:
+            clauses.append("record_id = ?")
+            params.append(str(record_id or "").strip())
+        normalized_status = _normalize_target_candidate_public_web_status(status, default="")
+        if normalized_status:
+            clauses.append("status = ?")
+            params.append(normalized_status)
+        postgres_rows = self._select_control_plane_rows(
+            "target_candidate_public_web_runs",
+            row_builder=self._target_candidate_public_web_run_from_row,
+            where_sql=" AND ".join(
+                [
+                    *(["batch_id = %s"] if batch_id else []),
+                    *(["record_id = %s"] if record_id else []),
+                    *(["status = %s"] if normalized_status else []),
+                ]
+            ),
+            params=[
+                *([str(batch_id or "").strip()] if batch_id else []),
+                *([str(record_id or "").strip()] if record_id else []),
+                *([normalized_status] if normalized_status else []),
+            ],
+            order_by_sql="updated_at DESC, created_at DESC, run_id DESC",
+            limit=limit,
+        )
+        if postgres_rows:
+            return postgres_rows
+        if self._control_plane_postgres_should_skip_sqlite_fallback("target_candidate_public_web_runs"):
+            return []
+        where_clause = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        with self._lock:
+            rows = self._connection.execute(
+                f"""
+                SELECT * FROM target_candidate_public_web_runs
+                {where_clause}
+                ORDER BY updated_at DESC, created_at DESC, run_id DESC
+                LIMIT ?
+                """,
+                (*params, limit),
+            ).fetchall()
+        return [self._target_candidate_public_web_run_from_row(row) for row in rows]
+
+    def upsert_person_public_web_asset(self, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized = _normalize_person_public_web_asset_payload(payload)
+        existing = self.get_person_public_web_asset(asset_id=normalized["asset_id"])
+        now = _utc_now_timestamp()
+        row_payload = {
+            "asset_id": normalized["asset_id"],
+            "person_identity_key": normalized["person_identity_key"],
+            "linkedin_url_key": normalized["linkedin_url_key"],
+            "latest_run_id": normalized["latest_run_id"],
+            "target_candidate_record_id": normalized["target_candidate_record_id"],
+            "candidate_name": normalized["candidate_name"],
+            "current_company": normalized["current_company"],
+            "status": normalized["status"],
+            "summary_json": json.dumps(_json_safe_payload(normalized["summary"]), ensure_ascii=False),
+            "signals_json": json.dumps(_json_safe_payload(normalized["signals"]), ensure_ascii=False),
+            "source_run_ids_json": json.dumps(normalized["source_run_ids"], ensure_ascii=False),
+            "artifact_root": normalized["artifact_root"],
+            "metadata_json": json.dumps(_json_safe_payload(normalized["metadata"]), ensure_ascii=False),
+            "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or "").strip() or now,
+            "updated_at": now,
+        }
+        if self._write_control_plane_row_to_postgres("person_public_web_assets", row_payload):
+            return (
+                self.get_person_public_web_asset(asset_id=normalized["asset_id"])
+                or self._person_public_web_asset_from_row(row_payload)
+            )
+        with self._lock, self._connection:
+            existing_row = self._connection.execute(
+                "SELECT created_at FROM person_public_web_assets WHERE asset_id = ? LIMIT 1",
+                (normalized["asset_id"],),
+            ).fetchone()
+            self._connection.execute(
+                """
+                INSERT INTO person_public_web_assets (
+                    asset_id, person_identity_key, linkedin_url_key, latest_run_id, target_candidate_record_id,
+                    candidate_name, current_company, status, summary_json, signals_json, source_run_ids_json,
+                    artifact_root, metadata_json, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), CURRENT_TIMESTAMP)
+                ON CONFLICT(asset_id) DO UPDATE SET
+                    person_identity_key = excluded.person_identity_key,
+                    linkedin_url_key = excluded.linkedin_url_key,
+                    latest_run_id = excluded.latest_run_id,
+                    target_candidate_record_id = excluded.target_candidate_record_id,
+                    candidate_name = excluded.candidate_name,
+                    current_company = excluded.current_company,
+                    status = excluded.status,
+                    summary_json = excluded.summary_json,
+                    signals_json = excluded.signals_json,
+                    source_run_ids_json = excluded.source_run_ids_json,
+                    artifact_root = excluded.artifact_root,
+                    metadata_json = excluded.metadata_json,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (
+                    row_payload["asset_id"],
+                    row_payload["person_identity_key"],
+                    row_payload["linkedin_url_key"],
+                    row_payload["latest_run_id"],
+                    row_payload["target_candidate_record_id"],
+                    row_payload["candidate_name"],
+                    row_payload["current_company"],
+                    row_payload["status"],
+                    row_payload["summary_json"],
+                    row_payload["signals_json"],
+                    row_payload["source_run_ids_json"],
+                    row_payload["artifact_root"],
+                    row_payload["metadata_json"],
+                    existing_row["created_at"] if existing_row is not None else normalized.get("created_at"),
+                ),
+            )
+            row = self._connection.execute(
+                "SELECT * FROM person_public_web_assets WHERE asset_id = ? LIMIT 1",
+                (normalized["asset_id"],),
+            ).fetchone()
+        self._mirror_control_plane_row("person_public_web_assets", row)
+        return self.get_person_public_web_asset(asset_id=normalized["asset_id"]) or normalized
+
+    def get_person_public_web_asset(
+        self,
+        *,
+        asset_id: str = "",
+        person_identity_key: str = "",
+        linkedin_url_key: str = "",
+    ) -> dict[str, Any] | None:
+        normalized_asset_id = str(asset_id or "").strip()
+        normalized_person_identity_key = str(person_identity_key or "").strip()
+        normalized_linkedin_url_key = str(linkedin_url_key or "").strip()
+        if normalized_asset_id:
+            where_sql, where_sqlite, value = "asset_id = %s", "asset_id = ?", normalized_asset_id
+        elif normalized_person_identity_key:
+            where_sql, where_sqlite, value = (
+                "person_identity_key = %s",
+                "person_identity_key = ?",
+                normalized_person_identity_key,
+            )
+        elif normalized_linkedin_url_key:
+            where_sql, where_sqlite, value = "linkedin_url_key = %s", "linkedin_url_key = ?", normalized_linkedin_url_key
+        else:
+            return None
+        postgres_row = self._select_control_plane_row(
+            "person_public_web_assets",
+            row_builder=self._person_public_web_asset_from_row,
+            where_sql=where_sql,
+            params=[value],
+            order_by_sql="updated_at DESC",
+        )
+        if postgres_row is not None:
+            return postgres_row
+        if self._control_plane_postgres_should_skip_sqlite_fallback("person_public_web_assets"):
+            return None
+        with self._lock:
+            row = self._connection.execute(
+                f"SELECT * FROM person_public_web_assets WHERE {where_sqlite} ORDER BY updated_at DESC LIMIT 1",
+                (value,),
+            ).fetchone()
+        return self._person_public_web_asset_from_row(row) if row is not None else None
+
+    def list_person_public_web_assets(
+        self,
+        *,
+        linkedin_url_key: str = "",
+        limit: int = 500,
+    ) -> list[dict[str, Any]]:
+        normalized_linkedin_url_key = str(linkedin_url_key or "").strip()
+        postgres_rows = self._select_control_plane_rows(
+            "person_public_web_assets",
+            row_builder=self._person_public_web_asset_from_row,
+            where_sql="linkedin_url_key = %s" if normalized_linkedin_url_key else "",
+            params=[normalized_linkedin_url_key] if normalized_linkedin_url_key else [],
+            order_by_sql="updated_at DESC, created_at DESC",
+            limit=limit,
+        )
+        if postgres_rows:
+            return postgres_rows
+        if self._control_plane_postgres_should_skip_sqlite_fallback("person_public_web_assets"):
+            return []
+        where_clause = "WHERE linkedin_url_key = ?" if normalized_linkedin_url_key else ""
+        params = (normalized_linkedin_url_key, limit) if normalized_linkedin_url_key else (limit,)
+        with self._lock:
+            rows = self._connection.execute(
+                f"""
+                SELECT * FROM person_public_web_assets
+                {where_clause}
+                ORDER BY updated_at DESC, created_at DESC
+                LIMIT ?
+                """,
+                params,
+            ).fetchall()
+        return [self._person_public_web_asset_from_row(row) for row in rows]
+
+    def upsert_person_public_web_signal(self, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized = _normalize_person_public_web_signal_payload(payload)
+        existing = self.get_person_public_web_signal(signal_id=normalized["signal_id"])
+        now = _utc_now_timestamp()
+        row_payload = _person_public_web_signal_row_payload(normalized, existing=existing, now=now)
+        if self._write_control_plane_row_to_postgres("person_public_web_signals", row_payload):
+            return (
+                self.get_person_public_web_signal(signal_id=normalized["signal_id"])
+                or self._person_public_web_signal_from_row(row_payload)
+            )
+        with self._lock, self._connection:
+            existing_row = self._connection.execute(
+                "SELECT created_at FROM person_public_web_signals WHERE signal_id = ? LIMIT 1",
+                (normalized["signal_id"],),
+            ).fetchone()
+            self._connection.execute(
+                """
+                INSERT INTO person_public_web_signals (
+                    signal_id, run_id, asset_id, person_identity_key, record_id, candidate_id, candidate_name,
+                    current_company, linkedin_url_key, signal_kind, signal_type, email_type, value,
+                    normalized_value, url, source_url, source_domain, source_family, source_title,
+                    confidence_label, confidence_score, identity_match_label, identity_match_score,
+                    publishable, promotion_status, suppression_reason, evidence_excerpt, artifact_refs_json,
+                    model_provider, model_version, metadata_json, created_at, updated_at
+                ) VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    COALESCE(?, CURRENT_TIMESTAMP), CURRENT_TIMESTAMP
+                )
+                ON CONFLICT(signal_id) DO UPDATE SET
+                    run_id = excluded.run_id,
+                    asset_id = excluded.asset_id,
+                    person_identity_key = excluded.person_identity_key,
+                    record_id = excluded.record_id,
+                    candidate_id = excluded.candidate_id,
+                    candidate_name = excluded.candidate_name,
+                    current_company = excluded.current_company,
+                    linkedin_url_key = excluded.linkedin_url_key,
+                    signal_kind = excluded.signal_kind,
+                    signal_type = excluded.signal_type,
+                    email_type = excluded.email_type,
+                    value = excluded.value,
+                    normalized_value = excluded.normalized_value,
+                    url = excluded.url,
+                    source_url = excluded.source_url,
+                    source_domain = excluded.source_domain,
+                    source_family = excluded.source_family,
+                    source_title = excluded.source_title,
+                    confidence_label = excluded.confidence_label,
+                    confidence_score = excluded.confidence_score,
+                    identity_match_label = excluded.identity_match_label,
+                    identity_match_score = excluded.identity_match_score,
+                    publishable = excluded.publishable,
+                    promotion_status = excluded.promotion_status,
+                    suppression_reason = excluded.suppression_reason,
+                    evidence_excerpt = excluded.evidence_excerpt,
+                    artifact_refs_json = excluded.artifact_refs_json,
+                    model_provider = excluded.model_provider,
+                    model_version = excluded.model_version,
+                    metadata_json = excluded.metadata_json,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (
+                    row_payload["signal_id"],
+                    row_payload["run_id"],
+                    row_payload["asset_id"],
+                    row_payload["person_identity_key"],
+                    row_payload["record_id"],
+                    row_payload["candidate_id"],
+                    row_payload["candidate_name"],
+                    row_payload["current_company"],
+                    row_payload["linkedin_url_key"],
+                    row_payload["signal_kind"],
+                    row_payload["signal_type"],
+                    row_payload["email_type"],
+                    row_payload["value"],
+                    row_payload["normalized_value"],
+                    row_payload["url"],
+                    row_payload["source_url"],
+                    row_payload["source_domain"],
+                    row_payload["source_family"],
+                    row_payload["source_title"],
+                    row_payload["confidence_label"],
+                    row_payload["confidence_score"],
+                    row_payload["identity_match_label"],
+                    row_payload["identity_match_score"],
+                    row_payload["publishable"],
+                    row_payload["promotion_status"],
+                    row_payload["suppression_reason"],
+                    row_payload["evidence_excerpt"],
+                    row_payload["artifact_refs_json"],
+                    row_payload["model_provider"],
+                    row_payload["model_version"],
+                    row_payload["metadata_json"],
+                    existing_row["created_at"] if existing_row is not None else normalized.get("created_at"),
+                ),
+            )
+            row = self._connection.execute(
+                "SELECT * FROM person_public_web_signals WHERE signal_id = ? LIMIT 1",
+                (normalized["signal_id"],),
+            ).fetchone()
+        self._mirror_control_plane_row("person_public_web_signals", row)
+        return self.get_person_public_web_signal(signal_id=normalized["signal_id"]) or normalized
+
+    def replace_person_public_web_signals_for_run(
+        self,
+        *,
+        run_id: str,
+        signals: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+    ) -> int:
+        normalized_run_id = str(run_id or "").strip()
+        if not normalized_run_id:
+            return 0
+        now = _utc_now_timestamp()
+        row_payloads = [
+            _person_public_web_signal_row_payload(
+                _normalize_person_public_web_signal_payload({**dict(signal), "run_id": normalized_run_id}),
+                existing=None,
+                now=now,
+            )
+            for signal in list(signals or [])
+            if isinstance(signal, dict)
+        ]
+        if self._control_plane_postgres_should_prefer_read("person_public_web_signals"):
+            try:
+                self._control_plane_postgres.delete_rows(
+                    table_name="person_public_web_signals",
+                    where_sql="run_id = %s",
+                    params=[normalized_run_id],
+                )
+                if row_payloads:
+                    self._control_plane_postgres.bulk_upsert_rows("person_public_web_signals", row_payloads)
+                if self._control_plane_postgres_should_skip_sqlite_fallback("person_public_web_signals"):
+                    return len(row_payloads)
+            except Exception as exc:
+                if self._control_plane_postgres_should_skip_sqlite_fallback("person_public_web_signals"):
+                    self._raise_control_plane_postgres_write_failure(
+                        table_name="person_public_web_signals",
+                        method_name="replace_person_public_web_signals_for_run",
+                        reason=f"{type(exc).__name__}: {exc}",
+                        error=exc,
+                    )
+        with self._lock, self._connection:
+            self._connection.execute(
+                "DELETE FROM person_public_web_signals WHERE run_id = ?",
+                (normalized_run_id,),
+            )
+            for row_payload in row_payloads:
+                self._connection.execute(
+                    """
+                    INSERT INTO person_public_web_signals (
+                        signal_id, run_id, asset_id, person_identity_key, record_id, candidate_id, candidate_name,
+                        current_company, linkedin_url_key, signal_kind, signal_type, email_type, value,
+                        normalized_value, url, source_url, source_domain, source_family, source_title,
+                        confidence_label, confidence_score, identity_match_label, identity_match_score,
+                        publishable, promotion_status, suppression_reason, evidence_excerpt, artifact_refs_json,
+                        model_provider, model_version, metadata_json, created_at, updated_at
+                    ) VALUES (
+                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                        CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                    )
+                    """,
+                    (
+                        row_payload["signal_id"],
+                        row_payload["run_id"],
+                        row_payload["asset_id"],
+                        row_payload["person_identity_key"],
+                        row_payload["record_id"],
+                        row_payload["candidate_id"],
+                        row_payload["candidate_name"],
+                        row_payload["current_company"],
+                        row_payload["linkedin_url_key"],
+                        row_payload["signal_kind"],
+                        row_payload["signal_type"],
+                        row_payload["email_type"],
+                        row_payload["value"],
+                        row_payload["normalized_value"],
+                        row_payload["url"],
+                        row_payload["source_url"],
+                        row_payload["source_domain"],
+                        row_payload["source_family"],
+                        row_payload["source_title"],
+                        row_payload["confidence_label"],
+                        row_payload["confidence_score"],
+                        row_payload["identity_match_label"],
+                        row_payload["identity_match_score"],
+                        row_payload["publishable"],
+                        row_payload["promotion_status"],
+                        row_payload["suppression_reason"],
+                        row_payload["evidence_excerpt"],
+                        row_payload["artifact_refs_json"],
+                        row_payload["model_provider"],
+                        row_payload["model_version"],
+                        row_payload["metadata_json"],
+                    ),
+                )
+        if self._control_plane_postgres.should_mirror("person_public_web_signals"):
+            try:
+                self._control_plane_postgres.delete_rows(
+                    table_name="person_public_web_signals",
+                    where_sql="run_id = %s",
+                    params=[normalized_run_id],
+                )
+                if row_payloads:
+                    self._control_plane_postgres.bulk_upsert_rows("person_public_web_signals", row_payloads)
+            except Exception:
+                pass
+        return len(row_payloads)
+
+    def get_person_public_web_signal(self, *, signal_id: str = "") -> dict[str, Any] | None:
+        normalized_signal_id = str(signal_id or "").strip()
+        if not normalized_signal_id:
+            return None
+        postgres_row = self._select_control_plane_row(
+            "person_public_web_signals",
+            row_builder=self._person_public_web_signal_from_row,
+            where_sql="signal_id = %s",
+            params=[normalized_signal_id],
+        )
+        if postgres_row is not None:
+            return postgres_row
+        if self._control_plane_postgres_should_skip_sqlite_fallback("person_public_web_signals"):
+            return None
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT * FROM person_public_web_signals WHERE signal_id = ? LIMIT 1",
+                (normalized_signal_id,),
+            ).fetchone()
+        return self._person_public_web_signal_from_row(row) if row is not None else None
+
+    def list_person_public_web_signals(
+        self,
+        *,
+        run_id: str = "",
+        asset_id: str = "",
+        person_identity_key: str = "",
+        record_id: str = "",
+        signal_kind: str = "",
+        limit: int = 500,
+    ) -> list[dict[str, Any]]:
+        clauses_sqlite: list[str] = []
+        clauses_pg: list[str] = []
+        params: list[Any] = []
+        for column_name, raw_value in (
+            ("run_id", run_id),
+            ("asset_id", asset_id),
+            ("person_identity_key", person_identity_key),
+            ("record_id", record_id),
+            ("signal_kind", signal_kind),
+        ):
+            value = str(raw_value or "").strip()
+            if not value:
+                continue
+            clauses_sqlite.append(f"{column_name} = ?")
+            clauses_pg.append(f"{column_name} = %s")
+            params.append(value)
+        postgres_rows = self._select_control_plane_rows(
+            "person_public_web_signals",
+            row_builder=self._person_public_web_signal_from_row,
+            where_sql=" AND ".join(clauses_pg),
+            params=params,
+            order_by_sql=(
+                "updated_at DESC, "
+                "CASE signal_kind WHEN 'email_candidate' THEN 0 WHEN 'profile_link' THEN 1 ELSE 2 END, "
+                "confidence_score DESC, signal_id DESC"
+            ),
+            limit=limit,
+        )
+        if postgres_rows:
+            return postgres_rows
+        if self._control_plane_postgres_should_skip_sqlite_fallback("person_public_web_signals"):
+            return []
+        where_clause = f"WHERE {' AND '.join(clauses_sqlite)}" if clauses_sqlite else ""
+        with self._lock:
+            rows = self._connection.execute(
+                f"""
+                SELECT * FROM person_public_web_signals
+                {where_clause}
+                ORDER BY updated_at DESC,
+                    CASE signal_kind WHEN 'email_candidate' THEN 0 WHEN 'profile_link' THEN 1 ELSE 2 END,
+                    confidence_score DESC,
+                    signal_id DESC
+                LIMIT ?
+                """,
+                (*params, limit),
+            ).fetchall()
+        return [self._person_public_web_signal_from_row(row) for row in rows]
+
+    def upsert_target_candidate_public_web_promotion(self, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized = _normalize_target_candidate_public_web_promotion_payload(payload)
+        existing = self.get_target_candidate_public_web_promotion(normalized["promotion_id"])
+        now = _utc_now_timestamp()
+        row_payload = _target_candidate_public_web_promotion_row_payload(normalized, existing=existing, now=now)
+        if self._write_control_plane_row_to_postgres("target_candidate_public_web_promotions", row_payload):
+            return (
+                self.get_target_candidate_public_web_promotion(normalized["promotion_id"])
+                or self._target_candidate_public_web_promotion_from_row(row_payload)
+            )
+        with self._lock, self._connection:
+            existing_row = self._connection.execute(
+                "SELECT created_at FROM target_candidate_public_web_promotions WHERE promotion_id = ? LIMIT 1",
+                (normalized["promotion_id"],),
+            ).fetchone()
+            self._connection.execute(
+                """
+                INSERT INTO target_candidate_public_web_promotions (
+                    promotion_id, signal_id, run_id, asset_id, person_identity_key, record_id, candidate_id,
+                    candidate_name, current_company, linkedin_url_key, signal_kind, signal_type, email_type,
+                    value, normalized_value, url, source_url, source_domain, source_family, source_title,
+                    confidence_label, confidence_score, identity_match_label, identity_match_score, publishable,
+                    clean_profile_link, link_shape_warnings_json, action, promotion_status, promoted_field,
+                    previous_value, new_value, operator, note, evidence_excerpt, metadata_json, created_at, updated_at
+                ) VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    COALESCE(?, CURRENT_TIMESTAMP), CURRENT_TIMESTAMP
+                )
+                ON CONFLICT(promotion_id) DO UPDATE SET
+                    signal_id = excluded.signal_id,
+                    run_id = excluded.run_id,
+                    asset_id = excluded.asset_id,
+                    person_identity_key = excluded.person_identity_key,
+                    record_id = excluded.record_id,
+                    candidate_id = excluded.candidate_id,
+                    candidate_name = excluded.candidate_name,
+                    current_company = excluded.current_company,
+                    linkedin_url_key = excluded.linkedin_url_key,
+                    signal_kind = excluded.signal_kind,
+                    signal_type = excluded.signal_type,
+                    email_type = excluded.email_type,
+                    value = excluded.value,
+                    normalized_value = excluded.normalized_value,
+                    url = excluded.url,
+                    source_url = excluded.source_url,
+                    source_domain = excluded.source_domain,
+                    source_family = excluded.source_family,
+                    source_title = excluded.source_title,
+                    confidence_label = excluded.confidence_label,
+                    confidence_score = excluded.confidence_score,
+                    identity_match_label = excluded.identity_match_label,
+                    identity_match_score = excluded.identity_match_score,
+                    publishable = excluded.publishable,
+                    clean_profile_link = excluded.clean_profile_link,
+                    link_shape_warnings_json = excluded.link_shape_warnings_json,
+                    action = excluded.action,
+                    promotion_status = excluded.promotion_status,
+                    promoted_field = excluded.promoted_field,
+                    previous_value = excluded.previous_value,
+                    new_value = excluded.new_value,
+                    operator = excluded.operator,
+                    note = excluded.note,
+                    evidence_excerpt = excluded.evidence_excerpt,
+                    metadata_json = excluded.metadata_json,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (
+                    row_payload["promotion_id"],
+                    row_payload["signal_id"],
+                    row_payload["run_id"],
+                    row_payload["asset_id"],
+                    row_payload["person_identity_key"],
+                    row_payload["record_id"],
+                    row_payload["candidate_id"],
+                    row_payload["candidate_name"],
+                    row_payload["current_company"],
+                    row_payload["linkedin_url_key"],
+                    row_payload["signal_kind"],
+                    row_payload["signal_type"],
+                    row_payload["email_type"],
+                    row_payload["value"],
+                    row_payload["normalized_value"],
+                    row_payload["url"],
+                    row_payload["source_url"],
+                    row_payload["source_domain"],
+                    row_payload["source_family"],
+                    row_payload["source_title"],
+                    row_payload["confidence_label"],
+                    row_payload["confidence_score"],
+                    row_payload["identity_match_label"],
+                    row_payload["identity_match_score"],
+                    row_payload["publishable"],
+                    row_payload["clean_profile_link"],
+                    row_payload["link_shape_warnings_json"],
+                    row_payload["action"],
+                    row_payload["promotion_status"],
+                    row_payload["promoted_field"],
+                    row_payload["previous_value"],
+                    row_payload["new_value"],
+                    row_payload["operator"],
+                    row_payload["note"],
+                    row_payload["evidence_excerpt"],
+                    row_payload["metadata_json"],
+                    existing_row["created_at"] if existing_row is not None else normalized.get("created_at"),
+                ),
+            )
+            row = self._connection.execute(
+                "SELECT * FROM target_candidate_public_web_promotions WHERE promotion_id = ? LIMIT 1",
+                (normalized["promotion_id"],),
+            ).fetchone()
+        self._mirror_control_plane_row("target_candidate_public_web_promotions", row)
+        return self.get_target_candidate_public_web_promotion(normalized["promotion_id"]) or normalized
+
+    def get_target_candidate_public_web_promotion(self, promotion_id: str) -> dict[str, Any] | None:
+        normalized_promotion_id = str(promotion_id or "").strip()
+        if not normalized_promotion_id:
+            return None
+        postgres_row = self._select_control_plane_row(
+            "target_candidate_public_web_promotions",
+            row_builder=self._target_candidate_public_web_promotion_from_row,
+            where_sql="promotion_id = %s",
+            params=[normalized_promotion_id],
+        )
+        if postgres_row is not None:
+            return postgres_row
+        if self._control_plane_postgres_should_skip_sqlite_fallback("target_candidate_public_web_promotions"):
+            return None
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT * FROM target_candidate_public_web_promotions WHERE promotion_id = ? LIMIT 1",
+                (normalized_promotion_id,),
+            ).fetchone()
+        return self._target_candidate_public_web_promotion_from_row(row) if row is not None else None
+
+    def list_target_candidate_public_web_promotions(
+        self,
+        *,
+        record_id: str = "",
+        signal_id: str = "",
+        run_id: str = "",
+        action: str = "",
+        limit: int = 500,
+    ) -> list[dict[str, Any]]:
+        clauses_sqlite: list[str] = []
+        clauses_pg: list[str] = []
+        params: list[Any] = []
+        for column_name, raw_value in (
+            ("record_id", record_id),
+            ("signal_id", signal_id),
+            ("run_id", run_id),
+        ):
+            value = str(raw_value or "").strip()
+            if not value:
+                continue
+            clauses_sqlite.append(f"{column_name} = ?")
+            clauses_pg.append(f"{column_name} = %s")
+            params.append(value)
+        normalized_action = _normalize_target_candidate_public_web_promotion_action(action, default="")
+        if normalized_action:
+            clauses_sqlite.append("action = ?")
+            clauses_pg.append("action = %s")
+            params.append(normalized_action)
+        postgres_rows = self._select_control_plane_rows(
+            "target_candidate_public_web_promotions",
+            row_builder=self._target_candidate_public_web_promotion_from_row,
+            where_sql=" AND ".join(clauses_pg),
+            params=params,
+            order_by_sql="updated_at DESC, created_at DESC, promotion_id DESC",
+            limit=limit,
+        )
+        if postgres_rows:
+            return postgres_rows
+        if self._control_plane_postgres_should_skip_sqlite_fallback("target_candidate_public_web_promotions"):
+            return []
+        where_clause = f"WHERE {' AND '.join(clauses_sqlite)}" if clauses_sqlite else ""
+        with self._lock:
+            rows = self._connection.execute(
+                f"""
+                SELECT * FROM target_candidate_public_web_promotions
+                {where_clause}
+                ORDER BY updated_at DESC, created_at DESC, promotion_id DESC
+                LIMIT ?
+                """,
+                (*params, limit),
+            ).fetchall()
+        return [self._target_candidate_public_web_promotion_from_row(row) for row in rows]
 
     def get_asset_default_pointer(
         self,
@@ -14672,6 +15819,156 @@ class SQLiteStore:
             "updated_at": row["updated_at"],
         }
 
+    def _target_candidate_public_web_batch_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+        return {
+            "batch_id": str(_row_value(row, "batch_id") or ""),
+            "idempotency_key": str(_row_value(row, "idempotency_key") or ""),
+            "status": str(_row_value(row, "status") or "queued"),
+            "requested_record_ids": _loads_json_list(_row_value(row, "requested_record_ids_json"), default=[]),
+            "source_families": _loads_json_list(_row_value(row, "source_families_json"), default=[]),
+            "options": _loads_json_dict(_row_value(row, "options_json")),
+            "run_ids": _loads_json_list(_row_value(row, "run_ids_json"), default=[]),
+            "summary": _loads_json_dict(_row_value(row, "summary_json")),
+            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
+            "requested_by": str(_row_value(row, "requested_by") or ""),
+            "force_refresh": bool(_row_value(row, "force_refresh", 0)),
+            "started_at": str(_row_value(row, "started_at") or ""),
+            "completed_at": str(_row_value(row, "completed_at") or ""),
+            "created_at": str(_row_value(row, "created_at") or ""),
+            "updated_at": str(_row_value(row, "updated_at") or ""),
+        }
+
+    def _target_candidate_public_web_run_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+        return {
+            "run_id": str(_row_value(row, "run_id") or ""),
+            "batch_id": str(_row_value(row, "batch_id") or ""),
+            "record_id": str(_row_value(row, "record_id") or ""),
+            "candidate_id": str(_row_value(row, "candidate_id") or ""),
+            "candidate_name": str(_row_value(row, "candidate_name") or ""),
+            "current_company": str(_row_value(row, "current_company") or ""),
+            "linkedin_url": str(_row_value(row, "linkedin_url") or ""),
+            "linkedin_url_key": str(_row_value(row, "linkedin_url_key") or ""),
+            "person_identity_key": str(_row_value(row, "person_identity_key") or ""),
+            "idempotency_key": str(_row_value(row, "idempotency_key") or ""),
+            "status": str(_row_value(row, "status") or "queued"),
+            "phase": str(_row_value(row, "phase") or "queued"),
+            "source_families": _loads_json_list(_row_value(row, "source_families_json"), default=[]),
+            "options": _loads_json_dict(_row_value(row, "options_json")),
+            "query_manifest": _loads_json_list(_row_value(row, "query_manifest_json"), default=[]),
+            "search_checkpoint": _loads_json_dict(_row_value(row, "search_checkpoint_json")),
+            "fetch_checkpoint": _loads_json_dict(_row_value(row, "fetch_checkpoint_json")),
+            "analysis_checkpoint": _loads_json_dict(_row_value(row, "analysis_checkpoint_json")),
+            "summary": _loads_json_dict(_row_value(row, "summary_json")),
+            "artifact_root": str(_row_value(row, "artifact_root") or ""),
+            "worker_key": str(_row_value(row, "worker_key") or ""),
+            "lease_owner": str(_row_value(row, "lease_owner") or ""),
+            "lease_expires_at": str(_row_value(row, "lease_expires_at") or ""),
+            "attempt_count": int(_row_value(row, "attempt_count", 0) or 0),
+            "last_error": str(_row_value(row, "last_error") or ""),
+            "started_at": str(_row_value(row, "started_at") or ""),
+            "completed_at": str(_row_value(row, "completed_at") or ""),
+            "created_at": str(_row_value(row, "created_at") or ""),
+            "updated_at": str(_row_value(row, "updated_at") or ""),
+        }
+
+    def _person_public_web_asset_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+        return {
+            "asset_id": str(_row_value(row, "asset_id") or ""),
+            "person_identity_key": str(_row_value(row, "person_identity_key") or ""),
+            "linkedin_url_key": str(_row_value(row, "linkedin_url_key") or ""),
+            "latest_run_id": str(_row_value(row, "latest_run_id") or ""),
+            "target_candidate_record_id": str(_row_value(row, "target_candidate_record_id") or ""),
+            "candidate_name": str(_row_value(row, "candidate_name") or ""),
+            "current_company": str(_row_value(row, "current_company") or ""),
+            "status": str(_row_value(row, "status") or "completed"),
+            "summary": _loads_json_dict(_row_value(row, "summary_json")),
+            "signals": _loads_json_dict(_row_value(row, "signals_json")),
+            "source_run_ids": _loads_json_list(_row_value(row, "source_run_ids_json"), default=[]),
+            "artifact_root": str(_row_value(row, "artifact_root") or ""),
+            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
+            "created_at": str(_row_value(row, "created_at") or ""),
+            "updated_at": str(_row_value(row, "updated_at") or ""),
+        }
+
+    def _person_public_web_signal_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+        return {
+            "signal_id": str(_row_value(row, "signal_id") or ""),
+            "run_id": str(_row_value(row, "run_id") or ""),
+            "asset_id": str(_row_value(row, "asset_id") or ""),
+            "person_identity_key": str(_row_value(row, "person_identity_key") or ""),
+            "record_id": str(_row_value(row, "record_id") or ""),
+            "candidate_id": str(_row_value(row, "candidate_id") or ""),
+            "candidate_name": str(_row_value(row, "candidate_name") or ""),
+            "current_company": str(_row_value(row, "current_company") or ""),
+            "linkedin_url_key": str(_row_value(row, "linkedin_url_key") or ""),
+            "signal_kind": str(_row_value(row, "signal_kind") or ""),
+            "signal_type": str(_row_value(row, "signal_type") or ""),
+            "email_type": str(_row_value(row, "email_type") or ""),
+            "value": str(_row_value(row, "value") or ""),
+            "normalized_value": str(_row_value(row, "normalized_value") or ""),
+            "url": str(_row_value(row, "url") or ""),
+            "source_url": str(_row_value(row, "source_url") or ""),
+            "source_domain": str(_row_value(row, "source_domain") or ""),
+            "source_family": str(_row_value(row, "source_family") or ""),
+            "source_title": str(_row_value(row, "source_title") or ""),
+            "confidence_label": str(_row_value(row, "confidence_label") or ""),
+            "confidence_score": _coerce_public_web_float(_row_value(row, "confidence_score", 0.0)),
+            "identity_match_label": str(_row_value(row, "identity_match_label") or ""),
+            "identity_match_score": _coerce_public_web_float(_row_value(row, "identity_match_score", 0.0)),
+            "publishable": bool(_row_value(row, "publishable", 0)),
+            "promotion_status": str(_row_value(row, "promotion_status") or ""),
+            "suppression_reason": str(_row_value(row, "suppression_reason") or ""),
+            "evidence_excerpt": str(_row_value(row, "evidence_excerpt") or ""),
+            "artifact_refs": _loads_json_dict(_row_value(row, "artifact_refs_json")),
+            "model_provider": str(_row_value(row, "model_provider") or ""),
+            "model_version": str(_row_value(row, "model_version") or ""),
+            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
+            "created_at": str(_row_value(row, "created_at") or ""),
+            "updated_at": str(_row_value(row, "updated_at") or ""),
+        }
+
+    def _target_candidate_public_web_promotion_from_row(self, row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+        return {
+            "promotion_id": str(_row_value(row, "promotion_id") or ""),
+            "signal_id": str(_row_value(row, "signal_id") or ""),
+            "run_id": str(_row_value(row, "run_id") or ""),
+            "asset_id": str(_row_value(row, "asset_id") or ""),
+            "person_identity_key": str(_row_value(row, "person_identity_key") or ""),
+            "record_id": str(_row_value(row, "record_id") or ""),
+            "candidate_id": str(_row_value(row, "candidate_id") or ""),
+            "candidate_name": str(_row_value(row, "candidate_name") or ""),
+            "current_company": str(_row_value(row, "current_company") or ""),
+            "linkedin_url_key": str(_row_value(row, "linkedin_url_key") or ""),
+            "signal_kind": str(_row_value(row, "signal_kind") or ""),
+            "signal_type": str(_row_value(row, "signal_type") or ""),
+            "email_type": str(_row_value(row, "email_type") or ""),
+            "value": str(_row_value(row, "value") or ""),
+            "normalized_value": str(_row_value(row, "normalized_value") or ""),
+            "url": str(_row_value(row, "url") or ""),
+            "source_url": str(_row_value(row, "source_url") or ""),
+            "source_domain": str(_row_value(row, "source_domain") or ""),
+            "source_family": str(_row_value(row, "source_family") or ""),
+            "source_title": str(_row_value(row, "source_title") or ""),
+            "confidence_label": str(_row_value(row, "confidence_label") or ""),
+            "confidence_score": _coerce_public_web_float(_row_value(row, "confidence_score", 0.0)),
+            "identity_match_label": str(_row_value(row, "identity_match_label") or ""),
+            "identity_match_score": _coerce_public_web_float(_row_value(row, "identity_match_score", 0.0)),
+            "publishable": bool(_row_value(row, "publishable", 0)),
+            "clean_profile_link": bool(_row_value(row, "clean_profile_link", 0)),
+            "link_shape_warnings": _loads_json_list(_row_value(row, "link_shape_warnings_json"), default=[]),
+            "action": str(_row_value(row, "action") or ""),
+            "promotion_status": str(_row_value(row, "promotion_status") or ""),
+            "promoted_field": str(_row_value(row, "promoted_field") or ""),
+            "previous_value": str(_row_value(row, "previous_value") or ""),
+            "new_value": str(_row_value(row, "new_value") or ""),
+            "operator": str(_row_value(row, "operator") or ""),
+            "note": str(_row_value(row, "note") or ""),
+            "evidence_excerpt": str(_row_value(row, "evidence_excerpt") or ""),
+            "metadata": _loads_json_dict(_row_value(row, "metadata_json")),
+            "created_at": str(_row_value(row, "created_at") or ""),
+            "updated_at": str(_row_value(row, "updated_at") or ""),
+        }
+
     def _asset_default_pointer_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
         return {
             "pointer_key": str(row["pointer_key"] or ""),
@@ -15212,38 +16509,479 @@ def _normalize_frontend_history_link_payload(payload: dict[str, Any]) -> dict[st
     }
 
 
-def _normalize_linkedin_profile_url_key(profile_url: str) -> str:
-    raw_value = str(profile_url or "").strip()
-    if not raw_value:
-        return ""
-    if "://" not in raw_value:
-        raw_value = f"https://{raw_value}"
-    parsed = parse.urlsplit(raw_value)
-    netloc = str(parsed.netloc or "").strip().lower()
-    path = str(parsed.path or "").strip()
-    if not netloc and path:
-        reparsed = parse.urlsplit(f"https://{path}")
-        netloc = str(reparsed.netloc or "").strip().lower()
-        path = str(reparsed.path or "").strip()
-    if not netloc:
-        return ""
-    normalized_path = re.sub(r"/{2,}", "/", path).rstrip("/")
-    if not normalized_path:
-        normalized_path = "/"
-    return f"https://{netloc}{normalized_path}".lower()
+_TARGET_CANDIDATE_PUBLIC_WEB_STATUSES = {
+    "queued",
+    "search_submitted",
+    "searching",
+    "entry_links_ready",
+    "fetching",
+    "analyzing",
+    "completed",
+    "completed_with_errors",
+    "needs_review",
+    "failed",
+    "cancelled",
+}
+_TARGET_CANDIDATE_PUBLIC_WEB_TERMINAL_STATUSES = {
+    "completed",
+    "completed_with_errors",
+    "needs_review",
+    "failed",
+    "cancelled",
+}
 
 
-def _normalize_linkedin_profile_url_list(values: list[str] | None) -> list[str]:
-    deduped: list[str] = []
-    seen_keys: set[str] = set()
-    for value in list(values or []):
-        normalized_value = str(value or "").strip()
-        normalized_key = _normalize_linkedin_profile_url_key(normalized_value)
-        if not normalized_key or normalized_key in seen_keys:
+def _loads_json_dict(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return dict(value)
+    try:
+        parsed = json.loads(str(value or "{}"))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return {}
+    return dict(parsed) if isinstance(parsed, dict) else {}
+
+
+def _loads_json_list(value: Any, *, default: list[Any] | None = None) -> list[Any]:
+    if isinstance(value, list):
+        return list(value)
+    if isinstance(value, tuple):
+        return list(value)
+    try:
+        parsed = json.loads(str(value or "[]"))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return list(default or [])
+    return list(parsed) if isinstance(parsed, list) else list(default or [])
+
+
+def _normalize_public_web_string_list(value: Any) -> list[str]:
+    if isinstance(value, str):
+        raw_items = [item.strip() for item in value.split(",")]
+    else:
+        raw_items = list(value or []) if isinstance(value, (list, tuple, set)) else []
+    seen: set[str] = set()
+    items: list[str] = []
+    for raw_item in raw_items:
+        item = str(raw_item or "").strip()
+        if not item or item in seen:
             continue
-        seen_keys.add(normalized_key)
-        deduped.append(normalized_value or normalized_key)
-    return deduped
+        seen.add(item)
+        items.append(item)
+    return items
+
+
+def _normalize_target_candidate_public_web_status(value: Any, *, default: str = "queued") -> str:
+    normalized = str(value or "").strip().lower()
+    if normalized in _TARGET_CANDIDATE_PUBLIC_WEB_STATUSES:
+        return normalized
+    return default
+
+
+def _public_web_hash_token(*parts: Any) -> str:
+    return sha1("|".join(str(part or "") for part in parts).encode("utf-8")).hexdigest()[:16]
+
+
+def _normalize_target_candidate_public_web_batch_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(payload or {})
+    requested_record_ids = _normalize_public_web_string_list(
+        normalized.get("requested_record_ids") or normalized.get("record_ids")
+    )
+    source_families = _normalize_public_web_string_list(normalized.get("source_families"))
+    options = dict(normalized.get("options") or {})
+    run_ids = _normalize_public_web_string_list(normalized.get("run_ids"))
+    idempotency_key = str(normalized.get("idempotency_key") or "").strip()
+    if not idempotency_key:
+        idempotency_key = "target-candidate-public-web-batch:" + _public_web_hash_token(
+            ",".join(sorted(requested_record_ids)),
+            ",".join(sorted(source_families)),
+            json.dumps(_json_safe_payload(options), sort_keys=True, ensure_ascii=False),
+            str(bool(normalized.get("force_refresh"))),
+        )
+    batch_id = str(normalized.get("batch_id") or normalized.get("id") or "").strip()
+    if not batch_id:
+        batch_id = f"tc-public-web-batch-{_public_web_hash_token(idempotency_key)}"
+    status = _normalize_target_candidate_public_web_status(normalized.get("status"))
+    completed_at = str(normalized.get("completed_at") or "").strip()
+    if status in _TARGET_CANDIDATE_PUBLIC_WEB_TERMINAL_STATUSES and not completed_at:
+        completed_at = _utc_now_timestamp()
+    return {
+        "batch_id": batch_id,
+        "idempotency_key": idempotency_key,
+        "status": status,
+        "requested_record_ids": requested_record_ids,
+        "source_families": source_families,
+        "options": options,
+        "run_ids": run_ids,
+        "summary": dict(normalized.get("summary") or {}),
+        "metadata": dict(normalized.get("metadata") or {}),
+        "requested_by": str(normalized.get("requested_by") or "").strip(),
+        "force_refresh": bool(normalized.get("force_refresh")),
+        "started_at": str(normalized.get("started_at") or "").strip(),
+        "completed_at": completed_at,
+        "created_at": str(normalized.get("created_at") or "").strip(),
+    }
+
+
+def _normalize_target_candidate_public_web_run_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(payload or {})
+    record_id = str(normalized.get("record_id") or normalized.get("id") or "").strip()
+    linkedin_url = str(normalized.get("linkedin_url") or "").strip()
+    linkedin_url_key = str(normalized.get("linkedin_url_key") or "").strip() or _normalize_linkedin_profile_url_key(
+        linkedin_url
+    )
+    source_families = _normalize_public_web_string_list(normalized.get("source_families"))
+    options = dict(normalized.get("options") or {})
+    person_identity_key = str(normalized.get("person_identity_key") or "").strip()
+    if not person_identity_key:
+        person_identity_key = f"linkedin:{linkedin_url_key}" if linkedin_url_key else f"target_candidate:{record_id}"
+    idempotency_key = str(normalized.get("idempotency_key") or "").strip()
+    if not idempotency_key:
+        idempotency_key = "target-candidate-public-web-run:" + _public_web_hash_token(
+            record_id,
+            person_identity_key,
+            ",".join(sorted(source_families)),
+            json.dumps(_json_safe_payload(options), sort_keys=True, ensure_ascii=False),
+        )
+    run_id = str(normalized.get("run_id") or "").strip() or f"tc-public-web-run-{_public_web_hash_token(idempotency_key)}"
+    status = _normalize_target_candidate_public_web_status(normalized.get("status"))
+    phase = str(normalized.get("phase") or status or "queued").strip().lower()
+    started_at = str(normalized.get("started_at") or "").strip()
+    if status != "queued" and not started_at:
+        started_at = _utc_now_timestamp()
+    completed_at = str(normalized.get("completed_at") or "").strip()
+    if status in _TARGET_CANDIDATE_PUBLIC_WEB_TERMINAL_STATUSES and not completed_at:
+        completed_at = _utc_now_timestamp()
+    attempt_value = normalized.get("attempt_count")
+    try:
+        attempt_count = max(0, int(attempt_value or 0))
+    except (TypeError, ValueError):
+        attempt_count = 0
+    return {
+        "run_id": run_id,
+        "batch_id": str(normalized.get("batch_id") or "").strip(),
+        "record_id": record_id,
+        "candidate_id": str(normalized.get("candidate_id") or "").strip(),
+        "candidate_name": str(normalized.get("candidate_name") or "").strip(),
+        "current_company": str(normalized.get("current_company") or "").strip(),
+        "linkedin_url": linkedin_url,
+        "linkedin_url_key": linkedin_url_key,
+        "person_identity_key": person_identity_key,
+        "idempotency_key": idempotency_key,
+        "status": status,
+        "phase": phase,
+        "source_families": source_families,
+        "options": options,
+        "query_manifest": _loads_json_list(normalized.get("query_manifest"), default=[]),
+        "search_checkpoint": dict(normalized.get("search_checkpoint") or {}),
+        "fetch_checkpoint": dict(normalized.get("fetch_checkpoint") or {}),
+        "analysis_checkpoint": dict(normalized.get("analysis_checkpoint") or {}),
+        "summary": dict(normalized.get("summary") or {}),
+        "artifact_root": str(normalized.get("artifact_root") or "").strip(),
+        "worker_key": str(normalized.get("worker_key") or "").strip() or f"public_web_run::{run_id}",
+        "lease_owner": str(normalized.get("lease_owner") or "").strip(),
+        "lease_expires_at": str(normalized.get("lease_expires_at") or "").strip(),
+        "attempt_count": attempt_count,
+        "last_error": str(normalized.get("last_error") or "").strip(),
+        "started_at": started_at,
+        "completed_at": completed_at,
+        "created_at": str(normalized.get("created_at") or "").strip(),
+    }
+
+
+def _target_candidate_public_web_run_row_payload(
+    normalized: dict[str, Any],
+    *,
+    existing: dict[str, Any] | None,
+    now: str,
+) -> dict[str, Any]:
+    return {
+        "run_id": normalized["run_id"],
+        "batch_id": normalized["batch_id"],
+        "record_id": normalized["record_id"],
+        "candidate_id": normalized["candidate_id"],
+        "candidate_name": normalized["candidate_name"],
+        "current_company": normalized["current_company"],
+        "linkedin_url": normalized["linkedin_url"],
+        "linkedin_url_key": normalized["linkedin_url_key"],
+        "person_identity_key": normalized["person_identity_key"],
+        "idempotency_key": normalized["idempotency_key"],
+        "status": normalized["status"],
+        "phase": normalized["phase"],
+        "source_families_json": json.dumps(normalized["source_families"], ensure_ascii=False),
+        "options_json": json.dumps(_json_safe_payload(normalized["options"]), ensure_ascii=False),
+        "query_manifest_json": json.dumps(_json_safe_payload(normalized["query_manifest"]), ensure_ascii=False),
+        "search_checkpoint_json": json.dumps(_json_safe_payload(normalized["search_checkpoint"]), ensure_ascii=False),
+        "fetch_checkpoint_json": json.dumps(_json_safe_payload(normalized["fetch_checkpoint"]), ensure_ascii=False),
+        "analysis_checkpoint_json": json.dumps(_json_safe_payload(normalized["analysis_checkpoint"]), ensure_ascii=False),
+        "summary_json": json.dumps(_json_safe_payload(normalized["summary"]), ensure_ascii=False),
+        "artifact_root": normalized["artifact_root"],
+        "worker_key": normalized["worker_key"],
+        "lease_owner": normalized["lease_owner"],
+        "lease_expires_at": normalized["lease_expires_at"],
+        "attempt_count": normalized["attempt_count"],
+        "last_error": normalized["last_error"],
+        "started_at": normalized["started_at"],
+        "completed_at": normalized["completed_at"],
+        "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or "").strip() or now,
+        "updated_at": now,
+    }
+
+
+def _normalize_person_public_web_asset_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(payload or {})
+    linkedin_url_key = str(normalized.get("linkedin_url_key") or "").strip()
+    person_identity_key = str(normalized.get("person_identity_key") or "").strip()
+    if not person_identity_key:
+        person_identity_key = f"linkedin:{linkedin_url_key}" if linkedin_url_key else ""
+    asset_id = str(normalized.get("asset_id") or "").strip()
+    if not asset_id:
+        asset_id = f"person-public-web-{_public_web_hash_token(person_identity_key)}"
+    source_run_ids = _normalize_public_web_string_list(normalized.get("source_run_ids"))
+    latest_run_id = str(normalized.get("latest_run_id") or "").strip()
+    if latest_run_id and latest_run_id not in source_run_ids:
+        source_run_ids.append(latest_run_id)
+    return {
+        "asset_id": asset_id,
+        "person_identity_key": person_identity_key,
+        "linkedin_url_key": linkedin_url_key,
+        "latest_run_id": latest_run_id,
+        "target_candidate_record_id": str(normalized.get("target_candidate_record_id") or "").strip(),
+        "candidate_name": str(normalized.get("candidate_name") or "").strip(),
+        "current_company": str(normalized.get("current_company") or "").strip(),
+        "status": _normalize_target_candidate_public_web_status(normalized.get("status"), default="completed"),
+        "summary": dict(normalized.get("summary") or {}),
+        "signals": dict(normalized.get("signals") or {}),
+        "source_run_ids": source_run_ids,
+        "artifact_root": str(normalized.get("artifact_root") or "").strip(),
+        "metadata": dict(normalized.get("metadata") or {}),
+        "created_at": str(normalized.get("created_at") or "").strip(),
+    }
+
+
+def _normalize_person_public_web_signal_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(payload or {})
+    run_id = str(normalized.get("run_id") or "").strip()
+    person_identity_key = str(normalized.get("person_identity_key") or "").strip()
+    linkedin_url_key = str(normalized.get("linkedin_url_key") or "").strip()
+    asset_id = str(normalized.get("asset_id") or "").strip()
+    if not asset_id and person_identity_key.startswith("linkedin:"):
+        asset_id = f"person-public-web-{_public_web_hash_token(person_identity_key)}"
+    signal_kind = str(normalized.get("signal_kind") or normalized.get("kind") or "").strip()
+    signal_type = str(normalized.get("signal_type") or normalized.get("type") or "").strip()
+    value = str(normalized.get("value") or "").strip()
+    normalized_value = str(normalized.get("normalized_value") or value).strip()
+    url = str(normalized.get("url") or "").strip()
+    source_url = str(normalized.get("source_url") or url).strip()
+    signal_id = str(normalized.get("signal_id") or "").strip()
+    if not signal_id:
+        signal_id = "person-public-web-signal-" + _public_web_hash_token(
+            run_id,
+            person_identity_key,
+            signal_kind,
+            signal_type,
+            normalized_value,
+            url,
+            source_url,
+        )
+    return {
+        "signal_id": signal_id,
+        "run_id": run_id,
+        "asset_id": asset_id,
+        "person_identity_key": person_identity_key,
+        "record_id": str(normalized.get("record_id") or "").strip(),
+        "candidate_id": str(normalized.get("candidate_id") or "").strip(),
+        "candidate_name": str(normalized.get("candidate_name") or "").strip(),
+        "current_company": str(normalized.get("current_company") or "").strip(),
+        "linkedin_url_key": linkedin_url_key,
+        "signal_kind": signal_kind,
+        "signal_type": signal_type,
+        "email_type": str(normalized.get("email_type") or "").strip(),
+        "value": value,
+        "normalized_value": normalized_value,
+        "url": url,
+        "source_url": source_url,
+        "source_domain": str(normalized.get("source_domain") or "").strip(),
+        "source_family": str(normalized.get("source_family") or "").strip(),
+        "source_title": str(normalized.get("source_title") or "").strip(),
+        "confidence_label": str(normalized.get("confidence_label") or "").strip(),
+        "confidence_score": _coerce_public_web_float(normalized.get("confidence_score")),
+        "identity_match_label": str(normalized.get("identity_match_label") or "").strip(),
+        "identity_match_score": _coerce_public_web_float(normalized.get("identity_match_score")),
+        "publishable": bool(normalized.get("publishable")),
+        "promotion_status": str(normalized.get("promotion_status") or "").strip(),
+        "suppression_reason": str(normalized.get("suppression_reason") or "").strip(),
+        "evidence_excerpt": str(normalized.get("evidence_excerpt") or "").strip(),
+        "artifact_refs": dict(normalized.get("artifact_refs") or {}),
+        "model_provider": str(normalized.get("model_provider") or "").strip(),
+        "model_version": str(normalized.get("model_version") or "").strip(),
+        "metadata": dict(normalized.get("metadata") or {}),
+        "created_at": str(normalized.get("created_at") or "").strip(),
+    }
+
+
+def _person_public_web_signal_row_payload(
+    normalized: dict[str, Any],
+    *,
+    existing: dict[str, Any] | None,
+    now: str,
+) -> dict[str, Any]:
+    return {
+        "signal_id": normalized["signal_id"],
+        "run_id": normalized["run_id"],
+        "asset_id": normalized["asset_id"],
+        "person_identity_key": normalized["person_identity_key"],
+        "record_id": normalized["record_id"],
+        "candidate_id": normalized["candidate_id"],
+        "candidate_name": normalized["candidate_name"],
+        "current_company": normalized["current_company"],
+        "linkedin_url_key": normalized["linkedin_url_key"],
+        "signal_kind": normalized["signal_kind"],
+        "signal_type": normalized["signal_type"],
+        "email_type": normalized["email_type"],
+        "value": normalized["value"],
+        "normalized_value": normalized["normalized_value"],
+        "url": normalized["url"],
+        "source_url": normalized["source_url"],
+        "source_domain": normalized["source_domain"],
+        "source_family": normalized["source_family"],
+        "source_title": normalized["source_title"],
+        "confidence_label": normalized["confidence_label"],
+        "confidence_score": normalized["confidence_score"],
+        "identity_match_label": normalized["identity_match_label"],
+        "identity_match_score": normalized["identity_match_score"],
+        "publishable": 1 if normalized["publishable"] else 0,
+        "promotion_status": normalized["promotion_status"],
+        "suppression_reason": normalized["suppression_reason"],
+        "evidence_excerpt": normalized["evidence_excerpt"],
+        "artifact_refs_json": json.dumps(_json_safe_payload(normalized["artifact_refs"]), ensure_ascii=False),
+        "model_provider": normalized["model_provider"],
+        "model_version": normalized["model_version"],
+        "metadata_json": json.dumps(_json_safe_payload(normalized["metadata"]), ensure_ascii=False),
+        "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or "").strip() or now,
+        "updated_at": now,
+    }
+
+
+def _normalize_target_candidate_public_web_promotion_action(value: Any, *, default: str = "promote") -> str:
+    normalized = str(value or "").strip().lower()
+    if normalized in {"promote", "reject"}:
+        return normalized
+    return default
+
+
+def _normalize_target_candidate_public_web_promotion_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(payload or {})
+    action = _normalize_target_candidate_public_web_promotion_action(normalized.get("action"))
+    promotion_status = str(normalized.get("promotion_status") or "").strip()
+    if not promotion_status:
+        promotion_status = "manually_promoted" if action == "promote" else "manually_rejected"
+    signal_id = str(normalized.get("signal_id") or "").strip()
+    record_id = str(normalized.get("record_id") or "").strip()
+    normalized_value = str(normalized.get("normalized_value") or normalized.get("value") or normalized.get("url") or "").strip()
+    promotion_id = str(normalized.get("promotion_id") or normalized.get("id") or "").strip()
+    if not promotion_id:
+        promotion_id = "target-candidate-public-web-promotion-" + _public_web_hash_token(
+            record_id,
+            signal_id,
+            action,
+            normalized_value,
+            normalized.get("created_at") or _utc_now_timestamp(),
+        )
+    link_shape_warnings = _normalize_public_web_string_list(normalized.get("link_shape_warnings"))
+    metadata = dict(normalized.get("metadata") or {})
+    return {
+        "promotion_id": promotion_id,
+        "signal_id": signal_id,
+        "run_id": str(normalized.get("run_id") or "").strip(),
+        "asset_id": str(normalized.get("asset_id") or "").strip(),
+        "person_identity_key": str(normalized.get("person_identity_key") or "").strip(),
+        "record_id": record_id,
+        "candidate_id": str(normalized.get("candidate_id") or "").strip(),
+        "candidate_name": str(normalized.get("candidate_name") or "").strip(),
+        "current_company": str(normalized.get("current_company") or "").strip(),
+        "linkedin_url_key": str(normalized.get("linkedin_url_key") or "").strip(),
+        "signal_kind": str(normalized.get("signal_kind") or "").strip(),
+        "signal_type": str(normalized.get("signal_type") or "").strip(),
+        "email_type": str(normalized.get("email_type") or "").strip(),
+        "value": str(normalized.get("value") or "").strip(),
+        "normalized_value": normalized_value,
+        "url": str(normalized.get("url") or "").strip(),
+        "source_url": str(normalized.get("source_url") or "").strip(),
+        "source_domain": str(normalized.get("source_domain") or "").strip(),
+        "source_family": str(normalized.get("source_family") or "").strip(),
+        "source_title": str(normalized.get("source_title") or "").strip(),
+        "confidence_label": str(normalized.get("confidence_label") or "").strip(),
+        "confidence_score": _coerce_public_web_float(normalized.get("confidence_score")),
+        "identity_match_label": str(normalized.get("identity_match_label") or "").strip(),
+        "identity_match_score": _coerce_public_web_float(normalized.get("identity_match_score")),
+        "publishable": bool(normalized.get("publishable")),
+        "clean_profile_link": bool(normalized.get("clean_profile_link")),
+        "link_shape_warnings": link_shape_warnings,
+        "action": action,
+        "promotion_status": promotion_status,
+        "promoted_field": str(normalized.get("promoted_field") or "").strip(),
+        "previous_value": str(normalized.get("previous_value") or "").strip(),
+        "new_value": str(normalized.get("new_value") or normalized_value).strip(),
+        "operator": str(normalized.get("operator") or "operator").strip() or "operator",
+        "note": str(normalized.get("note") or "").strip(),
+        "evidence_excerpt": str(normalized.get("evidence_excerpt") or "").strip(),
+        "metadata": metadata,
+        "created_at": str(normalized.get("created_at") or "").strip(),
+    }
+
+
+def _target_candidate_public_web_promotion_row_payload(
+    normalized: dict[str, Any],
+    *,
+    existing: dict[str, Any] | None,
+    now: str,
+) -> dict[str, Any]:
+    return {
+        "promotion_id": normalized["promotion_id"],
+        "signal_id": normalized["signal_id"],
+        "run_id": normalized["run_id"],
+        "asset_id": normalized["asset_id"],
+        "person_identity_key": normalized["person_identity_key"],
+        "record_id": normalized["record_id"],
+        "candidate_id": normalized["candidate_id"],
+        "candidate_name": normalized["candidate_name"],
+        "current_company": normalized["current_company"],
+        "linkedin_url_key": normalized["linkedin_url_key"],
+        "signal_kind": normalized["signal_kind"],
+        "signal_type": normalized["signal_type"],
+        "email_type": normalized["email_type"],
+        "value": normalized["value"],
+        "normalized_value": normalized["normalized_value"],
+        "url": normalized["url"],
+        "source_url": normalized["source_url"],
+        "source_domain": normalized["source_domain"],
+        "source_family": normalized["source_family"],
+        "source_title": normalized["source_title"],
+        "confidence_label": normalized["confidence_label"],
+        "confidence_score": normalized["confidence_score"],
+        "identity_match_label": normalized["identity_match_label"],
+        "identity_match_score": normalized["identity_match_score"],
+        "publishable": 1 if normalized["publishable"] else 0,
+        "clean_profile_link": 1 if normalized["clean_profile_link"] else 0,
+        "link_shape_warnings_json": json.dumps(normalized["link_shape_warnings"], ensure_ascii=False),
+        "action": normalized["action"],
+        "promotion_status": normalized["promotion_status"],
+        "promoted_field": normalized["promoted_field"],
+        "previous_value": normalized["previous_value"],
+        "new_value": normalized["new_value"],
+        "operator": normalized["operator"],
+        "note": normalized["note"],
+        "evidence_excerpt": normalized["evidence_excerpt"],
+        "metadata_json": json.dumps(_json_safe_payload(normalized["metadata"]), ensure_ascii=False),
+        "created_at": str((existing or {}).get("created_at") or normalized.get("created_at") or "").strip() or now,
+        "updated_at": now,
+    }
+
+
+def _coerce_public_web_float(value: Any) -> float:
+    try:
+        return float(value or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _row_value(row: Any, key: str, default: Any = "") -> Any:

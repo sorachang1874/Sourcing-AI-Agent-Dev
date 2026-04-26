@@ -42,11 +42,19 @@ from .orchestrator import (
 )
 from .outreach_layering import analyze_company_outreach_layers
 from .profile_registry_backfill import backfill_linkedin_profile_registry
+from .public_web_quality import evaluate_public_web_quality_paths, write_public_web_quality_report
+from .public_web_search import (
+    PublicWebExperimentOptions,
+    build_sample_target_candidate_records,
+    load_target_candidates_from_json,
+    run_target_candidate_public_web_experiment,
+)
 from .runtime_rebuild import rebuild_runtime_control_plane
+from .search_provider import build_search_provider
 from .semantic_provider import build_semantic_provider
 from .service_daemon import SingleInstanceError, WorkerDaemonService
 from .settings import load_settings
-from .storage import SQLiteStore
+from .storage import ControlPlaneStore
 from .workflow_submission import (
     normalize_workflow_submission_payload,
     workflow_runtime_uses_managed_runner,
@@ -111,8 +119,8 @@ def launch_detached_command(
     return payload
 
 
-def build_runtime_store(settings) -> SQLiteStore:
-    return SQLiteStore(settings.db_path)
+def build_runtime_store(settings) -> ControlPlaneStore:
+    return ControlPlaneStore(settings.db_path)
 
 
 def build_control_plane_runtime_summary() -> dict[str, Any]:
@@ -136,38 +144,38 @@ def build_control_plane_runtime_summary() -> dict[str, Any]:
             "candidate_documents_fallback_enabled": store.candidate_documents_fallback_enabled(),
         }
     )
-    summary["legacy_sqlite_banner"] = _legacy_sqlite_runtime_banner(summary)
+    summary["control_plane_storage_banner"] = _control_plane_storage_banner(summary)
     return summary
 
 
-def _legacy_sqlite_runtime_banner(summary: dict[str, Any]) -> dict[str, Any]:
+def _control_plane_storage_banner(summary: dict[str, Any]) -> dict[str, Any]:
     live_mode = str(summary.get("control_plane_postgres_live_mode") or "").strip().lower()
     sqlite_shadow_backend = str(summary.get("sqlite_shadow_backend") or "").strip().lower()
     if live_mode != "postgres_only":
         return {
-            "status": "legacy_sqlite_runtime",
-            "severity": "warning",
+            "status": "non_pg_control_plane",
+            "severity": "error",
             "message": (
-                "This runtime is not PG-only. SQLite is allowed only for dev/emergency legacy workflows; "
-                "production/live hosted traffic must use Postgres."
+                "This runtime is not PG-only. Disk SQLite live control-plane mode is retired; "
+                "migrate state into Postgres before live or hosted use."
             ),
             "migration_exit": (
                 "Set SOURCING_CONTROL_PLANE_POSTGRES_DSN, "
                 "SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE=postgres_only, "
-                "SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES=1, and migrate any SQLite-only state back into PG."
+                "SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES=1, and migrate any remaining SQLite-only state into PG."
             ),
         }
     if sqlite_shadow_backend == "disk":
         return {
-            "status": "disk_sqlite_shadow",
-            "severity": "warning",
-            "message": "PG-only live mode should use an ephemeral shared_memory SQLite shadow, not disk-backed SQLite.",
+            "status": "disk_shadow_rejected",
+            "severity": "error",
+            "message": "PG-only live mode must use an ephemeral shared_memory compatibility shadow, not disk-backed storage.",
             "migration_exit": "Set SOURCING_PG_ONLY_SQLITE_BACKEND=shared_memory before serving live traffic.",
         }
     return {
         "status": "pg_only",
         "severity": "ok",
-        "message": "Postgres is the live control plane; SQLite is only an ephemeral compatibility shadow.",
+        "message": "Postgres is the live control plane; the compatibility shadow is ephemeral.",
         "migration_exit": "",
     }
 
@@ -227,6 +235,103 @@ def build_asset_supplement_manager() -> CompanyAssetSupplementManager:
         settings=settings,
         model_client=model_client,
     )
+
+
+def run_target_candidate_public_web_experiment_command(args) -> dict[str, Any]:
+    provider_mode = str(args.external_provider_mode or "").strip().lower()
+    if provider_mode:
+        os.environ["SOURCING_EXTERNAL_PROVIDER_MODE"] = provider_mode
+    catalog = AssetCatalog.discover()
+    settings = load_settings(catalog.project_root)
+    store = build_runtime_store(settings)
+    if str(args.input_file or "").strip():
+        target_candidates = load_target_candidates_from_json(args.input_file)
+    elif bool(args.sample):
+        target_candidates = build_sample_target_candidate_records(limit=max(1, int(args.limit or 10)))
+    else:
+        requested_record_ids = [str(item or "").strip() for item in list(args.record_id or []) if str(item or "").strip()]
+        if requested_record_ids:
+            target_candidates = [
+                record
+                for record_id in requested_record_ids
+                if (record := store.get_target_candidate(record_id)) is not None
+            ]
+        else:
+            target_candidates = store.list_target_candidates(
+                job_id=str(args.job_id or "").strip(),
+                history_id=str(args.history_id or "").strip(),
+                follow_up_status=str(args.follow_up_status or "").strip(),
+                limit=max(1, int(args.limit or 10)),
+            )
+        if not target_candidates and bool(args.sample_if_empty):
+            target_candidates = build_sample_target_candidate_records(limit=max(1, int(args.limit or 10)))
+    if not target_candidates:
+        return {
+            "status": "not_found",
+            "reason": "no target candidates matched; use --sample or --input-file for a self-contained experiment",
+        }
+    output_root = (
+        Path(str(args.output_dir)).expanduser()
+        if str(args.output_dir or "").strip()
+        else settings.runtime_dir / "public_web" / "experiments"
+    )
+    options = PublicWebExperimentOptions(
+        max_queries_per_candidate=max(1, int(args.max_queries_per_candidate or 10)),
+        max_results_per_query=max(1, int(args.max_results_per_query or 10)),
+        max_entry_links_per_candidate=max(1, int(args.max_entry_links_per_candidate or 40)),
+        max_fetches_per_candidate=max(0, int(args.max_fetches_per_candidate or 0)),
+        max_ai_evidence_documents=max(1, int(args.max_ai_evidence_documents or 8)),
+        fetch_content=not bool(args.no_fetch_content),
+        extract_contact_signals=not bool(args.no_contact_extraction),
+        ai_extraction=str(args.ai_extraction or "auto").strip().lower() or "auto",
+        timeout_seconds=max(1, int(args.timeout_seconds or settings.search.timeout_seconds or 30)),
+        use_batch_search=not bool(args.no_batch_search),
+        batch_ready_poll_interval_seconds=max(0.0, float(args.batch_ready_poll_interval_seconds or 0.0)),
+        max_batch_ready_polls=max(1, int(args.max_batch_ready_polls or 1)),
+        max_concurrent_fetches_per_candidate=max(1, int(args.max_concurrent_fetches_per_candidate or 1)),
+        max_concurrent_candidate_analyses=max(1, int(args.max_concurrent_candidate_analyses or 1)),
+    )
+    search_provider = build_search_provider(settings.search)
+    model_client = build_model_client(settings.model_provider, settings.qwen)
+    summary = run_target_candidate_public_web_experiment(
+        target_candidates=target_candidates[: max(1, int(args.limit or len(target_candidates)))],
+        search_provider=search_provider,
+        model_client=model_client,
+        output_dir=output_root,
+        options=options,
+        run_id=str(args.run_id or "").strip(),
+    )
+    return {
+        "status": summary.get("status", "completed"),
+        "provider_mode": os.environ.get("SOURCING_EXTERNAL_PROVIDER_MODE", "live"),
+        "summary": summary,
+    }
+
+
+def evaluate_public_web_quality_command(args) -> dict[str, Any]:
+    catalog = AssetCatalog.discover()
+    settings = load_settings(catalog.project_root)
+    input_paths = [Path(str(item)).expanduser() for item in list(args.experiment_dir or []) if str(item or "").strip()]
+    if not input_paths:
+        input_paths = [settings.runtime_dir / "public_web" / "experiments"]
+    report = evaluate_public_web_quality_paths(input_paths)
+    written: dict[str, str] = {}
+    output_dir_value = str(args.output_dir or "").strip()
+    if output_dir_value:
+        written = write_public_web_quality_report(report, Path(output_dir_value).expanduser())
+        report = {**report, "written": written}
+    if bool(args.fail_on_high_risk) and int(dict(report.get("summary") or {}).get("high_issue_count") or 0) > 0:
+        report = {**report, "status": "failed"}
+    if bool(getattr(args, "summary_only", False)):
+        summary_report: dict[str, Any] = {
+            "status": report.get("status", "ok"),
+            "summary": report.get("summary", {}),
+            "input_paths": [str(path) for path in input_paths],
+        }
+        if written:
+            summary_report["written"] = written
+        return summary_report
+    return report
 
 
 def spawn_workflow_runner(job_id: str, *, auto_job_daemon: bool) -> dict[str, object]:
@@ -452,7 +557,7 @@ def main() -> None:
     subparsers.add_parser("bootstrap", help="Load local assets into the runtime store")
     subparsers.add_parser(
         "show-control-plane-runtime",
-        help="Print the resolved Postgres/SQLite-shadow runtime configuration for the current workspace",
+        help="Print the resolved Postgres control-plane runtime configuration for the current workspace",
     )
 
     run_job_parser = subparsers.add_parser("run-job", help="Run a sourcing job from JSON file")
@@ -892,20 +997,10 @@ def main() -> None:
 
     company_handoff_bundle_parser = subparsers.add_parser(
         "export-company-handoff-bundle",
-        help="Export a company handoff bundle including snapshots and related runtime assets; SQLite is backup-only and excluded by default",
+        help="Export a company handoff bundle including snapshots and related runtime assets",
     )
     company_handoff_bundle_parser.add_argument("--company", required=True, help="Company key or name")
     company_handoff_bundle_parser.add_argument("--output-dir", default="", help="Optional bundle export directory")
-    company_handoff_bundle_parser.add_argument(
-        "--with-sqlite-backup",
-        action="store_true",
-        help="Also include a legacy backup-only SQLite snapshot alias in the handoff bundle",
-    )
-    company_handoff_bundle_parser.add_argument(
-        "--without-sqlite",
-        action="store_true",
-        help="Deprecated compatibility flag; SQLite is already excluded by default",
-    )
     company_handoff_bundle_parser.add_argument(
         "--without-live-tests", action="store_true", help="Do not include matching live test assets"
     )
@@ -916,11 +1011,13 @@ def main() -> None:
         "--without-jobs", action="store_true", help="Do not include matching job JSON files"
     )
 
-    sqlite_snapshot_parser = subparsers.add_parser(
-        "export-sqlite-snapshot",
-        help="Legacy alias: export a backup-only control-plane snapshot or SQLite portable bundle",
+    control_plane_snapshot_bundle_parser = subparsers.add_parser(
+        "export-control-plane-snapshot-bundle",
+        help="Export the Postgres control-plane snapshot as a portable asset bundle",
     )
-    sqlite_snapshot_parser.add_argument("--output-dir", default="", help="Optional bundle export directory")
+    control_plane_snapshot_bundle_parser.add_argument(
+        "--output-dir", default="", help="Optional bundle export directory"
+    )
 
     company_artifact_parser = subparsers.add_parser(
         "build-company-candidate-artifacts",
@@ -1324,17 +1421,6 @@ def main() -> None:
         help="Force re-download even when the local payload file already matches the manifest",
     )
 
-    restore_sqlite_parser = subparsers.add_parser(
-        "restore-sqlite-snapshot",
-        help="Legacy alias: restore a backup-only control-plane snapshot or SQLite bundle",
-    )
-    restore_sqlite_parser.add_argument("--manifest", required=True, help="Path to bundle_manifest.json")
-    restore_sqlite_parser.add_argument("--target-db-path", default="", help="Optional DB path override")
-    restore_sqlite_parser.add_argument("--backup-dir", default="", help="Optional backup directory")
-    restore_sqlite_parser.add_argument(
-        "--no-backup", action="store_true", help="Overwrite without backing up current DB"
-    )
-
     import_cloud_assets_parser = subparsers.add_parser(
         "import-cloud-assets",
         help="Download/restore a cloud asset bundle and automatically repair runtime registries for imported company snapshots",
@@ -1361,13 +1447,7 @@ def main() -> None:
     import_cloud_assets_parser.add_argument(
         "--target-db-path",
         default="",
-        help="Optional DB path override for sqlite restore or post-import registry repair",
-    )
-    import_cloud_assets_parser.add_argument(
-        "--backup-dir", default="", help="Optional backup directory for sqlite restore"
-    )
-    import_cloud_assets_parser.add_argument(
-        "--no-backup", action="store_true", help="Overwrite sqlite target without backup"
+        help="Optional control-plane store path override for post-import registry repair",
     )
     import_cloud_assets_parser.add_argument(
         "--conflict",
@@ -1399,11 +1479,6 @@ def main() -> None:
         "--disable-legacy-bundle-fallback",
         action="store_true",
         help="Fail instead of restoring legacy bundle payloads when generation-first resolution does not succeed",
-    )
-    import_cloud_assets_parser.add_argument(
-        "--allow-sqlite-snapshot-restore",
-        action="store_true",
-        help="Explicitly allow legacy sqlite snapshot restore when generation-first resolution does not succeed",
     )
     import_cloud_assets_parser.add_argument(
         "--disable-local-link",
@@ -1473,14 +1548,22 @@ def main() -> None:
 
     export_control_plane_parser = subparsers.add_parser(
         "export-control-plane-snapshot",
-        help="Export SQLite-backed control-plane state plus generation indexes as a Postgres-migration snapshot",
+        help="Export control-plane state plus generation indexes as a Postgres restore/migration snapshot",
     )
     export_control_plane_parser.add_argument(
         "--output",
         default="",
         help="Optional output path; defaults to runtime/object_sync/control_plane/control_plane_snapshot.json",
     )
-    export_control_plane_parser.add_argument("--sqlite-path", default="", help="Optional sqlite path override")
+    export_control_plane_parser.add_argument(
+        "--source-backend",
+        choices=["postgres", "sqlite", "auto"],
+        default="postgres",
+        help="Snapshot source backend; sqlite is migration-only",
+    )
+    export_control_plane_parser.add_argument(
+        "--sqlite-path", default="", help="Migration-only sqlite source path when --source-backend=sqlite or auto"
+    )
     export_control_plane_parser.add_argument("--runtime-dir", default="", help="Optional runtime dir override")
     export_control_plane_parser.add_argument(
         "--table", action="append", default=[], help="Optional table selection; repeatable"
@@ -1488,12 +1571,12 @@ def main() -> None:
     export_control_plane_parser.add_argument(
         "--all-sqlite-tables",
         action="store_true",
-        help="Export every non-internal SQLite table plus generation_index_entries when present",
+        help="Migration-only: export every non-internal SQLite table plus generation_index_entries when present",
     )
 
     sync_control_plane_parser = subparsers.add_parser(
         "sync-control-plane-postgres",
-        help="Sync an exported control-plane snapshot into Postgres, or mirror runtime control-plane state directly",
+        help="Sync an exported control-plane snapshot into Postgres, or run a migration-only runtime mirror",
     )
     sync_control_plane_parser.add_argument(
         "--snapshot", default="", help="Optional path to an exported control-plane snapshot JSON"
@@ -1505,7 +1588,7 @@ def main() -> None:
         "--runtime-dir", default="", help="Optional runtime dir override for direct runtime mirroring"
     )
     sync_control_plane_parser.add_argument(
-        "--sqlite-path", default="", help="Optional sqlite path override for direct runtime mirroring"
+        "--sqlite-path", default="", help="Migration-only sqlite path override for direct runtime mirroring"
     )
     sync_control_plane_parser.add_argument(
         "--state-path", default="", help="Optional sync state path override for direct runtime mirroring"
@@ -1530,7 +1613,7 @@ def main() -> None:
     sync_control_plane_parser.add_argument(
         "--all-sqlite-tables",
         action="store_true",
-        help="When mirroring directly from runtime SQLite, sync every non-internal SQLite table plus generation_index_entries",
+        help="Migration-only: sync every non-internal SQLite table plus generation_index_entries",
     )
     sync_control_plane_parser.add_argument(
         "--validate-postgres",
@@ -1540,7 +1623,7 @@ def main() -> None:
     sync_control_plane_parser.add_argument(
         "--direct-stream",
         action="store_true",
-        help="Stream rows directly from SQLite to Postgres table-by-table instead of exporting a monolithic JSON snapshot first",
+        help="Migration-only: stream rows directly from SQLite to Postgres table-by-table",
     )
     sync_control_plane_parser.add_argument(
         "--chunk-size",
@@ -1603,6 +1686,135 @@ def main() -> None:
         help="Command to run, passed after --. Example: launch-detached --log-path runtime/service_logs/task.log -- python3 -m sourcing_agent.cli serve",
     )
 
+    public_web_experiment_parser = subparsers.add_parser(
+        "run-target-candidate-public-web-experiment",
+        help=(
+            "Run the candidate-level Public Web Search experiment for selected target candidates. "
+            "Outputs query, entry-link, fetch, signal, and summary artifacts without adding new persistence tables."
+        ),
+    )
+    public_web_experiment_parser.add_argument(
+        "--limit",
+        type=int,
+        default=10,
+        help="Maximum target candidates to process. Defaults to the requested 10-candidate experiment batch.",
+    )
+    public_web_experiment_parser.add_argument("--record-id", action="append", default=[], help="Target candidate record id; repeatable")
+    public_web_experiment_parser.add_argument("--job-id", default="", help="Optional target_candidates job_id filter")
+    public_web_experiment_parser.add_argument("--history-id", default="", help="Optional target_candidates history_id filter")
+    public_web_experiment_parser.add_argument(
+        "--follow-up-status", default="", help="Optional target_candidates follow_up_status filter"
+    )
+    public_web_experiment_parser.add_argument(
+        "--input-file",
+        default="",
+        help="Optional JSON file with target_candidates/candidates records; bypasses store selection.",
+    )
+    public_web_experiment_parser.add_argument(
+        "--sample",
+        action="store_true",
+        help="Use the built-in 10-candidate sample instead of reading target_candidates from the store.",
+    )
+    public_web_experiment_parser.add_argument(
+        "--sample-if-empty",
+        action="store_true",
+        help="Fall back to the built-in sample if the selected target_candidates scope is empty.",
+    )
+    public_web_experiment_parser.add_argument(
+        "--output-dir",
+        default="",
+        help="Artifact output root. Defaults to runtime/public_web/experiments.",
+    )
+    public_web_experiment_parser.add_argument("--run-id", default="", help="Optional stable run id for replayable experiments")
+    public_web_experiment_parser.add_argument(
+        "--external-provider-mode",
+        choices=["live", "simulate", "replay", "scripted"],
+        default="",
+        help="Optional override for SOURCING_EXTERNAL_PROVIDER_MODE before provider construction.",
+    )
+    public_web_experiment_parser.add_argument("--max-queries-per-candidate", type=int, default=10)
+    public_web_experiment_parser.add_argument("--max-results-per-query", type=int, default=10)
+    public_web_experiment_parser.add_argument("--max-entry-links-per-candidate", type=int, default=40)
+    public_web_experiment_parser.add_argument("--max-fetches-per-candidate", type=int, default=5)
+    public_web_experiment_parser.add_argument(
+        "--max-ai-evidence-documents",
+        type=int,
+        default=8,
+        help="Maximum fetched model-safe document summaries/slices sent to the candidate-level AI adjudicator.",
+    )
+    public_web_experiment_parser.add_argument(
+        "--max-concurrent-fetches-per-candidate",
+        type=int,
+        default=4,
+        help="Maximum concurrent URL fetch/document extraction calls within one candidate analysis.",
+    )
+    public_web_experiment_parser.add_argument(
+        "--max-concurrent-candidate-analyses",
+        type=int,
+        default=2,
+        help="Maximum target candidates finalized concurrently after batch search results are ready.",
+    )
+    public_web_experiment_parser.add_argument(
+        "--no-fetch-content",
+        action="store_true",
+        help="Only discover/rank entry links; skip page/PDF fetch and document analysis.",
+    )
+    public_web_experiment_parser.add_argument(
+        "--no-contact-extraction",
+        action="store_true",
+        help="Disable deterministic email/contact extraction from fetched public-web content.",
+    )
+    public_web_experiment_parser.add_argument(
+        "--ai-extraction",
+        choices=["auto", "on", "off"],
+        default="auto",
+        help="AI signal adjudication mode. auto skips deterministic/offline model clients.",
+    )
+    public_web_experiment_parser.add_argument(
+        "--no-batch-search",
+        action="store_true",
+        help="Disable provider batch/queue search and fall back to sequential provider.search calls.",
+    )
+    public_web_experiment_parser.add_argument(
+        "--batch-ready-poll-interval-seconds",
+        type=float,
+        default=10.0,
+        help="Sleep interval between provider batch ready polls.",
+    )
+    public_web_experiment_parser.add_argument(
+        "--max-batch-ready-polls",
+        type=int,
+        default=18,
+        help="Maximum provider batch ready poll attempts before recording per-query timeouts.",
+    )
+    public_web_experiment_parser.add_argument("--timeout-seconds", type=int, default=30)
+
+    public_web_quality_parser = subparsers.add_parser(
+        "evaluate-public-web-quality",
+        help="Evaluate Public Web signals artifacts for email/media evidence quality before product UI/export rollout.",
+    )
+    public_web_quality_parser.add_argument(
+        "--experiment-dir",
+        action="append",
+        default=[],
+        help="Experiment directory or signals.json path to evaluate; repeatable. Defaults to runtime/public_web/experiments.",
+    )
+    public_web_quality_parser.add_argument(
+        "--output-dir",
+        default="",
+        help="Optional output directory for JSON, CSV, and Markdown quality reports.",
+    )
+    public_web_quality_parser.add_argument(
+        "--fail-on-high-risk",
+        action="store_true",
+        help="Return status=failed when high-severity quality issues are found.",
+    )
+    public_web_quality_parser.add_argument(
+        "--summary-only",
+        action="store_true",
+        help="Print only status, summary, input paths, and written report paths; useful for large quality runs.",
+    )
+
     subparsers.add_parser(
         "test-model",
         help="Run provider healthcheck. For low-cost workflow smoke tests, set SOURCING_EXTERNAL_PROVIDER_MODE=simulate or replay to disable Harvest/Search/model/semantic live calls.",
@@ -1627,6 +1839,15 @@ def main() -> None:
     args = parser.parse_args()
     if args.command == "show-control-plane-runtime":
         print(json.dumps(build_control_plane_runtime_summary(), ensure_ascii=False, indent=2))
+        return
+    if args.command == "run-target-candidate-public-web-experiment":
+        print(json.dumps(run_target_candidate_public_web_experiment_command(args), ensure_ascii=False, indent=2))
+        return
+    if args.command == "evaluate-public-web-quality":
+        result = evaluate_public_web_quality_command(args)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        if result.get("status") == "failed":
+            sys.exit(1)
         return
     if args.command in {
         "backfill-linkedin-profile-registry",
@@ -1753,7 +1974,7 @@ def main() -> None:
         sqlite_path = (
             Path(str(args.sqlite_path or "").strip()).expanduser()
             if str(args.sqlite_path or "").strip()
-            else settings.db_path
+            else None
         )
         print(
             json.dumps(
@@ -1763,6 +1984,7 @@ def main() -> None:
                     sqlite_path=sqlite_path,
                     tables=[str(item or "").strip() for item in list(args.table or []) if str(item or "").strip()],
                     include_all_sqlite_tables=bool(args.all_sqlite_tables),
+                    source_backend=str(args.source_backend or "postgres"),
                 ),
                 ensure_ascii=False,
                 indent=2,
@@ -1826,7 +2048,7 @@ def main() -> None:
     if args.command in {
         "export-company-snapshot-bundle",
         "export-company-handoff-bundle",
-        "export-sqlite-snapshot",
+        "export-control-plane-snapshot-bundle",
         "build-company-candidate-artifacts",
         "segment-company-outreach-layers",
         "complete-company-assets",
@@ -1836,7 +2058,6 @@ def main() -> None:
         "publish-candidate-generation",
         "delete-asset-bundle",
         "download-asset-bundle",
-        "restore-sqlite-snapshot",
         "import-cloud-assets",
         "hydrate-candidate-generation",
     }:
@@ -1860,7 +2081,6 @@ def main() -> None:
                     bundle_manager.export_company_handoff_bundle(
                         args.company,
                         output_dir=args.output_dir or None,
-                        include_sqlite=bool(args.with_sqlite_backup) and not bool(args.without_sqlite),
                         include_live_tests=not args.without_live_tests,
                         include_manual_review=not args.without_manual_review,
                         include_jobs=not args.without_jobs,
@@ -1870,10 +2090,10 @@ def main() -> None:
                 )
             )
             return
-        if args.command == "export-sqlite-snapshot":
+        if args.command == "export-control-plane-snapshot-bundle":
             print(
                 json.dumps(
-                    bundle_manager.export_sqlite_snapshot(output_dir=args.output_dir or None),
+                    bundle_manager.export_control_plane_snapshot_bundle(output_dir=args.output_dir or None),
                     ensure_ascii=False,
                     indent=2,
                 )
@@ -2048,20 +2268,6 @@ def main() -> None:
                 )
             )
             return
-        if args.command == "restore-sqlite-snapshot":
-            print(
-                json.dumps(
-                    bundle_manager.restore_sqlite_snapshot(
-                        args.manifest,
-                        target_db_path=args.target_db_path or None,
-                        backup_current=not args.no_backup,
-                        backup_dir=args.backup_dir or None,
-                    ),
-                    ensure_ascii=False,
-                    indent=2,
-                )
-            )
-            return
         storage_client = build_object_storage()
         if args.command == "upload-asset-bundle":
             print(
@@ -2171,8 +2377,6 @@ def main() -> None:
                         target_runtime_dir=args.target_runtime_dir or None,
                         conflict=str(args.conflict or "skip"),
                         target_db_path=args.target_db_path or None,
-                        backup_current_db=not bool(args.no_backup),
-                        backup_dir=args.backup_dir or None,
                         companies=[
                             str(item or "").strip() for item in list(args.company or []) if str(item or "").strip()
                         ],
@@ -2181,7 +2385,6 @@ def main() -> None:
                         generation_key=str(args.generation_key or "").strip(),
                         prefer_generation=not bool(args.disable_generation_first),
                         allow_legacy_bundle_fallback=not bool(args.disable_legacy_bundle_fallback),
-                        allow_sqlite_snapshot_restore=bool(args.allow_sqlite_snapshot_restore),
                         prefer_local_link=not bool(args.disable_local_link),
                         run_artifact_repair=not bool(args.skip_artifact_repair),
                         run_org_warmup=not bool(args.skip_org_warmup),

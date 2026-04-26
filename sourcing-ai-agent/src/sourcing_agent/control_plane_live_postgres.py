@@ -43,6 +43,11 @@ CONTROL_PLANE_LIVE_TABLES = (
     "target_candidates",
     "asset_default_pointers",
     "asset_default_pointer_history",
+    "target_candidate_public_web_batches",
+    "target_candidate_public_web_runs",
+    "person_public_web_assets",
+    "person_public_web_signals",
+    "target_candidate_public_web_promotions",
     "frontend_history_links",
     "agent_runtime_sessions",
     "agent_trace_spans",
@@ -86,6 +91,11 @@ _PRIMARY_KEY_COLUMNS = {
     "target_candidates": ("record_id",),
     "asset_default_pointers": ("pointer_key",),
     "asset_default_pointer_history": ("history_id",),
+    "target_candidate_public_web_batches": ("batch_id",),
+    "target_candidate_public_web_runs": ("run_id",),
+    "person_public_web_assets": ("asset_id",),
+    "person_public_web_signals": ("signal_id",),
+    "target_candidate_public_web_promotions": ("promotion_id",),
     "frontend_history_links": ("history_id",),
     "agent_runtime_sessions": ("session_id",),
     "agent_trace_spans": ("span_id",),
@@ -1661,6 +1671,78 @@ class LiveControlPlanePostgresAdapter:
                         """
                         CREATE INDEX IF NOT EXISTS idx_asset_default_pointer_history_pointer
                         ON asset_default_pointer_history (pointer_key, occurred_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_batches_updated
+                        ON target_candidate_public_web_batches (updated_at, status)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_runs_batch
+                        ON target_candidate_public_web_runs (batch_id, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_runs_record
+                        ON target_candidate_public_web_runs (record_id, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_runs_status
+                        ON target_candidate_public_web_runs (status, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_runs_identity
+                        ON target_candidate_public_web_runs (linkedin_url_key, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_person_public_web_assets_identity
+                        ON person_public_web_assets (linkedin_url_key, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_person_public_web_signals_run
+                        ON person_public_web_signals (run_id, signal_kind, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_person_public_web_signals_record
+                        ON person_public_web_signals (record_id, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_person_public_web_signals_identity
+                        ON person_public_web_signals (person_identity_key, signal_kind, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_promotions_record
+                        ON target_candidate_public_web_promotions (record_id, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_promotions_signal
+                        ON target_candidate_public_web_promotions (signal_id, updated_at)
+                        """
+                    )
+                    cursor.execute(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_target_candidate_public_web_promotions_run
+                        ON target_candidate_public_web_promotions (run_id, updated_at)
                         """
                     )
                     cursor.execute(

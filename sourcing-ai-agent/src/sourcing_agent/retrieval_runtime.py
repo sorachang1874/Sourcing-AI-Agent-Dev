@@ -17,7 +17,7 @@ from .snapshot_state import (
     load_candidate_document_state,
     read_json_dict,
 )
-from .storage import SQLiteStore
+from .storage import ControlPlaneStore
 
 SNAPSHOT_CANDIDATE_SOURCE_KINDS = {"company_snapshot"}
 OUTREACH_LAYER_KEY_BY_INDEX = {
@@ -28,7 +28,7 @@ OUTREACH_LAYER_KEY_BY_INDEX = {
 }
 
 
-def candidate_documents_fallback_enabled(*, store: SQLiteStore | None) -> bool:
+def candidate_documents_fallback_enabled(*, store: ControlPlaneStore | None) -> bool:
     resolver = getattr(store, "candidate_documents_fallback_enabled", None)
     if callable(resolver):
         try:
@@ -38,7 +38,7 @@ def candidate_documents_fallback_enabled(*, store: SQLiteStore | None) -> bool:
     return False
 
 
-def bootstrap_candidate_store_enabled(*, store: SQLiteStore | None) -> bool:
+def bootstrap_candidate_store_enabled(*, store: ControlPlaneStore | None) -> bool:
     resolver = getattr(store, "bootstrap_candidate_store_enabled", None)
     if callable(resolver):
         try:
@@ -76,7 +76,7 @@ def empty_candidate_source(
 def load_company_snapshot_candidate_documents_with_materialization_fallback(
     *,
     runtime_dir: str | Path,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     target_company: str,
     snapshot_id: str,
     view: str = "canonical_merged",
@@ -114,7 +114,7 @@ def bootstrap_candidate_matches_request_company(*, candidate: Candidate, target_
     return False
 
 
-def load_bootstrap_candidate_source(*, store: SQLiteStore, request: JobRequest) -> dict[str, Any]:
+def load_bootstrap_candidate_source(*, store: ControlPlaneStore, request: JobRequest) -> dict[str, Any]:
     target_company = str(request.target_company or "").strip()
     if not bootstrap_candidate_store_enabled(store=store):
         return empty_candidate_source(
@@ -141,7 +141,7 @@ def load_bootstrap_candidate_source(*, store: SQLiteStore, request: JobRequest) 
     }
 
 
-def load_control_plane_candidate_source(*, store: SQLiteStore, request: JobRequest) -> dict[str, Any]:
+def load_control_plane_candidate_source(*, store: ControlPlaneStore, request: JobRequest) -> dict[str, Any]:
     target_company = str(request.target_company or "").strip()
     candidates = (
         list(store.list_candidates_for_company(target_company))
@@ -222,7 +222,7 @@ def load_candidate_document_candidate_source(
 def load_retrieval_candidate_source(
     *,
     runtime_dir: str | Path,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     request: JobRequest,
     snapshot_id: str = "",
     allow_materialization_fallback: bool = True,

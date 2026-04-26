@@ -6,9 +6,10 @@ from typing import Any
 
 from .asset_reuse_planning import build_acquisition_shard_registry_record
 from .company_registry import resolve_company_alias_key
+from .linkedin_url_normalization import normalize_linkedin_profile_url_key
 from .local_postgres import resolve_default_control_plane_db_path
 from .organization_execution_profile import ensure_organization_execution_profile
-from .storage import SQLiteStore
+from .storage import ControlPlaneStore
 
 
 def _write_candidate_documents(
@@ -111,7 +112,7 @@ def _write_candidate_documents(
 def _seed_authoritative_company_asset(
     *,
     runtime_dir: str | Path,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     target_company: str,
     snapshot_id: str,
     current_count: int,
@@ -194,7 +195,7 @@ def _seed_authoritative_company_asset(
 def _register_materialization_generation(
     *,
     runtime_dir: str | Path,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     target_company: str,
     snapshot_id: str,
     artifact_kind: str,
@@ -217,10 +218,10 @@ def _register_materialization_generation(
                 "artifact_key": artifact_key,
                 "lane": lane,
                 "employment_scope": str(spec.get("employment_status") or employment_scope or "current"),
-                "member_key": store.normalize_linkedin_profile_url(linkedin_url),
+                "member_key": normalize_linkedin_profile_url_key(linkedin_url),
                 "member_key_kind": "profile_url_key",
                 "candidate_id": f"{company_key}-{artifact_key}-{index}",
-                "profile_url_key": store.normalize_linkedin_profile_url(linkedin_url),
+                "profile_url_key": normalize_linkedin_profile_url_key(linkedin_url),
                 "metadata": {
                     "display_name": str(spec.get("name") or f"{target_company} Candidate {index}"),
                     "role": str(spec.get("role") or ""),
@@ -254,7 +255,7 @@ def _register_materialization_generation(
 def _append_selected_snapshots(
     *,
     runtime_dir: str | Path,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     target_company: str,
     snapshot_ids: list[str],
 ) -> dict[str, Any]:
@@ -282,11 +283,11 @@ def _append_selected_snapshots(
 def seed_reference_smoke_runtime(
     *,
     runtime_dir: str | Path,
-    store: SQLiteStore | None = None,
+    store: ControlPlaneStore | None = None,
 ) -> dict[str, Any]:
     runtime_root = Path(runtime_dir)
     runtime_root.mkdir(parents=True, exist_ok=True)
-    effective_store = store or SQLiteStore(
+    effective_store = store or ControlPlaneStore(
         resolve_default_control_plane_db_path(runtime_root, base_dir=runtime_root)
     )
 

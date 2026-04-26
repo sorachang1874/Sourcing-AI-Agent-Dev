@@ -25,7 +25,7 @@ if str(SRC_ROOT) not in sys.path:
 
 from sourcing_agent.candidate_artifacts import build_company_candidate_artifacts
 from sourcing_agent.domain import Candidate, EvidenceRecord, make_candidate_id, make_evidence_id
-from sourcing_agent.storage import SQLiteStore
+from sourcing_agent.storage import ControlPlaneStore
 
 _BENCHMARK_MODES: dict[str, dict[str, str]] = {
     "optimized": {},
@@ -309,7 +309,7 @@ def _run_single_build(
     base_env_overrides: dict[str, str],
     env_overrides: dict[str, str],
 ) -> dict[str, Any]:
-    store = SQLiteStore(runtime_dir / "sourcing_agent.db")
+    store = ControlPlaneStore(runtime_dir / "sourcing_agent.db")
     with _EnvOverride(
         {
             "SOURCING_WRITE_COMPATIBILITY_ARTIFACTS": "0",

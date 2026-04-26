@@ -157,7 +157,7 @@ cd sourcing-ai-agent
 
 ### 4. Restore selected company assets
 
-优先恢复第一批 baseline 公司，不恢复旧的整库 SQLite snapshot。
+优先恢复第一批 baseline 公司，不恢复旧的整库 SQLite snapshot；旧 `sqlite_snapshot` 已退役。
 
 如果你已经有 object storage bundle，优先走：
 
@@ -299,7 +299,7 @@ make frontend-build-hosted HOSTED_API_BASE_URL=https://api.111874.xyz
 ### Phase 3
 
 - 再考虑更重的 live acquisition
-- 再决定是否导入部分 SQLite snapshot
+- 如需补全全局状态，只恢复 `control_plane_snapshot`；不再导入 SQLite snapshot
 
 ## Why The Results Page Was Optimized Before Rollout
 

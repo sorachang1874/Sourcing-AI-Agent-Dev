@@ -23,14 +23,14 @@ from sourcing_agent.organization_execution_profile import (
     _select_best_organization_asset_registry_row,
     ensure_organization_execution_profile,
 )
-from sourcing_agent.storage import SQLiteStore
+from sourcing_agent.storage import ControlPlaneStore
 
 
 class OrganizationExecutionProfileTest(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
         self.runtime_dir = Path(self.tempdir.name)
-        self.store = SQLiteStore(self.runtime_dir / "sourcing_agent.db")
+        self.store = ControlPlaneStore(self.runtime_dir / "sourcing_agent.db")
 
     def tearDown(self) -> None:
         self.tempdir.cleanup()

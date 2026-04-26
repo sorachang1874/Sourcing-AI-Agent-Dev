@@ -14,6 +14,8 @@
     "browser:install": "bash ./scripts/bootstrap_browser_env.sh",
     "browser:check": "bash ./scripts/check_playwright_browser.sh",
     "browser:e2e": "node ./scripts/run_workflow_e2e.mjs",
+    "browser:target-public-web": "node ./scripts/run_target_public_web_e2e.mjs",
+    "browser:target-public-web:promotion-export": "node ./scripts/run_target_public_web_promotion_export_e2e.mjs",
     "browser:matrix:fast": "make -C .. test-browser-e2e-fast",
     "browser:matrix:slow": "make -C .. test-browser-e2e-slow",
     "browser:matrix:full": "make -C .. test-browser-e2e-full",

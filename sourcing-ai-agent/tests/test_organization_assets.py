@@ -5,14 +5,14 @@ from pathlib import Path
 
 from sourcing_agent.domain import Candidate
 from sourcing_agent.organization_assets import load_company_snapshot_registry_summary
-from sourcing_agent.storage import SQLiteStore
+from sourcing_agent.storage import ControlPlaneStore
 
 
 class OrganizationAssetsTest(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
         self.runtime_dir = Path(self.tempdir.name)
-        self.store = SQLiteStore(self.runtime_dir / "sourcing_agent.db")
+        self.store = ControlPlaneStore(self.runtime_dir / "sourcing_agent.db")
 
     def tearDown(self) -> None:
         self.tempdir.cleanup()

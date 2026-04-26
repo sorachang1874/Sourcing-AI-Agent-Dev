@@ -11,7 +11,7 @@ from sourcing_agent.model_provider import DeterministicModelClient
 from sourcing_agent.orchestrator import SourcingOrchestrator
 from sourcing_agent.semantic_provider import LocalSemanticProvider
 from sourcing_agent.settings import AppSettings, HarvestActorSettings, HarvestSettings, QwenSettings, SemanticProviderSettings
-from sourcing_agent.storage import SQLiteStore
+from sourcing_agent.storage import ControlPlaneStore
 
 
 def _build_catalog(root: Path) -> AssetCatalog:
@@ -38,7 +38,7 @@ class ManualReviewResolutionTest(unittest.TestCase):
         self.tempdir = tempfile.TemporaryDirectory()
         self.root = Path(self.tempdir.name)
         self.catalog = _build_catalog(self.root)
-        self.store = SQLiteStore(self.root / "test.db")
+        self.store = ControlPlaneStore(self.root / "test.db")
         self.settings = AppSettings(
             project_root=self.root,
             runtime_dir=self.root,

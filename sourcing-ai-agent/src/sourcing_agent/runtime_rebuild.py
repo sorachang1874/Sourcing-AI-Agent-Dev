@@ -17,7 +17,7 @@ from .organization_assets import ensure_organization_completeness_ledger
 from .request_matching import request_signature
 from .retrieval_runtime import candidate_source_is_snapshot_authoritative
 from .search_seed_registry import backfill_search_seed_lane_assets
-from .storage import SQLiteStore
+from .storage import ControlPlaneStore
 
 _SUPPORTED_ASSET_VIEWS = ("canonical_merged", "strict_roster_only")
 _TERMINAL_JOB_STATUSES = {"completed", "failed", "superseded", "cancelled"}
@@ -43,7 +43,7 @@ def _snapshot_company_filter_keys(snapshot_dir: Path, identity_payload: dict[str
 def rebuild_runtime_control_plane(
     *,
     runtime_dir: str | Path,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     companies: list[str] | None = None,
     snapshot_id: str = "",
     rebuild_missing_artifacts: bool = True,
@@ -93,7 +93,7 @@ def rebuild_runtime_control_plane(
 def rebuild_runtime_company_asset_control_plane(
     *,
     runtime_dir: str | Path,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     companies: list[str] | None = None,
     snapshot_id: str = "",
     rebuild_missing_artifacts: bool = True,
@@ -313,7 +313,7 @@ def rebuild_runtime_company_asset_control_plane(
 def rebuild_runtime_jobs_control_plane(
     *,
     runtime_dir: str | Path,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
 ) -> dict[str, Any]:
     runtime_root = Path(runtime_dir).expanduser()
     jobs_dir = runtime_root / "jobs"
@@ -421,7 +421,7 @@ def _repair_snapshot_artifacts_if_needed(
     *,
     runtime_dir: Path,
     snapshot_dir: Path,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     target_company: str,
     rebuild_missing_artifacts: bool,
     supported_views: list[str],
@@ -457,7 +457,7 @@ def _repair_snapshot_artifacts_if_needed(
 
 def _align_snapshot_registry_generation(
     *,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     target_company: str,
     snapshot_id: str,
     asset_view: str,
@@ -559,7 +559,7 @@ def _resolved_runtime_job_source_path(
 def _persist_runtime_job_result_view(
     *,
     runtime_dir: Path,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     job_id: str,
     request_payload: dict[str, Any],
     summary_payload: dict[str, Any],

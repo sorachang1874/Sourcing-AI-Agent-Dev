@@ -27,9 +27,9 @@ The goal is to turn the remaining TODOs into executable contracts, not one-off f
   - Promote behavior reports into high-signal regression gates.
 - [x] Asset governance productization
   - Standardize canonical/default pointers, replacement lifecycle, and historical retention.
-- [x] SQLite legacy surface
+- [x] SQLite compatibility surface
   - Keep live/hosted PG-only.
-  - Add explicit legacy banners and migration exits for SQLite tooling.
+  - Retire SQLite snapshot/product tooling and keep remaining SQLite code migration-only or ephemeral-shadow-only.
 - [x] Excel intake enhancements
   - Add throughput benchmark and continuation/export/target-candidate follow-up gates.
 - [x] Product journey regression matrix
@@ -106,9 +106,10 @@ These items were added before the final validation/documentation/push pass so th
   - Frontend/backend plan strategy labels now share backend semantics:
     - `compile_execution_semantics(...)` emits `execution_strategy_label`
     - frontend `PlanCard` mapping prefers this backend label before local inference
-  - SQLite legacy surface gained a CLI banner:
-    - `show-control-plane-runtime` now includes `legacy_sqlite_banner`
-    - non-PG runtime is explicitly marked as legacy/emergency with migration exit instructions
+  - SQLite compatibility surface was closed further:
+    - `show-control-plane-runtime` now includes `control_plane_storage_banner`
+    - non-PG runtime is explicitly marked as an error with migration exit instructions
+    - `sqlite_snapshot` export/restore/import/upload/download product paths are retired
   - Verification completed:
     - `./.venv-tests/bin/python -m py_compile src/sourcing_agent/service_daemon.py src/sourcing_agent/orchestrator.py src/sourcing_agent/api.py src/sourcing_agent/source_snapshot_coverage.py src/sourcing_agent/asset_reuse_planning.py src/sourcing_agent/organization_execution_profile.py`
     - `./.venv-tests/bin/python -m pytest tests/test_service_daemon.py -q`
@@ -117,7 +118,7 @@ These items were added before the final validation/documentation/push pass so th
     - `./.venv-tests/bin/python -m pytest tests/test_pipeline.py -q -k 'cancel_workflow_job_marks_job_terminal or light_routes_are_classified'`
     - `./.venv-tests/bin/python -m pytest tests/test_execution_semantics.py -q`
     - `npm run build`
-    - `./.venv-tests/bin/python -m pytest tests/test_cli.py -q -k 'legacy_sqlite_runtime_banner'`
+    - `./.venv-tests/bin/python -m pytest tests/test_cli.py -q -k 'control_plane_storage_banner'`
 - 2026-04-25: Second productization slice completed:
   - Harvest / materialization reporting now has executable streaming and writer-budget contracts:
     - `runtime_tuning.py` exposes `materialization_coalescing_window_ms`

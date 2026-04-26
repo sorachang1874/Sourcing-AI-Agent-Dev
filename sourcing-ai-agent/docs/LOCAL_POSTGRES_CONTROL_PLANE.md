@@ -229,7 +229,7 @@ pg_ctl -D "$LOCAL_PG_DATA" -l "$LOCAL_PG_RUN/postgres.log" -o "-k $LOCAL_PG_RUN 
   - Postgres control plane
   - generation-first object storage
   - local hot cache
-- `sqlite_snapshot` 仅保留 backup / portability 语义，不是默认 hosted 主路径
+- `sqlite_snapshot` 已退役；不要再导出、上传、下载、导入或恢复 SQLite snapshot
 - 如果要把环境迁到另一台 Mac，优先使用：
   - Postgres logical dump
   - `.local-postgres.env`
@@ -239,4 +239,4 @@ pg_ctl -D "$LOCAL_PG_DATA" -l "$LOCAL_PG_RUN/postgres.log" -o "-k $LOCAL_PG_RUN 
 
 - 新代码不要再假设“只有 `runtime/sourcing_agent.db` 才是 authoritative”
 - 新文档、脚本和排障说明默认写 Postgres-first 路径
-- 如果某个模块还需要 SQLite fallback，必须说明它是 temporary compatibility path，而不是长期主路径
+- 如果某个模块还保留 SQLite 代码，必须限定为 migration-only 或 ephemeral test shadow，不能作为 live/default fallback

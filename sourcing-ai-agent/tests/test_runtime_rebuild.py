@@ -11,7 +11,7 @@ from sourcing_agent.runtime_rebuild import (
     rebuild_runtime_company_asset_control_plane,
     rebuild_runtime_jobs_control_plane,
 )
-from sourcing_agent.storage import SQLiteStore
+from sourcing_agent.storage import ControlPlaneStore
 
 
 class RuntimeRebuildTest(unittest.TestCase):
@@ -158,7 +158,7 @@ class RuntimeRebuildTest(unittest.TestCase):
         )
 
     def test_rebuild_runtime_company_assets_registers_generation_without_eager_artifact_repair(self) -> None:
-        rebuild_store = SQLiteStore(self.runtime_dir / "rebuild.db")
+        rebuild_store = ControlPlaneStore(self.runtime_dir / "rebuild.db")
 
         result = rebuild_runtime_company_asset_control_plane(
             runtime_dir=self.runtime_dir,
@@ -179,7 +179,7 @@ class RuntimeRebuildTest(unittest.TestCase):
         self.assertIsNotNone(generation)
 
     def test_rebuild_runtime_company_assets_registers_generation_for_legacy_summary_snapshot(self) -> None:
-        seed_store = SQLiteStore(self.runtime_dir / "seed.db")
+        seed_store = ControlPlaneStore(self.runtime_dir / "seed.db")
         build_company_candidate_artifacts(
             runtime_dir=self.runtime_dir,
             store=seed_store,
@@ -190,7 +190,7 @@ class RuntimeRebuildTest(unittest.TestCase):
         (artifact_dir / "manifest.json").unlink()
         (artifact_dir / "snapshot_manifest.json").unlink()
 
-        rebuild_store = SQLiteStore(self.runtime_dir / "rebuild.db")
+        rebuild_store = ControlPlaneStore(self.runtime_dir / "rebuild.db")
         result = rebuild_runtime_company_asset_control_plane(
             runtime_dir=self.runtime_dir,
             store=rebuild_store,
@@ -224,7 +224,7 @@ class RuntimeRebuildTest(unittest.TestCase):
 
     def test_rebuild_runtime_company_assets_backfills_legacy_search_seed_lanes_and_registry(self) -> None:
         self._write_legacy_search_seed_summary()
-        rebuild_store = SQLiteStore(self.runtime_dir / "rebuild.db")
+        rebuild_store = ControlPlaneStore(self.runtime_dir / "rebuild.db")
 
         result = rebuild_runtime_company_asset_control_plane(
             runtime_dir=self.runtime_dir,
@@ -255,14 +255,14 @@ class RuntimeRebuildTest(unittest.TestCase):
         )
 
     def test_rebuild_runtime_jobs_restores_jobs_and_result_views_with_local_source_path(self) -> None:
-        seed_store = SQLiteStore(self.runtime_dir / "seed.db")
+        seed_store = ControlPlaneStore(self.runtime_dir / "seed.db")
         build_company_candidate_artifacts(
             runtime_dir=self.runtime_dir,
             store=seed_store,
             target_company="Acme",
             snapshot_id=self.snapshot_id,
         )
-        rebuild_store = SQLiteStore(self.runtime_dir / "rebuild.db")
+        rebuild_store = ControlPlaneStore(self.runtime_dir / "rebuild.db")
         rebuild_runtime_company_asset_control_plane(
             runtime_dir=self.runtime_dir,
             store=rebuild_store,
@@ -402,7 +402,7 @@ class RuntimeRebuildTest(unittest.TestCase):
             encoding="utf-8",
         )
 
-        rebuild_store = SQLiteStore(self.runtime_dir / "rebuild.db")
+        rebuild_store = ControlPlaneStore(self.runtime_dir / "rebuild.db")
         result = rebuild_runtime_company_asset_control_plane(
             runtime_dir=self.runtime_dir,
             store=rebuild_store,

@@ -1,18 +1,21 @@
 from __future__ import annotations
 
+import inspect
+import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import inspect
 from pathlib import Path
-import time
 from typing import Any, Callable
 
 from .agent_runtime import AgentWorkerHandle
 from .asset_logger import AssetLogger
 from .connectors import CompanyIdentity
-from .domain import Candidate, JobRequest
+from .domain import Candidate
+from .target_candidate_public_web import (
+    PUBLIC_WEB_WORKER_RECOVERY_KIND,
+    execute_target_candidate_public_web_run_once,
+)
 from .worker_scheduler import lane_budget_caps_from_plan, lane_limits_from_plan, schedule_work_specs
-
 
 WorkerExecutor = Callable[[dict[str, Any]], dict[str, Any]]
 WorkerResultCallback = Callable[[dict[str, Any]], None]
@@ -534,6 +537,15 @@ class PersistentWorkerRecoveryDaemon:
 
     def _resume_exploration_worker(self, worker: dict[str, Any]) -> dict[str, Any]:
         metadata = dict(worker.get("metadata") or {})
+        if str(metadata.get("recovery_kind") or "") == PUBLIC_WEB_WORKER_RECOVERY_KIND:
+            return execute_target_candidate_public_web_run_once(
+                store=self.store,
+                search_provider=self.acquisition_engine.search_provider,
+                model_client=getattr(self.acquisition_engine, "model_client", None),
+                runtime_dir=str(metadata.get("runtime_dir") or ""),
+                run_id=str(metadata.get("run_id") or dict(worker.get("input") or {}).get("run_id") or ""),
+                worker=worker,
+            )
         input_payload = dict(worker.get("input") or {})
         checkpoint = dict(worker.get("checkpoint") or {})
         candidate = Candidate(**dict(input_payload.get("candidate") or {}))

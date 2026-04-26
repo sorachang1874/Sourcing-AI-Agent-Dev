@@ -17,10 +17,11 @@ from .candidate_artifacts import (
 )
 from .company_registry import normalize_company_key
 from .domain import normalize_name_token
+from .linkedin_url_normalization import normalize_linkedin_profile_url_key
 from .profile_timeline import (
     timeline_has_complete_profile_detail,
 )
-from .storage import SQLiteStore, _build_asset_membership_row
+from .storage import ControlPlaneStore, _build_asset_membership_row
 
 
 def _utc_now_iso() -> str:
@@ -108,7 +109,7 @@ def _normalize_string_list(values: Any) -> list[str]:
 def _load_authoritative_snapshot_candidate_payload(
     *,
     runtime_dir: str | Path,
-    store: SQLiteStore | None,
+    store: ControlPlaneStore | None,
     target_company: str,
     snapshot_id: str,
     asset_view: str = "canonical_merged",
@@ -297,8 +298,8 @@ def _stub_candidate_id(target_company: str, shard_key: str, entry: dict[str, Any
     return sha1(payload.encode("utf-8")).hexdigest()[:16]
 
 
-def _normalize_linkedin_url_key(store: SQLiteStore, url: str) -> str:
-    normalized = store.normalize_linkedin_profile_url(str(url or "").strip())
+def _normalize_linkedin_url_key(url: str) -> str:
+    normalized = normalize_linkedin_profile_url_key(str(url or "").strip())
     if normalized:
         return normalized
     return str(url or "").strip().lower()
@@ -306,7 +307,7 @@ def _normalize_linkedin_url_key(store: SQLiteStore, url: str) -> str:
 
 def _build_candidate_indexes(
     *,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     candidates: list[Any],
     evidence: list[dict[str, Any]],
 ) -> tuple[dict[str, dict[str, Any]], dict[str, list[dict[str, Any]]], dict[str, dict[str, Any]]]:
@@ -325,7 +326,7 @@ def _build_candidate_indexes(
             continue
         linkedin_url = str(record.get("linkedin_url") or "").strip()
         if linkedin_url:
-            candidate_by_url[_normalize_linkedin_url_key(store, linkedin_url)] = record
+            candidate_by_url[_normalize_linkedin_url_key(linkedin_url)] = record
         display_name = str(record.get("display_name") or record.get("name_en") or "").strip()
         if display_name:
             candidate_by_name[normalize_name_token(display_name)] = record
@@ -521,7 +522,7 @@ def _merge_registry_summary_with_completeness_ledger(
 def load_company_snapshot_registry_summary(
     *,
     runtime_dir: str | Path,
-    store: SQLiteStore | None = None,
+    store: ControlPlaneStore | None = None,
     target_company: str,
     snapshot_id: str,
     asset_view: str = "canonical_merged",
@@ -825,7 +826,7 @@ def _standard_bundle_metadata(summary_payload: dict[str, Any], bundle_path: Path
 def build_acquisition_shard_standard_bundle(
     *,
     runtime_dir: str | Path,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     target_company: str,
     snapshot_id: str,
     shard_row: dict[str, Any],
@@ -884,7 +885,7 @@ def build_acquisition_shard_standard_bundle(
     for raw_entry in list(source_entries or []):
         candidate_record: dict[str, Any] | None = None
         url = _entry_linkedin_url(raw_entry)
-        url_key = _normalize_linkedin_url_key(store, url) if url else ""
+        url_key = _normalize_linkedin_url_key(url) if url else ""
         if url_key:
             candidate_record = candidate_by_url.get(url_key)
         if candidate_record is None:
@@ -1050,7 +1051,7 @@ def build_acquisition_shard_standard_bundle(
 def ensure_acquisition_shard_bundles_for_snapshot(
     *,
     runtime_dir: str | Path,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     target_company: str,
     snapshot_id: str,
     asset_view: str = "canonical_merged",
@@ -1240,7 +1241,7 @@ def _build_former_effective_lane_coverage(profile_search_former: dict[str, Any])
 def ensure_organization_completeness_ledger(
     *,
     runtime_dir: str | Path,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     target_company: str,
     snapshot_id: str,
     asset_view: str = "canonical_merged",
@@ -1672,7 +1673,7 @@ def discover_normalized_company_snapshots(
 def warmup_existing_organization_assets(
     *,
     runtime_dir: str | Path,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     asset_view: str = "canonical_merged",
     max_companies: int = 0,
 ) -> dict[str, Any]:

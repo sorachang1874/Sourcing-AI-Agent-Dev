@@ -90,7 +90,7 @@ from .seed_discovery import (
     build_candidates_from_seed_snapshot,
 )
 from .settings import AppSettings
-from .storage import SQLiteStore
+from .storage import ControlPlaneStore
 
 _FULL_ROSTER_BASELINE_REUSE_MIN_CANDIDATES = 1000
 _FULL_ROSTER_BASELINE_REUSE_CURRENT_RATIO_THRESHOLD = 0.6
@@ -298,7 +298,7 @@ class AcquisitionEngine:
         self,
         catalog: AssetCatalog,
         settings: AppSettings,
-        store: SQLiteStore,
+        store: ControlPlaneStore,
         model_client: ModelClient,
         worker_runtime: AgentRuntimeCoordinator | None = None,
     ) -> None:
@@ -4281,7 +4281,7 @@ def _anthropic_detail(task_type: str, bootstrap_summary: dict[str, Any]) -> str:
 
 
 def _inherit_historical_profile_captures(
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     identity: CompanyIdentity,
     snapshot_dir: Path,
     candidates: list[Candidate],

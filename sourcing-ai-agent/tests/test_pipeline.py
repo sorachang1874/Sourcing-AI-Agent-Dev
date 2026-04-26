@@ -53,7 +53,7 @@ from sourcing_agent.settings import (
     QwenSettings,
     SemanticProviderSettings,
 )
-from sourcing_agent.storage import SQLiteStore
+from sourcing_agent.storage import ControlPlaneStore
 from sourcing_agent.workflow_refresh import _worker_is_terminal_for_acquisition_resume
 
 
@@ -61,7 +61,7 @@ class PipelineTest(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
         self.catalog = AssetCatalog.discover()
-        self.store = SQLiteStore(f"{self.tempdir.name}/test.db")
+        self.store = ControlPlaneStore(f"{self.tempdir.name}/test.db")
         self.settings = AppSettings(
             project_root=Path(self.tempdir.name),
             runtime_dir=Path(self.tempdir.name),

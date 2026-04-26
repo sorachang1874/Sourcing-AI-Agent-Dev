@@ -36,11 +36,11 @@
   - Harvest 全局 in-flight budget/backpressure
   - asset governance/promotion
   - cold materialization 优化
-  - SQLite compatibility surface 最后清理
+  - SQLite compatibility surface 最后清理（产品入口已退役，剩余仅 migration-only / ephemeral shadow）
 - 后续如果继续优化，不应重新打开旧双轨或补丁分支；只能在同一 contract 上继续深化：
   - materialization source-index / writer-budget 的真实大 snapshot benchmark
   - workflow recovery / plan hydration / provider budget 的更多 scripted scenario gate
-  - SQLite legacy tooling 的 UI/CLI banner 与迁移出口
+  - `sqlite_snapshot` 已从 UI/CLI/import/object-sync 产品路径退役；后续只能做 PG-native/Public Web 新模块
 
 ### Active productization tracker
 
@@ -50,7 +50,7 @@
   - runtime service cooperative shutdown / workflow cancel API
   - multi-snapshot coverage 从 mode proxy 收到显式 `coverage_proof`
   - 后端 `execution_strategy_label` 作为前端检索策略 label 的优先来源
-  - SQLite legacy runtime CLI banner / migration exit
+  - control-plane storage CLI banner / migration exit
 - 已完成第二批产品化 contract：
   - materialization coalescing / writer-budget report
   - workflow smoke `materialization_streaming` 指标与 aggregate guardrail
@@ -65,7 +65,7 @@
   - snapshot candidate-document sync 已纳入 shared `materialization_writer` budget，writer slot 支持 reentrant 防死锁
 - 继续时不要重新打开旧 proxy / fallback：
   - `preferred_snapshot_subset` 不能单独作为 coverage proof
-  - 非 PG-only runtime 只能是 dev/emergency legacy
+  - 非 PG-only runtime 只能是 explicit legacy dev/admin path
   - 前端不应绕开后端 execution semantics 自行推断核心检索策略
 
 ### Current closeout checklist before opening the next session
@@ -145,10 +145,72 @@
   - default workflow 不再自动运行 `Public Web Stage 2`
   - default `/api/workflows` submission 已切回 `single_stage`
   - 只有显式 `two_stage` opt-in 才会把 `enrich_public_web_signals` 放进 plan
-- 下一轮若要重启这条能力，不应再回到“默认开启并阻塞 board readiness”：
-  - 需要显式 user opt-in
-  - 更理想的是单独的 UI/endpoint，从已完成 job 上手动触发 stage2 augment，而不是重新把它塞回默认主链路
-  - 重新上线前，需要先证明它确实能提供稳定增量，而不是只额外消耗 wall-clock
+- `2026-04-25` 已新增 artifact-only target-candidate Public Web experiment harness：
+  - `src/sourcing_agent/public_web_search.py`
+  - CLI: `run-target-candidate-public-web-experiment`
+  - DataForSEO batch/queue search path 已验证：10 人 x 4 query 从同步约 4 分钟降到约 88 秒
+  - 首轮 query budget 已调整为 high-precision entry discovery：general identity、homepage、company-constrained Scholar、company-constrained GitHub；name-only GitHub/Scholar 做 fallback，resume/CV 与 generic email/contact 后置
+  - `company_page` 已收紧为公司官方/公司域名页面，不再把第三方公司提及页算作 company page，且候选人级默认不 fetch company page
+  - Scholar profile / homepage / GitHub / publication fetch 现在会产出二级 entry links；Scholar profile 额外抽取 homepage、verified email domain、affiliation、research interests
+  - experiment harness 仍保留 per-candidate status artifacts；产品后端现在已持久化 PG run tables 和 DataForSEO checkpoint
+  - entry-link-only 默认不再调用 live AI；fetch/email 后再 AI adjudication，显式 `--ai-extraction on` 可强制
+  - replay fetch 已验证个人主页/CV 邮箱抽取：Chelsea Finn academic email、Xiang Fu personal email 均能提取并标为 `promotion_recommended`
+- 产品化方向已拆成专门 TODO/spec：
+  - [PUBLIC_WEB_SEARCH_PRODUCTIZATION_TODO.md](./PUBLIC_WEB_SEARCH_PRODUCTIZATION_TODO.md)
+- `2026-04-26` 已完成第一层后端产品化 contract：
+  - PG-authoritative tables: `target_candidate_public_web_batches`, `target_candidate_public_web_runs`, `person_public_web_assets`
+  - API: `POST/GET /api/target-candidates/public-web-search`
+  - POST 只做幂等排队和 recoverable worker 创建，不在请求线程里跑 live DataForSEO/fetch/LLM
+  - per-candidate run 保存 DataForSEO-style batch task checkpoint；未 ready 时 worker 保持 `waiting_remote_search`，后续 recovery takeover 复用 checkpoint poll/fetch，不重复 submit
+  - 完成后按 normalized LinkedIn URL key 写入 reusable `person_public_web_assets`
+- `2026-04-26` 另一个 session 已接入第一层目标候选人页 UI，并已复核：
+  - checkbox selection
+  - `Public Web Search` 批量按钮
+  - `GET/POST /api/target-candidates/public-web-search`
+  - running run 的 5s polling
+  - 卡片级 status/metrics/primary links 展示
+  - typed frontend API contract / adapter
+  - 前端不读 runtime 文件、不把 Public Web email 写入 `primary_email`
+- 当前已越过 compact product slice：first-class signal rows/detail endpoint、质量评测层、目标候选人页 Public Web detail section、email/link promotion writer/API/UI、Web Search promoted-only export、Public Web frontend browser E2E 已完成；company-level lane 尚未完成。
+- 目标不再是 workflow-level Stage 2 开关，而是：
+  - 用户先从候选人看板加入 `target_candidates`
+  - 再在目标候选人页选择一批人触发 `Public Web Search`
+  - 结果先进入 reusable person-level public-web asset，再通过 target candidate overlay 暴露给当前记录
+  - 复用语义对齐 LinkedIn Profile：同一个人未来从其他 workflow/用户再次加入目标池时可复用，而不是按短 TTL 失效；v1 自动复用以 normalized/sanity LinkedIn URL key 匹配为主，raw LinkedIn URL 必须先规范化，不能直接作为 durable identity key
+  - run status 分为一次多选操作的 lightweight batch aggregate 和每个目标候选人的 per-candidate run；v1 以 per-candidate run 为事实来源，batch-level 只做进度聚合，不代表 company-level public web search
+  - Public Web 新表必须从第一版开始就是 PG-authoritative；不要再新增 SQLite-first table 然后依靠 mirror/fallback 过渡
+  - 导出目标候选人时可包含 public-web summary / evidence / model-safe signals
+- 公司官网 / arXiv affiliation / blog / research / engineering 等 broad scan 属于 company-level public web asset，仍不默认运行；个人主页、邮箱、论文方向、X/Substack/GitHub 等属于 target-candidate 手动触发 enrichment。
+- 继续扩展 Public Web promotion/export/company lane 前，先用 `evaluate-public-web-quality` 跑质量门槛：
+  - 评估 email candidates 是否有 source URL / source family / evidence excerpt / trusted identity
+  - 评估 X/Substack/GitHub/Google Scholar 等 media/profile links 是否只是 search-only 发现、是否有 confirmed/likely identity、是否是 repo/deep link 或 same-name Scholar 噪声
+  - 大预算实验可通过 `--limit`、`--max-queries-per-candidate`、`--max-results-per-query`、`--max-fetches-per-candidate`、`--max-ai-evidence-documents` 和 `--ai-extraction on|auto` 控制
+  - 已有 10x10 live social discovery 报告显示 search-only media/profile link recall 足够高但噪声也高；UI 只能把 unreviewed/ambiguous links 当待审核候选证据，不能展示成 confirmed profile
+- 重新上线前必须保持这些 guardrails：
+  - 不重新阻塞默认 candidate board readiness
+  - email extraction 默认开启，但不通过 HarvestAPI 低置信邮箱满足这条能力
+  - public-web email 按个人/学术/公司/generic 等类型展示来源、置信度和 promotion 状态
+  - 个人主页、CV/resume、论文、学校主页中提取且身份匹配强的邮箱可标为 high-confidence / promotion-recommended
+  - 写入 `primary_email` 必须先生成人工 promotion 记录；低置信或未审核 email 不能直接写入
+  - X/Substack/GitHub 等社交/技术链接如果 AI 无法确认身份，应标记 `ambiguous_identity` / `needs_review`，不能当确认链接使用
+  - raw HTML/PDF 仅作为分析/审计材料保存，不默认进入导出包
+  - 不把当前 arXiv-backed `scholar_coauthor` 误标成已产品化的 Google Scholar connector
+  - public web runs 必须可审计、可复用、可导出
+  - company-level public web refresh v1 先 API/CLI-only，前端 UI 延后
+  - 新模块不要通过 store facade 调用身份工具函数；LinkedIn URL normalization 已抽成 storage-neutral helper，Public Web 应直接复用
+- 下一步优先级：
+  - 新 session 第一件事是重启本地 backend/worker 到当前代码，确认 `GET /api/target-candidates/public-web-search?limit=5` 不再返回旧进程的 404；当前本地 11 个 target candidates 还没有 Public Web run/batch，因此卡片显示 `未开始` 是正确的。
+  - 重启后先对 2-3 个目标候选人触发 Public Web Search，小批量检查 queued/searching/analyzing/completed 或 needs_review 状态、detail section、source URL、identity label、URL-shape warning、promotion 状态和 promoted-only export。
+  - 需要继续跑更大预算 Public Web quality pass 时，优先用 12-15 个 target candidates、10-16 queries/candidate、8-12 fetches/candidate、12-16 AI evidence documents/candidate；如 live DataForSEO/LLM 凭证不可用，则先对已有 replay/live artifacts 跑 `evaluate-public-web-quality --summary-only`
+  - 更大 live pass 已跑出并修复一个 fetch diversity 问题：discovered GitHub links 前插会抢占 Scholar/X/Substack fetch slots；已修为 append。修复后的 3-candidate sanity pass 已确认 12 fetches/candidate 能覆盖 homepage/resume/Scholar/GitHub/X/Substack/publication/academic profile，不必先升到 16
+  - 已补 URL-shape guardrail：X/Substack/GitHub/Scholar 的 deep/post/repo/non-profile 链接即使被 LLM 标 `likely_same_person`，也只作为 evidence/review signal，不进入 `primary_links`，`person_public_web_signals.publishable=false`，detail API/UI 展示 `link_shape_warnings`
+  - 已补效率 guardrail：候选人内 URL fetch 支持 bounded concurrency，实验 CLI 的候选人 finalization/LLM adjudication 支持 bounded concurrency；DataForSEO queue wait 仍是外部 provider tail latency
+  - 目标候选人页 Public Web detail section 已接入 `GET /api/target-candidates/{record_id}/public-web-search`，展示 grouped email/profile/evidence signals；后续不要在没有 promotion persistence 的情况下加 promote 按钮
+  - Web Search 专用导出包已接入 `POST /api/target-candidates/public-web-export`，默认 `promoted_only`，只包含人工确认的 model-safe signals/evidence/promotions/manifest，继续排除 raw HTML/PDF/search payload
+  - email/profile link 人工 promotion writer/API/UI 已接入 `GET/POST /api/target-candidates/{record_id}/public-web-promotions`；email promotion record 写入成功后才更新 `target_candidates.primary_email`
+  - Public Web target-candidate frontend browser E2E 已覆盖 selection -> trigger -> polling/refresh -> compact card status，并补充 detail promotion -> promoted-only export 下载链路；后续可扩展非 publishable override/reason 的 browser 断言
+  - 目标候选人页已补第一轮 toolbar/filter 布局优化：Public Web Search 与刷新状态靠近、LinkedIn/Web Search 导出改为范围语义、说明文字进入问号 tooltip、跟进状态和 Public Web 状态支持多选筛选。后续还需要继续重做候选人卡片编辑体验，尤其是备注输入、详情跳转/抽屉和卡片信息密度。
+  - 下一步转为 company-level Public Web refresh API/CLI-only、promotion override/reason workflow、以及 Public Web export mode 的产品口径配置
 
 ### Workflow behavior analysis in scripted/simulated tests
 
@@ -499,11 +561,17 @@
 
 ### 13. Remove the last SQLite compatibility surface
 
-- 这对应当前存储升级里暂缓的 `8`。
-- 目标不是再做一轮 bridge，而是把 SQLite 明确压到仅限 dev portability / emergency tooling：
-  - candidate / evidence 的剩余兼容 fallback 彻底退出 live 主路径
-  - backup / portable / admin 链路改成显式 legacy mode，而不是默认可漂移到 live path
-  - 对所有剩余 SQLite-only 命令补清晰的 banner、文档和迁移出口
+Status: closed for product/runtime guardrails on `2026-04-25`; keep this section as regression-prevention context.
+
+- 这对应当前存储升级里暂缓的 `8`，本轮已完成 live/runtime guardrail：
+  - production 不再接受 SQLite control-plane emergency override
+  - `postgres_only` 一律拒绝 disk-backed SQLite shadow
+  - store facade 已改名为 `ControlPlaneStore`
+  - LinkedIn URL normalization 已抽成 storage-neutral helper
+  - `sqlite_snapshot` export/restore CLI、handoff SQLite 选项、cloud import fallback、object-storage upload/download 已退役
+  - `show-control-plane-runtime` 改为 `control_plane_storage_banner`，non-PG runtime 是 error，不再是 legacy warning
+  - profile registry / test-env seeding / hosted smoke seeding 不再提供磁盘 SQLite fallback
+  - artifact 新写字段从 `sqlite_*_count` 改为 `control_plane_*_count`，仅保留旧 artifact 读取兼容
 - 做完后，hosted / ECS 环境的默认心智模型应只剩：
   - Postgres control plane
   - generation/object-storage data plane

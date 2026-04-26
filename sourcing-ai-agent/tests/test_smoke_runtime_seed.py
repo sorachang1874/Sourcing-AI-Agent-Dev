@@ -4,14 +4,14 @@ from pathlib import Path
 
 from sourcing_agent.company_registry import resolve_company_alias_key
 from sourcing_agent.smoke_runtime_seed import seed_reference_smoke_runtime
-from sourcing_agent.storage import SQLiteStore
+from sourcing_agent.storage import ControlPlaneStore
 
 
 class SmokeRuntimeSeedTest(unittest.TestCase):
     def test_seed_reference_smoke_runtime_populates_authoritative_assets_and_openai_reasoning_shards(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             runtime_dir = Path(tempdir)
-            store = SQLiteStore(runtime_dir / "sourcing_agent.db")
+            store = ControlPlaneStore(runtime_dir / "sourcing_agent.db")
 
             result = seed_reference_smoke_runtime(runtime_dir=runtime_dir, store=store)
 

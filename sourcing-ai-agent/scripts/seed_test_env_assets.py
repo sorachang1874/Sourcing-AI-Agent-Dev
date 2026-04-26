@@ -5,15 +5,19 @@ import argparse
 import json
 import os
 import shutil
-import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
 from sourcing_agent.asset_reuse_planning import backfill_organization_asset_registry_for_company
 from sourcing_agent.company_registry import normalize_company_key
-from sourcing_agent.local_postgres import resolve_control_plane_postgres_dsn, resolve_default_control_plane_db_path
-from sourcing_agent.storage import SQLiteStore
+from sourcing_agent.local_postgres import (
+    configure_control_plane_postgres_session,
+    resolve_control_plane_postgres_dsn,
+    resolve_control_plane_postgres_schema,
+    resolve_default_control_plane_db_path,
+)
+from sourcing_agent.storage import ControlPlaneStore
 
 
 _ACQUISITION_SHARD_REGISTRY_COLUMNS = (
@@ -54,7 +58,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--source-runtime-dir",
         default="runtime",
-        help="Source runtime root that already contains company_assets and, when PG is disabled, a control-plane sqlite db.",
+        help="Source runtime root that already contains company_assets and a Postgres control-plane registry.",
     )
     parser.add_argument(
         "--target-runtime-dir",
@@ -62,14 +66,9 @@ def parse_args() -> argparse.Namespace:
         help="Target isolated runtime root that should receive linked/copied company assets.",
     )
     parser.add_argument(
-        "--source-db-path",
-        default="",
-        help="Optional source sqlite override. Defaults to <source-runtime-dir>/sourcing_agent.db.",
-    )
-    parser.add_argument(
         "--target-db-path",
         default="",
-        help="Optional target sqlite/shadow override. Defaults to the runtime's resolved control-plane db path.",
+        help="Optional target compatibility-shadow path override. Defaults to the runtime's resolved control-plane db path.",
     )
     parser.add_argument(
         "--company",
@@ -95,7 +94,6 @@ def parse_args() -> argparse.Namespace:
 def _load_authoritative_snapshot_row(
     *,
     source_runtime_dir: Path,
-    source_db_path: Path,
     company: str,
 ) -> dict[str, Any]:
     normalized_key = normalize_company_key(company)
@@ -108,6 +106,10 @@ def _load_authoritative_snapshot_row(
                 "Postgres control plane is configured but psycopg is unavailable for test-env seeding."
             ) from exc
         with psycopg.connect(postgres_dsn, client_encoding="utf8") as connection:
+            configure_control_plane_postgres_session(
+                connection,
+                schema=resolve_control_plane_postgres_schema(source_runtime_dir),
+            )
             with connection.cursor() as cursor:
                 cursor.execute(
                     """
@@ -144,39 +146,9 @@ def _load_authoritative_snapshot_row(
         raise SystemExit(
             f"No authoritative organization_asset_registry row found for `{company}` in Postgres control plane."
         )
-    if not source_db_path.exists():
-        raise SystemExit(f"Source sqlite database not found: {source_db_path}")
-    with sqlite3.connect(str(source_db_path)) as connection:
-        connection.row_factory = sqlite3.Row
-        row = connection.execute(
-            """
-            SELECT
-              target_company,
-              company_key,
-              snapshot_id,
-              selected_snapshot_ids_json,
-              source_snapshot_selection_json
-            FROM organization_asset_registry
-            WHERE authoritative = 1
-              AND asset_view = 'canonical_merged'
-              AND (
-                lower(target_company) = lower(?)
-                OR company_key = ?
-              )
-            ORDER BY updated_at DESC, registry_id DESC
-            LIMIT 1
-            """,
-            (str(company or "").strip(), normalized_key),
-        ).fetchone()
-    if row is None:
-        raise SystemExit(f"No authoritative organization_asset_registry row found for `{company}` in {source_db_path}.")
-    payload = dict(row)
-    payload["company_key"] = str(payload.get("company_key") or normalized_key)
-    payload["target_company"] = str(payload.get("target_company") or company).strip()
-    payload["snapshot_id"] = str(payload.get("snapshot_id") or "").strip()
-    if not payload["snapshot_id"]:
-        raise SystemExit(f"Authoritative organization_asset_registry row for `{company}` is missing snapshot_id.")
-    return payload
+    raise SystemExit(
+        "Postgres control-plane DSN is required for test-env seeding; disk SQLite source fallback is retired."
+    )
 
 
 def _decode_json_payload(value: Any, *, default: Any) -> Any:
@@ -202,7 +174,6 @@ def _selected_snapshot_ids(row: dict[str, Any]) -> list[str]:
 def _query_source_acquisition_shard_rows(
     *,
     source_runtime_dir: Path,
-    source_db_path: Path,
     target_company: str,
     company_key: str,
     snapshot_ids: list[str],
@@ -220,6 +191,10 @@ def _query_source_acquisition_shard_rows(
                 "Postgres control plane is configured but psycopg is unavailable for test-env shard import."
             ) from exc
         with psycopg.connect(postgres_dsn, client_encoding="utf8") as connection:
+            configure_control_plane_postgres_session(
+                connection,
+                schema=resolve_control_plane_postgres_schema(source_runtime_dir),
+            )
             with connection.cursor() as cursor:
                 cursor.execute(
                     f"""
@@ -240,27 +215,9 @@ def _query_source_acquisition_shard_rows(
                     for raw_row in list(cursor.fetchall() or [])
                 ]
     else:
-        if not source_db_path.exists():
-            return []
-        placeholder_sql = ", ".join("?" for _ in normalized_snapshot_ids)
-        with sqlite3.connect(str(source_db_path)) as connection:
-            connection.row_factory = sqlite3.Row
-            rows = [
-                dict(row)
-                for row in connection.execute(
-                    f"""
-                    SELECT {column_sql}
-                    FROM acquisition_shard_registry
-                    WHERE (
-                      lower(target_company) = lower(?)
-                      OR company_key = ?
-                    )
-                      AND snapshot_id IN ({placeholder_sql})
-                    ORDER BY updated_at DESC, created_at DESC, shard_key ASC
-                    """,
-                    (target_company, company_key, *normalized_snapshot_ids),
-                ).fetchall()
-            ]
+        raise SystemExit(
+            "Postgres control-plane DSN is required for test-env shard import; disk SQLite source fallback is retired."
+        )
     deduped: dict[str, dict[str, Any]] = {}
     for row in rows:
         shard_key = str(row.get("shard_key") or "").strip()
@@ -272,7 +229,7 @@ def _query_source_acquisition_shard_rows(
 
 def _seed_acquisition_shard_rows(
     *,
-    store: SQLiteStore,
+    store: ControlPlaneStore,
     rows: list[dict[str, Any]],
 ) -> dict[str, Any]:
     imported_count = 0
@@ -310,21 +267,28 @@ def _seed_acquisition_shard_rows(
 
 
 @contextmanager
-def _disabled_live_postgres() -> Any:
-    original = os.getenv("SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE")
-    os.environ["SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE"] = "disabled"
+def _target_postgres_test_environment() -> Any:
+    keys = {
+        "SOURCING_RUNTIME_ENVIRONMENT": "test",
+        "SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE": "postgres_only",
+        "SOURCING_REQUIRE_CONTROL_PLANE_POSTGRES": "1",
+        "SOURCING_PG_ONLY_SQLITE_BACKEND": "shared_memory",
+    }
+    previous = {key: os.getenv(key) for key in keys}
+    os.environ.update(keys)
     try:
         yield
     finally:
-        if original is None:
-            os.environ.pop("SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE", None)
-        else:
-            os.environ["SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE"] = original
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
 
 
-def _build_isolated_target_store(target_db_path: Path) -> SQLiteStore:
-    with _disabled_live_postgres():
-        return SQLiteStore(str(target_db_path))
+def _build_target_store(target_db_path: Path) -> ControlPlaneStore:
+    with _target_postgres_test_environment():
+        return ControlPlaneStore(str(target_db_path))
 
 
 def _load_company_identity(
@@ -384,11 +348,6 @@ def main() -> int:
 
     source_runtime_dir = Path(args.source_runtime_dir).expanduser().resolve()
     target_runtime_dir = Path(args.target_runtime_dir).expanduser().resolve()
-    source_db_path = (
-        Path(args.source_db_path).expanduser().resolve()
-        if str(args.source_db_path or "").strip()
-        else (source_runtime_dir / "sourcing_agent.db").resolve()
-    )
     target_db_path = (
         Path(args.target_db_path).expanduser().resolve()
         if str(args.target_db_path or "").strip()
@@ -397,16 +356,19 @@ def main() -> int:
 
     if not source_runtime_dir.exists():
         raise SystemExit(f"Source runtime dir not found: {source_runtime_dir}")
+    if not resolve_control_plane_postgres_dsn(source_runtime_dir):
+        raise SystemExit("Source runtime must resolve a Postgres control-plane DSN.")
+    if not resolve_control_plane_postgres_dsn(target_runtime_dir):
+        raise SystemExit("Target runtime must resolve a Postgres control-plane DSN.")
 
     target_runtime_dir.mkdir(parents=True, exist_ok=True)
     (target_runtime_dir / "company_assets").mkdir(parents=True, exist_ok=True)
-    store = _build_isolated_target_store(target_db_path)
+    store = _build_target_store(target_db_path)
 
     results: list[dict[str, Any]] = []
     for company in companies:
         row = _load_authoritative_snapshot_row(
             source_runtime_dir=source_runtime_dir,
-            source_db_path=source_db_path,
             company=company,
         )
         target_company = str(row.get("target_company") or company).strip()
@@ -446,7 +408,6 @@ def main() -> int:
         selected_snapshot_ids = _selected_snapshot_ids(row)
         shard_rows = _query_source_acquisition_shard_rows(
             source_runtime_dir=source_runtime_dir,
-            source_db_path=source_db_path,
             target_company=target_company,
             company_key=company_key,
             snapshot_ids=selected_snapshot_ids,
@@ -476,9 +437,10 @@ def main() -> int:
         json.dumps(
             {
                 "source_runtime_dir": str(source_runtime_dir),
-                "source_db_path": str(source_db_path),
+                "source_control_plane": "postgres",
                 "target_runtime_dir": str(target_runtime_dir),
                 "target_db_path": str(target_db_path),
+                "target_control_plane": "postgres",
                 "asset_view": str(args.asset_view or "canonical_merged"),
                 "link_mode": str(args.link_mode or "symlink"),
                 "results": results,

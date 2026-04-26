@@ -3,13 +3,13 @@ import unittest
 
 from sourcing_agent.agent_runtime import AgentRuntimeCoordinator
 from sourcing_agent.domain import JobRequest
-from sourcing_agent.storage import SQLiteStore
+from sourcing_agent.storage import ControlPlaneStore
 
 
 class AgentRuntimeTest(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
-        self.store = SQLiteStore(f"{self.tempdir.name}/runtime.db")
+        self.store = ControlPlaneStore(f"{self.tempdir.name}/runtime.db")
         self.runtime = AgentRuntimeCoordinator(self.store)
         self.request = JobRequest(
             raw_user_request="帮我找 xAI 的 RL researcher",

@@ -11,7 +11,7 @@ from .candidate_artifacts import (
 )
 from .domain import Candidate, EvidenceRecord
 from .results_store import open_snapshot_artifact_store, read_snapshot_candidate_shard
-from .storage import SQLiteStore
+from .storage import ControlPlaneStore
 
 _CANDIDATE_FIELD_NAMES = {field.name for field in fields(Candidate)}
 
@@ -37,7 +37,7 @@ def load_authoritative_candidate_snapshot(
     target_company: str,
     snapshot_id: str = "",
     asset_view: str = "canonical_merged",
-    store: SQLiteStore | None = None,
+    store: ControlPlaneStore | None = None,
     allow_materialization_fallback: bool = True,
     allow_candidate_documents_fallback: bool | None = None,
 ) -> AuthoritativeCandidateSnapshot:
@@ -85,7 +85,7 @@ def load_authoritative_candidate_detail(
     candidate_id: str,
     snapshot_id: str = "",
     asset_view: str = "canonical_merged",
-    store: SQLiteStore | None = None,
+    store: ControlPlaneStore | None = None,
     allow_materialization_fallback: bool = True,
     allow_candidate_documents_fallback: bool | None = None,
 ) -> dict[str, Any]:
@@ -157,7 +157,7 @@ def load_authoritative_candidate_details(
     candidate_ids: list[str],
     snapshot_id: str = "",
     asset_view: str = "canonical_merged",
-    store: SQLiteStore | None = None,
+    store: ControlPlaneStore | None = None,
     allow_materialization_fallback: bool = True,
     allow_candidate_documents_fallback: bool | None = None,
 ) -> dict[str, dict[str, Any]]:

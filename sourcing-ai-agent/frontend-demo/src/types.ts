@@ -385,3 +385,150 @@ export interface TargetCandidateRecord {
   addedAt: string;
   updatedAt: string;
 }
+
+export type TargetCandidatePublicWebStatus =
+  | "queued"
+  | "search_submitted"
+  | "searching"
+  | "entry_links_ready"
+  | "fetching"
+  | "analyzing"
+  | "completed"
+  | "completed_with_errors"
+  | "needs_review"
+  | "failed"
+  | "cancelled"
+  | "unknown";
+
+export interface TargetCandidatePublicWebBatch {
+  batchId: string;
+  status: TargetCandidatePublicWebStatus;
+  requestedRecordIds: string[];
+  runIds: string[];
+  sourceFamilies: string[];
+  summary: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TargetCandidatePublicWebRun {
+  runId: string;
+  batchId: string;
+  recordId: string;
+  candidateId: string;
+  candidateName: string;
+  currentCompany: string;
+  linkedinUrl: string;
+  status: TargetCandidatePublicWebStatus;
+  phase: string;
+  sourceFamilies: string[];
+  summary: Record<string, unknown>;
+  queryManifest: Record<string, unknown>[];
+  searchCheckpoint: Record<string, unknown>;
+  analysisCheckpoint: Record<string, unknown>;
+  artifactRoot: string;
+  lastError: string;
+  startedAt: string;
+  completedAt: string;
+  updatedAt: string;
+}
+
+export interface TargetCandidatePublicWebSignal {
+  signalId: string;
+  runId: string;
+  signalKind: string;
+  signalType: string;
+  emailType: string;
+  value: string;
+  normalizedValue: string;
+  url: string;
+  sourceUrl: string;
+  sourceDomain: string;
+  sourceFamily: string;
+  sourceTitle: string;
+  confidenceLabel: string;
+  confidenceScore: number | null;
+  identityMatchLabel: string;
+  identityMatchScore: number | null;
+  publishable: boolean;
+  promotionStatus: string;
+  promotionId?: string;
+  promotionAction?: string;
+  promotedField?: string;
+  promotedValue?: string;
+  previousValue?: string;
+  promotedBy?: string;
+  promotedAt?: string;
+  promotionNote?: string;
+  suppressionReason: string;
+  evidenceExcerpt: string;
+  linkShapeWarnings: string[];
+  cleanProfileLink: boolean;
+  artifactRefs: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TargetCandidatePublicWebEvidenceLink {
+  sourceUrl: string;
+  sourceDomain: string;
+  sourceFamily: string;
+  sourceTitle: string;
+  signalIds: string[];
+  signalKinds: string[];
+  signalTypes: string[];
+  identityMatchLabels: string[];
+  maxConfidenceScore: number | null;
+}
+
+export interface TargetCandidatePublicWebPromotion {
+  promotionId: string;
+  signalId: string;
+  runId: string;
+  recordId: string;
+  signalKind: string;
+  signalType: string;
+  emailType: string;
+  newValue: string;
+  previousValue: string;
+  sourceUrl: string;
+  sourceDomain: string;
+  confidenceLabel: string;
+  identityMatchLabel: string;
+  action: string;
+  promotionStatus: string;
+  operator: string;
+  note: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TargetCandidatePublicWebDetail {
+  status: string;
+  recordId: string;
+  targetCandidate: Record<string, unknown> | null;
+  latestRun: Record<string, unknown> | null;
+  personAsset: Record<string, unknown> | null;
+  signals: TargetCandidatePublicWebSignal[];
+  emailCandidates: TargetCandidatePublicWebSignal[];
+  profileLinks: TargetCandidatePublicWebSignal[];
+  groupedSignals: Record<string, unknown>;
+  evidenceLinks: TargetCandidatePublicWebEvidenceLink[];
+  promotions: TargetCandidatePublicWebPromotion[];
+  promotionSummary: Record<string, unknown>;
+  rawAssetPolicy: Record<string, unknown>;
+}
+
+export interface TargetCandidatePublicWebSearchState {
+  status: string;
+  batches: TargetCandidatePublicWebBatch[];
+  runs: TargetCandidatePublicWebRun[];
+}
+
+export interface TargetCandidatePublicWebStartResult extends TargetCandidatePublicWebSearchState {
+  batch: TargetCandidatePublicWebBatch | null;
+  summary: Record<string, unknown>;
+  workerSummary: Record<string, unknown>;
+  job: Record<string, unknown>;
+}

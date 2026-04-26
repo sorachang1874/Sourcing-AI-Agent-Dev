@@ -4,7 +4,7 @@
 
 
 > Reference note: this tutorial is still useful for environment recovery, but current default entry docs are `../../ONBOARDING.md` and `docs/INDEX.md`.
-> Current default recovery path is `Postgres control plane + control_plane_snapshot + company_snapshot`; `sqlite_snapshot` is a legacy backup-only alias.
+> Current default recovery path is `Postgres control plane + control_plane_snapshot + company_snapshot`; `sqlite_snapshot` is retired and no longer has product CLI/import/restore support.
 
 ## Goal
 
@@ -120,16 +120,13 @@ PYTHONPATH=src python3 -m sourcing_agent.cli import-cloud-assets \
 - 已存在且匹配 manifest 的 payload 会被跳过
 - 中断后重跑会优先补剩余缺口
 
-### 4. Restore legacy sqlite bundle if needed
+### 4. Retired SQLite Bundles
 
-只有在排障、便携恢复、或手头只有旧格式备份时，才需要直接调用：
+旧 `sqlite_snapshot` 包不再支持直接恢复。若手头只有旧格式备份，应先在离线环境做一次性迁移，把需要保留的状态同步到 Postgres 后重新导出 `control_plane_snapshot`。
 
 ```bash
-PYTHONPATH=src python3 -m sourcing_agent.cli restore-sqlite-snapshot \
-  --manifest /path/to/sqlite_snapshot_bundle_manifest.json
+PYTHONPATH=src python3 -m sourcing_agent.cli export-control-plane-snapshot-bundle
 ```
-
-默认会先备份当前 DB。`sqlite_snapshot` 现在是 legacy backup-only alias，不是 hosted 默认恢复主路径。
 
 ### 5. Validate
 
@@ -154,7 +151,7 @@ PYTHONPATH=src python3 -m sourcing_agent.cli show-daemon-status
 cd "sourcing-ai-agent"
 
 PYTHONPATH=src python3 -m sourcing_agent.cli export-company-handoff-bundle --company thinkingmachineslab
-PYTHONPATH=src python3 -m sourcing_agent.cli export-sqlite-snapshot
+PYTHONPATH=src python3 -m sourcing_agent.cli export-control-plane-snapshot-bundle
 ```
 
 当前已知可直接复用的 Thinking Machines Lab handoff bundle 是：
@@ -171,7 +168,7 @@ PYTHONPATH=src python3 -m sourcing_agent.cli upload-asset-bundle \
   --max-workers 8
 
 PYTHONPATH=src python3 -m sourcing_agent.cli upload-asset-bundle \
-  --manifest runtime/asset_exports/sqlite_snapshot_sourcing_agent_db_20260406T125538Z/bundle_manifest.json \
+  --manifest runtime/asset_exports/control_plane_snapshot_control_plane_snapshot_<timestamp>/bundle_manifest.json \
   --max-workers 8
 ```
 
@@ -220,8 +217,8 @@ Cloudflare R2 这轮已经真实验证过可用的关键点：
 - 不要把 dashboard URL 当成 endpoint
 - `region` 使用 `auto`
 - 当前 uploader/downloader 已成功对真实 R2 完成：
-  - `sqlite_snapshot` upload
-  - `sqlite_snapshot` download
+  - `control_plane_snapshot` 风格 bundle upload
+  - `control_plane_snapshot` 风格 bundle download
   - `company_handoff` upload
   - `company_handoff` download
   - 基于下载结果的本地 restore

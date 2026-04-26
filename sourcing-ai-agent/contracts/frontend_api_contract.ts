@@ -574,6 +574,177 @@ export interface WorkflowExplainResponse {
   [key: string]: JsonValue | undefined;
 }
 
+export type TargetCandidatePublicWebStatus =
+  | "queued"
+  | "search_submitted"
+  | "searching"
+  | "entry_links_ready"
+  | "fetching"
+  | "analyzing"
+  | "completed"
+  | "completed_with_errors"
+  | "needs_review"
+  | "failed"
+  | "cancelled"
+  | "unknown";
+
+export interface TargetCandidatePublicWebBatch {
+  batch_id?: string;
+  status: TargetCandidatePublicWebStatus;
+  requested_record_ids: string[];
+  run_ids: string[];
+  source_families: string[];
+  summary: JsonObject;
+  created_at?: string;
+  updated_at?: string;
+  [key: string]: JsonValue | undefined;
+}
+
+export interface TargetCandidatePublicWebRun {
+  run_id?: string;
+  batch_id?: string;
+  record_id?: string;
+  candidate_id?: string;
+  candidate_name?: string;
+  current_company?: string;
+  linkedin_url?: string;
+  status: TargetCandidatePublicWebStatus;
+  phase?: string;
+  source_families: string[];
+  summary: JsonObject;
+  query_manifest: JsonObject[];
+  search_checkpoint: JsonObject;
+  analysis_checkpoint: JsonObject;
+  artifact_root?: string;
+  last_error?: string;
+  started_at?: string;
+  completed_at?: string;
+  updated_at?: string;
+  [key: string]: JsonValue | undefined;
+}
+
+export interface TargetCandidatePublicWebSearchState {
+  status: string;
+  batches: TargetCandidatePublicWebBatch[];
+  runs: TargetCandidatePublicWebRun[];
+  [key: string]: JsonValue | undefined;
+}
+
+export interface TargetCandidatePublicWebStartResponse extends TargetCandidatePublicWebSearchState {
+  batch?: TargetCandidatePublicWebBatch | null;
+  summary: JsonObject;
+  worker_summary: JsonObject;
+  job: JsonObject;
+}
+
+export interface TargetCandidatePublicWebSignal {
+  signal_id?: string;
+  run_id?: string;
+  asset_id?: string;
+  person_identity_key?: string;
+  record_id?: string;
+  candidate_id?: string;
+  signal_kind: "email_candidate" | "profile_link" | string;
+  signal_type?: string;
+  email_type?: string;
+  value?: string;
+  normalized_value?: string;
+  url?: string;
+  source_url?: string;
+  source_domain?: string;
+  source_family?: string;
+  source_title?: string;
+  confidence_label?: string;
+  confidence_score?: number;
+  identity_match_label?: string;
+  identity_match_score?: number;
+  publishable?: boolean;
+  promotion_status?: string;
+  promotion_id?: string;
+  promotion_action?: string;
+  promoted_field?: string;
+  promoted_value?: string;
+  previous_value?: string;
+  promoted_by?: string;
+  promoted_at?: string;
+  promotion_note?: string;
+  suppression_reason?: string;
+  evidence_excerpt?: string;
+  artifact_refs?: JsonObject;
+  model_provider?: string;
+  model_version?: string;
+  link_shape_warnings?: string[];
+  clean_profile_link?: boolean;
+  metadata?: JsonObject;
+  created_at?: string;
+  updated_at?: string;
+  [key: string]: JsonValue | undefined;
+}
+
+export interface TargetCandidatePublicWebPromotion {
+  promotion_id?: string;
+  signal_id?: string;
+  run_id?: string;
+  record_id?: string;
+  signal_kind?: string;
+  signal_type?: string;
+  email_type?: string;
+  new_value?: string;
+  previous_value?: string;
+  source_url?: string;
+  source_domain?: string;
+  confidence_label?: string;
+  identity_match_label?: string;
+  action?: string;
+  promotion_status?: string;
+  operator?: string;
+  note?: string;
+  created_at?: string;
+  updated_at?: string;
+  [key: string]: JsonValue | undefined;
+}
+
+export interface TargetCandidatePublicWebEvidenceLink {
+  source_url: string;
+  source_domain?: string;
+  source_family?: string;
+  source_title?: string;
+  signal_ids: string[];
+  signal_kinds: string[];
+  signal_types: string[];
+  identity_match_labels: string[];
+  max_confidence_score?: number;
+  [key: string]: JsonValue | undefined;
+}
+
+export interface TargetCandidatePublicWebDetailResponse {
+  status: string;
+  record_id?: string;
+  target_candidate?: JsonObject | null;
+  latest_run?: JsonObject | null;
+  person_asset?: JsonObject | null;
+  signals: TargetCandidatePublicWebSignal[];
+  email_candidates: TargetCandidatePublicWebSignal[];
+  profile_links: TargetCandidatePublicWebSignal[];
+  grouped_signals: JsonObject;
+  evidence_links: TargetCandidatePublicWebEvidenceLink[];
+  promotions: TargetCandidatePublicWebPromotion[];
+  promotion_summary: JsonObject;
+  raw_asset_policy: JsonObject;
+  [key: string]: JsonValue | undefined;
+}
+
+export interface TargetCandidatePublicWebPromotionResponse {
+  status: string;
+  record_id?: string;
+  signal?: TargetCandidatePublicWebSignal;
+  promotion?: TargetCandidatePublicWebPromotion;
+  target_candidate?: JsonObject;
+  detail?: TargetCandidatePublicWebDetailResponse | null;
+  reason?: string;
+  [key: string]: JsonValue | undefined;
+}
+
 export interface RefinementCompileResponse {
   status: "compiled" | "invalid" | "not_found";
   baseline_job_id?: string;

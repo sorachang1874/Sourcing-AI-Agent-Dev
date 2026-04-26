@@ -34,6 +34,16 @@ import type {
   ServiceStatusPayload,
   SystemProgressResponse,
   SourcingPlanSummary,
+  TargetCandidatePublicWebBatch,
+  TargetCandidatePublicWebDetailResponse,
+  TargetCandidatePublicWebEvidenceLink,
+  TargetCandidatePublicWebPromotion,
+  TargetCandidatePublicWebPromotionResponse,
+  TargetCandidatePublicWebRun,
+  TargetCandidatePublicWebSearchState,
+  TargetCandidatePublicWebSignal,
+  TargetCandidatePublicWebStartResponse,
+  TargetCandidatePublicWebStatus,
   WorkflowExplainResponse,
   WorkflowStartResponse,
   WorkflowStageSummariesPayload,
@@ -141,6 +151,46 @@ export class SourcingAgentApiClient {
   async listQueryDispatches(filters: JsonObject = {}): Promise<QueryDispatchListResponse> {
     const query = buildQueryString(filters);
     return this.get(`/api/query-dispatches${query}`, mapQueryDispatchListResponse);
+  }
+
+  async listTargetCandidatePublicWebSearches(
+    filters: JsonObject = {},
+  ): Promise<TargetCandidatePublicWebSearchState> {
+    const query = buildQueryString(filters);
+    return this.get(
+      `/api/target-candidates/public-web-search${query}`,
+      mapTargetCandidatePublicWebSearchState,
+    );
+  }
+
+  async getTargetCandidatePublicWebSearchDetail(
+    recordId: string,
+  ): Promise<TargetCandidatePublicWebDetailResponse> {
+    return this.get(
+      `/api/target-candidates/${encodeURIComponent(recordId)}/public-web-search`,
+      mapTargetCandidatePublicWebDetailResponse,
+    );
+  }
+
+  async promoteTargetCandidatePublicWebSignal(
+    recordId: string,
+    payload: JsonObject,
+  ): Promise<TargetCandidatePublicWebPromotionResponse> {
+    return this.post(
+      `/api/target-candidates/${encodeURIComponent(recordId)}/public-web-promotions`,
+      payload,
+      mapTargetCandidatePublicWebPromotionResponse,
+    );
+  }
+
+  async startTargetCandidatePublicWebSearch(
+    payload: JsonObject,
+  ): Promise<TargetCandidatePublicWebStartResponse> {
+    return this.post(
+      "/api/target-candidates/public-web-search",
+      payload,
+      mapTargetCandidatePublicWebStartResponse,
+    );
   }
 
   private async get<T>(path: string, mapper: (payload: unknown) => T): Promise<T> {
@@ -290,6 +340,222 @@ export function mapWorkflowExplainResponse(payload: unknown): WorkflowExplainRes
     },
     timings_ms: source.timings_ms ? asJsonObject(source.timings_ms) : undefined,
   };
+}
+
+export function mapTargetCandidatePublicWebSearchState(
+  payload: unknown,
+): TargetCandidatePublicWebSearchState {
+  const source = asObject(payload, "TargetCandidatePublicWebSearchState");
+  return {
+    ...(source as JsonObject),
+    status: asOptionalString(source.status) ?? "",
+    batches: asArray(source.batches).map(mapTargetCandidatePublicWebBatch),
+    runs: asArray(source.runs).map(mapTargetCandidatePublicWebRun),
+  };
+}
+
+export function mapTargetCandidatePublicWebStartResponse(
+  payload: unknown,
+): TargetCandidatePublicWebStartResponse {
+  const source = asObject(payload, "TargetCandidatePublicWebStartResponse");
+  const state = mapTargetCandidatePublicWebSearchState(source);
+  return {
+    ...state,
+    batch: source.batch ? mapTargetCandidatePublicWebBatch(source.batch) : null,
+    summary: source.summary ? asJsonObject(source.summary) : {},
+    worker_summary: source.worker_summary ? asJsonObject(source.worker_summary) : {},
+    job: source.job ? asJsonObject(source.job) : {},
+  };
+}
+
+export function mapTargetCandidatePublicWebDetailResponse(
+  payload: unknown,
+): TargetCandidatePublicWebDetailResponse {
+  const source = asObject(payload, "TargetCandidatePublicWebDetailResponse");
+  return {
+    ...(source as JsonObject),
+    status: asOptionalString(source.status) ?? "",
+    record_id: asOptionalString(source.record_id),
+    target_candidate: source.target_candidate ? asJsonObject(source.target_candidate) : null,
+    latest_run: source.latest_run ? asJsonObject(source.latest_run) : null,
+    person_asset: source.person_asset ? asJsonObject(source.person_asset) : null,
+    signals: asArray(source.signals).map(mapTargetCandidatePublicWebSignal),
+    email_candidates: asArray(source.email_candidates).map(mapTargetCandidatePublicWebSignal),
+    profile_links: asArray(source.profile_links).map(mapTargetCandidatePublicWebSignal),
+    grouped_signals: source.grouped_signals ? asJsonObject(source.grouped_signals) : {},
+    evidence_links: asArray(source.evidence_links).map(mapTargetCandidatePublicWebEvidenceLink),
+    promotions: asArray(source.promotions).map(mapTargetCandidatePublicWebPromotion),
+    promotion_summary: source.promotion_summary ? asJsonObject(source.promotion_summary) : {},
+    raw_asset_policy: source.raw_asset_policy ? asJsonObject(source.raw_asset_policy) : {},
+  };
+}
+
+export function mapTargetCandidatePublicWebPromotionResponse(
+  payload: unknown,
+): TargetCandidatePublicWebPromotionResponse {
+  const source = asObject(payload, "TargetCandidatePublicWebPromotionResponse");
+  return {
+    ...(source as JsonObject),
+    status: asOptionalString(source.status) ?? "",
+    record_id: asOptionalString(source.record_id),
+    signal: source.signal ? mapTargetCandidatePublicWebSignal(source.signal) : undefined,
+    promotion: source.promotion ? mapTargetCandidatePublicWebPromotion(source.promotion) : undefined,
+    target_candidate: source.target_candidate ? asJsonObject(source.target_candidate) : undefined,
+    detail: source.detail ? mapTargetCandidatePublicWebDetailResponse(source.detail) : null,
+    reason: asOptionalString(source.reason),
+  };
+}
+
+export function mapTargetCandidatePublicWebSignal(payload: unknown): TargetCandidatePublicWebSignal {
+  const source = asObject(payload, "TargetCandidatePublicWebSignal");
+  return {
+    ...(source as JsonObject),
+    signal_id: asOptionalString(source.signal_id),
+    run_id: asOptionalString(source.run_id),
+    asset_id: asOptionalString(source.asset_id),
+    person_identity_key: asOptionalString(source.person_identity_key),
+    record_id: asOptionalString(source.record_id),
+    candidate_id: asOptionalString(source.candidate_id),
+    signal_kind: asOptionalString(source.signal_kind) ?? "",
+    signal_type: asOptionalString(source.signal_type),
+    email_type: asOptionalString(source.email_type),
+    value: asOptionalString(source.value),
+    normalized_value: asOptionalString(source.normalized_value),
+    url: asOptionalString(source.url),
+    source_url: asOptionalString(source.source_url),
+    source_domain: asOptionalString(source.source_domain),
+    source_family: asOptionalString(source.source_family),
+    source_title: asOptionalString(source.source_title),
+    confidence_label: asOptionalString(source.confidence_label),
+    confidence_score: asOptionalNumber(source.confidence_score),
+    identity_match_label: asOptionalString(source.identity_match_label),
+    identity_match_score: asOptionalNumber(source.identity_match_score),
+    publishable: asOptionalBoolean(source.publishable),
+    promotion_status: asOptionalString(source.promotion_status),
+    promotion_id: asOptionalString(source.promotion_id),
+    promotion_action: asOptionalString(source.promotion_action),
+    promoted_field: asOptionalString(source.promoted_field),
+    promoted_value: asOptionalString(source.promoted_value),
+    previous_value: asOptionalString(source.previous_value),
+    promoted_by: asOptionalString(source.promoted_by),
+    promoted_at: asOptionalString(source.promoted_at),
+    promotion_note: asOptionalString(source.promotion_note),
+    suppression_reason: asOptionalString(source.suppression_reason),
+    evidence_excerpt: asOptionalString(source.evidence_excerpt),
+    artifact_refs: source.artifact_refs ? asJsonObject(source.artifact_refs) : undefined,
+    model_provider: asOptionalString(source.model_provider),
+    model_version: asOptionalString(source.model_version),
+    link_shape_warnings: asOptionalStringArray(source.link_shape_warnings),
+    clean_profile_link: asOptionalBoolean(source.clean_profile_link),
+    metadata: source.metadata ? asJsonObject(source.metadata) : undefined,
+    created_at: asOptionalString(source.created_at),
+    updated_at: asOptionalString(source.updated_at),
+  };
+}
+
+export function mapTargetCandidatePublicWebPromotion(payload: unknown): TargetCandidatePublicWebPromotion {
+  const source = asObject(payload, "TargetCandidatePublicWebPromotion");
+  return {
+    ...(source as JsonObject),
+    promotion_id: asOptionalString(source.promotion_id),
+    signal_id: asOptionalString(source.signal_id),
+    run_id: asOptionalString(source.run_id),
+    record_id: asOptionalString(source.record_id),
+    signal_kind: asOptionalString(source.signal_kind),
+    signal_type: asOptionalString(source.signal_type),
+    email_type: asOptionalString(source.email_type),
+    new_value: asOptionalString(source.new_value),
+    previous_value: asOptionalString(source.previous_value),
+    source_url: asOptionalString(source.source_url),
+    source_domain: asOptionalString(source.source_domain),
+    confidence_label: asOptionalString(source.confidence_label),
+    identity_match_label: asOptionalString(source.identity_match_label),
+    action: asOptionalString(source.action),
+    promotion_status: asOptionalString(source.promotion_status),
+    operator: asOptionalString(source.operator),
+    note: asOptionalString(source.note),
+    created_at: asOptionalString(source.created_at),
+    updated_at: asOptionalString(source.updated_at),
+  };
+}
+
+export function mapTargetCandidatePublicWebEvidenceLink(
+  payload: unknown,
+): TargetCandidatePublicWebEvidenceLink {
+  const source = asObject(payload, "TargetCandidatePublicWebEvidenceLink");
+  return {
+    ...(source as JsonObject),
+    source_url: asOptionalString(source.source_url) ?? "",
+    source_domain: asOptionalString(source.source_domain),
+    source_family: asOptionalString(source.source_family),
+    source_title: asOptionalString(source.source_title),
+    signal_ids: asOptionalStringArray(source.signal_ids),
+    signal_kinds: asOptionalStringArray(source.signal_kinds),
+    signal_types: asOptionalStringArray(source.signal_types),
+    identity_match_labels: asOptionalStringArray(source.identity_match_labels),
+    max_confidence_score: asOptionalNumber(source.max_confidence_score),
+  };
+}
+
+export function mapTargetCandidatePublicWebBatch(payload: unknown): TargetCandidatePublicWebBatch {
+  const source = asObject(payload, "TargetCandidatePublicWebBatch");
+  return {
+    ...(source as JsonObject),
+    batch_id: asOptionalString(source.batch_id),
+    status: normalizeTargetCandidatePublicWebStatus(source.status),
+    requested_record_ids: asOptionalStringArray(source.requested_record_ids),
+    run_ids: asOptionalStringArray(source.run_ids),
+    source_families: asOptionalStringArray(source.source_families),
+    summary: source.summary ? asJsonObject(source.summary) : {},
+    created_at: asOptionalString(source.created_at),
+    updated_at: asOptionalString(source.updated_at),
+  };
+}
+
+export function mapTargetCandidatePublicWebRun(payload: unknown): TargetCandidatePublicWebRun {
+  const source = asObject(payload, "TargetCandidatePublicWebRun");
+  return {
+    ...(source as JsonObject),
+    run_id: asOptionalString(source.run_id),
+    batch_id: asOptionalString(source.batch_id),
+    record_id: asOptionalString(source.record_id),
+    candidate_id: asOptionalString(source.candidate_id),
+    candidate_name: asOptionalString(source.candidate_name),
+    current_company: asOptionalString(source.current_company),
+    linkedin_url: asOptionalString(source.linkedin_url),
+    status: normalizeTargetCandidatePublicWebStatus(source.status),
+    phase: asOptionalString(source.phase),
+    source_families: asOptionalStringArray(source.source_families),
+    summary: source.summary ? asJsonObject(source.summary) : {},
+    query_manifest: asObjectArray(source.query_manifest),
+    search_checkpoint: source.search_checkpoint ? asJsonObject(source.search_checkpoint) : {},
+    analysis_checkpoint: source.analysis_checkpoint ? asJsonObject(source.analysis_checkpoint) : {},
+    artifact_root: asOptionalString(source.artifact_root),
+    last_error: asOptionalString(source.last_error),
+    started_at: asOptionalString(source.started_at),
+    completed_at: asOptionalString(source.completed_at),
+    updated_at: asOptionalString(source.updated_at),
+  };
+}
+
+export function normalizeTargetCandidatePublicWebStatus(value: unknown): TargetCandidatePublicWebStatus {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (
+    normalized === "queued" ||
+    normalized === "search_submitted" ||
+    normalized === "searching" ||
+    normalized === "entry_links_ready" ||
+    normalized === "fetching" ||
+    normalized === "analyzing" ||
+    normalized === "completed" ||
+    normalized === "completed_with_errors" ||
+    normalized === "needs_review" ||
+    normalized === "failed" ||
+    normalized === "cancelled"
+  ) {
+    return normalized;
+  }
+  return "unknown";
 }
 
 export function mapJobProgressResponse(payload: unknown): JobProgressResponse {

@@ -6,11 +6,11 @@ from .asset_catalog import AssetCatalog
 from .domain import JobRequest
 from .model_provider import ModelClient
 from .planning import build_sourcing_plan
-from .storage import SQLiteStore
+from .storage import ControlPlaneStore
 
 
 class CriteriaEvolutionEngine:
-    def __init__(self, catalog: AssetCatalog, store: SQLiteStore, model_client: ModelClient) -> None:
+    def __init__(self, catalog: AssetCatalog, store: ControlPlaneStore, model_client: ModelClient) -> None:
         self.catalog = catalog
         self.store = store
         self.model_client = model_client

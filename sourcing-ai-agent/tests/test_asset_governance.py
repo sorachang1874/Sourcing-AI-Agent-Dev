@@ -4,7 +4,7 @@ from sourcing_agent.asset_governance import (
     default_asset_pointer_key,
     normalize_asset_lifecycle_status,
 )
-from sourcing_agent.storage import SQLiteStore
+from sourcing_agent.storage import ControlPlaneStore
 
 
 def test_default_asset_pointer_key_is_unique_per_scope() -> None:
@@ -57,7 +57,7 @@ def test_canonical_replacement_plan_rejects_partial_snapshot_as_default() -> Non
 
 
 def test_promote_asset_default_pointer_persists_current_pointer_and_history(tmp_path) -> None:
-    store = SQLiteStore(str(tmp_path / "test.db"))
+    store = ControlPlaneStore(str(tmp_path / "test.db"))
 
     first = store.promote_asset_default_pointer(
         {
@@ -89,7 +89,7 @@ def test_promote_asset_default_pointer_persists_current_pointer_and_history(tmp_
 
 
 def test_promote_asset_default_pointer_rejects_partial_without_writing(tmp_path) -> None:
-    store = SQLiteStore(str(tmp_path / "test.db"))
+    store = ControlPlaneStore(str(tmp_path / "test.db"))
 
     result = store.promote_asset_default_pointer(
         {

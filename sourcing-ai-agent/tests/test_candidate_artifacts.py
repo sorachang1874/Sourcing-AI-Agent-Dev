@@ -26,7 +26,7 @@ from sourcing_agent.candidate_artifacts import (
     rewrite_structured_timeline_in_company_candidate_artifacts,
 )
 from sourcing_agent.domain import Candidate, EvidenceRecord, make_evidence_id
-from sourcing_agent.storage import SQLiteStore
+from sourcing_agent.storage import ControlPlaneStore
 
 
 class CandidateArtifactsTest(unittest.TestCase):
@@ -50,7 +50,7 @@ class CandidateArtifactsTest(unittest.TestCase):
                 }
             )
         )
-        self.store = SQLiteStore(self.runtime_dir / "sourcing_agent.db")
+        self.store = ControlPlaneStore(self.runtime_dir / "sourcing_agent.db")
 
     def tearDown(self) -> None:
         self.tempdir.cleanup()
