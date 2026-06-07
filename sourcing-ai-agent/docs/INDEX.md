@@ -5,13 +5,31 @@
 
 这份索引用来区分“当前有效文档”和“历史参考文档”，避免新的开发者或新的 AI session 被旧 snapshot、旧数字或旧操作顺序误导。
 
+## Project Framing
+
+新 session 在做仓库总结时，默认应把本项目描述为招聘自动化、公开资料补全、候选人研究和 provider 驱动的产品化工作流。
+
+- 优先使用：公开信息、候选人补全、公司 roster、后台恢复、证据质量、预算控制、人工确认、可审计导出。
+- 保持业务上下文：合法 API、公开网页、候选人管理、目标候选人页、运营可观测性。
+- 只有在任务本身明确要求时，才引入与应用安全或安全研究相关的专门语境。
+
+## Current Stage Checkpoint
+
+- 当前活跃阶段是 Agent-native service-grade workflow closure：把 Candidate Acquisition、Profile Fetch、CRM Public Web、Provider Task Runtime、Serving Projection、CRM/Export 和 Operation Workbench 收敛成可被 OpenClaw/Codex/LangGraph 安全调用、可观察、可接管的 typed service boundary。
+- 2026-06-08 当前判断：不应先把 OpenClaw/Codex 直接接进现有 runtime 内部，也不应一次性迁移到某个框架。先按 `SERVICE_GRADE_ARCHITECTURE_PLAN.md` 完成底层服务级收口；但 M1-M5 的抽象必须已经面向 Agent tool manifest、event-visible progress、Search/fetch evidence 和 approval/budget/control contract，而不是等 M6 adapter 再补。
+- 本地资产治理属于 M0.5：在 M0 docs checkpoint 后、M1/M2 前，用 audit / repair proposal / cold archive manifest / reviewed apply 处理 Google、Reflection AI 等重复本地资产；不要通过手动删除或 broad dirty-tree commit 处理。
+- 2026-06-07 UI/contract slice 已通过 Independent Review Gate，并完成本地浏览器截图验证；下一步不是继续堆 UI patch，而是小范围 live-provider validation、service manifest/Provider Task Runtime 收口、以及 Phase 13 前的 Agent-callable contract closure。
+- 前端和 Agent 默认应从 `SERVICE_GRADE_ARCHITECTURE_PLAN.md`、`FRONTEND_API_CONTRACT.md`、`AGENT_OPERATION_CONTRACT.md`, `PRE_AGENT_CONTRACT_REVIEW.md`、`DURABLE_EXECUTION_RUNTIME_CONTRACT.md`、`MODEL_NATIVE_SEARCH_PROVIDER_CONTRACT.md` 和 `NEXT_TODO.md` 读取当前合同。旧 session handoff、事故复盘和长 tracker 只作为历史参考；若与这些合同冲突，以当前合同和最新 checkpoint 为准。
+- 不建议在一次 UI/contract slice 中批量删除历史 Markdown。删除或归档旧文档应作为单独 cleanup，通过 Independent Review Gate 确认没有丢失审计证据或仍被测试引用的合同字符串。
+
 ## Start Here
 
 1. [../../README.md](../../README.md)
-2. [../../ONBOARDING.md](../../ONBOARDING.md)
-3. [../../CONTRIBUTING.md](../../CONTRIBUTING.md)
-4. [../README.md](../README.md)
-5. [../PROGRESS.md](../PROGRESS.md)
+2. [RUNTIME_PREFLIGHT.md](RUNTIME_PREFLIGHT.md)
+3. [../../ONBOARDING.md](../../ONBOARDING.md)
+4. [../../CONTRIBUTING.md](../../CONTRIBUTING.md)
+5. [../README.md](../README.md)
+6. [../PROGRESS.md](../PROGRESS.md)
 
 ## Status Banner Rule
 
@@ -42,10 +60,48 @@
 
 - [MODULES.md](MODULES.md)
   当前模块职责与上下游关系。
+- [RUNTIME_PREFLIGHT.md](RUNTIME_PREFLIGHT.md)
+  本地 dev、scripted/test、local live smoke、hosted/ECS workflow 启动前的统一 preflight 入口，包含持久启动、端口检查、webhook readiness 和边界说明。
 - [ARCHITECTURE.md](ARCHITECTURE.md)
   当前系统分层、provider 抽象和 runtime 设计。
+- [SERVICE_GRADE_ARCHITECTURE_PLAN.md](SERVICE_GRADE_ARCHITECTURE_PLAN.md)
+  Phase 13 / OpenClaw-Codex adapter 之前的服务级收口计划：workflow spec/command spec manifest、Provider Task Runtime、Candidate Acquisition、Profile Fetch、CRM Public Web、Serving Projection、CRM/Export、Frontend/Operation Workbench 和 GitHub checkpoint 纪律。
 - [EXECUTION_CONTRACT_GUARDRAILS.md](EXECUTION_CONTRACT_GUARDRAILS.md)
   planner/runtime/provider/results 不可回退的执行契约与测试约束。
+- [INTENT_STRATEGY_SOURCE_PRIORITY_CONTRACT.md](INTENT_STRATEGY_SOURCE_PRIORITY_CONTRACT.md)
+  用户请求的人群边界、策略制定、coverage proof、authoritative pointer 和展示语义之间的 source priority 合同。
+- [EVENT_LEVEL_WORKFLOW_RESPONSE.md](EVENT_LEVEL_WORKFLOW_RESPONSE.md)
+  Provider-backed workflow 的事件级响应抽象：remote completion discovery、local event apply、next submit 和 downstream materialization 的解耦 contract。
+- [DURABLE_EXECUTION_RUNTIME_CONTRACT.md](DURABLE_EXECUTION_RUNTIME_CONTRACT.md)
+  Durable execution runtime 顶层合同：OperationRun / WorkflowRun / WorkflowCommand / ActivityAttempt 分层、append-only event log、reducer、typed command owner registry、timer/retry、completion policy、Agent 边界、`job_materialization_items` 迁移退役与大 snapshot 资产整理 gate。
+- [DISCOVERY_PROVIDER_QUEUE_CONTRACT.md](DISCOVERY_PROVIDER_QUEUE_CONTRACT.md)
+  Search-seed discovery query、provider retry、worker envelope、snapshot merge 与 profile prefetch 的 queue-first owner contract，明确 `provider_search_retry` 不能作为独立 drain fallback。
+- [WORKFLOW_PROGRESS_CONTRACT.md](WORKFLOW_PROGRESS_CONTRACT.md)
+  执行过程页与候选人看板 streaming 的字段来源、计数不变量、前端展示规则和 scripted/browser 观测 guardrails。
+- [CLAUDE_CODE_STREAMING_WORKFLOW_REBUILD_CONTEXT.md](CLAUDE_CODE_STREAMING_WORKFLOW_REBUILD_CONTEXT.md)
+  面向 Claude Code 的服务级 streaming workflow 重构上下文：失败复盘、产品预期、目标架构、反模式和验收标准。
+- [CLAUDE_CODE_BOARD_RUNTIME_ORCHESTRATION_HANDOFF_2026-05-06.md](CLAUDE_CODE_BOARD_RUNTIME_ORCHESTRATION_HANDOFF_2026-05-06.md)
+  面向 Claude Code 的当前 PG manual scripted 事故交接：候选人看板 streaming、local apply、board runtime、分页、分层和 scripted/live parity 的修复入口。
+- [STREAMING_WORKFLOW_REBUILD_PLAN.md](STREAMING_WORKFLOW_REBUILD_PLAN.md)
+  result lifecycle、atomic progress、provider handoff、partial delta board streaming 和 scripted/browser 测试体系的分阶段落地计划。
+- [JOB_RESULT_LIFECYCLE_DESIGN.md](JOB_RESULT_LIFECYCLE_DESIGN.md)
+  服务级 streaming workflow 重构第一片实现的设计说明：canonical 持久化 `job_result_lifecycle` 表的 schema、写入者归属、读取改造与失败类消除矩阵。
+- [CANONICAL_SERVING_PROJECTION_CONTRACT.md](CANONICAL_SERVING_PROJECTION_CONTRACT.md)
+  下一轮 post-ECS 架构改造的顶层结果服务合同：`projection_id` 作为结果资源、run/result 分离、collection authoritative projection、public reader fail-closed、CRM 来源解耦、无双轨迁移和未来 Agent 交互边界。
+- [CRM_STATE_CONTRACT.md](CRM_STATE_CONTRACT.md)
+  CRM 独立模块合同：person-first CRM record、engagement/pipeline state、append-only event audit、target-candidate 迁移、Public Web promotion 到 PersonAssertion 的边界，以及未来 Agent 调用 CRM 的 writer 规则。
+- [PERSON_ASSET_EVIDENCE_ASSERTION_CONTRACT.md](PERSON_ASSET_EVIDENCE_ASSERTION_CONTRACT.md)
+  Person 级资产/证据/断言合同：LinkedIn identity、raw profile、avatar media、Public Web/DataForSEO evidence、用户确认 contact/social assertion、raw/evidence index 与 projection/CRM 的边界。
+- [AGENT_OPERATION_CONTRACT.md](AGENT_OPERATION_CONTRACT.md)
+  多轮 Agent 操作合同：AgentConversation、AgentAction、OperationRun、action registry、approval/budget/idempotency、staged acquisition，以及 Temporal/LangGraph 这类执行框架的可替换边界。
+- [PRE_AGENT_CONTRACT_REVIEW.md](PRE_AGENT_CONTRACT_REVIEW.md)
+  Phase 13 前的 W10 合同审查矩阵：模块 owner/source of truth、Agent-callable surface、fast preflight、migration-only bridge 和未决方向。
+- [CLAUDE_CODE_EVENT_WORKFLOW_REVIEW_PROMPT.md](CLAUDE_CODE_EVENT_WORKFLOW_REVIEW_PROMPT.md)
+  启动 Claude Code 新 session 审查事件级工作流设计时使用的 handoff prompt、阅读顺序、review 问题和输出格式。
+- [APIFY_PROVIDER_WEBHOOK_PLAYBOOK.md](APIFY_PROVIDER_WEBHOOK_PLAYBOOK.md)
+  Apify ad-hoc webhook 的 ECS / 本地 tunnel 配置、token 口径、connectivity probe、one-profile round-trip smoke 与排障方法。
+- [APIFY_BILLING_INCIDENT_POSTMORTEM_2026-05-07.md](APIFY_BILLING_INCIDENT_POSTMORTEM_2026-05-07.md)
+  2026-05-07 scripted smoke 跨 runtime namespace 触发真实 Apify 计费的复盘、证据链、隔离 contract 和 prevention gates。
 - [CHANGE_REVIEW_2026-04-21_2026-04-23.md](CHANGE_REVIEW_2026-04-21_2026-04-23.md)
   4/21-4/23 这轮稳定化改动的复盘：哪些改动应保留，哪些仍需继续回退成更干净的 contract。
 - [SESSION_HANDOFF_2026-04-25.md](SESSION_HANDOFF_2026-04-25.md)
@@ -76,6 +132,8 @@
   从 Linux/WSL 虚拟机迁移到另一台 Mac 时，代码、runtime 资产、Postgres control plane 和 Codex 记录的推荐迁移方式。
 - [ECS_ACCESS_PLAYBOOK.md](ECS_ACCESS_PLAYBOOK.md)
   连接阿里云 ECS 的 SSH、端口转发、文件同步和最小健康检查入口。
+- [ECS_CODE_AND_ASSET_MIGRATION_PLAYBOOK.md](ECS_CODE_AND_ASSET_MIGRATION_PLAYBOOK.md)
+  将当前代码和精选 canonical 数据资产迁移到 ECS 的可复用流程，包含 `latest_snapshot.json` 降级、资产 manifest、选择性 rsync/bundle、归档和上线探针。
 - [HOSTED_DEPLOYMENT_AND_GITHUB_SCOPE.md](HOSTED_DEPLOYMENT_AND_GITHUB_SCOPE.md)
   云端 `serve` 默认路径、前端禁区、GitHub 上传边界（降部署成本）。
 - [QUERY_GUARDRAILS.md](QUERY_GUARDRAILS.md)
@@ -84,6 +142,8 @@
   工程实现约束与 live-test 纪律。
 - [DATA_ASSET_GOVERNANCE.md](DATA_ASSET_GOVERNANCE.md)
   snapshot、scope、promotion state、云端版本治理规则。
+- [AUTHORITATIVE_ASSET_COVERAGE_CONTRACT.md](AUTHORITATIVE_ASSET_COVERAGE_CONTRACT.md)
+  `authoritative` serving pointer、full-company coverage proof、exact scoped shard coverage 和 planner local-reuse 策略的当前生产合同。
 - [SERVICE_EVOLUTION_STRATEGY.md](SERVICE_EVOLUTION_STRATEGY.md)
   当前推荐的 hybrid 服务形态与后续产品化路径。
 - [SERVER_RUNTIME_BOOTSTRAP.md](SERVER_RUNTIME_BOOTSTRAP.md)

@@ -1,11 +1,32 @@
 # Service-Grade Architecture Plan
 
-> Status: Design/reference doc. Useful for product or architecture context, but not the source of truth for current runtime behavior.
+> Status: Current architecture planning doc for service-grade workflow closure before OpenClaw/Codex adapter work. Cross-check with `AGENT_OPERATION_CONTRACT.md`, `PRE_AGENT_CONTRACT_REVIEW.md`, `DURABLE_EXECUTION_RUNTIME_CONTRACT.md`, `MODEL_NATIVE_SEARCH_PROVIDER_CONTRACT.md`, `NEXT_TODO.md`, and `PROGRESS.md` before changing runtime, provider, workflow, or Agent-facing contracts.
 
 
 ## Goal
 
 把当前 Sourcing AI Agent 从“本地可用的工作流原型”升级成适合长期迭代的服务级系统，避免以后继续反复做大规模 infra / storage / runtime 重构。
+
+2026-06-08 重新定位：本计划不再只是历史设计参考。它是 Phase 13 / OpenClaw-Codex adapter 之前的底层服务收口清单。项目可以借鉴 Temporal、LangGraph、OpenClaw/Codex 这类成熟框架的抽象，但短期目标不是直接迁移到某个框架，而是把现有候选人发现、Profile 获取、Public Web、CRM/Export、provider task runtime 和 serving/projection 改造成成熟框架会认可的 typed workflow/service boundary。只有这些边界稳定后，外层通用 Agent 才能安全调用。
+
+核心原则：
+
+- OpenClaw/Codex/LangGraph 可以成为外层 planner、browser、Search、model orchestration runtime。
+- 本项目仍必须拥有业务状态、审批、预算、幂等、重试、PG-only provenance、CRM/export 权限和 evidence materialization。
+- Adapter 前的目标不是暴露更多 API，而是先让底层模块达到 Agent-native 的服务级状态机质量。
+- 任何 Agent-callable action 都必须通过 `AgentAction -> OperationRun -> workflow_commands -> ActivityAttempt / EntityDelta -> module owner`，不能直接写业务 read model。
+- Agent-native 设计不是 M6 之后才补的外壳。M1 开始的 manifest、M2 Provider Task Runtime、M3 Candidate Acquisition、M4 Profile Fetch、M5 Public Web 都必须把自己设计成未来 Agent 能读懂、能观察、能暂停/继续/接管的工具化服务。
+
+## Agent-Native Target Principles
+
+这里的 Agent-native 不是“让 Agent 直接访问数据库或旧 route”，而是让每个底层模块从一开始就具备成熟 Agent 框架会期待的工具边界：
+
+- **Tool-first service shape.** 每个可调用能力都有 action/command manifest、JSON schema、owner、权限、预算、幂等键、retry/cancel/resume 语义、display/control contract 和输出 provenance。OpenClaw/Codex adapter 只读取这些 manifest，不反向解析 orchestrator 代码。
+- **Event-visible progress.** 长任务不能再是黑盒。候选人发现、Profile fetch、Public Web、导出、CRM 写入都要暴露阶段、当前 item、pending/timeout/retry、ActivityAttempt、EntityDelta 和下一步可操作动作，让 Codex/OpenClaw 可以实时汇报或在人类同意后接管。
+- **Multi-source evidence, single owner.** Candidate acquisition 和 Public Web 可以同时使用 DataForSEO/API provider 与 Agent-native Search/fetch/browser 工具，但所有结果必须落入统一 ProviderTask/Evidence/EntityDelta contract。Agent Search 只能成为带 provenance、cost、retry、circuit 和 export policy 的 evidence source，不能成为不可审计的隐藏 fallback。
+- **Planner uses Search before committing side effects.** 在意图识别、公司身份确认、目标公司 LinkedIn URL、Public Web profile/email 查找等阶段，Agent 可以调用自己的 Search/fetch/browser 能力补充 DataForSEO；但 commit/promotion/export/CRM mutation 仍必须通过 typed action 和 owner adjudication。
+- **Human handoff is first-class.** Agent 需要能解释“我找到哪些候选/证据、哪些不确定、下一步需要批准什么 provider/model 调用、预算是多少”，而不是只返回最终结果。审批、人工 promotion、手动排除、retry/cancel 都是可持久化状态。
+- **Framework-compatible, framework-independent.** 设计应对齐 OpenClaw/LangGraph/Temporal/Codex 会认可的 graph/tool/activity/event 模型，但不要先把业务状态交给某个框架。框架可替换；业务 owner、PG provenance、evidence/export/CRM contract 不可替换。
 
 这份方案关注 5 个问题：
 
@@ -14,6 +35,134 @@
 - SQLite 还混合承担 control plane 和 blob transport 职责。
 - query-time 结果视图和 company-level authoritative asset 没有完全分层。
 - 部分能力仍不是 AI-first，而是靠规则、路径约定和后置补丁兜底。
+
+2026-06-08 新增的服务级问题：
+
+- `orchestrator.py` 仍然是约 87k 行的中央执行体，很多 service boundary 虽已通过 typed commands 收口，但实现仍散在单体 orchestrator 中，难以 review、替换或让 Agent 安全调用。
+- `storage.py` 仍然承担过多 schema/reader/writer 职责。PG-only 是正确方向，但 store API 需要按 owner/service 分层，避免每个模块绕过 owner 直接读写表。
+- Workflow command / activity / provider task contract 仍大量写在 docs、registry、orchestrator 和 tests 中，没有完全中央化为可生成、可 diff、可被 OpenClaw/Codex adapter 消费的 manifest。
+- Candidate acquisition、Profile fetch、Public Web enrichment 仍混合了 legacy job compatibility、typed command owner、provider worker、serving projection 等多代语义；需要先形成服务级 vertical slice，而不是让外层 Agent 直接面对这些历史层。
+- DataForSEO、Harvest/Apify、document fetch、model adjudication、未来 model-native Search 应共享 Provider Task Runtime，而不是每条链路各自实现 task identity、retry、pending budget、late result quarantine、circuit breaker 和 cost accounting。
+- 前端/Operation Workbench 已开始产品化，但仍是最小控制台，不是自然语言 Agent UI；它需要消费 backend-owned display/control contracts，不得重新推导状态或暴露内部 contract 文案。
+
+## 2026-06-08 Refactor Inventory
+
+这是一轮面向 OpenClaw/Codex adapter 的底层盘点。优先级按“直接影响 Agent 安全调用”和“当前维护成本”排序。
+
+| area | current state | service-grade target | adapter risk if skipped |
+| --- | --- | --- | --- |
+| Workflow spec / command spec | Durable command registry、ActionRegistry、docs 和 tests 都存在，但规格分散。 | 单一 manifest 定义 action、command、owner、input/output schema、display/control contract、activity/entity evidence、approval/budget、retry/cancel/resume。 | Agent 只能靠文档和字符串猜工具能力，容易调用内部 command 或绕过 owner。 |
+| Provider Task Runtime | DataForSEO item-level contract 已开始收口；Harvest/Apify/Profile/Public Web 仍有多套 pending/retry/callback 语义。 | 统一 `ProviderTask` / `ProviderAttempt` / `ProviderResult` contract，支持 stable item key、batch envelope、retry unit、cost budget、pending budget、late-result quarantine、circuit breaker。 | OpenClaw/Codex Search 或 provider 调用会放大重复提交、无限等待、错误归因和成本失控。 |
+| Agent-native Search/fetch evidence | DataForSEO 是当前主要 Public Web/search provider；模型原生 Search 仍 default-off。 | Search/fetch/browser 能力作为 Provider Task source 接入，输出 provider-attempt/evidence/entity-delta，不直接决定 truth。 | 如果把 Agent Search 当快捷外部能力，会绕过 provider 成本、证据审计、identity matching 和 export policy。 |
+| Candidate Acquisition Service | W11 已把 root/intent/plan/review/commit/probe/profile admission 切成 typed commands，但 `queue_workflow` 和 legacy job bridge 仍存在。 | `plan -> review -> probe -> discover -> normalize -> publish projection` 是明确 service API；legacy job/snapshot 只作为 migration/read compatibility。 | 外层 Agent 可能直接触发旧 job workflow，绕过 staged review 或创建不可恢复状态。 |
+| Profile Fetch Service | Registry、provider fetch、terminal admit、projection admission 已有 typed command 方向，但状态散在 profile registry、activity/entity delta、legacy refill workers。 | `requested -> cache_hit/fetch_required -> provider_fetch -> terminal_admit -> projection_admission` 是显式状态机，成功/失败 URL 分桶重试。 | Agent 可能整批 retry profile，重复消耗 provider，或把未 terminal 的 profile 当成 board-visible。 |
+| CRM Public Web Service | CRM-owned queue/phase commands、detail/export/promotion contract 已大幅收口；live-provider validation 仍未完成。 | Public Web search, document fetch, evidence adjudication, signal materialization, manual promotion/export 都有 owner-owned event/evidence and live quality gate。 | Agent 会重复搜索、丢失人工 promotion、把低置信 evidence 当成可导出结果。 |
+| Model-native Search | `model_native_search` 已 reserved/fail-closed。 | 作为实验 provider source 接入 Provider Task Runtime，只能 supplemental evidence，与 DataForSEO A/B，不能替代正常 chain。 | 模型 Search 会变成不可审计、不可复现、绕过 DataForSEO retry/cost 的隐藏 fallback。 |
+| Serving Projection / Result View | Canonical serving projection 和 result view contract 已存在；旧 snapshot/materialized JSON compatibility 仍广泛可见。 | `ProjectionReader` / `ResultViewService` 是 Agent/前端唯一 read surface；object/cache/materialization 是 owner 内部细节。 | Agent 可能读旧 snapshot 或 candidate_documents fallback，做出与前端/CRM 不一致判断。 |
+| Local Asset Governance | Google、Reflection AI、早期测试/生产未隔离资产和大公司 historical snapshots 仍可能占据大量本地空间；W5 已有 audit/repair/cold-archive 基础但未作为当前 M0.5 闭环。 | 在 M1/M2 前完成只读 audit、authoritative pointer 校验、重复 shard subsumption 判断、cold archive manifest、reviewed apply；热路径只保留 authoritative baseline 和必要 scoped shards。 | Provider Task Runtime / Agent Search 可能复用污染或重复资产；直接删除会破坏 rebuild artifact、projection、audit 或 historical recovery。 |
+| CRM / Export | Operation adapters 和 CRM writer/export owners 已存在；product UX 和 bulk approval polish 仍不足。 | CRM mutation/export 都通过 approval/budget-aware actions；exports carry provenance and manual promotion scope. | Agent 可触发错误 CRM stage、导出未确认 contact、或绕过人工确认。 |
+| Frontend / Operation Workbench | `/operations` 是最小任务审批与执行工作台；目标候选人 Public Web UI 已局部产品化。 | 前端只显示 backend-owned display/control/status/help contracts；技术细节在 debug drilldown；自然语言 Agent UI 另建。 | 用户误触高成本 retry，或产品文案暴露内部 contract，造成误操作和理解偏差。 |
+| Documentation / GitHub process | 当前文档多、历史 tracker 多、README 曾过期；worktree 巨大且包含大量未跟踪文件。 | README/INDEX/PROGRESS/NEXT_TODO/Service plan 是当前入口；每个 milestone 用 branch/PR/review artifact 固化。 | 后续 session 容易回退旧架构，或者把未审计 dirty state 直接推上 GitHub。 |
+
+## Service-Grade Closure Milestones
+
+这些 milestone 是 adapter 前的收口顺序。每个 milestone 都需要 targeted tests、fast contract preflight 和 Independent Review Gate；涉及 provider/live quality 的阶段还需要小范围 live validation。
+
+1. `M0 Documentation and GitHub checkpoint`
+   - 更新 README、INDEX、NEXT_TODO、PROGRESS 和本计划，明确当前不是 MVP，而是服务级 workflow closure。
+   - 盘点 dirty worktree，分离 runtime/log/secret/test artifact，禁止无范围 `git add .`。
+   - 建立 docs-only GitHub checkpoint PR，保存当前 reviewed docs 和后续重构计划。不要把 Operation UI、frontend API adapter、runtime registry 或大 pre-agent test 混进 M0；这些属于独立 implementation checkpoint。
+
+2. `M0.5 Local Asset Governance`
+   - 目标是治理本地大资产，而不是继续拖到 M1/M2 之后。Google、Reflection AI、Anthropic/OpenAI 早期测试/生产混杂快照应先通过只读审计确认 authoritative baseline、可复用 scoped shard、重复 no-increment snapshot、缺失 reference payload 和 projection/index 依赖。
+   - 第一阶段只允许生成 audit / repair proposal / cold archive manifest，不删除、不覆盖、不移动热路径资产。任何 apply 都必须有 reviewed manifest、cold-copy/hash proof、projection pointer proof、rebuild rehearsal 和 Independent Review Gate。
+   - 保留策略：热路径保留最新 authoritative baseline、已发布 collection projection 所需 payload、可证明服务具体 scope 的 shard；重复 historical snapshots 移出正常 reuse index，原始文件进入 cold archive 或外部备份位置，保留 manifest 以支持 rebuild/audit。
+   - 不把 M0.5 混入 M0 docs-only checkpoint，也不和 M1 manifest / M2 Provider Task Runtime 同 PR。资产治理会影响 storage、artifact rebuild、projection pointer、provider cache 和 local disk layout，必须是单独 implementation checkpoint。
+
+3. `M1 Workflow and command spec manifest`
+   - 从 `ActionRegistry`、durable command owner registry、display/control/activity policies 生成或维护单一 manifest。
+   - Manifest 必须覆盖 action/command schema、owner、allowed transitions、retry/cancel/resume、approval/budget、evidence and display contracts。
+   - 前端、Operation Workbench 和未来 OpenClaw/Codex adapter 只读 manifest/API record，不硬编码 command/action 字符串。
+   - Manifest 必须以 Agent tool spec 的形态可消费：包含输入 schema、输出 schema、side-effect class、cost class、approval gate、progress event contract 和 owner-readable status cards。
+
+4. `M2 Provider Task Runtime v1`
+   - 把 DataForSEO、Harvest/Apify、document fetch、model adjudication 的 provider attempt 统一到 item-level task contract。
+   - 强制 stable task key、provider tag/keyword join、per-item retry、pending budget、late result quarantine、cost/circuit metrics。
+   - 禁止 whole-batch retry 或 request-order fallback 成为正常路径。
+   - 为 Agent-native Search/fetch/browser source 预留同一套 `ProviderTask` 接口：它可以补充 evidence，但必须受 budget、retry、rate-limit、late-result quarantine、provenance 和 source-quality contract 约束。
+
+5. `M3 Candidate Acquisition Service closure`
+   - 收口 `start_acquisition_run` 到 service-level `plan/review/probe/discover/publish` contract。
+   - `queue_workflow` 和 legacy job shell 只保留 report-visible migration bridge。
+   - Candidate list discovery 输出 Activity/EntityDelta + serving projection proof，不能只依赖 job snapshot。
+   - 意图识别到候选人发现之间允许 Agent-native Search/fetch 作为 reviewed evidence source，例如确认目标公司官网/LinkedIn company URL、补充搜索 query、发现公开 roster hints；这些 evidence 进入同一 adjudication/projection path，而不是直接创建候选人。
+
+6. `M4 Profile Fetch Service closure`
+   - 建立 profile URL item state machine：cache hit、fetch required、provider fetch、terminal admit、projection admission。
+   - 成功 URL 和失败 URL 分桶；retry 只作用于失败 item，不重跑成功 URL。
+   - Board-visible/profile detail 只能读 terminal/projection admission proof。
+
+7. `M5 CRM Public Web and evidence quality closure`
+   - 完成小范围 live-provider validation：DataForSEO pending/timeout、model provider circuit、manual promotion preservation、export payload quality。
+   - Public Web evidence/adjudication 输出必须可解释，Google Scholar/GitHub/X/email 等类型有统一 review/export contract。
+   - Public Web 默认设计成双源 evidence pipeline：DataForSEO/API provider 是可复现基础源，Agent-native Search/fetch/browser 是 reviewed supplemental source。两者一起进入 identity/evidence adjudication，不允许任一来源直接 bypass review/export policy。
+   - Model-native Search 只作为 reviewed experiment 接入，不作为 fallback。
+
+8. `M6 Agent-callable adapter`
+   - 暴露 read-only context tools：action registry、operation run/provenance、projection/CRM/Public Web detail、Activity/EntityDelta。
+   - 暴露 controlled action tools：submit action、approve/reject、dispatch、poll、cancel/retry/resume。
+   - OpenClaw/Codex adapter 不接数据库，不接 legacy route，不接 migration/backfill route，不直接调用 provider。
+   - 如果 M1-M5 已按 Agent-native service shape 完成，M6 应主要是 thin adapter，而不是再补业务语义。
+
+9. `M7 Natural-language Agent product layer`
+   - 在 adapter 稳定后再做自然语言 planner loop、memory/context、multi-model adjudication、browser/search sandbox 和 Agent UI。
+   - Agent 输出必须落到 typed action/evidence/promotion/export provenance，而不是只停留在 chat transcript。
+
+## Immediate Decisions
+
+- **Do not migrate wholesale to a framework first.** Temporal/LangGraph/OpenClaw abstractions应先作为服务边界标准，而不是一次性替换当前 runtime。直接迁移会把现有 legacy compatibility 和 provider long-tail 问题搬进新框架。
+- **Do not expose current internals to OpenClaw/Codex yet.** Adapter 前必须先有 manifest、provider task runtime、candidate/profile/Public Web vertical slice closure。
+- **Do not postpone Agent-native design until the adapter.** M1-M5 的服务边界必须已经是 Agent 可观察、可解释、可接管、可工具调用的形态；M6 只做安全暴露和协议适配。
+- **Do not treat docs-only review as product signoff.** 当前文档更新只能确定方向；Public Web 和 provider runtime 仍需真实 live/provider validation。
+- **Do not push the full dirty worktree without a scope gate.** 当前仓库存在大量修改和未跟踪文件。GitHub 同步应先做 scoped checkpoint branch/PR，随后按 milestone 拆 PR。
+
+## GitHub Checkpoint Procedure
+
+2026-06-08 repo state:
+
+- Git root: `/Users/changyuyi/projects/Sourcing AI Agent Dev`
+- Current branch: `productization-2026-04-25-stable`
+- Remote: `git@github.com:sorachang1874/Sourcing-AI-Agent-Dev.git`
+- Dirty scope observed during this checkpoint: hundreds of tracked and untracked files, including runtime/log/output artifacts and newly created contract/runtime files.
+
+Checkpoint rule:
+
+- Do not run `git add .` or push the whole branch as a milestone snapshot.
+- First PR should be a scoped architecture checkpoint only. It must not include `sourcing-ai-agent/frontend-demo/**`, `sourcing-ai-agent/contracts/**`, `sourcing-ai-agent/src/**`, `sourcing-ai-agent/tests/**`, runtime artifacts, provider payloads, logs, or generated screenshots.
+- Required staged files for M0 checkpoint (git-root-relative):
+  - `sourcing-ai-agent/README.md`
+  - `sourcing-ai-agent/PROGRESS.md`
+  - `sourcing-ai-agent/docs/INDEX.md`
+  - `sourcing-ai-agent/docs/NEXT_TODO.md`
+  - `sourcing-ai-agent/docs/SERVICE_GRADE_ARCHITECTURE_PLAN.md`
+  - `sourcing-ai-agent/docs/AGENT_OPERATION_CONTRACT.md`
+  - `sourcing-ai-agent/docs/PRE_AGENT_CONTRACT_REVIEW.md`
+  - `sourcing-ai-agent/docs/DURABLE_EXECUTION_RUNTIME_CONTRACT.md`
+  - `sourcing-ai-agent/docs/MODEL_NATIVE_SEARCH_PROVIDER_CONTRACT.md`
+  - `sourcing-ai-agent/docs/INDEPENDENT_REVIEW_BRIEF.md`
+  - `sourcing-ai-agent/docs/INDEPENDENT_REVIEW_GATE.md`
+- The 2026-06-07 UI/contract slice is not part of M0. If it is synchronized to GitHub, open a separate implementation PR and explicitly include its full dependency scope, including frontend route/page/API helpers, frontend API contract types/schema/adapter, backend operation/durable runtime owners, affected contract docs, and targeted tests.
+- Before staging, run `git status --short`, inspect untracked files, and exclude `runtime/**`, `logs/**`, `output/**`, `runtime/secrets/**`, raw provider payloads, local cache, `.venv*`, `node_modules`, browser cache, and generated review prompts unless the review artifact itself is intentionally being committed.
+- Before PR creation, run `git diff --cached --name-only` and compare its git-root-relative output against the required staged-file list above. Any missing current-entry contract doc or any extra runtime/log/secret/generated artifact blocks the PR. Do not use a subproject-relative list for this checklist unless the command is explicitly changed to `git diff --relative --cached --name-only` in both current entry docs.
+- The PR description must include targeted validation commands and the Independent Review artifact path.
+- After the checkpoint PR lands, split implementation work by milestone: `M0.5 local asset governance`, `M1 manifest`, `M2 Provider Task Runtime`, `M3 acquisition service`, `M4 profile fetch`, `M5 CRM Public Web quality`, `M6 adapter`. Each implementation PR gets its own targeted tests and Independent Review Gate.
+
+Branching decision:
+
+- Because the previous working tree has not been synchronized for more than a month, creating a new branch from the current local state is acceptable and preferable to continuing on an ambiguous stale branch.
+- A branch pointer alone does not preserve the dirty working tree. The current state becomes recoverable only after scoped commits/PRs. Therefore the first branch should be a checkpoint branch whose first commit is the docs-only M0 scope above.
+- Do not make a single "current local state" commit containing all modified/untracked files. Use a docs-only checkpoint PR first, then separate implementation PRs for UI/contract, runtime/operation, provider task runtime, acquisition/profile, and Public Web quality.
+- Do not run local asset cleanup as a manual filesystem deletion. Use the existing asset-consolidation audit/repair/cold-archive pattern, then add a reviewed apply step that can prove hot projections and rebuild paths still work before normal reuse indexes stop seeing archived snapshots.
 
 ## Current Anti-Patterns
 
@@ -185,22 +334,24 @@ full-reuse query 的正确姿势应是：
 - `normalized_artifacts/publishable_primary_emails.json`
   - 紧凑 overlay，不再通过 strict-view monolith 回补
 
-结果页 API 也应围绕这个 contract：
+当前 serving API 目标应围绕 canonical projection / collection contract：
 
-- `GET /api/jobs/{job_id}/dashboard`
-- `GET /api/jobs/{job_id}/candidates?offset=&limit=`
-- `GET /api/jobs/{job_id}/candidates/{candidate_id}`
-- 后续可继续加：
-  - `GET /api/jobs/{job_id}/backlogs/manual-review`
-  - `GET /api/jobs/{job_id}/backlogs/profile-completion`
+- `GET /api/collections`
+- `GET /api/collections/{collection_id}/coverage`
+- `GET /api/projections/{projection_id}/candidates?offset=&limit=`
+- `GET /api/projections/{projection_id}/candidates/{candidate_id}`
+- `GET /api/operations/runs`
+- `GET /api/operations/runs/{operation_run_id}/provenance`
+
+旧 `/api/jobs/{job_id}/results|dashboard|candidates` 只能作为 migration/read-compat surface；当 run-scope projection 已就绪时，应返回 projection pointer 或 fail closed，而不是重新组合 job/runtime artifacts。
 
 ## 4. Object Storage First, Local Cache Second
 
 长期目标不是“把所有东西都放 ECS 本地盘”，而是：
 
 - control plane DB
-  - SQLite in dev
-  - Postgres in hosted/prod
+  - PG-only in local, hosted, production, and Agent-callable normal paths
+  - SQLite/shadow storage is historical, migration-only, or explicit test compatibility; it is not a service-grade target and must not be exposed through OpenClaw/Codex adapters
 - object storage
   - OSS / R2 / S3-compatible
   - raw assets
