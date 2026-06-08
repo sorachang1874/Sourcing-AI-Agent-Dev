@@ -66,6 +66,8 @@
   当前系统分层、provider 抽象和 runtime 设计。
 - [SERVICE_GRADE_ARCHITECTURE_PLAN.md](SERVICE_GRADE_ARCHITECTURE_PLAN.md)
   Phase 13 / OpenClaw-Codex adapter 之前的服务级收口计划：workflow spec/command spec manifest、Provider Task Runtime、Candidate Acquisition、Profile Fetch、CRM Public Web、Serving Projection、CRM/Export、Frontend/Operation Workbench 和 GitHub checkpoint 纪律。
+- [RUNTIME_ASSET_RETENTION_GOVERNANCE.md](RUNTIME_ASSET_RETENTION_GOVERNANCE.md)
+  M0.5 本地 runtime/output 资产保留治理：区分 company snapshot consolidation 与 `runtime/test_env` / `output` 历史运行目录 retention inventory，禁止把只读盘点当成删除许可。
 - [EXECUTION_CONTRACT_GUARDRAILS.md](EXECUTION_CONTRACT_GUARDRAILS.md)
   planner/runtime/provider/results 不可回退的执行契约与测试约束。
 - [INTENT_STRATEGY_SOURCE_PRIORITY_CONTRACT.md](INTENT_STRATEGY_SOURCE_PRIORITY_CONTRACT.md)
