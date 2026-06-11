@@ -27,7 +27,7 @@
 - [x] PG ON CONFLICT 唯一索引缺口类修复（2026-06-12）：SQLite UNIQUE 约束从未镜像进 PG bootstrap，postgres_only 下 `upsert_criteria_pattern` 等触发 InvalidColumnReference；修复 = `_CONTROL_PLANE_UNIQUE_INDEXES` 幂等唯一索引 + 建索引前去重（有时近列保留最新，无时近列 loud failure）+ 复发守卫 `tests/test_pg_onconflict_guard.py`（机械扫描 ON CONFLICT 目标 vs 索引清单）。
 - [ ] 其余 ~40 个直接实例化 SQLite `ControlPlaneStore` 的测试文件分批迁移（~10/批；其中 ~10 个 daemon/server 进程型需 per-test context manager 变体；`testcontainers_*` 与 PG 适配器自测不在范围）。
 - [ ] advisory lock key 按 schema 命名空间化：**已评估、暂缓**——滚动部署期间新旧进程锁身份不一致会破坏互斥，需要协调切换方案，设计说明已记录待 owner 审定。
-- [ ] 之后：按表组把 292 个双路径方法重写为 PG-pure 并删 mirror；最后移除内存 SQLite 影子。引入正式 migration 机制（PG DDL 目前在 `control_plane_live_postgres.py` 手工第二份）。
+- [ ] 之后：按表组把 292 个双路径方法重写为 PG-pure 并删 mirror；最后移除内存 SQLite 影子。引入正式 migration 机制（PG DDL 目前在 `control_plane_live_postgres.py` 手工第二份）。**每个方法重写时必须特征化"行不存在"语义与 SQLite fallback 一致**（已知分歧族：ON CONFLICT 唯一索引缺口、`update_agent_runtime_session_status` 在 PG-only 下对缺行 raise 而 SQLite 静默 no-op——后者已修，见 `WORKFLOW_BEHAVIOR_GUARDRAILS.md` invariant 7）。
 
 ### Track C — Serving Runtime（目标 ~20 并发用户）
 - [x] psycopg_pool 连接池（2026-06-11）：per-adapter 懒加载池（`SOURCING_CONTROL_PLANE_PG_POOL_MIN/MAX`，默认 1/8）；25 个调用点事务语义逐一核验不变；实测 200 次顺序操作 1.516s→0.743s、新建连接 200→1；`ControlPlaneStore.close()` 接线。
