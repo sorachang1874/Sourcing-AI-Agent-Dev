@@ -202,6 +202,9 @@ from .durable_runtime import (
     workflow_command_control_policy,
     workflow_command_control_state,
     workflow_command_display_contract,
+    workflow_command_expected_run_statuses,
+    workflow_command_migration_step_id,
+    workflow_command_product_label_zh,
 )
 from .excel_intake import ExcelIntakeService, group_contacts_by_company_hints
 from .execution_preferences import merge_execution_preferences, normalize_execution_preferences
@@ -599,14 +602,6 @@ _WORKFLOW_STAGE_SUMMARY_STAGE_ORDER = (
     "public_web_stage_2",
     "stage_2_final",
 )
-_CRM_PUBLIC_WEB_PHASE_PRODUCT_LABELS = {
-    CRM_PUBLIC_WEB_SEARCH_SUBMIT_COMMAND_TYPE: "提交公开搜索",
-    CRM_PUBLIC_WEB_SEARCH_POLL_FETCH_COMMAND_TYPE: "取回搜索结果",
-    CRM_PUBLIC_WEB_DOCUMENTS_FETCH_COMMAND_TYPE: "整理页面内容",
-    CRM_PUBLIC_WEB_EVIDENCE_ADJUDICATE_COMMAND_TYPE: "判断候选信号",
-    CRM_PUBLIC_WEB_MODEL_SAFE_FINALIZE_COMMAND_TYPE: "生成审核候选",
-    CRM_PUBLIC_WEB_SIGNALS_MATERIALIZE_COMMAND_TYPE: "保存公开信息结果",
-}
 _CHINA_TIME_ZONE = ZoneInfo("Asia/Shanghai")
 _RETIRED_RESULT_CANDIDATE_SOURCE_KINDS = {
     "",
@@ -14536,14 +14531,7 @@ class SourcingOrchestrator:
     @staticmethod
     def _crm_public_web_phase_command_migration_phase(command_type: str) -> str:
         normalized = str(command_type or "").strip()
-        return {
-            CRM_PUBLIC_WEB_SEARCH_SUBMIT_COMMAND_TYPE: "W7f_crm_public_web_search_submit",
-            CRM_PUBLIC_WEB_SEARCH_POLL_FETCH_COMMAND_TYPE: "W7f_crm_public_web_search_poll_fetch",
-            CRM_PUBLIC_WEB_DOCUMENTS_FETCH_COMMAND_TYPE: "W7f_crm_public_web_documents_fetch",
-            CRM_PUBLIC_WEB_EVIDENCE_ADJUDICATE_COMMAND_TYPE: "W7f_crm_public_web_evidence_adjudicate",
-            CRM_PUBLIC_WEB_MODEL_SAFE_FINALIZE_COMMAND_TYPE: "W7f_crm_public_web_model_safe_finalize",
-            CRM_PUBLIC_WEB_SIGNALS_MATERIALIZE_COMMAND_TYPE: "W7f_crm_public_web_signals_materialize",
-        }.get(normalized, "W7f_crm_public_web_phase_command")
+        return workflow_command_migration_step_id(normalized) or "W7f_crm_public_web_phase_command"
 
     def _plan_crm_public_web_run_phase_command(
         self,
@@ -14786,7 +14774,7 @@ class SourcingOrchestrator:
         current = dict(summary.get("current_command") or {})
         control_state = dict(current.get("control_state") or {})
         command_type = str(current.get("command_type") or "").strip()
-        display_label = str(_CRM_PUBLIC_WEB_PHASE_PRODUCT_LABELS.get(command_type) or "").strip()
+        display_label = str(workflow_command_product_label_zh(command_type) or "").strip()
         command_status = str(control_state.get("command_status") or current.get("status") or "").strip()
         if not display_label:
             return ""
@@ -52795,7 +52783,7 @@ class SourcingOrchestrator:
             "plan_id": str(plan_payload.get("plan_id") or "").strip(),
             "workflow_run_id": str(plan_payload.get("workflow_run_id") or "").strip(),
             "source_command_id": str(plan_payload.get("source_command_id") or "").strip(),
-            "request_source": "acquisition.plan_review.request",
+            "request_source": ACQUISITION_PLAN_REVIEW_REQUEST_COMMAND_TYPE,
         }
 
     @staticmethod
@@ -52805,7 +52793,7 @@ class SourcingOrchestrator:
             "required_before_execution": True,
             "risk_level": "medium",
             "review_reason": "typed_acquisition_plan_requires_review_before_provider_work",
-            "source": "acquisition.plan_review.request",
+            "source": ACQUISITION_PLAN_REVIEW_REQUEST_COMMAND_TYPE,
             "plan_id": str(plan_payload.get("plan_id") or "").strip(),
             "downstream_stage_count": len(list(plan_payload.get("stages") or [])),
         }
@@ -52864,7 +52852,7 @@ class SourcingOrchestrator:
         execution_bundle = {
             "request": request_payload,
             "plan": plan_payload,
-            "source": "acquisition.plan_review.request",
+            "source": ACQUISITION_PLAN_REVIEW_REQUEST_COMMAND_TYPE,
             "workflow_run_id": str(plan_payload.get("workflow_run_id") or "").strip(),
             "operation_id": str(command_payload.get("operation_id") or "").strip(),
             "plan_review_request_command_id": str(command_payload.get("command_id") or "").strip(),
@@ -60447,14 +60435,7 @@ class SourcingOrchestrator:
     @staticmethod
     def _crm_public_web_phase_expected_statuses(command_type: str) -> tuple[str, ...]:
         normalized_type = str(command_type or "").strip()
-        return {
-            CRM_PUBLIC_WEB_SEARCH_SUBMIT_COMMAND_TYPE: ("queued",),
-            CRM_PUBLIC_WEB_SEARCH_POLL_FETCH_COMMAND_TYPE: ("search_submitted", "searching"),
-            CRM_PUBLIC_WEB_DOCUMENTS_FETCH_COMMAND_TYPE: ("entry_links_ready", "fetching"),
-            CRM_PUBLIC_WEB_EVIDENCE_ADJUDICATE_COMMAND_TYPE: ("documents_fetched", "analyzing"),
-            CRM_PUBLIC_WEB_MODEL_SAFE_FINALIZE_COMMAND_TYPE: ("adjudication_completed",),
-            CRM_PUBLIC_WEB_SIGNALS_MATERIALIZE_COMMAND_TYPE: ("analysis_completed",),
-        }.get(normalized_type, ())
+        return workflow_command_expected_run_statuses(normalized_type)
 
     @classmethod
     def _crm_public_web_phase_status_relation(cls, command_type: str, run_status: str) -> str:

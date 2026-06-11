@@ -632,7 +632,26 @@ def test_w10_review_exposes_w11e_profile_activity_boundary() -> None:
     assert "local-apply deltas" in next_todo
     assert "LINKEDIN_PROFILE_FETCH_ACTIVITY_RUN_COMMAND_TYPE" in metrics_source
     assert "LINKEDIN_PROFILE_FETCH_PROVIDER_COMMAND_TYPE" in metrics_source
-    assert "LINKEDIN_PROFILE_FETCH_ACTIVITY_OWNER" in metrics_source
+    # The expected-owner binding moved from a literal table in
+    # workflow_service_metrics.py to the durable_runtime command type registry;
+    # assert the registry still pins the activity owner for both commands so the
+    # derived metrics contract keeps them contract-visible.
+    durable_runtime_source = DURABLE_RUNTIME_PATH.read_text(encoding="utf-8")
+    assert "LINKEDIN_PROFILE_FETCH_ACTIVITY_OWNER" in durable_runtime_source
+    from sourcing_agent.durable_runtime import (
+        LINKEDIN_PROFILE_FETCH_ACTIVITY_OWNER,
+        LINKEDIN_PROFILE_FETCH_PROVIDER_COMMAND_TYPE,
+    )
+    from sourcing_agent.workflow_service_metrics import _DURABLE_COMMAND_OWNER_CONTRACTS
+
+    for command_type in (
+        LINKEDIN_PROFILE_FETCH_ACTIVITY_RUN_COMMAND_TYPE,
+        LINKEDIN_PROFILE_FETCH_PROVIDER_COMMAND_TYPE,
+    ):
+        assert (
+            _DURABLE_COMMAND_OWNER_CONTRACTS[command_type]["expected_owner"]
+            == LINKEDIN_PROFILE_FETCH_ACTIVITY_OWNER
+        )
 
 
 def test_pre_agent_contract_gate_is_single_fast_entrypoint() -> None:
