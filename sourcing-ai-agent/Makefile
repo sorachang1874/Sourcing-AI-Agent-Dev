@@ -6,6 +6,8 @@ HOST ?= 0.0.0.0
 PYTHON_BIN ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,$(if $(wildcard .venv-tests/bin/python),.venv-tests/bin/python,python3))
 TEST_PYTHON_BIN ?= $(if $(wildcard .venv-tests/bin/python),.venv-tests/bin/python,$(PYTHON_BIN))
 TESTCONTAINERS_POSTGRES_IMAGE ?= public.ecr.aws/docker/library/postgres:16-alpine
+LOCAL_PG_DOCKER_BIN_PATH ?= /Applications/Docker.app/Contents/Resources/bin
+LOCAL_PG_DOCKER_CMD = PATH="$(LOCAL_PG_DOCKER_BIN_PATH):$$PATH" PYTHONPATH=src "$(PYTHON_BIN)" -m sourcing_agent.local_postgres_docker
 API_PORT ?= 8765
 FRONTEND_PORT ?= 4173
 RUNTIME_DIR ?= runtime
@@ -150,7 +152,7 @@ FRONTEND_HOSTED_BUILD_SAME_ORIGIN_CMD = cd frontend-demo && VITE_API_BASE_URL="s
 PYTHON_QUALITY_CMD = bash ./scripts/run_python_quality.sh
 DETACHED_LAUNCH_CMD = PYTHONPATH=src "$(PYTHON_BIN)" -m sourcing_agent.cli launch-detached
 
-.PHONY: help bootstrap-test-env dev-doctor agent-network-preflight docker-start docker-doctor dev-backend dev-frontend dev-launch-backend dev-launch-frontend dev dev-status dev-stop dev-logs dev-clean hosted-trial-backend hosted-trial-backend-launch frontend-build-hosted frontend-build-hosted-same-origin lint typecheck verify-python test-env-backend test-env-launch-backend test-env-frontend test-env test-env-status test-env-stop test-env-logs test-env-clean test-env-seed-assets test-env-scripted-openai-agent test-env-scripted-openai-agent-backend test-env-scripted-openai-agent-seed test-env-scripted-openai-agent-status test-env-scripted-openai-agent-stop test-env-scripted-openai-agent-logs test-browser-e2e-fast test-browser-e2e-slow test-browser-e2e-full test-scripted-large-org ci-pg-contract ci-workflow-fake-provider ci-frontend-browser-gate ci-workflow-browser-gate ci-pre-agent-contract independent-review-gate ci-containerized-pre-release local-container-smoke test-env-backend-live test-live-large-org-manual test-crm-public-web-live-product-validation asset-media-backfill-dry-run asset-media-backfill-apply prune-test-env prune-test-env-apply
+.PHONY: help bootstrap-test-env dev-doctor agent-network-preflight docker-start docker-doctor local-pg-up local-pg-down local-pg-status dev-backend dev-frontend dev-launch-backend dev-launch-frontend dev dev-status dev-stop dev-logs dev-clean hosted-trial-backend hosted-trial-backend-launch frontend-build-hosted frontend-build-hosted-same-origin lint typecheck verify-python test-env-backend test-env-launch-backend test-env-frontend test-env test-env-status test-env-stop test-env-logs test-env-clean test-env-seed-assets test-env-scripted-openai-agent test-env-scripted-openai-agent-backend test-env-scripted-openai-agent-seed test-env-scripted-openai-agent-status test-env-scripted-openai-agent-stop test-env-scripted-openai-agent-logs test-browser-e2e-fast test-browser-e2e-slow test-browser-e2e-full test-scripted-large-org ci-pg-contract ci-workflow-fake-provider ci-frontend-browser-gate ci-workflow-browser-gate ci-pre-agent-contract independent-review-gate ci-containerized-pre-release local-container-smoke test-env-backend-live test-live-large-org-manual test-crm-public-web-live-product-validation asset-media-backfill-dry-run asset-media-backfill-apply prune-test-env prune-test-env-apply
 
 help:
 	@printf '%s\n' \
@@ -160,6 +162,9 @@ help:
 	  '  make agent-network-preflight  Read-only GitHub/Codex/Clash network check for Agent sessions' \
 	  '  make docker-start   Start Docker Desktop/Colima for Testcontainers gates' \
 	  '  make docker-doctor  Check Docker daemon and Testcontainers dependencies' \
+	  '  make local-pg-up    Start Docker-backed local control-plane Postgres (port 55432) and refresh .local-postgres.env' \
+	  '  make local-pg-down  Stop the Docker-backed local control-plane Postgres container' \
+	  '  make local-pg-status Show Docker-backed local Postgres container / env-file status' \
 	  '  make dev-backend    Start local backend helper' \
 	  '  make dev-frontend   Start local frontend helper' \
 	  '  make dev-launch-backend  Launch local backend detached (WSL/Cursor-safe)' \
@@ -243,6 +248,15 @@ docker-start:
 
 docker-doctor:
 	@$(DOCKER_DOCTOR_CMD)
+
+local-pg-up:
+	@$(LOCAL_PG_DOCKER_CMD) up
+
+local-pg-down:
+	@$(LOCAL_PG_DOCKER_CMD) down
+
+local-pg-status:
+	@$(LOCAL_PG_DOCKER_CMD) status
 
 dev-backend:
 	@$(BACKEND_CMD)

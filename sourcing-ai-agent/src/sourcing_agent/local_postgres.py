@@ -4,6 +4,7 @@ import os
 import re
 import socket
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -296,6 +297,15 @@ def resolve_default_control_plane_db_path(
     return runtime_root / "sourcing_agent.db"
 
 
+def resolve_default_control_plane_db_path_role(
+    *,
+    base_dir: str | Path | None = None,
+) -> str:
+    if resolve_control_plane_postgres_dsn(base_dir):
+        return "compatibility_shadow_seed_path"
+    return "disk_live_control_plane_path"
+
+
 def resolve_default_control_plane_postgres_live_mode(
     explicit_value: Any = "",
     *,
@@ -323,9 +333,48 @@ def local_postgres_is_running(base_dir: str | Path | None = None) -> bool:
         sock.close()
 
 
+def _docker_local_postgres_fallback_result(
+    base_dir: str | Path | None,
+    settings: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Dispatch ensure-started to the Docker-backed local PG path.
+
+    Only used when the Linux ``.local-postgres/{extract,data}`` assets are
+    unavailable (e.g. macOS) AND the resolved DSN already targets the Docker
+    local PG endpoint. Never writes env files; explicit provisioning lives in
+    ``make local-pg-up`` / ``sourcing_agent.local_postgres_docker``.
+    """
+
+    flag = str(os.getenv("SOURCING_LOCAL_POSTGRES_DOCKER_FALLBACK") or "").strip()
+    if flag == "0":
+        return None
+    if sys.platform != "darwin" and flag != "1":
+        return None
+    configured_dsn = str(settings.get("configured_dsn") or "").strip()
+    if not configured_dsn:
+        return None
+    try:
+        from sourcing_agent.local_postgres_docker import (
+            dsn_targets_docker_local_postgres,
+            ensure_docker_local_postgres_started,
+        )
+
+        if not dsn_targets_docker_local_postgres(configured_dsn, base_dir):
+            return None
+        result = ensure_docker_local_postgres_started(base_dir, write_env_file=False)
+    except Exception:
+        return None
+    if str(result.get("status") or "") in {"running", "started"}:
+        return result
+    return None
+
+
 def ensure_local_postgres_started(base_dir: str | Path | None = None) -> dict[str, Any]:
     settings = resolve_local_postgres_settings(base_dir)
     if not bool(settings.get("available")):
+        docker_fallback = _docker_local_postgres_fallback_result(base_dir, settings)
+        if docker_fallback is not None:
+            return docker_fallback
         return {
             "status": "missing_assets",
             "dsn": "",
@@ -478,11 +527,14 @@ def describe_control_plane_runtime(
     }
     if resolved_runtime_dir is not None:
         default_db_path = resolve_default_control_plane_db_path(resolved_runtime_dir, base_dir=anchor)
+        default_db_path_role = resolve_default_control_plane_db_path_role(base_dir=anchor)
         summary.update(
             {
                 "runtime_dir": str(resolved_runtime_dir),
                 "default_db_path": str(default_db_path),
                 "default_db_path_exists": default_db_path.exists(),
+                "default_db_path_role": default_db_path_role,
+                "default_db_path_is_live_authoritative": default_db_path_role == "disk_live_control_plane_path",
             }
         )
     return summary

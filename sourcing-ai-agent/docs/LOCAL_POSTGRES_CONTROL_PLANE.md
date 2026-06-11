@@ -2,6 +2,8 @@
 
 > Status: Current first-party doc. Treat this file as active guidance, but keep it aligned with `docs/INDEX.md` and `PROGRESS.md` when runtime contracts change.
 
+> Revision (2026-06-11): macOS 现在有官方 Docker 路径。`make local-pg-up` 用 `postgres:16-alpine` 启动持久容器 `sourcing-local-postgres`（host `127.0.0.1:55432`，volume `sourcing-local-postgres-data`，user `sourcing` / db `sourcing_agent`，loopback `trust` 免密，与既有 DSN 形状 `postgresql://sourcing@127.0.0.1:55432/sourcing_agent` 完全一致），并刷新仓库根目录 `.local-postgres.env`，让 `resolve_control_plane_postgres_dsn` 零消费方改动地发现它。配套：`make local-pg-status` / `make local-pg-down`；实现见 `src/sourcing_agent/local_postgres_docker.py`。本文其余的 `.local-postgres/{extract,data}` + `pg_ctl` 段落仍是 Linux/WSL 路径。
+
 
 这份文档定义本仓库本地 `Postgres-first` control-plane 的默认发现、启动与排障方式，避免再出现“本地明明有 PG 资产，但运行时没有识别到 DSN”的情况。
 
