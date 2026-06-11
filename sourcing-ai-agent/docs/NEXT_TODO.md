@@ -42,8 +42,9 @@
 - [ ] 之后：plan review 对话化、intent→plan 前门流式化；OpenClaw/Claude 作为可插拔外脑。
 
 ### Track E — 治理
-- [/] 文档治理（进行中）：21 份归档、PROGRESS/NEXT_TODO 轮转、INDEX 分层、治理规则成文。
-- [/] `runtime/test_env` TTL 清理（进行中）：prune 工具加 local-rebuildable 模式（免 review artifact，保留 dry-run/保护名单/活动进程检查）；TTL=14 天 dry-run 待用户确认后 apply（预计回收 ~110G）。
+- [x] 文档治理（2026-06-11 完成，PR #15）：21 份归档、PROGRESS/NEXT_TODO 轮转、INDEX 分层、治理规则成文、决策记录迁入 PRE_AGENT_CONTRACT_REVIEW。
+- [x] `runtime/test_env` TTL 清理（2026-06-11 applied）：648 个目录、回收 130,498,437,051 字节（~121.5 GiB）、0 失败；磁盘可用 68Gi→183Gi；test_env 117G→1.4G。记录：`runtime/asset_governance/ttl_apply_20260611/ttl_local_rebuildable_apply_v2.json`。过程中修复了活动进程检测器的 PID 复用误报（身份比对 + 新鲜度窗口）。
+- [ ] 后续例行：`make prune-test-env`（TTL 默认 14 天）目标待加；测试 harness teardown 钩子随 Track B 契约 v2 落地。
 - [ ] M1 后：contract 文档 per-command 段落由 CommandSpec registry 生成；守卫测试改对 registry。
 
 ### M2 Provider Task Runtime 设计要求（新增约束）
