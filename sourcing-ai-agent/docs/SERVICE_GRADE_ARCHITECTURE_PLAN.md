@@ -23,6 +23,18 @@
 - **M2 新增设计约束**：provider 级并发预算属于 Provider Task Runtime——HarvestAPI profile-fetch 有 ~8 并发 actor 的隐性限制（旧 8 槽 API 信号量的真实由来）；需 per-provider+key 信号量/令牌桶、API key 池化、batch 粒度治理；该保护就位后 HTTP 入口并发上限才可放开。
 - **Track E 治理**：M0.9 独立审批流程取消（10 个冷备已 sha256 验证、`archive_verified: true`，源目录随 `runtime/test_env` TTL 清理一并回收）；Independent Review Gate 适用范围收窄到不可重建资产的破坏性操作与 contract-heavy 变更；文档治理规则见 `INDEX.md`（轮转契约、归档制度、banner 纪律）。
 
+### 多用户 Agent Serving 拓扑（2026-06-11 确认，经业界调研核实）
+
+隔离单位逐层选择，不做 per-user 常驻容器（业界对照：Devin/Codex cloud/Claude Code web/Manus 的 per-task VM 只为任意代码执行与浏览器存在；Temporal/LangGraph Platform/Restate/Inngest 全部采用无状态 worker + checkpoint 会话，无一使用 per-user 容器；E2B/Modal 沙箱按工具调用租用，冷启动 80ms–3s）：
+
+- **会话状态层**：`agent_session` 升级为一等公民，按 `session_key` 标识；一次用户消息 = 一个 `agent_turn`；同一 session 的 turn 凭 lease 串行（单写者语义，复用 `workflow_commands` 的 claim/lease 机制），不同 session 并行；每个工具边界写 PG checkpoint；长工具 enqueue durable command 并挂起 turn，completion event 唤醒（与 completion policy 同构）。任何 worker 副本可恢复任何会话；API 重启不再中断用户工作。
+- **算力容量层**：按角色容器化（api / agent-loop worker / provider worker / PG / 对象存储），单机 docker-compose 起步，容量 = 副本数；本地开发、测试、生产同一套镜像（对应 Mac Docker PG 决策）。20 用户规模：单机 api ×1–2、agent-worker ×2–4、provider-worker ×2。
+- **流式**：worker append `agent_events`，FastAPI SSE 网关 tail（200–300ms 轮询在当前规模足够，不引入 Redis/LISTEN-NOTIFY）；断线重连按事件序号续读。
+- **公平性**：per-user 并发会话/turn 限额；provider 预算按 workspace 配额叠加在 M2 的 per-provider+key 令牌桶之上（HarvestAPI ~8 并发为全局池，多用户共享时必须在 provider 层统一调度）。
+- **数据隔离**：store 层强制 tenant/workspace 作用域（列已存在）；canonical 数据面（公司资产、证据）刻意跨用户共享以复用 provider 采购成本；用户私有面 = CRM/workspace/会话/导出；同实体并发写由幂等键 + advisory lock 串行化。
+- **凭证边界**：provider API key 只存在于 provider worker 层；Agent loop 只能引用 typed action，接外脑（OpenClaw 等）时此边界即安全线（参照 Claude Code git-proxy / Codex setup-phase-only secrets 模式）。
+- **per-session 沙箱**：现在不引入；将来加任意代码执行或自营浏览器工具时按**工具调用**临时租用沙箱池，不随用户常驻。
+
 核心原则：
 
 - OpenClaw/Codex/LangGraph 可以成为外层 planner、browser、Search、model orchestration runtime。

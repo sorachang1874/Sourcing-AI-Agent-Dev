@@ -26,11 +26,12 @@
 - [ ] 之后：按表组把 292 个双路径方法重写为 PG-pure 并删 mirror；最后移除内存 SQLite 影子。引入正式 migration 机制（PG DDL 目前在 `control_plane_live_postgres.py` 手工第二份）。
 
 ### Track C — Serving Runtime（目标 ~20 并发用户）
-- [ ] psycopg_pool 连接池（最大单项杠杆；`control_plane_live_postgres.py:_connect` 每查询新建连接）。
+- [ ] psycopg_pool 连接池（最大单项杠杆；`control_plane_live_postgres.py:_connect` 每查询新建连接）。注意：本机 PG 验证依赖 Docker PG（Track B）先就位。
 - [ ] 重活出请求线程：plan compile / `/api/jobs` / 导出统一为 enqueue + 轮询（后续 SSE）。
 - [ ] worker 与 API 进程分离（`worker_daemon` 独立进程成为唯一模式）。
 - [ ] 最小鉴权 + 用户身份（token；`requester_id/tenant_id` 列已存在但来自未认证 payload）。
 - [ ] FastAPI + uvicorn 重写 api.py（已批准；pydantic→OpenAPI 反向成为前端 contract 生成源）；SSE 推送替代 1s/5s 轮询。
+- [ ] 多用户 Agent serving 拓扑（2026-06-11 确认，详见 plan doc revision 节）：按角色容器化（api/agent-worker/provider-worker，docker-compose 起步）；`agent_session`/`agent_turn` PG checkpoint + per-session 单写者 lease；`agent_events` SSE tail；per-user 并发限额；凭证只在 provider worker 层。**不做 per-user 常驻容器**；沙箱仅在将来加代码执行/浏览器工具时按工具调用租用。
 - [ ] 之后：对象存储读穿（company_assets/media 出本地盘；`object_storage.py` 抽象已存在）。
 - 明确不做：Redis、LISTEN/NOTIFY（当前规模不需要）。
 
