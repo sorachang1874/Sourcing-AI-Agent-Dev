@@ -12241,6 +12241,11 @@ class ControlPlaneStore:
             if row is not None:
                 return self._agent_runtime_session_from_row(row)
             if self._control_plane_postgres_should_skip_sqlite_fallback("agent_runtime_sessions"):
+                if self.get_agent_runtime_session(job_id=job_id) is None:
+                    # Parity with the SQLite fallback below: updating a session
+                    # that does not exist (legacy/recovered jobs) is a no-op,
+                    # not a write failure.
+                    return None
                 self._raise_control_plane_postgres_write_failure(
                     table_name="agent_runtime_sessions",
                     method_name="update_agent_runtime_session_status",

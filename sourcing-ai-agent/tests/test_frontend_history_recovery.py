@@ -1238,21 +1238,102 @@ class FrontendHistoryRecoveryTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 }
             ],
         )
-        # Completion promotion fails closed without a durable serving_finalized
-        # proof and requires an agent runtime session row in PG-only mode; seed
-        # both, mirroring what the run-scope projection finalize owner records.
-        self.store.create_agent_runtime_session(
+        with mock.patch.object(
+            self.orchestrator,
+            "_load_workflow_stage_summaries",
+            return_value={"summaries": {"stage_2_final": {"status": "completed"}}},
+        ):
+            progress = self.orchestrator.get_job_progress(job_id)
+
+        assert progress is not None
+        # Owner-approved exemption (2026-06-12): a legacy/recovered job with NO
+        # durable workflow run (and no agent runtime session) must still be
+        # promotable — it can never produce a serving_finalized proof.
+        self.assertEqual(progress["status"], "completed")
+        link = self.store.get_frontend_history_link(history_id)
+        self.assertIsNotNone(link)
+        assert link is not None
+        self.assertEqual(link["phase"], "results")
+
+    def test_progress_reconciliation_requires_serving_finalized_proof_for_durable_runs(self) -> None:
+        history_id = "history-workflow-results-proof-gate-1"
+        job_id = "workflow_results_proof_gate"
+        self.store.save_job(
             job_id=job_id,
-            target_company="OpenAI",
+            job_type="workflow",
+            status="running",
+            stage="retrieving",
             request_payload={
                 "raw_user_request": "我想要OpenAI做Reasoning方向的人",
                 "query": "OpenAI Reasoning direction",
                 "target_company": "OpenAI",
             },
             plan_payload={},
-            runtime_mode="workflow",
-            lanes=[],
+            summary_payload={"message": "Preparing final results"},
         )
+        self.store.upsert_frontend_history_link(
+            {
+                "history_id": history_id,
+                "query_text": "我想要OpenAI做Reasoning方向的人",
+                "target_company": "OpenAI",
+                "job_id": job_id,
+                "phase": "running",
+            }
+        )
+        self.store.replace_job_results(
+            job_id,
+            [
+                {
+                    "candidate_id": "cand_openai_reasoning_proof_1",
+                    "rank": 1,
+                    "score": 0.91,
+                    "semantic_score": 0.0,
+                    "confidence_label": "high",
+                    "confidence_score": 0.91,
+                    "confidence_reason": "reconciled",
+                    "explanation": "Recovered from completed stage 2 final results.",
+                    "matched_fields": ["work_history"],
+                }
+            ],
+        )
+        # A durable workflow run EXISTS (any reduced event creates the current
+        # state row) but carries no serving_finalized proof: the exemption must
+        # not apply and promotion must stay fail-closed.
+        self.orchestrator.durable_runtime_writer.append_event_and_reduce(
+            workflow_run_id=legacy_job_workflow_run_id(job_id),
+            operation_id=legacy_job_operation_id(job_id),
+            command_id=f"{job_id}:proof_gate_seed_other",
+            event_family="workflow_event",
+            event_type="CompletionProofRecorded",
+            idempotency_key=f"{job_id}:other_proof:seed",
+            actor=PROJECTION_RUN_SCOPE_FINALIZE_OWNER,
+            source=PROJECTION_RUN_SCOPE_FINALIZE_COMMAND_TYPE,
+            payload={
+                "workflow_type": "linkedin_acquisition",
+                "stage_key": "run_scope_projection_finalize",
+                "proof_key": "other_seed_proof",
+                "status": "proved",
+                "job_id": job_id,
+            },
+        )
+        stage_summaries = {"summaries": {"stage_2_final": {"status": "completed"}}}
+
+        with mock.patch.object(
+            self.orchestrator,
+            "_load_workflow_stage_summaries",
+            return_value=stage_summaries,
+        ):
+            blocked_progress = self.orchestrator.get_job_progress(job_id)
+
+        assert blocked_progress is not None
+        self.assertEqual(blocked_progress["status"], "running")
+        blocked_link = self.store.get_frontend_history_link(history_id)
+        assert blocked_link is not None
+        self.assertEqual(blocked_link["phase"], "running")
+
+        # Recording the serving_finalized proof unblocks promotion; the agent
+        # runtime session row is intentionally absent to lock the PG-only
+        # missing-row no-op parity on the promote path.
         self.orchestrator.durable_runtime_writer.append_event_and_reduce(
             workflow_run_id=legacy_job_workflow_run_id(job_id),
             operation_id=legacy_job_operation_id(job_id),
@@ -1270,20 +1351,18 @@ class FrontendHistoryRecoveryTest(PGDurableRuntimeTestMixin, unittest.TestCase):
                 "job_id": job_id,
             },
         )
-
         with mock.patch.object(
             self.orchestrator,
             "_load_workflow_stage_summaries",
-            return_value={"summaries": {"stage_2_final": {"status": "completed"}}},
+            return_value=stage_summaries,
         ):
-            progress = self.orchestrator.get_job_progress(job_id)
+            promoted_progress = self.orchestrator.get_job_progress(job_id)
 
-        assert progress is not None
-        self.assertEqual(progress["status"], "completed")
-        link = self.store.get_frontend_history_link(history_id)
-        self.assertIsNotNone(link)
-        assert link is not None
-        self.assertEqual(link["phase"], "results")
+        assert promoted_progress is not None
+        self.assertEqual(promoted_progress["status"], "completed")
+        promoted_link = self.store.get_frontend_history_link(history_id)
+        assert promoted_link is not None
+        self.assertEqual(promoted_link["phase"], "results")
 
     def test_frontend_history_recovery_falls_back_to_review_registry(self) -> None:
         history_id = "29fc2046-17c4-4e2b-a7a9-d02ff84d0040"

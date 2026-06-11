@@ -33642,7 +33642,14 @@ class SourcingOrchestrator:
         manual_review_count = self.store.count_manual_review_items(job_id=job_id, status="")
         if result_count <= 0 and manual_review_count <= 0:
             return job
-        promotion_blockers = self._workflow_completion_promotion_blockers(job)
+        # Final-results reconciliation is the one owner-approved entry point
+        # where a legacy/recovered job without a durable workflow run may be
+        # promoted: independent completion evidence (stage_2_final + persisted
+        # results) is required to even reach this call.
+        promotion_blockers = self._workflow_completion_promotion_blockers(
+            job,
+            allow_legacy_run_absent_exemption=True,
+        )
         if promotion_blockers:
             return job
 
@@ -33657,6 +33664,7 @@ class SourcingOrchestrator:
                 "artifact_path": str(job.get("artifact_path") or stage2_final_summary.get("artifact_path") or ""),
             },
             preserved_summary=job_summary,
+            allow_legacy_run_absent_exemption=True,
         )
         if bool(final_summary.get("workflow_completion_deferred")):
             self.store.update_agent_runtime_session_status(job_id, "running")
@@ -33694,6 +33702,7 @@ class SourcingOrchestrator:
         job: dict[str, Any],
         *,
         ignore_workflow_lease: bool = False,
+        allow_legacy_run_absent_exemption: bool = False,
     ) -> dict[str, Any]:
         job_id = str(dict(job or {}).get("job_id") or "").strip()
         if not job_id:
@@ -33756,8 +33765,16 @@ class SourcingOrchestrator:
         materialization_items = self.store.list_job_materialization_items(job_id=job_id, limit=500)
         linkedin_stage_1_progress = self._build_linkedin_stage1_progress_payload(job=job, workers=workers)
         workflow_state_unavailable = False
+        workflow_run_absent = False
         try:
             workflow_state = self.store.get_workflow_current_state(legacy_job_workflow_run_id(job_id)) or {}
+            # The store returns {} when no current-state row exists. Confirmed
+            # absence may exempt the serving_finalized gate, but ONLY for the
+            # final-results reconciliation path (callers opt in) — generic
+            # terminality/supervisor checks must keep treating a completed-
+            # looking job without a durable run as non-terminal (anti-spoofing).
+            # Lookup failures below stay fail-closed.
+            workflow_run_absent = allow_legacy_run_absent_exemption and not workflow_state
         except Exception:
             workflow_state_unavailable = True
             workflow_state = {}
@@ -33773,6 +33790,7 @@ class SourcingOrchestrator:
             blocking_materialization_item_kinds=_WORKFLOW_COMPLETION_BLOCKING_MATERIALIZATION_ITEM_KINDS,
             linkedin_stage_1_progress=linkedin_stage_1_progress,
             workflow_current_state=workflow_state,
+            workflow_run_absent=workflow_run_absent,
         )
         if workflow_state_unavailable:
             first_blocker = dict(evaluation.get("first_blocker") or {})
@@ -33791,6 +33809,7 @@ class SourcingOrchestrator:
         job: dict[str, Any],
         *,
         ignore_workflow_lease: bool = False,
+        allow_legacy_run_absent_exemption: bool = False,
     ) -> dict[str, Any]:
         job_id = str(job.get("job_id") or "").strip()
         if not job_id:
@@ -33798,6 +33817,7 @@ class SourcingOrchestrator:
         completion_policy = self._workflow_completion_policy_evaluation(
             job,
             ignore_workflow_lease=ignore_workflow_lease,
+            allow_legacy_run_absent_exemption=allow_legacy_run_absent_exemption,
         )
         blocker = _completion_policy_first_blocker(completion_policy)
         if blocker:
@@ -64718,6 +64738,7 @@ class SourcingOrchestrator:
         plan: Any,
         artifact: dict[str, Any],
         preserved_summary: dict[str, Any],
+        allow_legacy_run_absent_exemption: bool = False,
     ) -> dict[str, Any]:
         final_summary = dict(artifact.get("summary") or {})
         latest_summary = self._workflow_job_summary(job_id)
@@ -64815,6 +64836,7 @@ class SourcingOrchestrator:
                 "summary": dict(final_summary),
             },
             ignore_workflow_lease=True,
+            allow_legacy_run_absent_exemption=allow_legacy_run_absent_exemption,
         )
         if completion_blockers:
             deferred_summary = {
