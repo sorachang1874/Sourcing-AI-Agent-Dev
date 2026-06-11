@@ -3,12 +3,13 @@ import unittest
 from pathlib import Path
 
 from sourcing_agent.asset_reuse_planning import (
-    build_organization_asset_registry_candidate_inventory,
     build_acquisition_shard_registry_record,
+    build_organization_asset_registry_candidate_inventory,
     compile_asset_reuse_plan,
     evaluate_organization_asset_registry_promotion,
     normalize_organization_asset_lifecycle_status,
     select_organization_asset_registry_promotion_candidate,
+    upsert_organization_asset_registry_with_guard,
 )
 from sourcing_agent.domain import (
     AcquisitionStrategyPlan,
@@ -23,27 +24,36 @@ from sourcing_agent.organization_execution_profile import (
     _select_best_organization_asset_registry_row,
     ensure_organization_execution_profile,
 )
-from sourcing_agent.storage import ControlPlaneStore
+
+from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
 
 
-class OrganizationExecutionProfileTest(unittest.TestCase):
+class OrganizationExecutionProfileTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
     def setUp(self) -> None:
+        super().setUp()
         self.tempdir = tempfile.TemporaryDirectory()
         self.runtime_dir = Path(self.tempdir.name)
-        self.store = ControlPlaneStore(self.runtime_dir / "sourcing_agent.db")
+        self.store = self.make_pg_store(self.runtime_dir / "sourcing_agent.db")
 
     def tearDown(self) -> None:
         self.tempdir.cleanup()
 
-    def _scoped_search_plan(self, *, target_company: str, profile: dict[str, object]) -> SourcingPlan:
+    def _scoped_search_plan(
+        self,
+        *,
+        target_company: str,
+        profile: dict[str, object],
+        query: str = "TBD",
+    ) -> SourcingPlan:
         filter_hints = {
             "current_companies": [target_company],
-            "keywords": ["TBD"],
-            "scope_keywords": ["TBD"],
+            "past_companies": [target_company],
+            "keywords": [query],
+            "scope_keywords": [query],
         }
         shared_metadata = {
             "strategy_type": "scoped_search_roster",
-            "search_seed_queries": ["TBD"],
+            "search_seed_queries": [query],
             "filter_hints": filter_hints,
             "employment_statuses": ["current", "former"],
         }
@@ -55,11 +65,11 @@ class OrganizationExecutionProfileTest(unittest.TestCase):
             retrieval_plan=RetrievalPlan(strategy="structured", reason="test"),
             acquisition_strategy=AcquisitionStrategyPlan(
                 strategy_type="scoped_search_roster",
-                target_population=f"TBD within {target_company}",
-                company_scope=[target_company, "TBD"],
+                target_population=f"{query} within {target_company}",
+                company_scope=[target_company, query],
                 roster_sources=["harvest_profile_search"],
                 search_channel_order=["harvest_profile_search", "profile_detail_api"],
-                search_seed_queries=["TBD"],
+                search_seed_queries=[query],
                 filter_hints=filter_hints,
                 organization_execution_profile=dict(profile or {}),
             ),
@@ -120,6 +130,135 @@ class OrganizationExecutionProfileTest(unittest.TestCase):
         self.assertTrue(decision["effective_lane_total_materially_higher"])
         self.assertTrue(decision["promote"])
         self.assertEqual(decision["reason"], "materially_higher_coverage_with_stable_quality")
+
+    def test_authoritative_promotion_inherits_reusable_shard_source_snapshots(self) -> None:
+        self.store.upsert_organization_asset_registry(
+            {
+                "target_company": "OpenAI",
+                "company_key": "openai",
+                "snapshot_id": "openai-chatgpt-serving",
+                "asset_view": "canonical_merged",
+                "status": "ready",
+                "candidate_count": 1000,
+                "evidence_count": 0,
+                "profile_detail_count": 1000,
+                "missing_linkedin_count": 0,
+                "profile_completion_backlog_count": 0,
+                "completeness_score": 88.0,
+                "current_lane_effective_candidate_count": 700,
+                "former_lane_effective_candidate_count": 300,
+                "current_lane_effective_ready": True,
+                "former_lane_effective_ready": True,
+                "source_snapshot_count": 2,
+                "selected_snapshot_ids": ["openai-chatgpt-serving", "openai-agent-source"],
+                "source_snapshot_selection": {
+                    "mode": "preferred_snapshot_subset",
+                    "selected_snapshot_ids": ["openai-chatgpt-serving", "openai-agent-source"],
+                },
+            },
+            authoritative=True,
+        )
+        for snapshot_id, query, employment_scope in [
+            ("openai-agent-source", "Agent", "current"),
+            ("openai-agent-source", "Agent", "former"),
+            ("openai-chatgpt-serving", "ChatGPT", "current"),
+        ]:
+            self.store.upsert_acquisition_shard_registry(
+                build_acquisition_shard_registry_record(
+                    target_company="OpenAI",
+                    company_key="openai",
+                    snapshot_id=snapshot_id,
+                    lane="profile_search",
+                    employment_scope=employment_scope,
+                    strategy_type=(
+                        "former_employee_search" if employment_scope == "former" else "scoped_search_roster"
+                    ),
+                    shard_id=query,
+                    shard_title=query,
+                    search_query=query,
+                    company_filters={
+                        "companies": ["OpenAI"],
+                        "search_query": query,
+                    },
+                    result_count=25,
+                    status="completed",
+                )
+            )
+
+        promoted = upsert_organization_asset_registry_with_guard(
+            store=self.store,
+            candidate_record={
+                "target_company": "OpenAI",
+                "company_key": "openai",
+                "snapshot_id": "openai-health-serving",
+                "asset_view": "canonical_merged",
+                "status": "ready",
+                "candidate_count": 1111,
+                "evidence_count": 0,
+                "profile_detail_count": 1111,
+                "missing_linkedin_count": 0,
+                "profile_completion_backlog_count": 0,
+                "completeness_score": 88.0,
+                "current_lane_effective_candidate_count": 778,
+                "former_lane_effective_candidate_count": 333,
+                "current_lane_effective_ready": True,
+                "former_lane_effective_ready": True,
+                "source_snapshot_count": 1,
+                "selected_snapshot_ids": ["openai-health-serving"],
+                "source_snapshot_selection": {
+                    "mode": "preferred_snapshot_subset",
+                    "selected_snapshot_ids": ["openai-health-serving"],
+                },
+            },
+        )
+
+        self.assertTrue(promoted["authoritative"])
+        self.assertEqual(promoted["snapshot_id"], "openai-health-serving")
+        self.assertEqual(
+            promoted["selected_snapshot_ids"],
+            ["openai-health-serving", "openai-chatgpt-serving", "openai-agent-source"],
+        )
+        self.assertEqual(
+            promoted["source_snapshot_selection"]["mode"],
+            "authoritative_serving_snapshot_with_reusable_shard_sources",
+        )
+
+        request = JobRequest(
+            raw_user_request="帮我找OpenAI做Agent方向的人",
+            target_company="OpenAI",
+            target_scope="full_company_asset",
+            employment_statuses=["current", "former"],
+            keywords=["Agent"],
+        )
+        plan = self._scoped_search_plan(
+            target_company="OpenAI",
+            profile={
+                "org_scale_band": "large",
+                "default_acquisition_mode": "scoped_search_roster",
+                "prefer_delta_from_baseline": True,
+            },
+            query="Agent",
+        )
+
+        reuse_plan = compile_asset_reuse_plan(
+            runtime_dir=self.runtime_dir,
+            store=self.store,
+            request=request,
+            plan=plan,
+        )
+
+        self.assertEqual(reuse_plan["baseline_snapshot_id"], "openai-health-serving")
+        self.assertFalse(reuse_plan["requires_delta_acquisition"])
+        self.assertEqual(reuse_plan["missing_current_profile_search_queries"], [])
+        self.assertEqual(reuse_plan["missing_former_profile_search_queries"], [])
+        self.assertEqual(
+            {
+                row["coverage_mode"]
+                for row in reuse_plan["covered_current_profile_search_queries"]
+                + reuse_plan["covered_former_profile_search_queries"]
+            },
+            {"selected_snapshot_registry_match"},
+        )
 
     def test_partial_lifecycle_asset_cannot_promote_to_authoritative_baseline(self) -> None:
         decision = evaluate_organization_asset_registry_promotion(
@@ -219,6 +358,394 @@ class OrganizationExecutionProfileTest(unittest.TestCase):
 
         self.assertFalse(asset_reuse_plan["baseline_reuse_available"])
         self.assertEqual(asset_reuse_plan["reason"], "baseline_lacks_large_org_coverage_contract")
+
+    def test_small_company_scoped_only_authoritative_asset_does_not_unlock_full_population_reuse(self) -> None:
+        snapshot_id = "skild-agent-scoped"
+        self.store.upsert_organization_asset_registry(
+            {
+                "target_company": "Skild AI",
+                "company_key": "skildai",
+                "snapshot_id": snapshot_id,
+                "asset_view": "canonical_merged",
+                "status": "ready",
+                "authoritative": True,
+                "candidate_count": 12,
+                "profile_detail_count": 12,
+                "completeness_score": 82.0,
+                "current_lane_effective_candidate_count": 12,
+                "former_lane_effective_candidate_count": 0,
+                "current_lane_effective_ready": True,
+                "former_lane_effective_ready": False,
+                "selected_snapshot_ids": [snapshot_id],
+                "source_snapshot_selection": {
+                    "mode": "single_scoped_search_snapshot",
+                    "selected_snapshot_ids": [snapshot_id],
+                    "population_coverage": {
+                        "coverage_kind": "scoped_search",
+                        "coverage_status": "partial",
+                        "coverage_scope": "Agent",
+                    },
+                },
+                "summary": {
+                    "candidate_count": 12,
+                    "population_coverage": {
+                        "coverage_kind": "scoped_search",
+                        "coverage_status": "partial",
+                        "coverage_scope": "Agent",
+                    },
+                },
+            },
+            authoritative=True,
+        )
+        self.store.upsert_acquisition_shard_registry(
+            build_acquisition_shard_registry_record(
+                target_company="Skild AI",
+                company_key="skildai",
+                snapshot_id=snapshot_id,
+                lane="profile_search",
+                employment_scope="current",
+                strategy_type="scoped_search_roster",
+                shard_id="Agent",
+                shard_title="Agent",
+                search_query="Agent",
+                company_filters={
+                    "companies": ["Skild AI"],
+                    "search_query": "Agent",
+                },
+                result_count=12,
+                status="completed",
+            )
+        )
+
+        profile = ensure_organization_execution_profile(
+            runtime_dir=self.runtime_dir,
+            store=self.store,
+            target_company="Skild AI",
+            asset_view="canonical_merged",
+        )
+
+        self.assertFalse(profile["summary"]["coverage_baseline_reuse_ready"])
+        self.assertFalse(profile["summary"]["full_company_coverage_proven"])
+        self.assertEqual(profile["summary"]["population_coverage_contract"]["coverage_kind"], "scoped_search")
+        self.assertEqual(profile["current_lane_default"], "delta_live_search")
+        self.assertIn("authoritative_asset_has_scoped_coverage_only", profile["reason_codes"])
+
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "帮我找Skild AI所有人",
+                "target_company": "Skild AI",
+                "categories": ["employee", "former_employee"],
+                "employment_statuses": ["current", "former"],
+            }
+        )
+        plan = SourcingPlan(
+            target_company="Skild AI",
+            target_scope="full_company_asset",
+            intent_summary="test",
+            criteria_summary="test",
+            retrieval_plan=RetrievalPlan(strategy="structured", reason="test"),
+            acquisition_strategy=AcquisitionStrategyPlan(
+                strategy_type="full_company_roster",
+                target_population="All Skild AI members",
+                company_scope=["Skild AI"],
+                roster_sources=["harvest_company_employees"],
+                search_channel_order=["harvest_company_employees"],
+                search_seed_queries=[],
+                organization_execution_profile=dict(profile),
+            ),
+            publication_coverage=PublicationCoveragePlan(coverage_goal="test"),
+            search_strategy=SearchStrategyPlan(planner_mode="deterministic", objective="test"),
+            acquisition_tasks=[
+                AcquisitionTask(
+                    task_id="acquire-full-roster",
+                    task_type="acquire_full_roster",
+                    title="Acquire full current roster",
+                    description="test",
+                    metadata={
+                        "strategy_type": "full_company_roster",
+                        "company_employee_shards": [
+                            {
+                                "shard_id": "all",
+                                "title": "All employees",
+                                "strategy_id": "full_company_roster",
+                                "company_filters": {},
+                            }
+                        ],
+                    },
+                ),
+            ],
+            organization_execution_profile=dict(profile),
+        )
+
+        reuse_plan = compile_asset_reuse_plan(
+            runtime_dir=self.runtime_dir,
+            store=self.store,
+            request=request,
+            plan=plan,
+        )
+
+        self.assertTrue(reuse_plan["baseline_reuse_available"])
+        self.assertTrue(reuse_plan["requires_delta_acquisition"])
+        self.assertFalse(reuse_plan["baseline_full_company_lane_reuse_sufficient"])
+        self.assertFalse(reuse_plan["baseline_population_default_reuse_sufficient"])
+        self.assertFalse(reuse_plan["baseline_full_company_coverage_proven"])
+        self.assertEqual(
+            reuse_plan["baseline_population_coverage_contract"]["coverage_kind"],
+            "scoped_search",
+        )
+
+    def test_execution_profile_persists_full_roster_coverage_to_authoritative_serving_row(self) -> None:
+        snapshot_id = "lovable-full-roster"
+        self.store.upsert_organization_asset_registry(
+            {
+                "target_company": "Lovable",
+                "company_key": "lovable",
+                "snapshot_id": snapshot_id,
+                "asset_view": "canonical_merged",
+                "status": "ready",
+                "authoritative": True,
+                "candidate_count": 140,
+                "profile_detail_count": 140,
+                "completeness_score": 91.0,
+                "current_lane_effective_candidate_count": 120,
+                "former_lane_effective_candidate_count": 20,
+                "current_lane_effective_ready": True,
+                "former_lane_effective_ready": True,
+                "selected_snapshot_ids": [snapshot_id],
+                "source_snapshot_selection": {
+                    "mode": "all_history_snapshots",
+                    "selected_snapshot_ids": [snapshot_id],
+                },
+            },
+            authoritative=True,
+        )
+        self.store.upsert_acquisition_shard_registry(
+            build_acquisition_shard_registry_record(
+                target_company="Lovable",
+                company_key="lovable",
+                snapshot_id=snapshot_id,
+                lane="company_employees",
+                employment_scope="all",
+                strategy_type="full_company_roster",
+                shard_id="company_employees:all",
+                shard_title="All employees",
+                search_query="",
+                company_filters={"companies": ["Lovable"]},
+                result_count=140,
+                status="completed",
+            )
+        )
+
+        profile = ensure_organization_execution_profile(
+            runtime_dir=self.runtime_dir,
+            store=self.store,
+            target_company="Lovable",
+            asset_view="canonical_merged",
+        )
+
+        self.assertTrue(profile["summary"]["full_company_coverage_proven"])
+        self.assertTrue(profile["summary"]["coverage_baseline_reuse_ready"])
+        self.assertEqual(profile["summary"]["population_coverage_contract"]["coverage_kind"], "full_company_roster")
+        self.assertEqual(profile["current_lane_default"], "reuse_baseline")
+        self.assertEqual(profile["former_lane_default"], "reuse_baseline")
+        authoritative = self.store.get_authoritative_organization_asset_registry(
+            target_company="Lovable",
+            asset_view="canonical_merged",
+        )
+        coverage = dict(dict(authoritative.get("summary") or {}).get("population_coverage") or {})
+        self.assertEqual(coverage["coverage_kind"], "full_company_roster")
+        self.assertTrue(coverage["full_company_coverage_proven"])
+
+    def test_small_company_exact_scoped_shard_still_reuses_without_delta(self) -> None:
+        snapshot_id = "skild-agent-scoped"
+        self.store.upsert_organization_asset_registry(
+            {
+                "target_company": "Skild AI",
+                "company_key": "skildai",
+                "snapshot_id": snapshot_id,
+                "asset_view": "canonical_merged",
+                "status": "ready",
+                "authoritative": True,
+                "candidate_count": 12,
+                "profile_detail_count": 12,
+                "completeness_score": 82.0,
+                "current_lane_effective_candidate_count": 12,
+                "former_lane_effective_candidate_count": 0,
+                "current_lane_effective_ready": True,
+                "former_lane_effective_ready": False,
+                "selected_snapshot_ids": [snapshot_id],
+                "source_snapshot_selection": {
+                    "mode": "single_scoped_search_snapshot",
+                    "selected_snapshot_ids": [snapshot_id],
+                    "population_coverage": {
+                        "coverage_kind": "scoped_search",
+                        "coverage_status": "partial",
+                        "coverage_scope": "Agent",
+                    },
+                },
+            },
+            authoritative=True,
+        )
+        self.store.upsert_acquisition_shard_registry(
+            build_acquisition_shard_registry_record(
+                target_company="Skild AI",
+                company_key="skildai",
+                snapshot_id=snapshot_id,
+                lane="profile_search",
+                employment_scope="current",
+                strategy_type="scoped_search_roster",
+                shard_id="Agent",
+                shard_title="Agent",
+                search_query="Agent",
+                company_filters={
+                    "companies": ["Skild AI"],
+                    "search_query": "Agent",
+                },
+                result_count=12,
+                status="completed",
+            )
+        )
+        profile = ensure_organization_execution_profile(
+            runtime_dir=self.runtime_dir,
+            store=self.store,
+            target_company="Skild AI",
+            asset_view="canonical_merged",
+        )
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "帮我找Skild AI做Agent方向的人",
+                "target_company": "Skild AI",
+                "keywords": ["Agent"],
+                "categories": ["employee"],
+                "employment_statuses": ["current"],
+            }
+        )
+
+        reuse_plan = compile_asset_reuse_plan(
+            runtime_dir=self.runtime_dir,
+            store=self.store,
+            request=request,
+            plan=SourcingPlan(
+                target_company="Skild AI",
+                target_scope="full_company_asset",
+                intent_summary="test",
+                criteria_summary="test",
+                retrieval_plan=RetrievalPlan(strategy="structured", reason="test"),
+                acquisition_strategy=AcquisitionStrategyPlan(
+                    strategy_type="scoped_search_roster",
+                    target_population="Agent current members within Skild AI",
+                    company_scope=["Skild AI", "Agent"],
+                    roster_sources=["harvest_profile_search"],
+                    search_channel_order=["harvest_profile_search"],
+                    search_seed_queries=["Agent"],
+                    filter_hints={
+                        "current_companies": ["Skild AI"],
+                        "keywords": ["Agent"],
+                        "scope_keywords": ["Agent"],
+                    },
+                    organization_execution_profile=dict(profile),
+                ),
+                publication_coverage=PublicationCoveragePlan(coverage_goal="test"),
+                search_strategy=SearchStrategyPlan(planner_mode="deterministic", objective="test"),
+                acquisition_tasks=[
+                    AcquisitionTask(
+                        task_id="acquire-full-roster",
+                        task_type="acquire_full_roster",
+                        title="Acquire scoped current roster",
+                        description="test",
+                        metadata={
+                            "strategy_type": "scoped_search_roster",
+                            "search_seed_queries": ["Agent"],
+                            "filter_hints": {
+                                "current_companies": ["Skild AI"],
+                                "keywords": ["Agent"],
+                                "scope_keywords": ["Agent"],
+                            },
+                            "employment_statuses": ["current"],
+                        },
+                    )
+                ],
+                organization_execution_profile=dict(profile),
+            ),
+        )
+
+        self.assertTrue(reuse_plan["baseline_reuse_available"])
+        self.assertFalse(reuse_plan["requires_delta_acquisition"])
+        self.assertEqual(reuse_plan["missing_current_profile_search_queries"], [])
+        self.assertEqual(
+            list(reuse_plan["covered_current_profile_search_queries"] or [])[0]["coverage_mode"],
+            "heuristic_registry_match",
+        )
+        self.assertFalse(reuse_plan["baseline_full_company_coverage_proven"])
+
+    def test_directional_all_members_query_uses_full_company_filter_only_with_full_coverage(self) -> None:
+        snapshot_id = "xai-full-company"
+        self.store.upsert_organization_asset_registry(
+            {
+                "target_company": "xAI",
+                "company_key": "xai",
+                "snapshot_id": snapshot_id,
+                "asset_view": "canonical_merged",
+                "status": "ready",
+                "authoritative": True,
+                "candidate_count": 3600,
+                "profile_detail_count": 3500,
+                "completeness_score": 92.0,
+                "current_lane_effective_candidate_count": 3300,
+                "former_lane_effective_candidate_count": 300,
+                "current_lane_effective_ready": True,
+                "former_lane_effective_ready": True,
+                "selected_snapshot_ids": [snapshot_id],
+                "source_snapshot_selection": {
+                    "mode": "full_company_roster",
+                    "selected_snapshot_ids": [snapshot_id],
+                    "population_coverage": {
+                        "coverage_kind": "full_company_roster",
+                        "coverage_status": "verified",
+                    },
+                },
+            },
+            authoritative=True,
+        )
+        profile = ensure_organization_execution_profile(
+            runtime_dir=self.runtime_dir,
+            store=self.store,
+            target_company="xAI",
+            asset_view="canonical_merged",
+        )
+        request = JobRequest.from_payload(
+            {
+                "raw_user_request": "我要 xAI 做 Coding 方向的全部成员",
+                "query": "xAI coding all members",
+                "target_company": "xAI",
+                "keywords": ["Coding"],
+                "must_have_facets": ["coding"],
+                "categories": ["employee"],
+                "employment_statuses": ["current", "former"],
+            }
+        )
+
+        reuse_plan = compile_asset_reuse_plan(
+            runtime_dir=self.runtime_dir,
+            store=self.store,
+            request=request,
+            plan=self._scoped_search_plan(target_company="xAI", profile=profile, query="Coding"),
+        )
+
+        self.assertTrue(reuse_plan["baseline_reuse_available"])
+        self.assertFalse(reuse_plan["requires_delta_acquisition"])
+        self.assertTrue(reuse_plan["baseline_full_company_coverage_proven"])
+        self.assertTrue(reuse_plan["full_company_filter_from_baseline"])
+        self.assertEqual(reuse_plan["missing_current_profile_search_queries"], [])
+        self.assertEqual(reuse_plan["missing_former_profile_search_queries"], [])
+        self.assertEqual(
+            {
+                dict(row.get("metadata") or {}).get("coverage_reason")
+                for row in reuse_plan["covered_current_profile_search_queries"]
+                + reuse_plan["covered_former_profile_search_queries"]
+            },
+            {"authoritative_full_company_lane_reuse"},
+        )
 
     def test_large_org_mode_only_multi_snapshot_selection_is_not_coverage_proof(self) -> None:
         self.store.upsert_organization_asset_registry(

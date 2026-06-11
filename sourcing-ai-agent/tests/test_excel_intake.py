@@ -11,9 +11,9 @@ from xml.sax.saxutils import escape
 from sourcing_agent.domain import Candidate, JobRequest
 from sourcing_agent.excel_intake import (
     ExcelIntakeService,
-    build_excel_intake_throughput_plan,
     _build_local_candidate_inventory,
     _find_exact_local_linkedin_match,
+    build_excel_intake_throughput_plan,
     group_contacts_by_company_hints,
 )
 from sourcing_agent.model_provider import DeterministicModelClient
@@ -24,7 +24,7 @@ from sourcing_agent.settings import (
     QwenSettings,
     SemanticProviderSettings,
 )
-from sourcing_agent.storage import ControlPlaneStore
+from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
 
 
 def _column_ref(index: int) -> str:
@@ -93,11 +93,12 @@ def _write_inline_workbook(path: Path, *, sheet_name: str, headers: list[str], r
         archive.writestr("xl/worksheets/sheet1.xml", sheet_xml)
 
 
-class ExcelIntakeTest(unittest.TestCase):
+class ExcelIntakeTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
     def setUp(self) -> None:
+        super().setUp()
         self.tempdir = tempfile.TemporaryDirectory()
         root = Path(self.tempdir.name)
-        self.store = ControlPlaneStore(root / "test.db")
+        self.store = self.make_pg_store(root / "test.db")
         self.settings = AppSettings(
             project_root=root,
             runtime_dir=root,
@@ -738,6 +739,12 @@ class ExcelIntakeTest(unittest.TestCase):
                     "title": "Researcher",
                 },
                 {
+                    "row_key": "Contacts#1b",
+                    "name": "Casey Slash",
+                    "company": "Meta/OpenAI",
+                    "title": "Researcher",
+                },
+                {
                     "row_key": "Contacts#2",
                     "name": "Ada Import",
                     "company": "Anthropic",
@@ -748,11 +755,11 @@ class ExcelIntakeTest(unittest.TestCase):
 
         groups = {item["company"]: item for item in grouped["groups"]}
         self.assertEqual(set(groups.keys()), {"Anthropic", "Meta", "OpenAI"})
-        self.assertEqual(groups["OpenAI"]["row_count"], 1)
-        self.assertEqual(groups["Meta"]["row_count"], 1)
+        self.assertEqual(groups["OpenAI"]["row_count"], 2)
+        self.assertEqual(groups["Meta"]["row_count"], 2)
         self.assertEqual(groups["Anthropic"]["row_count"], 1)
 
-    def test_exact_local_linkedin_match_respects_route_company(self) -> None:
+    def test_exact_local_linkedin_match_ignores_route_company(self) -> None:
         candidate = Candidate(
             candidate_id="barry-meta",
             name_en="Barry Dong",
@@ -767,7 +774,7 @@ class ExcelIntakeTest(unittest.TestCase):
         self.store.upsert_candidate(candidate)
         inventory = _build_local_candidate_inventory(Path(self.tempdir.name), self.store)
 
-        self.assertIsNone(
+        self.assertIsNotNone(
             _find_exact_local_linkedin_match(
                 {
                     "name": "Barry Dong",
@@ -787,6 +794,89 @@ class ExcelIntakeTest(unittest.TestCase):
                 inventory,
             )
         )
+
+    def test_ingest_excel_contacts_uses_registry_cache_before_local_inventory(self) -> None:
+        profile_url = "https://www.linkedin.com/in/barry-dong-525a10149/"
+        raw_path = Path(self.tempdir.name) / "harvest_profiles" / "barry-dong.json"
+        raw_path.parent.mkdir(parents=True, exist_ok=True)
+        raw_path.write_text(
+            json.dumps(
+                {
+                    "fullName": "Barry Dong",
+                    "headline": "Researcher at Meta",
+                    "linkedinUrl": profile_url,
+                    "location": "San Francisco, California, United States",
+                    "about": "Works on reasoning systems.",
+                    "experience": [
+                        {"title": "Researcher", "companyName": "Meta"},
+                        {"title": "Researcher", "companyName": "OpenAI"},
+                    ],
+                    "education": [{"school": "Fudan University", "degree": "BS", "field": "CS"}],
+                    "publicIdentifier": "barry-dong-525a10149",
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        self.store.mark_linkedin_profile_registry_fetched(
+            profile_url,
+            raw_path=str(raw_path),
+            alias_urls=[profile_url],
+            raw_linkedin_url=profile_url,
+            sanity_linkedin_url=profile_url,
+            source_shards=["seed"],
+        )
+
+        with (
+            patch("sourcing_agent.excel_intake._build_local_candidate_inventory") as mocked_inventory,
+            patch.object(self.service, "_fetch_profiles") as mocked_fetch,
+            patch.object(self.service, "_search_contact") as mocked_search,
+        ):
+            mocked_inventory.side_effect = AssertionError("registry URL hits must not build full local inventory")
+            result = self.service.ingest_contacts(
+                {
+                    "target_company": "OpenAI",
+                    "attach_to_snapshot": False,
+                    "prepared_contact_batch": {
+                        "workbook": {
+                            "source_path": str(Path(self.tempdir.name) / "contacts.xlsx"),
+                            "sheet_count": 1,
+                            "sheet_names": ["Contacts"],
+                            "detected_contact_row_count": 1,
+                        },
+                        "schema_inference": {},
+                        "contacts": [
+                            {
+                                "row_key": "Contacts#1",
+                                "sheet_name": "Contacts",
+                                "row_index": 1,
+                                "name": "Barry Dong",
+                                "company": "OpenAI",
+                                "uploaded_company": "OpenAI & Meta",
+                                "route_target_company": "OpenAI",
+                                "company_hints": ["OpenAI", "Meta"],
+                                "title": "Researcher",
+                                "linkedin_url": profile_url,
+                                "email": "",
+                                "source_path": str(Path(self.tempdir.name) / "contacts.xlsx#Contacts:1"),
+                                "raw_row": {},
+                            }
+                        ],
+                    },
+                }
+            )
+
+        self.assertEqual(result["results"][0]["status"], "fetched_direct_linkedin")
+        self.assertEqual(result["results"][0]["match_reason"], "linkedin_url_registry_cache")
+        self.assertTrue(result["results"][0]["profile_cache_hit"])
+        self.assertEqual(result["inventory"]["registry_cached_profile_count"], 1)
+        mocked_fetch.assert_not_called()
+        mocked_search.assert_not_called()
+        stored_candidates = self.store.list_candidates()
+        self.assertEqual(len(stored_candidates), 1)
+        self.assertEqual(stored_candidates[0].target_company, "OpenAI")
+        self.assertEqual(stored_candidates[0].employment_status, "former")
+        self.assertEqual(stored_candidates[0].metadata.get("excel_uploaded_company"), "OpenAI & Meta")
 
     def test_ingest_excel_contacts_routes_profile_to_former_company_when_current_company_differs(self) -> None:
         fetched_payload = {

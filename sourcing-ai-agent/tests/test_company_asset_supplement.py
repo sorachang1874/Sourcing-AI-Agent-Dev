@@ -12,11 +12,13 @@ from sourcing_agent.connectors import CompanyIdentity
 from sourcing_agent.domain import Candidate, EvidenceRecord
 from sourcing_agent.seed_discovery import SearchSeedSnapshot
 from sourcing_agent.settings import load_settings
-from sourcing_agent.storage import ControlPlaneStore
+
+from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
 
 
-class CompanyAssetSupplementTest(unittest.TestCase):
+class CompanyAssetSupplementTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
     def setUp(self) -> None:
+        super().setUp()
         self.tempdir = tempfile.TemporaryDirectory()
         self.project_root = Path(self.tempdir.name)
         self.runtime_dir = self.project_root / "runtime"
@@ -56,7 +58,7 @@ class CompanyAssetSupplementTest(unittest.TestCase):
             )
         )
         (snapshot_dir / "candidate_documents.json").write_text(json.dumps({"candidates": [], "evidence": []}, ensure_ascii=False, indent=2))
-        self.store = ControlPlaneStore(self.runtime_dir / "sourcing_agent.db")
+        self.store = self.make_pg_store(self.runtime_dir / "sourcing_agent.db")
         self.settings = load_settings(self.project_root)
 
     def tearDown(self) -> None:

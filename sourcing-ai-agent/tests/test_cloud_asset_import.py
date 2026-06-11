@@ -6,15 +6,18 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
+from sourcing_agent.artifact_cache import load_hot_cache_governance_state
 from sourcing_agent.asset_sync import AssetBundleError, AssetBundleManager
 from sourcing_agent.cloud_asset_import import hydrate_cloud_generation, import_cloud_assets
 from sourcing_agent.domain import Candidate, make_evidence_id
 from sourcing_agent.object_storage import ObjectStorageConfig, build_object_storage_client
-from sourcing_agent.storage import ControlPlaneStore
+
+from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
 
 
-class CloudAssetImportTest(unittest.TestCase):
+class CloudAssetImportTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
     def setUp(self) -> None:
+        super().setUp()
         self.tempdir = tempfile.TemporaryDirectory()
         self.root = Path(self.tempdir.name)
         self.source_project = self.root / "source_project"
@@ -120,11 +123,15 @@ class CloudAssetImportTest(unittest.TestCase):
         )
 
         export = self.source_manager.export_company_snapshot_bundle("Acme")
-        result = import_cloud_assets(
-            bundle_manager=self.target_manager,
-            manifest_path=export["manifest_path"],
-            conflict="error",
-        )
+        # The PG-backed fixture env provides a control-plane DSN, which flips the
+        # post-import refresh default from inline to background; this test asserts
+        # the inline-completion results, so pin the mode explicitly.
+        with unittest.mock.patch.dict(os.environ, {"SOURCING_IMPORT_POST_REFRESH_MODE": "inline"}, clear=False):
+            result = import_cloud_assets(
+                bundle_manager=self.target_manager,
+                manifest_path=export["manifest_path"],
+                conflict="error",
+            )
 
         self.assertEqual(result["status"], "completed")
         self.assertEqual(result["bundle_kind"], "company_snapshot")
@@ -145,7 +152,7 @@ class CloudAssetImportTest(unittest.TestCase):
         self.assertTrue(ledger_path.exists())
         self.assertTrue((self.target_runtime / "company_identity_registry.json").exists())
 
-        store = ControlPlaneStore(self.target_runtime / "sourcing_agent.db")
+        store = self.make_pg_store(self.target_runtime / "sourcing_agent.db")
         authoritative = store.get_authoritative_organization_asset_registry(
             target_company="Acme",
             asset_view="canonical_merged",
@@ -276,8 +283,10 @@ class CloudAssetImportTest(unittest.TestCase):
             "completed",
         )
 
-        target_store = ControlPlaneStore(self.target_runtime / "sourcing_agent.db")
-        profile_registry_entry = target_store.get_linkedin_profile_registry("https://www.linkedin.com/in/alice-example/")
+        target_store = self.make_pg_store(self.target_runtime / "sourcing_agent.db")
+        profile_registry_entry = target_store.get_linkedin_profile_registry(
+            "https://www.linkedin.com/in/alice-example/"
+        )
         self.assertIsNotNone(profile_registry_entry)
 
     def test_import_retired_sqlite_snapshot_manifest_is_rejected(self) -> None:
@@ -298,29 +307,6 @@ class CloudAssetImportTest(unittest.TestCase):
         )
 
         with self.assertRaisesRegex(AssetBundleError, "sqlite_snapshot import/restore has been retired"):
-            import_cloud_assets(
-                bundle_manager=self.target_manager,
-                manifest_path=str(manifest_path),
-            )
-
-    def test_import_control_plane_snapshot_requires_postgres_dsn(self) -> None:
-        bundle_root = self.source_runtime / "asset_exports" / "control-plane"
-        bundle_root.mkdir(parents=True, exist_ok=True)
-        manifest_path = bundle_root / "bundle_manifest.json"
-        manifest_path.write_text(
-            json.dumps(
-                {
-                    "bundle_kind": "control_plane_snapshot",
-                    "bundle_id": "control-plane",
-                    "files": [],
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-            encoding="utf-8",
-        )
-
-        with self.assertRaisesRegex(AssetBundleError, "requires a Postgres control-plane DSN"):
             import_cloud_assets(
                 bundle_manager=self.target_manager,
                 manifest_path=str(manifest_path),
@@ -464,6 +450,9 @@ class CloudAssetImportTest(unittest.TestCase):
 
         self.assertEqual(hydrated["status"], "hydrated")
         self.assertEqual(str(dict(hydrated.get("ledger") or {}).get("operation_type") or ""), "hydrate_generation")
+        self.assertEqual(str(dict(hydrated.get("hot_cache_governance") or {}).get("status") or ""), "completed")
+        governance_state = load_hot_cache_governance_state(self.target_runtime)
+        self.assertEqual(str(governance_state.get("status") or ""), "completed")
         self.assertTrue(
             (hot_cache_root / "acme" / snapshot_id / "normalized_artifacts" / "candidate_shards" / "c1.json").exists()
         )
@@ -563,6 +552,9 @@ class CloudAssetImportTest(unittest.TestCase):
             {
                 "SOURCING_CANONICAL_ASSETS_DIR": str(canonical_root),
                 "SOURCING_HOT_CACHE_ASSETS_DIR": str(hot_cache_root),
+                # PG-backed fixture env provides a DSN, which would default the
+                # post-import refresh to background; this test asserts inline results.
+                "SOURCING_IMPORT_POST_REFRESH_MODE": "inline",
             },
             clear=False,
         ):
@@ -583,7 +575,7 @@ class CloudAssetImportTest(unittest.TestCase):
         self.assertTrue(
             (hot_cache_root / "acme" / snapshot_id / "normalized_artifacts" / "candidate_shards" / "c1.json").exists()
         )
-        target_store = ControlPlaneStore(self.target_runtime / "sourcing_agent.db")
+        target_store = self.make_pg_store(self.target_runtime / "sourcing_agent.db")
         authoritative = target_store.get_authoritative_organization_asset_registry(
             target_company="Acme",
             asset_view="canonical_merged",
@@ -674,6 +666,9 @@ class CloudAssetImportTest(unittest.TestCase):
             {
                 "SOURCING_CANONICAL_ASSETS_DIR": str(canonical_root),
                 "SOURCING_HOT_CACHE_ASSETS_DIR": str(hot_cache_root),
+                # PG-backed fixture env provides a DSN, which would default the
+                # post-import refresh to a background thread that races tempdir cleanup.
+                "SOURCING_IMPORT_POST_REFRESH_MODE": "inline",
             },
             clear=False,
         ):
@@ -763,6 +758,9 @@ class CloudAssetImportTest(unittest.TestCase):
             {
                 "SOURCING_CANONICAL_ASSETS_DIR": str(canonical_root),
                 "SOURCING_HOT_CACHE_ASSETS_DIR": str(hot_cache_root),
+                # PG-backed fixture env provides a DSN, which would default the
+                # post-import refresh to a background thread that races tempdir cleanup.
+                "SOURCING_IMPORT_POST_REFRESH_MODE": "inline",
             },
             clear=False,
         ):
@@ -793,6 +791,52 @@ class CloudAssetImportTest(unittest.TestCase):
                 bundle_kind="sqlite_snapshot",
                 bundle_id="retired-sqlite-bundle",
                 companies=["Acme"],
+            )
+
+
+class CloudAssetImportWithoutPostgresEnvTest(unittest.TestCase):
+    """Covers the absent-Postgres-DSN rejection path.
+
+    Deliberately NOT on PGControlPlaneStoreTestMixin: the mixin patches
+    SOURCING_CONTROL_PLANE_POSTGRES_DSN into os.environ for the whole class,
+    which would make the no-DSN rejection asserted here unreachable.
+    """
+
+    def setUp(self) -> None:
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.root = Path(self.tempdir.name)
+        self.source_project = self.root / "source_project"
+        self.source_runtime = self.source_project / "runtime"
+        self.source_runtime.mkdir(parents=True, exist_ok=True)
+        self.target_project = self.root / "target_project"
+        self.target_runtime = self.target_project / "runtime"
+        self.target_runtime.mkdir(parents=True, exist_ok=True)
+        self.target_manager = AssetBundleManager(self.target_project, self.target_runtime)
+
+    def tearDown(self) -> None:
+        self.tempdir.cleanup()
+
+    def test_import_control_plane_snapshot_requires_postgres_dsn(self) -> None:
+        bundle_root = self.source_runtime / "asset_exports" / "control-plane"
+        bundle_root.mkdir(parents=True, exist_ok=True)
+        manifest_path = bundle_root / "bundle_manifest.json"
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "bundle_kind": "control_plane_snapshot",
+                    "bundle_id": "control-plane",
+                    "files": [],
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(AssetBundleError, "requires a Postgres control-plane DSN"):
+            import_cloud_assets(
+                bundle_manager=self.target_manager,
+                manifest_path=str(manifest_path),
             )
 
 

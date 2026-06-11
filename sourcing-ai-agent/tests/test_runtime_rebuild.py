@@ -1,9 +1,7 @@
 import json
-import os
 import tempfile
 import unittest
 from pathlib import Path
-from unittest import mock
 
 from sourcing_agent.candidate_artifacts import build_company_candidate_artifacts
 from sourcing_agent.domain import Candidate
@@ -11,20 +9,13 @@ from sourcing_agent.runtime_rebuild import (
     rebuild_runtime_company_asset_control_plane,
     rebuild_runtime_jobs_control_plane,
 )
-from sourcing_agent.storage import ControlPlaneStore
+
+from tests.pg_store_fixture import PGControlPlaneStoreTestMixin, pg_backed_control_plane_store
 
 
-class RuntimeRebuildTest(unittest.TestCase):
+class RuntimeRebuildTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
     def setUp(self) -> None:
-        self.env_patcher = mock.patch.dict(
-            os.environ,
-            {
-                "SOURCING_CONTROL_PLANE_POSTGRES_DSN": "",
-                "SOURCING_CONTROL_PLANE_POSTGRES_LIVE_MODE": "",
-            },
-            clear=False,
-        )
-        self.env_patcher.start()
+        super().setUp()
         self.tempdir = tempfile.TemporaryDirectory()
         self.project_root = Path(self.tempdir.name)
         self.runtime_dir = self.project_root / "runtime"
@@ -80,7 +71,7 @@ class RuntimeRebuildTest(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.tempdir.cleanup()
-        self.env_patcher.stop()
+        super().tearDown()
 
     def _write_legacy_search_seed_summary(self) -> None:
         discovery_dir = self.snapshot_dir / "search_seed_discovery"
@@ -158,7 +149,7 @@ class RuntimeRebuildTest(unittest.TestCase):
         )
 
     def test_rebuild_runtime_company_assets_registers_generation_without_eager_artifact_repair(self) -> None:
-        rebuild_store = ControlPlaneStore(self.runtime_dir / "rebuild.db")
+        rebuild_store = self.make_pg_store(self.runtime_dir / "rebuild.db")
 
         result = rebuild_runtime_company_asset_control_plane(
             runtime_dir=self.runtime_dir,
@@ -179,18 +170,24 @@ class RuntimeRebuildTest(unittest.TestCase):
         self.assertIsNotNone(generation)
 
     def test_rebuild_runtime_company_assets_registers_generation_for_legacy_summary_snapshot(self) -> None:
-        seed_store = ControlPlaneStore(self.runtime_dir / "seed.db")
-        build_company_candidate_artifacts(
-            runtime_dir=self.runtime_dir,
-            store=seed_store,
-            target_company="Acme",
-            snapshot_id=self.snapshot_id,
-        )
+        # The seed store must stay invisible to the rebuild store (under SQLite
+        # they were two separate db files), so seed inside a fresh per-test
+        # schema and rebuild against the empty per-class schema afterwards.
+        with pg_backed_control_plane_store(
+            schema_label="runtime_rebuild_legacy_seed",
+            db_path=self.runtime_dir / "seed.db",
+        ) as seed_store:
+            build_company_candidate_artifacts(
+                runtime_dir=self.runtime_dir,
+                store=seed_store,
+                target_company="Acme",
+                snapshot_id=self.snapshot_id,
+            )
         artifact_dir = self.snapshot_dir / "normalized_artifacts"
         (artifact_dir / "manifest.json").unlink()
         (artifact_dir / "snapshot_manifest.json").unlink()
 
-        rebuild_store = ControlPlaneStore(self.runtime_dir / "rebuild.db")
+        rebuild_store = self.make_pg_store(self.runtime_dir / "rebuild.db")
         result = rebuild_runtime_company_asset_control_plane(
             runtime_dir=self.runtime_dir,
             store=rebuild_store,
@@ -224,7 +221,7 @@ class RuntimeRebuildTest(unittest.TestCase):
 
     def test_rebuild_runtime_company_assets_backfills_legacy_search_seed_lanes_and_registry(self) -> None:
         self._write_legacy_search_seed_summary()
-        rebuild_store = ControlPlaneStore(self.runtime_dir / "rebuild.db")
+        rebuild_store = self.make_pg_store(self.runtime_dir / "rebuild.db")
 
         result = rebuild_runtime_company_asset_control_plane(
             runtime_dir=self.runtime_dir,
@@ -255,14 +252,19 @@ class RuntimeRebuildTest(unittest.TestCase):
         )
 
     def test_rebuild_runtime_jobs_restores_jobs_and_result_views_with_local_source_path(self) -> None:
-        seed_store = ControlPlaneStore(self.runtime_dir / "seed.db")
-        build_company_candidate_artifacts(
-            runtime_dir=self.runtime_dir,
-            store=seed_store,
-            target_company="Acme",
-            snapshot_id=self.snapshot_id,
-        )
-        rebuild_store = ControlPlaneStore(self.runtime_dir / "rebuild.db")
+        # Seed in a fresh per-test schema so the rebuild store starts empty,
+        # mirroring the original two-sqlite-file isolation.
+        with pg_backed_control_plane_store(
+            schema_label="runtime_rebuild_jobs_seed",
+            db_path=self.runtime_dir / "seed.db",
+        ) as seed_store:
+            build_company_candidate_artifacts(
+                runtime_dir=self.runtime_dir,
+                store=seed_store,
+                target_company="Acme",
+                snapshot_id=self.snapshot_id,
+            )
+        rebuild_store = self.make_pg_store(self.runtime_dir / "rebuild.db")
         rebuild_runtime_company_asset_control_plane(
             runtime_dir=self.runtime_dir,
             store=rebuild_store,
@@ -402,7 +404,7 @@ class RuntimeRebuildTest(unittest.TestCase):
             encoding="utf-8",
         )
 
-        rebuild_store = ControlPlaneStore(self.runtime_dir / "rebuild.db")
+        rebuild_store = self.make_pg_store(self.runtime_dir / "rebuild.db")
         result = rebuild_runtime_company_asset_control_plane(
             runtime_dir=self.runtime_dir,
             store=rebuild_store,
