@@ -1,6 +1,6 @@
 # 2026-04-24 Long-Tail Hardening Tracker
 
-> Status: Closed tracker. Use as the source of truth for this hardening pass and regression commands.
+> Status: Archived 2026-06-11. Historical record only — do not treat as active guidance; see `docs/INDEX.md` for current docs. (Previous status: Closed tracker. Use as the source of truth for this hardening pass and regression commands.)
 
 > Active tracker for the post-stabilization hardening pass. After any context compact or session resume, read this file plus `../PROGRESS.md` before running commands.
 
@@ -21,7 +21,7 @@ This pass closes the remaining architectural tails that can otherwise regress in
   - Expected guardrail: test/scripted/replay never silently inherit production/repo PG; production remains PG-only unless an explicit emergency override is used.
 - [x] Harvest global in-flight budget / backpressure
   - Goal: provider calls, background prefetch, and materialization writers share one runtime budget contract instead of each lane inventing its own limits.
-  - Expected guardrail: no duplicate provider dispatch, no unsafe high-concurrency profile scraping, and no stage barrier waiting for unrelated work.
+  - Expected guardrail: no duplicate provider dispatch, no over-aggressive high-concurrency profile collection, and no stage barrier waiting for unrelated work.
 - [x] Asset governance / promotion
   - Goal: promotion, canonical pointers, lane coverage, and planner reuse eligibility share executable governance rules.
   - Expected guardrail: tiny Excel/import/supplemental snapshots can enrich assets but cannot become coverage baselines without proof.

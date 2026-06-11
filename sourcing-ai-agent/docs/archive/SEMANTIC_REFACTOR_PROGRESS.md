@@ -1,6 +1,6 @@
 # Semantic Refactor Progress
 
-> Status: Living tracker. Use the latest entries as the source of truth, and assume older bullets may describe superseded intermediate states.
+> Status: Archived 2026-06-11. Historical record only — do not treat as active guidance; see `docs/INDEX.md` for current docs. (Previous status: Living tracker. Use the latest entries as the source of truth, and assume older bullets may describe superseded intermediate states.)
 
 
 Updated: 2026-04-23

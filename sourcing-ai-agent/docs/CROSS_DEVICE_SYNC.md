@@ -30,7 +30,7 @@
 
 如果你的目标不是“恢复 durable runtime 资产”，而是“把当前本地开发环境整体搬到另一台 Mac，包括 Codex 本地状态”，直接看：
 
-- `docs/MAC_DEV_ENV_MIGRATION.md`
+- `docs/archive/MAC_DEV_ENV_MIGRATION.md`
 
 ## Design Principles
 

@@ -9,6 +9,20 @@
 
 2026-06-08 重新定位：本计划不再只是历史设计参考。它是 Phase 13 / OpenClaw-Codex adapter 之前的底层服务收口清单。项目可以借鉴 Temporal、LangGraph、OpenClaw/Codex 这类成熟框架的抽象，但短期目标不是直接迁移到某个框架，而是把现有候选人发现、Profile 获取、Public Web、CRM/Export、provider task runtime 和 serving/projection 改造成成熟框架会认可的 typed workflow/service boundary。只有这些边界稳定后，外层通用 Agent 才能安全调用。
 
+2026-06-10 checkpoint：本计划仍然是 M1-M6 的架构路线。M0.5 本地资产治理已经推进到 M0.6/M0.9 runtime-retention closeout：M0.6 reviewed apply 已回收约 `14.75GB`，M0.9 cold bundle 已验证但 destructive apply 尚未执行。继续开发前，新 session 应先读 `CLAUDE_CODE_PROJECT_HANDBOOK_2026-06-10.md` 和 `archive/CLAUDE_CODE_CONTINUATION_PROMPT_2026-06-10.md`，并把资产治理收口、GitHub scoped PR、Provider Task Runtime / workflow manifest refactor 作为后续顺序。
+
+## 2026-06-11 Plan Revision（Claude Code 深审后，经 owner 确认）
+
+基于对 `orchestrator.py`（87,225 行 / 1,099 方法）、`storage.py`（510 方法 / 292 双路径）、contract 分散度（每 command ~14 处定义位点）、测试安全网（3,033 测试中 33.9% 触碰私有方法但确定性断点有限）和 serving 现状（ThreadingHTTPServer 8 槽、psycopg 每查询新建连接、零鉴权）的多代理审计与对抗核实，重构改为五条轨道推进。本节优先于下文与之冲突的旧表述。
+
+- **Track A 分解**：Phase 0 测试前置修缮 → Phase 1 CommandKernel 提取（~30 个 store-only 协议方法）→ Phase 2 CommandSpec registry → Phase 3 逐域提取（crm_public_web → excel_intake → profile_fetch → acquisition 仅 command 层；facade 保留全部公私方法名）→ Phase 4 纠缠核心重设计（`run_worker_recovery_once` 注册式 phase 分发；projection/candidate_source/asset_population 网随 M3–M5 拆解）。
+- **M1 重定义**：M1 不再是"从 monolith 提取 manifest"，而是"在 `durable_runtime` 建 CommandSpec registry（合并 owner/stage/readiness/display 四张字典、activity-spine 与 running-control policy set 族、metrics 表、orchestrator 的 per-type 映射），workflow/command manifest 与 Agent tool spec 是它的导出物"。这避免把 monolith 的偶然结构固化进外部契约。
+- **Track B 存储/测试**："先删 SQLite fallback"被审计否决（默认测试套件跑在 SQLite 上；postgres_only 模式仍依赖内存 SQLite 影子作为执行基底）。正确顺序：测试环境契约 v2（PG schema-per-run + teardown + TTL + symlink seed）→ 51 个 SQLite 直连测试文件迁共享 PG fixture → 按表组 PG-pure 重写双路径方法 → 删影子与 SQLite DDL。Mac 本地 PG 用 Docker（`local_postgres.py` 现为 Linux 专用）；正式 migration 机制替代手工双份 DDL。
+- **Track C Serving Runtime（新增轨道，目标 ~20 并发用户）**：psycopg_pool 连接池 → 重活（plan compile / job 执行 / 导出）统一出请求线程走 enqueue+poll → worker 与 API 进程分离 → 最小鉴权与用户身份（`requester_id/tenant_id` 列转为认证产物）→ FastAPI/uvicorn 重写 api.py（已批准；pydantic→OpenAPI 成为前端 contract 生成源）+ SSE → 对象存储读穿。明确不引入 Redis 与 LISTEN/NOTIFY（当前规模收益为负）。
+- **Track D 强 Agent 化**：ModelClient 升级（streaming + tool-calling；现为 14 个单发方法）→ Agent Session 契约（服务端 agentic loop，工具面 = M1 manifest 导出 + 只读上下文工具 + `model_native_search` 转正；效果全部走 typed AgentAction）→ 第一垂直切片为公司身份自验证 loop（替代 PlanCard 手动修正 LinkedIn URL）→ plan review 对话化、intent→plan 前门流式化。外脑（OpenClaw/Claude/自建）可插拔；护城河 = typed sourcing 工具 + 证据裁决 + durable 执行 + 预算审批。
+- **M2 新增设计约束**：provider 级并发预算属于 Provider Task Runtime——HarvestAPI profile-fetch 有 ~8 并发 actor 的隐性限制（旧 8 槽 API 信号量的真实由来）；需 per-provider+key 信号量/令牌桶、API key 池化、batch 粒度治理；该保护就位后 HTTP 入口并发上限才可放开。
+- **Track E 治理**：M0.9 独立审批流程取消（10 个冷备已 sha256 验证、`archive_verified: true`，源目录随 `runtime/test_env` TTL 清理一并回收）；Independent Review Gate 适用范围收窄到不可重建资产的破坏性操作与 contract-heavy 变更；文档治理规则见 `INDEX.md`（轮转契约、归档制度、banner 纪律）。
+
 核心原则：
 
 - OpenClaw/Codex/LangGraph 可以成为外层 planner、browser、Search、model orchestration runtime。

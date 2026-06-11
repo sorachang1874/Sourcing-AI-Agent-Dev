@@ -1,15 +1,22 @@
 # Public Web Search Productization TODO
 
-> Status: Active productization tracker. This document now combines the accepted product shape, empirical search/fetch notes, implemented target-candidate Public Web backend/frontend slice, and remaining product hardening work. Review it with `NEXT_TODO.md`, `FRONTEND_API_CONTRACT.md`, and `LEAD_DISCOVERY_METHODS.md` before changing code.
+> Status: Archived 2026-06-11. Historical record only — do not treat as active guidance; see `docs/INDEX.md` for current docs. (Previous status: Historical tracker with W7 cutover notes. Candidate-level Public Web normal product paths are now CRM-owned (`/api/crm/records/...`, `crm_public_web_v1`, `crm.p)
 
 ## Goal
 
-把旧的 `Public Web Stage 2` 从 workflow 内部阶段改造成目标候选人页上的独立批量能力：
+把旧的 `Public Web Stage 2` 从 workflow 内部阶段改造成目标候选人页上的独立批量能力。W7 后的正常实现是 CRM-owned action，不是 legacy target-candidate execution path：
 
-- 用户先在候选人看板中把人加入 `target_candidates`。
+- 用户先在候选人看板中把人加入 `crm_records`。
 - 用户进入目标候选人页面，选择一批人，触发 `Public Web Search`。
 - 系统对这些目标候选人做可恢复、可审计的公开网络信息补全。
 - 结果写回长期候选人资产，支持再次使用、二次补全、排序、筛选和导出。
+
+Current W7 normal path:
+
+- Start/poll/detail/promotion/export endpoints are `/api/crm/records/public-web-search`, `/api/crm/records/public-web-search/poll`, `/api/crm/records/{crm_record_id}/public-web-search`, `/api/crm/records/{crm_record_id}/public-web-promotions`, and `/api/crm/records/public-web-export`.
+- Storage owner and execution backend are `crm_public_web_v1`; normal service metrics must report no `target_candidate_public_web_v1` execution backend.
+- Legacy `/api/target-candidates/public-web...` aliases are retired by default with `410`; the migration override is not a product path.
+- 2026-05-24 local audit found zero `target_candidate_public_web_*` rows in the active runtime and one `crm_public_web_*` live validation record. This clears the data side for W7e physical deletion. 2026-05-25 follow-up: shared execution moved to `public_web_runtime_core.py`; 2026-05-26 follow-up: the retired `target_candidate_public_web.py` facade was physically deleted. Remaining W7e code work is deleting or archiving legacy target-candidate storage/table helpers after targeted CRM Public Web signoff.
 
 这不是把 `enrich_public_web_signals` 重新塞回默认 workflow。默认 workflow 仍应优先交付候选人看板，Public Web Search 是用户显式触发的后续 enrich action。
 
@@ -26,11 +33,11 @@ Status as of `2026-04-26`:
   - Live/replay calibration has validated high-value sources including personal homepages, Google Scholar pages, GitHub, paper/publication pages, and selected X/Substack entry links, with known noisy cases tracked below.
 - Completed quality evaluation layer before richer UI/export/promotion rollout:
   - `src/sourcing_agent/public_web_quality.py` evaluates `signals.json` artifacts for email/source/evidence safety and media/profile identity quality.
-  - CLI `evaluate-public-web-quality` writes `public_web_quality_report.json`, `public_web_quality_signals.csv`, and `public_web_quality_report.md`, with `--summary-only` for large runs and `--fail-on-high-risk` for CI-style gates.
+  - CLI `evaluate-public-web-quality` writes `public_web_quality_report.json`, `public_web_quality_signals.csv`, and `public_web_quality_report.md`, with `--summary-only` for large runs and `--fail-on-high-risk` for CI-style high-severity quality gates.
   - Reports count trusted vs needs-review X/Substack/GitHub/Google Scholar links by type and flag common noise such as search-only identity, GitHub repo/deep links, X utility/post links, Substack non-profile pages, same-name Scholar pages, and promotion-recommended emails without source/evidence/trusted identity.
-  - Public Web experiment options now include `max_ai_evidence_documents`; product API options normalize it to a bounded 1..20 range so larger pre-rollout LLM evidence budgets are explicit and auditable.
+  - Public Web experiment options now include `max_ai_evidence_documents` and `max_ai_entry_links`; product API options normalize both to a bounded 1..20 range so larger pre-rollout LLM evidence budgets are explicit and auditable. Candidate adjudication input construction must respect these normalized budgets; it must not add a second hard cap that prevents live validation from sending the configured search-result or document evidence window to the model.
 - Completed first backend productization slice:
-  - `src/sourcing_agent/target_candidate_public_web.py` is the service boundary for target-candidate selected batch actions.
+  - Historical note: `src/sourcing_agent/target_candidate_public_web.py` used to be the service boundary for target-candidate selected batch actions. It has been deleted in W7e; normal product code now uses `crm_public_web_runtime.py`, and legacy tests/migration evidence use `legacy_target_candidate_public_web_runtime.py`.
   - PG tables now exist for `target_candidate_public_web_batches`, `target_candidate_public_web_runs`, and `person_public_web_assets`.
   - `POST /api/target-candidates/public-web-search` creates an idempotent batch plus per-candidate runs and queues recoverable `exploration_specialist` workers.
   - `GET /api/target-candidates/public-web-search` lists batch/run state for polling.
@@ -54,12 +61,73 @@ Status as of `2026-04-26`:
   - PG-authoritative `target_candidate_public_web_promotions` records manual email/link promotion or rejection with signal lineage, source URL/domain/family, identity/confidence, URL-shape metadata, operator, timestamp, previous value, and new value.
   - `GET/POST /api/target-candidates/{record_id}/public-web-promotions` exposes promotion state and writes promotion records. Email promotion writes the record before mutating `target_candidates.primary_email`.
   - `POST /api/target-candidates/public-web-export` creates a dedicated zip containing model-safe summaries, exported signals, evidence links, promotions, per-candidate JSON, and manifest. Default mode is `promoted_only`; `promoted_and_publishable` is explicit.
+  - Public Web export manifests and summary CSV rows now include per-record export status and skip reason. Empty exports distinguish `no_public_web_result`, `public_web_run_not_terminal`, and `no_exportable_signals`, and the API/manifest expose aggregate counts so operators can tell whether a zip is truly useful instead of treating an empty successful download as success. The HTTP response also exposes these counts via `X-Sourcing-*` headers, and the target-candidate UI displays the export summary immediately after download.
   - Target-candidate frontend detail rows can promote/reject email candidates and clean profile links. Public Web export defaults to selected candidates, or all target candidates when none are selected.
-  - Browser E2E now covers target-candidate selection -> Public Web Search trigger -> refresh/polling -> compact status card, plus completed-run detail promotion -> promoted-only export download.
+  - Non-publishable / dirty URL-shape signals can only be manually promoted with `allow_unpublishable=true` plus an explicit `override_reason`; the promotion detail/export preserves the reason and the original validation failure.
+  - Target-candidate frontend currently hides the unfinished export mode control to avoid layout/product ambiguity; the right-side export panel exposes only LinkedIn Profile export and Web Search export. Web Search export sends `promoted_and_publishable` to include manual promotions plus AI-publishable unpromoted signals without raw assets, leaving unavailable fields blank.
+  - Browser E2E now covers target-candidate selection -> Public Web Search trigger -> refresh/polling -> compact status card, plus completed-run detail promotion -> `promoted_and_publishable` export download.
+- Completed quality-gate integration:
+  - `scripts/run_python_quality.sh all` and `pyproject.toml` now include Public Web core modules and tests.
+  - `run_pytest_matrix.py --mode changed` maps Public Web paths to `public-web-core`, `target-candidate-public-web-api`, and `target-candidate-public-web-pg`.
+- Completed target-candidate run control slice:
+  - `POST /api/target-candidates/public-web-search/cancel` cancels queued/in-flight per-candidate runs, marks the run terminal `cancelled`, syncs batch summary, and terminates the matching recoverable worker checkpoint.
+  - `POST /api/target-candidates/public-web-search/retry` creates a fresh force-refresh run/worker for retryable terminal states (`failed`, `cancelled`, `completed_with_errors`, `needs_review`) while preserving the old run as audit history.
+  - Worker execution respects terminal `cancelled` rows before resuming provider polling/fetch/analyze, so cancelled remote-wait runs do not spend provider/LLM work after the user stops them.
+  - The target-candidate page exposes per-record cancel/retry controls without making browser state the source of truth.
+- Completed target-candidate run phase observability slice:
+  - Per-candidate runs now persist `summary.phase_metrics` and `analysis_checkpoint.phase_metrics` for search submit, ready poll, ready fetch, analysis/finalization, and signal materialization.
+  - Metrics include submitted/pending/fetched/failed/timeout task counts, ready poll count, query-result/raw-link counts, search submit/poll/fetch durations, analysis duration, fetched document count, email/link signal counts, materialized signal count, and person-asset materialization.
+  - Terminal run status is now written after person asset/signal rows are materialized, so a run cannot briefly report `completed` while its detail/export signal rows are still absent.
+  - Batch summaries now aggregate run phase metrics across selected candidates and expose phase/status counts, pending/fetched remote task totals, materialized signal totals, slowest observed phase, and service guardrails for pending remote runs, unmaterialized signal gaps, terminal partial failures, provider/fetch metric errors, missing phase metrics, phase-lag risk reasons, and terminal materialization violations.
+  - Browser/scripted Public Web gates now read the same batch guardrail surface. Happy-path browser coverage fails if the guardrail line is absent or reports terminal materialization violations / missing phase metrics.
+  - `workflow_service_metrics.target_candidate_public_web` now exposes the same guardrails to scripted/live-observation matrix summaries and smoke expectations. Matrix cases can fail on `require_no_target_public_web_guardrail_violation`, `require_crm_public_web_storage_owner`, `require_public_web_execution_backend_report`, `max_target_public_web_legacy_storage_owner_batch_count`, `max_target_public_web_remote_pending_run_count`, `max_target_public_web_partial_failure_count`, `max_target_public_web_completed_without_materialized_signals_count`, and `max_target_public_web_missing_phase_metric_count`.
+  - Hosted/scripted smoke diagnostics read real Public Web batch rows through `/api/target-candidates/public-web-search?limit=1000` and filter them to the current smoke case window before building service metrics, so old manual batches cannot pollute unrelated workflow runs.
+  - Batch/service summaries now carry phase-efficiency rollups: per-phase count/total/avg/max for provider submit/poll/fetch, document fetch, AI adjudication, model-safe analysis/finalization, and signal materialization, plus provider/fetch failure count and local processing error count. Matrix summaries aggregate max duration by phase and slowest-phase distribution so bottleneck triage does not require opening per-run artifacts.
+  - Smoke expectations can now enforce Public Web efficiency SLOs with `max_target_public_web_duration_by_phase_ms`, `max_target_public_web_provider_or_fetch_failure_count`, and `max_target_public_web_local_processing_error_count`.
+  - `target_public_web_action` is now a first-class smoke matrix action, not an expectation shortcut. A case that declares it imports real target candidates from the completed workflow result, triggers the CRM Public Web API, drives the recoverable Public Web worker, and then gates the real batch through `workflow_service_metrics.target_candidate_public_web`.
+  - Normal CRM Public Web action must use `crm_public_web_v1` storage owner and execution backend. `target_candidate_public_web_v1` execution backend, `execution_backend_bridge_present`, or legacy storage-owner batches are blocking failures after the CRM owner/execution cutover.
+  - `configs/scripted/target_public_web_service_smoke_matrix.json` and service-gate tag `target_candidate_public_web_service_slo` cover the post-workflow Public Web path. Ordinary workflow matrices should not claim this tag unless they actually trigger the action.
+  - The target-candidate page surfaces these metrics in the Public Web action panel and per-candidate cards, so users can tell whether the current batch is waiting on remote search, local analysis, or signal materialization.
+  - DataForSEO-style batch search fetch and candidate analysis are now separated by a durable `entry_links_ready` state. Once all remote search tasks are fetched, the worker checkpoints the run and releases its lease; a later recovery pass performs analysis/finalization/materialization.
+  - URL/document fetch and AI adjudication are separated by durable `documents_fetched`. The document fetch pass writes `document_fetch_payload.json`; a later recovery pass reads that payload and performs AI adjudication plus model-safe `signals.json` / summary artifact creation.
+  - AI adjudication, model-safe artifact creation, and durable signal/person-asset materialization are separated by durable `adjudication_completed` and `analysis_completed` states. Adjudication writes `adjudication_input_payload.json` with the exact compact model input plus `adjudication_payload.json` with the sanitized model result; a later recovery pass writes `signals.json`, `candidate_summary.json`, and `search_results.json`; a final pass materializes reusable person assets and first-class signal rows.
+  - CRM Public Web poll/detail now expose `crm_public_web_phase_command_status_v1` directly from `workflow_commands` for every run. The response includes phase command ids, statuses, phase order, current command, and command-control API paths, so frontend and future Agent callers can retry/cancel/resume/debug a candidate's Public Web phase without inferring status from run phase strings or scanning global command lists.
+  - Recovery from advanced durable phases must not redispatch provider search. `documents_fetched` resumes from `document_fetch_payload.json`, `adjudication_completed` resumes from `adjudication_payload.json`, and missing handoff artifacts fail loudly instead of falling back to empty payloads.
+  - Detail/export responses sanitize run and person-asset summaries before returning them. Internal paths and handoff fields such as `artifact_root`, `document_fetch_payload_path`, `adjudication_payload_path`, raw paths, and raw payloads are not part of the public model-safe surface.
+  - Recovery must reuse the same candidate artifact root after the first checkpoint. Once `artifact_root` points at `.../candidates/01_<record>`, later phases must not treat it as a run root and create nested `candidates/01_<record>/candidates/01_<record>` directories.
+  - Batch service gates include staggered per-candidate provider readiness and partial provider failure. A slow/failing candidate must not block a fast candidate from reaching reusable signal materialization, and the batch aggregate must remain running until every per-candidate run is terminal.
+- Completed scoped polling hardening:
+  - `POST /api/target-candidates/public-web-search/poll` accepts scoped `record_ids` in the request body and returns the latest run per record.
+  - Storage uses a per-record latest-run query (`ROW_NUMBER() OVER (PARTITION BY record_id ...)`) on both PG and SQLite paths, so retry history for one candidate cannot evict another candidate from a large-pool poll response.
+  - The frontend uses POST scoped polling whenever it has target-candidate record ids, avoiding oversized GET query strings and N-per-record status queries.
+- Completed company-level API/CLI-only v1:
+  - Added PG-authoritative tables `company_public_web_asset_runs` and `company_public_web_assets`.
+  - `POST /api/company-assets/public-web` refreshes company-level model-safe seed assets and writes an auditable run row.
+  - `GET /api/company-assets/public-web?target_company=...` lists persisted company-level runs/assets.
+  - CLI commands `refresh-company-public-web-assets` and `list-company-public-web-assets` use the same orchestrator contract.
+  - v1 is intentionally seed-URL/model-safe only: no raw HTML/PDF/search payloads are exposed by default, no default workflow stage is enabled, and no target-candidate UI control is added.
+- Completed company-level provider-search opt-in:
+  - `refresh_company_public_web_assets` supports explicit `collection_mode=provider_search` on the same run/asset contract.
+  - `provider_search` requires an actual search provider; missing providers return `invalid`, and provider exceptions mark the run `failed`.
+  - Query planning writes `query_manifest.json`; provider result records write `model_safe_search_results.json`; raw provider payloads stay outside default model/export surfaces.
+  - Provider result assets persist `collection_mode`, `provider_name`, `query_text`, `result_rank`, `source_family`, and `raw_content_included=false` as provenance.
+  - CLI supports `--collection-mode provider_search`, `--max-queries`, and `--max-results-per-query`; default remains `seed_url_only`.
+- Completed company-level collector bundle:
+  - `refresh_company_public_web_assets` supports explicit `collection_mode=collector_bundle` on the same `company_public_web_asset_runs` / `company_public_web_assets` contract.
+  - `collector_inputs` can carry model-safe RSS items, arXiv publications, OpenReview publications, and crawled-page summaries. Live collectors should output that structure instead of writing a separate workflow-stage surface.
+  - `collector_documents` can carry pre-fetched RSS XML, arXiv Atom XML, OpenReview JSON, or crawled HTML and will be parsed into the same `collector_inputs` shape before persistence.
+  - `collector_sources` can now trigger live source fetches for RSS/arXiv/OpenReview/crawled pages, but only when `collection_mode=collector_bundle`; fetched documents still go through the same parser/persistence path.
+  - `discover_collector_sources` can derive RSS/arXiv/OpenReview/crawl source URLs from source families and seed URLs, then feed those URLs into the same collector source path. It is explicit/default-off.
+  - Collector source/fetch quality is observable and gateable: summaries/service metrics expose source count, fetched document count, fetch failure count, and max fetch duration. Fetch failures mark the run `failed` after a run row exists.
+  - Collector assets persist `collection_mode=collector_bundle`, `collector_type`, source family, URL/title/summary/authors/published time/source URL, and `raw_content_included=false`.
+  - Artifacts include `collector_manifest.json`; summaries expose `collector_record_count` and `collector_type_counts`.
+  - CLI supports `--collection-mode collector_bundle`, `--collector-input-json`, `--collector-source-url`, `--collector-source-json`, and `--discover-collector-sources`.
+  - Service metrics expose `company_public_web` guardrails for failed runs, raw-asset exposure, missing collector manifests, asset count, collector record count, collection-mode counts, and collector-type counts.
+  - Scripted service gate `company_public_web_collector_bundle_service_slo` triggers a real post-workflow company Public Web collector action and validates those metrics before ECS sync.
 - Not completed yet:
-  - Company-level Public Web refresh API/CLI lane.
-  - Promotion override/reason workflow for non-publishable signals.
-  - Product-level export mode controls beyond the default promoted-only package.
+  - Live quality tuning for provider-specific source discovery against real company pages/APIs using the source/fetch metrics as SLOs; the generic discovery/fetcher/persistence contract is now in place.
+  - Target-candidate card editing/comment/detail navigation redesign.
+  - Large-roster workflow tails still rely on daemon/recovery polling cadence to notice remote completed provider runs; candidate-level UI should assume “results can be browsable while background profile/detail completion is still catching up”.
 
 ## Cross-Session Review Notes
 
@@ -80,7 +148,7 @@ Suggested follow-up improvements:
 - Keep frontend browser E2E for selecting target candidates, triggering Public Web Search, polling run status, rendering compact status cards, and completed-run promotion/export download.
 - Replace global `limit=500` frontend polling with scoped polling when target-candidate volume grows.
 - Keep the detail section on top of `GET /api/target-candidates/{record_id}/public-web-search`; any future override promotion must still go through promotion persistence/API before mutating target-candidate fields.
-- Keep company-level Public Web as a later API/CLI-only lane; do not surface it in the target-candidate page until candidate-level ROI is stable.
+- Keep company-level Public Web as an API/CLI-only lane; do not surface it in the target-candidate page until candidate-level ROI is stable.
 
 For the full resume record, read `SESSION_HANDOFF_2026-04-26_PUBLIC_WEB.md`.
 
@@ -108,7 +176,7 @@ For the full resume record, read `SESSION_HANDOFF_2026-04-26_PUBLIC_WEB.md`.
 - `target_candidates` 已经是跨 workflow 的目标候选人 truth source。
   - Backend API: `GET/POST /api/target-candidates`
   - Import API: `POST /api/target-candidates/import-from-job`
-  - Export API: `POST /api/target-candidates/export`
+  - Canonical export API: `POST /api/projections/export`; legacy `POST /api/target-candidates/export` is retired by default and remains migration/test-only.
   - Storage table: `target_candidates` with `metadata_json`
 - 前端目标候选人页已存在：
   - `frontend-demo/src/pages/TargetCandidatesPage.tsx`
@@ -134,14 +202,14 @@ For the full resume record, read `SESSION_HANDOFF_2026-04-26_PUBLIC_WEB.md`.
 - `Public Web Stage 2` 仍以 workflow stage/snapshot task 的形态存在，核心入口是 `enrich_public_web_signals`。
 - `ExploratoryWebEnricher` 的结果主要写入 job/company snapshot 下的 `exploration/<candidate_id>/...`，不是可跨 workflow 复用的 person-level public-web asset，也不是 target-candidate overlay。
 - `target_candidates` 原本只保存 CRM-like fields，缺少公开网络补全状态、运行记录、evidence summary、search artifact pointer；当前 target-candidate Public Web slice 已补上独立 run/signal/promotion/export 表达。
-- 目标候选人导出原本主要打包 CSV + 可用 LinkedIn profile 原始文件；当前已新增 promoted-only Public Web 专用导出包，默认只导出人工确认的 model-safe signals/evidence/promotions/manifest。
+- 目标候选人导出原本主要打包 CSV + 可用 LinkedIn profile 原始文件；当前已新增 Public Web 专用导出包，默认只导出人工确认的 model-safe signals/evidence/promotions/manifest，显式 `promoted_and_publishable` 模式可额外包含 AI 判定可发布的未人工确认 signals。
 - 网页/resume 的 email 原本没有一等 extraction contract；当前 Public Web experiment/service path 已有 deterministic extraction、AI adjudication、signal persistence 和 manual promotion guardrail。
 - “Scholar”命名容易误导：当前 production 的 scholar coauthor 第一版实际是 arXiv author feed，而不是 Google Scholar profile connector。
 - 现有 Stage 2 把 company-level publication discovery 和 per-person public-web enrichment 混在一个 workflow stage 里；产品化后必须拆成两条可独立触发、独立复用的 lane。
 
 ### Backend and frontend product slice now implemented
 
-已完成第一层可执行后端 contract、first-class grouped signal detail API、目标候选人页 compact UI、Public Web detail section、manual promotion 和 promoted-only export：
+已完成第一层可执行后端 contract、first-class grouped signal detail API、目标候选人页 compact UI、显式卡片编辑保存、Public Web detail drawer、manual promotion/override 和双模式 Public Web export：
 
 - 新增 `src/sourcing_agent/target_candidate_public_web.py` 作为 target-candidate selected batch action 的服务边界。
 - 新增 PG-authoritative control-plane tables：
@@ -187,9 +255,8 @@ For the full resume record, read `SESSION_HANDOFF_2026-04-26_PUBLIC_WEB.md`.
 
 尚未完成：
 
-- company-level public web API/CLI-only refresh。
-- promotion override/reason workflow。
-- export mode controls beyond the default promoted-only package。
+- live provider/RSS/arXiv/OpenReview/crawling collectors that produce `collector_bundle` records.
+- composed one-page target-candidate profile contract has landed via `GET /api/target-candidates/{record_id}/profile`; it is read-only, model-safe, starts from the target candidate record, and treats Public Web as one evidence section rather than the whole profile。
 
 ## Product Shape
 
@@ -306,7 +373,7 @@ LinkedIn Stage 1 的踩坑可以直接变成 Public Web Search 的编排约束�
 - Batch search should not force every candidate to wait for the slowest query when productized. The experiment harness can still fetch a batch after polling, but the service path should emit candidate-level readiness as soon as enough high-value entry links are available, then continue late query results as incremental evidence or a follow-up run.
 - Backpressure needs separate budgets. DataForSEO submit/poll/fetch, URL fetch, PDF extraction, and LLM adjudication have different rate limits and failure modes. Product serving should queue/limit them independently and keep persistence writes behind a single clear writer contract, mirroring the materialization writer lessons from Stage 1.
 - Fetch and LLM phases should be resumable independently. A fetched document with an evidence slice should not be refetched just because model adjudication failed; an LLM retry should reuse the same deterministic payload unless `force_refresh` changes the evidence set.
-- UI progress must show real phases, not optimistic completion. Useful per-candidate phases are `queued`, `search_submitted`, `searching`, `entry_links_ready`, `fetching`, `analyzing`, `completed`, `completed_with_errors`, `needs_review`, `failed`, and `cancelled`.
+- UI progress must show real phases, not optimistic completion. Useful per-candidate phases are `queued`, `search_submitted`, `searching`, `entry_links_ready`, `fetching`, `documents_fetched`, `analyzing`, `adjudication_completed`, `analysis_completed`, `completed`, `completed_with_errors`, `needs_review`, `failed`, and `cancelled`.
 - Cancel/retry semantics should be explicit. Cancelling a batch should stop unscheduled work, preserve completed candidate assets, mark in-flight candidates cancelled where possible, and leave failed/partial runs retryable without losing evidence.
 - Export should read from completed model-safe outputs or PG signal tables, not from raw HTML/PDF scans. Raw assets remain audit inputs and need an explicit future debug/audit export flag.
 
@@ -326,11 +393,19 @@ For each selected target candidate:
    - fetch available source types with per-source-type coverage, write raw/internal assets plus model-safe evidence slices, extract deterministic emails/links
 6. `analyzing`
    - send one aggregated candidate-level LLM payload when AI is enabled and useful; sanitize output so the model cannot introduce unobserved emails or unknown URLs
-7. terminal
+7. `adjudication_completed`
+   - persist sanitized AI adjudication and deterministic signal decisions to `adjudication_payload.json`; release the worker before model-safe artifact generation
+8. `analysis_completed`
+   - write `signals.json`, `candidate_summary.json`, and `search_results.json`; release the worker before person-asset/signal-row materialization
+9. terminal
    - `completed` when model-safe summary/signals are persisted without run-level errors
    - `completed_with_errors` when useful evidence exists but some source families failed
    - `needs_review` when identity/email/social confidence is too ambiguous for automatic display as confirmed
    - `failed` only when no useful result can be produced
+   - `cancelled` only when the user/operator explicitly cancels the run; cancellation is terminal and must prevent further provider polling/fetch/analysis for that run
+10. retry
+   - retry never reopens the old terminal run; it creates a new force-refresh run/worker with lineage back to `source_run_ids`
+   - retry is allowed for `failed`, `cancelled`, `completed_with_errors`, and `needs_review`, because each represents a user-visible need to rerun or improve the public-web evidence
 
 The batch aggregate should derive counts from these per-candidate rows:
 
@@ -344,12 +419,24 @@ The batch aggregate should derive counts from these per-candidate rows:
 - `needs_review_count`
 - `failed_count`
 - `cancelled_count`
+- `phase_metrics.remote_search_pending_run_count`
+- `phase_metrics.unmaterialized_signal_gap_count`
+- `phase_metrics.completed_without_materialized_signals_count`
+- `phase_metrics.terminal_with_errors_count`
+- `phase_metrics.partial_failure_count`
+- `phase_metrics.runs_with_errors_count`
+- `phase_metrics.runs_with_metric_errors_count`
+- `phase_metrics.missing_phase_metric_count`
+- `phase_metrics.phase_lag_risk_reasons`
+- `phase_metrics.service_guardrail_violation_detected`
 
 ### Regression tests needed before frontend/API rollout
 
 - Default workflow tests must continue asserting that single-stage jobs do not include `enrich_public_web_signals` or `public_web_stage_2` summaries.
 - Batch trigger idempotency: submitting the same selected record ids and options twice should join or return existing in-flight runs, not duplicate DataForSEO tasks.
 - Recovery resume: a run with submitted DataForSEO task checkpoints should poll/fetch existing tasks rather than submit new ones after process restart.
+- Cancellation: cancelling a remote-wait run must mark the run/batch terminal and prevent later worker recovery from polling/fetching provider tasks for that run.
+- Retry: retrying a retryable terminal run must create a new durable run and worker while preserving the old run's terminal audit trail.
 - Candidate isolation: one candidate's query timeout or fetch failure should not prevent other candidates in the same batch from reaching `completed`.
 - Completion ordering: terminal status may be written only after signals/model-safe summaries are persisted.
 - Fetch diversity: when enough fetch budget and source types exist, the first fetch window should include one slice per available media/source type before duplicate source types.
@@ -908,9 +995,16 @@ Request:
 {
   "target_company": "Anthropic",
   "source_families": [
-    "company_official_publications",
-    "company_arxiv_affiliation"
+    "company_homepage",
+    "company_research"
   ],
+  "seed_urls": [
+    "https://anthropic.com/",
+    "https://anthropic.com/research"
+  ],
+  "options": {
+    "max_assets": 50
+  },
   "force_refresh": false
 }
 ```
@@ -919,9 +1013,18 @@ Response:
 
 ```json
 {
-  "status": "queued",
-  "run_id": "...",
-  "company_key": "anthropic"
+  "status": "completed",
+  "run": {
+    "run_id": "...",
+    "company_key": "anthropic",
+    "status": "completed"
+  },
+  "summary": {
+    "asset_count": 2,
+    "raw_assets_included": false,
+    "default_workflow_stage": "not_enabled",
+    "target_candidate_lane": "separate"
+  }
 }
 ```
 
@@ -929,7 +1032,7 @@ Response:
 
 `GET /api/company-assets/public-web?target_company=...`
 
-Response should include latest company-level run status, source-family counts, publication/blog/arXiv asset counts, and artifact manifest pointers.
+Response includes persisted company-level run rows, model-safe asset rows, source-family counts, and product-boundary metadata. v1 is synchronous seed-URL-only; provider-backed crawling/RSS/arXiv/OpenReview collection should reuse the same run/asset contract instead of adding a workflow-stage fallback.
 
 ### Trigger batch search
 
@@ -1004,7 +1107,7 @@ Returns:
 
 ### Export
 
-Existing `POST /api/target-candidates/export` should be extended with:
+Canonical projection export (`POST /api/projections/export`) should remain the normal candidate/profile export surface. Public Web-specific export remains separate until the target-candidate page is cut over to CRM/person APIs:
 
 ```json
 {
@@ -1291,24 +1394,28 @@ This harness was used before adding PG Public Web tables and remains the method-
    - deterministic email extraction is on by default unless `--no-contact-extraction`
    - HarvestAPI email lookup is not used
    - email candidates carry type, source URL/domain, confidence, publishability, promotion status, and suppression reason
-   - `--ai-extraction on|auto|off` lets configured Qwen/OpenAI-compatible model clients judge identity confidence, publishability, and promotion recommendation from the candidate context, entry links, email candidates, and aggregated `evidence_slices`
+   - `--ai-extraction on|auto|off` lets configured OpenAI-compatible/Qwen model clients judge identity confidence, publishability, and promotion recommendation from the candidate context, entry links, email candidates, and aggregated `evidence_slices`
    - the intended Public Web product shape is one candidate-level adjudication call per candidate run when AI is needed, not one LLM call per fetched page
    - ambiguous social/profile ownership and weak email identity should remain reviewable signals, not silent `primary_email` updates
 
 Current LLM adjudication implementation:
 
 - Entry point: `public_web_search.run_public_web_candidate_adjudication(...)`
-- Model call: `model_provider.QwenResponsesModelClient.analyze_public_web_candidate_signals(...)` when Qwen is enabled, otherwise `model_provider.OpenAICompatibleChatModelClient.analyze_public_web_candidate_signals(...)` when the OpenAI-compatible provider is enabled
+- Model call: `model_provider.OpenAICompatibleChatModelClient.analyze_public_web_candidate_signals(...)` when a configured OpenAI-compatible `model_provider` is enabled, otherwise `model_provider.QwenResponsesModelClient.analyze_public_web_candidate_signals(...)` when Qwen is enabled
 - Prompt builder: `model_provider._build_public_web_signal_adjudication_prompt()`
 - Transport: Qwen `/responses` for the Qwen client, or OpenAI-compatible `/chat/completions` with `temperature=0` for the OpenAI-compatible client; strict JSON is expected in both paths
 - Auto mode behavior: `ai_extraction=auto` skips entry-link-only evidence. It runs when fetched documents or email candidates exist, and `--ai-extraction on` can force link-level review for debugging.
-- Payload context: candidate record, normalized LinkedIn URL key, headline, current company, primary email, known education/work history, up to 20 email candidates, source-balanced `entry_links`/`search_evidence` from DataForSEO URL/title/snippet/query/rank/provider context, and a configurable fetched-document / source-aware `evidence_slices` budget (`max_ai_evidence_documents`, default 8; product API bounded to 1..20). Search evidence is intentionally present because X/Substack and other platform pages may not be fetchable.
+- Payload context: candidate record, normalized LinkedIn URL key, headline, current company, primary email, known education/work history, bounded email candidates, source-balanced `entry_links`/`search_evidence` from DataForSEO URL/title/snippet/query/rank/provider context, and a compact fetched-document / source-aware `evidence_slices` budget. Search evidence is intentionally present because X/Substack and other platform pages may not be fetchable. The exact compact model input is persisted as `adjudication_input_payload.json` before the model result is applied, so bad promotions can be audited against provider result, selected model window, model output, and materialized signal separately.
 - Fetch/analyze split: document fetch writes raw/internal assets and model-safe evidence slices; only the candidate-level Public Web adjudication prompt sees those slices. This keeps raw HTML/PDF out of prompts/exports and avoids per-document LLM spend.
+- Evidence-window contract: `max_ai_entry_links` and `max_ai_evidence_documents` are adjudication input owner-controlled budgets, both bounded to `1..20`. The model input must persist the requested and effective budgets in `adjudication_input_payload.json`; live quality validation should pair an expanded fetch budget with an expanded AI search/document budget, for example `max_fetches_per_candidate=10`, `max_ai_entry_links=10`, and `max_ai_evidence_documents=10`, so failures distinguish provider recall/adjudication quality from an undersized model packet.
+- User-visible signal contract: `entry_links.json`, raw search payloads, fetched documents, and `adjudication_input_payload.json` are the audit layer; `person_public_web_signals` is the user-visible signal layer. The materializer must not copy every ranked DataForSEO result into user-visible signals. It may materialize confirmed/likely/ambiguous or reviewable profile-shaped links that the model assessed, publishable profile links, and non-suppressed email candidates. It must keep unreviewed `model_no_assessment` links, third-party mention snippets, single-publication pages, non-profile posts/articles/videos, unrelated Scholar profiles, and `not_same_person` / `suppressed` emails out of the normal signal table. Those rows remain in artifacts for debugging and re-adjudication.
 - Fetch queue policy: after entry-link ranking, the first fetch window is source/type diversified. When enough fetch budget and evidence exist, the queue gives one slot each to personal homepage, Scholar, GitHub, X/Twitter, Substack, resume/CV, academic profile, and publication before spending duplicate slots on the same source type. Company pages and LinkedIn remain non-default fetch targets.
 - Prompt policy: suppress generic inboxes, paper-title fake emails, Scholar verified-domain placeholders, unrelated coauthor emails, same-name collisions, and boilerplate contacts. Grouped paper emails such as `{barryz, lesli}@domain` must be judged per expanded address.
+- Publishability policy: publication pages, company/speaker/event/blog pages, commerce/product pages, repository issues, org/follower pages, YouTube/article pages, and `entry_type=other` are evidence only. A link is publishable only when it is a confirmed/likely same-person clean profile URL from an allowed profile type such as Scholar profile, GitHub profile, X profile, Substack profile, homepage, resume/CV, academic profile, or LinkedIn profile. URL shape canonicalization is applied after model adjudication so a model cannot promote an `other` deep link as a profile or downgrade a clean GitHub/Scholar profile into an untyped publishable signal.
 - Output safety policy: model output is sanitized against the deterministic payload before it is applied. The model may adjudicate only email candidates produced by deterministic extraction; it cannot introduce new email addresses from Scholar verified domains, coauthor domains, or inferred company domains. Link assessment signal types are normalized back to the Public Web entry-type registry and unknown URLs are dropped.
 - Link policy: X/Twitter, Substack, GitHub, Scholar, homepage, publication, resume, academic profile, company page, and LinkedIn links should be identity-adjudicated; search-result-only social/profile links should not be marked confirmed from name match alone.
 - Academic summary policy: when Scholar, publication, academic profile, resume/CV, GitHub research repo, or personal homepage evidence is fetched, candidate-level adjudication should return `academic_summary` with research directions, notable work, academic affiliations, publication signals, outreach angles, confidence, and evidence sources. This summary must only use slices judged to belong to the target candidate; same-name Scholar/coauthor profiles should be excluded or marked low confidence.
+- 2026-05-29 Anthropic live quality root cause: Jackie Bow's correct X profile (`https://x.com/jbowocky`) was present in DataForSEO results, while the wrong Stacey Wueste X page came from a company-context query whose snippet merely mentioned Jackie Bow. The fix is not a provider fallback: candidate-level adjudication now persists `adjudication_input_payload.json`, prioritizes owned-looking profile titles over third-party mention snippets, excludes same-name-missing Scholar/profile pages from the model window, and keeps speaker/event/commerce/article pages evidence-only through link-shape warnings. Cached back-half GPT 5.5 rerun against `output/w7g_jackie_adjudication_input_recheck_v2/` used DataForSEO-free cached input, selected Databricks speaker evidence + GitHub `jbow` + X `jbowocky` + Anthropic company evidence, and left `jbowocky` as `needs_review` rather than publishable because the profile snippet lacked Anthropic/work/education corroboration.
 
 Default artifact root:
 
@@ -1540,7 +1647,7 @@ Outputs:
 Quality dimensions:
 
 - Email candidates must carry source URL, source family, evidence excerpt, email type, confidence, publishability, identity label, and suppression/promotion status.
-- Promotion-recommended emails without trusted identity, source URL, evidence excerpt, publishability, or non-generic type are high-risk issues.
+- Promotion-recommended emails without trusted identity, source URL, evidence excerpt, publishability, or non-generic type are high-severity quality issues.
 - X/Substack/GitHub/Google Scholar media/profile links are counted separately as trusted vs needs-review.
 - GitHub repo/deep links, X search/post/utility URLs, Substack non-profile/non-publication URLs, non-profile Scholar URLs, and unreviewed/ambiguous media links are flagged before UI treats them as confirmed.
 - Search-only links should generally remain `unreviewed`; fetch + model-safe evidence + AI adjudication is required before the detail UI can present them as confirmed/likely same person.
@@ -1592,12 +1699,12 @@ Empirical report checks:
 Next quality pass:
 
 - Run 12-15 candidates with 10-16 queries/candidate, 8-12 fetches/candidate, and 12-16 AI evidence documents/candidate when live DataForSEO/LLM credentials and budget are available.
-- Inspect the generated CSV/Markdown before implementing email promotion; promotion UX should only operate on signals that have durable source/evidence metadata.
+- Inspect the generated CSV/Markdown before broadening promotion/export defaults; promotion UX should continue to operate only on signals that have durable source/evidence metadata, with override reasons required for non-publishable exceptions.
 - Keep raw HTML/PDF out of quality/export outputs unless a future explicit audit/debug export flag is accepted.
 
 ### Phase 1: Backend service skeleton
 
-Status as of `2026-04-26`: target-candidate backend service, PG control-plane skeleton, first-class signal rows, and record detail API are implemented. The company lane and email promotion persistence remain future work.
+Status as of `2026-05-04`: target-candidate backend service, PG control-plane skeleton, first-class signal rows, record detail API, manual promotion, override reasons, export modes, and company-level Public Web persistence are implemented. The company lane supports seed URLs, provider search, model-safe collector bundles, and explicit live collector source fetching.
 
 Completed:
 
@@ -1609,8 +1716,7 @@ Completed:
 
 Remaining:
 
-- Add `company_public_web_assets.py` and company-level public web runs/assets when the lower-ROI company lane is ready.
-- Add email promotion tables/writers before any Public Web email can update `target_candidates.primary_email`.
+- Live quality tuning for provider-specific RSS/arXiv/OpenReview/crawling discovery should continue to produce `collector_sources`, `collector_documents`, or `collector_inputs` and call `collection_mode=collector_bundle`; it must not introduce a separate store or default workflow stage.
 - Add dataclasses:
   - `PublicWebSearchRequest`
   - `PublicWebSearchRun`
@@ -1619,7 +1725,7 @@ Remaining:
   - `CompanyPublicWebAssetRun`
   - `PersonPublicWebAsset`
 - Continue moving/refactoring any remaining query generation from `exploratory_enrichment.py` into the source-family registry.
-- Add store methods for company asset and target overlay cache; public-web promotion records are implemented for target-candidate v1.
+- Target overlay cache remains future work; company asset run/asset methods and public-web promotion records are implemented for v1.
 - Add tests around:
   - record_id selection
   - person identity key construction
@@ -1628,7 +1734,6 @@ Remaining:
   - force refresh vs reuse
   - source-family query expansion
   - email suppression defaults
-  - email promotion audit trail
   - ambiguous social/profile link handling
 
 ### Phase 2: API and worker integration
@@ -1646,12 +1751,15 @@ Completed:
 - Batch aggregate sync from per-candidate runs
 - First-class `person_public_web_signals` materialization for detail/export-ready email/link evidence
 
-Remaining endpoints:
+Completed company-level endpoints:
 
 - `POST /api/company-assets/public-web`
 - `GET /api/company-assets/public-web`
-- `POST /api/target-candidates/{record_id}/public-web-email-promotions`
-- Add progress/detail payloads for company public web runs.
+
+Remaining company-level work:
+
+- Live quality tuning for RSS/arXiv/OpenReview/crawling source discovery should populate the existing `company_public_web_asset_runs` and `company_public_web_assets` contract through `collection_mode=collector_bundle` using `collector_sources`, `collector_documents`, or `collector_inputs`. Search-provider-backed company collection is available as opt-in `collection_mode=provider_search`.
+- Add progress/detail payloads only when provider-backed asynchronous collection is introduced.
 
 ### Phase 3: AI extraction
 
@@ -1671,11 +1779,14 @@ Status as of `2026-04-26`: implemented in the experiment/analyzer layer and mate
 
 ### Phase 4: Frontend target candidate action
 
-Status as of `2026-04-26`: target-candidate page action and Public Web detail section are implemented; export/promotion controls remain.
+Status as of `2026-04-27`: target-candidate page action, Public Web detail section, promotion/reject controls, override reason prompt, scoped status polling, and dedicated Web Search export are implemented. The export mode controls are hidden until the manual promotion product surface is redesigned.
 
 Completed:
 
 - Checkbox selection in `TargetCandidatesPanel`.
+- Follow-up status, quality score, and comment are local card drafts until the user clicks `保存跟进信息`; typing does not call `POST /api/target-candidates`.
+- Card edit state exposes dirty, saving, saved, error, and cancel/revert states. The backend target-candidate row remains the truth source.
+- Card-level inline Public Web detail expansion has been retired. A page-level drawer owns Public Web evidence review, email/link promotion/rejection, detail refresh, LinkedIn navigation, and selected-run cancel/retry.
 - User-triggered `Public Web Search` batch button.
 - Polling through `GET /api/target-candidates/public-web-search` while runs are non-terminal.
 - Compact per-candidate status and latest summary display from per-candidate runs.
@@ -1683,19 +1794,25 @@ Completed:
 - Email candidates display type, identity label, publishability, suppression reason, evidence excerpt, source link, and promotion status.
 - Profile/evidence links display identity label plus URL-shape warning chips such as `x_link_not_profile` and `substack_link_not_profile_or_publication`.
 - Default export action remains separate and does not imply raw HTML/PDF inclusion.
+- Email/link promotion controls call `POST /api/target-candidates/{record_id}/public-web-promotions`; frontend never mutates `primaryEmail` directly.
+- Signals requiring manual override show `覆盖确认邮箱/链接` and require a reason before submit.
+- Web Search export button currently sends `mode=promoted_and_publishable`; keep the `promoted_only` backend mode for API/manual QA use and future UI redesign.
 
 Remaining:
 
-- Add manual promote/reject controls for email candidates.
-- Keep export action separate but aware of public-web results.
+- Add scoped polling/filtering once the target-candidate pool grows beyond the current v1 range.
+- Redesign target-candidate card editing/comment/detail navigation UX.
 
 ### Phase 5: Export and reuse
 
-- Extend target-candidate export archive:
-  - summary CSV columns for public web status and primary links
+- Dedicated Public Web export archive is implemented:
+  - summary CSV columns for public web status and promoted/high-confidence signals
   - `public_web_signals.csv`
+  - `public_web_evidence_links.csv`
+  - `public_web_promotions.csv`
   - per-candidate `public_web_summary.json`
   - `public_web_manifest.json`
+  - default `promoted_only`; explicit `promoted_and_publishable` includes AI-publishable unpromoted signals
 - Add reuse logic:
   - default reuse successful person-level assets when normalized/sanity LinkedIn URL keys match
   - low-confidence same-name reuse goes to `needs_review`, not silent merge

@@ -18,7 +18,12 @@
 - 当检测到可用本地 PG 时，`load_settings()` 默认把 `db_path` 设为：
   - `runtime/control_plane.shadow.db`
 
-这个 `control_plane.shadow.db` 只是本地 shadow / compatibility 容器，不再是 live authoritative store。
+这个 `control_plane.shadow.db` 只是 compatibility shadow seed path，不再是 live authoritative store。
+在 `postgres_only` 下，真正的 shadow 连接目标应看 `show-control-plane-runtime` 输出里的：
+
+- `compatibility_shadow_connect_target`
+- `compatibility_shadow_ephemeral`
+- `control_plane_storage_banner`
 
 ## 一条命令确认当前解析结果
 
@@ -33,7 +38,9 @@ PYTHONPATH=src .venv/bin/python -m sourcing_agent.cli show-control-plane-runtime
 - 当前解析到的 `resolved_control_plane_postgres_dsn`
 - `resolved_control_plane_postgres_live_mode`
 - 默认 `db_path`
+- `default_db_path_role`
 - SQLite shadow 是否是 `shared_memory`
+- compatibility shadow 的真实连接 target
 - 本地 `.local-postgres` 是否可用、是否已启动
 - 当前是否通过 `.local-postgres.env` / `connection.env` 提供了显式配置
 - 本地 PG 的 `server_encoding` / `database_encoding`
@@ -233,7 +240,7 @@ pg_ctl -D "$LOCAL_PG_DATA" -l "$LOCAL_PG_RUN/postgres.log" -o "-k $LOCAL_PG_RUN 
 - 如果要把环境迁到另一台 Mac，优先使用：
   - Postgres logical dump
   - `.local-postgres.env`
-  - `docs/MAC_DEV_ENV_MIGRATION.md`
+  - `docs/archive/MAC_DEV_ENV_MIGRATION.md`
 
 ## 开发要求
 

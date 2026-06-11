@@ -1,6 +1,6 @@
 # Model-Native Search Provider Contract
 
-> Status: Guardrail contract drafted 2026-06-04. No normal-path implementation exists yet. Read with `DURABLE_EXECUTION_RUNTIME_CONTRACT.md`, `PRE_AGENT_CONTRACT_REVIEW.md`, and `PUBLIC_WEB_SEARCH_PRODUCTIZATION_TODO.md` before adding model-native web search, model tool calls, or relay-provided search to Public Web, intent planning, company assets, or candidate enrichment.
+> Status: Guardrail contract drafted 2026-06-04. No normal-path implementation exists yet. Read with `DURABLE_EXECUTION_RUNTIME_CONTRACT.md`, `PRE_AGENT_CONTRACT_REVIEW.md`, and `archive/PUBLIC_WEB_SEARCH_PRODUCTIZATION_TODO.md` before adding model-native web search, model tool calls, or relay-provided search to Public Web, intent planning, company assets, or candidate enrichment.
 
 ## Purpose
 

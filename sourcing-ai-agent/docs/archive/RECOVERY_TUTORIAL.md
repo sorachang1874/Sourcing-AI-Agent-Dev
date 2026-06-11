@@ -1,6 +1,6 @@
 # Recovery Tutorial
 
-> Status: Historical reference only. Do not use this file as the default implementation or operations guide; cross-check `docs/INDEX.md` and `PROGRESS.md` first.
+> Status: Archived 2026-06-11. Historical record only — do not treat as active guidance; see `docs/INDEX.md` for current docs. (Previous status: Historical reference only. Do not use this file as the default implementation or operations guide; cross-check `docs/INDEX.md` and `PROGRESS.md` first.)
 
 
 > Reference note: this tutorial is still useful for environment recovery, but current default entry docs are `../../ONBOARDING.md` and `docs/INDEX.md`.

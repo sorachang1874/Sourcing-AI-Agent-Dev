@@ -1,6 +1,6 @@
 # 2026-04-25 Productization Tracker
 
-> Status: Active tracker for the post-green productization pass. After context compaction, read this file plus `../PROGRESS.md` and `NEXT_TODO.md` before running commands.
+> Status: Archived 2026-06-11. Historical record only — do not treat as active guidance; see `docs/INDEX.md` for current docs. (Previous status: Active tracker for the post-green productization pass. After context compaction, read this file plus `../PROGRESS.md` and `NEXT_TODO.md` before running commands)
 
 ## Scope
 

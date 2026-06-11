@@ -17,7 +17,7 @@ Agent-native 在本项目中的含义是：底层服务从一开始就提供 too
 
 本地资产治理是当前 M0 后的独立 M0.5：Google、Reflection AI 等早期生产/测试混杂资产应通过 audit、cold archive manifest、reviewed apply 和 rebuild/projection proof 治理，不应在 docs checkpoint 或手动文件删除中处理。
 
-开始在这个子项目里改代码之前，先阅读 monorepo 根目录的协作规则 [../CONTRIBUTING.md](../CONTRIBUTING.md)。
+开始在这个子项目里改代码之前，先阅读 workspace / repo 协作规则：[../AGENTS.md](../AGENTS.md)、[AGENTS.md](AGENTS.md) 和 [../CONTRIBUTING.md](../CONTRIBUTING.md)。
 
 ## Documentation Map
 
@@ -31,6 +31,8 @@ Agent-native 在本项目中的含义是：底层服务从一开始就提供 too
 - [docs/DURABLE_EXECUTION_RUNTIME_CONTRACT.md](docs/DURABLE_EXECUTION_RUNTIME_CONTRACT.md)
 - [docs/MODEL_NATIVE_SEARCH_PROVIDER_CONTRACT.md](docs/MODEL_NATIVE_SEARCH_PROVIDER_CONTRACT.md)
 - [docs/NEXT_TODO.md](docs/NEXT_TODO.md)
+- [docs/CLAUDE_CODE_PROJECT_HANDBOOK_2026-06-10.md](docs/CLAUDE_CODE_PROJECT_HANDBOOK_2026-06-10.md)
+- [docs/archive/CLAUDE_CODE_CONTINUATION_PROMPT_2026-06-10.md](docs/archive/CLAUDE_CODE_CONTINUATION_PROMPT_2026-06-10.md)
 - [docs/FRONTEND_API_CONTRACT.md](docs/FRONTEND_API_CONTRACT.md)
 - [docs/WORKFLOW_OPERATIONS_PLAYBOOK.md](docs/WORKFLOW_OPERATIONS_PLAYBOOK.md)
 - [docs/TESTING_PLAYBOOK.md](docs/TESTING_PLAYBOOK.md)
@@ -48,7 +50,21 @@ Agent-native 在本项目中的含义是：底层服务从一开始就提供 too
 
 ## Current Stable Validation Snapshot
 
-截至 `2026-06-08`，当前仓库处于服务级重构收口阶段，不应再把 `2026-04-25` 的全量测试数字当成当前稳定证明。最新已验证的具体 slice 记录在 `PROGRESS.md`；当前最重要的已验证点是 2026-06-07 Target Candidates / CRM Public Web / Operation Workbench UI-contract slice。
+截至 `2026-06-10`，当前仓库处于服务级重构收口和本地资产治理收口阶段，不应再把 `2026-04-25` 的全量测试数字当成当前稳定证明。最新已验证的具体 slice 记录在 `PROGRESS.md`；当前最重要的已验证点是 2026-06-07 Target Candidates / CRM Public Web / Operation Workbench UI-contract slice、2026-06-10 Independent Review Gate fast-mode 默认值收口，以及 M0.6/M0.9 本地 runtime 资产治理证据。
+
+当前资产治理状态：
+
+- M0.6 已通过 reviewed apply 移除 `35` 个低风险 historical runtime/output 目录，回收 `14,745,489,340` bytes；没有触碰 `runtime/company_assets`、PG、projection、provider cache、registry pointer 或 signoff/phase 证据目录。
+- M0.9 已为 `10` 个 superseded runtime/test_env 证据目录生成并校验本地 cold bundles，source size `10,730,637,032` bytes，archive size `1,372,774,127` bytes，预计下一步可回收约 `9.36GB`。
+- M0.9 destructive apply 尚未执行。旧的 v8/v9/v10 review artifacts 不能作为当前 destructive apply 前置条件；下一步必须先为当前代码、文档和 prune scope 生成新的有效 `GO` Independent Review artifact，再用该 artifact 重新生成 prune plan 并确认 scope digest 不变。当前 dev backend/worker/frontend 仍在运行，apply 会被 active runtime process check 正确阻塞。
+- 不要手动删除 runtime 目录。继续治理时按 [docs/RUNTIME_ASSET_RETENTION_GOVERNANCE.md](docs/RUNTIME_ASSET_RETENTION_GOVERNANCE.md) 的 plan -> dry-run -> reviewed apply 顺序执行。
+
+当前 Independent Review Gate 默认配置：
+
+- reviewer model: `gpt-5.5`
+- reasoning effort: `xhigh`
+- service tier: `fast`
+- artifact metadata 必须记录上述字段；live/provider signoff 会 fail closed 拒绝缺失这些字段的旧 artifact。
 
 当前常用验证入口：
 
@@ -59,7 +75,7 @@ Agent-native 在本项目中的含义是：底层服务从一开始就提供 too
 - `cd frontend-demo && npm run build`：前端构建。
 - `python3 -m py_compile src/sourcing_agent/orchestrator.py`：大 orchestrator 改动后的最小语法验证。
 
-服务级 workflow 或 Agent-callable contract 变更必须在 targeted tests 后运行 Independent Review Gate，review artifact 写入 `runtime/reviews/`。
+服务级 workflow、Agent-callable contract、资产治理 destructive apply、provider/model 行为、前端/后端公共语义或 milestone closeout 变更必须在 targeted tests 后运行 Independent Review Gate，review artifact 写入 `runtime/reviews/`。
 
 默认本地开发规则：
 
@@ -83,7 +99,7 @@ PYTHONPATH=src "$(./scripts/dev_backend.sh --print-config 2>/dev/null | sed -n '
 
 ## Mac Migration
 
-- 如果要把当前本地环境迁到另一台 Mac，优先参考 [docs/MAC_DEV_ENV_MIGRATION.md](docs/MAC_DEV_ENV_MIGRATION.md)
+- 如果要把当前本地环境迁到另一台 Mac，优先参考 [docs/archive/MAC_DEV_ENV_MIGRATION.md](docs/archive/MAC_DEV_ENV_MIGRATION.md)
 - 当前推荐同时保留两份语义明确的迁移产物：
   - portable migration bundle
     - 目标是“在 Mac 上尽快恢复为可运行开发环境”
@@ -481,7 +497,7 @@ PYTHONPATH=src python3 -m sourcing_agent.cli import-cloud-assets \
     - `strict_roster_only`
   - 当前 authoritative counts、cloud bundle 和 asset-view 使用规则统一见：
     - `docs/THINKING_MACHINES_LAB_CANONICAL_ASSET.md`
-    - `docs/THINKING_MACHINES_LAB_VALIDATION_2026-04-08.md`
+    - `docs/archive/THINKING_MACHINES_LAB_VALIDATION_2026-04-08.md`
   - 当前设备上 Harvest 配置入口已恢复到 `runtime/secrets/providers.local.json`
   - `2026-04-07` 新 Harvest token 已重新 smoke test 验证通过
   - backlog 不再在 README 中写死，以 snapshot 内 `normalized_artifacts/*_backlog.json` 和对应 validation note 为准
@@ -601,7 +617,7 @@ sourcing-ai-agent/
 10. [docs/HOSTED_DEPLOYMENT_AND_GITHUB_SCOPE.md](docs/HOSTED_DEPLOYMENT_AND_GITHUB_SCOPE.md)
 11. [docs/QUERY_GUARDRAILS.md](docs/QUERY_GUARDRAILS.md)
 12. [docs/THINKING_MACHINES_LAB_CANONICAL_ASSET.md](docs/THINKING_MACHINES_LAB_CANONICAL_ASSET.md)
-13. [docs/THINKING_MACHINES_LAB_VALIDATION_2026-04-08.md](docs/THINKING_MACHINES_LAB_VALIDATION_2026-04-08.md)
+13. [docs/archive/THINKING_MACHINES_LAB_VALIDATION_2026-04-08.md](docs/archive/THINKING_MACHINES_LAB_VALIDATION_2026-04-08.md)
 14. 需要追旧决策或恢复旧环境时，再看 `docs/` 下的 dated reference 文档
 
 ## GitHub Sync Boundary

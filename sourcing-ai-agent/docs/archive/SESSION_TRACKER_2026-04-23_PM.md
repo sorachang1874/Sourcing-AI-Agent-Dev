@@ -1,6 +1,6 @@
 # Session Tracker 2026-04-23 PM
 
-> Status: Closed on `2026-04-24`. The immediate stabilization pass from the `2026-04-23 20:00+` thread is now considered closed. Long-horizon follow-ups were promoted into `docs/NEXT_TODO.md`; this file remains as a historical closure record, not an active backlog.
+> Status: Archived 2026-06-11. Historical record only — do not treat as active guidance; see `docs/INDEX.md` for current docs. (Previous status: Closed on `2026-04-24`. The immediate stabilization pass from the `2026-04-23 20:00+` thread is now considered closed. Long-horizon follow-ups were promoted int)
 
 ## Scope
 

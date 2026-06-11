@@ -1,6 +1,6 @@
 # Session Handoff 2026-04-25
 
-> Status: Current handoff for opening the next development session. Read with `../PROGRESS.md`, `NEXT_TODO.md`, and `SESSION_TRACKER_2026-04-25_PRODUCTIZATION.md`.
+> Status: Archived 2026-06-11. Historical record only — do not treat as active guidance; see `docs/INDEX.md` for current docs. (Previous status: Current handoff for opening the next development session. Read with `../PROGRESS.md`, `NEXT_TODO.md`, and `SESSION_TRACKER_2026-04-25_PRODUCTIZATION.md`.)
 
 ## Current State
 
