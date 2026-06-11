@@ -13,20 +13,21 @@
 详细依据见 `docs/SERVICE_GRADE_ARCHITECTURE_PLAN.md` 的 "2026-06-11 Plan Revision" 一节。
 
 ### Track A — Orchestrator 分解
-- [/] **Phase 0 测试前置修缮**（进行中）：`tests/source_inspection.py` AST 解析助手；`test_crm_public_web_runtime_boundary` 与 `test_pre_agent_contract_review` 的源码切片断言改造；`_utc_now_iso` 与 projection 分页常量的 patch 接缝；regression_matrix 未映射文件守卫；边界扫描 rglob 化。
-- [ ] Phase 1：提取 `CommandKernel`（~30 个 store-only 协议方法）。
-- [ ] Phase 2：CommandSpec registry（落 `durable_runtime`，合并 4 张字典 + 3-4 个 policy set 族 + metrics 表 + orchestrator 3 张 per-type 映射；manifest 与 Agent tool spec 是它的导出物 = 重定义后的 M1）。
+- [x] **Phase 0 测试前置修缮**（2026-06-11，PR #15）：`tests/source_inspection.py` AST 解析助手；两个守卫测试文件脱离源码切片；patch 接缝；regression_matrix 未映射守卫；边界扫描 rglob 化。
+- [x] Phase 1：`CommandKernel` 提取（2026-06-11）：17 个 store-only 协议方法迁入 `command_kernel.py`，facade 全名保留、577 调用点零改动、独立 AST 级验证。
+- [x] Phase 2：CommandTypeSpec registry（2026-06-11，= 重定义后的 M1 落地）：`DEFAULT_COMMAND_TYPE_SPECS` 41 类型单一事实源；4 张字典+policy set 族+metrics 表+orchestrator 3 张映射全部收敛；`command_type_manifest()` 导出（Agent tool spec 种子）；金快照特征化测试 + 字节码级独立比对零漂移；src/ 裸 command-type 字面量清零。
 - [ ] Phase 3：逐域提取（顺序：crm_public_web → excel_intake → profile_fetch → acquisition 仅 command 层；facade 保留全部公私方法名；`run_worker_recovery_once` 的 drain 绑定改注册式）。
 - [ ] Phase 4：纠缠核心重设计（recovery phase 编排 registry 化；projection/candidate_source/asset_population 网随 M3–M5 拆解）。
 
 ### Track B — 存储与测试基建（与 A 并行）
-- [ ] 测试环境契约 v2：每 run = (PG schema + runtime dir) 配对；teardown `DROP SCHEMA CASCADE`；孤儿 schema janitor；seed 资产默认 symlink；advisory lock key 按 schema 命名空间化。
+- [x] 测试环境契约 v2（2026-06-11）：每 run = (PG schema + runtime dir) 配对 + `.ephemeral-test-env.json` 标记；teardown `DROP SCHEMA CASCADE`（仅删自建 schema，`pre_existing` 守卫）；孤儿 janitor `scripts/prune_test_schemas.py`（先快照后扫描、活跃连接守卫、仅限本地 DSN、dry-run 默认）。
+- [x] Mac 本地 PG Docker 方案（2026-06-11）：`local_postgres_docker.py` + `make local-pg-up/down/status`；容器 55432 复用既有 DSN 发现机制零侵入；PG 强制模式下 durable runtime 套件真实执行验证。
 - [ ] 51 个直接实例化 SQLite `ControlPlaneStore` 的测试文件迁移到共享 PG fixture（推广 `tests/pg_durable_runtime.py` 模式）。
-- [ ] Mac 本地 PG：Docker 方案（`local_postgres.py` 当前 Linux 专用）；CI 用 testcontainers。
+- [ ] advisory lock key 按 schema 命名空间化：**已评估、暂缓**——滚动部署期间新旧进程锁身份不一致会破坏互斥，需要协调切换方案，设计说明已记录待 owner 审定。
 - [ ] 之后：按表组把 292 个双路径方法重写为 PG-pure 并删 mirror；最后移除内存 SQLite 影子。引入正式 migration 机制（PG DDL 目前在 `control_plane_live_postgres.py` 手工第二份）。
 
 ### Track C — Serving Runtime（目标 ~20 并发用户）
-- [ ] psycopg_pool 连接池（最大单项杠杆；`control_plane_live_postgres.py:_connect` 每查询新建连接）。注意：本机 PG 验证依赖 Docker PG（Track B）先就位。
+- [x] psycopg_pool 连接池（2026-06-11）：per-adapter 懒加载池（`SOURCING_CONTROL_PLANE_PG_POOL_MIN/MAX`，默认 1/8）；25 个调用点事务语义逐一核验不变；实测 200 次顺序操作 1.516s→0.743s、新建连接 200→1；`ControlPlaneStore.close()` 接线。
 - [ ] 重活出请求线程：plan compile / `/api/jobs` / 导出统一为 enqueue + 轮询（后续 SSE）。
 - [ ] worker 与 API 进程分离（`worker_daemon` 独立进程成为唯一模式）。
 - [ ] 最小鉴权 + 用户身份（token；`requester_id/tenant_id` 列已存在但来自未认证 payload）。
