@@ -16,13 +16,16 @@
 - [x] **Phase 0 测试前置修缮**（2026-06-11，PR #15）：`tests/source_inspection.py` AST 解析助手；两个守卫测试文件脱离源码切片；patch 接缝；regression_matrix 未映射守卫；边界扫描 rglob 化。
 - [x] Phase 1：`CommandKernel` 提取（2026-06-11）：17 个 store-only 协议方法迁入 `command_kernel.py`，facade 全名保留、577 调用点零改动、独立 AST 级验证。
 - [x] Phase 2：CommandTypeSpec registry（2026-06-11，= 重定义后的 M1 落地）：`DEFAULT_COMMAND_TYPE_SPECS` 41 类型单一事实源；4 张字典+policy set 族+metrics 表+orchestrator 3 张映射全部收敛；`command_type_manifest()` 导出（Agent tool spec 种子）；金快照特征化测试 + 字节码级独立比对零漂移；src/ 裸 command-type 字面量清零。
-- [ ] Phase 3：逐域提取（顺序：crm_public_web → excel_intake → profile_fetch → acquisition 仅 command 层；facade 保留全部公私方法名；`run_worker_recovery_once` 的 drain 绑定改注册式）。
+- [x] Phase 3a：crm_public_web 域提取（2026-06-12）：首个领域 owner `crm_public_web_owner.py` 落地；orchestrator 保留全部公私方法签名等价 facade、调用点零改动；`regression_matrix` 映射更新；独立 AST 级验证（逐方法对比 git HEAD）。
+- [ ] Phase 3b–3d：excel_intake → profile_fetch → acquisition（仅 command 层）按同一 playbook 提取；`run_worker_recovery_once` 的 drain 绑定改注册式。
 - [ ] Phase 4：纠缠核心重设计（recovery phase 编排 registry 化；projection/candidate_source/asset_population 网随 M3–M5 拆解）。
 
 ### Track B — 存储与测试基建（与 A 并行）
 - [x] 测试环境契约 v2（2026-06-11）：每 run = (PG schema + runtime dir) 配对 + `.ephemeral-test-env.json` 标记；teardown `DROP SCHEMA CASCADE`（仅删自建 schema，`pre_existing` 守卫）；孤儿 janitor `scripts/prune_test_schemas.py`（先快照后扫描、活跃连接守卫、仅限本地 DSN、dry-run 默认）。
 - [x] Mac 本地 PG Docker 方案（2026-06-11）：`local_postgres_docker.py` + `make local-pg-up/down/status`；容器 55432 复用既有 DSN 发现机制零侵入；PG 强制模式下 durable runtime 套件真实执行验证。
-- [ ] 51 个直接实例化 SQLite `ControlPlaneStore` 的测试文件迁移到共享 PG fixture（推广 `tests/pg_durable_runtime.py` 模式）。
+- [x] PG 测试 fixture 试点（2026-06-12）：`tests/pg_store_fixture.py`（`PGControlPlaneStoreTestMixin`：per-class schema + `pg_tables` 截断复用）；8 个文件先行迁移；试点即捕获一个生产缺陷（见下条）。
+- [x] PG ON CONFLICT 唯一索引缺口类修复（2026-06-12）：SQLite UNIQUE 约束从未镜像进 PG bootstrap，postgres_only 下 `upsert_criteria_pattern` 等触发 InvalidColumnReference；修复 = `_CONTROL_PLANE_UNIQUE_INDEXES` 幂等唯一索引 + 建索引前去重（有时近列保留最新，无时近列 loud failure）+ 复发守卫 `tests/test_pg_onconflict_guard.py`（机械扫描 ON CONFLICT 目标 vs 索引清单）。
+- [ ] 其余 ~40 个直接实例化 SQLite `ControlPlaneStore` 的测试文件分批迁移（~10/批；其中 ~10 个 daemon/server 进程型需 per-test context manager 变体；`testcontainers_*` 与 PG 适配器自测不在范围）。
 - [ ] advisory lock key 按 schema 命名空间化：**已评估、暂缓**——滚动部署期间新旧进程锁身份不一致会破坏互斥，需要协调切换方案，设计说明已记录待 owner 审定。
 - [ ] 之后：按表组把 292 个双路径方法重写为 PG-pure 并删 mirror；最后移除内存 SQLite 影子。引入正式 migration 机制（PG DDL 目前在 `control_plane_live_postgres.py` 手工第二份）。
 
@@ -31,7 +34,8 @@
 - [ ] 重活出请求线程：plan compile / `/api/jobs` / 导出统一为 enqueue + 轮询（后续 SSE）。
 - [ ] worker 与 API 进程分离（`worker_daemon` 独立进程成为唯一模式）。
 - [ ] 最小鉴权 + 用户身份（token；`requester_id/tenant_id` 列已存在但来自未认证 payload）。
-- [ ] FastAPI + uvicorn 重写 api.py（已批准；pydantic→OpenAPI 反向成为前端 contract 生成源）；SSE 推送替代 1s/5s 轮询。
+- [x] FastAPI + uvicorn 传输层等价重写 api.py（2026-06-12）：同路由/同 payload/同状态码/同 headers；CORS allowlist + localhost 自动放行 + header 回显；Apify webhook token 校验保留；双道信号量改 middleware（HarvestAPI 并发约束保留至 M2 provider 预算落地）；`create_server` 兼容垫片包 uvicorn（serve_forever/shutdown/port-0）；`tests/test_api_transport_parity.py` 传输等价测试。
+- [ ] FastAPI 第二步：handler 签名 pydantic 模型化 → OpenAPI 成为前端 contract 生成源；SSE 推送替代 1s/5s 轮询。
 - [ ] 多用户 Agent serving 拓扑（2026-06-11 确认，详见 plan doc revision 节）：按角色容器化（api/agent-worker/provider-worker，docker-compose 起步）；`agent_session`/`agent_turn` PG checkpoint + per-session 单写者 lease；`agent_events` SSE tail；per-user 并发限额；凭证只在 provider worker 层。**不做 per-user 常驻容器**；沙箱仅在将来加代码执行/浏览器工具时按工具调用租用。
 - [ ] 之后：对象存储读穿（company_assets/media 出本地盘；`object_storage.py` 抽象已存在）。
 - 明确不做：Redis、LISTEN/NOTIFY（当前规模不需要）。
@@ -51,6 +55,14 @@
 ### M2 Provider Task Runtime 设计要求（新增约束）
 - Provider 级并发预算：HarvestAPI profile-fetch 有 ~8 并发 actor 的隐性限制（"too many requests"），旧 8 槽 API 信号量即源于此——保护必须移到 provider 层（per-provider+key 的信号量/令牌桶），HTTP 入口的并发上限才能放开。
 - API key 池化扩容；高需求下避免 profile fetch batch 过度碎片化。
+
+## 已知失败预算（必须归因后入账，不得静默增长）
+
+> 规则：新失败先做 control-environment 归因（在无该变更的对照环境复现）再入账；修复后移除条目。2026-06-12 凌晨批次的 8 个被举报失败已全部归因并修复（3× 测试自身 Thread.start 全局 stub 扼杀 psycopg_pool 工作线程、1× 测试未随 06-07 workspace fail-closed 契约更新、1× c942874 携带的 get_job_api include_details 压缩丢字段、3× c942874 携带的 completion-policy/W6/canonical-projection 漂移——其中投影读路径丢 job-scoped 标记是真实产品缺陷，已修）。
+
+- `tests/test_results_api.py` 全文件 36 failed / 261 passed（2026-06-12 全量首跑发现；对照实验证明与 6fe870b/7280512/139d1ca 无关——提取还原后失败集 byte-identical，叠加还原 ON CONFLICT 修复后 36 个仍原样出现）。错误桶：9× PG-only durable-runtime 守卫 RuntimeError、5× HTTP 410 Gone、10× completion/promotion 状态不匹配（与 c942874 的 completion-policy 门禁同族）、5× 投影断言（含 `get_run_projection_link` 非 `proj_` 前缀）、7× 杂项数据形状。属 pre-handoff Codex-era src/test 漂移，待按 completion-policy / serving-projection 主题分批修复。
+- `tests/test_workflow_explain.py::test_explain_workflow_does_not_use_legacy_standard_bundle_as_hidden_full_coverage_proof`（2026-06-11 归因：pre-handoff uncommitted worktree state，与 CommandKernel/registry 提取无关）。
+- `tests/test_control_plane_live_postgres.py::test_serving_projection_foundation_uses_live_postgres_tables`（同上）。
 
 ## Decisions Log (2026-06-11)
 
