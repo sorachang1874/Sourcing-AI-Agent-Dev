@@ -8,7 +8,8 @@ from sourcing_agent.request_matching import (
     request_family_signature,
     request_signature,
 )
-from sourcing_agent.storage import ControlPlaneStore
+
+from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
 
 
 RAW_GEMINI_PM_REQUEST = {
@@ -24,10 +25,11 @@ STRUCTURED_GEMINI_PM_REQUEST = {
 }
 
 
-class MatchingMetadataStorageTest(unittest.TestCase):
+class MatchingMetadataStorageTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
     def setUp(self) -> None:
+        super().setUp()
         self.tempdir = tempfile.TemporaryDirectory()
-        self.store = ControlPlaneStore(Path(self.tempdir.name) / "test.db")
+        self.store = self.make_pg_store(Path(self.tempdir.name) / "test.db")
 
     def tearDown(self) -> None:
         self.tempdir.cleanup()

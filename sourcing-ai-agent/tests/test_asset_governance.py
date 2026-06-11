@@ -4,7 +4,8 @@ from sourcing_agent.asset_governance import (
     default_asset_pointer_key,
     normalize_asset_lifecycle_status,
 )
-from sourcing_agent.storage import ControlPlaneStore
+
+from tests.pg_store_fixture import pg_backed_control_plane_store
 
 
 def test_default_asset_pointer_key_is_unique_per_scope() -> None:
@@ -57,47 +58,51 @@ def test_canonical_replacement_plan_rejects_partial_snapshot_as_default() -> Non
 
 
 def test_promote_asset_default_pointer_persists_current_pointer_and_history(tmp_path) -> None:
-    store = ControlPlaneStore(str(tmp_path / "test.db"))
+    with pg_backed_control_plane_store(
+        schema_label="asset_governance_pointer_history",
+        db_path=tmp_path / "test.db",
+    ) as store:
+        first = store.promote_asset_default_pointer(
+            {
+                "company_key": "OpenAI",
+                "snapshot_id": "snap-1",
+                "coverage_proof": {"coverage_scope": "company"},
+                "promoted_by_job_id": "job-1",
+            }
+        )
+        second = store.promote_asset_default_pointer(
+            {
+                "company_key": "OpenAI",
+                "snapshot_id": "snap-2",
+                "coverage_proof": {"coverage_scope": "company", "lane_coverage": ["current", "former"]},
+                "promoted_by_job_id": "job-2",
+            }
+        )
 
-    first = store.promote_asset_default_pointer(
-        {
-            "company_key": "OpenAI",
-            "snapshot_id": "snap-1",
-            "coverage_proof": {"coverage_scope": "company"},
-            "promoted_by_job_id": "job-1",
-        }
-    )
-    second = store.promote_asset_default_pointer(
-        {
-            "company_key": "OpenAI",
-            "snapshot_id": "snap-2",
-            "coverage_proof": {"coverage_scope": "company", "lane_coverage": ["current", "former"]},
-            "promoted_by_job_id": "job-2",
-        }
-    )
-
-    assert first["status"] == "promoted"
-    assert second["status"] == "promoted"
-    pointer = store.get_asset_default_pointer(company_key="OpenAI")
-    assert pointer is not None
-    assert pointer["snapshot_id"] == "snap-2"
-    assert pointer["previous_snapshot_id"] == "snap-1"
-    history = store.list_asset_default_pointer_history(pointer_key=pointer["pointer_key"])
-    event_types = [item["event_type"] for item in history]
-    assert event_types.count("promoted") == 2
-    assert event_types.count("superseded") == 1
+        assert first["status"] == "promoted"
+        assert second["status"] == "promoted"
+        pointer = store.get_asset_default_pointer(company_key="OpenAI")
+        assert pointer is not None
+        assert pointer["snapshot_id"] == "snap-2"
+        assert pointer["previous_snapshot_id"] == "snap-1"
+        history = store.list_asset_default_pointer_history(pointer_key=pointer["pointer_key"])
+        event_types = [item["event_type"] for item in history]
+        assert event_types.count("promoted") == 2
+        assert event_types.count("superseded") == 1
 
 
 def test_promote_asset_default_pointer_rejects_partial_without_writing(tmp_path) -> None:
-    store = ControlPlaneStore(str(tmp_path / "test.db"))
+    with pg_backed_control_plane_store(
+        schema_label="asset_governance_pointer_reject",
+        db_path=tmp_path / "test.db",
+    ) as store:
+        result = store.promote_asset_default_pointer(
+            {
+                "company_key": "Meta",
+                "snapshot_id": "excel-import",
+                "lifecycle_status": "partial",
+            }
+        )
 
-    result = store.promote_asset_default_pointer(
-        {
-            "company_key": "Meta",
-            "snapshot_id": "excel-import",
-            "lifecycle_status": "partial",
-        }
-    )
-
-    assert result["status"] == "rejected"
-    assert store.get_asset_default_pointer(company_key="Meta") is None
+        assert result["status"] == "rejected"
+        assert store.get_asset_default_pointer(company_key="Meta") is None

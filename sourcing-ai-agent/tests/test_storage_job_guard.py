@@ -1,13 +1,13 @@
 import tempfile
 import unittest
 
-from sourcing_agent.storage import ControlPlaneStore
+from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
 
 
-class StorageJobGuardTest(unittest.TestCase):
+class StorageJobGuardTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
     def test_save_job_does_not_regress_terminal_job_to_running(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
-            store = ControlPlaneStore(f"{tempdir}/test.db")
+            store = self.make_pg_store(f"{tempdir}/test.db")
             job_id = "workflow-terminal-1"
             request_payload = {"raw_user_request": "我想要OpenAI做Reasoning方向的人"}
             plan_payload = {"target_company": "OpenAI"}

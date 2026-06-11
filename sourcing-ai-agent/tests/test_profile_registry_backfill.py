@@ -6,15 +6,17 @@ from pathlib import Path
 from unittest.mock import patch
 
 from sourcing_agent.profile_registry_backfill import backfill_linkedin_profile_registry
-from sourcing_agent.storage import ControlPlaneStore
+
+from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
 
 
-class ProfileRegistryBackfillTest(unittest.TestCase):
+class ProfileRegistryBackfillTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
     def setUp(self) -> None:
+        super().setUp()
         self.tempdir = tempfile.TemporaryDirectory()
         self.runtime_dir = Path(self.tempdir.name) / "runtime"
         self.runtime_dir.mkdir(parents=True, exist_ok=True)
-        self.store = ControlPlaneStore(self.runtime_dir / "sourcing_agent.db")
+        self.store = self.make_pg_store(self.runtime_dir / "sourcing_agent.db")
 
     def tearDown(self) -> None:
         self.tempdir.cleanup()

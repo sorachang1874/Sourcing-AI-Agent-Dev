@@ -1,13 +1,14 @@
 import tempfile
 import unittest
 
-from sourcing_agent.storage import ControlPlaneStore
+from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
 
 
-class CandidateStateRegistryTest(unittest.TestCase):
+class CandidateStateRegistryTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
     def setUp(self) -> None:
+        super().setUp()
         self.tempdir = tempfile.TemporaryDirectory()
-        self.store = ControlPlaneStore(f"{self.tempdir.name}/state.db")
+        self.store = self.make_pg_store(f"{self.tempdir.name}/state.db")
 
     def tearDown(self) -> None:
         self.tempdir.cleanup()
