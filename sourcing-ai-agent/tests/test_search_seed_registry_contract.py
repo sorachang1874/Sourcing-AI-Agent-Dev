@@ -11,14 +11,16 @@ from sourcing_agent.asset_reuse_planning import (
 from sourcing_agent.connectors import CompanyIdentity
 from sourcing_agent.search_seed_registry import persist_search_seed_snapshot
 from sourcing_agent.seed_discovery import SearchSeedSnapshot
-from sourcing_agent.storage import ControlPlaneStore
+
+from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
 
 
-class SearchSeedRegistryContractTest(unittest.TestCase):
+class SearchSeedRegistryContractTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
     def setUp(self) -> None:
+        super().setUp()
         self.tempdir = tempfile.TemporaryDirectory()
         self.runtime_dir = Path(self.tempdir.name)
-        self.store = ControlPlaneStore(self.runtime_dir / "test.db")
+        self.store = self.make_pg_store(self.runtime_dir / "test.db")
 
     def tearDown(self) -> None:
         self.tempdir.cleanup()

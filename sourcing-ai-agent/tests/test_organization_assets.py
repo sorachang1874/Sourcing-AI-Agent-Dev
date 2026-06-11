@@ -5,17 +5,20 @@ from pathlib import Path
 
 from sourcing_agent.domain import Candidate
 from sourcing_agent.organization_assets import load_company_snapshot_registry_summary
-from sourcing_agent.storage import ControlPlaneStore
+
+from tests.pg_store_fixture import PGControlPlaneStoreTestMixin
 
 
-class OrganizationAssetsTest(unittest.TestCase):
+class OrganizationAssetsTest(PGControlPlaneStoreTestMixin, unittest.TestCase):
     def setUp(self) -> None:
+        super().setUp()
         self.tempdir = tempfile.TemporaryDirectory()
         self.runtime_dir = Path(self.tempdir.name)
-        self.store = ControlPlaneStore(self.runtime_dir / "sourcing_agent.db")
+        self.store = self.make_pg_store(self.runtime_dir / "sourcing_agent.db")
 
     def tearDown(self) -> None:
         self.tempdir.cleanup()
+        super().tearDown()
 
     def test_load_company_snapshot_registry_summary_uses_authoritative_source_payload_for_materialized_selection(self) -> None:
         current_snapshot_id = "20260420T010101"
